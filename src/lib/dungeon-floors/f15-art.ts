@@ -39,6 +39,8 @@ import {
   URCHIN,
 } from './f15-brains';
 import type { Arc, Chart, FShot, Ring, Well } from './f15-brains';
+import { F3, proj, renderRig, Rig, SE, vadd, vlerp, vmul, vnorm } from './f15-rig';
+import type { Mat, RigOpt, RigOut, V3 } from './f15-rig';
 
 type RGBA = [number, number, number, number];
 type Tones = [RGBA, RGBA, RGBA, RGBA];
@@ -2620,257 +2622,6 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-// --- Кристальный ёж -----------------------------------------------------------
-
-const URCH_FUR = tn('#2a1c3a', '#46325c', '#6a5288', '#9a86bc');
-const URCH_SKIN = tn('#5a3848', '#8c5a6c', '#c08a9a', '#f0c4cc');
-
-/**
- * Ёж: круглое тельце, мордочка вправо, на спине — два ряда кристальных игл
- * назад-вверх. `ball` 0…1 — свернулся (иглы во все стороны), `bristle` —
- * иглы дыбом, `roll` — поворот клубка.
- */
-function urchinBody(o: {
-  step: number;
-  ball: number;
-  bristle: number;
-  roll: number;
-  glowK: number;
-  dizzy: number;
-  dk: number;
-}): Built {
-  const p = new Px(42, 36);
-  const cx = 19;
-  const gy = 30;
-  const cy = gy - 7 - o.ball * 1.5;
-  const rx = 9 - o.ball * 1.5;
-  const ry = 6.5 + o.ball;
-  if (o.ball < 0.6) {
-    const s = o.step;
-    for (const [lx, ph] of [
-      [cx - 5, 0],
-      [cx - 2, 2],
-      [cx + 3, 1],
-      [cx + 6, 3],
-    ] as [number, number][]) {
-      const up = (s + ph) % 4 < 2 ? 1 : 0;
-      p.rect(lx, cy + 4, lx + 1, gy - 1 - up, URCH_SKIN[1]);
-      p.set(lx + 1, gy - 1 - up, URCH_SKIN[0]);
-    }
-  }
-  const quills: [number, number, number, number][] = [];
-  if (o.ball > 0.5) {
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * TAU + o.roll;
-      quills.push([a, 7 + (i % 2) * 2, i, 1]);
-    }
-  } else {
-    const spread = 1 + o.bristle * 0.35;
-    // Задний ряд (короче, темнее) и передний.
-    for (let i = 0; i < 5; i++)
-      quills.push([
-        PI * (1.2 + i * 0.13 * spread) - o.ball * 0.4,
-        (7 + (i % 2) * 1.5) * (0.85 + o.bristle * 0.35),
-        i,
-        0,
-      ]);
-    for (let i = 0; i < 5; i++)
-      quills.push([
-        PI * (1.14 + i * 0.15 * spread) - o.ball * 0.4,
-        (8.5 + ((i + 1) % 2) * 2) * (0.85 + o.bristle * 0.35),
-        i + 5,
-        1,
-      ]);
-  }
-  // Задний ряд под тело.
-  for (const [a, L, i, row] of quills)
-    if (!row || (o.ball > 0.5 && Math.sin(a) < 0))
-      spike(
-        p,
-        cx + Math.cos(a) * rx * 0.55,
-        cy + Math.sin(a) * ry * 0.55,
-        a,
-        L,
-        3.4,
-        i % 3 ? CRYST_DIM : VIOLET,
-        CRYST[3],
-      );
-  shadeEll(p, cx, cy, rx, ry, URCH_FUR, 0.05);
-  // Брюшко светлее.
-  if (o.ball < 0.5) p.ell(cx + 1, cy + 3.5, rx * 0.7, 2, URCH_FUR[2]);
-  if (o.ball < 0.6) {
-    const fx = cx + rx - 1;
-    const fy = cy + 1;
-    shadeEll(p, fx + 1, fy, 3.6 * (1 - o.ball * 0.8), 2.8 * (1 - o.ball * 0.8), URCH_SKIN, 0.1);
-    p.set(fx + 4.4, fy, INK);
-    p.set(fx + 4.4, fy - 1, alpha(URCH_SKIN[3], 0.8));
-    // Ушко.
-    p.set(fx - 3, cy - 5, URCH_SKIN[1]);
-    p.set(fx - 3, cy - 6, URCH_SKIN[0]);
-    if (o.dizzy) {
-      p.set(fx - 1, cy - 3, INK);
-      p.set(fx + 1, cy - 1, INK);
-      p.set(fx + 1, cy - 3, INK);
-      p.set(fx - 1, cy - 1, INK);
-      p.set(fx, cy - 2, INK);
-    } else {
-      p.rect(fx - 1, cy - 3, fx, cy - 2, INK);
-      p.set(fx - 1, cy - 3, WHITE);
-    }
-  }
-  // Передний ряд — поверх спины.
-  for (const [a, L, i, row] of quills)
-    if (row && !(o.ball > 0.5 && Math.sin(a) < 0))
-      spike(
-        p,
-        cx + Math.cos(a) * rx * 0.45,
-        cy + Math.sin(a) * ry * 0.4,
-        a,
-        L,
-        3.8,
-        i % 4 === 1 ? VIOLET : CRYST,
-        WHITE,
-      );
-  edge(p, alpha(INK, 0.9));
-  if (o.glowK > 0) glow(p, cx - 3, cy - 5, 12, TEAL_GLOW, 0.3 * o.glowK);
-  if (o.dizzy) stars(p, cx + 3, cy - 11, 7, o.dizzy - 1);
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1901, [CRYST[2], CRYST[3], VIOLET[2], WHITE], cx, cy);
-  return {
-    p: out,
-    ax: cx,
-    ay: gy,
-    eye: o.ball < 0.6 && !o.dk ? [cx + rx - 2, cy - 3] : null,
-    lit: true,
-  };
-}
-
-registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk)
-    return frameOf('urchin', pose, 'die', dk, () =>
-      urchinBody({ step: 0, ball: 0, bristle: 1, roll: 0, glowK: 0, dizzy: 0, dk }),
-    );
-  switch (pose.mode) {
-    case 'f15_curl': {
-      const k = Math.min(4, Math.floor((pose.t / URCHIN.curl) * 5));
-      return frameOf(
-        'urchin',
-        pose,
-        'curl',
-        k,
-        () =>
-          urchinBody({
-            step: 0,
-            ball: k / 4,
-            bristle: 0.5,
-            roll: 0,
-            glowK: k / 4,
-            dizzy: 0,
-            dk: 0,
-          }),
-        {
-          still: true,
-          sy: 1 - k * 0.03,
-        },
-      );
-    }
-    case 'f15_roll': {
-      const f = Math.floor(pose.now * 16) % 8;
-      const flip = Math.cos(m.dir) < 0;
-      return frameOf(
-        'urchin',
-        pose,
-        'roll',
-        f,
-        () =>
-          urchinBody({
-            step: 0,
-            ball: 1,
-            bristle: 0.7,
-            roll: (f / 8) * TAU * 0.5,
-            glowK: 0.6,
-            dizzy: 0,
-            dk: 0,
-          }),
-        { ghost: { every: 0.05, life: 0.18, tint: '108,240,255', alpha: 0.45 }, still: true },
-        flip,
-      );
-    }
-    case 'f15_dizzy': {
-      const f = Math.floor(pose.now * 6) % 4;
-      return frameOf(
-        'urchin',
-        pose,
-        'dizzy',
-        f,
-        () =>
-          urchinBody({ step: 0, ball: 0.2, bristle: 0.2, roll: 0, glowK: 0, dizzy: f + 1, dk: 0 }),
-        { still: true },
-      );
-    }
-    case 'f15_open': {
-      const k = Math.min(3, Math.floor((pose.t / URCHIN.open) * 4));
-      return frameOf(
-        'urchin',
-        pose,
-        'open',
-        k,
-        () =>
-          urchinBody({
-            step: 0,
-            ball: 0,
-            bristle: 0.6 + k * 0.15,
-            roll: 0,
-            glowK: 0.3 + k * 0.25,
-            dizzy: 0,
-            dk: 0,
-          }),
-        {
-          still: true,
-          sx: 1 + k * 0.03,
-        },
-      );
-    }
-    case 'windup': {
-      const k = Math.min(2, Math.floor((pose.t / 0.6) * 3));
-      return frameOf(
-        'urchin',
-        pose,
-        'wind',
-        k,
-        () =>
-          urchinBody({ step: 0, ball: 0.15, bristle: 0.9, roll: 0, glowK: 0.4, dizzy: 0, dk: 0 }),
-        {
-          dx: -k * 0.6,
-          still: true,
-        },
-      );
-    }
-    default: {
-      const run = pose.anim === 'run';
-      const f = run ? pose.frame % 4 : 0;
-      return frameOf(
-        'urchin',
-        pose,
-        run ? 'run' : 'idle',
-        f,
-        () =>
-          urchinBody({
-            step: f,
-            ball: 0,
-            bristle: run ? 0.45 : 0.35,
-            roll: 0,
-            glowK: 0,
-            dizzy: 0,
-            dk: 0,
-          }),
-        run ? { dy: f % 2 ? -0.5 : 0 } : null,
-      );
-    }
-  }
-});
-
 // --- Метеорит ------------------------------------------------------------------
 
 /**
@@ -4033,6 +3784,614 @@ registerMobPainter('f15_goldbug', (_m: Mob, pose: MobPose) => {
   const f = Math.floor(pose.now * 18) % 4;
   return frameOf('bug', pose, 'run', f, () => bugBody({ f, dk: 0 }), { dy: f % 2 ? -0.5 : 0 });
 });
+// ---------------------------------------------------------------------------
+// Монстры в объёме (анимации 15). Каждый собран из примитивов мини-3D
+// (`f15-rig.ts`) и смотрит в одну из 16 сторон — туда, куда идёт: боком не
+// ходит. Шаг — по пройденному пути, техники — 24 к/с от времени режима
+// (стоп-кадр их держит), кадр контакта — ровно там, где мозг бьёт. Кадр
+// строится раз на позу, сторону и облик и живёт в кеше с вытеснением.
+// Состояние рисунка (курс с пределом поворота, путь, прошлый режим) — в
+// `WeakMap` по мобу: в `m.data` рисунок не пишет.
+// ---------------------------------------------------------------------------
+
+const MF = frameLRU<MobFrame>(2600);
+const FPS = 24;
+const NDIR = 16;
+
+/** Замер для стенда: сколько кадров монстров построено и за сколько. */
+export const F15_MOB_STAT = { n: 0, ms: 0, max: 0, size: () => MF.size };
+
+interface Vis {
+  now: number;
+  x: number;
+  y: number;
+  /** Курс рисунка в игровых углах (сглажен пределом поворота). */
+  yaw: number;
+  /** Пройденный путь, клетки. */
+  dist: number;
+  mode: string;
+  prev: string;
+}
+const VIS = new WeakMap<Mob, Vis>();
+
+const angD = (a: number, b: number) => {
+  let d = (a - b) % TAU;
+  if (d > PI) d -= TAU;
+  if (d < -PI) d += TAU;
+  return d;
+};
+
+/**
+ * Прошлый режим для листа кадров: стенд рисует каждый кадр новым мобом и
+ * передаёт его номером в `m.data.vSheetPrev` (в игре его помнит `Vis`).
+ */
+const SHEET_PREV = [
+  '',
+  'windup',
+  'f15_open',
+  'aim',
+  'f15_charge',
+  'f15_dash',
+  'f15_cast_well',
+  'f15_cast_bolt',
+  'f15_dive',
+  'f15_gather',
+  'f15_lunge',
+  'f15_dizzy',
+  'f15_roll',
+  'f15_snuff',
+];
+
+/** Ход моба для рисунка: курс с пределом поворота (рад/с), путь, прошлый режим. */
+function visOf(m: Mob, pose: MobPose, want: number, turn: number): Vis {
+  let v = VIS.get(m);
+  if (!v) {
+    const sp = Math.hypot(m.vx, m.vy);
+    v = {
+      now: pose.now,
+      x: m.x,
+      y: m.y,
+      yaw: want,
+      dist: sp * pose.t,
+      mode: pose.mode,
+      prev: SHEET_PREV[m.data.vSheetPrev ?? 0] ?? '',
+    };
+    VIS.set(m, v);
+    return v;
+  }
+  const dt = Math.max(0, Math.min(0.1, pose.now - v.now));
+  if (dt > 0) {
+    v.dist += Math.min(Math.hypot(m.x - v.x, m.y - v.y), 1);
+    v.x = m.x;
+    v.y = m.y;
+    v.now = pose.now;
+    const mx = turn * dt;
+    v.yaw += Math.max(-mx, Math.min(mx, angD(want, v.yaw)));
+  }
+  if (pose.mode !== v.mode) {
+    v.prev = v.mode;
+    v.mode = pose.mode;
+  }
+  return v;
+}
+
+/** Игровой угол → курс рига (чтобы на экране морда смотрела точно туда же). */
+const rigYaw = (a: number) => Math.atan2(Math.sin(a), SE * Math.cos(a));
+/** Курс рига → угол на экране. */
+const scrAng = (yaw: number) => Math.atan2(SE * Math.sin(yaw), Math.cos(yaw));
+/** Сторона 0…15 и её курс рига. */
+function side16(gameA: number): { d: number; yaw: number } {
+  const d = dirBucket(rigYaw(gameA), NDIR);
+  return { d, yaw: (d / NDIR) * TAU };
+}
+/** Идёт ли моб (по скорости мозга). */
+const moving = (m: Mob, thr = 0.4) => Math.hypot(m.vx, m.vy) > thr;
+/** Курс по ходу: движется — по скорости, стоит — куда смотрит. */
+const headOf = (m: Mob) => (moving(m) ? Math.atan2(m.vy, m.vx) : m.face);
+
+const easeOut = (k: number) => 1 - (1 - clamp01(k)) ** 3;
+const easeIn = (k: number) => clamp01(k) ** 2;
+const sstep = (a: number, b: number, x: number) => smooth(clamp01((x - a) / (b - a)));
+/** Номер кадра техники 24 к/с (не больше `max`). */
+const fi = (t: number, max: number) => Math.min(max, Math.max(0, Math.floor(t * FPS)));
+
+interface Pic {
+  p: Px;
+  lit: Px | null;
+  ax: number;
+  ay: number;
+  eye: [number, number] | null;
+}
+
+function pale(p: Px): Px {
+  const c0 = hx('#f4f0ff');
+  const q = new Px(p.w, p.h);
+  for (let i = 0; i < p.data.length; i += 4) {
+    if (!p.data[i + 3]) continue;
+    const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
+    const c = mixc([l, l, l, 255], c0, 0.5);
+    q.data[i] = c[0];
+    q.data[i + 1] = c[1];
+    q.data[i + 2] = c[2];
+    q.data[i + 3] = p.data[i + 3];
+  }
+  return q;
+}
+
+function finish3(b: Pic, look: Look, flash: boolean): MobFrame {
+  let p = b.p;
+  if (look === 'albino') p = pale(p);
+  if (look === 'elite') edge(p, GOLDK);
+  if (flash) p = p.tint(WHITE, 0.85);
+  return { img: p.canvas(), ax: b.ax, ay: b.ay, eye: b.eye, lit: b.lit ? b.lit.canvas() : null };
+}
+
+/** Кадр из кеша: вид, поза, номер кадра, сторона; `extra` — поля хода кадра. */
+function mobFrame(
+  kind: string,
+  pose: MobPose,
+  anim: string,
+  f: number,
+  d: number,
+  build: () => Pic,
+  extra?: Partial<MobFrame> | null,
+): MobFrame {
+  const key = `${kind}|${anim}|${f}|${d}|${pose.flash ? 1 : 0}|${pose.look}`;
+  let fr = MF.get(key);
+  if (!fr) {
+    const t0 = performance.now();
+    // Осколки смерти элиты — без золотой обводки: она съедала их цвет.
+    const look = pose.look === 'elite' && anim === 'die' ? 'normal' : pose.look;
+    fr = MF.set(key, finish3(build(), look, pose.flash));
+    const ms = performance.now() - t0;
+    F15_MOB_STAT.n++;
+    F15_MOB_STAT.ms += ms;
+    F15_MOB_STAT.max = Math.max(F15_MOB_STAT.max, ms);
+  }
+  return extra ? { ...fr, ...extra } : fr;
+}
+
+type Proj2 = (v: V3) => [number, number];
+/** Отрисовать риг и дорисовать поверх (`post` — след, искры) в экранных точках. */
+function draw(
+  r: Rig,
+  w: number,
+  h: number,
+  ax: number,
+  ay: number,
+  post?: (o: RigOut, P: Proj2) => void,
+  opt?: RigOpt,
+): Pic {
+  const o = renderRig(r, w, h, ax, ay, opt);
+  if (post)
+    post(o, (v) => {
+      const q = proj(v, ax, ay);
+      return [q[0], q[1]];
+    });
+  return { p: o.p, lit: o.lit, ax, ay, eye: o.eye };
+}
+
+const litOn = (o: RigOut): Px => (o.lit ??= new Px(o.p.w, o.p.h));
+
+/**
+ * След удара — серп по полу вокруг точки (cx, cy) экрана: от угла `a0` до
+ * `a1` (экранные углы), нарисована доля `k`, голова яркая, хвост гаснет.
+ */
+function slash(
+  p: Px,
+  cx: number,
+  cy: number,
+  R: number,
+  a0: number,
+  a1: number,
+  k: number,
+  c: RGBA,
+  fade = 1,
+  wide = 2,
+): void {
+  if (k <= 0 || fade <= 0) return;
+  const n = Math.max(4, Math.ceil(Math.abs(a1 - a0) * R * 1.6));
+  const m = Math.round(n * clamp01(k));
+  for (let i = 0; i <= m; i++) {
+    const s = i / n;
+    const a = a0 + (a1 - a0) * s;
+    const age = m ? 1 - i / m : 0; // 0 — голова
+    const al = (1 - age * 0.85) * fade;
+    const wdt = 1 + (wide - 1) * (1 - age) * Math.sin(Math.PI * Math.min(1, s * 1.15));
+    for (let j = 0; j < wdt; j += 0.7) {
+      const rr = R - j;
+      p.set(
+        Math.round(cx + Math.cos(a) * rr),
+        Math.round(cy + Math.sin(a) * rr),
+        alpha(age < 0.2 ? WHITE : c, al),
+      );
+    }
+  }
+}
+
+/** Звёзды над оглушённым: точки рига на орбите над головой (кадр f из 8). */
+function dizzyStars(r: Rig, top: V3, f: number, R = 4): void {
+  for (let i = 0; i < 3; i++) {
+    const a = (f / 8) * TAU + (i / 3) * TAU;
+    const P: V3 = [top[0] + Math.cos(a) * R, top[1] + Math.sin(a) * R, top[2] + Math.sin(a) * 0.6];
+    r.dot(P, i === 0 ? WHITE : hx('#fff27a'), 1, 2, 0.4);
+  }
+}
+
+/** Искры-лучики вокруг точки экрана (контакт, выстрел): k — доля разлёта. */
+function burstPx(p: Px, x: number, y: number, k: number, n: number, R: number, c: RGBA, seed = 1) {
+  if (k <= 0 || k >= 1) return;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU + hash(i, seed, 3) * 0.6;
+    const r0 = R * (0.2 + k * 0.8);
+    const r1 = r0 + 2 * (1 - k);
+    stroke(
+      p,
+      x + Math.cos(a) * r0,
+      y + Math.sin(a) * r0,
+      x + Math.cos(a) * r1,
+      y + Math.sin(a) * r1,
+      alpha(i % 2 ? c : WHITE, 1 - k),
+    );
+  }
+}
+
+
+// --- Кристальный ёж -----------------------------------------------------------
+//
+// Тельце в бурой шёрстке, мордочка, четыре лапки и иглы-кристаллы кольцами
+// вокруг боковой оси (по шесть в кольце: шар при качении повторяется через
+// 60°, и кадров качения нужно пять на сторону). У развёрнутого видны только
+// иглы спины, свёрнутый — колючий шар.
+
+const U_FUR = tn('#2a1614', '#4e2e24', '#7c5236', '#b08458');
+const U_SKIN = tn('#5a3438', '#8c5458', '#c48a84', '#f4c8b8');
+const U_EYE = hx('#9fe8ff');
+const U_R = 5.4;
+
+const U_SPINES: { d: V3; back: number; ring: number }[] = (() => {
+  const out: { d: V3; back: number; ring: number }[] = [];
+  [-0.98, -0.5, 0, 0.5, 0.98].forEach((lat, ring) => {
+    for (let k = 0; k < 6; k++) {
+      const th = ((k + (ring % 2) * 0.5) / 6) * TAU;
+      const cl = Math.cos(lat);
+      const d: V3 = [Math.cos(th) * cl, Math.sin(lat), Math.sin(th) * cl];
+      const back = clamp01((d[2] + 0.3) * 1.7) * clamp01((0.6 - d[0]) * 1.7);
+      out.push({ d, back, ring });
+    }
+  });
+  return out;
+})();
+
+interface UPose {
+  /** Фаза шага 0…1. */
+  ph: number;
+  /** Свёрнут 0…1. */
+  c: number;
+  /** Мордочка наружу у свёрнутого (оглушён). */
+  peek: number;
+  /** Поворот шара (качение вперёд), рад. */
+  spin: number;
+  pitch: number;
+  fwd: number;
+  lift: number;
+  crouch: number;
+  jaw: number;
+  bristle: number;
+  /** Иглы смотрят вперёд (прицел веера) 0…1. */
+  aim: number;
+  glow: number;
+  /** Доля выстреленных игл спины (отрастают). */
+  gone: number;
+  side: number;
+  /** Смерть 0…1. */
+  dk: number;
+}
+const U0: UPose = {
+  ph: 0,
+  c: 0,
+  peek: 0,
+  spin: 0,
+  pitch: 0,
+  fwd: 0,
+  lift: 0,
+  crouch: 0,
+  jaw: 0,
+  bristle: 0,
+  aim: 0,
+  glow: 0,
+  gone: 0,
+  side: 0,
+  dk: 0,
+};
+
+function urchinRig(o: UPose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const c = o.c;
+  const sk = 1 - o.dk * 0.45;
+  const rb: V3 = [
+    (6.2 - c * 1.0) * sk,
+    (4.9 + c * 0.3) * sk,
+    (4.0 + c * 1.2 - o.crouch * 0.7) * sk,
+  ];
+  const H = rb[2] + 0.5 - o.crouch * 0.4 + o.lift - c * 0.2;
+  const body = B.at(o.fwd, 0, H).pitch(o.pitch).roll(o.side);
+  const crack = o.dk > 0 ? 0.25 + o.dk * 0.5 : 0;
+  r.ell(body, [0, 0, 0], rb, {
+    T: U_FUR,
+    bias: crack,
+    glow: o.dk > 0 ? o.dk * 0.6 : 0,
+    pat: (q, l) => (q[2] < -0.5 + c * 0.3 && q[0] > -0.6 ? tone(U_SKIN, l - 0.1) : null),
+  });
+  // Мордочка: у свёрнутого уходит в шар.
+  const ch = c * (1 - o.peek);
+  const hd = body
+    .at(rb[0] * (0.74 - ch * 0.45), 0, -0.9 - ch * 0.8)
+    .pitch(-o.jaw * 0.45 + ch * 0.4)
+    .scale(1 - ch * 0.25);
+  const skin: Mat = { T: U_SKIN };
+  r.ell(hd, [0.6, 0, 0], [2.8, 2.25, 2.05], skin);
+  r.dot(hd.p(3.3, 0, 0.35), hx('#2a0c22'), 0, 1, 0.8);
+  if (ch < 0.8) {
+    for (const s of [-1, 1]) {
+      r.ell(hd, [-1.2, s * 1.9, 1.8], [0.7, 0.55, 1.0], skin);
+      r.dot(hd.p(1.2, s * 1.55, 1.0), o.dk > 0 ? INK : U_EYE, o.dk > 0 ? 0 : 1, 1, 0.5);
+    }
+    if (o.jaw > 0.05) {
+      r.ell(hd, [1.6, 0, -1.3], [1.7, 1.25, 0.45 + o.jaw * 0.8], { T: tn('#1a0614', '#2a0c1e', '#4a1830', '#6a2440') });
+      r.dot(hd.p(2.6, -0.6, -0.9), WHITE, 0, 1, 0.9);
+      r.dot(hd.p(2.6, 0.6, -0.9), WHITE, 0, 1, 0.9);
+    }
+    if (o.dk <= 0) r.eye = hd.p(1.2, -1.55, 1.0);
+  }
+  // Лапки: диагональными парами; свёрнутый их поджимает.
+  const legs: [number, number, number][] = [
+    [2.4, -2.8, 0],
+    [2.4, 2.8, 0.5],
+    [-2.6, -2.8, 0.5],
+    [-2.6, 2.8, 0],
+  ];
+  for (const [lf, ls, off] of legs) {
+    const p = (o.ph + off) % 1;
+    const sw = -Math.cos(p * TAU) * 1.9;
+    const up = Math.max(0, Math.sin(p * TAU)) * 1.4;
+    const hip = body.p(lf, ls * 0.9, -rb[2] * 0.45);
+    const foot0 = B.p(o.fwd + lf * 0.9 + sw, ls * 1.1, up);
+    const foot = vlerp(foot0, hip, Math.max(c, o.dk));
+    r.cap(hip, foot, 1.25, 0.95, { T: U_FUR, bias: -0.15 });
+    r.ball(foot, 1.0 * (1 - c * 0.5), { T: U_SKIN, bias: -0.2 });
+  }
+  // Иглы.
+  const spinF = body.pitch(o.spin);
+  const sweep = -0.4 + o.aim * 1.1 - o.bristle * 0.15;
+  const mat: Mat = { T: CRYST, spec: true, glow: 0.22 + o.glow * 0.45 };
+  const from = r.size;
+  for (const s of U_SPINES) {
+    let vis = Math.max(s.back, c);
+    if (o.gone > 0 && s.back > 0.45 && s.d[0] > -0.35) vis *= 1 - o.gone;
+    if (vis < 0.08) continue;
+    const L = (3.0 + 2.5 * s.back * (1 - c * 0.3) + o.bristle * 1.3) * vis;
+    const base = spinF.p(s.d[0] * rb[0] * 0.8, s.d[1] * rb[1] * 0.8, s.d[2] * rb[2] * 0.8);
+    const dl = spinF.v(s.d[0], s.d[1], s.d[2]);
+    const dir = vadd(dl, vmul(body.f, sweep * (1 - c) * Math.max(0, s.d[2] + 0.2)));
+    r.spike(base, dir, L, 1.3 + 0.4 * s.back, mat, 4, s.ring * 0.4);
+    if (o.glow > 0.35 && s.back > 0.5) {
+      const tip = vadd(base, vmul(vnorm(dir), L + 0.3));
+      r.dot(tip, WHITE, o.glow, 1, 0.8);
+    }
+  }
+  if (o.dk > 0) r.explode(sstep(0.25, 1, o.dk), body.o, 15, 11, 30, from, 0.3);
+  return r;
+}
+
+/** Нарисовать ежа: холст 44×44, ноги в (22, 30). */
+function urchinPic(o: UPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(urchinRig(o, yaw), 44, 44, 22, 30, post);
+}
+
+/** Серп укуса перед мордой: экранный угол `sa`, доля `k`, затухание `fade`. */
+function biteTrail(R: number, sa: number, arc: number, k: number, fade: number, c: RGBA) {
+  return (o: RigOut, P: Proj2) => {
+    const [cx, cy] = P([0, 0, 2.5]);
+    const lit = litOn(o);
+    slash(lit, cx, cy, R, sa + arc / 2, sa - arc / 2, k, c, fade, 3);
+    slash(o.p, cx, cy, R, sa + arc / 2, sa - arc / 2, k, alpha(c, 0.8), fade * 0.8, 1);
+  };
+}
+
+registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const roll = md === 'f15_roll';
+  const tech = md !== 'chase' && md !== 'idle' && md !== 'wander' && md !== 'flee';
+  const v = visOf(m, pose, roll ? Math.atan2(m.vy, m.vx) : tech ? m.face : headOf(m), roll ? 40 : 11);
+  const { d, yaw } = side16(v.yaw);
+  const sa = scrAng(yaw);
+  const o: UPose = { ...U0 };
+  const extra: Partial<MobFrame> = { shadow: 6 };
+  let anim = 'idle';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  if (md === 'dying') {
+    const T = 1.05;
+    f = fi(t, 25);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.c = easeOut(k / 0.3);
+    o.dk = k;
+    o.glow = 1 - k;
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.7, 1, k);
+    extra.shadow = 6 * (1 - k);
+  } else if (md === 'windup') {
+    // Укус: присел назад, иглы дыбом — бросок вперёд с открытой пастью;
+    // челюсти смыкаются в последнем кадре замаха (урон — в конце замаха).
+    const T = 0.6;
+    f = fi(t, 14);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'bite';
+    const back = sstep(0, 0.65, k);
+    const snap = easeOut((k - 0.7) / 0.25);
+    o.fwd = -3 * back * (1 - snap) + 5.5 * snap;
+    o.crouch = 0.9 * back * (1 - snap);
+    o.bristle = back;
+    o.pitch = -0.18 * back * (1 - snap) + 0.22 * snap;
+    o.jaw = k < 0.93 ? back * 0.5 * (1 - snap) + snap : 0.15;
+    o.ph = 0.25;
+    if (k > 0.72) post = biteTrail(13, sa, 1.4, (k - 0.72) / 0.28, 1, TEAL_GLOW);
+    extra.still = true;
+  } else if (md === 'f15_curl') {
+    // Сворачивание: присел, качнулся назад — и колючий шар, готовый к броску.
+    const T = 0.6;
+    f = fi(t, 14);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'curl';
+    o.crouch = 0.8 * sstep(0, 0.2, k) * (1 - sstep(0.3, 0.6, k));
+    o.c = easeOut(sstep(0.12, 0.7, k));
+    o.lift = Math.sin(PI * sstep(0.5, 0.85, k)) * 2.2;
+    o.spin = -0.45 * sstep(0.55, 0.85, k) + 0.6 * sstep(0.85, 1, k);
+    o.bristle = sstep(0.1, 0.6, k);
+    o.glow = k;
+    extra.still = true;
+  } else if (roll) {
+    // Качение: шар крутится по ходу; пять кадров на 60° (иглы повторяются).
+    const ang = (v.dist * TS) / U_R;
+    f = Math.floor(ang / (TAU / 30)) % 5;
+    anim = 'roll';
+    o.c = 1;
+    o.spin = (f * TAU) / 30 + 0.6;
+    o.glow = 0.7;
+    extra.dy = -Math.abs(Math.sin(v.dist * 3.1)) * 1.2;
+    extra.ghost = { every: 0.035, life: 0.18, tint: '108,240,255', alpha: 0.42 };
+    extra.still = true;
+  } else if (md === 'f15_dizzy') {
+    // Оглушён: шар раскачивается и затихает, мордочка наружу, звёзды кругом.
+    f = fi(t, 26);
+    const k = f / FPS;
+    anim = 'dizzy';
+    o.c = 0.85;
+    o.peek = 0.7;
+    o.side = Math.sin(k * 13) * 0.4 * (1 - k / 1.2);
+    o.spin = Math.sin(k * 9) * 0.15;
+    extra.still = true;
+    const sf = f % 8;
+    const base = urchinRig;
+    return mobFrame('urchin', pose, anim, f, d, () => {
+      const r = base(o, yaw);
+      dizzyStars(r, [0, 0, 13], sf, 4.2);
+      return draw(r, 44, 44, 22, 30);
+    }, extra);
+  } else if (md === 'f15_open') {
+    // Раскрытие: разворачивается, горбит спину к цели, иглы смотрят вперёд и
+    // наливаются светом; выстрел — в конце режима.
+    const T = 0.55;
+    f = fi(t, 13);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'open';
+    o.c = 0.9 * (1 - easeOut(sstep(0, 0.42, k)));
+    o.pitch = 0.5 * sstep(0.25, 0.85, k);
+    o.aim = sstep(0.25, 0.9, k);
+    o.bristle = sstep(0.2, 0.8, k);
+    o.glow = sstep(0.35, 1, k);
+    o.crouch = 0.6 * sstep(0.3, 1, k);
+    o.side = k > 0.7 ? (f % 2 ? 0.05 : -0.05) : 0;
+    extra.still = true;
+  } else if (md === 'recover') {
+    const T = 0.6;
+    f = fi(t, 14);
+    const k = (f + 0.5) / FPS / T;
+    if (v.prev === 'f15_open') {
+      // Отдача веера: иглы спины ушли, корпус отбросило назад; отрастают.
+      anim = 'shot';
+      const kick = 1 - easeOut(k / 0.35);
+      o.pitch = -0.28 * kick;
+      o.fwd = -2.2 * kick;
+      o.aim = kick;
+      o.gone = 1 - sstep(0.35, 1, k);
+      o.glow = kick;
+      o.crouch = 0.3 * kick;
+      if (f <= 4)
+        post = (out, P) => {
+          const lit = litOn(out);
+          const fk = f / 5;
+          for (let i = -2; i <= 2; i++) {
+            const a = sa + i * 0.22;
+            const [x0, y0] = P([0, 0, 7]);
+            const r0 = 6 + fk * 10;
+            const x = x0 + Math.cos(a) * r0;
+            const y = y0 + Math.sin(a) * r0 * 0.9;
+            stroke(lit, x, y, x - Math.cos(a) * 4, y - Math.sin(a) * 4, alpha(TEAL_GLOW, 0.8 - fk * 0.6));
+            lit.set(Math.round(x), Math.round(y), alpha(WHITE, 1 - fk));
+          }
+        };
+    } else if (v.prev === 'windup') {
+      // Проводка укуса: держит выпад, серп гаснет, затем отходит.
+      anim = 'bitefol';
+      const hold = 1 - sstep(0.2, 0.75, k);
+      o.fwd = 5.5 * hold;
+      o.pitch = 0.22 * hold;
+      o.jaw = 0.15 * hold;
+      o.bristle = hold;
+      o.ph = 0.25;
+      if (k < 0.4) post = biteTrail(13, sa, 1.4, 1, 1 - k / 0.4, TEAL_GLOW);
+    } else {
+      anim = 'rec';
+      o.crouch = 0.3 * (1 - k);
+      o.bristle = 0.5 * (1 - k);
+    }
+    extra.still = true;
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(t, 6);
+    anim = 'hurt';
+    const k = f / 6;
+    o.crouch = 0.8 * (1 - k);
+    o.fwd = -1.5 * (1 - k);
+    o.pitch = -0.2 * (1 - k);
+    o.bristle = 1 - k;
+  } else if (moving(m)) {
+    f = Math.floor((v.dist / 0.7) * 8) % 8;
+    anim = 'run';
+    o.ph = f / 8;
+    o.lift = Math.abs(Math.sin((f / 8) * TAU)) * 0.6;
+    o.pitch = 0.05;
+  } else {
+    f = Math.floor(pose.now * 4) % 4;
+    anim = 'idle';
+    o.crouch = (f === 1 || f === 2 ? 0.15 : 0) + 0.05;
+    o.glow = f === 2 ? 0.4 : 0.15;
+  }
+  return mobFrame('urchin', pose, anim, f, d, () => urchinPic(o, yaw, post), extra);
+});
+
+registerMobWarm('f15_urchin', function* () {
+  const pose = (anim: MobPose['anim'], mode: string): MobPose => ({
+    anim,
+    frame: 0,
+    mode,
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  });
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('urchin', pose('run', 'chase'), 'run', f, d, () =>
+        urchinPic({ ...U0, ph: f / 8, lift: Math.abs(Math.sin((f / 8) * TAU)) * 0.6, pitch: 0.05 }, yaw),
+      );
+      yield 0;
+    }
+    for (let f = 0; f < 5; f++) {
+      mobFrame('urchin', pose('sleep', 'f15_roll'), 'roll', f, d, () =>
+        urchinPic({ ...U0, c: 1, spin: (f * TAU) / 30 + 0.6, glow: 0.7 }, yaw),
+      );
+      yield 0;
+    }
+  }
+});
+
 // --- Прогрев кадров ------------------------------------------------------------------
 
 /** Кадры по позам: рендер дорисует их по 3 мс за кадр, пока такой моб в мире. */
@@ -4050,36 +4409,6 @@ function warm(kind: string, poses: [string, number, () => Built][]): () => Itera
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
-registerMobWarm(
-  'f15_urchin',
-  warm('urchin', [
-    ...range(4).map((f): [string, number, () => Built] => [
-      'run',
-      f,
-      () => urchinBody({ step: f, ball: 0, bristle: 0.45, roll: 0, glowK: 0, dizzy: 0, dk: 0 }),
-    ]),
-    ...range(8).map((f): [string, number, () => Built] => [
-      'roll',
-      f,
-      () =>
-        urchinBody({
-          step: 0,
-          ball: 1,
-          bristle: 0.7,
-          roll: (f / 8) * TAU * 0.5,
-          glowK: 0.6,
-          dizzy: 0,
-          dk: 0,
-        }),
-    ]),
-    ...range(5).map((k): [string, number, () => Built] => [
-      'curl',
-      k,
-      () =>
-        urchinBody({ step: 0, ball: k / 4, bristle: 0.5, roll: 0, glowK: k / 4, dizzy: 0, dk: 0 }),
-    ]),
-  ]),
-);
 registerMobWarm(
   'f15_graviton',
   warm(
