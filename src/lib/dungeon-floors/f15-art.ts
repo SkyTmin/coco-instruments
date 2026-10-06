@@ -891,15 +891,16 @@ function slabFloor(p: Px, c: CellCtx): void {
           (id > 0.9 ? 0.2 : 0),
       );
       if (id < 0.07) {
-        // Редкая плита со звездой-инкрустацией: латунь и слоновая кость.
+        // Редкая плита со звездой-инкрустацией: приглушённое серебро в лазури —
+        // не спорит с золотыми метками звездопада и блеском добычи.
         const dx = u - 7.5;
         const dy = v - 7.5;
         const r = Math.hypot(dx, dy);
         const a = Math.atan2(dy, dx);
-        if (r < 1.6) col = IVORY[3];
-        else if (r < 2.2 + 3.6 * Math.pow(Math.abs(Math.cos(a * 2)), 6))
-          col = tone(BRASS, 0.75 - (dx + dy) * 0.06);
-        else if (Math.abs(r - 6) < 0.5) col = mixc(col, BRASS[1], 0.6);
+        if (r < 1.4) col = mixc(col, IVORY[2], 0.55);
+        else if (r < 2 + 3.4 * Math.pow(Math.abs(Math.cos(a * 2)), 6))
+          col = mixc(col, dx + dy < 0 ? IVORY[1] : LAPIS[2], 0.45);
+        else if (Math.abs(r - 6) < 0.5) col = mixc(col, LAPIS[1], 0.5);
       }
       if (u === 0 || v === 0) col = BRASS[0];
       else if (u === 1 || v === 1) col = mixc(col, OBS_FLOOR[3], 0.35);
