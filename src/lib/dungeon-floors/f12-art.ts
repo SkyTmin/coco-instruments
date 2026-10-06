@@ -2291,7 +2291,8 @@ function rigTask(
         if (over()) return false;
       }
       if (stage === 2 && job) {
-        if (!job.step(ms < Infinity ? Math.max(0, ms - (performance.now() - t0)) : ms)) return false;
+        if (!job.step(ms < Infinity ? Math.max(0, ms - (performance.now() - t0)) : ms))
+          return false;
         out = job.out();
         stage = 3;
         if (over()) return false;
@@ -5786,7 +5787,8 @@ interface MamCtx {
 
 /** Поза мамонта в режиме `mode` на время `t` (с; уже квантовано по кадрам). */
 function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
-  const o: MamO = { ...MAM0, rider: c.rider, phase: c.phase, rRib: now * 4.5 };
+  // Ленты — от времени режима: ключ кадра техники покрывает и их.
+  const o: MamO = { ...MAM0, rider: c.rider, phase: c.phase, rRib: t * 4.5 };
   switch (mode) {
     case 'roar': {
       // Вход: трясёт головой, удар ногой — голову вверх, хобот трубой, рёв;
@@ -6145,6 +6147,7 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       o.rLean = 0.5 + 0.08 * Math.sin(a - 1);
       o.rUp = Math.sin(a - 0.6);
       o.rCrouch = 0.4;
+      o.rRib = a * 2;
       return o;
     }
     case 'f12b_skid': {
@@ -6292,6 +6295,7 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       o.furAmp = 0.05;
       o.furPh = u;
       o.rLean = 0.15 + 0.06 * Math.sin(a);
+      o.rRib = a * 2;
       return o;
     }
     case 'f12b_getup': {
@@ -6768,7 +6772,7 @@ function mamFrame(
   } else if (mode === 'f12b_paw') {
     const tt = clamp01(c.k) * MAMMOTH.paw;
     const pi = f24(tt);
-    o = mamAt(mode, t, now, { ...c, k: pi / 24 / MAMMOTH.paw });
+    o = mamAt(mode, pi / 24, now, { ...c, k: pi / 24 / MAMMOTH.paw });
     key = `paw${pi}`;
   } else if (len !== undefined) {
     o = mamAt(mode, t, now, c);
@@ -6854,10 +6858,63 @@ function mamCtx(m: Mob): MamCtx {
 }
 
 /** Позы мамонта по режиму мозга. */
-function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<MobFrame> } {
+function mamPose(
+  m: Mob,
+  pose: MobPose,
+  /** Кадр «на потом»: на сколько кадров 24 к/с вперёд (0 — сейчас). */
+  j = 0,
+): { o: MamO; key: string; ex: Partial<MobFrame> } {
   const c = mamCtx(m);
-  const { o, key, ex } = mamFrame(pose.mode, pose.t, pose.now, c, m.face);
+  let t = pose.t;
+  if (j) {
+    if (MAM_LEN[pose.mode] !== undefined) t = (f24(pose.t) + j + 0.5) / 24;
+    else {
+      // Шаг и набег: ход идёт по пройденному пути (как в `tankStep` мозга).
+      t += j / 24;
+      c.walk += (c.speed + 2.4 * clamp01((Math.abs(c.turn) - 0.03) / 0.25)) * (j / 24);
+    }
+    if (pose.mode === 'f12b_paw') c.k += j / 24 / MAMMOTH.paw;
+  }
+  const { o, key, ex } = mamFrame(pose.mode, t, pose.now + j / 24, c, m.face);
   return { o, key: `${pose.look}|${c.rider ? 'r' : ''}${c.phase}|${key}`, ex };
+}
+
+/**
+ * Кадр «на потом». Техника идёт 24 к/с, игра — 60–100 к/с: новый рисунок
+ * нужен раз в 2–4 кадра игры, и каждый такой кадр платил за него целиком
+ * (p95 кадра боя, библия §14 п. 12). Теперь следующий кадр мамонта рисуется
+ * заранее в своих буферах — по `PIPE_MS` за кадр игры; к своему времени он
+ * уже в кеше, а не успел — дорисовывается остаток. Не угадал (сменился
+ * режим, повернул) — брошен, картинка та же, что без него.
+ */
+const MAM_PIPE = rigBufs();
+const PIPE_MS = 0.45;
+let mamNext: { id: number; mode: string; until: number; task: RigTask } | null = null;
+
+function mamAhead(m: Mob, pose: MobPose, look: MobPose['look']): void {
+  if (mamNext && (mamNext.id !== m.id || mamNext.mode !== pose.mode || pose.now > mamNext.until))
+    mamNext = null;
+  const t0 = performance.now();
+  const left = () => PIPE_MS - (performance.now() - t0);
+  for (let j = 1; j <= 3 && left() > 0; j++) {
+    if (!mamNext) {
+      const { o, key } = mamPose(m, pose, j);
+      const task = rigTask(
+        'f12boss',
+        key,
+        m.face,
+        CV_MAM,
+        false,
+        () => mammothBuild(look, o),
+        16,
+        MAM_PIPE,
+      );
+      if (lruOf('f12boss').get(task.key)) continue;
+      mamNext = { id: m.id, mode: pose.mode, until: pose.now + 0.3, task };
+    }
+    if (!mamNext.task.step(left())) return;
+    mamNext = null;
+  }
 }
 
 /** Точки кадра (px от точки моба на полу): бубен и середина кончиков бивней. */
@@ -6890,9 +6947,15 @@ lruOf('f12_shaman', 320);
 
 regMob('f12boss', (m, pose) => {
   const { o, key, ex } = mamPose(m, pose);
+  // Нужный кадр рисовался заранее — дорисовать остаток.
+  if (mamNext?.id === m.id && mamNext.task.key === `${key}|${dirN(m.face, 16)}|0`) {
+    mamNext.task.step(Infinity);
+    mamNext = null;
+  }
   const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => mammothBuild(pose.look, o));
   MAM_PTS.set(m.id, mamPts(o, m.face, ex));
   if (MAM_PTS.size > 8) MAM_PTS.delete(MAM_PTS.keys().next().value as number);
+  mamAhead(m, pose, pose.look);
   return mobFrame(c, CV_MAM, ex);
 });
 
