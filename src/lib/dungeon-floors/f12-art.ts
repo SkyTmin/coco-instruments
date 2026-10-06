@@ -5566,7 +5566,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
               const a = tr[k][j];
               const b = tr[k + 1][j];
               if (fx.z(a[0], a[1]) > a[2] + 3) continue;
-              p.line(a[0], a[1], b[0], b[1], alpha(WHITE, 0.95 - k * 0.25));
+              p.line(a[0], a[1], b[0], b[1], alpha(WHITE, 0.95 * (1 - k / (tr.length - 1))));
             }
         }
       },
@@ -6626,12 +6626,13 @@ function mamFrame(
     o.lift = 6.5 * k;
     key += `b${wf}`;
   }
-  // След бивней: те же ключи на 1–3 кадра раньше.
+  // След бивней: те же ключи на 0,15 с назад, через полкадра — дуга, а не
+  // ломаная из трёх хорд.
   const tw = MAM_TRAIL[mode];
   if (tw && t >= tw[0] && t <= tw[1]) {
     const tr: V3[][] = [];
-    for (let k = 0; k <= 3; k++) {
-      const ok = k === 0 ? o : mamAt(mode, t - k / 24, now, c);
+    for (let k = 0; k <= 7; k++) {
+      const ok = k === 0 ? o : mamAt(mode, t - k / 48, now, c);
       const T = mamTusks(mamSkel(ok));
       tr.push([T.tip[0], T.tip[1], T.mid[0], T.mid[1]]);
     }
