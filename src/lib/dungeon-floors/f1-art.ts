@@ -826,11 +826,12 @@ export const F1_MOB_STAT = {
   list: [] as number[],
   /** Бюджет новых кадров на кадр рендера, мс (см. `held`). */
   budget: 0.3,
-  size: () => RAT_LRU.size + BIP_LRU.size + VAR_LRU.size,
+  size: () => [...LRUS.values()].reduce((a, l) => a + l.size, VAR_LRU.size),
+  /** Стенд: сколько кадров в кеше у каждого вида (сверка с `LRU_CAP`). */
+  sizes: () => Object.fromEntries([...LRUS].map(([k, l]) => [k, l.size])),
   /** Стенд: сбросить кеши кадров (замер нового кадра на прогретом JIT). */
   clear: () => {
-    RAT_LRU.clear();
-    BIP_LRU.clear();
+    for (const l of LRUS.values()) l.clear();
     VAR_LRU.clear();
   },
 };
@@ -2004,9 +2005,30 @@ function ratPose(
   return { o, fx, k };
 }
 
-const RAT_LRU = frameLRU<MobFrame>(1600);
+/**
+ * Кеш кадров — свой у каждого вида, с пределом: толпа одних крыс не
+ * вытесняет прогретых латников. Предел — прогрев вида (покой, ход, приёмы на
+ * 5 рисуемых сторон; зеркальные три стороны в кеш не идут) с запасом на
+ * смерть, появление и редкие позы.
+ */
+const LRU_CAP: Record<string, number> = {
+  rat: 700,
+  fatrat: 600,
+  bomber: 400,
+  goldrat: 400,
+  ratman: 1200,
+  slinger: 1000,
+  shaman: 1200,
+  guard: 1300,
+};
+const LRUS = new Map<string, FrameLRU<MobFrame>>();
+function lruOf(id: string): FrameLRU<MobFrame> {
+  let l = LRUS.get(id);
+  if (!l) LRUS.set(id, (l = frameLRU<MobFrame>(LRU_CAP[id] ?? 400)));
+  return l;
+}
 /** Чары и вспышка всех видов: ореол общий, холст — только у вспышки. */
-const VAR_LRU = frameLRU<MobFrame>(1200);
+const VAR_LRU = frameLRU<MobFrame>(2400);
 const MOB_WU = new Map(F1.mobs.map((d) => [d.id, d.windup]));
 /** Режимы, где крыса бежит, — остальные рисуются своей позой. */
 const RAT_MOVE = new Set(['chase', 'flee', 'idle', 'wander', 'return', 'recover', 'alert']);
@@ -2024,7 +2046,7 @@ function ratFrame(
   glint = -1,
 ): MobFrame {
   const base = `${K.id}|${anim}|${f}|${anim === 'bite' || anim === 'plant' || anim === 'die' ? T : ''}|${glint}`;
-  return mobFrame(RAT_LRU, base, d, look, flash, buff, (yaw) => {
+  return mobFrame(lruOf(K.id), base, d, look, flash, buff, (yaw) => {
     const { o, fx, k } = ratPose(K, anim, f, T, glint);
     return ratPic(o, yaw, K, ratCoat(K, look), fx, k);
   });
@@ -4213,7 +4235,6 @@ function bipDie(K: BipK, x: number, out: BOut): void {
   }
 }
 
-const BIP_LRU = frameLRU<MobFrame>(3000);
 /** Режимы, где двуногий идёт по скорости (остальные — своей позой). */
 const BIP_MOVE = new Set(['chase', 'flee', 'idle', 'wander', 'return', 'alert']);
 const BIP_ATK = new Set([
@@ -4243,7 +4264,7 @@ function bipFrame(
   buff: number,
 ): MobFrame {
   const base = `${K.id}|${anim}|${f}|${T}|${vr}`;
-  return mobFrame(BIP_LRU, base, d, look, flash, buff, (yaw) =>
+  return mobFrame(lruOf(K.id), base, d, look, flash, buff, (yaw) =>
     bipPic(bipPose(K, anim, f, T, vr), yaw, K, furOf(K.fur, look)),
   );
 }
