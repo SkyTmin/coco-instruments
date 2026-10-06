@@ -4331,13 +4331,29 @@ registerZonePainter(
     const side = big ? 1 : -1;
     const fx = a0 === undefined ? cx : cx - Math.sin(a0) * 4 * side;
     const fy = a0 === undefined ? cy : cy + Math.cos(a0) * 2 * side;
-    p.col(GLOW[ph], 0.55 * (1 - k));
-    const rx = (big ? 6 : 4) + (big ? 9 : 6) * eOut2(k);
-    // Овал (вид сверху в три четверти): по пикселям кольца, сжатого по y.
-    const pts = circle(rx);
-    for (let i = 0; i < pts.x.length; i += 1) {
-      if ((i >> 1) % 3 === 2) continue;
-      p.dot(fx + pts.x[i], fy + pts.y[i] * 0.45);
+    // Отпечаток ступни — тёмная черта с бликом, держится весь шаг: видно,
+    // где он прошёл (за подолом — под ним, сбоку — на полу).
+    const fade = 1 - k01((t - 0.25) / 0.2);
+    p.col(STEP_INK[ph], 0.55 * fade);
+    p.dot(fx - 2, fy, 4, 1);
+    p.col(GLOW_HI[ph], 0.5 * fade);
+    p.dot(fx - 1, fy - 1, 2, 1);
+    // Тик: овал (вид в три четверти) шире подола — двенадцать рисок
+    // циферблата расходятся от ступни; тёмная подложка — чтобы читался и
+    // на светлой кости, светлая риска поверх.
+    const rx = (big ? 9 : 7) + (big ? 10 : 7) * eOut2(k);
+    const ry = rx * 0.42;
+    const len = big ? 3 : 2;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const x0 = fx + ca * rx;
+      const y0 = fy + sa * ry;
+      p.col(STEP_INK[ph], 0.42 * (1 - k));
+      p.line(x0 + 1, y0 + 1, x0 + ca * len + 1, y0 + sa * len * 0.42 + 1);
+      p.col(i % 3 === 0 ? GLOW_HI[ph] : GLOW[ph], 0.85 * (1 - k));
+      p.line(x0, y0, x0 + ca * len, y0 + sa * len * 0.42);
     }
     const sd = seedOf(zz.id);
     for (let i = 0; i < 2; i++) {
@@ -4347,9 +4363,11 @@ registerZonePainter(
       p.dot(fx + Math.cos(a) * 6 * f.h * 8, fy - f.z);
     }
     if (a0 !== undefined && !reduced())
-      dust(p, sd + 3, t, fx, fy, 2, a0 + Math.PI, 0.7, 10, 8, 1.5, 3.5, 3, 0.45, dustPal(), 0.45);
+      dust(p, sd + 3, t, fx, fy, 3, a0 + Math.PI, 0.8, 14, 10, 2, 4.5, 4, 0.45, dustPal(), 0.55);
   }),
 );
+/** Тёмная подложка шага по фазе: кость, лёд, бирюза, ночь. */
+const STEP_INK = ['#6a4818', '#3a4a66', '#1c4a52', '#1a1c3a'];
 
 // Смена фазы: от Повелителя по арене бежит волна цвета новой фазы; за ней —
 // искры, пол уже другой (арена перекрашена мозгом).
