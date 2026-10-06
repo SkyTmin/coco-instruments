@@ -4492,11 +4492,44 @@ function lordBase(q: LReq): MobFrame {
   if (r.op < 0.999) out.alpha = lclamp(r.op, 0, 1);
   if (q.tech === 'death')
     out.shadow = 13 * (1 - 0.8 * lclamp((t - DEATH_SWEEP[0]) / DEATH_SWEEP[1], 0, 1));
+  // Точки тела для «Техник» (`lordPointPx`): от якоря кадра, влево — отражены.
+  const gq = lGeo(r);
+  const tipOf = (b: LBlade): [number, number] => [b.x + b.ux * b.len, b.y + b.uy * b.len];
+  const raw: Record<LordPoint, [number, number]> = {
+    face: [gq.hx, gq.hy],
+    minTip: tipOf(lBlade(r, gq, true)),
+    hourTip: tipOf(lBlade(r, gq, false)),
+    glass: [LCX + r.gx + gq.sh(LG + r.gy), LG + r.gy + r.drop],
+  };
+  const rel = {} as Record<LordPoint, [number, number]>;
+  for (const k of LORD_POINTS) {
+    const [x, y] = raw[k];
+    rel[k] = [(q.left ? LW - 1 - x : x) - LCX, y - LG];
+  }
+  LPTS.set(out, rel);
   const ms = performance.now() - t0;
   F14_LORD_STAT.drawn++;
   F14_LORD_STAT.ms += ms;
   F14_LORD_STAT.max = Math.max(F14_LORD_STAT.max, ms);
   return LFR.set(key, out);
+}
+
+export type LordPoint = 'face' | 'minTip' | 'hourTip' | 'glass';
+const LORD_POINTS: LordPoint[] = ['face', 'minTip', 'hourTip', 'glass'];
+/** Точки тела в готовом кадре (от якоря, до хода кадра). */
+const LPTS = new WeakMap<MobFrame, Record<LordPoint, [number, number]>>();
+/** Точки тела в последнем нарисованном кадре, с ходом кадра — по `m.id`. */
+const LPT_LAST = new Map<number, Record<LordPoint, [number, number]>>();
+
+/**
+ * Точка тела Повелителя в последнем нарисованном кадре — px от точки моба
+ * на полу (как рисует движок: сжатие, наклон и сдвиг кадра учтены):
+ * `face` — середина циферблата, `minTip` / `hourTip` — острия минутной и
+ * часовой стрелок-клинков, `glass` — песочные часы в руках. `null`, если
+ * кадра ещё не было. Эффекты рук и клинков берут точку только отсюда.
+ */
+export function lordPointPx(m: Mob, which: LordPoint): [number, number] | null {
+  return LPT_LAST.get(m.id)?.[which] ?? null;
 }
 
 /** Смерть: клинки падают, нимб ложится, корпус рассыпается шестернями. */
@@ -4783,6 +4816,22 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
       out.ghost = { every: 0.025, life: 0.13, tint: '#ffe0a0', alpha: 0.24 };
   }
   if (q.tech === 'death') out.linger = DEATH_T;
+  const pts = LPTS.get(lordBase(q));
+  if (pts) {
+    const sx = out.sx ?? 1;
+    const sy = out.sy ?? 1;
+    const ca = Math.cos(out.rot ?? 0);
+    const sa = Math.sin(out.rot ?? 0);
+    const put = {} as Record<LordPoint, [number, number]>;
+    for (const k of LORD_POINTS) {
+      const x = pts[k][0] * sx;
+      const y = pts[k][1] * sy;
+      // Движок ставит якорь на 2 px ниже точки моба (`drawMob`).
+      put[k] = [x * ca - y * sa + (out.dx ?? 0), x * sa + y * ca + (out.dy ?? 0) + 2];
+    }
+    LPT_LAST.set(m.id, put);
+    if (LPT_LAST.size > 8) LPT_LAST.delete(LPT_LAST.keys().next().value as number);
+  }
   return out;
 });
 
