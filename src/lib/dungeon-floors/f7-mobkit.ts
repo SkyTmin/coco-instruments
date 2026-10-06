@@ -15,6 +15,8 @@ import { Px } from '../dungeon-art';
 import { frameLRU, paintSim } from '../dungeon-paint';
 import type { FrameLRU, MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
+import { SE, proj, renderRig } from './f15-rig';
+import type { Rig, RigOut, V3 } from './f15-rig';
 
 export type RGBA = [number, number, number, number];
 export type Tones = [RGBA, RGBA, RGBA, RGBA];
@@ -593,4 +595,76 @@ export function smear(
       if (near < 0.45 && (x + y) % 2) continue;
       p.set(x, y, alpha(mixc(cold, hot, near), al));
     }
+}
+
+// ---- Мини-3D (риг 15-го): курс, картинка, проявление ------------------------------
+
+/** Игровой угол → курс рига: на экране морда смотрит точно туда же. */
+export const rigYaw = (a: number) => Math.atan2(Math.sin(a), SE * Math.cos(a));
+/** Курс рига стороны 0…7. */
+export const yawOfDir = (d: number) => rigYaw((d * PI) / 4);
+
+/** Риг → картинка позы (контур, свет, слой поверх темноты, глаз). */
+export function rigPic(
+  r: Rig,
+  w: number,
+  h: number,
+  ax: number,
+  ay: number,
+  opt: { outline?: RGBA | null; inner?: number } = {},
+  post?: (o: RigOut, P: (v: V3) => [number, number]) => void,
+): Pic {
+  const o = renderRig(r, w, h, ax, ay, { outline: opt.outline ?? INK, inner: opt.inner ?? 2.2 });
+  if (post)
+    post(o, (v) => {
+      const q = proj(v, ax, ay);
+      return [q[0], q[1]];
+    });
+  return { p: o.p, lit: o.lit, ax, ay, eye: o.eye };
+}
+export const litOf = (o: RigOut): Px => (o.lit ??= new Px(o.p.w, o.p.h));
+
+/** Проявление дизером: остаются точки, у которых шум ниже `k` (0 — пусто, 1 — всё). */
+export function dither(p: Px, k: number, seed: number): Px {
+  if (k >= 1) return p;
+  const q = new Px(p.w, p.h);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      const i = (y * p.w + x) * 4;
+      if (!p.data[i + 3]) continue;
+      // Упорядоченная матрица 4×4 + сдвиг: зерно не «кипит» от кадра к кадру.
+      const b = BAYER[((y + seed) & 3) * 4 + ((x + seed * 3) & 3)];
+      if (b >= k * 16) continue;
+      q.data[i] = p.data[i];
+      q.data[i + 1] = p.data[i + 1];
+      q.data[i + 2] = p.data[i + 2];
+      q.data[i + 3] = p.data[i + 3];
+    }
+  return q;
+}
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+/** Только кайма силуэта (невидимка): цвет `c`, каждая `step`-я точка по кругу. */
+export function rimOf(p: Px, c: RGBA, f: number, step = 3): Px {
+  const q = new Px(p.w, p.h);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) {
+      if (!p.solid(x, y)) continue;
+      const edge = !p.solid(x - 1, y) || !p.solid(x + 1, y) || !p.solid(x, y - 1);
+      if (edge && (x + y + f) % step === 0) q.set(x, y, c);
+    }
+  return q;
+}
+
+/** Прозрачность картинки ×k. */
+export function fadePx(p: Px, k: number): Px {
+  const q = new Px(p.w, p.h);
+  for (let i = 0; i < p.data.length; i += 4) {
+    if (!p.data[i + 3]) continue;
+    q.data[i] = p.data[i];
+    q.data[i + 1] = p.data[i + 1];
+    q.data[i + 2] = p.data[i + 2];
+    q.data[i + 3] = Math.round(p.data[i + 3] * k);
+  }
+  return q;
 }

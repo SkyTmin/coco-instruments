@@ -37,6 +37,7 @@ import type { Mob, Sim, Strike, Zone } from '../dungeon-sim';
 import { F7_CRYSTAL, F7_GALLERY, F7_HALL, F7_MARK } from './f7';
 import { BOSS, F7_VIEW } from './f7-brains';
 import './f7-mob-echo';
+import './f7-mob-phantom';
 
 type RGBA = [number, number, number, number];
 
@@ -3207,97 +3208,6 @@ registerMobPainter('f7_golem', (m: Mob, pose: MobPose) => {
   const sleep = pose.anim === 'sleep';
   return frameOf('f7_golem', pose, `${a}${cracks}${sleep ? 's' : ''}`, i * 10 + glow, () =>
     paintGolem(i, cracks, glow, sleep),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Призрачная копия: бледная фигура в капюшоне без ног, вместо лица —
-// гладкое зеркало. Не видят — почти прозрачна, только мерцает кант.
-// ---------------------------------------------------------------------------
-
-const PH: Tones = [hx('#5a6c98'), hx('#98aed8'), hx('#cfe0f6'), hx('#f6fbff')];
-
-function paintPhantom(anim: string, f: number, hidden: boolean): Built {
-  const p = new Px(22, 26);
-  const sway = Math.sin((f / 4) * TAU);
-  const lean = anim === 'run' ? 2 : anim === 'bite' ? 3 : 0;
-  // Хвост — лентами вниз, колышется.
-  for (let i = 0; i < 3; i++) {
-    const x0 = 9 + i * 2;
-    const pts = spline(
-      [
-        [x0, 14],
-        [x0 - lean * 0.5 + sway * (i - 1), 19],
-        [x0 - lean + sway * 1.5 * (i === 1 ? -1 : 1), 24],
-      ],
-      5,
-    );
-    pts.forEach(([x, y], j) => {
-      const w = 2.4 - j * 0.16;
-      p.ell(x, y, Math.max(0.5, w), 0.8, alpha(PH[j < 5 ? 1 : 0], 0.85 - j * 0.06));
-    });
-  }
-  // Тело-балахон.
-  poly(
-    p,
-    [
-      [6 + lean * 0.3, 8],
-      [15 + lean * 0.3, 8],
-      [16, 16],
-      [5, 16],
-    ],
-    (x, y) => tone(PH, (x < 10 ? 0.6 : 0.3) - (y - 8) * 0.04),
-  );
-  // Руки: в замахе подняты, в ударе вперёд.
-  const up = anim === 'wind';
-  const fw = anim === 'bite';
-  const lh: [number, number] = [up ? 3 : fw ? 2 : 4, up ? 3 : fw ? 11 : 14 + sway];
-  const rh: [number, number] = [up ? 19 : fw ? 21 : 17, up ? 3 : fw ? 10 : 14 - sway];
-  limb(p, 7, 10, lh[0], lh[1], 1.2, 0.8, PH, 0.1);
-  limb(p, 15, 10, rh[0], rh[1], 1.2, 0.8, PH, -0.1);
-  // Когти-льдинки.
-  p.set(lh[0], lh[1] + 1, CYAN_HOT);
-  p.set(rh[0], rh[1] + 1, CYAN_HOT);
-  // Капюшон и лицо-зеркало.
-  shadeEll(p, 10.5 + lean * 0.4, 5.5, 4.6, 4.8, PH, 0.1);
-  const fx = 10.5 + lean * 0.5;
-  p.ell(fx, 6.4, 2.6, 3, SILV[1]);
-  p.ell(fx - 0.6, 5.8, 1.6, 2, SILV[2]);
-  stroke(p, fx - 1.6, 4.6, fx + 0.4, 8.2, SILV[3]);
-  if (up || fw) {
-    p.set(Math.round(fx - 1), 6, VIO[3]);
-    p.set(Math.round(fx + 1), 6, VIO[3]);
-  }
-  p.outline(alpha(hx('#2a3456'), 0.8));
-  let out = fade(p, 0.82);
-  if (hidden) {
-    // Не видят: только мерцающий кант.
-    out = new Px(p.w, p.h);
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (!p.data[i + 3]) continue;
-        const edge = !p.solid(x - 1, y) || !p.solid(x + 1, y) || !p.solid(x, y - 1);
-        if (edge && (x + y + f) % 3 === 0) out.set(x, y, alpha(PH[3], 0.35));
-      }
-  }
-  return { p: out, ax: 11, ay: 25, eye: hidden ? null : [Math.round(fx), 6] };
-}
-
-registerMobPainter('f7_phantom', (m: Mob, pose: MobPose) => {
-  const hidden = (m.data.ghost ?? 0) > 0 && pose.mode !== 'f7_step';
-  let anim: string = pose.anim;
-  if (anim === 'sleep') anim = 'idle';
-  const f = anim === 'wind' || anim === 'bite' ? pose.frame % 2 : pose.frame % 4;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_phantom', pose, 'dead', k, () => {
-      const b = paintPhantom('idle', 0, false);
-      return { ...b, p: slices(b.p, (k + 1) / 4, true) };
-    });
-  }
-  return frameOf('f7_phantom', pose, `${anim}${hidden ? 'h' : ''}`, f, () =>
-    paintPhantom(anim, f, hidden),
   );
 });
 
