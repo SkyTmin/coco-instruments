@@ -124,7 +124,9 @@ function vnoise(x: number, y: number, s: number): number {
 }
 
 const fbm = (x: number, y: number, s: number) =>
-  vnoise(x, y, s) * 0.55 + vnoise(x * 2.1, y * 2.1, s + 7) * 0.3 + vnoise(x * 4.3, y * 4.3, s + 13) * 0.15;
+  vnoise(x, y, s) * 0.55 +
+  vnoise(x * 2.1, y * 2.1, s + 7) * 0.3 +
+  vnoise(x * 4.3, y * 4.3, s + 13) * 0.15;
 
 /** Порядковый дизеринг 4×4: тон между ступенями без каши. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -347,7 +349,12 @@ export function renderRig(
         if (j < 0 || j >= w * h || idb[j] < 0 || idb[j] === idb[i]) continue;
         if (zb[j] - zb[i] > 2.2) {
           const c = p.get(x, y);
-          p.set(x, y, [Math.round(c[0] * 0.55), Math.round(c[1] * 0.55), Math.round(c[2] * 0.62), 255]);
+          p.set(x, y, [
+            Math.round(c[0] * 0.55),
+            Math.round(c[1] * 0.55),
+            Math.round(c[2] * 0.62),
+            255,
+          ]);
           break;
         }
       }
@@ -396,7 +403,17 @@ export function chain(
   for (let i = 0; i < pts.length; i++) {
     const k = pts.length > 1 ? i / (pts.length - 1) : 0;
     const rr = r(k);
-    out.push({ x: pts[i][0], y: pts[i][1], z: pts[i][2], rx: rr, ry: rr, rz: rr, ramp: rmp, id, ...extra });
+    out.push({
+      x: pts[i][0],
+      y: pts[i][1],
+      z: pts[i][2],
+      rx: rr,
+      ry: rr,
+      rz: rr,
+      ramp: rmp,
+      id,
+      ...extra,
+    });
   }
   return out;
 }
@@ -417,7 +434,7 @@ export function bez(a: V3, b: V3, c: V3, n: number): [number, number, number][] 
 }
 
 /** Сторона из 16 (или n) и угол стороны. */
-const dirN = (face: number, n: number) => (((Math.round((face / TAU) * n) % n) + n) % n);
+const dirN = (face: number, n: number) => ((Math.round((face / TAU) * n) % n) + n) % n;
 const dirAng = (d: number, n: number) => (d / n) * TAU;
 
 /** Плавная кривая 0…1. */
@@ -442,7 +459,11 @@ function frameOf(out: RigOut, ax: number, ay: number, extra: Partial<MobFrame> =
 }
 
 /** Кеш кадров: ключ — всё, что меняет картинку. */
-type Cached = { img: HTMLCanvasElement; lit: HTMLCanvasElement | null; eye: [number, number] | null };
+type Cached = {
+  img: HTMLCanvasElement;
+  lit: HTMLCanvasElement | null;
+  eye: [number, number] | null;
+};
 function cachedRig(
   cache: ReturnType<typeof frameLRU<Cached>>,
   key: string,
@@ -460,7 +481,8 @@ const f24 = (t: number) => Math.max(0, Math.floor(t * 24));
 /** Вид моба: элита — иней с синевой, альбинос — белый. */
 function lookRamp(r: RGBA[], look: MobPose['look']): RGBA[] {
   if (look === 'albino') return r.map((c) => mixc(c, hx('#f4f8ff'), 0.6));
-  if (look === 'elite') return r.map((c, i) => mixc(c, i > 2 ? hx('#bfe8ff') : hx('#2a3a8a'), 0.35));
+  if (look === 'elite')
+    return r.map((c, i) => mixc(c, i > 2 ? hx('#bfe8ff') : hx('#2a3a8a'), 0.35));
   return r;
 }
 
@@ -612,7 +634,12 @@ function snowPx(p: Px, c: CellCtx, look: Look, drift: boolean): void {
   }
 }
 
-function icePx(p: Px, c: CellCtx, look: Look, kind: 'ice' | 'thin' | 'polish' | 'grit' | 'post'): void {
+function icePx(
+  p: Px,
+  c: CellCtx,
+  look: Look,
+  kind: 'ice' | 'thin' | 'polish' | 'grit' | 'post',
+): void {
   const N = noise();
   const X0 = c.wx * TS;
   const Y0 = c.wy * TS;
@@ -751,7 +778,7 @@ function stonePx(p: Px, c: CellCtx, warm: boolean): void {
       // Плиты 8×8 со сдвигом рядов.
       const row = Math.floor(Y / 8);
       const sx = X + (row & 1) * 4;
-      const seam = (((sx % 8) + 8) % 8 === 0 || ((Y % 8) + 8) % 8 === 0);
+      const seam = ((sx % 8) + 8) % 8 === 0 || ((Y % 8) + 8) % 8 === 0;
       const slab = hash(Math.floor(sx / 8), row, 51);
       let k = 0.42 + slab * 0.22 + (at(N.fine, X, Y) - 0.5) * 0.3;
       k -= wallShade(c, x, y);
@@ -967,8 +994,7 @@ function wallFacePx(c: CellCtx, look: Look): Px {
       if (iceFace) k = 0.45 + (at(N.streak, X, Y) - 0.5) * 0.6 - (y / 15) * 0.15;
       p.set(x, y, toneOf(R, k, X, Y));
       // Вертикальные трещины породы.
-      if (!iceFace && hash(X >> 2, 0, 141) < 0.18 && ((X & 3) === 1) && y > 3)
-        p.set(x, y, R[0]);
+      if (!iceFace && hash(X >> 2, 0, 141) < 0.18 && (X & 3) === 1 && y > 3) p.set(x, y, R[0]);
     }
   // Снежная шапка по верхнему краю (рваная).
   if (mk !== MK.glacier)
@@ -1150,7 +1176,8 @@ function surfacePx(p: Px, c: CellCtx, look: Look): void {
   const Y0 = c.wy * TS;
   const own = c.mark;
   const ownIce = snowness(own) === 0;
-  const iceKind = own === MK.grit ? 'grit' : own === MK.postIce || own === MK.postWar ? 'post' : 'ice';
+  const iceKind =
+    own === MK.grit ? 'grit' : own === MK.postIce || own === MK.postWar ? 'post' : 'ice';
   // Сначала оба слоя целиком, потом выбор по пикселю.
   const ice = new Px(TS, TS);
   icePx(ice, c, look, ownIce ? iceKind : 'ice');
@@ -1419,13 +1446,19 @@ registerPropPainter('f12_gong', (o, time) => {
     p.line(4, 33, 6, 6, BONE[1]);
     p.line(24, 33, 22, 6, BONE[1]);
     p.line(23, 33, 21, 6, BONE[0]);
-    for (let x = 4; x <= 23; x++) p.set(x, 5 + Math.round(Math.sin(((x - 4) / 19) * Math.PI) * -2), BONE[3]);
+    for (let x = 4; x <= 23; x++)
+      p.set(x, 5 + Math.round(Math.sin(((x - 4) / 19) * Math.PI) * -2), BONE[3]);
     const dx = ring >= 0 ? [0, 1, 0, -1][ring] : 0;
     const cx = 14 + dx;
     p.ell(cx, 17, 8, 8, (x, y) => {
       const d = Math.hypot(x + 0.5 - cx, y + 0.5 - 17) / 8;
       const l = 0.55 + ((cx - x) / 8) * 0.25 + (17 - y) * 0.015;
-      return toneOf(ramp('#3a2408', '#6e4614', '#a8701e', '#d8a03a', '#ffe08a'), d > 0.85 ? 0.3 : l, x, y);
+      return toneOf(
+        ramp('#3a2408', '#6e4614', '#a8701e', '#d8a03a', '#ffe08a'),
+        d > 0.85 ? 0.3 : l,
+        x,
+        y,
+      );
     });
     p.ell(cx, 17, 3, 3, hx('#8a5a18'));
     p.ell(cx - 1, 16, 1.4, 1.4, hx('#ffe08a'));
@@ -1483,7 +1516,8 @@ registerPropPainter('f12_statue', (o) =>
       { x: 0, y: 5, z: 15, rx: 1.6, ry: 1.6, rz: 5, ramp: ICE },
       { x: 1, y: 0, z: 25, rx: 3.4, ry: 3.4, rz: 1.6, ramp: ICE, gloss: true },
     ];
-    for (let k = 0; k < 8; k++) parts.push({ x: 0, y: 6.5, z: 6 + k * 3.2, rx: 0.8, ry: 0.8, rz: 1.8, ramp: BONE });
+    for (let k = 0; k < 8; k++)
+      parts.push({ x: 0, y: 6.5, z: 6 + k * 3.2, rx: 0.8, ry: 0.8, rz: 1.8, ramp: BONE });
     const out = renderRig(parts, Math.PI / 2 + (o.x & 1 ? 0.5 : -0.5), 26, 40, 13, 34);
     return [out.p, 13, 34];
   }),
@@ -1502,7 +1536,15 @@ registerPropPainter('f12_crystals', (o, time) => {
       [12, 20, 5, 1.2, 0.5],
     ];
     seeds.forEach(([x, y, h, w, l], k) =>
-      crystal(p, x + (hash(o.x, k, 410) - 0.5), y, h * (0.85 + hash(o.y, k, 411) * 0.3), w, l, TEAL),
+      crystal(
+        p,
+        x + (hash(o.x, k, 410) - 0.5),
+        y,
+        h * (0.85 + hash(o.y, k, 411) * 0.3),
+        w,
+        l,
+        TEAL,
+      ),
     );
     // Искра бежит по граням.
     if (f < 3) p.set(9 + f, 6 + f * 2, WHITE);
@@ -1677,7 +1719,8 @@ registerPropPainter('f12_boat', () =>
       const t = (x - 1) / 27;
       const top = 6 - Math.sin(t * Math.PI) * 1.5 + (t < 0.1 || t > 0.9 ? -2 : 0);
       const bot = 9 + Math.sin(t * Math.PI) * 3;
-      for (let y = Math.round(top); y < bot; y++) p.set(x, y, toneOf(FUR, 0.6 - (y - top) * 0.06, x, y));
+      for (let y = Math.round(top); y < bot; y++)
+        p.set(x, y, toneOf(FUR, 0.6 - (y - top) * 0.06, x, y));
       p.set(x, Math.round(top), BONE[2]);
     }
     p.ell(15, 7, 10, 1.5, FUR[0]);
@@ -1761,7 +1804,14 @@ registerPropPainter('f12_rack', (o, time) => {
     for (let k = 0; k < 4; k++) {
       const x = 6 + k * 3.5 + (k === 1 ? f * 0.6 : 0);
       p.line(x, 4, x, 6, BONE[1]);
-      p.ell(x, 9, 1.3, 3, (xx, yy) => toneOf(ramp('#3a4a5a', '#5a7088', '#8aa0b4', '#b8c8d4', '#e0ecf4'), 0.6 - (yy - 6) * 0.06 + (xx < x ? 0.15 : 0), xx, yy));
+      p.ell(x, 9, 1.3, 3, (xx, yy) =>
+        toneOf(
+          ramp('#3a4a5a', '#5a7088', '#8aa0b4', '#b8c8d4', '#e0ecf4'),
+          0.6 - (yy - 6) * 0.06 + (xx < x ? 0.15 : 0),
+          xx,
+          yy,
+        ),
+      );
       p.set(x, 13, hx('#3a4a5a'));
       p.set(x - 1, 13, hx('#3a4a5a'));
       p.set(x + 1, 13, hx('#3a4a5a'));
@@ -1790,7 +1840,8 @@ registerPropPainter('f12_bones', (o) =>
     p.line(4, 21, 30, 21, BONE[1]);
     p.ell(30, 18, 3.5, 3, BONE[2]);
     p.set(29, 17, INK);
-    for (let t = 0; t <= 1; t += 0.06) p.set(31 + Math.sin(t * 2.6) * 2 - t * 8, 20 - t * 7 + t * t * 9, BONE[4]);
+    for (let t = 0; t <= 1; t += 0.06)
+      p.set(31 + Math.sin(t * 2.6) * 2 - t * 8, 20 - t * 7 + t * t * 9, BONE[4]);
     p.ell(17, 23, 15, 2.2, alpha(SNOW[3], 0.9));
     p.outline(INK);
     return [flip ? p.flipX() : p, 17, 22];
@@ -1888,7 +1939,17 @@ function rigCached(
   const f = dirAng(d, dirs);
   return cachedRig(lruOf(id), `${key}|${d}|${flash ? 1 : 0}`, () => {
     const b = make(f);
-    const out = renderRig(b.parts, f, cv.w, cv.h, cv.ox, cv.oy, b.eyes ?? [], flash ? 0.8 : 0, b.clip);
+    const out = renderRig(
+      b.parts,
+      f,
+      cv.w,
+      cv.h,
+      cv.ox,
+      cv.oy,
+      b.eyes ?? [],
+      flash ? 0.8 : 0,
+      b.clip,
+    );
     if (b.post) {
       const scr: Scr = (x, y, z) => {
         const [wx, wy, wz] = toWorld(x, y, z, f);
@@ -2012,7 +2073,15 @@ const CV_LEM: Canvas = { w: 22, h: 22, ox: 11, oy: 16 };
 
 function lemmingBuild(
   look: MobPose['look'],
-  o: { run: number; moving: boolean; crouch: number; stretch: number; mouth: number; roll: number; head: number },
+  o: {
+    run: number;
+    moving: boolean;
+    crouch: number;
+    stretch: number;
+    mouth: number;
+    roll: number;
+    head: number;
+  },
 ): Build {
   const parts: Part[] = [];
   const back = lookRamp(LEM_BACK, look);
@@ -2022,8 +2091,30 @@ function lemmingBuild(
   const z = 3.2 + bob - o.crouch * 1;
   const L = 4.2 * (1 + o.stretch * 0.35);
   const pitch = o.crouch * 0.35 - o.stretch * 0.15;
-  parts.push({ x: -0.4, y: 0, z, rx: L, ry: 3.3, rz: 2.9, ramp: side, pitch, roll: o.roll, fur: 0.12 });
-  parts.push({ x: -0.2, y: 0, z: z + 1.3, rx: L * 0.86, ry: 2.7, rz: 2.0, ramp: back, pitch, roll: o.roll, fur: 0.15 });
+  parts.push({
+    x: -0.4,
+    y: 0,
+    z,
+    rx: L,
+    ry: 3.3,
+    rz: 2.9,
+    ramp: side,
+    pitch,
+    roll: o.roll,
+    fur: 0.12,
+  });
+  parts.push({
+    x: -0.2,
+    y: 0,
+    z: z + 1.3,
+    rx: L * 0.86,
+    ry: 2.7,
+    rz: 2.0,
+    ramp: back,
+    pitch,
+    roll: o.roll,
+    fur: 0.15,
+  });
   parts.push({ x: 0, y: 0, z: z - 1.2, rx: L * 0.75, ry: 2.4, rz: 1.6, ramp: belly, roll: o.roll });
   const hx2 = L * 0.82 + o.stretch * 1;
   const hz = z + 0.6 - o.crouch * 0.8 + o.head;
@@ -2139,8 +2230,24 @@ function urchinBuild(
   if (c < 0.7) {
     const k = 1 - c / 0.7;
     // Мордочка.
-    parts.push({ x: rx * 0.9, y: 0, z: z - 0.8, rx: 2.2 * k + 0.3, ry: 1.8 * k + 0.3, rz: 1.6 * k + 0.3, ramp: URC_SNOUT });
-    parts.push({ x: rx * 0.9 + 2 * k, y: 0, z: z - 1.2, rx: 0.8, ry: 0.8, rz: 0.7, ramp: ramp('#0a0608', '#1a1018', '#2a1a24', '#3a2a34', '#5a4a54') });
+    parts.push({
+      x: rx * 0.9,
+      y: 0,
+      z: z - 0.8,
+      rx: 2.2 * k + 0.3,
+      ry: 1.8 * k + 0.3,
+      rz: 1.6 * k + 0.3,
+      ramp: URC_SNOUT,
+    });
+    parts.push({
+      x: rx * 0.9 + 2 * k,
+      y: 0,
+      z: z - 1.2,
+      rx: 0.8,
+      ry: 0.8,
+      rz: 0.7,
+      ramp: ramp('#0a0608', '#1a1018', '#2a1a24', '#3a2a34', '#5a4a54'),
+    });
     legs4(parts, {
       fx: 2.6,
       bx: -2.6,
@@ -2287,7 +2394,15 @@ const CV_SEAL: Canvas = { w: 40, h: 34, ox: 20, oy: 25 };
 
 function sealBuild(
   look: MobPose['look'],
-  o: { rear: number; slide: number; flip: number; run: number; moving: boolean; sink: number; mouth: number },
+  o: {
+    rear: number;
+    slide: number;
+    flip: number;
+    run: number;
+    moving: boolean;
+    sink: number;
+    mouth: number;
+  },
 ): Build {
   const parts: Part[] = [];
   const body = lookRamp(SEAL_BODY, look);
@@ -2305,15 +2420,50 @@ function sealBuild(
   const hx2 = L * 0.95 * Math.cos(pitch) + 1;
   const hz = z + 2.4 + Math.sin(pitch) * L * 0.9 + gal * 0.6;
   parts.push({ x: hx2, y: 0, z: hz, rx: 3.4, ry: 3, rz: 2.9, ramp: body });
-  parts.push({ x: hx2 + 2.4, y: 0, z: hz - 0.8 - o.mouth * 0.6, rx: 1.8, ry: 1.9, rz: 1.4, ramp: belly });
+  parts.push({
+    x: hx2 + 2.4,
+    y: 0,
+    z: hz - 0.8 - o.mouth * 0.6,
+    rx: 1.8,
+    ry: 1.9,
+    rz: 1.4,
+    ramp: belly,
+  });
   // Ласты: передние по бокам, задние — хвост (бьёт при «перевороте»).
   const fl = s > 0 ? -1.2 : 1.2;
-  parts.push({ x: 2.5, y: -5, z: z - 2.5 + r * 2, rx: 2.8, ry: 1, rz: 0.9, yaw: -0.7 + fl * 0.3, ramp: body });
-  parts.push({ x: 2.5, y: 5, z: z - 2.5 + r * 2, rx: 2.8, ry: 1, rz: 0.9, yaw: 0.7 - fl * 0.3, ramp: body });
+  parts.push({
+    x: 2.5,
+    y: -5,
+    z: z - 2.5 + r * 2,
+    rx: 2.8,
+    ry: 1,
+    rz: 0.9,
+    yaw: -0.7 + fl * 0.3,
+    ramp: body,
+  });
+  parts.push({
+    x: 2.5,
+    y: 5,
+    z: z - 2.5 + r * 2,
+    rx: 2.8,
+    ry: 1,
+    rz: 0.9,
+    yaw: 0.7 - fl * 0.3,
+    ramp: body,
+  });
   const ta = o.flip * 2.2;
   const tx = -L - 1.5;
   const tz = z - 1 + Math.sin(o.flip * Math.PI) * 4;
-  parts.push({ x: tx, y: Math.sin(ta) * 3, z: tz, rx: 2.4, ry: 2.6, rz: 0.9, ramp: body, yaw: ta * 0.5 });
+  parts.push({
+    x: tx,
+    y: Math.sin(ta) * 3,
+    z: tz,
+    rx: 2.4,
+    ry: 2.6,
+    rz: 0.9,
+    ramp: body,
+    yaw: ta * 0.5,
+  });
   const eyes: Eye[] = [
     { x: hx2 + 1.2, y: -1.6, z: hz + 0.9, c: hx('#05080c') },
     { x: hx2 + 1.2, y: 1.6, z: hz + 0.9, c: hx('#05080c') },
@@ -2461,7 +2611,18 @@ function foxBuild(look: MobPose['look'], o: FoxO): Build {
   const bob = o.moving ? Math.abs(Math.sin(o.run * Math.PI)) * 1.4 * o.gallop : 0;
   const z = (4.6 + bob) * s - o.sink;
   const L = 5.4 * s;
-  parts.push({ x: 0, y: 0, z, rx: L, ry: 2.9 * s, rz: 2.8 * s, ramp: fur, pitch: o.pitch, roll: o.roll, fur: 0.14 });
+  parts.push({
+    x: 0,
+    y: 0,
+    z,
+    rx: L,
+    ry: 2.9 * s,
+    rz: 2.8 * s,
+    ramp: fur,
+    pitch: o.pitch,
+    roll: o.roll,
+    fur: 0.14,
+  });
   // Грудь и шея.
   const cx = Math.cos(o.pitch) * L * 0.8;
   const cz = z + Math.sin(o.pitch) * L * 0.8 + 0.6;
@@ -2472,15 +2633,59 @@ function foxBuild(look: MobPose['look'], o: FoxO): Build {
   parts.push({ x: hx2, y: 0, z: hz, rx: 2.5 * s, ry: 2.4 * s, rz: 2.2 * s, ramp: fur });
   // Морда: верхняя и нижняя челюсть (раскрыта при укусе).
   const jaw = o.jaw;
-  parts.push({ x: hx2 + 2.4 * s, y: 0, z: hz - 0.4 + jaw * 0.6, rx: 2 * s, ry: 1.1 * s, rz: 0.9 * s, ramp: fur, pitch: jaw * 0.35 });
-  parts.push({ x: hx2 + 2.1 * s, y: 0, z: hz - 1.2 - jaw * 0.6, rx: 1.7 * s, ry: 0.9 * s, rz: 0.6 * s, ramp: fur, pitch: -jaw * 0.45 });
-  parts.push({ x: hx2 + 4.1 * s, y: 0, z: hz - 0.3 + jaw * 0.9, rx: 0.6, ry: 0.6, rz: 0.55, ramp: DARK });
+  parts.push({
+    x: hx2 + 2.4 * s,
+    y: 0,
+    z: hz - 0.4 + jaw * 0.6,
+    rx: 2 * s,
+    ry: 1.1 * s,
+    rz: 0.9 * s,
+    ramp: fur,
+    pitch: jaw * 0.35,
+  });
+  parts.push({
+    x: hx2 + 2.1 * s,
+    y: 0,
+    z: hz - 1.2 - jaw * 0.6,
+    rx: 1.7 * s,
+    ry: 0.9 * s,
+    rz: 0.6 * s,
+    ramp: fur,
+    pitch: -jaw * 0.45,
+  });
+  parts.push({
+    x: hx2 + 4.1 * s,
+    y: 0,
+    z: hz - 0.3 + jaw * 0.9,
+    rx: 0.6,
+    ry: 0.6,
+    rz: 0.55,
+    ramp: DARK,
+  });
   // Уши — острые.
   for (const e of [-1, 1])
-    parts.push({ x: hx2 - 0.5, y: e * 1.4 * s, z: hz + 2.2 * s, rx: 0.8 * s, ry: 0.7 * s, rz: 1.6 * s, ramp: fur, roll: e * 0.25 });
+    parts.push({
+      x: hx2 - 0.5,
+      y: e * 1.4 * s,
+      z: hz + 2.2 * s,
+      rx: 0.8 * s,
+      ry: 0.7 * s,
+      rz: 1.6 * s,
+      ramp: fur,
+      roll: e * 0.25,
+    });
   if (o.were)
     for (let k = 0; k < 5; k++)
-      parts.push({ x: L * 0.6 - k * 1.8, y: 0, z: z + 2.8 * s - k * 0.1, rx: 0.7, ry: 0.5, rz: 1.5, ramp: fur, pitch: -0.4 });
+      parts.push({
+        x: L * 0.6 - k * 1.8,
+        y: 0,
+        z: z + 2.8 * s - k * 0.1,
+        rx: 0.7,
+        ry: 0.5,
+        rz: 1.5,
+        ramp: fur,
+        pitch: -0.4,
+      });
   // Хвост: пушистый, по дуге назад-вверх.
   const tw = o.moving ? Math.sin(o.run * TAU) * 0.8 : Math.sin(o.dig * 7) * 0.5;
   const tail = bez(
@@ -2492,15 +2697,33 @@ function foxBuild(look: MobPose['look'], o: FoxO): Build {
   tail.forEach((pt, i) => {
     const r = (1.2 + Math.sin(((i + 0.5) / 6) * Math.PI) * 1.2) * s;
     const tip = i === tail.length - 1;
-    parts.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: tip && !o.red ? fur : tip ? FOX_FUR : fur, fur: 0.1 });
+    parts.push({
+      x: pt[0],
+      y: pt[1],
+      z: pt[2],
+      rx: r,
+      ry: r,
+      rz: r,
+      ramp: tip && !o.red ? fur : tip ? FOX_FUR : fur,
+      fur: 0.1,
+    });
   });
   // Ноги: галоп или рытьё (передние лапы гребут попеременно).
   if (o.dig > 0) {
     for (const e of [-1, 1]) {
       const a = o.dig * 14 + (e > 0 ? Math.PI : 0);
-      leg(parts, [cx, e * 1.6, z - 1], [cx + 2 + Math.sin(a) * 1.5, e * 1.8, Math.max(0, Math.cos(a)) * 1.5 + 0.6], 1, 0.8, fur, 40 + e);
+      leg(
+        parts,
+        [cx, e * 1.6, z - 1],
+        [cx + 2 + Math.sin(a) * 1.5, e * 1.8, Math.max(0, Math.cos(a)) * 1.5 + 0.6],
+        1,
+        0.8,
+        fur,
+        40 + e,
+      );
     }
-    for (const e of [-1, 1]) leg(parts, [-L * 0.6, e * 1.6, z - 1], [-L * 0.7, e * 1.8, 0.6], 1.1, 0.8, fur, 45 + e);
+    for (const e of [-1, 1])
+      leg(parts, [-L * 0.6, e * 1.6, z - 1], [-L * 0.7, e * 1.8, 0.6], 1.1, 0.8, fur, 45 + e);
   } else
     legs4(parts, {
       fx: L * 0.6,
@@ -2518,7 +2741,16 @@ function foxBuild(look: MobPose['look'], o: FoxO): Build {
     });
   if (o.sack > 0) {
     // Мешок на спине: перевязан, из горловины блестят монеты.
-    parts.push({ x: -1, y: 0, z: z + 4.2, rx: 3.6 * o.sack, ry: 3.4 * o.sack, rz: 3.2 * o.sack, ramp: SACK, fur: 0.08 });
+    parts.push({
+      x: -1,
+      y: 0,
+      z: z + 4.2,
+      rx: 3.6 * o.sack,
+      ry: 3.4 * o.sack,
+      rz: 3.2 * o.sack,
+      ramp: SACK,
+      fur: 0.08,
+    });
     parts.push({ x: 1.6, y: 0, z: z + 6.8 * o.sack, rx: 1.3, ry: 1.3, rz: 0.9, ramp: SACK });
   }
   const eyeC = o.were ? hx('#ff5a3a') : hx('#ffb84a');
@@ -2539,7 +2771,8 @@ function foxBuild(look: MobPose['look'], o: FoxO): Build {
         p.set(x, y, hx('#ffe08a'));
         p.set(x + 1, y + 1, hx('#ffc23a'));
       }
-      if (o.dig > 0) spray(p, scr, (o.dig * 3) % 1, 6, 6, Math.floor(o.dig * 3), [SNOW[4], SNOW[3]]);
+      if (o.dig > 0)
+        spray(p, scr, (o.dig * 3) % 1, 6, 6, Math.floor(o.dig * 3), [SNOW[4], SNOW[3]]);
     },
   };
 }
@@ -2559,7 +2792,11 @@ const FOX0: FoxO = {
   roll: 0,
 };
 
-function foxPose(m: Mob, pose: MobPose, red: boolean): { o: FoxO; key: string; ex: Partial<MobFrame>; face: number } {
+function foxPose(
+  m: Mob,
+  pose: MobPose,
+  red: boolean,
+): { o: FoxO; key: string; ex: Partial<MobFrame>; face: number } {
   const mode = pose.mode;
   const prev = prevMode(m);
   const moving = speedOf(m) > 0.4;
@@ -2580,7 +2817,13 @@ function foxPose(m: Mob, pose: MobPose, red: boolean): { o: FoxO; key: string; e
     ex.shadow = 0;
   } else if (mode === 'f12_leap') {
     const k = Math.min(1, pose.t / 0.6);
-    o = { ...o, moving: false, pitch: lerp(0.55, -0.6, k), head: k > 0.7 ? 1 : 0, jaw: k > 0.7 ? 1 : 0 };
+    o = {
+      ...o,
+      moving: false,
+      pitch: lerp(0.55, -0.6, k),
+      head: k > 0.7 ? 1 : 0,
+      jaw: k > 0.7 ? 1 : 0,
+    };
     key = `leap${Math.round(k * 14)}`;
     ex.dy = -Math.sin(k * Math.PI) * 12;
     ex.still = true;
@@ -2629,7 +2872,10 @@ regMob('f12_fox', (m, pose) => {
 regMob('f12_sackfox', (m, pose) => {
   const { o, key, ex, face } = foxPose(m, pose, true);
   const c = rigCached('f12_sackfox', key, face, CV_FOX, pose.flash, () => foxBuild(pose.look, o));
-  return mobFrame(c, CV_FOX, { ...ex, ghost: { every: 0.08, life: 0.2, tint: '#ffcf7a', alpha: 0.25 } });
+  return mobFrame(c, CV_FOX, {
+    ...ex,
+    ghost: { every: 0.08, life: 0.2, tint: '#ffcf7a', alpha: 0.25 },
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2652,12 +2898,39 @@ function owlBuild(
   parts.push({ x: 0, y: 0, z, rx: 3.6, ry: 3.4, rz: 4.6, ramp: F, pitch: o.pitch, fur: 0.1 });
   const hx2 = Math.sin(o.pitch) * -4.5 + 0.5;
   const hz = z + Math.cos(o.pitch) * 4.8;
-  parts.push({ x: hx2, y: 0, z: hz, rx: 3.1, ry: 3.2, rz: 2.8, ramp: F, yaw: o.headYaw, fur: 0.05 });
+  parts.push({
+    x: hx2,
+    y: 0,
+    z: hz,
+    rx: 3.1,
+    ry: 3.2,
+    rz: 2.8,
+    ramp: F,
+    yaw: o.headYaw,
+    fur: 0.05,
+  });
   // Лицевой диск и клюв (поворачиваются с головой).
   const ca = Math.cos(o.headYaw);
   const sa = Math.sin(o.headYaw);
-  parts.push({ x: hx2 + ca * 2.2, y: sa * 2.2, z: hz - 0.2, rx: 1, ry: 2.6, rz: 2.2, ramp: F, yaw: o.headYaw });
-  parts.push({ x: hx2 + ca * 3.2, y: sa * 3.2, z: hz - 0.8, rx: 0.8, ry: 0.6, rz: 0.8, ramp: DARK });
+  parts.push({
+    x: hx2 + ca * 2.2,
+    y: sa * 2.2,
+    z: hz - 0.2,
+    rx: 1,
+    ry: 2.6,
+    rz: 2.2,
+    ramp: F,
+    yaw: o.headYaw,
+  });
+  parts.push({
+    x: hx2 + ca * 3.2,
+    y: sa * 3.2,
+    z: hz - 0.8,
+    rx: 0.8,
+    ry: 0.6,
+    rz: 0.8,
+    ramp: DARK,
+  });
   // Крылья: сложены вдоль тела или раскрыты и машут.
   for (const e of [-1, 1]) {
     const sp = o.spread;
@@ -2681,11 +2954,28 @@ function owlBuild(
     });
   }
   // Хвост.
-  parts.push({ x: -3.4 + Math.sin(o.pitch) * 2, y: 0, z: z - 2.2, rx: 1.8, ry: 1.8, rz: 0.8, ramp: OWL_SPECK, pitch: o.pitch });
+  parts.push({
+    x: -3.4 + Math.sin(o.pitch) * 2,
+    y: 0,
+    z: z - 2.2,
+    rx: 1.8,
+    ry: 1.8,
+    rz: 0.8,
+    ramp: OWL_SPECK,
+    pitch: o.pitch,
+  });
   // Лапы с когтями — видны, когда стоит или пикирует.
   if (o.tuck < 0.5)
     for (const e of [-1, 1])
-      parts.push({ x: 0.6, y: e * 1.4, z: Math.max(0.6, z - 4.4), rx: 1, ry: 0.8, rz: 0.7, ramp: DARK });
+      parts.push({
+        x: 0.6,
+        y: e * 1.4,
+        z: Math.max(0.6, z - 4.4),
+        rx: 1,
+        ry: 0.8,
+        rz: 0.7,
+        ramp: DARK,
+      });
   const eyes: Eye[] = [
     { x: hx2 + ca * 2.9 - sa * 1.2, y: sa * 2.9 + ca * -1.2, z: hz + 0.3, c: hx('#ffd23a') },
     { x: hx2 + ca * 2.9 + sa * 1.2, y: sa * 2.9 + ca * 1.2, z: hz + 0.3, c: hx('#ffd23a') },
@@ -2754,7 +3044,9 @@ regMob('f12_owl', (m, pose) => {
     o = { ...o, spread: 1, flap: f / 8 };
     key = `hover${f}`;
   }
-  const c = rigCached('f12_owl', `${pose.look}|${key}`, face, CV_OWL, pose.flash, () => owlBuild(pose.look, o));
+  const c = rigCached('f12_owl', `${pose.look}|${key}`, face, CV_OWL, pose.flash, () =>
+    owlBuild(pose.look, o),
+  );
   return mobFrame(c, CV_OWL, ex);
 });
 
@@ -2794,7 +3086,8 @@ function icicleBuild(o: { crack: number; stuck: number; melt: number }): Build {
         const [x, y] = scr(0, 0, 0);
         for (let a = 0; a < 6; a++) {
           const t = (a / 6) * TAU + 0.3;
-          for (let r = 2; r < 6; r++) p.set(x + Math.cos(t) * r, y + Math.sin(t) * r * 0.55, alpha(WHITE, 0.8));
+          for (let r = 2; r < 6; r++)
+            p.set(x + Math.cos(t) * r, y + Math.sin(t) * r * 0.55, alpha(WHITE, 0.8));
         }
       }
     },
@@ -2809,8 +3102,13 @@ regMob('f12_icicle', (m, pose) => {
     const shake = t > 0 && t < 0.35;
     const fall = t > 0.35 ? Math.min(1, (t - 0.35) / 0.45) : 0;
     const crack = mode === 'f12_crack' ? Math.min(1, t / 0.3) : 0;
-    const c = rigCached('f12_icicle', `h${Math.round(crack * 4)}`, 0, CV_ICI, pose.flash, () =>
-      icicleBuild({ crack, stuck: 0, melt: 0 }),
+    const c = rigCached(
+      'f12_icicle',
+      `h${Math.round(crack * 4)}`,
+      0,
+      CV_ICI,
+      pose.flash,
+      () => icicleBuild({ crack, stuck: 0, melt: 0 }),
       1,
     );
     return mobFrame(c, CV_ICI, {
@@ -2823,8 +3121,13 @@ regMob('f12_icicle', (m, pose) => {
   }
   if (mode === 'f12_stuck' || mode === 'escape' || mode === 'dying') {
     const melt = mode === 'f12_stuck' ? Math.max(0, (pose.t - 2.2) / 0.8) : 1;
-    const c = rigCached('f12_icicle', `s${Math.round(melt * 4)}`, 0, CV_ICI, pose.flash, () =>
-      icicleBuild({ crack: 0, stuck: 1, melt }),
+    const c = rigCached(
+      'f12_icicle',
+      `s${Math.round(melt * 4)}`,
+      0,
+      CV_ICI,
+      pose.flash,
+      () => icicleBuild({ crack: 0, stuck: 1, melt }),
       1,
     );
     return mobFrame(c, CV_ICI, {
@@ -2834,7 +3137,15 @@ regMob('f12_icicle', (m, pose) => {
       sy: mode === 'dying' ? 1 - Math.min(1, pose.t * 2) * 0.6 : 1,
     });
   }
-  const c = rigCached('f12_icicle', 'h0', 0, CV_ICI, pose.flash, () => icicleBuild({ crack: 0, stuck: 0, melt: 0 }), 1);
+  const c = rigCached(
+    'f12_icicle',
+    'h0',
+    0,
+    CV_ICI,
+    pose.flash,
+    () => icicleBuild({ crack: 0, stuck: 0, melt: 0 }),
+    1,
+  );
   return mobFrame(c, CV_ICI, { lift: HANG, still: true, shadow: 2 });
 });
 
@@ -2846,24 +3157,76 @@ regMob('f12_icicle', (m, pose) => {
 const SPIRIT_R = ramp('#2a6a8a', '#4a9ab8', '#7accdc', '#b6eef4', '#ecffff');
 const CV_SPI: Canvas = { w: 34, h: 40, ox: 17, oy: 32 };
 
-function spiritBuild(o: { swell: number; blow: number; stretch: number; bob: number; arms: number }): Build {
+function spiritBuild(o: {
+  swell: number;
+  blow: number;
+  stretch: number;
+  bob: number;
+  arms: number;
+}): Build {
   const parts: Part[] = [];
   const z = 9 + o.bob;
   const s = 1 + o.swell * 0.25;
-  parts.push({ x: 0, y: 0, z, rx: 3.4 * s, ry: 3.6 * s, rz: 4 * s, ramp: SPIRIT_R, alpha: 0.6, glow: true });
+  parts.push({
+    x: 0,
+    y: 0,
+    z,
+    rx: 3.4 * s,
+    ry: 3.6 * s,
+    rz: 4 * s,
+    ramp: SPIRIT_R,
+    alpha: 0.6,
+    glow: true,
+  });
   parts.push({ x: 0.5, y: 0, z: z + 1, rx: 1.6, ry: 1.6, rz: 1.8, ramp: TEAL, glow: true });
   const hz = z + 5 * s;
-  parts.push({ x: 0.6 + o.blow * 0.8, y: 0, z: hz, rx: 3 * s, ry: 3 * s, rz: 2.9 * s, ramp: SPIRIT_R, alpha: 0.7, glow: true });
+  parts.push({
+    x: 0.6 + o.blow * 0.8,
+    y: 0,
+    z: hz,
+    rx: 3 * s,
+    ry: 3 * s,
+    rz: 2.9 * s,
+    ramp: SPIRIT_R,
+    alpha: 0.7,
+    glow: true,
+  });
   // Шлейф: вниз и назад, вытягивается на бегу.
-  const tail = bez([-1, 0, z - 3], [-4 - o.stretch * 4, Math.sin(o.bob * 3) * 2, z - 6], [-7 - o.stretch * 7, 0, 2.5], 5);
+  const tail = bez(
+    [-1, 0, z - 3],
+    [-4 - o.stretch * 4, Math.sin(o.bob * 3) * 2, z - 6],
+    [-7 - o.stretch * 7, 0, 2.5],
+    5,
+  );
   tail.forEach((pt, i) => {
     const r = 2.6 - i * 0.4;
-    parts.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: SPIRIT_R, alpha: 0.45, glow: true });
+    parts.push({
+      x: pt[0],
+      y: pt[1],
+      z: pt[2],
+      rx: r,
+      ry: r,
+      rz: r,
+      ramp: SPIRIT_R,
+      alpha: 0.45,
+      glow: true,
+    });
   });
   // Руки-клочья.
   for (const e of [-1, 1]) {
     const a = o.arms * 1.2;
-    parts.push({ x: 1 + a * 1.5, y: e * (3.6 + a), z: z + 1 + a * 2, rx: 2.2, ry: 0.9, rz: 0.9, yaw: e * 0.6, ramp: SPIRIT_R, alpha: 0.5, glow: true });
+    parts.push({
+      x: 1 + a * 1.5,
+      y: e * (3.6 + a),
+      z: z + 1 + a * 2,
+      rx: 2.2,
+      ry: 0.9,
+      rz: 0.9,
+      yaw: e * 0.6,
+      ramp: SPIRIT_R,
+      alpha: 0.5,
+      glow: true,
+    });
   }
   return {
     parts,
@@ -2876,7 +3239,11 @@ function spiritBuild(o: { swell: number; blow: number; stretch: number; bob: num
         ? (p, scr) => {
             // Струя холодного воздуха изо рта.
             for (let k = 0; k < 6; k++) {
-              const [x, y] = scr(4.5 + k * 1.6, (hash(k, Math.round(o.blow * 9), 520) - 0.5) * 2, hz - 0.6 - k * 0.3);
+              const [x, y] = scr(
+                4.5 + k * 1.6,
+                (hash(k, Math.round(o.blow * 9), 520) - 0.5) * 2,
+                hz - 0.6 - k * 0.3,
+              );
               p.set(x, y, alpha(SPIRIT_R[4], 0.9 - k * 0.12));
             }
           }
@@ -2984,7 +3351,11 @@ function humanoid(parts: Part[], b: Body, d: Dress): { head: V3; handL: V3; hand
       const fx = Math.sin(ph) * b.stride * s;
       const fz = Math.max(0, Math.cos(ph)) * b.stride * 0.5 * s + b.up * 0.6;
       const hy = e * (1.7 + b.wide * 0.6) * s;
-      const foot: V3 = [b.kneel > 0.5 ? -3 * s : fx, hy * (1 + b.wide * 0.4), b.kneel > 0.5 ? 0.8 : fz + 0.8];
+      const foot: V3 = [
+        b.kneel > 0.5 ? -3 * s : fx,
+        hy * (1 + b.wide * 0.4),
+        b.kneel > 0.5 ? 0.8 : fz + 0.8,
+      ];
       const kneeX = b.kneel > 0.5 ? 2.5 * s : (fx + 0) / 2 + 1.2 * s + b.crouch * 0.6;
       const knee: V3 = [kneeX, hy, b.kneel > 0.5 ? 1.2 : (hipZ + foot[2]) / 2];
       const pts = bez([0, hy, hipZ], knee, foot, 4);
@@ -2992,7 +3363,16 @@ function humanoid(parts: Part[], b: Body, d: Dress): { head: V3; handL: V3; hand
         const r = (1.7 - i * 0.12) * s;
         parts.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: d.legs, id: 60 + e });
       });
-      parts.push({ x: foot[0] + 0.8 * s, y: foot[1], z: 0.9 * s, rx: 1.8 * s, ry: 1.1 * s, rz: 0.9 * s, ramp: DARK, id: 62 + e });
+      parts.push({
+        x: foot[0] + 0.8 * s,
+        y: foot[1],
+        z: 0.9 * s,
+        rx: 1.8 * s,
+        ry: 1.1 * s,
+        rz: 0.9 * s,
+        ramp: DARK,
+        id: 62 + e,
+      });
     }
   else {
     // Роба: конус от пояса к земле.
@@ -3000,18 +3380,60 @@ function humanoid(parts: Part[], b: Body, d: Dress): { head: V3; handL: V3; hand
     for (let i = 0; i < n; i++) {
       const t = i / (n - 1);
       const r = (2.6 + t * 2.6) * s;
-      parts.push({ x: -t * b.lean * 3, y: 0, z: hipZ - t * (hipZ - 1.8 - b.up), rx: r, ry: r * 1.05, rz: 2.2 * s, ramp: d.robe, fur: 0.04, id: 70 });
+      parts.push({
+        x: -t * b.lean * 3,
+        y: 0,
+        z: hipZ - t * (hipZ - 1.8 - b.up),
+        rx: r,
+        ry: r * 1.05,
+        rz: 2.2 * s,
+        ramp: d.robe,
+        fur: 0.04,
+        id: 70,
+      });
     }
   }
   // Таз и корпус.
   parts.push({ x: 0, y: 0, z: hipZ, rx: 2.4 * s, ry: 2.9 * s, rz: 2 * s, ramp: d.legs, id: 71 });
   const cl = Math.sin(b.lean);
   const chest: V3 = [cl * 4.5 * s, 0, hipZ + Math.cos(b.lean) * 4.5 * s];
-  parts.push({ x: chest[0] * 0.55, y: 0, z: (hipZ + chest[2]) / 2, rx: 2.4 * s, ry: 3.1 * s, rz: 2.8 * s, ramp: d.torso, pitch: -b.lean, yaw: tw, id: 72 });
-  parts.push({ x: chest[0], y: 0, z: chest[2], rx: 2.8 * s, ry: 3.8 * s, rz: 2.8 * s, ramp: d.torso, pitch: -b.lean, yaw: tw, fur: 0.06, id: 73 });
+  parts.push({
+    x: chest[0] * 0.55,
+    y: 0,
+    z: (hipZ + chest[2]) / 2,
+    rx: 2.4 * s,
+    ry: 3.1 * s,
+    rz: 2.8 * s,
+    ramp: d.torso,
+    pitch: -b.lean,
+    yaw: tw,
+    id: 72,
+  });
+  parts.push({
+    x: chest[0],
+    y: 0,
+    z: chest[2],
+    rx: 2.8 * s,
+    ry: 3.8 * s,
+    rz: 2.8 * s,
+    ramp: d.torso,
+    pitch: -b.lean,
+    yaw: tw,
+    fur: 0.06,
+    id: 73,
+  });
   // Голова.
   const head: V3 = [chest[0] + cl * 3.8 * s, 0, chest[2] + Math.cos(b.lean) * 4.2 * s];
-  parts.push({ x: head[0], y: 0, z: head[2], rx: 2.3 * s, ry: 2.2 * s, rz: 2.5 * s, ramp: d.skin, id: 74 });
+  parts.push({
+    x: head[0],
+    y: 0,
+    z: head[2],
+    rx: 2.3 * s,
+    ry: 2.2 * s,
+    rz: 2.5 * s,
+    ramp: d.skin,
+    id: 74,
+  });
   // Руки: плечо → локоть (наружу и вниз) → кисть.
   const out: { L: V3; R: V3 } = { L: [0, 0, 0], R: [0, 0, 0] };
   for (const e of [-1, 1]) {
@@ -3022,13 +3444,35 @@ function humanoid(parts: Part[], b: Body, d: Dress): { head: V3; handL: V3; hand
     ];
     const h0 = e < 0 ? b.handL : b.handR;
     const hand: V3 = [h0[0] * s, h0[1] * s, h0[2] * s + b.up - b.crouch];
-    const elbow: V3 = [(sh[0] + hand[0]) / 2 - 1 * s, (sh[1] + hand[1]) / 2 + e * 1.4 * s, (sh[2] + hand[2]) / 2 - 0.6 * s];
+    const elbow: V3 = [
+      (sh[0] + hand[0]) / 2 - 1 * s,
+      (sh[1] + hand[1]) / 2 + e * 1.4 * s,
+      (sh[2] + hand[2]) / 2 - 0.6 * s,
+    ];
     const pts = bez(sh, elbow, hand, 4);
     pts.forEach((pt, i) => {
       const r = (1.5 - i * 0.1) * s;
-      parts.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: i < 2 ? d.torso : d.arms, id: 80 + e });
+      parts.push({
+        x: pt[0],
+        y: pt[1],
+        z: pt[2],
+        rx: r,
+        ry: r,
+        rz: r,
+        ramp: i < 2 ? d.torso : d.arms,
+        id: 80 + e,
+      });
     });
-    parts.push({ x: hand[0], y: hand[1], z: hand[2], rx: 1.2 * s, ry: 1.2 * s, rz: 1.2 * s, ramp: d.skin, id: 82 + e });
+    parts.push({
+      x: hand[0],
+      y: hand[1],
+      z: hand[2],
+      rx: 1.2 * s,
+      ry: 1.2 * s,
+      rz: 1.2 * s,
+      ramp: d.skin,
+      id: 82 + e,
+    });
     if (e < 0) out.L = hand;
     else out.R = hand;
   }
@@ -3053,7 +3497,16 @@ function haft(
   const n = Math.max(3, Math.round((len + back) / 1.4));
   for (let i = 0; i <= n; i++) {
     const t = -back + ((len + back) * i) / n;
-    parts.push({ x: from[0] + dx * t, y: from[1] + dy * t, z: from[2] + dz * t, rx: r, ry: r, rz: r, ramp: R, id });
+    parts.push({
+      x: from[0] + dx * t,
+      y: from[1] + dy * t,
+      z: from[2] + dz * t,
+      rx: r,
+      ry: r,
+      rz: r,
+      ramp: R,
+      id,
+    });
   }
   return [from[0] + dx * len, from[1] + dy * len, from[2] + dz * len];
 }
@@ -3085,7 +3538,16 @@ function warriorBuild(look: MobPose['look'], o: WarO): Build {
   const j = humanoid(parts, o.body, d);
   const s = o.body.s;
   // Шлем с рогами.
-  parts.push({ x: j.head[0], y: 0, z: j.head[2] + 1.2 * s, rx: 2.6 * s, ry: 2.6 * s, rz: 1.8 * s, ramp: d.torso, id: 90 });
+  parts.push({
+    x: j.head[0],
+    y: 0,
+    z: j.head[2] + 1.2 * s,
+    rx: 2.6 * s,
+    ry: 2.6 * s,
+    rz: 1.8 * s,
+    ramp: d.torso,
+    id: 90,
+  });
   for (const e of [-1, 1]) {
     const horn = bez(
       [j.head[0], e * 2.2 * s, j.head[2] + 1.6 * s],
@@ -3094,11 +3556,30 @@ function warriorBuild(look: MobPose['look'], o: WarO): Build {
       3,
     );
     horn.forEach((pt, i) =>
-      parts.push({ x: pt[0], y: pt[1], z: pt[2], rx: 0.9 - i * 0.15, ry: 0.9 - i * 0.15, rz: 0.9 - i * 0.15, ramp: BONE, id: 91 + e }),
+      parts.push({
+        x: pt[0],
+        y: pt[1],
+        z: pt[2],
+        rx: 0.9 - i * 0.15,
+        ry: 0.9 - i * 0.15,
+        rz: 0.9 - i * 0.15,
+        ramp: BONE,
+        id: 91 + e,
+      }),
     );
   }
   // Плащ из шкуры на плечах.
-  parts.push({ x: j.chest[0] - 2 * s, y: 0, z: j.chest[2] - 1, rx: 2 * s, ry: 4.4 * s, rz: 4 * s, ramp: d.legs, fur: 0.25, id: 93 });
+  parts.push({
+    x: j.chest[0] - 2 * s,
+    y: 0,
+    z: j.chest[2] - 1,
+    rx: 2 * s,
+    ry: 4.4 * s,
+    rz: 4 * s,
+    ramp: d.legs,
+    fur: 0.25,
+    id: 93,
+  });
   // Секира в правой руке.
   const tip = haft(parts, j.handR, o.axeYaw, o.axePitch, 2.5 * s, 9 * s, 0.7 * s, WOOD, 94);
   const bx = Math.cos(o.axeYaw);
@@ -3118,7 +3599,18 @@ function warriorBuild(look: MobPose['look'], o: WarO): Build {
   });
   if (o.block > 0) {
     // Глыба льда вокруг (прозрачная), чем меньше — тем больше трещин.
-    parts.push({ x: 0.5, y: 0, z: 10 * s, rx: 6.5 * s, ry: 7.2 * s, rz: 12 * s * o.block, ramp: ICE, alpha: 0.42, gloss: true, id: 96 });
+    parts.push({
+      x: 0.5,
+      y: 0,
+      z: 10 * s,
+      rx: 6.5 * s,
+      ry: 7.2 * s,
+      rz: 12 * s * o.block,
+      ramp: ICE,
+      alpha: 0.42,
+      gloss: true,
+      id: 96,
+    });
   }
   if (o.shards > 0)
     for (let k = 0; k < 8; k++) {
@@ -3126,7 +3618,18 @@ function warriorBuild(look: MobPose['look'], o: WarO): Build {
       const r = 5 + o.shards * 9;
       const z = 6 + (k % 3) * 5 + Math.sin(o.shards * Math.PI) * 6 - o.shards * o.shards * 8;
       if (z < 0.5) continue;
-      parts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r, z, rx: 1.8, ry: 1.2, rz: 1.5, yaw: a, ramp: ICE, gloss: true, id: 97 + k });
+      parts.push({
+        x: Math.cos(a) * r,
+        y: Math.sin(a) * r,
+        z,
+        rx: 1.8,
+        ry: 1.2,
+        rz: 1.5,
+        yaw: a,
+        ramp: ICE,
+        gloss: true,
+        id: 97 + k,
+      });
     }
   return {
     parts,
@@ -3139,7 +3642,11 @@ function warriorBuild(look: MobPose['look'], o: WarO): Build {
         ? (p, scr) => {
             // Иней на плечах и шлеме.
             for (let k = 0; k < 6; k++) {
-              const [x, y] = scr(j.chest[0] + (k % 3) - 1, (k - 2.5) * 1.4, j.chest[2] + 2.4 + (k % 2));
+              const [x, y] = scr(
+                j.chest[0] + (k % 3) - 1,
+                (k - 2.5) * 1.4,
+                j.chest[2] + 2.4 + (k % 2),
+              );
               p.set(x, y, alpha(WHITE, 0.85));
             }
           }
@@ -3152,26 +3659,63 @@ function warPose(m: Mob, pose: MobPose): { o: WarO; key: string; ex: Partial<Mob
   const mode = pose.mode;
   const prev = prevMode(m);
   const moving = speedOf(m) > 0.3;
-  const base: WarO = { body: { ...BODY0, handR: [3, 4.5, 10], handL: [2, -4.2, 9] }, axeYaw: 0.2, axePitch: 1.0, block: 0, shards: 0, frost: 1 };
+  const base: WarO = {
+    body: { ...BODY0, handR: [3, 4.5, 10], handL: [2, -4.2, 9] },
+    axeYaw: 0.2,
+    axePitch: 1.0,
+    block: 0,
+    shards: 0,
+    frost: 1,
+  };
   const ex: Partial<MobFrame> = { shadow: 7 };
   let o = base;
   let key = '';
   const hits = m.data.hits ?? 0;
   if (mode === 'f12_frozen') {
     // В глыбе — боевая стойка, секира над плечом; трещины по числу ударов.
-    o = { ...base, body: { ...base.body, wide: 1, lean: 0.15, handR: [0, 4.5, 17], handL: [3.5, -3, 11] }, axeYaw: Math.PI, axePitch: 0.9, block: 1 - Math.min(2, hits) * 0.08 };
+    o = {
+      ...base,
+      body: { ...base.body, wide: 1, lean: 0.15, handR: [0, 4.5, 17], handL: [3.5, -3, 11] },
+      axeYaw: Math.PI,
+      axePitch: 0.9,
+      block: 1 - Math.min(2, hits) * 0.08,
+    };
     key = `frozen${Math.min(2, hits)}`;
     ex.still = true;
   } else if (mode === 'f12_thaw') {
     const k = Math.min(1, pose.t / 1.1);
     const sh = k24(pose.t) % 2 ? 0.5 : -0.5;
-    o = { ...base, body: { ...base.body, wide: 1, lean: 0.15 - k * 0.1, handR: [0, 4.5, 17 - k * 6], handL: [3.5, -3, 11] }, axeYaw: Math.PI * (1 - k * 0.8), axePitch: 0.9, shards: k };
+    o = {
+      ...base,
+      body: {
+        ...base.body,
+        wide: 1,
+        lean: 0.15 - k * 0.1,
+        handR: [0, 4.5, 17 - k * 6],
+        handL: [3.5, -3, 11],
+      },
+      axeYaw: Math.PI * (1 - k * 0.8),
+      axePitch: 0.9,
+      shards: k,
+    };
     key = `thaw${Math.round(k * 14)}`;
     ex.dx = k < 0.5 ? sh : 0;
     ex.still = true;
   } else if (mode === 'dying') {
     const k = Math.min(1, pose.t / 0.9);
-    o = { ...base, body: { ...base.body, kneel: Math.min(1, k * 2), lean: k * 0.9, handR: [4, 4, 3], handL: [3, -4, 3] }, axeYaw: 0.3, axePitch: -0.2, shards: k > 0.6 ? (k - 0.6) * 2.5 : 0 };
+    o = {
+      ...base,
+      body: {
+        ...base.body,
+        kneel: Math.min(1, k * 2),
+        lean: k * 0.9,
+        handR: [4, 4, 3],
+        handL: [3, -4, 3],
+      },
+      axeYaw: 0.3,
+      axePitch: -0.2,
+      shards: k > 0.6 ? (k - 0.6) * 2.5 : 0,
+    };
     key = `die${Math.round(k * 10)}`;
     ex.linger = 0.9;
     ex.alpha = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
@@ -3180,19 +3724,37 @@ function warPose(m: Mob, pose: MobPose): { o: WarO; key: string; ex: Partial<Mob
     const k = ease(Math.min(1, pose.t / 0.75));
     o = {
       ...base,
-      body: { ...base.body, wide: 0.6, lean: -0.25 * k, twist: -0.4 * k, handR: [lerp(3, -1.5, k), lerp(4.5, 3, k), lerp(10, 21, k)], handL: [lerp(2, 0, k), -3.5, lerp(9, 19, k)] },
+      body: {
+        ...base.body,
+        wide: 0.6,
+        lean: -0.25 * k,
+        twist: -0.4 * k,
+        handR: [lerp(3, -1.5, k), lerp(4.5, 3, k), lerp(10, 21, k)],
+        handL: [lerp(2, 0, k), -3.5, lerp(9, 19, k)],
+      },
       axeYaw: lerp(0.2, Math.PI, k),
       axePitch: lerp(1, 0.6, k),
     };
     key = `wind${Math.round(k * 12)}`;
     ex.still = true;
-  } else if ((mode === 'recover' && prev === 'f12_wind' && pose.t < 0.28) || (mode === 'recover' && prev === 'f12_slam' && pose.t < 0.36)) {
+  } else if (
+    (mode === 'recover' && prev === 'f12_wind' && pose.t < 0.28) ||
+    (mode === 'recover' && prev === 'f12_slam' && pose.t < 0.36)
+  ) {
     // Контакт: секира внизу перед собой; у удара сверху — лезвие во льду.
     const slam = prev === 'f12_slam';
     const k = Math.min(1, pose.t / (slam ? 0.36 : 0.28));
     o = {
       ...base,
-      body: { ...base.body, wide: 0.8, lean: 0.5 - k * 0.3, crouch: slam ? 2 : 1, twist: slam ? 0 : 0.35, handR: [6, slam ? 1.5 : 2.5, slam ? 4 : 6], handL: [5.5, slam ? -1 : -2.5, slam ? 4.5 : 7] },
+      body: {
+        ...base.body,
+        wide: 0.8,
+        lean: 0.5 - k * 0.3,
+        crouch: slam ? 2 : 1,
+        twist: slam ? 0 : 0.35,
+        handR: [6, slam ? 1.5 : 2.5, slam ? 4 : 6],
+        handL: [5.5, slam ? -1 : -2.5, slam ? 4.5 : 7],
+      },
       axeYaw: slam ? 0 : -0.5,
       axePitch: slam ? -0.9 : -0.35,
     };
@@ -3204,19 +3766,41 @@ function warPose(m: Mob, pose: MobPose): { o: WarO; key: string; ex: Partial<Mob
     const up = k < 0.75 ? ease(k / 0.75) : 1 - (k - 0.75) / 0.25;
     o = {
       ...base,
-      body: { ...base.body, wide: 0.8, lean: -0.2 * up + (k > 0.75 ? 0.6 * (k - 0.75) * 4 : 0), up: up * 2.5, handR: [lerp(3, 0, up), 1.5, lerp(10, 22, up)], handL: [lerp(2, 0, up), -1, lerp(9, 22, up)] },
+      body: {
+        ...base.body,
+        wide: 0.8,
+        lean: -0.2 * up + (k > 0.75 ? 0.6 * (k - 0.75) * 4 : 0),
+        up: up * 2.5,
+        handR: [lerp(3, 0, up), 1.5, lerp(10, 22, up)],
+        handL: [lerp(2, 0, up), -1, lerp(9, 22, up)],
+      },
       axeYaw: lerp(0.2, Math.PI, up),
       axePitch: lerp(0.4, 0.5, up),
     };
     key = `slam${Math.round(k * 14)}`;
     ex.still = true;
   } else if (mode === 'stun' || pose.anim === 'hurt') {
-    o = { ...base, body: { ...base.body, lean: -0.3, handR: [1, 5, 8], handL: [0, -5, 8] }, axeYaw: 0.6, axePitch: 0.4 };
+    o = {
+      ...base,
+      body: { ...base.body, lean: -0.3, handR: [1, 5, 8], handL: [0, -5, 8] },
+      axeYaw: 0.6,
+      axePitch: 0.4,
+    };
     key = 'hurt';
   } else if (moving) {
     const f = runFrame(pose, m, 1.4);
     const sw = Math.sin((f / 8) * TAU);
-    o = { ...base, body: { ...base.body, step: f / 8, stride: 2.4, lean: 0.15, handR: [3 - sw * 1.5, 4.5, 10], handL: [2 + sw * 1.5, -4.2, 9] } };
+    o = {
+      ...base,
+      body: {
+        ...base.body,
+        step: f / 8,
+        stride: 2.4,
+        lean: 0.15,
+        handR: [3 - sw * 1.5, 4.5, 10],
+        handL: [2 + sw * 1.5, -4.2, 9],
+      },
+    };
     key = `run${f}`;
   } else {
     const f = Math.floor(pose.now * 1.6 + m.id) % 4;
@@ -3228,7 +3812,9 @@ function warPose(m: Mob, pose: MobPose): { o: WarO; key: string; ex: Partial<Mob
 
 regMob('f12_warrior', (m, pose) => {
   const { o, key, ex } = warPose(m, pose);
-  const c = rigCached('f12_warrior', key, m.face, CV_WAR, pose.flash, () => warriorBuild(pose.look, o));
+  const c = rigCached('f12_warrior', key, m.face, CV_WAR, pose.flash, () =>
+    warriorBuild(pose.look, o),
+  );
   return mobFrame(c, CV_WAR, ex);
 });
 
@@ -3240,24 +3826,83 @@ const CV_KEEP: Canvas = { w: 48, h: 54, ox: 24, oy: 44 };
 
 function keeperBuild(
   look: MobPose['look'],
-  o: { body: Body; staffYaw: number; staffPitch: number; glow: number; shield: number; spin: number; summon: number },
+  o: {
+    body: Body;
+    staffYaw: number;
+    staffPitch: number;
+    glow: number;
+    shield: number;
+    spin: number;
+    summon: number;
+  },
 ): Build {
   const parts: Part[] = [];
   const robe = lookRamp(K_ROBE, look);
   const d: Dress = { skin: K_MASK, torso: robe, legs: robe, arms: robe, robe };
   const j = humanoid(parts, o.body, d);
   // Капюшон и маска с рогами-кристаллами.
-  parts.push({ x: j.head[0] - 0.6, y: 0, z: j.head[2] + 0.6, rx: 3, ry: 3, rz: 3.2, ramp: robe, id: 100 });
-  parts.push({ x: j.head[0] + 1.4, y: 0, z: j.head[2], rx: 1.4, ry: 2, rz: 2.3, ramp: K_MASK, id: 101 });
-  for (const e of [-1, 1]) crystalPart(parts, [j.head[0] - 0.5, e * 1.8, j.head[2] + 2.8], 0.2, e * 0.5, 3.2, TEAL, 102 + e);
+  parts.push({
+    x: j.head[0] - 0.6,
+    y: 0,
+    z: j.head[2] + 0.6,
+    rx: 3,
+    ry: 3,
+    rz: 3.2,
+    ramp: robe,
+    id: 100,
+  });
+  parts.push({
+    x: j.head[0] + 1.4,
+    y: 0,
+    z: j.head[2],
+    rx: 1.4,
+    ry: 2,
+    rz: 2.3,
+    ramp: K_MASK,
+    id: 101,
+  });
+  for (const e of [-1, 1])
+    crystalPart(
+      parts,
+      [j.head[0] - 0.5, e * 1.8, j.head[2] + 2.8],
+      0.2,
+      e * 0.5,
+      3.2,
+      TEAL,
+      102 + e,
+    );
   // Посох с зелёным кристаллом сияния.
   const tip = haft(parts, j.handR, o.staffYaw, o.staffPitch, 7, 7, 0.6, BONE, 105);
-  parts.push({ x: tip[0], y: tip[1], z: tip[2] + 1.2, rx: 1.4 + o.glow * 0.6, ry: 1.4 + o.glow * 0.6, rz: 2.4 + o.glow, ramp: AURORA, glow: true, gloss: true, id: 106 });
+  parts.push({
+    x: tip[0],
+    y: tip[1],
+    z: tip[2] + 1.2,
+    rx: 1.4 + o.glow * 0.6,
+    ry: 1.4 + o.glow * 0.6,
+    rz: 2.4 + o.glow,
+    ramp: AURORA,
+    glow: true,
+    gloss: true,
+    id: 106,
+  });
   // Щит: осколки льда кружат вокруг, пока хранитель холодный.
   if (o.shield > 0)
     for (let k = 0; k < 6; k++) {
       const a = o.spin + (k / 6) * TAU;
-      parts.push({ x: Math.cos(a) * 7, y: Math.sin(a) * 7, z: 9 + Math.sin(a * 2) * 2, rx: 1.5, ry: 0.8, rz: 2.4, yaw: a, ramp: ICE, gloss: true, alpha: 0.75, glow: true, id: 110 + k });
+      parts.push({
+        x: Math.cos(a) * 7,
+        y: Math.sin(a) * 7,
+        z: 9 + Math.sin(a * 2) * 2,
+        rx: 1.5,
+        ry: 0.8,
+        rz: 2.4,
+        yaw: a,
+        ramp: ICE,
+        gloss: true,
+        alpha: 0.75,
+        glow: true,
+        id: 110 + k,
+      });
     }
   return {
     parts,
@@ -3271,7 +3916,11 @@ function keeperBuild(
             // Вихрь сияния вокруг поднятых рук.
             for (let k = 0; k < 10; k++) {
               const a = o.summon * 9 + (k / 10) * TAU;
-              const [x, y] = scr(Math.cos(a) * (4 + k * 0.4), Math.sin(a) * (4 + k * 0.4), 14 + k * 0.8);
+              const [x, y] = scr(
+                Math.cos(a) * (4 + k * 0.4),
+                Math.sin(a) * (4 + k * 0.4),
+                14 + k * 0.8,
+              );
               p.set(x, y, k % 2 ? AURORA[3] : TEAL[3]);
             }
           }
@@ -3280,10 +3929,30 @@ function keeperBuild(
 }
 
 /** Кристалл-рог из трёх шаров. */
-function crystalPart(parts: Part[], at: V3, yaw: number, roll: number, len: number, R: RGBA[], id: number): void {
+function crystalPart(
+  parts: Part[],
+  at: V3,
+  yaw: number,
+  roll: number,
+  len: number,
+  R: RGBA[],
+  id: number,
+): void {
   for (let i = 0; i < 3; i++) {
     const r = 0.9 - i * 0.22;
-    parts.push({ x: at[0], y: at[1] + Math.sin(roll) * i * len * 0.3, z: at[2] + i * len * 0.33, rx: r, ry: r, rz: r * 1.4, ramp: R, gloss: true, glow: true, yaw, id });
+    parts.push({
+      x: at[0],
+      y: at[1] + Math.sin(roll) * i * len * 0.3,
+      z: at[2] + i * len * 0.33,
+      rx: r,
+      ry: r,
+      rz: r * 1.4,
+      ramp: R,
+      gloss: true,
+      glow: true,
+      yaw,
+      id,
+    });
   }
 }
 
@@ -3292,18 +3961,33 @@ regMob('f12_keeper', (m, pose) => {
   const prev = prevMode(m);
   const sim = paintSim();
   const st = f12State(sim);
-  const warm = !!st?.braziers.some((o) => st.lit.has(o.id) && Math.hypot(o.x + 0.5 - m.x, o.y + 0.5 - m.y) < 3.2);
+  const warm = !!st?.braziers.some(
+    (o) => st.lit.has(o.id) && Math.hypot(o.x + 0.5 - m.x, o.y + 0.5 - m.y) < 3.2,
+  );
   const casting = mode === 'f12_wind' || mode === 'f12_summon';
   const shield = !(warm || (m.data.spent ?? 0) > 0 || casting) && mode !== 'dying';
   const sp = Math.floor(pose.now * 6) % 6;
   const float = Math.round(Math.sin(pose.now * 2 + m.id) * 2) / 2;
-  const base = { body: { ...BODY0, up: 1.5 + float, handR: [3, 4, 10] as V3, handL: [2.5, -3.5, 10] as V3 }, staffYaw: 0, staffPitch: 1.45, glow: 0, shield: shield ? 1 : 0, spin: (sp / 6) * (TAU / 6), summon: 0 };
+  const base = {
+    body: { ...BODY0, up: 1.5 + float, handR: [3, 4, 10] as V3, handL: [2.5, -3.5, 10] as V3 },
+    staffYaw: 0,
+    staffPitch: 1.45,
+    glow: 0,
+    shield: shield ? 1 : 0,
+    spin: (sp / 6) * (TAU / 6),
+    summon: 0,
+  };
   let o = base;
   let key = '';
   const ex: Partial<MobFrame> = { shadow: 6, still: true };
   if (mode === 'dying') {
     const k = Math.min(1, pose.t / 0.8);
-    o = { ...base, body: { ...base.body, kneel: k, lean: k * 0.6, up: 0 }, staffPitch: 1.45 - k * 1.3, shield: 0 };
+    o = {
+      ...base,
+      body: { ...base.body, kneel: k, lean: k * 0.6, up: 0 },
+      staffPitch: 1.45 - k * 1.3,
+      shield: 0,
+    };
     key = `die${Math.round(k * 8)}`;
     ex.linger = 0.8;
     ex.alpha = 1 - k * 0.8;
@@ -3312,14 +3996,35 @@ regMob('f12_keeper', (m, pose) => {
     const k = Math.min(1, pose.t / 0.85);
     const up = ease(Math.min(1, k / 0.7));
     const thrust = k > 0.8 ? (k - 0.8) / 0.2 : 0;
-    o = { ...base, body: { ...base.body, lean: -0.2 * up + thrust * 0.4, handR: [lerp(3, 1, up) + thrust * 4, lerp(4, 2.5, up), lerp(10, 20, up) - thrust * 6], handL: [3, -3.5, 12 + up * 2] }, staffPitch: lerp(1.45, 1.55, up) - thrust * 1.1, glow: up };
+    o = {
+      ...base,
+      body: {
+        ...base.body,
+        lean: -0.2 * up + thrust * 0.4,
+        handR: [lerp(3, 1, up) + thrust * 4, lerp(4, 2.5, up), lerp(10, 20, up) - thrust * 6],
+        handL: [3, -3.5, 12 + up * 2],
+      },
+      staffPitch: lerp(1.45, 1.55, up) - thrust * 1.1,
+      glow: up,
+    };
     key = `cast${Math.round(k * 12)}`;
   } else if (mode === 'recover' && prev === 'f12_wind' && pose.t < 0.25) {
-    o = { ...base, body: { ...base.body, lean: 0.35, handR: [7, 2.5, 13], handL: [3, -3.5, 12] }, staffPitch: 0.4, glow: 1 - pose.t * 4 };
+    o = {
+      ...base,
+      body: { ...base.body, lean: 0.35, handR: [7, 2.5, 13], handL: [3, -3.5, 12] },
+      staffPitch: 0.4,
+      glow: 1 - pose.t * 4,
+    };
     key = `thrust${k24(pose.t, 6)}`;
   } else if (mode === 'f12_summon') {
     const k = Math.min(1, pose.t / 1);
-    o = { ...base, body: { ...base.body, lean: -0.15, handR: [1, 4.5, 19], handL: [1, -4.5, 19] }, staffPitch: 1.5, glow: 0.6, summon: k };
+    o = {
+      ...base,
+      body: { ...base.body, lean: -0.15, handR: [1, 4.5, 19], handL: [1, -4.5, 19] },
+      staffPitch: 1.5,
+      glow: 0.6,
+      summon: k,
+    };
     key = `summon${Math.round(k * 12)}`;
   } else if (mode === 'stun' || pose.anim === 'hurt') {
     o = { ...base, body: { ...base.body, lean: -0.3 } };
@@ -3329,7 +4034,14 @@ regMob('f12_keeper', (m, pose) => {
     o = { ...base, body: { ...base.body, lean: moving ? 0.15 : 0 } };
     key = `idle${moving ? 'm' : ''}`;
   }
-  const c = rigCached('f12_keeper', `${pose.look}|${key}|${o.shield}|${sp}|${float}`, m.face, CV_KEEP, pose.flash, () => keeperBuild(pose.look, o));
+  const c = rigCached(
+    'f12_keeper',
+    `${pose.look}|${key}|${o.shield}|${sp}|${float}`,
+    m.face,
+    CV_KEEP,
+    pose.flash,
+    () => keeperBuild(pose.look, o),
+  );
   return mobFrame(c, CV_KEEP, ex);
 });
 
@@ -3351,18 +4063,93 @@ function shamanParts(parts: Part[], o: ShO, look: MobPose['look'], dx = 0, dz = 
   const d: Dress = { skin: SH_FACE, torso: park, legs: park, arms: park };
   const j = humanoid(sub, o.body, d);
   // Капюшон с мехом и рога-оленьи.
-  sub.push({ x: j.head[0] - 0.5, y: 0, z: j.head[2] + 0.4, rx: 2.9, ry: 3, rz: 3, ramp: park, fur: 0.3, id: 120 });
-  sub.push({ x: j.head[0] + 1.5, y: 0, z: j.head[2] - 0.2, rx: 1.2, ry: 1.8, rz: 2, ramp: SH_FACE, id: 121 });
+  sub.push({
+    x: j.head[0] - 0.5,
+    y: 0,
+    z: j.head[2] + 0.4,
+    rx: 2.9,
+    ry: 3,
+    rz: 3,
+    ramp: park,
+    fur: 0.3,
+    id: 120,
+  });
+  sub.push({
+    x: j.head[0] + 1.5,
+    y: 0,
+    z: j.head[2] - 0.2,
+    rx: 1.2,
+    ry: 1.8,
+    rz: 2,
+    ramp: SH_FACE,
+    id: 121,
+  });
   for (const e of [-1, 1]) {
-    const ant = bez([j.head[0] - 1, e * 1.5, j.head[2] + 2.4], [j.head[0] - 2, e * 4, j.head[2] + 5], [j.head[0] - 1, e * 5, j.head[2] + 8], 4);
-    ant.forEach((pt, i) => sub.push({ x: pt[0], y: pt[1], z: pt[2], rx: 0.6, ry: 0.6, rz: 0.6, ramp: BONE, id: 122 + e }));
-    sub.push({ x: j.head[0] - 1.5, y: e * 4.4, z: j.head[2] + 5.4, rx: 0.5, ry: 1.6, rz: 0.5, ramp: BONE, id: 122 + e });
+    const ant = bez(
+      [j.head[0] - 1, e * 1.5, j.head[2] + 2.4],
+      [j.head[0] - 2, e * 4, j.head[2] + 5],
+      [j.head[0] - 1, e * 5, j.head[2] + 8],
+      4,
+    );
+    ant.forEach((pt, i) =>
+      sub.push({
+        x: pt[0],
+        y: pt[1],
+        z: pt[2],
+        rx: 0.6,
+        ry: 0.6,
+        rz: 0.6,
+        ramp: BONE,
+        id: 122 + e,
+      }),
+    );
+    sub.push({
+      x: j.head[0] - 1.5,
+      y: e * 4.4,
+      z: j.head[2] + 5.4,
+      rx: 0.5,
+      ry: 1.6,
+      rz: 0.5,
+      ramp: BONE,
+      id: 122 + e,
+    });
   }
   // Бубен в левой руке: плоский диск, обод охрой.
-  sub.push({ x: j.handL[0] + 1, y: j.handL[1] - 0.6, z: j.handL[2] + 0.6, rx: 3.2, ry: 0.6, rz: 3.2, yaw: 0.2, roll: o.drum * 0.3, ramp: BONE, id: 125 });
-  sub.push({ x: j.handL[0] + 1, y: j.handL[1] - 0.2, z: j.handL[2] + 0.6, rx: 3.5, ry: 0.4, rz: 3.5, yaw: 0.2, ramp: OCHRE, id: 126 });
+  sub.push({
+    x: j.handL[0] + 1,
+    y: j.handL[1] - 0.6,
+    z: j.handL[2] + 0.6,
+    rx: 3.2,
+    ry: 0.6,
+    rz: 3.2,
+    yaw: 0.2,
+    roll: o.drum * 0.3,
+    ramp: BONE,
+    id: 125,
+  });
+  sub.push({
+    x: j.handL[0] + 1,
+    y: j.handL[1] - 0.2,
+    z: j.handL[2] + 0.6,
+    rx: 3.5,
+    ry: 0.4,
+    rz: 3.5,
+    yaw: 0.2,
+    ramp: OCHRE,
+    id: 126,
+  });
   if (o.aurora > 0)
-    sub.push({ x: j.handR[0], y: j.handR[1], z: j.handR[2] + 1, rx: 1.6 * o.aurora, ry: 1.6 * o.aurora, rz: 1.6 * o.aurora, ramp: AURORA, glow: true, id: 127 });
+    sub.push({
+      x: j.handR[0],
+      y: j.handR[1],
+      z: j.handR[2] + 1,
+      rx: 1.6 * o.aurora,
+      ry: 1.6 * o.aurora,
+      rz: 1.6 * o.aurora,
+      ramp: AURORA,
+      glow: true,
+      id: 127,
+    });
   for (const pt of sub) parts.push({ ...pt, x: pt.x + dx, z: pt.z + dz });
   return { head: [j.head[0] + dx, 0, j.head[2] + dz] };
 }
@@ -3379,7 +4166,11 @@ function shamanBuild(look: MobPose['look'], o: ShO): Build {
   };
 }
 
-const SH_BASE: ShO = { body: { ...BODY0, s: 0.85, handL: [3, -4, 11], handR: [2.5, 4, 9] }, drum: 0, aurora: 0 };
+const SH_BASE: ShO = {
+  body: { ...BODY0, s: 0.85, handL: [3, -4, 11], handR: [2.5, 4, 9] },
+  drum: 0,
+  aurora: 0,
+};
 
 regMob('f12_shaman', (m, pose) => {
   const mode = pose.mode;
@@ -3389,14 +4180,26 @@ regMob('f12_shaman', (m, pose) => {
   const ex: Partial<MobFrame> = { shadow: 4.5, still: true, lift: 0.01 };
   if (mode === 'f12s_jump') {
     const k = Math.min(1, pose.t / 0.9);
-    o = { ...SH_BASE, body: { ...SH_BASE.body, crouch: k < 0.15 ? 2 : 0, handR: [1, 4.5, 15], handL: [1, -4.5, 15] } };
+    o = {
+      ...SH_BASE,
+      body: {
+        ...SH_BASE.body,
+        crouch: k < 0.15 ? 2 : 0,
+        handR: [1, 4.5, 15],
+        handL: [1, -4.5, 15],
+      },
+    };
     key = `jump${k < 0.15 ? 0 : 1}`;
     ex.lift = HIGH * easeOut(k) + 8 * (1 - k);
     ex.ghost = { every: 0.06, life: 0.25, tint: '#9affd8', alpha: 0.3 };
   } else if (mode === 'f12s_high') {
     // Под сводом в ленте сияния: недосягаема.
     const f = Math.floor(pose.now * 4) % 4;
-    o = { ...SH_BASE, body: { ...SH_BASE.body, handR: [1, 4.5, 15 + (f % 2)], handL: [1, -4.5, 15] }, aurora: 1 };
+    o = {
+      ...SH_BASE,
+      body: { ...SH_BASE.body, handR: [1, 4.5, 15 + (f % 2)], handL: [1, -4.5, 15] },
+      aurora: 1,
+    };
     key = `high${f}`;
     ex.lift = HIGH + Math.sin(pose.now * 2) * 2;
     ex.alpha = 0.85;
@@ -3411,21 +4214,47 @@ regMob('f12_shaman', (m, pose) => {
     // Бьёт в бубен: руки вверх и вниз в такт, кристалл сияния в кулаке.
     const k = Math.min(1, pose.t / 1.1);
     const beat = Math.floor(pose.t * 8) % 2;
-    o = { ...SH_BASE, body: { ...SH_BASE.body, wide: 0.6, lean: -0.1, handR: [2, 3.5, beat ? 16 : 12], handL: [3, -3.5, 14] }, drum: beat, aurora: 0.6 + k * 0.6 };
+    o = {
+      ...SH_BASE,
+      body: {
+        ...SH_BASE.body,
+        wide: 0.6,
+        lean: -0.1,
+        handR: [2, 3.5, beat ? 16 : 12],
+        handL: [3, -3.5, 14],
+      },
+      drum: beat,
+      aurora: 0.6 + k * 0.6,
+    };
     key = `cast${beat}${Math.round(k * 4)}`;
   } else if (mode === 'f12s_low') {
     // Выдохлась: на колене, тяжело дышит — бей.
     const f = Math.floor(pose.t * 3) % 2;
-    o = { ...SH_BASE, body: { ...SH_BASE.body, kneel: 1, lean: 0.5 + f * 0.08, handR: [3, 4, 4], handL: [3.5, -3, 6] } };
+    o = {
+      ...SH_BASE,
+      body: {
+        ...SH_BASE.body,
+        kneel: 1,
+        lean: 0.5 + f * 0.08,
+        handR: [3, 4, 4],
+        handL: [3.5, -3, 6],
+      },
+    };
     key = `low${f}`;
   } else if (mode === 'f12s_rise') {
     const k = Math.min(1, pose.t / 0.45);
-    o = { ...SH_BASE, body: { ...SH_BASE.body, crouch: k < 0.2 ? 2 : 0, handR: [1, 4.5, 15], handL: [1, -4.5, 15] } };
+    o = {
+      ...SH_BASE,
+      body: { ...SH_BASE.body, crouch: k < 0.2 ? 2 : 0, handR: [1, 4.5, 15], handL: [1, -4.5, 15] },
+    };
     key = `rise${k < 0.2 ? 0 : 1}`;
     ex.lift = HIGH * easeOut(Math.max(0, (k - 0.2) / 0.8)) + 0.01;
   } else if (mode === 'dying' || mode === 'escape') {
     const k = Math.min(1, pose.t / 0.8);
-    o = { ...SH_BASE, body: { ...SH_BASE.body, kneel: 1, lean: 0.9 * k, handR: [3, 4, 2], handL: [3, -4, 2] } };
+    o = {
+      ...SH_BASE,
+      body: { ...SH_BASE.body, kneel: 1, lean: 0.9 * k, handR: [3, 4, 2], handL: [3, -4, 2] },
+    };
     key = `die${Math.round(k * 6)}`;
     ex.alpha = 1 - k;
     ex.linger = 0.8;
@@ -3433,7 +4262,9 @@ regMob('f12_shaman', (m, pose) => {
     o = SH_BASE;
     key = 'idle';
   }
-  const c = rigCached('f12_shaman', `${pose.look}|${key}`, m.face, CV_SHA, pose.flash, () => shamanBuild(pose.look, o));
+  const c = rigCached('f12_shaman', `${pose.look}|${key}`, m.face, CV_SHA, pose.flash, () =>
+    shamanBuild(pose.look, o),
+  );
   return mobFrame(c, CV_SHA, ex);
 });
 
@@ -3466,19 +4297,73 @@ function golemBuild(look: MobPose['look'], o: GolO): Build {
     const ph = (o.step + (e > 0 ? 0.5 : 0)) * TAU;
     const fx = o.moving ? Math.sin(ph) * 2.2 : 0;
     const lift = (e > 0 ? o.legLift : 0) + (o.moving ? Math.max(0, Math.cos(ph)) * 1.4 : 0);
-    parts.push({ x: sp(fx, 1), y: sp(e * 4, 2), z: drop(3 + lift, 1), rx: 3.4, ry: 3.2, rz: 3.4, ramp: S, id: 130 + e });
+    parts.push({
+      x: sp(fx, 1),
+      y: sp(e * 4, 2),
+      z: drop(3 + lift, 1),
+      rx: 3.4,
+      ry: 3.2,
+      rz: 3.4,
+      ramp: S,
+      id: 130 + e,
+    });
   }
   // Туловище: нижний ком и грудь, наклон вперёд.
   const sq = 1 - o.squash * 0.15;
-  parts.push({ x: sp(0, 3), y: 0, z: drop(9 * sq, 3), rx: 6.4, ry: 7, rz: 5.4 * sq, ramp: S, roll: o.roll, fur: 0.08, id: 133 });
+  parts.push({
+    x: sp(0, 3),
+    y: 0,
+    z: drop(9 * sq, 3),
+    rx: 6.4,
+    ry: 7,
+    rz: 5.4 * sq,
+    ramp: S,
+    roll: o.roll,
+    fur: 0.08,
+    id: 133,
+  });
   const cx = Math.sin(o.lean) * 7;
   const cz = 9 * sq + Math.cos(o.lean) * 7.5;
-  parts.push({ x: sp(cx, 4), y: 0, z: drop(cz, 4), rx: 6, ry: 7.6, rz: 5.4, ramp: S, pitch: -o.lean, roll: o.roll, fur: 0.08, id: 134 });
+  parts.push({
+    x: sp(cx, 4),
+    y: 0,
+    z: drop(cz, 4),
+    rx: 6,
+    ry: 7.6,
+    rz: 5.4,
+    ramp: S,
+    pitch: -o.lean,
+    roll: o.roll,
+    fur: 0.08,
+    id: 134,
+  });
   // Слабое место: ядро-кристалл на спине (видно, когда голем спиной).
-  parts.push({ x: sp(cx - 5.4, 5), y: 0, z: drop(cz + 0.6, 5), rx: 1.6, ry: 2.4, rz: 2.8, ramp: TEAL, glow: true, gloss: true, id: 135 });
+  parts.push({
+    x: sp(cx - 5.4, 5),
+    y: 0,
+    z: drop(cz + 0.6, 5),
+    rx: 1.6,
+    ry: 2.4,
+    rz: 2.8,
+    ramp: TEAL,
+    glow: true,
+    gloss: true,
+    id: 135,
+  });
   // Ледяные глыбы на плечах.
   for (const e of [-1, 1])
-    parts.push({ x: sp(cx - 0.5, 6), y: sp(e * 6.4, 6), z: drop(cz + 3.4, 6), rx: 2.6, ry: 2.2, rz: 2.4, yaw: e * 0.6, ramp: I, gloss: true, id: 136 + e });
+    parts.push({
+      x: sp(cx - 0.5, 6),
+      y: sp(e * 6.4, 6),
+      z: drop(cz + 3.4, 6),
+      rx: 2.6,
+      ry: 2.2,
+      rz: 2.4,
+      yaw: e * 0.6,
+      ramp: I,
+      gloss: true,
+      id: 136 + e,
+    });
   // Голова маленькая, вдавлена в плечи.
   const hx2 = cx + Math.sin(o.lean) * 5 + 1.5;
   const hz = cz + Math.cos(o.lean) * 4.6;
@@ -3489,9 +4374,28 @@ function golemBuild(look: MobPose['look'], o: GolO): Build {
     const f = e > 0 ? o.fistR : o.fistL;
     const el: V3 = [(sh[0] + f[0]) / 2 - 1, (sh[1] + f[1]) / 2 + e * 1.5, (sh[2] + f[2]) / 2];
     bez(sh, el, f, 3).forEach((pt, i) =>
-      parts.push({ x: sp(pt[0], 8 + i), y: sp(pt[1], 8), z: drop(pt[2], 8 + i), rx: 2.2 + i * 0.25, ry: 2.2 + i * 0.25, rz: 2.2 + i * 0.25, ramp: S, id: 140 + e }),
+      parts.push({
+        x: sp(pt[0], 8 + i),
+        y: sp(pt[1], 8),
+        z: drop(pt[2], 8 + i),
+        rx: 2.2 + i * 0.25,
+        ry: 2.2 + i * 0.25,
+        rz: 2.2 + i * 0.25,
+        ramp: S,
+        id: 140 + e,
+      }),
     );
-    parts.push({ x: sp(f[0], 9), y: sp(f[1], 9), z: drop(f[2], 9), rx: 3.4, ry: 3.4, rz: 3.2, ramp: I, gloss: true, id: 142 + e });
+    parts.push({
+      x: sp(f[0], 9),
+      y: sp(f[1], 9),
+      z: drop(f[2], 9),
+      rx: 3.4,
+      ry: 3.4,
+      rz: 3.2,
+      ramp: I,
+      gloss: true,
+      id: 142 + e,
+    });
   }
   return {
     parts,
@@ -3505,7 +4409,17 @@ function golemBuild(look: MobPose['look'], o: GolO): Build {
   };
 }
 
-const GOL0: GolO = { lean: 0.2, roll: 0, fistR: [4, 8, 6], fistL: [4, -8, 6], legLift: 0, squash: 0, crumble: 0, step: 0, moving: false };
+const GOL0: GolO = {
+  lean: 0.2,
+  roll: 0,
+  fistR: [4, 8, 6],
+  fistL: [4, -8, 6],
+  legLift: 0,
+  squash: 0,
+  crumble: 0,
+  step: 0,
+  moving: false,
+};
 
 regMob('f12_golem', (m, pose) => {
   const mode = pose.mode;
@@ -3522,7 +4436,11 @@ regMob('f12_golem', (m, pose) => {
   } else if (mode === 'f12_wind') {
     // Кулак над головой, корпус назад.
     const k = ease(Math.min(1, pose.t / 0.9));
-    o = { ...GOL0, lean: lerp(0.2, -0.25, k), fistR: [lerp(4, -1, k), lerp(8, 5, k), lerp(6, 27, k)] };
+    o = {
+      ...GOL0,
+      lean: lerp(0.2, -0.25, k),
+      fistR: [lerp(4, -1, k), lerp(8, 5, k), lerp(6, 27, k)],
+    };
     key = `wind${Math.round(k * 12)}`;
     ex.still = true;
   } else if (mode === 'recover' && prev === 'f12_wind' && pose.t < 0.3) {
@@ -3533,7 +4451,14 @@ regMob('f12_golem', (m, pose) => {
   } else if (mode === 'f12_stomp') {
     const k = Math.min(1, pose.t / 1.15);
     const up = k < 0.8 ? ease(k / 0.8) : 1 - (k - 0.8) / 0.2;
-    o = { ...GOL0, lean: -0.1 * up, legLift: up * 7, fistR: [2, 9, 6 + up * 10], fistL: [2, -9, 6 + up * 10], roll: -up * 0.12 };
+    o = {
+      ...GOL0,
+      lean: -0.1 * up,
+      legLift: up * 7,
+      fistR: [2, 9, 6 + up * 10],
+      fistL: [2, -9, 6 + up * 10],
+      roll: -up * 0.12,
+    };
     key = `stomp${Math.round(k * 14)}`;
     ex.still = true;
   } else if (mode === 'recover' && prev === 'f12_stomp' && pose.t < 0.3) {
@@ -3547,14 +4472,23 @@ regMob('f12_golem', (m, pose) => {
     key = 'hurt';
   } else if (speedOf(m) > 0.3) {
     const f = runFrame(pose, m, 0.9);
-    o = { ...GOL0, moving: true, step: f / 8, roll: Math.sin((f / 8) * TAU) * 0.07, fistR: [4 - Math.sin((f / 8) * TAU) * 2, 8, 6], fistL: [4 + Math.sin((f / 8) * TAU) * 2, -8, 6] };
+    o = {
+      ...GOL0,
+      moving: true,
+      step: f / 8,
+      roll: Math.sin((f / 8) * TAU) * 0.07,
+      fistR: [4 - Math.sin((f / 8) * TAU) * 2, 8, 6],
+      fistL: [4 + Math.sin((f / 8) * TAU) * 2, -8, 6],
+    };
     key = `run${f}`;
   } else {
     const f = Math.floor(pose.now * 1.2 + m.id) % 2;
     o = { ...GOL0, squash: f * 0.1 };
     key = `idle${f}`;
   }
-  const c = rigCached('f12_golem', `${pose.look}|${key}`, m.face, CV_GOL, pose.flash, () => golemBuild(pose.look, o));
+  const c = rigCached('f12_golem', `${pose.look}|${key}`, m.face, CV_GOL, pose.flash, () =>
+    golemBuild(pose.look, o),
+  );
   return mobFrame(c, CV_GOL, ex);
 });
 
@@ -3644,7 +4578,10 @@ function rollAbout(p: V3, z0: number, a: number): V3 {
 
 function mammothBuild(look: MobPose['look'], o: MamO): Build {
   const raw: Part[] = [];
-  const fur = lookRamp(o.frost > 0.5 ? M_FUR.map((c) => mixc(c, hx('#b8d0ec'), o.frost * 0.55)) : M_FUR, look);
+  const fur = lookRamp(
+    o.frost > 0.5 ? M_FUR.map((c) => mixc(c, hx('#b8d0ec'), o.frost * 0.55)) : M_FUR,
+    look,
+  );
   const fur2 = lookRamp(M_FUR2, look);
   const tuskR = M_TUSK;
   const bob = o.stride > 0 ? Math.abs(Math.sin(o.walk * TAU * 2)) * 1.2 : 0;
@@ -3657,12 +4594,31 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   raw.push({ x: 6, y: 0, z: z0 + 8, rx: 10, ry: 9.5, rz: 8, ramp: fur, fur: 0.3, id: 2 });
   raw.push({ x: -10, y: 0, z: z0 - 1, rx: 9, ry: 10.5, rz: 10, ramp: fur, fur: 0.32, id: 3 });
   // Снег на холке (с фазой — толще).
-  raw.push({ x: 4, y: 0, z: z0 + 13 + o.phase * 0.6, rx: 8 + o.phase, ry: 6.5 + o.phase * 0.6, rz: 2.4, ramp: SNOW, id: 4 });
+  raw.push({
+    x: 4,
+    y: 0,
+    z: z0 + 13 + o.phase * 0.6,
+    rx: 8 + o.phase,
+    ry: 6.5 + o.phase * 0.6,
+    rz: 2.4,
+    ramp: SNOW,
+    id: 4,
+  });
   // Бахрома шерсти: свисает по бокам до колен.
   for (let k = 0; k < 6; k++) {
     const x = -14 + k * 5.6;
     for (const e of [-1, 1])
-      raw.push({ x, y: e * 10.5, z: z0 - 8, rx: 3.4, ry: 2.2, rz: 6.5, ramp: fur2, fur: 0.5, id: 5 });
+      raw.push({
+        x,
+        y: e * 10.5,
+        z: z0 - 8,
+        rx: 3.4,
+        ry: 2.2,
+        rz: 6.5,
+        ramp: fur2,
+        fur: 0.5,
+        id: 5,
+      });
   }
   // Голова: лоб куполом, глаза малые.
   const H: V3 = [17, 0, z0 + 3];
@@ -3674,8 +4630,28 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     const px = x * Math.cos(o.hp) + z * Math.sin(o.hp);
     return [H[0] + px * hc - y * hs, px * hs + y * hc, H[2] + pz];
   };
-  const hp = (pt: V3, rx: number, ry: number, rz: number, R: RGBA[], id: number, extra: Partial<Part> = {}) =>
-    raw.push({ x: pt[0], y: pt[1], z: pt[2], rx, ry, rz, ramp: R, id, yaw: o.hy, pitch: -o.hp, ...extra });
+  const hp = (
+    pt: V3,
+    rx: number,
+    ry: number,
+    rz: number,
+    R: RGBA[],
+    id: number,
+    extra: Partial<Part> = {},
+  ) =>
+    raw.push({
+      x: pt[0],
+      y: pt[1],
+      z: pt[2],
+      rx,
+      ry,
+      rz,
+      ramp: R,
+      id,
+      yaw: o.hy,
+      pitch: -o.hp,
+      ...extra,
+    });
   hp(head(2, 0, 2), 8, 8.4, 9, fur, 10, { fur: 0.28 });
   hp(head(1, 0, 9), 6, 6, 4.5, fur, 11, { fur: 0.3 });
   for (const e of [-1, 1]) hp(head(-2, e * 7.5, 3), 1.6, 3.4, 4.2, fur2, 12, { fur: 0.4 });
@@ -3687,7 +4663,18 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     pts.forEach((pt, i) => {
       const r = 2.3 - i * 0.2;
       const cr = o.crack && i > 1 && i < 6;
-      raw.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: cr ? TEAL : tuskR, gloss: true, glow: cr, id: 13 + (e > 0 ? 1 : 0) });
+      raw.push({
+        x: pt[0],
+        y: pt[1],
+        z: pt[2],
+        rx: r,
+        ry: r,
+        rz: r,
+        ramp: cr ? TEAL : tuskR,
+        gloss: true,
+        glow: cr,
+        id: 13 + (e > 0 ? 1 : 0),
+      });
     });
   }
   // Хобот: висит, завит вверх (рёв) или вытянут (выдох).
@@ -3700,7 +4687,15 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     raw.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: M_SKIN, fur: 0.1, id: 15 });
   });
   // Пасть (рёв): тёмный провал под хоботом.
-  if (o.mouth > 0) hp(head(7, 0, -6), 2.2 * o.mouth, 2.6, 1.8 * o.mouth, ramp('#2a0a0a', '#4a1414', '#6a2222', '#8a3434', '#aa4a4a'), 16);
+  if (o.mouth > 0)
+    hp(
+      head(7, 0, -6),
+      2.2 * o.mouth,
+      2.6,
+      1.8 * o.mouth,
+      ramp('#2a0a0a', '#4a1414', '#6a2222', '#8a3434', '#aa4a4a'),
+      16,
+    );
   // Хвост с кисточкой.
   raw.push({ x: -26, y: 0, z: z0 - 2, rx: 1.4, ry: 1.4, rz: 4, ramp: fur2, pitch: 0.5, id: 17 });
   raw.push({ x: -27.5, y: 0, z: z0 - 7, rx: 1.8, ry: 1.8, rz: 2.4, ramp: fur2, fur: 0.5, id: 17 });
@@ -3729,9 +4724,28 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     const knee: V3 = [(hip[0] + foot[0]) / 2 + (k < 2 ? 1 : -1.5), ly, (hip[2] + foot[2]) / 2];
     bez(hip, knee, foot, 4).forEach((pt, i) => {
       const r = 4.8 - i * 0.2;
-      legParts.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: fur, fur: 0.3, id: 20 + k });
+      legParts.push({
+        x: pt[0],
+        y: pt[1],
+        z: pt[2],
+        rx: r,
+        ry: r,
+        rz: r,
+        ramp: fur,
+        fur: 0.3,
+        id: 20 + k,
+      });
     });
-    legParts.push({ x: foot[0] + 0.6, y: foot[1], z: foot[2] - 1.4, rx: 4.6, ry: 4.4, rz: 1.8, ramp: M_SKIN, id: 24 + k });
+    legParts.push({
+      x: foot[0] + 0.6,
+      y: foot[1],
+      z: foot[2] - 1.4,
+      rx: 4.6,
+      ry: 4.4,
+      rz: 1.8,
+      ramp: M_SKIN,
+      id: 24 + k,
+    });
   }
   // Наклон «на дыбы» — для всего, кроме задних ног.
   const parts: Part[] = [];
@@ -3740,7 +4754,14 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     let c: V3 = [p.x, p.y, p.z];
     if (!legs) c = pitchAbout(c, piv, pa);
     c = rollAbout(c, zRoll, o.roll);
-    return { ...p, x: c[0], y: c[1], z: c[2], pitch: (p.pitch ?? 0) + (legs ? 0 : -pa), roll: (p.roll ?? 0) + o.roll };
+    return {
+      ...p,
+      x: c[0],
+      y: c[1],
+      z: c[2],
+      pitch: (p.pitch ?? 0) + (legs ? 0 : -pa),
+      roll: (p.roll ?? 0) + o.roll,
+    };
   };
   for (const p of raw) parts.push(rot(p, false));
   for (const p of legParts) parts.push(rot(p, true));
@@ -3811,7 +4832,7 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
   const rider = (m.data.rider ?? 0) > 0;
   const phase = Math.max(0, Math.min(3, m.data.phase ?? 0));
   const base: MamO = { ...MAM0, rider, phase };
-  const walkPh = (((m.data.walk ?? 0) / 2.4) % 1 + 1) % 1;
+  const walkPh = ((((m.data.walk ?? 0) / 2.4) % 1) + 1) % 1;
   const wf = Math.floor(walkPh * 12) % 12;
   const ex: Partial<MobFrame> = { shadow: 26, still: true };
   let o = base;
@@ -3831,7 +4852,14 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
       // Смена фазы: на дыбы, удар передними к 0,9 с — кольцо снега.
       const k = t / T.rear;
       const up = t < 0.9 ? ease(t / 0.75) : Math.max(0, 1 - (t - 0.9) / 0.12);
-      o = { ...base, rear: up, hp: -0.4 * up, trunk: -0.8 * up, mouth: up > 0.4 ? 1 : 0, crouch: t > 0.9 && t < 1.2 ? 1 : 0 };
+      o = {
+        ...base,
+        rear: up,
+        hp: -0.4 * up,
+        trunk: -0.8 * up,
+        mouth: up > 0.4 ? 1 : 0,
+        crouch: t > 0.9 && t < 1.2 ? 1 : 0,
+      };
       key = `rear${sw(Math.min(1, k) * 38)}`;
       break;
     }
@@ -3860,8 +4888,19 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
     case 'f12b_stomp': {
       // Встаёт передом — и обоими передними в лёд ровно к 1,0 с.
       const w = T.stomp;
-      const up = t < 0.8 ? ease(t / 0.8) * 0.45 : t < w.hit ? 0.45 * (1 - (t - 0.8) / (w.hit - 0.8)) ** 2 : 0;
-      o = { ...base, rear: up, hp: -0.3 * (up / 0.45), trunk: -0.6 * (up / 0.45), crouch: t >= w.hit && t < w.hit + 0.25 ? 1 : 0 };
+      const up =
+        t < 0.8
+          ? ease(t / 0.8) * 0.45
+          : t < w.hit
+            ? 0.45 * (1 - (t - 0.8) / (w.hit - 0.8)) ** 2
+            : 0;
+      o = {
+        ...base,
+        rear: up,
+        hp: -0.3 * (up / 0.45),
+        trunk: -0.6 * (up / 0.45),
+        crouch: t >= w.hit && t < w.hit + 0.25 ? 1 : 0,
+      };
       key = `stomp${sw(Math.min(w.end, t) * 24)}`;
       break;
     }
@@ -3889,13 +4928,27 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
     case 'f12b_stunned': {
       // В стене: голова опущена и свёрнута, бивни треснули — светятся.
       const ph = Math.floor(pose.now * 3) % 4;
-      o = { ...base, hp: 0.35, hy: [0.15, 0.05, -0.05, 0.05][ph], roll: 0.1, trunk: -0.05, crack: true, crouch: 0.8 };
+      o = {
+        ...base,
+        hp: 0.35,
+        hy: [0.15, 0.05, -0.05, 0.05][ph],
+        roll: 0.1,
+        trunk: -0.05,
+        crack: true,
+        crouch: 0.8,
+      };
       key = `stun${ph}`;
       break;
     }
     case 'f12b_getup': {
       const k = Math.min(1, t / 0.6);
-      o = { ...base, hp: 0.35 * (1 - k), hy: Math.sin(k * Math.PI * 3) * 0.35, roll: 0.1 * (1 - k), crouch: 0.8 * (1 - k) };
+      o = {
+        ...base,
+        hp: 0.35 * (1 - k),
+        hy: Math.sin(k * Math.PI * 3) * 0.35,
+        roll: 0.1 * (1 - k),
+        crouch: 0.8 * (1 - k),
+      };
       key = `getup${sw(k * 14)}`;
       break;
     }
@@ -3904,15 +4957,32 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
       const bt = (t % T.drum.beat) / T.drum.beat;
       const beat = Math.floor(t / T.drum.beat);
       const lift = bt < 0.6 ? Math.sin((bt / 0.6) * Math.PI) * 5 : 0;
-      o = { ...base, liftR: beat % 2 ? lift : 0, liftL: beat % 2 ? 0 : lift, drum: bt < 0.4 ? 1 : 0, hp: -0.1 };
+      o = {
+        ...base,
+        liftR: beat % 2 ? lift : 0,
+        liftL: beat % 2 ? 0 : lift,
+        drum: bt < 0.4 ? 1 : 0,
+        hp: -0.1,
+      };
       key = `drum${beat % 2}${sw(bt * 8)}`;
       break;
     }
     case 'f12b_spikes': {
       // Голову вверх — и бивнями в лёд к 0,9 с: шипы идут от бивней.
       const w = T.spikes;
-      const hp = t < 0.7 ? -0.35 * ease(t / 0.7) : t < w.hit ? -0.35 + 0.9 * ((t - 0.7) / (w.hit - 0.7)) : 0.55 * (1 - Math.min(1, (t - w.hit) / 0.5));
-      o = { ...base, hp, rear: t < 0.7 ? 0.15 * ease(t / 0.7) : 0, crouch: t >= w.hit && t < w.hit + 0.3 ? 1 : 0, trunk: -0.4 };
+      const hp =
+        t < 0.7
+          ? -0.35 * ease(t / 0.7)
+          : t < w.hit
+            ? -0.35 + 0.9 * ((t - 0.7) / (w.hit - 0.7))
+            : 0.55 * (1 - Math.min(1, (t - w.hit) / 0.5));
+      o = {
+        ...base,
+        hp,
+        rear: t < 0.7 ? 0.15 * ease(t / 0.7) : 0,
+        crouch: t >= w.hit && t < w.hit + 0.3 ? 1 : 0,
+        trunk: -0.4,
+      };
       key = `spikes${sw(Math.min(w.end, t) * 24)}`;
       break;
     }
@@ -3927,7 +4997,14 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
     case 'f12b_drop': {
       // Шаманка спрыгивает к 0,7 с: мамонт вскидывает голову.
       const up = Math.sin(Math.min(1, t / 1.2) * Math.PI);
-      o = { ...base, rider: t < 0.7, rear: 0.15 * up, hp: -0.3 * up, trunk: -0.6 * up, mouth: up > 0.5 ? 1 : 0 };
+      o = {
+        ...base,
+        rider: t < 0.7,
+        rear: 0.15 * up,
+        hp: -0.3 * up,
+        trunk: -0.6 * up,
+        mouth: up > 0.5 ? 1 : 0,
+      };
       key = `drop${sw(Math.min(1.2, t) * 24)}`;
       break;
     }
@@ -3936,7 +5013,16 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
       const k = Math.min(1, t / 2.6);
       const stag = Math.min(1, t / 0.6);
       const fall = t < 0.6 ? 0 : ease(Math.min(1, (t - 0.6) / 1.0));
-      o = { ...base, rider: false, hp: 0.3 * stag, hy: Math.sin(t * 6) * 0.2 * (1 - fall), roll: fall * 1.25, crouch: stag * 1.5, fall, frost: t > 1.4 ? Math.min(1, (t - 1.4) / 0.8) : 0 };
+      o = {
+        ...base,
+        rider: false,
+        hp: 0.3 * stag,
+        hy: Math.sin(t * 6) * 0.2 * (1 - fall),
+        roll: fall * 1.25,
+        crouch: stag * 1.5,
+        fall,
+        frost: t > 1.4 ? Math.min(1, (t - 1.4) / 0.8) : 0,
+      };
       key = `die${sw(k * 40)}`;
       ex.linger = 2.6;
       ex.alpha = t > 2.1 ? Math.max(0, 1 - (t - 2.1) / 0.5) : 1;
@@ -3971,8 +5057,24 @@ registerMobWarm('f12boss', function* () {
     for (let d = 0; d < 16; d++)
       for (let wf = 0; wf < 12; wf++) {
         const f = (d / 16) * TAU;
-        const m = { id: 0, mode: 'chase', vx: Math.cos(f), vy: Math.sin(f), face: f, data: { walk: (wf / 12) * 2.4 + 0.01, rider: rider ? 1 : 0, phase: rider ? 0 : 3 } } as unknown as Mob;
-        const pose: MobPose = { anim: 'run', frame: 0, mode: 'chase', t: 0, left: false, flash: false, look: 'normal', now: 0 };
+        const m = {
+          id: 0,
+          mode: 'chase',
+          vx: Math.cos(f),
+          vy: Math.sin(f),
+          face: f,
+          data: { walk: (wf / 12) * 2.4 + 0.01, rider: rider ? 1 : 0, phase: rider ? 0 : 3 },
+        } as unknown as Mob;
+        const pose: MobPose = {
+          anim: 'run',
+          frame: 0,
+          mode: 'chase',
+          t: 0,
+          left: false,
+          flash: false,
+          look: 'normal',
+          now: 0,
+        };
         const { o, key } = mamPose(m, pose);
         rigCached('f12boss', key, f, CV_MAM, false, () => mammothBuild('normal', o));
         yield 0;
@@ -4091,7 +5193,9 @@ function floeCv(f: { id: number; rx: number; ry: number }): HTMLCanvasElement {
   const cx = W / 2;
   const cy = RY + 2;
   const rim = (a: number) =>
-    1 - 0.13 * vnoise(Math.cos(a) * 2 + f.id * 3.1, Math.sin(a) * 2, 81) - 0.05 * Math.sin(a * 5 + f.id);
+    1 -
+    0.13 * vnoise(Math.cos(a) * 2 + f.id * 3.1, Math.sin(a) * 2, 81) -
+    0.05 * Math.sin(a * 5 + f.id);
   const inside = (x: number, y: number, dz: number) => {
     const dx = (x - cx) / RX;
     const dy = (y - cy - dz) / RY;
@@ -4130,6 +5234,20 @@ function floeCv(f: { id: number; rx: number; ry: number }): HTMLCanvasElement {
   FLOE.set(key, cv);
   return cv;
 }
+
+/**
+ * Вставки в слои пола и неба: метки замаха и мамонта (`f12-boss-fx.ts`).
+ * Рисуют в игровых пикселях, `left/top` — мировой пиксель левого верха вида.
+ */
+export type F12Hook = (
+  g: CanvasRenderingContext2D,
+  sim: Sim,
+  left: number,
+  top: number,
+  time: number,
+) => void;
+export const F12_FLOOR_HOOKS: F12Hook[] = [];
+export const F12_SKY_HOOKS: F12Hook[] = [];
 
 /** След скольжения героя: точки за последние ~1,2 с, своя на вылазку. */
 const TRAIL = new WeakMap<Sim, { x: number; y: number; t: number }[]>();
@@ -4190,7 +5308,12 @@ registerZonePainter('f12_floor', (g, z, px, py, _s, time) => {
       const a = hash(hl.i, s, 84);
       const b = hash(hl.i, s, 85);
       g.fillStyle = css(s % 3 ? ICE[3] : WHITE, 0.5 + k * 0.4);
-      g.fillRect(Math.round(X + 1 + a * 13 + Math.sin(time + s) * 0.6), Math.round(Y + 1 + b * 13), 2, 1);
+      g.fillRect(
+        Math.round(X + 1 + a * 13 + Math.sin(time + s) * 0.6),
+        Math.round(Y + 1 + b * 13),
+        2,
+        1,
+      );
     }
     if (k > 0.35) {
       const d = Math.round(((k - 0.35) / 0.65) * 8);
@@ -4294,7 +5417,8 @@ registerZonePainter('f12_floor', (g, z, px, py, _s, time) => {
   const h = sim.hero;
   if (ice.on && ice.slide > 0.4) {
     const last = tr[tr.length - 1];
-    if (!last || Math.hypot(last.x - h.x, last.y - h.y) > 0.18) tr.push({ x: h.x, y: h.y, t: time });
+    if (!last || Math.hypot(last.x - h.x, last.y - h.y) > 0.18)
+      tr.push({ x: h.x, y: h.y, t: time });
   }
   while (tr.length && (time - tr[0].t > 1.4 || tr[0].t > time)) tr.shift();
   for (let k = 1; k < tr.length; k++) {
@@ -4310,6 +5434,7 @@ registerZonePainter('f12_floor', (g, z, px, py, _s, time) => {
       g.stroke();
     }
   }
+  for (const f of F12_FLOOR_HOOKS) f(g, sim, left, top, time);
   return true;
 });
 
@@ -4446,8 +5571,10 @@ registerZonePainter('f12_sky', (g, z, px, py, _s, time) => {
       const d = 0.5 + s * 0.8;
       const ox = hash(i, 4, 93) * (gw + 80);
       const oy = hash(i, 5, 93) * (gh + 80);
-      const xx = ((((ox + ux * time * sp * d - left * 0.15) % (gw + 80)) + gw + 80) % (gw + 80)) - 40;
-      const yy = ((((oy + uy * time * sp * d - top * 0.15) % (gh + 80)) + gh + 80) % (gh + 80)) - 40;
+      const xx =
+        ((((ox + ux * time * sp * d - left * 0.15) % (gw + 80)) + gw + 80) % (gw + 80)) - 40;
+      const yy =
+        ((((oy + uy * time * sp * d - top * 0.15) % (gh + 80)) + gh + 80) % (gh + 80)) - 40;
       const L = (push ? 7 : 3) * d;
       g.strokeStyle = css(i % 5 ? SNOW[4] : WHITE, 0.45 + 0.4 * s);
       g.lineWidth = d > 1 ? 2 : 1;
@@ -4492,7 +5619,12 @@ registerZonePainter('f12_sky', (g, z, px, py, _s, time) => {
       const r = 6 + hash(i, 7, 94) * 5;
       const tw = 0.5 + 0.5 * Math.sin(time * 5 + i * 1.7);
       g.fillStyle = css(i % 2 ? WHITE : TEAL[4], 0.4 + 0.5 * tw);
-      g.fillRect(Math.round(hx0 + Math.cos(a) * r), Math.round(hy0 - 10 + Math.sin(a) * r * 1.3), 1, 1);
+      g.fillRect(
+        Math.round(hx0 + Math.cos(a) * r),
+        Math.round(hy0 - 10 + Math.sin(a) * r * 1.3),
+        1,
+        1,
+      );
     }
     // Три доли над головой: полная — бирюзовая, часть — наливается снизу.
     const full = flakeCv(true);
@@ -4508,6 +5640,7 @@ registerZonePainter('f12_sky', (g, z, px, py, _s, time) => {
       }
     }
   }
+  for (const f of F12_SKY_HOOKS) f(g, sim, left, top, time);
   return true;
 });
 

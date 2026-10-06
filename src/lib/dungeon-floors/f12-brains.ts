@@ -1031,6 +1031,9 @@ function iced(b: Brain): Brain {
     ...b,
     step(sim, m, dt, c, api) {
       const st = STATE.get(sim);
+      // Метки замаха рисует этаж (ледяные, `f12-boss-fx.ts`) — у всех
+      // мобов этажа одинаково, и у тех, что вышли из засады. Только рисунок.
+      m.data.vNoTele = 1;
       // Ослеплён вспышкой гонга: стоит, щурится.
       if ((m.data.blind ?? 0) > 0) {
         m.data.blind -= dt;
@@ -2857,7 +2860,8 @@ brain('f12_keeper', {
     const warm = st?.braziers.some(
       (o) => st.lit.has(o.id) && hypot(o.x + 0.5 - m.x, o.y + 0.5 - m.y) < 3.2,
     );
-    if (warm || (m.data.spent ?? 0) > 0 || m.mode === 'f12_wind' || m.mode === 'f12_summon') return 1;
+    if (warm || (m.data.spent ?? 0) > 0 || m.mode === 'f12_wind' || m.mode === 'f12_summon')
+      return 1;
     return KEEPER.shield;
   },
 });
@@ -2953,6 +2957,12 @@ function mamOf(sim: Sim): Mammoth {
 /** Мамонт для рисовальщика шаманки и для эффектов. */
 export const f12Mammoth = (sim: Sim | null): Mob | null =>
   sim?.mobs.find((m) => m.kind === 'f12boss') ?? null;
+
+/** Слои ледника и сколько уже поднято (для рисовальщика предупреждения). */
+export const f12Glacier = (sim: Sim | null): { layers: number[][]; layer: number } => {
+  const s = sim ? MAM.get(sim) : null;
+  return { layers: s?.layers ?? [], layer: s?.layer ?? 0 };
+};
 
 /** Слои ледника арены: внешний обод и второй ряд, без жаровен. */
 function glacierLayers(sim: Sim, b: BossFight): number[][] {
@@ -3314,6 +3324,15 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
         for (let k = 0; k < n; k++) {
           const p = spotNear(sim, api, h.x, h.y, 0.5, 5, () => sim.rng(), false);
           if (!p) continue;
+          // Сосулька летит со свода — только рисунок.
+          fx(sim, api, {
+            x: p[0],
+            y: p[1],
+            r: 0.95,
+            life: 0.95 + k * 0.18,
+            art: 'f12_icdrop',
+            above: true,
+          });
           api.strike(sim, {
             shape: 'circle',
             x: p[0],
