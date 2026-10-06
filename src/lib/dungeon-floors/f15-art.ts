@@ -1358,9 +1358,35 @@ function cellOf(area: string) {
   };
 }
 
-registerCellPainter(F15_ROOTS, cellOf(F15_ROOTS));
-registerCellPainter(F15_OBS, cellOf(F15_OBS));
-registerCellPainter(F15_ORBIT, cellOf(F15_ORBIT));
+/**
+ * Кеш клеток. Движок на каждую смену клетки (`setTile`: кольца островов на
+ * каждом такте, двери, мосты) перерисовывает 9 кусков по 16×16 клеток, а
+ * реголит и корни считаются шумом по пикселям (~0,1 мс клетка): у колец
+ * «Пояса орбит» кадр стоил 200+ мс. Ключ — клетка, метки 5×5 и
+ * проходимость 3×3 (дальше рисовальщики клеток не смотрят), так что
+ * неизменные клетки берутся из кеша.
+ */
+const CELL_CACHE = frameLRU<Px | null>(6000);
+function cachedCell(area: string, f: (c: CellCtx) => Px | null) {
+  return (c: CellCtx): Px | null => {
+    // Без вылазки в ходу (до первого шага этажа) кратеры, уступы и кольца не
+    // видны — такой рисунок кешируем отдельно, чтобы он не застрял.
+    const live = (F15_FX.sim ? 1 : 0) + (stNow() ? 2 : 0);
+    // Метки — 5×5 (гравий), проходимость — 3×3 (стены, уступы, края).
+    let ob = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) ob = (ob << 1) | (c.open(dx, dy) ? 1 : 0);
+    let k = `${area}|${live}|${c.wx},${c.wy}|${c.tile}|${ob}|`;
+    for (let dy = -2; dy <= 2; dy++)
+      for (let dx = -2; dx <= 2; dx++) k += String.fromCharCode(48 + c.markAt(dx, dy));
+    const hit = CELL_CACHE.get(k);
+    if (hit !== undefined) return hit;
+    return CELL_CACHE.set(k, f(c));
+  };
+}
+
+registerCellPainter(F15_ROOTS, cachedCell(F15_ROOTS, cellOf(F15_ROOTS)));
+registerCellPainter(F15_OBS, cachedCell(F15_OBS, cellOf(F15_OBS)));
+registerCellPainter(F15_ORBIT, cachedCell(F15_ORBIT, cellOf(F15_ORBIT)));
 
 // ---------------------------------------------------------------------------
 // Предметы. Кадры живых — по корзинам времени, всё в кеше с вытеснением.
@@ -6002,7 +6028,7 @@ function islandArt(r: Ring): IslandArt {
 /** Кольцо орбиты: острова плавно едут по кругу; парад — золото по краю. */
 registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
   const r = zoneOf<Ring>(z);
-  if (!r) return true;
+  if (!r || !onScreen(g, px, py, r.r1 * TS + 12)) return true;
   const art = islandArt(r);
   const C = art.C;
   // Ход по орбите: в такте — пыль за кормой; у причала остров замирает,
