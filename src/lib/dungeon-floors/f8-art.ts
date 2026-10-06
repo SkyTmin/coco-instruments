@@ -31,6 +31,7 @@ import './f8-mob-imp';
 import './f8-mob-blade';
 import './f8-mob-spider';
 import './f8-mob-lantern';
+import './f8-mob-arms';
 
 type RGBA = [number, number, number, number];
 type V = [number, number];
@@ -2919,114 +2920,6 @@ function poseIn(pose: MobPose, runFrames = 6): PoseIn {
   f = mod(f, n);
   return { anim: pose.anim, f, mode: pose.mode, t: pose.t };
 }
-
-// ---------------------------------------------------------------------------
-// Многорукий: громадный, шесть рук. Звезда ударов — все руки в стороны.
-// ---------------------------------------------------------------------------
-
-const ARMS_ST: Style = {
-  skin: tones('#183640', '#2a5a68', '#46869a', '#7ab8c8'),
-  top: tones('#2a1a12', '#46301e', '#644428', '#86603a'),
-  pants: tones('#1e1612', '#34261c', '#4a3828', '#645038'),
-  under: hx('#e0d8c8'),
-  sash: hx('#e8e0c8'),
-  hair: tones('#2a0808', '#4a1010', '#6e1a16', '#9a2a20'),
-  hairKind: 'wild',
-  horns: 2,
-  horn: tones('#6a5a3a', '#9a8a5a', '#c8b884', '#f0e4b8'),
-  eye: hx('#ff8a30'),
-  bulk: 1.85,
-  sleeve: 0,
-  hakama: true,
-};
-
-registerMobPainter('f8_arms', (m: Mob, pose: MobPose) => {
-  const pi = poseIn(pose, 6);
-  let anim: string = pi.anim;
-  let f = pi.f;
-  if (pose.mode === 'star') {
-    anim = 'star';
-    f = pose.t < STAR_T * 0.5 ? 0 : 1;
-  } else if (pose.mode === 'grab') {
-    anim = 'grab';
-    f = pose.t < 0.5 ? 0 : 1;
-  } else if (pose.mode === 'recover' && m.data.long) {
-    anim = 'star_end';
-    f = 0;
-  } else if (pose.mode === 'f8_out') {
-    anim = 'run';
-    f = mod(pose.t * 8, 6);
-  }
-  return frameOf('f8_arms', pose, anim, f, () => {
-    const W = 60;
-    const H = 50;
-    const s = 1.4;
-    const base = ['star', 'grab', 'star_end'].includes(anim) ? 'idle' : anim;
-    const r = bipedRig({
-      s,
-      W,
-      H,
-      legLen: 10.5,
-      torso: 10.5,
-      headR: 4.4,
-      arms: 2,
-      pose: { ...pi, anim: base, f },
-      heavy: true,
-      lean: 0.18,
-    });
-    const neck = neckOf(r);
-    // Шесть рук: три пары от плеч вниз по корпусу.
-    const shs: V[] = [add(neck, [0, 1.4]), add(neck, [-0.6, 4.2]), add(neck, [-1, 7])];
-    const arms: Arm[] = [];
-    for (let i = 0; i < 3; i++) {
-      const sh = shs[i];
-      // В покое — поза божества: верхняя пара вскинута, средняя в стороны,
-      // нижняя опущена. Шесть рук видны силуэтом, а не гребёнкой у живота.
-      const sw =
-        anim === 'run'
-          ? Math.sin(f * 1.05 + i) * 0.18
-          : anim === 'idle'
-            ? Math.sin(f * 1.6 + i) * 0.08
-            : 0;
-      const aN0 = [-0.95, 0.12, 1.05][i] + sw;
-      const aF0 = [Math.PI + 0.95, Math.PI - 0.12, Math.PI - 1.05][i] - sw;
-      const bend = (a: number, L: number, turn: number): [V, V] => [
-        [Math.cos(a - turn) * L * 0.5, Math.sin(a - turn) * L * 0.5],
-        [Math.cos(a) * L, Math.sin(a) * L],
-      ];
-      let [elN, haN] = bend(aN0, 7.6 * s, 0.35);
-      let [elF, haF] = bend(aF0, 7.4 * s, -0.35);
-      if (anim === 'star' || anim === 'star_end') {
-        // Звезда: на замахе руки сжаты к телу, на ударе — выброшены до конца.
-        const k = anim === 'star_end' ? 1.3 : f ? 1.3 : 0.55;
-        const aN = -0.95 + i * 0.95;
-        const aF = Math.PI + 0.95 - i * 0.95;
-        [elN, haN] = bend(aN, 7 * s * k, f || anim === 'star_end' ? 0.05 : 0.8);
-        [elF, haF] = bend(aF, 6.8 * s * k, f || anim === 'star_end' ? -0.05 : -0.8);
-      } else if (anim === 'grab' && i === 0) {
-        const k = f ? 1 : 0.5;
-        elN = [3.4 * s * k, 0];
-        haN = [7.6 * s * k, 0.4 * s];
-      } else if (anim === 'wind') {
-        elN = [-0.6 * s, -1.6 * s - i * 0.4];
-        haN = [0.8 * s, -3.6 * s - i * 0.6];
-      } else if (anim === 'bite') {
-        elN = [3 * s, 0.6 * s + i];
-        haN = [5.6 * s, 0.8 * s + i];
-      }
-      arms.push({ sh: add(sh, [-0.8, 0]), el: add(sh, elF), ha: add(sh, haF), far: true });
-      arms.push({ sh: add(sh, [0.6, 0.2]), el: add(sh, elN), ha: add(sh, haN), far: false });
-    }
-    r.arms = arms;
-    if (anim === 'dead') deadRig(r, H);
-    const { p, eye } = drawRig(r, ARMS_ST, W, H, anim === 'dead');
-    if (pose.mode === 'stun') stars(p, r.head[0], r.head[1] - 5, 5, mod(pose.t * 8, 4));
-    return { p, ax: Math.round(W / 2), ay: H - 2, eye: anim === 'dead' ? null : eye };
-  });
-});
-
-/** Замах звезды (для кадра) — из ИИ. */
-const STAR_T = 0.95;
 
 // ---------------------------------------------------------------------------
 // Бес-казначей: толстый, в хаори торговца, мешок монет за спиной.
