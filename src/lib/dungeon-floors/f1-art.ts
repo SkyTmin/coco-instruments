@@ -821,6 +821,11 @@ export const F1_MOB_STAT = {
   /** Последние 4000 замеров, мс: p50/p90 на стенде. */
   list: [] as number[],
   size: () => RAT_LRU.size + BIP_LRU.size,
+  /** Стенд: сбросить кеши кадров (замер нового кадра на прогретом JIT). */
+  clear: () => {
+    RAT_LRU.clear();
+    BIP_LRU.clear();
+  },
 };
 function stat(key: string, ms: number): void {
   const S = F1_MOB_STAT;
@@ -831,6 +836,7 @@ function stat(key: string, ms: number): void {
     S.maxKey = key;
   }
   S.list.push(ms);
+  (S as unknown as { kl?: string[] }).kl?.push(key); // DBGT
   if (S.list.length > 4000) S.list.splice(0, 1000);
 }
 
@@ -909,6 +915,8 @@ function mobFrame(
   } else {
     const t0 = performance.now();
     const pic = make(yaw8(d));
+    const tA = performance.now(); // DBGT
+    (F1_MOB_STAT as unknown as Record<string, number>).tm = ((F1_MOB_STAT as unknown as Record<string, number>).tm ?? 0) + tA - t0; // DBGT
     let p = pic.p;
     if (look === 'elite') p.outline(GOLD_EDGE);
     if (buff) buffKant(p, pic.ax, buff);
@@ -2077,12 +2085,12 @@ const T4 = (a: RGBA[]): Tones => [a[0], a[1], a[2], a[3]];
 const BIP_K: Record<string, BipK> = {
   f1_ratman: {
     id: 'ratman',
-    s: 1.6,
+    s: 1.5,
     bulk: 1,
-    w: 60,
-    h: 58,
-    ax: 30,
-    ay: 44,
+    w: 56,
+    h: 54,
+    ax: 28,
+    ay: 41,
     cycle: 0.9,
     turn: 12,
     die: 0.8,
@@ -2092,12 +2100,12 @@ const BIP_K: Record<string, BipK> = {
   },
   f1_slinger: {
     id: 'slinger',
-    s: 1.5,
+    s: 1.42,
     bulk: 0.88,
-    w: 58,
-    h: 56,
-    ax: 29,
-    ay: 42,
+    w: 54,
+    h: 52,
+    ax: 27,
+    ay: 39,
     cycle: 0.9,
     turn: 12,
     die: 0.75,
@@ -2107,12 +2115,12 @@ const BIP_K: Record<string, BipK> = {
   },
   f1_shaman: {
     id: 'shaman',
-    s: 1.6,
+    s: 1.5,
     bulk: 1.05,
-    w: 62,
-    h: 64,
-    ax: 31,
-    ay: 49,
+    w: 58,
+    h: 60,
+    ax: 29,
+    ay: 46,
     cycle: 0.85,
     turn: 9,
     die: 0.9,
@@ -2129,18 +2137,24 @@ const BIP_K: Record<string, BipK> = {
   },
   f1_guard: {
     id: 'guard',
-    s: 1.9,
+    s: 1.78,
     bulk: 1.3,
-    w: 72,
-    h: 72,
-    ax: 36,
-    ay: 53,
+    w: 68,
+    h: 68,
+    ax: 34,
+    ay: 50,
     cycle: 0.85,
     turn: 14,
     die: 0.9,
     fur: FUR.guard,
     cloth: T3(CLOTH.rag),
-    st: { lean: 0.12, R: [1.1, 0.5, -4.0], W: [0.85, 0.15, 0.55], L: [2.6, 0.9, -2.2] },
+    st: {
+      lean: 0.12,
+      R: [1.1, 0.5, -4.0],
+      W: [0.85, 0.15, 0.55],
+      L: [2.6, 0.9, -2.2],
+      shA: 0.75,
+    },
   },
 };
 
@@ -2248,10 +2262,12 @@ function bipSkel(o: BP, yaw: number, K: BipK): BSk {
     .turn(o.twist * 0.3 + cw * 0.1)
     .roll(o.side * 0.4 + Math.sin(o.ph * TAU2) * o.walk * 0.04);
   const lean = o.lean + o.walk * 0.1;
-  const Tf = P.turn(o.twist * 0.7 - cw * 0.3)
-    .pitch(lean)
-    .roll(o.side * 0.6);
+  // Плечи крутятся вокруг своего хребта (голова остаётся над ним) — и
+  // голова наполовину отворачивает обратно, к цели.
+  const tw = o.twist * 0.7 - cw * 0.3;
+  const Tf = P.pitch(lean).turn(tw).roll(o.side * 0.6);
   const Hd = Tf.at(1.3 * s, 0, 7.4 * s)
+    .turn(-tw * 0.5)
     .pitch(-lean * 0.85 + o.head)
     .turn(o.hyaw)
     .roll(o.hroll);
@@ -2320,7 +2336,7 @@ function bipSkel(o: BP, yaw: number, K: BipK): BSk {
   else if (K.id === 'guard') tip = vadd(wb, vmul(wd, 6.3 * s));
   else if (o.wx >= 0) {
     spin = o.wx;
-    tip = vadd(wb, B.v(Math.cos(o.wx) * 4 * s, Math.sin(o.wx) * 4 * s, 0.8 * s));
+    tip = vadd(wb, B.v(Math.cos(o.wx) * SLING_R * s, Math.sin(o.wx) * SLING_R * s, 0.6 * s));
   } else tip = vadd(wb, vmul(wd, 3.5 * s));
   return {
     B,
@@ -2345,6 +2361,8 @@ function bipSkel(o: BP, yaw: number, K: BipK): BSk {
   };
 }
 
+/** Радиус круга пращи, в единицах роста. */
+const SLING_R = 4.5;
 const STONE_T = tn4('#3e3a34', '#66605a', '#8e8880', '#c8c0b0');
 const STRAP = hex('#6a5038');
 const RED_T = T3(CLOTH.red);
@@ -2490,7 +2508,7 @@ function bipRig(o: BP, yaw: number, K: BipK, c: Fur, sk: BSk, spell: number): Ri
   const tb = P.p(-2.2 * s * bk, 0, -0.6 * s);
   const f0 = vdot(tb, B.f);
   const s0 = vdot(tb, B.s);
-  const N = 8;
+  const N = 7;
   const Lt = 11.5 * s;
   let prev = tb;
   let pr = 0.95 * s;
@@ -2527,7 +2545,7 @@ function bipRig(o: BP, yaw: number, K: BipK, c: Fur, sk: BSk, spell: number): Ri
     // Праща: ремень из кисти, в кармане — камень.
     if (o.wx > -1.5) {
       r.line(wb, sk.tip, STRAP, 0, 0.5);
-      r.ball(sk.tip, 0.85 * s, { T: STONE_T });
+      r.ball(sk.tip, 1.0 * s, { T: STONE_T });
     } else r.line(wb, vadd(wb, vmul(wd, 3.4 * s)), STRAP, 0, 0.5);
     // Концы повязки за головой.
     const hb = Hd.p(-1.9 * s, 0, 0.35 * s);
@@ -2699,12 +2717,14 @@ function bipFx(pic: MPic, out: BOut, sk: BSk, pv: BSk | null, K: BipK): void {
   const spellC = (SPELL_T[out.spell] ?? SPELL_T[0])[2];
   if (pv) {
     // След оружия: область, которую оно прошло за кадр, и яркая кромка.
-    const a0 = S(pv.wb);
+    // Посох длинный — след только от середины к черепу.
+    const root = (q: BSk) => (K.id === 'shaman' ? vadd(q.wb, vmul(q.wd, 3.5 * K.s)) : q.wb);
+    const a0 = S(root(pv));
     const a1 = S(pv.tip);
     const b1 = S(sk.tip);
-    const b0 = S(sk.wb);
+    const b0 = S(root(sk));
     const col = K.id === 'shaman' ? spellC : SPARK;
-    poly(L, [a0, a1, b1, b0], withAl(col, 0.38));
+    poly(L, [a0, a1, b1, b0], withAl(col, K.id === 'shaman' ? 0.28 : 0.38));
     L.line(a1[0], a1[1], b1[0], b1[1], withAl(WHITE, 0.8));
   }
   const ground = (P: V3) => S([P[0], P[1], 0]);
@@ -2746,11 +2766,14 @@ function bipFx(pic: MPic, out: BOut, sk: BSk, pv: BSk | null, K: BipK): void {
       // След камня: дуга по кругу пращи, гаснет к хвосту.
       if (sk.spin < 0) break;
       const s = K.s;
-      for (let j = 1; j <= 7; j++) {
-        const a = sk.spin - j * 0.24;
-        const P = vadd(sk.wb, sk.B.v(Math.cos(a) * 4 * s, Math.sin(a) * 4 * s, 0.8 * s));
+      for (let j = 1; j <= 12; j++) {
+        const a = sk.spin - j * 0.16;
+        const P = vadd(
+          sk.wb,
+          sk.B.v(Math.cos(a) * SLING_R * s, Math.sin(a) * SLING_R * s, 0.6 * s),
+        );
         const [x, y] = S(P);
-        L.set(x, y, withAl(hex('#e0d8c8'), 0.75 * (1 - j / 8)));
+        L.set(x, y, withAl(hex('#f0e8d8'), 0.9 * (1 - j / 13)));
       }
       break;
     }
@@ -3384,11 +3407,11 @@ function bipPose(K: BipK, anim: string, f: number, T: number, vr: number): BOut 
     // ---- Пращник: раскрут, бросок, тычок кулаком ----
     case 'spin': {
       const raise = B({
-        R: [0.6, 0.6, 3.2],
+        R: [0.4, 0.4, 4.7],
         W: [0, 0, -1],
-        lean: 0.2,
+        lean: 0.02,
         twist: -0.25,
-        head: -0.15,
+        head: -0.2,
         L: [1.6, -0.6, -3.0],
         ears: 0.8,
         tl: 0.2,
@@ -3413,8 +3436,8 @@ function bipPose(K: BipK, anim: string, f: number, T: number, vr: number): BOut 
         R: [3.6, 0.4, 0.8],
         W: [1, 0, 0.1],
         twist: 0.6,
-        lean: 0.55,
-        fwd: 0.9,
+        lean: 0.4,
+        fwd: 0.6,
         stepR: [1.2, 0, 0],
         L: [-1.2, -1.0, -3.4],
         jaw: 0.5,
@@ -3425,8 +3448,8 @@ function bipPose(K: BipK, anim: string, f: number, T: number, vr: number): BOut 
         R: [2.6, -0.8, -2.2],
         W: [0.3, -0.2, -1],
         twist: 0.8,
-        lean: 0.65,
-        fwd: 0.6,
+        lean: 0.5,
+        fwd: 0.5,
         stepR: [1.2, 0, 0],
         L: [-1.0, -1.0, -3.6],
       });
@@ -8925,3 +8948,5 @@ registerItemArt('f1_scrap', () => {
   p.outline(INK);
   return p;
 });
+
+export const F1_BIP_DEBUG = { bipSkel, bipPose, BIP_K, yaw8 };
