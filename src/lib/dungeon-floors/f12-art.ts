@@ -253,30 +253,44 @@ const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
  * одни на все кадры (кадр обрезается в свой холст, рабочий — не уходит
  * наружу). Новые массивы на каждый кадр — это сборщик мусора в бою.
  */
-const RIG_BUF = { n: 0, zb: new Float32Array(0), idb: new Int16Array(0), glow: new Uint8Array(0) };
-const RIG_PX = new Map<string, Px>();
-function rigBuf(n: number) {
-  if (RIG_BUF.n < n) {
-    RIG_BUF.n = n;
-    RIG_BUF.zb = new Float32Array(n);
-    RIG_BUF.idb = new Int16Array(n);
-    RIG_BUF.glow = new Uint8Array(n);
+interface RigBufs {
+  n: number;
+  zb: Float32Array;
+  idb: Int16Array;
+  glow: Uint8Array;
+  px: Map<string, Px>;
+}
+const rigBufs = (): RigBufs => ({
+  n: 0,
+  zb: new Float32Array(0),
+  idb: new Int16Array(0),
+  glow: new Uint8Array(0),
+  px: new Map(),
+});
+/** Общие — для кадра, нарисованного сразу; свои — у кадра «на потом» (`rigJob`). */
+const RIG_BUF = rigBufs();
+function rigBuf(n: number, B = RIG_BUF) {
+  if (B.n < n) {
+    B.n = n;
+    B.zb = new Float32Array(n);
+    B.idb = new Int16Array(n);
+    B.glow = new Uint8Array(n);
   }
-  const zb = RIG_BUF.zb.subarray(0, n);
-  const idb = RIG_BUF.idb.subarray(0, n);
-  const glow = RIG_BUF.glow.subarray(0, n);
+  const zb = B.zb.subarray(0, n);
+  const idb = B.idb.subarray(0, n);
+  const glow = B.glow.subarray(0, n);
   zb.fill(-1e9);
   idb.fill(-1);
   glow.fill(0);
   return { zb, idb, glow };
 }
-function rigPx(w: number, h: number): Px {
+function rigPx(w: number, h: number, B = RIG_BUF): Px {
   const k = `${w}x${h}`;
-  let p = RIG_PX.get(k);
+  let p = B.px.get(k);
   if (!p) {
     p = new Px(w, h);
-    if (RIG_PX.size > 8) RIG_PX.clear();
-    RIG_PX.set(k, p);
+    if (B.px.size > 8) B.px.clear();
+    B.px.set(k, p);
   } else p.data.fill(0);
   return p;
 }
@@ -299,13 +313,40 @@ export function renderRig(
   /** Точки кадра, которые обрезка обязана сохранить (след бивней и т. п.). */
   keep: [number, number][] = [],
 ): RigOut {
-  const p = crop ? rigPx(w, h) : new Px(w, h);
+  return rigJob(parts, face, w, h, ox, oy, eyes, flash, clipZ, crop, keep).out();
+}
+
+/**
+ * Кадр рига по частям: `step(мс)` рисует части, пока не кончится бюджет
+ * (`true` — кадр готов), `out()` дорисовывает остаток сразу. Кадр «на
+ * потом» (`own` — свои буферы: между шагами рисуют другие) растягивается на
+ * несколько кадров игры, и ни один из них не платит за кадр целиком.
+ */
+interface RigJob {
+  step: (ms: number) => boolean;
+  out: () => RigOut;
+}
+function rigJob(
+  parts: Part[],
+  face: number,
+  w: number,
+  h: number,
+  ox: number,
+  oy: number,
+  eyes: { x: number; y: number; z: number; c: RGBA; r?: number }[] = [],
+  flash = 0,
+  clipZ = -1e9,
+  crop = false,
+  keep: [number, number][] = [],
+  own?: RigBufs,
+): RigJob {
+  const p = own ? rigPx(w, h, own) : crop ? rigPx(w, h) : new Px(w, h);
   // Рамка нарисованного: швы, контур и холст — только в ней.
   let bx0 = w;
   let by0 = h;
   let bx1 = -1;
   let by1 = -1;
-  const { zb, idb, glow: glowAt } = rigBuf(w * h);
+  const { zb, idb, glow: glowAt } = rigBuf(w * h, own);
   let anyGlow = false;
   // Сперва плотные части — от ближних к дальним (дальний пиксель за ближним
   // отсекает буфер глубины без расчёта цвета; итог тот же: в пикселе всегда
@@ -320,7 +361,7 @@ export function renderRig(
       (a, b) =>
         (a.glass ? 1 : 0) - (b.glass ? 1 : 0) || (a.glass ? a.k - b.k : b.d - a.d || a.k - b.k),
     );
-  order.forEach(({ pt, k, A, glass }) => {
+  const drawPart = ({ pt, k, A, glass }: (typeof order)[number]) => {
     const [e1, e2, e3] = A.e;
     const [r1, r2, r3] = A.r;
     // Рамка на экране — точная тень эллипсоида (опорная функция по осям
@@ -462,102 +503,123 @@ export function renderRig(
         } else glowAt[i] = 0;
       }
     }
-  });
-  // Линии стыка: дальняя часть темнее у кромки ближней.
-  for (let y = by0; y <= by1; y++)
-    for (let x = bx0; x <= bx1; x++) {
-      const i = y * w + x;
-      if (idb[i] < 0) continue;
-      for (let n = 0; n < 4; n++) {
-        const j = n === 0 ? i + 1 : n === 1 ? i + w : n === 2 ? i - 1 : i - w;
-        if (j < 0 || j >= w * h || idb[j] < 0 || idb[j] === idb[i]) continue;
-        if (zb[j] - zb[i] > 2.2) {
-          const c = p.get(x, y);
-          p.set(x, y, [
-            Math.round(c[0] * 0.55),
-            Math.round(c[1] * 0.55),
-            Math.round(c[2] * 0.62),
-            255,
-          ]);
-          break;
+  };
+  const finish = (): RigOut => {
+    // Линии стыка: дальняя часть темнее у кромки ближней.
+    for (let y = by0; y <= by1; y++)
+      for (let x = bx0; x <= bx1; x++) {
+        const i = y * w + x;
+        if (idb[i] < 0) continue;
+        for (let n = 0; n < 4; n++) {
+          const j = n === 0 ? i + 1 : n === 1 ? i + w : n === 2 ? i - 1 : i - w;
+          if (j < 0 || j >= w * h || idb[j] < 0 || idb[j] === idb[i]) continue;
+          if (zb[j] - zb[i] > 2.2) {
+            const c = p.get(x, y);
+            p.set(x, y, [
+              Math.round(c[0] * 0.55),
+              Math.round(c[1] * 0.55),
+              Math.round(c[2] * 0.62),
+              255,
+            ]);
+            break;
+          }
         }
       }
+    // Глаза: видны, если ближе тела.
+    let eye: [number, number] | null = null;
+    for (const e of eyes) {
+      const [wx, wy, wz] = toWorld(e.x, e.y, e.z, face);
+      const [sx, sy, sd] = project(wx, wy, wz);
+      const ex = Math.floor(ox + sx);
+      const ey = Math.floor(oy + sy);
+      if (ex < 0 || ey < 0 || ex >= w || ey >= h) continue;
+      const i = ey * w + ex;
+      if (idb[i] >= 0 && zb[i] > sd + 1.2) continue;
+      p.set(ex, ey, e.c);
+      if ((e.r ?? 0) > 0) p.set(ex + 1, ey, e.c);
+      if (!eye) eye = [ex + 0.5, ey + 0.5];
     }
-  // Глаза: видны, если ближе тела.
-  let eye: [number, number] | null = null;
-  for (const e of eyes) {
-    const [wx, wy, wz] = toWorld(e.x, e.y, e.z, face);
-    const [sx, sy, sd] = project(wx, wy, wz);
-    const ex = Math.floor(ox + sx);
-    const ey = Math.floor(oy + sy);
-    if (ex < 0 || ey < 0 || ex >= w || ey >= h) continue;
-    const i = ey * w + ex;
-    if (idb[i] >= 0 && zb[i] > sd + 1.2) continue;
-    p.set(ex, ey, e.c);
-    if ((e.r ?? 0) > 0) p.set(ex + 1, ey, e.c);
-    if (!eye) eye = [ex + 0.5, ey + 0.5];
-  }
-  if (crop) {
-    // Кадр по рамке (+6: контур и рисунок поверх — звёзды, брызги): меньше
-    // холст, контур и вывод на экран.
-    if (bx1 < 0) {
-      bx0 = by0 = 0;
-      bx1 = by1 = 0;
+    if (crop) {
+      // Кадр по рамке (+6: контур и рисунок поверх — звёзды, брызги): меньше
+      // холст, контур и вывод на экран.
+      if (bx1 < 0) {
+        bx0 = by0 = 0;
+        bx1 = by1 = 0;
+      }
+      for (const [kx, ky] of keep) {
+        bx0 = Math.min(bx0, Math.floor(kx));
+        bx1 = Math.max(bx1, Math.ceil(kx));
+        by0 = Math.min(by0, Math.floor(ky));
+        by1 = Math.max(by1, Math.ceil(ky));
+      }
+      const cx = Math.max(0, bx0 - 6);
+      const cy = Math.max(0, by0 - 6);
+      const cw = Math.min(w, bx1 + 7) - cx;
+      const ch = Math.min(h, by1 + 7) - cy;
+      const q = new Px(cw, ch);
+      for (let y = 0; y < ch; y++) {
+        const src = ((y + cy) * w + cx) * 4;
+        q.data.set(p.data.subarray(src, src + cw * 4), y * cw * 4);
+      }
+      q.outline(INK);
+      let lit: Px | null = null;
+      if (anyGlow) {
+        lit = new Px(cw, ch);
+        const qd = q.data;
+        const c4: RGBA = [0, 0, 0, 0];
+        for (let y = 0; y < ch; y++)
+          for (let x = 0; x < cw; x++)
+            if (glowAt[(y + cy) * w + x + cx]) {
+              const j = (y * cw + x) * 4;
+              c4[0] = qd[j];
+              c4[1] = qd[j + 1];
+              c4[2] = qd[j + 2];
+              c4[3] = qd[j + 3];
+              lit.set(x, y, c4);
+            }
+      }
+      const e2: [number, number] | null = eye ? [eye[0] - cx, eye[1] - cy] : null;
+      const zc = new Float32Array(cw * ch);
+      for (let y = 0; y < ch; y++)
+        zc.set(zb.subarray((y + cy) * w + cx, (y + cy) * w + cx + cw), y * cw);
+      return { p: flash > 0 ? q.tint(WHITE, flash) : q, lit, eye: e2, cx, cy, zb: zc };
     }
-    for (const [kx, ky] of keep) {
-      bx0 = Math.min(bx0, Math.floor(kx));
-      bx1 = Math.max(bx1, Math.ceil(kx));
-      by0 = Math.min(by0, Math.floor(ky));
-      by1 = Math.max(by1, Math.ceil(ky));
-    }
-    const cx = Math.max(0, bx0 - 6);
-    const cy = Math.max(0, by0 - 6);
-    const cw = Math.min(w, bx1 + 7) - cx;
-    const ch = Math.min(h, by1 + 7) - cy;
-    const q = new Px(cw, ch);
-    for (let y = 0; y < ch; y++) {
-      const src = ((y + cy) * w + cx) * 4;
-      q.data.set(p.data.subarray(src, src + cw * 4), y * cw * 4);
-    }
-    q.outline(INK);
+    p.outline(INK);
     let lit: Px | null = null;
     if (anyGlow) {
-      lit = new Px(cw, ch);
-      const qd = q.data;
-      const c4: RGBA = [0, 0, 0, 0];
-      for (let y = 0; y < ch; y++)
-        for (let x = 0; x < cw; x++)
-          if (glowAt[(y + cy) * w + x + cx]) {
-            const j = (y * cw + x) * 4;
-            c4[0] = qd[j];
-            c4[1] = qd[j + 1];
-            c4[2] = qd[j + 2];
-            c4[3] = qd[j + 3];
-            lit.set(x, y, c4);
-          }
+      lit = new Px(w, h);
+      for (let i = 0; i < w * h; i++)
+        if (glowAt[i]) {
+          const x = i % w;
+          const y = (i / w) | 0;
+          lit.set(x, y, p.get(x, y));
+        }
     }
-    const e2: [number, number] | null = eye ? [eye[0] - cx, eye[1] - cy] : null;
-    const zc = new Float32Array(cw * ch);
-    for (let y = 0; y < ch; y++)
-      zc.set(zb.subarray((y + cy) * w + cx, (y + cy) * w + cx + cw), y * cw);
-    return { p: flash > 0 ? q.tint(WHITE, flash) : q, lit, eye: e2, cx, cy, zb: zc };
-  }
-  p.outline(INK);
-  let lit: Px | null = null;
-  if (anyGlow) {
-    lit = new Px(w, h);
-    for (let i = 0; i < w * h; i++)
-      if (glowAt[i]) {
-        const x = i % w;
-        const y = (i / w) | 0;
-        lit.set(x, y, p.get(x, y));
-      }
-  }
-  if (flash > 0) {
-    const f = p.tint(WHITE, flash);
-    return { p: f, lit, eye };
-  }
-  return { p, lit, eye };
+    if (flash > 0) {
+      const f = p.tint(WHITE, flash);
+      return { p: f, lit, eye };
+    }
+    return { p, lit, eye };
+  };
+  let n = 0;
+  let res: RigOut | null = null;
+  const step = (ms: number): boolean => {
+    if (res) return true;
+    const t0 = ms < Infinity ? performance.now() : 0;
+    while (n < order.length) {
+      drawPart(order[n++]);
+      if (ms < Infinity && performance.now() - t0 > ms) return false;
+    }
+    res = finish();
+    return true;
+  };
+  return {
+    step,
+    out: () => {
+      step(Infinity);
+      return res as RigOut;
+    },
+  };
 }
 
 /** Точки кривой Безье второго порядка. */
@@ -2157,53 +2219,116 @@ function rigCached(
   make: (face: number) => Build,
   dirs = 16,
 ): Cached {
+  const task = rigTask(id, key, face, cv, flash, make, dirs);
+  const hit = lruOf(id).get(task.key);
+  if (hit) return hit;
+  task.step(Infinity);
+  return task.res as Cached;
+}
+
+/**
+ * Кадр рига в кеш по шагам: сборка позы, порядок частей, части (`rigJob`),
+ * рисунок поверх, холст. `step(мс)` — сколько успеть сейчас (`true` — кадр
+ * в кеше, `res`). С `own` кадр рисуется «на потом» в своих буферах.
+ */
+interface RigTask {
+  key: string;
+  res: Cached | null;
+  step: (ms: number) => boolean;
+}
+function rigTask(
+  id: string,
+  key: string,
+  face: number,
+  cv: Canvas,
+  flash: boolean,
+  make: (face: number) => Build,
+  dirs = 16,
+  own?: RigBufs,
+): RigTask {
   const d = dirN(face, dirs);
   const f = dirAng(d, dirs);
-  return cachedRig(lruOf(id), `${key}|${d}|${flash ? 1 : 0}`, () => {
-    const b = make(f);
-    const full = (x: number, y: number, z: number): [number, number, number] => {
-      const [wx, wy, wz] = toWorld(x, y, z, f);
-      const [sx, sy, sd] = project(wx, wy, wz);
-      return [cv.ox + sx, cv.oy + sy, sd];
-    };
-    const out = renderRig(
-      b.parts,
-      f,
-      cv.w,
-      cv.h,
-      cv.ox,
-      cv.oy,
-      b.eyes ?? [],
-      flash ? 0.8 : 0,
-      b.clip,
-      true,
-      (b.extent ?? []).map((e) => {
-        const [x, y] = full(e[0], e[1], e[2]);
-        return [x, y];
-      }),
-    );
-    if (b.post) {
-      const cx = out.cx ?? 0;
-      const cy = out.cy ?? 0;
-      const scr: Scr = (x, y, z) => {
-        const [sx, sy, sd] = full(x, y, z);
-        return [sx - cx, sy - cy, sd];
-      };
-      const zb = out.zb;
-      const W = out.p.w;
-      const H = out.p.h;
-      b.post(out.p, scr, {
-        lit: () => (out.lit ??= new Px(W, H)),
-        z: (x, y) => {
-          const X = Math.round(x);
-          const Y = Math.round(y);
-          if (!zb || X < 0 || Y < 0 || X >= W || Y >= H) return -1e9;
-          return zb[Y * W + X];
-        },
-      });
-    }
-    return out;
-  });
+  const lru = lruOf(id);
+  const full = (x: number, y: number, z: number): [number, number, number] => {
+    const [wx, wy, wz] = toWorld(x, y, z, f);
+    const [sx, sy, sd] = project(wx, wy, wz);
+    return [cv.ox + sx, cv.oy + sy, sd];
+  };
+  let stage = 0;
+  let b: Build | null = null;
+  let job: RigJob | null = null;
+  let out: RigOut | null = null;
+  const task: RigTask = {
+    key: `${key}|${d}|${flash ? 1 : 0}`,
+    res: null,
+    step: (ms) => {
+      const t0 = ms < Infinity ? performance.now() : 0;
+      const over = () => ms < Infinity && performance.now() - t0 > ms;
+      if (stage === 0) {
+        b = make(f);
+        stage = 1;
+        if (over()) return false;
+      }
+      if (stage === 1 && b) {
+        job = rigJob(
+          b.parts,
+          f,
+          cv.w,
+          cv.h,
+          cv.ox,
+          cv.oy,
+          b.eyes ?? [],
+          flash ? 0.8 : 0,
+          b.clip,
+          true,
+          (b.extent ?? []).map((e) => {
+            const [x, y] = full(e[0], e[1], e[2]);
+            return [x, y];
+          }),
+          own,
+        );
+        stage = 2;
+        if (over()) return false;
+      }
+      if (stage === 2 && job) {
+        if (!job.step(ms < Infinity ? Math.max(0, ms - (performance.now() - t0)) : ms)) return false;
+        out = job.out();
+        stage = 3;
+        if (over()) return false;
+      }
+      if (stage === 3 && b && out) {
+        if (b.post) {
+          const o = out;
+          const cx = o.cx ?? 0;
+          const cy = o.cy ?? 0;
+          const scr: Scr = (x, y, z) => {
+            const [sx, sy, sd] = full(x, y, z);
+            return [sx - cx, sy - cy, sd];
+          };
+          const zb = o.zb;
+          const W = o.p.w;
+          const H = o.p.h;
+          b.post(o.p, scr, {
+            lit: () => (o.lit ??= new Px(W, H)),
+            z: (x, y) => {
+              const X = Math.round(x);
+              const Y = Math.round(y);
+              if (!zb || X < 0 || Y < 0 || X >= W || Y >= H) return -1e9;
+              return zb[Y * W + X];
+            },
+          });
+        }
+        stage = 4;
+        if (over()) return false;
+      }
+      if (stage === 4 && out) {
+        task.res = cachedRig(lru, task.key, () => out as RigOut);
+        stage = 5;
+      }
+      return stage === 5;
+    },
+  };
+  return task;
 }
 
 /**
