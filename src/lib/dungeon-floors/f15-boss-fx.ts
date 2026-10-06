@@ -203,6 +203,7 @@ function occOf(S: number): Box[] {
     let hw: number;
     let h: number;
     let ht: number | undefined;
+    let hem = 0;
     if (m.kind === 'f15boss') {
       // Герой за владыкой — рисовальщик тела делает его полупрозрачным:
       // тогда он ничего не заслоняет, иначе вырезанный прямоугольник
@@ -213,6 +214,8 @@ function occOf(S: number): Box[] {
       hw = 1.25 * S;
       h = 5 * S;
       ht = 0.55 * S;
+      // Подол висит над полом на полклетки — там пол открыт (тень не в счёт).
+      hem = 0.5 * S;
     } else if (m.kind === 'f15b_keeper') {
       hw = 0.5 * S;
       h = 3.4 * S;
@@ -226,7 +229,14 @@ function occOf(S: number): Box[] {
       h = m.r * S * 3.2;
     }
     const fy = m.y * S + 2;
-    out.push({ x0: m.x * S - hw, x1: m.x * S + hw, y0: fy - lift - h, y1: fy - lift, fy, ht });
+    out.push({
+      x0: m.x * S - hw,
+      x1: m.x * S + hw,
+      y0: fy - lift - h,
+      y1: fy - lift - hem,
+      fy,
+      ht,
+    });
   }
   const fy = hero.y * S + 2;
   // Герой — колоколом по шлему и плечам: прямоугольник 1,25 клетки торчал
