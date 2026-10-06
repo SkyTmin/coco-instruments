@@ -741,3 +741,22 @@ export function arm(
   r.cap(el, hand, rad[1], rad[2], m2);
   return el;
 }
+
+/**
+ * Риг в масштабе `k`: рамки строятся через `F3.scale(k)` (точки и
+ * эллипсоиды растут сами), а радиусы капсул, шаров и шипов — здесь.
+ */
+export class KRig extends Rig {
+  constructor(public k: number) {
+    super();
+  }
+  cap(a: V3, b: V3, r0: number, r1: number, m: CapMat): this {
+    return super.cap(a, b, r0 * this.k, r1 * this.k, m);
+  }
+  ball(c: V3, r: number, m: CapMat): this {
+    return super.ball(c, r * this.k, m);
+  }
+  spike(b: V3, d: V3, L: number, w: number, m: CapMat, n = 4, tw = 0): this {
+    return super.spike(b, d, L * this.k, w * this.k, m, n, tw);
+  }
+}
