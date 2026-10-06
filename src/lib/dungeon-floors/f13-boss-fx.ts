@@ -196,30 +196,53 @@ function waveCrest(g: CanvasRenderingContext2D, to: (x: number, y: number) => [n
   const swell = w.t < BOSS.wave.swell;
   const k = swell ? w.t / BOSS.wave.swell : 1;
   const [, sy] = to(0, w.y);
+  const S = P.sea;
+  const inGap = (x: number) => w.gaps.some((gx) => Math.abs(x - gx) < w.gapW / 2);
+  // Тень гребня на полу.
+  g.fillStyle = 'rgba(4,14,30,0.35)';
   for (let x = ARENA_X0; x < ARENA_X1; x += 0.25) {
-    if (w.gaps.some((gx) => Math.abs(x + 0.125 - gx) < w.gapW / 2)) continue;
+    if (inGap(x + 0.125)) continue;
     const [sx] = to(x, w.y);
-    const h = (swell ? 3 + 5 * k : 9) + Math.sin(x * 1.3 + time * 6) * 1.5;
+    g.fillRect(sx, sy - 2, 4.2, 5);
+  }
+  for (let x = ARENA_X0; x < ARENA_X1; x += 0.25) {
+    if (inGap(x + 0.125)) continue;
+    const [sx] = to(x, w.y);
+    const roll = Math.sin(x * 1.3 + time * 6);
+    const h = (swell ? 4 + 10 * k : 15) + roll * 2;
     const curl = Math.sin(x * 2.1 - time * 8 * w.dir);
-    // Тело волны: синий холст, гребень белый.
-    g.fillStyle = rgba(P.sea[1], 0.82);
-    g.fillRect(sx, sy - h, 4.2, h);
-    g.fillStyle = rgba(P.sea[2], 0.9);
-    g.fillRect(sx, sy - h, 4.2, Math.max(1, h * 0.4));
-    g.fillStyle = rgba(P.sea[3], 0.95);
-    g.fillRect(sx, sy - h - (curl > 0.5 ? 1 : 0), 4.2, 1.6);
-    if (curl > 0.85) {
-      g.fillStyle = rgba([255, 255, 255, 255], 0.9);
-      g.fillRect(sx + 1, sy - h - 2, 1.5, 1.2);
+    const top = sy - h;
+    // Тело: тёмный низ, светлее к гребню; контур тушью.
+    g.fillStyle = rgba(INK, 0.9);
+    g.fillRect(sx - 0.5, top - 1.5, 5.2, h + 2);
+    g.fillStyle = rgba(S[0], 1);
+    g.fillRect(sx, top, 4.2, h);
+    g.fillStyle = rgba(S[1], 1);
+    g.fillRect(sx, top, 4.2, h * 0.62);
+    g.fillStyle = rgba(S[2], 1);
+    g.fillRect(sx, top, 4.2, h * 0.3);
+    g.fillStyle = rgba(S[3], 1);
+    g.fillRect(sx, top - (curl > 0.4 ? 1 : 0), 4.2, 2);
+    if (curl > 0.8) {
+      g.fillStyle = 'rgba(255,255,255,0.95)';
+      g.fillRect(sx + 0.5, top - 2.5, 2.5, 1.6);
     }
   }
   // Пока набухает — проёмы светятся: туда.
   if (swell)
     for (const gx of w.gaps) {
       const [cx] = to(gx, w.y);
-      g.strokeStyle = rgba(GOLD[3], 0.5 + 0.4 * Math.sin(time * 10));
-      g.lineWidth = 1;
-      g.strokeRect(cx - (w.gapW / 2) * 16 + 1, sy - 10, w.gapW * 16 - 2, 10);
+      const half = (w.gapW / 2) * 16;
+      g.strokeStyle = rgba(GOLD[3], 0.55 + 0.4 * Math.sin(time * 10));
+      g.lineWidth = 1.2;
+      g.beginPath();
+      g.moveTo(cx - half + 1, sy - 12);
+      g.lineTo(cx - half + 1, sy + 2);
+      g.moveTo(cx + half - 1, sy - 12);
+      g.lineTo(cx + half - 1, sy + 2);
+      g.stroke();
+      g.fillStyle = rgba(GOLD[3], 0.12);
+      g.fillRect(cx - half, sy - 12, half * 2, 14);
     }
 }
 

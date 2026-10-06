@@ -414,10 +414,11 @@ function seaFloor(p: Px, c: CellCtx, T: Tone): void {
   fill(p, (x, y) => {
     const X = c.wx * 16 + x;
     const Y = c.wy * 16 + y;
+    // Крашеный холст: спокойные мазки, чтобы настоящие волны акта читались.
     const w = Math.sin(X * 0.2 + Math.sin(Y * 0.13) * 2) + Math.sin(Y * 0.45 + X * 0.05);
-    if (w > 1.55) return T[3];
-    if (w > 1.1) return T[2];
-    if (w < -1.3) return T[0];
+    if (w > 1.75) return mixc(T[2], T[3], 0.35);
+    if (w > 1.25) return mixc(T[1], T[2], 0.6);
+    if (w < -1.3) return mixc(T[0], T[1], 0.4);
     // Холст: редкое плетение.
     return (X + Y) % 5 === 0 ? mixc(T[1], T[0], 0.3) : T[1];
   });
