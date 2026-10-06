@@ -4756,7 +4756,7 @@ function devRig(o: DPose, yaw: number): Rig {
   const B = F3.yaw(yaw).at(o.fwd, 0, 5).pitch(o.pitch);
   const skin: Mat = {
     T: VOID_T,
-    pat: (_q, l) => (l > 0.72 ? VOID_RIM : null),
+    pat: (_q, l) => (l > 0.93 ? VOID_RIM : null),
   };
   const from = r.size;
   r.ell(B, [0, 0, 0], [5.4, 3.8, 2.2], skin);
@@ -5023,7 +5023,7 @@ function novaRig(o: NPose, yaw: number): Rig {
     const e2: V3 = [nw[1] * e1[2] - nw[2] * e1[1], nw[2] * e1[0] - nw[0] * e1[2], nw[0] * e1[1] - nw[1] * e1[0]];
     const F = new F3(c, nw, e1, e2);
     const sz = (1 - col * 0.6) * (i % 2 ? 1 : 0.85);
-    r.ell(F, [0, 0, 0], [1.2, 3.4 * sz, 3.0 * sz], stone);
+    r.ell(F, [0, 0, 0], [1.2, 2.9 * sz, 2.6 * sz], stone);
   });
   // Глаза — щели на верхней пластине-короне.
   if (col < 0.2) {
