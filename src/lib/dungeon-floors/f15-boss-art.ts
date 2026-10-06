@@ -2839,7 +2839,7 @@ const KAX = 32;
 const KAY = 62;
 const MARBLE = ['#20243a', '#3c4262', '#646c8c', '#9098b4', '#bcc4d8', '#e4e8f2', '#fbfcff'].map((c) => hx(c));
 const STONE_K = ['#1c1c22', '#34343c', '#50505a', '#6e6e78', '#8e8e98', '#b0b0b8', '#d0d0d6'].map((c) => hx(c));
-const KEEP_LRU = frameLRU<[HTMLCanvasElement, HTMLCanvasElement]>(260);
+const KEEP_LRU = frameLRU<[HTMLCanvasElement, HTMLCanvasElement]>(320);
 const keeperLast = new WeakMap<Mob, number>();
 const STAFF_D = hx('#3a2a4a');
 const STAFF_S = hx('#22182e');
@@ -2902,7 +2902,19 @@ function robeR(z: number): number {
   return 0;
 }
 
+// Прожилки мрамора балахона не зависят от позы: одна таблица на все кадры
+// (vnoise на каждую из ~7800 точек был заметной долей сборки).
+let VEIN: Uint8Array | null = null;
+function veins(): Uint8Array {
+  if (VEIN) return VEIN;
+  const v = new Uint8Array(61 * 64);
+  for (let zi = 0; zi <= 60; zi++)
+    for (let k = 0; k < 64; k++) v[zi * 64 + k] = vnoise(((k / 64) * TAU) * 3 + zi * 0.075, zi * 0.175, 619) > 0.78 ? 1 : 0;
+  return (VEIN = v);
+}
+
 function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, flash: boolean, ph: number): [HTMLCanvasElement, HTMLCanvasElement] {
+  const vt = veins();
   const a = (dir * TAU) / 16;
   const ca = Math.cos(a);
   const sa = Math.sin(a);
@@ -2931,7 +2943,8 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
   const bob = kp.bob;
   const shade = (nx: number, ny: number, nz: number) => clamp01(0.42 + (nx * LV[0] + ny * LV[1] + nz * LV[2]) * 0.6);
   // Балахон и накидка: стопка дисков.
-  for (let z = 0; z <= 30; z += 0.5) {
+  for (let zi = 0; zi <= 60; zi++) {
+    const z = zi * 0.5;
     const R = robeR(z) + (z < 2 ? 0.4 * Math.sin(ph * 0.8 + z) : 0);
     const cf = leanAt(z);
     for (let k = 0; k < 64; k++) {
@@ -2952,7 +2965,7 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         const l = z > 29 ? shade(cx * 0.4, cy * 0.4, 0.9) : shade(cx, cy, 0.25);
         let c = mixq(rp[1], rp[5], l, Math.round(X), Math.round(Y));
         // Прожилки мрамора.
-        if (!stoneAt(z) && vnoise(psi * 3 + z * 0.15, z * 0.35, 619) > 0.78) c = mixc(c, rp[2], 0.6);
+        if (!stoneAt(z) && vt[zi * 64 + k]) c = mixc(c, rp[2], 0.6);
         const gold = !stoneAt(z) && (z < 1.5 || (z > 15.4 && z < 16.6) || (z > 28 && z < 29.2) || (Math.abs(u) < 0.16 && z < 15.4));
         if (gold) c = l > 0.55 ? GOLD[4] : GOLD[3];
         else if (stoneAt(z) && (z < 1.5 || (z > 15.4 && z < 16.6))) c = STONE_K[2];
@@ -3131,6 +3144,32 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
   return [p.canvas(), lit.canvas()];
 }
 
+// Толпа хранителей: новых сборок (~5–7 мс каждая) не больше двух за кадр,
+// остальные держат свой прошлый кадр. Без этого 15 хранителей в ударе
+// вытесняли кадры друг друга из кеша и кадр рендера уходил за 30 мс.
+const KEEP_PREV = new WeakMap<Mob, [HTMLCanvasElement, HTMLCanvasElement]>();
+const KEEP_FLASH = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+const keepBudget = { now: -1, n: 0 };
+const KEEP_BUILDS = 2;
+
+/** Вспышка попадания — белым поверх готового кадра, без новой сборки. */
+function keeperFlash(img: HTMLCanvasElement): HTMLCanvasElement {
+  const hit = KEEP_FLASH.get(img);
+  if (hit) return hit;
+  const f = document.createElement('canvas');
+  f.width = img.width;
+  f.height = img.height;
+  const g = f.getContext('2d');
+  if (g) {
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255,255,255,0.6)';
+    g.fillRect(0, 0, f.width, f.height);
+  }
+  KEEP_FLASH.set(img, f);
+  return f;
+}
+
 registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
   const now = pose.now;
   const T = pose.t;
@@ -3138,7 +3177,10 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
   if (mode === 'f15k_slam') keeperLast.set(m, 1);
   else if (mode === 'f15k_lance') keeperLast.set(m, 2);
   else if (mode !== 'recover') keeperLast.set(m, 0);
-  const dir = ((Math.round(m.face / (TAU / 16)) % 16) + 16) % 16;
+  // Удары и смерть — на 8 сторон (кадров у них втрое больше, чем у шага),
+  // шаг и покой — на 16.
+  const atk = mode === 'f15k_slam' || mode === 'f15k_lance' || mode === 'recover' || mode === 'dying';
+  const dir = atk ? (((Math.round(m.face / (TAU / 8)) % 8) + 8) % 8) * 2 : ((Math.round(m.face / (TAU / 16)) % 16) + 16) % 16;
   const sp = Math.hypot(m.vx, m.vy);
   const ph = sp > 0.3 ? Math.floor(now * 8) % 8 : Math.floor(now * 3) % 8;
   let stone = 0;
@@ -3166,11 +3208,23 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
     kp = keeperPose('chase', 0, 0, ph);
     key = `c${ph}`;
   }
-  const k = `${dir}|${key}|${pose.flash ? 1 : 0}`;
+  const k = `${dir}|${key}`;
   let fr = KEEP_LRU.get(k);
-  if (!fr) fr = KEEP_LRU.set(k, buildKeeper(dir, kp, stone, crumble, pose.flash, ph));
+  if (!fr) {
+    if (keepBudget.now !== now) {
+      keepBudget.now = now;
+      keepBudget.n = 0;
+    }
+    const prev = KEEP_PREV.get(m);
+    if (prev && keepBudget.n >= KEEP_BUILDS) fr = prev;
+    else {
+      keepBudget.n++;
+      fr = KEEP_LRU.set(k, buildKeeper(dir, kp, stone, crumble, false, ph));
+    }
+  }
+  KEEP_PREV.set(m, fr);
   return {
-    img: fr[0],
+    img: pose.flash ? keeperFlash(fr[0]) : fr[0],
     ax: KAX,
     ay: KAY,
     eye: null,
@@ -3184,7 +3238,7 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
 registerMobWarm('f15b_keeper', function* () {
   for (let d = 0; d < 16; d++)
     for (let ph = 0; ph < 8; ph++) {
-      const k = `${d}|c${ph}|0`;
+      const k = `${d}|c${ph}`;
       if (!KEEP_LRU.get(k)) KEEP_LRU.set(k, buildKeeper(d, keeperPose('chase', 0, 0, ph), 0, 0, false, ph));
       yield;
     }
