@@ -56,6 +56,7 @@ import {
   hurtFields,
   addFields,
   emptyFrame,
+  withFlash,
 } from './f4-mobkit';
 import type { RGBA, P3, Look } from './f4-mobkit';
 
@@ -674,7 +675,7 @@ function skelFrame(
   flash: boolean,
   build: (sc: Scene, hv: number, mir: boolean, glow: [number, number, RGBA][], eye: RGBA) => void,
 ): MobFrame {
-  return cached(skFrames, 'f4_skel', `${key}|${d8}|${look}|${flash ? 1 : 0}`, () => {
+  const fr = cached(skFrames, 'f4_skel', `${key}|${d8}|${look}`, () => {
     const vw = viewOf(d8);
     const sc = new Scene(camOf(vw.yaw, SK_AX, SK_AY));
     const glow: [number, number, RGBA][] = [];
@@ -685,7 +686,7 @@ function skelFrame(
     p.outline(INK);
     const pts = glow.map(([x, y, c]): [number, number, RGBA] => [vw.mir ? SK_W - 1 - x : x, y, c]);
     return {
-      img: finish(p, vw.mir, flash, look),
+      img: finish(p, vw.mir, false, look),
       lit: litOf(SK_W, SK_H, pts),
       ax: SK_AX,
       ay: SK_AY,
@@ -693,6 +694,7 @@ function skelFrame(
       shadow: 5,
     };
   });
+  return withFlash(fr, flash);
 }
 
 /** Костяк по позе (обычный кадр). */
@@ -886,13 +888,13 @@ function pileFrame(
   ex: Partial<MobFrame> = {},
 ): MobFrame {
   return {
-    ...cached(pileFrames, 'f4_bones', `${key}|${look}|${flash ? 1 : 0}`, () => {
+    ...cached(pileFrames, 'f4_bones', `${key}|${look}`, () => {
       const p = new Px(SK_W, SK_H);
       const glow: [number, number, RGBA][] = [];
       draw(p, glow, eyeCol(look, SK_EYE));
       p.outline(INK);
       return {
-        img: finish(p, false, flash, look),
+        img: finish(p, false, false, look),
         lit: litOf(SK_W, SK_H, glow),
         ax: SK_AX,
         ay: SK_AY,

@@ -47,6 +47,7 @@ import {
   vsub,
   viewOf,
   visOf,
+  withFlash,
 } from './f4-mobkit';
 import type { Look, P3, RGBA } from './f4-mobkit';
 
@@ -718,7 +719,7 @@ function knFrame(
   P: KnP,
   soul = 0,
 ): MobFrame {
-  return cached(knFrames, 'f4_knight', `${key}|${d8}|${look}|${flash ? 1 : 0}|${rim}`, () => {
+  const fr = cached(knFrames, 'f4_knight', `${key}|${d8}|${look}|${rim}`, () => {
     const vw = viewOf(d8);
     const sc = new Scene(camOf(vw.yaw, KN_AX, KN_AY));
     const glow: [number, number, RGBA][] = [];
@@ -729,7 +730,7 @@ function knFrame(
     p.outline(INK);
     const pts = glow.map(([x, y, c]): [number, number, RGBA] => [vw.mir ? KN_W - 1 - x : x, y, c]);
     return {
-      img: finish(p, vw.mir, flash, look),
+      img: finish(p, vw.mir, false, look),
       lit: litOf(KN_W, KN_H, pts),
       ax: KN_AX,
       ay: KN_AY,
@@ -737,6 +738,7 @@ function knFrame(
       shadow: 7,
     };
   });
+  return withFlash(fr, flash);
 }
 
 registerMobPainter('f4_knight', (m, pose) => {

@@ -51,6 +51,7 @@ import {
   vslerp,
   viewOf,
   visOf,
+  withFlash,
 } from './f4-mobkit';
 import type { Look, P3, RGBA } from './f4-mobkit';
 
@@ -512,7 +513,12 @@ function ncDeath(t: number): { P: NcP; sink: number; soul: number } {
 
 // ---- Кадр -------------------------------------------------------------------------
 
-type NcFr = MobFrame & { top: [number, number]; glow: [number, number, RGBA][] };
+type NcFr = MobFrame & {
+  top: [number, number];
+  glow: [number, number, RGBA][];
+  /** Слой огня по фазе и силе — у кадра тела, чтобы не собирать точки на каждый вызов. */
+  lits: Map<string, HTMLCanvasElement | null>;
+};
 const ncFrames = frameLRU<NcFr>(700);
 F4_MOB_STAT.size.f4_necro = () => ncFrames.size;
 
@@ -525,7 +531,7 @@ function ncBody(
   P: NcP,
   extra?: (p: Px, mir: boolean) => void,
 ): NcFr {
-  return cached(ncFrames, 'f4_necro', `${key}|${d8}|${look}|${flash ? 1 : 0}`, () => {
+  const fr = cached(ncFrames, 'f4_necro', `${key}|${d8}|${look}`, () => {
     const vw = viewOf(d8);
     const sc = new Scene(camOf(vw.yaw, NC_AX, NC_AY));
     const glow: [number, number, RGBA][] = [];
@@ -537,15 +543,17 @@ function ncBody(
     extra?.(p, vw.mir);
     const fx = (x: number) => (vw.mir ? NC_W - 1 - x : x);
     return {
-      img: finish(p, vw.mir, flash, look),
+      img: finish(p, vw.mir, false, look),
       ax: NC_AX,
       ay: NC_AY,
       eye: null,
       shadow: 6,
       top: [fx(out.top[0]), out.top[1]],
       glow: glow.map(([x, y, c]): [number, number, RGBA] => [fx(x), y, c]),
+      lits: new Map(),
     };
   }) as NcFr;
+  return withFlash(fr, flash);
 }
 
 /** Тело + огонь навершия (фаза огня 8 к/с — только слой поверх темноты). */
@@ -560,16 +568,16 @@ function ncFrame(
   fireMul = 1,
 ): MobFrame {
   const b = ncBody(key, d8, look, flash, P, extra);
-  const pts: [number, number, RGBA][] = fireMul < 0.3 ? [] : [...b.glow];
-  flamePts(b.top[0], b.top[1], P.fire * fireMul, mod(now * 8, 6), pts);
-  return {
-    img: b.img,
-    ax: b.ax,
-    ay: b.ay,
-    eye: null,
-    shadow: b.shadow,
-    lit: litOf(NC_W, NC_H, pts),
-  };
+  const ph = mod(now * 8, 6);
+  const lk = `${ph}|${R(fireMul * 20)}`;
+  let lit = b.lits.get(lk);
+  if (lit === undefined) {
+    const pts: [number, number, RGBA][] = fireMul < 0.3 ? [] : [...b.glow];
+    flamePts(b.top[0], b.top[1], P.fire * fireMul, ph, pts);
+    lit = litOf(NC_W, NC_H, pts);
+    b.lits.set(lk, lit);
+  }
+  return { img: b.img, ax: b.ax, ay: b.ay, eye: null, shadow: b.shadow, lit };
 }
 
 /** Распад в пепел: пиксели гаснут по шуму снизу вверх и улетают вверх (k 0…1). */

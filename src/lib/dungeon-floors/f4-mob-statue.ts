@@ -48,6 +48,7 @@ import {
   vsub,
   viewOf,
   visOf,
+  withFlash,
 } from './f4-mobkit';
 import type { Look, P3, RGBA } from './f4-mobkit';
 
@@ -351,7 +352,7 @@ function stScene(
   const dSk = sc.P(T(4, vadd(pel, [0, 0, -1])))[2];
   sc.add(dSk, (p) =>
     fillPoly(p, skH, (x, _y, k) =>
-      k > 0.88 ? STONE.dk : x < skx - 2.5 ? STONE.hi : x > skx + 2.5 ? STONE.sh : STONE.mid,
+      k > 0.88 ? STONE.dk : x < skx - 3.5 ? STONE.hi : x > skx + 1.5 ? STONE.sh : STONE.mid,
     ),
   );
   for (const a of [0.5, 1.3, 2.2, 4.1, 5.0, 5.8]) {
@@ -379,13 +380,13 @@ function stScene(
   const dB = sc.P(T(3, vadd(pel, vmul(up, 4))))[2];
   sc.add(dB, (p) =>
     fillPoly(p, body, (x, _y, k) =>
-      k < 0.12
+      k < 0.07
         ? STONE.hi
         : k > 0.9
           ? STONE.sh
-          : x < bx - 2
+          : x < bx - 3.2
             ? STONE.hi
-            : x > bx + 2
+            : x > bx + 1.2
               ? STONE.sh
               : STONE.mid,
     ),
@@ -618,38 +619,30 @@ function stFrame(
   P: StP,
   fall = -1,
 ): MobFrame {
-  return cached(
-    stFrames,
-    'f4_statue',
-    `${key}|${d8}|${look}|${flash ? 1 : 0}|${gold ? 1 : 0}|${cracks}`,
-    () => {
-      const vw = viewOf(d8);
-      const sc = new Scene(camOf(vw.yaw, S3_AX, S3_AY));
-      const glow: [number, number, RGBA][] = [];
-      const post: ((p: Px) => void)[] = [];
-      stScene(sc, P, headView(vw.d), gold, cracks, eyeCol(look, EYE), glow, post, fall);
-      const p = new Px(S3_W, S3_H);
-      sc.paint(p);
-      p.outline(INK);
-      // След клинка — после контура: иначе дуга обводится чернилами и темнеет.
-      for (const f of post) f(p);
-      if (fall >= 0) stDust(p, fall);
-      const pts = glow.map(([x, y, c]): [number, number, RGBA] => [
-        vw.mir ? S3_W - 1 - x : x,
-        y,
-        c,
-      ]);
-      return {
-        img: finish(p, vw.mir, flash, look),
-        lit: litOf(S3_W, S3_H, pts),
-        ax: S3_AX,
-        ay: S3_AY,
-        eye: null,
-        shadow: 8,
-        still: true,
-      };
-    },
-  );
+  const fr = cached(stFrames, 'f4_statue', `${key}|${d8}|${look}|${gold ? 1 : 0}|${cracks}`, () => {
+    const vw = viewOf(d8);
+    const sc = new Scene(camOf(vw.yaw, S3_AX, S3_AY));
+    const glow: [number, number, RGBA][] = [];
+    const post: ((p: Px) => void)[] = [];
+    stScene(sc, P, headView(vw.d), gold, cracks, eyeCol(look, EYE), glow, post, fall);
+    const p = new Px(S3_W, S3_H);
+    sc.paint(p);
+    p.outline(INK);
+    // След клинка — после контура: иначе дуга обводится чернилами и темнеет.
+    for (const f of post) f(p);
+    if (fall >= 0) stDust(p, fall);
+    const pts = glow.map(([x, y, c]): [number, number, RGBA] => [vw.mir ? S3_W - 1 - x : x, y, c]);
+    return {
+      img: finish(p, vw.mir, false, look),
+      lit: litOf(S3_W, S3_H, pts),
+      ax: S3_AX,
+      ay: S3_AY,
+      eye: null,
+      shadow: 8,
+      still: true,
+    };
+  });
+  return withFlash(fr, flash);
 }
 
 /** Каменная пыль при обвале. */

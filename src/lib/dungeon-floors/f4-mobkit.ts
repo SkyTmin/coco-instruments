@@ -244,6 +244,32 @@ export function hull2(P: [number, number, number][]): [number, number, number][]
 
 // ---- Кадр: облик, вспышка, зеркало, кеш ------------------------------------------------
 
+/**
+ * Белая вспышка удара из готового кадра: тот же холст, залитый белым поверх
+ * себя (как `tint(WHITE, 0.9)`), без перерисовки позы — кеш по картинке. Удар
+ * героя белит моба 0,1–0,15 с, и отдельный кадр вспышки на каждую позу был
+ * главной ценой новых кадров в толпе.
+ */
+const FLASHED = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+export function flashImg(img: HTMLCanvasElement): HTMLCanvasElement {
+  let c = FLASHED.get(img);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const g = c.getContext('2d')!;
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.globalAlpha = 0.9;
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, c.width, c.height);
+    FLASHED.set(img, c);
+  }
+  return c;
+}
+export const withFlash = <T extends MobFrame>(fr: T, flash: boolean): T =>
+  flash ? { ...fr, img: flashImg(fr.img) } : fr;
+
 /** Готовый рисунок → холст: облик (элита — золотой кант, альбинос — бледный), зеркало, вспышка. */
 export function finish(px: Px, mir: boolean, flash: boolean, look: Look): HTMLCanvasElement {
   let p = px;
