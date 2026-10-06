@@ -1393,6 +1393,7 @@ function startPalm(sim: Sim, m: Mob, api: SimApi): void {
     dmg: m.dmg * 1.15,
     knock: 7,
     art: 'f15b_palm',
+    above: true, // анимации 15 — только рисунок: метка светится поверх темноты
     from: m.id,
   });
   m.data.ang = a;
@@ -1412,6 +1413,7 @@ function startSweep(sim: Sim, m: Mob, api: SimApi): void {
     dmg: m.dmg,
     knock: 6,
     art: 'f15b_sweep',
+    above: true, // анимации 15 — только рисунок: метка светится поверх темноты
     from: m.id,
   });
   m.data.ang = a;
@@ -1430,6 +1432,7 @@ function startRepel(sim: Sim, m: Mob, st: F15BState, api: SimApi): void {
       dmg: m.dmg * 0.8,
       knock: 11,
       art: 'f15b_repel',
+      above: true, // анимации 15 — только рисунок: метка светится поверх темноты
       from: m.id,
     }),
   );
@@ -1460,6 +1463,7 @@ function startWell(sim: Sim, m: Mob, st: F15BState, api: SimApi): void {
     dmg: m.dmg * 1.3,
     knock: 9,
     art: 'f15b_well',
+    above: true, // анимации 15 — только рисунок: метка светится поверх темноты
     from: m.id,
   });
   m.data.cdWell = LORD.wellCd * (b2(sim) === 3 ? 1.4 : 1);
@@ -1498,6 +1502,7 @@ function startOrbit(sim: Sim, m: Mob, st: F15BState, api: SimApi): void {
       dmg: m.dmg,
       knock: 6,
       art: 'f15b_planet',
+      above: true, // анимации 15 — только рисунок: метка светится поверх темноты
       from: m.id,
     });
   });
