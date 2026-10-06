@@ -2014,39 +2014,6 @@ function markLine(
   g.globalAlpha = 1;
 }
 
-/** Аркан над рукой: петля крутится, к броску быстрее и шире. */
-function lassoSpin(g: G, hx0: number, hy0: number, k: number, f: number, t: number): void {
-  const cx = hx0;
-  const cy = hy0 - 7;
-  const ph = t * (9 + 22 * k * k);
-  const rx = 7 + 2 * k;
-  const ry = 2.6;
-  const at = (a: number): [number, number] => [cx + Math.cos(a) * rx, cy + Math.sin(a) * ry];
-  const L = TAU * rx;
-  // Петля: дальняя половина темнее (за рукой), ближняя — ярче.
-  if (ink(g, C.shade, 0.5))
-    curvePx(
-      g,
-      (s) => {
-        const [x, y] = at(s * TAU);
-        return [x, y + 1];
-      },
-      L,
-    );
-  if (ink(g, C.gold0, 0.9)) curvePx(g, (s) => at(Math.PI + s * Math.PI), L / 2);
-  if (ink(g, f > 0 ? C.cream : C.gold2, 0.95)) curvePx(g, (s) => at(s * Math.PI), L / 2);
-  // Верёвка от руки к узлу и сам узел.
-  const [kx, ky] = at(ph);
-  if (ink(g, C.gold1, 0.9)) linePx(g, hx0, hy0, kx, ky);
-  sparkPx(g, kx, ky, f > 0 ? C.white : C.gold3, 0.9, f > 0);
-  // Свист: точки позади узла.
-  for (let j = 1; j <= 3; j++) {
-    const [sx, sy] = at(ph - j * 0.35);
-    if (ink(g, C.gold3, (0.3 + 0.4 * k) * (1 - j / 4))) pp(g, sx, sy);
-  }
-  g.globalAlpha = 1;
-}
-
 /**
  * Таран на бегу: метка гаснет с первым шагом, а увернуться ещё надо — остаток
  * пути (`run − t`) лежит перед исполином шевронами, стена его обрезает.
@@ -2118,8 +2085,9 @@ function bossMarks(g: G, layer: Layer, to: To, time: number): void {
         markLine(g, layer, ox, oy, hand, R, W, a0, k, f, time, T_LORD, 'thrust');
         break;
       case 'f13_snare':
+        // Петлю над вагой, пока крутится, рисует «Тело» в кадре; здесь — метка
+        // (повтор снят при сведении v2.96).
         markLine(g, layer, ox, oy, hand, R, W, a0, k, f, time, T_LORD, 'snare');
-        if (layer === 'above' && hand) lassoSpin(g, hand[0], hand[1], k, f, m.t);
         break;
       case 'f13_needle':
         // Три иглы веером (разброс мозга 0,24 — по ±0,12): каждой своя серебряная нить.
@@ -2139,25 +2107,7 @@ function bossMarks(g: G, layer: Layer, to: To, time: number): void {
             T_NEEDLE,
             'needle',
           );
-        if (layer === 'above' && hand)
-          // Три иглы в пальцах веером — блестят сильнее к броску.
-          for (const d of [-0.35, 0, 0.35]) {
-            const a = a0 + d;
-            const x0 = hand[0] + Math.cos(a) * 2;
-            const y0 = hand[1] + Math.sin(a) * 2;
-            if (ink(g, C.shade, 0.5))
-              linePx(g, x0 + 1, y0 + 1, x0 + Math.cos(a) * 6 + 1, y0 + Math.sin(a) * 6 + 1);
-            if (ink(g, C.silver3, 0.95))
-              linePx(g, x0, y0, x0 + Math.cos(a) * 6, y0 + Math.sin(a) * 6);
-            sparkPx(
-              g,
-              x0 + Math.cos(a) * 6,
-              y0 + Math.sin(a) * 6,
-              C.white,
-              0.4 + 0.6 * Math.max(k * 0.6, f),
-              f > 0,
-            );
-          }
+        // Иглы веером в пальцах рисует «Тело» в кадре (повтор снят при сведении v2.96).
         break;
       case 'f13_lance':
         markLine(g, layer, ox, oy, null, R, W, a0, k, f, time, T_LANCE, 'lance');

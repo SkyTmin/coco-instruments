@@ -605,6 +605,10 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f13_bow_call: () => {
     stringBend();
     softChime(2);
+    // Смерть Кукловода (v2.96): нити лопаются по одной в кадрах «Тела»
+    // 11/17/23/28 (24 к/с), куча оседает на 36-м.
+    [460, 710, 960, 1170].forEach((ms, i) => window.setTimeout(() => stringPluck(4 - i), ms));
+    window.setTimeout(() => softThud(0.45), 1500);
   },
   f13_baton_call: () => stringPluck(3),
   f13_wave_call: () => windGust(0.6),
