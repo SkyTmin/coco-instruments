@@ -4594,7 +4594,13 @@ function crest(
     );
 }
 
-/** Фигура по пикселям: `inside(u, v)` — в долях R вдоль угла a и поперёк. */
+/**
+ * Фигура по пикселям: `inside(u, v)` — в долях R вдоль угла a и поперёк.
+ * С меткой `tag` строки берутся из кеша (R — по полпикселя, угол — 1/64
+ * оборота, центр — в середине пикселя): ладонь иначе считала силуэт по
+ * пикселю каждый кадр.
+ */
+const SHAPES = frameLRU<number[]>(240);
 function shapeRows(
   p: Pen,
   cx: number,
@@ -4602,29 +4608,42 @@ function shapeRows(
   R: number,
   a: number,
   inside: (u: number, v: number) => boolean,
+  tag?: string,
 ): void {
   if (R < 1) return;
-  const ux = Math.cos(a);
-  const uy = Math.sin(a);
-  const E = Math.ceil(R) + 1;
-  const x0 = Math.floor(cx);
-  const y0 = Math.floor(cy);
-  for (let y = -E; y <= E; y++) {
-    let run = NO_RUN;
-    for (let x = -E; x <= E + 1; x++) {
-      let on = false;
-      if (x <= E) {
-        const dx = (x0 + x + 0.5 - cx) / R;
-        const dy = (y0 + y + 0.5 - cy) / R;
-        on = inside(dx * ux + dy * uy, -dx * uy + dy * ux);
-      }
-      if (on && run === NO_RUN) run = x;
-      if (!on && run !== NO_RUN) {
-        p.rect(x0 + run, y0 + y, x - run, 1);
-        run = NO_RUN;
+  const aq = Math.round((a / TAU) * 64);
+  const Rq = tag ? Math.round(R * 2) / 2 : R;
+  const key = tag ? `${tag}|${Rq}|${mod(aq, 64)}` : '';
+  let spans = tag ? SHAPES.get(key) : undefined;
+  if (!spans) {
+    spans = [];
+    const A = tag ? (aq / 64) * TAU : a;
+    const ux = Math.cos(A);
+    const uy = Math.sin(A);
+    const E = Math.ceil(Rq) + 1;
+    const fx = tag ? 0.5 : cx - Math.floor(cx);
+    const fy = tag ? 0.5 : cy - Math.floor(cy);
+    for (let y = -E; y <= E; y++) {
+      let run = NO_RUN;
+      for (let x = -E; x <= E + 1; x++) {
+        let on = false;
+        if (x <= E) {
+          const dx = (x + 0.5 - fx) / Rq;
+          const dy = (y + 0.5 - fy) / Rq;
+          on = inside(dx * ux + dy * uy, -dx * uy + dy * ux);
+        }
+        if (on && run === NO_RUN) run = x;
+        if (!on && run !== NO_RUN) {
+          spans.push(run, y, x - run);
+          run = NO_RUN;
+        }
       }
     }
+    if (tag) SHAPES.set(key, spans);
   }
+  const x0 = Math.floor(cx);
+  const y0 = Math.floor(cy);
+  for (let i = 0; i < spans.length; i += 3) p.rect(x0 + spans[i], y0 + spans[i + 1], spans[i + 2], 1);
 }
 
 // ---- Ладонь: созвездие выходит из руки, встаёт над целью и падает ----------
@@ -4773,7 +4792,7 @@ registerZonePainter(
     // Тень ладони: большая и бледная, пока ладонь высоко, — чёткая под ней.
     const near = k01(1 - h / H);
     p.col(C.ink, (0.18 + 0.42 * near) * rise);
-    shapeRows(p, cx, cy, R * 0.92 * (1 + 0.45 * (1 - near)), a, inPalm);
+    shapeRows(p, cx, cy, R * 0.92 * (1 + 0.45 * (1 - near)), a, inPalm, 'p');
     // Ладонь-созвездие: из руки владыки — над целью.
     p.occ = null;
     const lord = mobOf(st.from);
@@ -4796,9 +4815,9 @@ registerZonePainter(
     }
     // Ладонь: ночной силуэт с золотой кромкой — читается и на плаще владыки.
     p.col(C.night[0], 0.55 + 0.2 * k);
-    shapeRows(p, ax, ay, Rp, a, inPalm);
+    shapeRows(p, ax, ay, Rp, a, inPalm, 'p');
     p.col(sig ? C.white : C.gold[1], 0.7 + 0.3 * k);
-    shapeRows(p, ax, ay, Rp, a, edgeOf(inPalm, Rp, a));
+    shapeRows(p, ax, ay, Rp, a, edgeOf(inPalm, Math.round(Rp * 2) / 2, a), 'pe');
     palmDraw(
       p,
       ax,
@@ -4859,9 +4878,9 @@ registerImpactPainter('f15b_palm', {
                 ? '#c890f0'
                 : '#6a34a4';
       p.col(hot, (age < 0.1 ? 0.75 : 0.4) * f);
-      shapeRows(p, cx, cy, R * 0.92, a, inPalm);
+      shapeRows(p, cx, cy, R * 0.92, a, inPalm, 'p');
       p.col(hot, Math.min(1, 1.5 * f));
-      shapeRows(p, cx, cy, R * 0.92, a, edgeOf(inPalm, R * 0.92, a));
+      shapeRows(p, cx, cy, R * 0.92, a, edgeOf(inPalm, Math.round(R * 1.84) / 2, a), 'pe');
       ring(p, cx, cy, R, C.gold[2], 0.8 * f * f, (_a, i) => hash(i >> 1, sd, 5) > 0.3);
       p.occ = null;
       hitStar(p, cx, cy - 2, age, 0.1, R * 1.05, sd * 0.01, C.gold[2]);
