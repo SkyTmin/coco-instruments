@@ -5177,9 +5177,10 @@ registerMobPainter('f15_nova', (m: Mob, pose: MobPose) => {
     extra.still = true;
   } else if (md === 'f15_gather') {
     // Набор света: скорлупа раскрывается, ядро растёт, руки вверх.
+    // 12 к/с, а не 24: набор долгий (1,4 с) и в толпе вытеснял кеш чаще всех.
     const T = NOVA.gather;
-    f = fi(t, 33);
-    const k = (f + 0.5) / FPS / T;
+    f = Math.min(16, Math.max(0, Math.floor(t * 12)));
+    const k = (f + 0.5) / 12 / T;
     anim = 'gather';
     o.open = 3.5 * easeOut(k);
     o.core = 0.4 + 0.6 * k;
