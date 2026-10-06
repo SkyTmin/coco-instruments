@@ -833,7 +833,10 @@ export const F1_MOB_STAT = {
   clear: () => {
     for (const l of LRUS.values()) l.clear();
     VAR_LRU.clear();
+    PEND.clear();
   },
+  /** Стенд: сколько кадров прогрева ждут холста. */
+  pending: () => PEND.size,
 };
 function stat(key: string, ms: number): void {
   const S = F1_MOB_STAT;
@@ -880,7 +883,7 @@ function mobFrame(
     // раз, получает свой отражённый холст — он живёт, пока жив исходный кадр.
     // Кадры ударов идут по разу на удар: им отражённый холст не окупается.
     const src = mobFrame(lru, base, SRC8[d], look, flash, buff, make);
-    if (FB.fell) return src;
+    if (FB.fell || WARM_DEFER) return src;
     let e = MIR_F.get(src);
     if (!e) {
       const a = base.split('|')[1];
@@ -924,10 +927,24 @@ function mobFrame(
   } else {
     if (FB.hold && FB.spent >= F1_MOB_STAT.budget) return hold();
     const t0 = performance.now();
-    const pic = make(yaw8(d));
-    const p = pic.p;
-    if (look === 'elite') p.outline(GOLD_EDGE);
-    fr = cropPic(p, pic.lit, pic.ax, pic.ay, pic.eye);
+    const pd = PEND.get(key);
+    if (pd) {
+      PEND.delete(key);
+      fr = croppedFrame(pd);
+    } else {
+      const pic = make(yaw8(d));
+      const p = pic.p;
+      if (look === 'elite') p.outline(GOLD_EDGE);
+      const cd = cropData(p, pic.lit, pic.ax, pic.ay, pic.eye);
+      if (WARM_DEFER) {
+        if (PEND.size >= PEND_MAX) PEND.delete(PEND.keys().next().value as string);
+        PEND.set(key, cd);
+        bakeLater(lru, key, cd);
+        spend(key, performance.now() - t0);
+        return DEFERRED;
+      }
+      fr = croppedFrame(cd);
+    }
     spend(key, performance.now() - t0);
   }
   return vl.set(key, fr);
@@ -1082,19 +1099,31 @@ function buffedOf(src: MobFrame, buff: number, base: string): MobFrame {
 /** Шаг обрезки кадра, пиксели: меньше разных размеров — меньше холстов ореола. */
 const CROP_Q = 6;
 
+/** Обрезанный кадр в пикселях — ещё без холста (см. `PEND`). */
+interface Cropped {
+  img: Uint8ClampedArray;
+  lit: Uint8ClampedArray | null;
+  cw: number;
+  ch: number;
+  ax: number;
+  ay: number;
+  eye: [number, number] | null;
+  rx: number;
+}
+
 /**
- * Холст кадра без пустых полей слева, справа и снизу: меньше холст — дешевле
- * блит (особенно с отражением и сжатием) и отражённый холст. Верх не трогаем —
- * от верха кадра движок ставит полоску здоровья, она не должна прыгать с
+ * Кадр без пустых полей слева, справа и снизу: меньше холст — дешевле блит
+ * (особенно с отражением и сжатием) и отражённый холст. Верх не трогаем — от
+ * верха кадра движок ставит полоску здоровья, она не должна прыгать с
  * замахом. Поле под кольцо чар у ног остаётся всегда.
  */
-function cropPic(
+function cropData(
   p: Px,
   lit: Px | null,
   ax: number,
   ay: number,
   eye: [number, number] | null,
-): MobFrame {
+): Cropped {
   const { w, h } = p;
   const rx = auraRx(w);
   let x0 = Math.max(0, Math.floor(ax) - rx - 1);
@@ -1114,28 +1143,86 @@ function cropPic(
   const cw = x1 - x0 + 1;
   const ch = y1 + 1;
   const sub = (q: Px) => {
-    if (cw === w && ch === h) return q.canvas();
-    const c = document.createElement('canvas');
-    c.width = cw;
-    c.height = ch;
-    const g = c.getContext('2d');
-    if (g) {
-      const im = g.createImageData(cw, ch);
-      for (let y = 0; y < ch; y++)
-        im.data.set(q.data.subarray((y * w + x0) * 4, (y * w + x0 + cw) * 4), y * cw * 4);
-      g.putImageData(im, 0, 0);
-    }
-    return c;
+    const o = new Uint8ClampedArray(cw * ch * 4);
+    for (let y = 0; y < ch; y++)
+      o.set(q.data.subarray((y * w + x0) * 4, (y * w + x0 + cw) * 4), y * cw * 4);
+    return o;
   };
-  const img = sub(p);
-  AURA_RX.set(img, rx);
   return {
-    img,
+    img: sub(p),
     lit: lit ? sub(lit) : null,
+    cw,
+    ch,
     ax: ax - x0,
     ay,
     eye: eye ? [eye[0] - x0, eye[1]] : null,
+    rx,
   };
+}
+
+/** Пиксели обрезанного кадра → холсты кадра. */
+function croppedFrame(c: Cropped): MobFrame {
+  const canvas = (d: Uint8ClampedArray) => {
+    const o = document.createElement('canvas');
+    o.width = c.cw;
+    o.height = c.ch;
+    const g = o.getContext('2d');
+    if (g) {
+      const im = g.createImageData(c.cw, c.ch);
+      im.data.set(d);
+      g.putImageData(im, 0, 0);
+    }
+    return o;
+  };
+  const img = canvas(c.img);
+  AURA_RX.set(img, c.rx);
+  return { img, lit: c.lit ? canvas(c.lit) : null, ax: c.ax, ay: c.ay, eye: c.eye };
+}
+
+/**
+ * Отложенные кадры прогрева: риг уже нарисован и обрезан, нет только холста.
+ * Холст — около трети цены кадра (`getContext`, `putImageData`), поэтому позы
+ * ударов прогрев кладёт сюда пикселями: прогрев короче, а первый показ в бою
+ * стоит ~0,1 мс вместо целого кадра. Покой и ход прогрев отдаёт холстами сразу.
+ */
+const PEND = new Map<string, Cropped>();
+const PEND_MAX = 4000;
+/** Прогрев сейчас кладёт кадр в `PEND`, а не в кеш (см. `deferWarm`). */
+let WARM_DEFER = false;
+/**
+ * Холст отложенного кадра — картинкой (`createImageBitmap`) вне кадра рендера:
+ * к бою кадр уже лежит в кеше, и первый показ ничего не стоит. Не успела
+ * картинка — первый показ соберёт холст сам из `PEND`.
+ */
+function bakeLater(lru: FrameLRU<MobFrame>, key: string, c: Cropped): void {
+  if (typeof createImageBitmap !== 'function' || typeof ImageData !== 'function') return;
+  const bm = (d: Uint8ClampedArray) =>
+    createImageBitmap(new ImageData(d as Uint8ClampedArray<ArrayBuffer>, c.cw, c.ch));
+  Promise.all([bm(c.img), c.lit ? bm(c.lit) : null])
+    .then(([img, lit]) => {
+      if (PEND.get(key) !== c) return;
+      PEND.delete(key);
+      const im = img as unknown as HTMLCanvasElement;
+      AURA_RX.set(im, c.rx);
+      lru.set(key, {
+        img: im,
+        lit: lit as unknown as HTMLCanvasElement | null,
+        ax: c.ax,
+        ay: c.ay,
+        eye: c.eye,
+      });
+    })
+    .catch(() => {});
+}
+/** Что вернуть прогреву вместо кадра: прогрев кадр не смотрит. */
+const DEFERRED = { img: null, ax: 0, ay: 0 } as unknown as MobFrame;
+function deferWarm(fn: () => void): void {
+  WARM_DEFER = true;
+  try {
+    fn();
+  } finally {
+    WARM_DEFER = false;
+  }
 }
 
 /** Слой поверх темноты: создать, если риг его не дал. */
@@ -2193,15 +2280,18 @@ registerMobWarm('f1_rat', function* () {
         yield 0;
       }
     }
-  // Замах укуса — пять сторон-источников (три зеркалом даром). Проводку не
-  // греем: весь прогрев идёт по 3 мс в кадр, и с проводками всех видов он
-  // тянулся 7–9 с после входа на этаж; её кадры дорисует бюджет в бою.
+  // Укус и проводка — пять сторон-источников (три зеркалом даром), без
+  // холстов (`deferWarm`): холст соберётся при первом показе.
   for (const id of ['rat', 'fatrat'])
     for (const d of [0, 1, 2, 6, 7]) {
       const K = RAT_K[id];
       const wu = MOB_WU.get(id) || 0.6;
       for (let f = 0; f < Math.max(1, Math.round(wu * MF_FPS)); f++) {
-        ratFrame(K, 'bite', f, wu, d, 'normal', false, 0);
+        deferWarm(() => ratFrame(K, 'bite', f, wu, d, 'normal', false, 0));
+        yield 0;
+      }
+      for (let f = 0; f <= 8; f++) {
+        deferWarm(() => ratFrame(K, 'rec', f, 0, d, 'normal', false, 0));
         yield 0;
       }
     }
@@ -4454,27 +4544,25 @@ function bipPaint(K: BipK) {
 
 /** Стороны-источники: остальные три — их зеркало (`MIR8`). */
 const WARM_D = [0, 1, 2, 6, 7];
-/**
- * Что прогреть сверх покоя и хода: [действие, длина (0 — цикл 8), vr]. Только
- * подготовки, сами приёмы и две самые дорогие проводки (удар латника о пол —
- * 0,7 мс кадр, посох шамана); прочие проводки и редкий зов дорисует бюджет в
- * бою (см. прогрев крыс).
- */
+/** Что прогреть сверх покоя и хода: [действие, длина (0 — цикл 8), vr]. */
 function bipWarmList(kind: string): [string, number, number[]][] {
   const wu = MOB_WU.get(kind) || 0.6;
   switch (kind) {
     case 'f1_ratman':
       return [
         ['jab', wu, [0]],
+        ['jabR', 0.55, [0]],
         ['coil', 0.42, [0]],
         ['coil', 0.34, [0]],
         ['lunge', 0.24, [0, 1, 2]],
+        ['skid', 0.55, [0]],
         ['feint', 0.3, [0]],
         ['hop', 0.22, [-1, 1]],
       ];
     case 'f1_slinger':
       return [
         ['punch', wu, [0]],
+        ['punchR', 0.45, [0]],
         ['spin', 0.8, [0]],
         ['throw', 0.45, [0]],
         ['run', 0, [0, 2, 3, 4, 5]],
@@ -4482,8 +4570,10 @@ function bipWarmList(kind: string): [string, number, number[]][] {
     case 'f1_shaman':
       return [
         ['poke', wu, [0]],
+        ['pokeR', 0.5, [0]],
         ['cast', 0.9, [1, 2, 3]],
         ['castR', 0.5, [0]],
+        ['call', 0.9, [0]],
       ];
     default:
       return [
@@ -4491,6 +4581,8 @@ function bipWarmList(kind: string): [string, number, number[]][] {
         ['smashR', 0.8, [0]],
         ['brace', 0.8, [0]],
         ['charge', 0, [0]],
+        ['bashR', 0.8, [0]],
+        ['skidG', 1.15, [0]],
         ['run', 0, [0, 2, 3, 4, 5]],
       ];
   }
@@ -4512,12 +4604,13 @@ for (const kind of Object.keys(BIP_K)) {
       }
     }
     // Приёмы — пять сторон-источников (три зеркалом даром): в толпе боя
-    // иначе каждый замах и проводка рисуются впервые прямо в драке.
+    // иначе каждый замах и проводка рисуются впервые прямо в драке. Без
+    // холстов (`deferWarm`): холст соберётся при первом показе.
     for (const [a, T, vrs] of bipWarmList(kind))
       for (const vr of vrs)
         for (const d of WARM_D)
           for (let f = 0; f < (T ? Math.max(1, Math.round(T * MF_FPS)) : 8); f++) {
-            bipFrame(K, a, f, T, vr, d, 'normal', false, 0);
+            deferWarm(() => bipFrame(K, a, f, T, vr, d, 'normal', false, 0));
             yield 0;
           }
   });
