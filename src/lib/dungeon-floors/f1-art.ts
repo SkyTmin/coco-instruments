@@ -695,6 +695,8 @@ const strideK = (yaw: number) => 1 / Math.hypot(Math.cos(yaw), SE * Math.sin(yaw
 // ---- Ход моба для рисунка --------------------------------------------------
 
 interface MVis {
+  /** Последний отданный кадр — его держит бюджет новых кадров. */
+  last: MobFrame | null;
   now: number;
   x: number;
   y: number;
@@ -771,6 +773,7 @@ function mvis(m: Mob, pose: MobPose, want: number, turn: number): MVis {
       hitK: data.vSheetBlock ? 0.06 : fl,
       hh: data.hit ?? 0,
       hhAt: data.hit ? now - (pose.t || 0) : -99,
+      last: null,
     };
     MVIS.set(m, v);
     return v;
@@ -821,11 +824,14 @@ export const F1_MOB_STAT = {
   maxKey: '',
   /** Последние 4000 замеров, мс: p50/p90 на стенде. */
   list: [] as number[],
-  size: () => RAT_LRU.size + BIP_LRU.size,
+  /** Бюджет новых кадров на кадр рендера, мс (см. `held`). */
+  budget: 0.6,
+  size: () => RAT_LRU.size + BIP_LRU.size + VAR_LRU.size,
   /** Стенд: сбросить кеши кадров (замер нового кадра на прогретом JIT). */
   clear: () => {
     RAT_LRU.clear();
     BIP_LRU.clear();
+    VAR_LRU.clear();
   },
 };
 function stat(key: string, ms: number): void {
@@ -867,28 +873,49 @@ function mobFrame(
   make: (yaw: number) => MPic,
 ): MobFrame {
   if (MIR8[d]) {
-    // Зеркальная сторона — тот же холст, отражённый движком (sx < 0): ни
-    // нового рисунка, ни нового холста, ни места в кеше.
+    // Зеркальная сторона — сперва тот же холст, отражённый движком (sx < 0):
+    // ни нового рисунка, ни холста. Но блит с отражением втрое дороже
+    // простого, поэтому кадр, который показали уже MIR_BAKE раз (покой, ход),
+    // получает свой отражённый холст — он живёт, пока жив исходный кадр.
     const src = mobFrame(lru, base, SRC8[d], look, flash, buff, make);
-    let mf = MIR_F.get(src);
-    if (!mf) {
-      mf = { ...src, sx: -1, eye: src.eye ? [src.eye[0] + 1, src.eye[1]] : null };
-      MIR_F.set(src, mf);
+    if (FB.fell) return src;
+    let e = MIR_F.get(src);
+    if (!e) {
+      e = { f: { ...src, sx: -1, eye: src.eye ? [src.eye[0] + 1, src.eye[1]] : null }, n: 0 };
+      MIR_F.set(src, e);
     }
-    return mf;
+    if (++e.n === MIR_BAKE) {
+      const t0 = performance.now();
+      const w = src.img.width;
+      e.f = {
+        img: mirrorCanvas(src.img),
+        lit: src.lit ? mirrorCanvas(src.lit) : null,
+        ax: w - src.ax,
+        ay: src.ay,
+        eye: src.eye ? [w - 1 - src.eye[0], src.eye[1]] : null,
+      };
+      spend(`${base}|${d}|mir`, performance.now() - t0);
+    }
+    return e.f;
   }
+  if (flash) buff = 0;
   const key = `${base}|${d}|${flash ? 1 : 0}|${look}|${buff}`;
-  const hit = lru.get(key);
+  // Варианты (чары, вспышка) — в своём кеше: не вытесняют прогретые кадры.
+  const vl = flash || buff ? VAR_LRU : lru;
+  const hit = vl.get(key);
   if (hit) return hit;
   let fr: MobFrame;
   if (flash || buff) {
     // Чары и вспышка — не новый рисунок, а обработка готового кадра холстом:
     // в толпе под чарами шамана иначе каждый кадр рисовался заново.
     const src = mobFrame(lru, base, d, look, false, 0, make);
+    if (FB.fell) return src;
+    if (FB.hold && FB.spent >= F1_MOB_STAT.budget) return hold();
     const t0 = performance.now();
-    fr = variantOf(src, buff, flash);
-    stat(key, performance.now() - t0);
+    fr = flash ? mobFlash(src) : buffedOf(src, buff, base);
+    spend(key, performance.now() - t0);
   } else {
+    if (FB.hold && FB.spent >= F1_MOB_STAT.budget) return hold();
     const t0 = performance.now();
     const pic = make(yaw8(d));
     const p = pic.p;
@@ -900,24 +927,58 @@ function mobFrame(
       ay: pic.ay,
       eye: pic.eye,
     };
-    TOP.set(fr, topOf(p, pic.ax));
-    stat(key, performance.now() - t0);
+    spend(key, performance.now() - t0);
   }
-  return lru.set(key, fr);
+  return vl.set(key, fr);
 }
 
-/** Верх силуэта над серединой кадра — куда сесть искрам чар. */
-const TOP = new WeakMap<MobFrame, number>();
-function topOf(p: Px, ax: number): number {
-  const x0 = Math.max(0, Math.round(ax) - 6);
-  const x1 = Math.min(p.w, Math.round(ax) + 6);
-  for (let y = 0; y < p.h; y++)
-    for (let x = x0; x < x1; x++) if (p.data[(y * p.w + x) * 4 + 3]) return y;
-  return -1;
+/**
+ * Бюджет новых кадров на кадр рендера. Толпа под чарами в бою просит
+ * десятки ещё не виденных кадров разом; сверх `F1_MOB_STAT.budget` мс за кадр рендера
+ * моб один кадр рендера (1/60 с) держит прошлый кадр, а новый рисуется в
+ * следующем — пики p90 размазываются, анимация не теряет ни одного кадра
+ * дольше чем на кадр экрана. Прогрев и листы (`hold` пуст) рисуют всегда.
+ */
+const FB = { at: -1, spent: 0, hold: null as MobFrame | null, fell: false };
+function hold(): MobFrame {
+  FB.fell = true;
+  return FB.hold!;
+}
+function spend(key: string, ms: number): void {
+  stat(key, ms);
+  if (FB.hold) FB.spent += ms;
+}
+/** Кадр моба с бюджетом: `v.last` — что показать, если бюджет кадра исчерпан. */
+function held(v: MVis, now: number, get: () => MobFrame): MobFrame {
+  if (FB.at !== now) {
+    FB.at = now;
+    FB.spent = 0;
+  }
+  FB.hold = v.last;
+  FB.fell = false;
+  try {
+    const fr = get();
+    v.last = fr;
+    return fr;
+  } finally {
+    FB.hold = null;
+    FB.fell = false;
+  }
 }
 
 /** Зеркальные кадры: исходный кадр → он же с `sx: −1`. */
-const MIR_F = new WeakMap<MobFrame, MobFrame>();
+const MIR_F = new WeakMap<MobFrame, { f: MobFrame; n: number }>();
+const MIR_BAKE = 4;
+function mirrorCanvas(c: HTMLCanvasElement): HTMLCanvasElement {
+  const o = document.createElement('canvas');
+  o.width = c.width;
+  o.height = c.height;
+  const g = o.getContext('2d')!;
+  g.translate(c.width, 0);
+  g.scale(-1, 1);
+  g.drawImage(c, 0, 0);
+  return o;
+}
 
 /**
  * Кадр + поля движка от рисовальщика (сдвиг, сжатие, наклон, тень). У
@@ -930,56 +991,75 @@ function withEx(fr: MobFrame, ex: Partial<MobFrame>): MobFrame {
   return o;
 }
 
-let silC: HTMLCanvasElement | null = null;
-/**
- * Вариант готового кадра: кант чар (контур цвета чары снаружи силуэта и три
- * искры над спиной) и белая вспышка удара — как `buffKant` и `tint(WHITE,
- * 0.86)`, только холстом, без нового рисунка рига.
- */
-function variantOf(src: MobFrame, buff: number, flash: boolean): MobFrame {
+/** Вспышка удара: белый на 86% поверх готового кадра, без нового рисунка. */
+function mobFlash(src: MobFrame): MobFrame {
   const c = src.img;
-  const w = c.width;
-  const h = c.height;
   const o = document.createElement('canvas');
-  o.width = w;
-  o.height = h;
+  o.width = c.width;
+  o.height = c.height;
   const g = o.getContext('2d')!;
-  const col = buff ? BUFF_C[buff] : null;
-  if (col) {
-    silC ??= document.createElement('canvas');
-    silC.width = w;
-    silC.height = h;
-    const sg = silC.getContext('2d')!;
-    sg.drawImage(c, 1, 0);
-    sg.drawImage(c, -1, 0);
-    sg.drawImage(c, 0, 1);
-    sg.drawImage(c, 0, -1);
-    sg.globalCompositeOperation = 'source-in';
-    sg.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-    sg.fillRect(0, 0, w, h);
-    sg.globalCompositeOperation = 'source-over';
-    g.globalAlpha = 200 / 255;
-    g.drawImage(silC, 0, 0);
-    g.globalAlpha = 1;
-  }
   g.drawImage(c, 0, 0);
-  if (col) {
-    const top = (TOP.get(src) ?? -1) - 1;
-    if (top >= 0) {
-      const ax = Math.round(src.ax);
-      g.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-      g.fillRect(ax - 3, top - 2, 1, 1);
-      g.fillRect(ax + 1, top - 3, 1, 1);
-      g.fillRect(ax + 4, top - 1, 1, 1);
-    }
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = 'rgba(255,255,255,0.86)';
+  g.fillRect(0, 0, c.width, c.height);
+  return { img: o, lit: null, ax: src.ax, ay: src.ay, eye: src.eye };
+}
+
+/**
+ * Чары шамана — ореол поверх темноты, а не новый кадр: кольцо цвета чары у
+ * ног и три искры, что поднимаются вдоль тела (фаза — номер кадра). Ореол
+ * общий для всех кадров вида одного размера; новый холст нужен, только если
+ * у кадра свой слой света (огонь посоха, искры удара).
+ */
+const AURA = new Map<string, HTMLCanvasElement>();
+function auraOf(w: number, h: number, ax: number, ay: number, buff: number, ph: number) {
+  const key = `${w}|${h}|${ax}|${ay}|${buff}|${ph}`;
+  let c = AURA.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d')!;
+  const col = BUFF_C[buff];
+  const rgb = `${col[0]},${col[1]},${col[2]}`;
+  const rx = Math.max(6, Math.min(14, Math.round(w * 0.27)));
+  const ry = Math.max(2, Math.round(rx * 0.38));
+  g.fillStyle = `rgba(${rgb},0.16)`;
+  g.beginPath();
+  g.ellipse(ax, ay + 1, rx, ry, 0, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = `rgba(${rgb},0.8)`;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.ellipse(ax, ay + 1, rx - 0.5, ry - 0.5, 0, 0, Math.PI * 2);
+  g.stroke();
+  // Искры: каждая поднимается от кольца на 0,6 высоты кадра и гаснет.
+  const top = Math.max(4, ay - 4);
+  for (let i = 0; i < 3; i++) {
+    const k = ((((ph + i * 2.7) % 8) + 8) % 8) / 8;
+    const x = Math.round(ax + (i - 1) * rx * 0.62);
+    const y = Math.round(ay - k * top * 0.75);
+    g.fillStyle = `rgba(${rgb},${(0.95 * (1 - k * 0.8)).toFixed(3)})`;
+    g.fillRect(x, y - 1, 1, 2);
   }
-  if (flash) {
-    g.globalCompositeOperation = 'source-atop';
-    g.fillStyle = 'rgba(255,255,255,0.86)';
-    g.fillRect(0, 0, w, h);
-    g.globalCompositeOperation = 'source-over';
+  AURA.set(key, c);
+  return c;
+}
+function buffedOf(src: MobFrame, buff: number, base: string): MobFrame {
+  const w = src.img.width;
+  const h = src.img.height;
+  const ph = Number(base.split('|')[2]) || 0;
+  const aura = auraOf(w, h, Math.round(src.ax), Math.round(src.ay), buff, ph % 8);
+  let lit = aura;
+  if (src.lit) {
+    lit = document.createElement('canvas');
+    lit.width = w;
+    lit.height = h;
+    const g = lit.getContext('2d')!;
+    g.drawImage(aura, 0, 0);
+    g.drawImage(src.lit, 0, 0);
   }
-  return { img: o, lit: flash ? null : src.lit, ax: src.ax, ay: src.ay, eye: src.eye };
+  return { ...src, lit };
 }
 
 /** Слой поверх темноты: создать, если риг его не дал. */
@@ -1123,10 +1203,10 @@ const RAT_K: Record<string, RatK> = {
     id: 'rat',
     s: 1,
     fat: 1,
-    w: 42,
-    h: 36,
-    ax: 21,
-    ay: 25,
+    w: 41,
+    h: 32,
+    ax: 23,
+    ay: 19,
     tail: 12,
     cycle: 0.85,
     turn: 16,
@@ -1136,10 +1216,10 @@ const RAT_K: Record<string, RatK> = {
     id: 'fatrat',
     s: 1.22,
     fat: 1.3,
-    w: 52,
-    h: 42,
-    ax: 26,
-    ay: 29,
+    w: 49,
+    h: 39,
+    ax: 27,
+    ay: 23,
     tail: 11,
     cycle: 0.95,
     turn: 8,
@@ -1149,10 +1229,10 @@ const RAT_K: Record<string, RatK> = {
     id: 'bomber',
     s: 1,
     fat: 1,
-    w: 42,
-    h: 38,
-    ax: 21,
-    ay: 27,
+    w: 35,
+    h: 32,
+    ax: 22,
+    ay: 19,
     tail: 12,
     cycle: 0.85,
     turn: 14,
@@ -1162,10 +1242,10 @@ const RAT_K: Record<string, RatK> = {
     id: 'goldrat',
     s: 1,
     fat: 0.92,
-    w: 42,
-    h: 36,
-    ax: 21,
-    ay: 25,
+    w: 37,
+    h: 34,
+    ax: 23,
+    ay: 20,
     tail: 13,
     cycle: 1.0,
     turn: 20,
@@ -1850,6 +1930,8 @@ function ratPose(
 }
 
 const RAT_LRU = frameLRU<MobFrame>(1600);
+/** Чары и вспышка всех видов: ореол общий, холст — только у вспышки. */
+const VAR_LRU = frameLRU<MobFrame>(1200);
 const MOB_WU = new Map(F1.mobs.map((d) => [d.id, d.windup]));
 /** Режимы, где крыса бежит, — остальные рисуются своей позой. */
 const RAT_MOVE = new Set(['chase', 'flee', 'idle', 'wander', 'return', 'recover', 'alert']);
@@ -1994,7 +2076,10 @@ registerMobPainter('f1_rat', (m, pose) => {
     const g = Math.floor(now * 9 + id * 1.7) % 14;
     if (g < 6) glint = g;
   }
-  return withEx(ratFrame(K, anim, f, T, v.d, pose.look, pose.flash, buff, glint), ex);
+  return withEx(
+    held(v, now, () => ratFrame(K, anim, f, T, v.d, pose.look, pose.flash, buff, glint)),
+    ex,
+  );
 });
 
 registerMobWarm('f1_rat', function* () {
@@ -2008,6 +2093,20 @@ registerMobWarm('f1_rat', function* () {
       }
       for (let f = 0; f < 16; f++) {
         ratFrame(K, 'idle', f, 0, d, 'normal', false, 0);
+        yield 0;
+      }
+    }
+  // Укус и проводка — пять сторон-источников (три зеркалом даром).
+  for (const id of ['rat', 'fatrat'])
+    for (const d of [0, 1, 2, 6, 7]) {
+      const K = RAT_K[id];
+      const wu = MOB_WU.get(id) || 0.6;
+      for (let f = 0; f < Math.max(1, Math.round(wu * MF_FPS)); f++) {
+        ratFrame(K, 'bite', f, wu, d, 'normal', false, 0);
+        yield 0;
+      }
+      for (let f = 0; f <= 8; f++) {
+        ratFrame(K, 'rec', f, 0, d, 'normal', false, 0);
         yield 0;
       }
     }
@@ -2137,9 +2236,9 @@ const BIP_K: Record<string, BipK> = {
     s: 1.5,
     bulk: 1,
     w: 56,
-    h: 54,
+    h: 50,
     ax: 28,
-    ay: 41,
+    ay: 33,
     cycle: 0.9,
     turn: 12,
     die: 0.8,
@@ -2151,10 +2250,10 @@ const BIP_K: Record<string, BipK> = {
     id: 'slinger',
     s: 1.42,
     bulk: 0.88,
-    w: 54,
-    h: 52,
-    ax: 27,
-    ay: 39,
+    w: 44,
+    h: 49,
+    ax: 23,
+    ay: 32,
     cycle: 0.9,
     turn: 12,
     die: 0.75,
@@ -2166,9 +2265,9 @@ const BIP_K: Record<string, BipK> = {
     id: 'shaman',
     s: 1.5,
     bulk: 1.05,
-    w: 58,
-    h: 60,
-    ax: 29,
+    w: 54,
+    h: 61,
+    ax: 25,
     ay: 46,
     cycle: 0.85,
     turn: 9,
@@ -2188,10 +2287,10 @@ const BIP_K: Record<string, BipK> = {
     id: 'guard',
     s: 1.78,
     bulk: 1.3,
-    w: 68,
-    h: 68,
-    ax: 34,
-    ay: 50,
+    w: 61,
+    h: 63,
+    ax: 30,
+    ay: 41,
     cycle: 0.85,
     turn: 14,
     die: 0.9,
@@ -4030,7 +4129,7 @@ function bipDie(K: BipK, x: number, out: BOut): void {
   }
 }
 
-const BIP_LRU = frameLRU<MobFrame>(2000);
+const BIP_LRU = frameLRU<MobFrame>(3000);
 /** Режимы, где двуногий идёт по скорости (остальные — своей позой). */
 const BIP_MOVE = new Set(['chase', 'flee', 'idle', 'wander', 'return', 'alert']);
 const BIP_ATK = new Set([
@@ -4242,8 +4341,57 @@ function bipPaint(K: BipK) {
         ex.sy = 0.9;
       }
     }
-    return withEx(bipFrame(K, anim, f, T, vr, v.d, pose.look, pose.flash, buffOf(m)), ex);
+    return withEx(
+      held(v, pose.now, () => bipFrame(K, anim, f, T, vr, v.d, pose.look, pose.flash, buffOf(m))),
+      ex,
+    );
   };
+}
+
+/** Стороны-источники: остальные три — их зеркало (`MIR8`). */
+const WARM_D = [0, 1, 2, 6, 7];
+/** Что прогреть сверх покоя и хода: [действие, длина (0 — цикл 8), vr]. */
+function bipWarmList(kind: string): [string, number, number[]][] {
+  const wu = MOB_WU.get(kind) || 0.6;
+  switch (kind) {
+    case 'f1_ratman':
+      return [
+        ['jab', wu, [0]],
+        ['jabR', 0.55, [0]],
+        ['coil', 0.42, [0]],
+        ['coil', 0.34, [0]],
+        ['lunge', 0.24, [0]],
+        ['skid', 0.55, [0]],
+        ['feint', 0.3, [0]],
+        ['hop', 0.22, [-1, 1]],
+      ];
+    case 'f1_slinger':
+      return [
+        ['punch', wu, [0]],
+        ['punchR', 0.45, [0]],
+        ['spin', 0.8, [0]],
+        ['throw', 0.45, [0]],
+        ['run', 0, [0, 2, 4]],
+      ];
+    case 'f1_shaman':
+      return [
+        ['poke', wu, [0]],
+        ['pokeR', 0.5, [0]],
+        ['cast', 0.9, [1, 2, 3]],
+        ['castR', 0.5, [0]],
+        ['call', 0.9, [0]],
+      ];
+    default:
+      return [
+        ['smash', wu, [0]],
+        ['smashR', 0.8, [0]],
+        ['brace', 0.8, [0]],
+        ['charge', 0, [0]],
+        ['bashR', 0.8, [0]],
+        ['skidG', 1.15, [0]],
+        ['run', 0, [0, 2, 4]],
+      ];
+  }
 }
 
 for (const kind of Object.keys(BIP_K)) {
@@ -4261,6 +4409,15 @@ for (const kind of Object.keys(BIP_K)) {
         yield 0;
       }
     }
+    // Приёмы — пять сторон-источников (три зеркалом даром): в толпе боя
+    // иначе каждый замах и проводка рисуются впервые прямо в драке.
+    for (const [a, T, vrs] of bipWarmList(kind))
+      for (const vr of vrs)
+        for (const d of WARM_D)
+          for (let f = 0; f < (T ? Math.max(1, Math.round(T * MF_FPS)) : 8); f++) {
+            bipFrame(K, a, f, T, vr, d, 'normal', false, 0);
+            yield 0;
+          }
   });
 }
 
