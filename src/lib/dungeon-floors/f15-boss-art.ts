@@ -2274,6 +2274,23 @@ const MODE_TRACK: Record<string, KFull[]> = {
   f15l_nova: T_NOVA,
 };
 
+/** Приём, после которого идёт отдых `act` (и удар из тьмы перед уходом под плащ). */
+const BEFORE: Record<number, KFull[]> = {
+  1: T_PALM,
+  2: T_SWEEP,
+  3: T_REPEL,
+  4: T_WELL,
+  5: T_ORBIT,
+  6: T_METEOR,
+  7: T_CONDUCT,
+};
+/** Поза дорожки на `t` с того же стыка: до нуля — конец прошлого приёма. */
+function poseAt(p: LPose, t: number): KFull | null {
+  if (!p.tr) return null;
+  if (t >= 0 || !p.pre) return sample(p.tr, Math.max(0, t));
+  return sample(p.pre, p.pre[p.pre.length - 1].t + t);
+}
+
 /** Поза владыки этого кадра: числа, ключ кадра и откуда она взята (для следа рук). */
 interface LPose extends KFull {
   train: number;
@@ -2290,6 +2307,8 @@ interface LPose extends KFull {
   /** Дорожка и её время — след быстрой руки берёт позу на 1/48 с раньше. */
   tr: KFull[] | null;
   tt: number;
+  /** Дорожка прошлого режима (приём перед отдыхом): след тянется через стык. */
+  pre: KFull[] | null;
 }
 
 const fr24 = (t: number) => Math.max(0, Math.floor(t * 24));
@@ -2309,6 +2328,7 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
   let tint = -1;
   let trk: KFull[] | null = null;
   let tt = 0;
+  let pre: KFull[] | null = null;
   const mode = pose.mode;
   const at = (tr: KFull[], t: number, cap = 1e9) => {
     const f = Math.min(fr24(t), cap);
@@ -2334,8 +2354,10 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
     dim = 0.45;
   } else if (mode === 'f15l_dark') {
     const act = m.data.act ?? 0;
-    if (act === 8 && T < 0.3) k = m.data.kind ? at(T_STAR_BACK, T) : at(T_CLAW_BACK, T);
-    else k = T_HIDDEN[0];
+    if (act === 8 && T < 0.3) {
+      k = m.data.kind ? at(T_STAR_BACK, T) : at(T_CLAW_BACK, T);
+      pre = m.data.kind ? T_STARFALL : T_CLAW;
+    } else k = T_HIDDEN[0];
     dim = 0.35;
   } else if (mode === 'f15l_core') {
     const nv = v?.nova;
@@ -2355,6 +2377,7 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
   } else if (mode === 'recover' && RECOVER[m.data.act ?? 0]) {
     const tr = RECOVER[m.data.act ?? 0];
     k = at(tr, T, fr24(tr[tr.length - 1].t + 0.05));
+    pre = BEFORE[m.data.act ?? 0] ?? null;
   } else {
     // Погоня: покой дышит (плечи и руки), на ходу — плащ тянется назад.
     const sb = spQ >= 1 ? 0 : Math.round(Math.sin((ph / 10) * TAU));
@@ -2384,6 +2407,7 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
     veil,
     tr: trk,
     tt,
+    pre,
   };
 }
 
@@ -2495,6 +2519,7 @@ const GOLD_P = [GOLD[1], GOLD[2], GOLD[3], GOLD[4]].map(pack);
 const PEL_P = [GOLD[2], GOLD[3], GOLD[4], GOLD[5]].map(pack);
 const CUFF_P = [GOLD[2], GOLD[3], GOLD[4]].map(pack);
 const INK_P = pack(INK);
+const WHITE_P = pack(WHITE);
 const STAR_C = [WHITE, ICE[5], GOLD[5], MAG[2]];
 
 /**
@@ -3109,7 +3134,8 @@ function nebula(): Uint8Array {
       const dens = clamp01((d - 0.47) * 2.8);
       const hue = pnoise(x * 2, y * 2, 2, 21);
       const ds = Math.min(3, Math.floor(dens * 3.6));
-      const hc = hue < 0.45 ? 0 : hue < 0.72 ? 1 : 2;
+      // Оттенок 3 — редкая неподвижная звезда в ткани (течёт вместе с ней).
+      const hc = hash(ix, iy, 31) < 0.02 ? 3 : hue < 0.45 ? 0 : hue < 0.72 ? 1 : 2;
       t[iy * NT + ix] = ds | (hc << 2);
     }
   NEB = t;
@@ -3123,26 +3149,34 @@ function nebula(): Uint8Array {
 let CLOTH: Uint32Array | null = null;
 let EDGE: Uint32Array | null = null;
 let BLAZE_T: Uint32Array | null = null;
-const HOT = ['#8a4a12', '#c0721c', '#e8a030', '#ffd060', '#ffeeaa', '#fffbe8'].map((c) => hx(c));
-const WARM = ['#5a2414', '#8a3c18', '#c0621e', '#e89430', '#ffc860', '#ffe8a8'].map((c) => hx(c));
+const HOT = ['#5a1e0a', '#9a3c10', '#d8641a', '#f8a032', '#ffd870', '#fff4c8'].map((c) => hx(c));
+const WARM = ['#3a1410', '#6a2414', '#a8461a', '#d87a26', '#f8b048', '#ffe0a0'].map((c) => hx(c));
 const EMBER = ['#1e0a16', '#36101c', '#5a1c1c', '#80301a', '#a8481a', '#d07020'].map((c) => hx(c));
+/** Ночь ткани: от тени до кромки света. */
+const CLOTH_BASE = ['#07061a', '#0c0b28', '#14113c', '#1d1852', '#282068', '#362c82'].map((c) =>
+  hx(c),
+);
 function clothTable(): Uint32Array {
   if (CLOTH) return CLOTH;
-  const t = new Uint32Array(6 * 4 * 3 * 2);
+  const t = new Uint32Array(6 * 4 * 4 * 2);
   const soft = [VIO[2], MAG[1], TEAL[2]];
-  const core = [VIO[3], MAG[2], TEAL[3]];
-  const amt = [0, 0.22, 0.4, 0.58];
+  const core = [VIO[4], hx('#d060d8'), TEAL[3]];
+  const amt = [0, 0.2, 0.38];
   for (let s = 0; s < 6; s++)
     for (let d = 0; d < 4; d++)
-      for (let h = 0; h < 3; h++) {
-        const base = NIGHT[1 + s];
+      for (let h = 0; h < 4; h++) {
+        const base = CLOTH_BASE[s];
         const c =
-          d === 3
-            ? mixc(mixc(base, soft[h], 0.45), core[h], 0.3 + s * 0.06)
-            : mixc(base, soft[h], amt[d] * (0.75 + s * 0.06));
-        const i = (s * 4 + d) * 3 + h;
+          h === 3
+            ? s >= 2
+              ? WHITE
+              : ICE[4]
+            : d === 3
+              ? mixc(mixc(base, soft[h], 0.5), core[h], 0.28 + s * 0.07)
+              : mixc(base, soft[h], amt[d] * (0.8 + s * 0.06));
+        const i = (s * 4 + d) * 4 + h;
         t[i] = pack(c);
-        t[72 + i] = pack(mixc(c, WHITE, 0.6));
+        t[96 + i] = pack(mixc(c, WHITE, 0.6));
       }
   CLOTH = t;
   return t;
@@ -3169,7 +3203,8 @@ function blazeTable(): Uint32Array {
     for (let s = 0; s < 6; s++)
       for (let d = 0; d < 4; d++) {
         const r = ramps[h];
-        const c = mixc(r[s], r[Math.min(5, s + 1)], d * 0.3);
+        // Плотность туманности — светлые струи плазмы: 0 — тень, 3 — ступень выше.
+        const c = d === 0 ? r[Math.max(0, s - 1)] : mixc(r[s], r[Math.min(5, s + 1)], (d - 1) * 0.5);
         t[(h * 6 + s) * 4 + d] = pack(c);
       }
   BLAZE_T = t;
@@ -3268,11 +3303,12 @@ function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
   const tab = clothTable();
   const edge = edgeTable();
   const bl = blazeTable();
-  const fo = flash ? 72 : 0;
+  const fo = flash ? 96 : 0;
   const eo = flash ? 18 : 0;
   for (let y = 0; y < LH; y++) TWIST[y] = Math.round(L.twist * ROW_W[y]);
   // Выгорание: всё ниже фронта — тело света, у фронта — тлеющая кайма.
-  const bz = burnQ > 0 ? HEM - 3 + (SHO + 6 - HEM) * (burnQ / 24) : -1e9;
+  // Фронт идёт до самой пелерины (её ткань помечена высотой +20).
+  const bz = burnQ > 0 ? HEM - 3 + (CORE + 13 - HEM) * (burnQ / 24) : -1e9;
   const cyc = Math.floor(now * 2.5);
   for (let i = 0; i < geo.cIdx.length; i++) {
     const pi = geo.cIdx[i];
@@ -3288,7 +3324,7 @@ function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
     const n = neb[iv * NT + iu];
     const z = geo.cV[i] * 0.5;
     if (z < bz + 2.6) {
-      if (z < bz) d32[di] = bl[(heat * 6 + si) * 4 + (n & 3)];
+      if (z < bz) d32[di] = n >> 2 === 3 ? WHITE_P : bl[(heat * 6 + si) * 4 + (n & 3)];
       else {
         const k = (z - bz) / 2.6 + (bay(X0, Y) - 0.5) * 0.5;
         d32[di] = pack(k < 0.35 ? WHITE : k < 0.7 ? HOT[4] : HOT[2]);
@@ -3300,7 +3336,7 @@ function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
       continue;
     }
     const ds = Math.max(0, (n & 3) - ((sb >> 3) & 1));
-    d32[di] = tab[fo + (si * 4 + ds) * 3 + (n >> 2)];
+    d32[di] = tab[fo + (si * 4 + ds) * 4 + (n >> 2)];
   }
   for (let i = 0; i < geo.sIdx.length; i++) {
     const pi = geo.sIdx[i];
@@ -3760,8 +3796,9 @@ function paintLit(m: Mob, p: LPose, geo: LGeo, now: number, s: Sim | null, X: Li
       let ly = h.y;
       let lenSum = 0;
       const pts: [number, number][] = [];
-      for (let j = 1; j <= 4; j++) {
-        const q = sample(p.tr, Math.max(0, p.tt - j / 48));
+      for (let j = 1; j <= 6; j++) {
+        const q = poseAt(p, p.tt - j / 48);
+        if (!q) break;
         const hk = h.side < 0 ? q.L : q.R;
         if (hk[3] === 0) break;
         const [qx, qy] = handAt(af, hk, h.side);
@@ -3772,23 +3809,25 @@ function paintLit(m: Mob, p: LPose, geo: LGeo, now: number, s: Sim | null, X: Li
         lx = x;
         ly = y;
       }
-      if (lenSum > 5) {
-        let ax = hxp;
-        let ay = h.y;
-        for (let j = 0; j < pts.length; j++) {
-          const [bx, by] = pts[j];
-          const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
-          for (let k = 0; k < n; k++) {
-            const t = (j + k / n) / pts.length;
-            const x = ax + ((bx - ax) * k) / n;
-            const y = ay + ((by - ay) * k) / n;
-            const al = (1 - t) * 0.8;
-            px1(x, y, claw ? VIO[4] : t < 0.3 ? WHITE : GOLD[5], al, t < 0.4 ? 2 : 1, t < 0.4 ? 2 : 1);
+      if (lenSum > 5)
+        for (const halo of [true, false]) {
+          let ax = hxp;
+          let ay = h.y;
+          for (let j = 0; j < pts.length; j++) {
+            const [bx, by] = pts[j];
+            const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+            for (let k = 0; k < n; k++) {
+              const t = (j + k / n) / pts.length;
+              const x = ax + ((bx - ax) * k) / n;
+              const y = ay + ((by - ay) * k) / n;
+              const w = t < 0.25 ? 3 : t < 0.6 ? 2 : 1;
+              if (halo) px1(x, y, claw ? VIO[3] : GOLD[3], 0.3 * (1 - t), w + 2, w + 2);
+              else px1(x, y, claw ? VIO[5] : t < 0.3 ? WHITE : GOLD[5], 0.9 * (1 - t), w, w);
+            }
+            ax = bx;
+            ay = by;
           }
-          ax = bx;
-          ay = by;
         }
-      }
     }
     if (gl > 0.05) {
       g.fillStyle = css(h.g === 3 || h.g === 6 ? VIO[3] : claw ? VIO[4] : GOLD[4], 0.12 + gl * 0.16);
@@ -4086,6 +4125,7 @@ registerMobWarm('f15boss', function* () {
     veil: 0,
     tr: null,
     tt: 0,
+    pre: null,
   });
   for (const spQ of [0, 1])
     for (const d of order)
