@@ -32,6 +32,7 @@ import './f8-mob-blade';
 import './f8-mob-spider';
 import './f8-mob-lantern';
 import './f8-mob-arms';
+import './f8-mob-miser';
 
 type RGBA = [number, number, number, number];
 type V = [number, number];
@@ -2920,87 +2921,6 @@ function poseIn(pose: MobPose, runFrames = 6): PoseIn {
   f = mod(f, n);
   return { anim: pose.anim, f, mode: pose.mode, t: pose.t };
 }
-
-// ---------------------------------------------------------------------------
-// Бес-казначей: толстый, в хаори торговца, мешок монет за спиной.
-// ---------------------------------------------------------------------------
-
-const MISER_ST: Style = {
-  skin: tones('#6a3a1a', '#a0582a', '#c8783a', '#eca058'),
-  top: tones('#3a2a0a', '#6a4a14', '#9a7020', '#c89a38'),
-  pants: tones('#2a1a14', '#3e281c', '#5a3a26', '#7a5234'),
-  under: hx('#e8d8b0'),
-  sash: hx('#1a1410'),
-  hair: tones('#1a1410', '#2e241c', '#443428', '#5e4a38'),
-  hairKind: 'knot',
-  horns: 1,
-  horn: tones('#8a7a58', '#c8b888', '#ece0b0', '#fff8d8'),
-  eye: hx('#ffe040'),
-  bulk: 1.35,
-  sleeve: 0.8,
-  hakama: true,
-  belly: true,
-};
-
-registerMobPainter('f8_miser', (m: Mob, pose: MobPose) => {
-  const pi = poseIn(pose, 6);
-  let anim: string = pi.anim;
-  let f = pi.f;
-  if (pose.mode === 'flee' || pose.mode === 'f8_out') {
-    anim = 'run';
-    f = mod(pose.t * 12, 6);
-  }
-  if (pose.mode === 'f8_dive' || pose.mode === 'f8_hidden') {
-    anim = 'dive';
-    f = tq(pose.t, 0.1, 4);
-  }
-  return frameOf('f8_miser', pose, anim, f, () => {
-    const W = 26;
-    const H = 24;
-    const s = 0.72;
-    const r = bipedRig({
-      s,
-      W,
-      H,
-      legLen: 5,
-      torso: 5,
-      headR: 3,
-      arms: 2,
-      pose: { ...pi, anim: anim === 'dive' ? 'run' : anim, f: anim === 'dive' ? 1 : f },
-    });
-    if (anim === 'dead') deadRig(r, H);
-    // Мешок с монетами за спиной; золото выглядывает.
-    const neck = neckOf(r);
-    r.items.push({
-      layer: 'back',
-      draw: (p) => {
-        const c: V = anim === 'dead' ? [r.hip[0] - 6, H - 6] : add(neck, [-4.2, 2.6]);
-        shadeEll(p, c[0], c[1], 4.4, 4.8, tones('#5a4428', '#8a6a3e', '#b08c56', '#d8b87a'));
-        p.set(Math.round(c[0]), Math.round(c[1] - 4.6), hx('#3a2a18'));
-        p.set(Math.round(c[0] + 1), Math.round(c[1] - 4.8), hx('#3a2a18'));
-        for (const [dx, dy] of [
-          [-1, -3],
-          [1, -3.4],
-          [0, -2.4],
-        ] as V[])
-          p.set(Math.round(c[0] + dx), Math.round(c[1] + dy), hx('#ffd84a'));
-        // Знак монеты на мешке.
-        p.ell(c[0] + 0.5, c[1] + 0.6, 1.6, 1.6, hx('#e8b84a'));
-        p.set(Math.round(c[0] + 0.5), Math.round(c[1] + 0.6), hx('#8a6a3e'));
-      },
-    });
-    const { p, eye } = drawRig(r, MISER_ST, W, H, anim === 'dead');
-    if (anim === 'dive') {
-      // Ныряет в щель двери: тает снизу вверх.
-      const cut = Math.round(H * (f / 4));
-      for (let y = H - 1; y >= H - cut; y--) for (let x = 0; x < W; x++) clear(p, x, y);
-    }
-    // Монетка выпадает на бегу.
-    if (anim === 'run' && f % 3 === 0) p.set(3, H - 4, hx('#ffd84a'));
-    void m;
-    return { p, ax: Math.round(W / 2), ay: H - 2, eye: anim === 'dead' ? null : eye };
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Демон-барабанщик: барабаны вросли в плечи и живот.

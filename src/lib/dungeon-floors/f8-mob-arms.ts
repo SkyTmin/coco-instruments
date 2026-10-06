@@ -263,7 +263,7 @@ const DIE: PKey<ArmsO>[] = carry<ArmsO>([
   ],
   [0.56, { hu: -5.8 }, easeOut],
   [0.64, { hu: -6.6 }, easeIn],
-  [0.8, {}],
+  [0.8, { hu: -6.6 }],
 ]);
 const SLEEP: ArmsO = {
   ...B0,
