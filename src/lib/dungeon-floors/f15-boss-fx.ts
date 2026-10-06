@@ -6681,7 +6681,9 @@ registerZonePainter(
     const cx = z.x * S;
     const cy = z.y * S;
     const p = new Pen(g, px, py, cx, cy);
-    const R = (v.r + 3) * S;
+    // Тьма — на весь видимый мир: и коридор ворот, и лампы зала гаснут.
+    const R = (v.r + 24) * S;
+    const RS = (v.r + 3) * S;
     const holes: [number, number, number][] = [[s.hero.x * S, (s.hero.y - 0.4) * S, 1.5 * S]];
     const lord = lordNow();
     const open = !!lord && lord.mode === 'f15l_open';
@@ -6695,7 +6697,9 @@ registerZonePainter(
     const Rw = maxR * w;
     if (Rw < 2) return;
     const a = 0.8;
-    const inArena = (x: number, y: number) => Math.hypot(x - cx, y - cy) < R;
+    const [vx0, vx1, vy0, vy1] = viewOf(p);
+    const inArena = (x: number, y: number) =>
+      x > vx0 && x < vx1 && y > vy0 && y < vy1 && Math.hypot(x - cx, y - cy) < R;
     veil(p, lx, ly, Rw, holes, C.night[0], a, [cx, cy, R]);
     // Фронт волны: кайма ночи светится фиолетом, по ней бегут звёзды.
     if (w < 0.999) {
@@ -6713,7 +6717,7 @@ registerZonePainter(
     }
     // Небо затмения: редкие звёзды мерцают — только там, куда дошла ночь.
     for (let i = 0; i < 60; i++) {
-      const rr = R * Math.sqrt(hash(i, 1, 97));
+      const rr = RS * Math.sqrt(hash(i, 1, 97));
       const aa = TAU * hash(i, 2, 97);
       const x = cx + Math.cos(aa) * rr;
       const y = cy + Math.sin(aa) * rr * 0.9;
