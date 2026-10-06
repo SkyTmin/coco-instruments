@@ -13,7 +13,7 @@
 // (сидящий колосс на троне, 60×66: улыбка, глаза-светильники, печать на
 // груди — золото, когда уязвим).
 
-import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Strike, Zone } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
 import { hex, mix, Px, TS } from '../dungeon-art';
 import {
@@ -25,14 +25,15 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import { F4_MARK } from './f4';
-import { F4_VIEW, knightGuards } from './f4-brains';
+import { F4_VIEW } from './f4-brains';
 // Мобы этажа (анимации мобов 4): костяк, кучка, латник, некромант — свой модуль.
 import './f4-mobs';
+import './f4-mob-knight';
+import './f4-mob-necro';
 
 type RGBA = [number, number, number, number];
 
@@ -69,19 +70,12 @@ const STONE = {
   mossDk: hex('#44563a'),
 };
 const GOLD = { hi: hex('#fff2b0'), mid: hex('#dcb44c'), dk: hex('#8a6a20') };
-const ROBE = {
-  hi: hex('#6e5a7e'),
-  mid: hex('#4a3856'),
-  dk: hex('#2c2036'),
-  deep: hex('#1a1220'),
-};
 const GREEN = { hi: hex('#e2ffd4'), mid: hex('#8cff7c'), dk: hex('#2eae4c') };
 const TABARD = { hi: hex('#a8443a'), mid: hex('#7a2c2a'), dk: hex('#4a1a1a') };
 const WOOD = { mid: hex('#6e4a2e'), dk: hex('#432a1a'), hi: hex('#94683e') };
 const EYE_RED = hex('#ff3a28');
 const EYE_AMBER = hex('#ffb040');
 
-const cache = new Map<string, MobFrame>();
 const sprites = new Map<string, Sprite>();
 
 /** Холст из пикселей: зеркало, вспышка белым, облик. */
@@ -110,391 +104,6 @@ function bone(p: Px, x0: number, y0: number, x1: number, y1: number, knobs = tru
     p.set(x1, y1, BONE.hi);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Латник склепа: четыре стороны, щит — туда, куда смотрит.
-// ---------------------------------------------------------------------------
-
-type Dir4 = 'down' | 'up' | 'side';
-
-function dirOf(face: number): { dir: Dir4; left: boolean } {
-  const s = Math.sin(face);
-  const c = Math.cos(face);
-  if (s > 0.72) return { dir: 'down', left: c < 0 };
-  if (s < -0.72) return { dir: 'up', left: c < 0 };
-  return { dir: 'side', left: c < 0 };
-}
-
-const KN_W = 24;
-const KN_H = 30;
-const KN_CX = 12;
-const KN_G = 29;
-
-/** Башенный щит лицом к зрителю: железная оковка, тёмно-красное поле, костяной знак. */
-function towerShield(p: Px, x0: number, y0: number, w: number, h: number, knocked = false): void {
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const edge = x === 0 || x === w - 1 || y === 0 || y === h - 1;
-      // Низ щита — клином.
-      if (y === h - 1 && (x === 0 || x === w - 1)) continue;
-      const c = edge
-        ? x === 0 || y === 0
-          ? IRON.hi
-          : IRON.sh
-        : x < 2
-          ? TABARD.hi
-          : x > w - 3
-            ? TABARD.dk
-            : TABARD.mid;
-      p.set(x0 + x, y0 + y, knocked ? mix(c, IRON.dk, 0.25) : c);
-    }
-  // Знак: череп склепа (светлый) на поле.
-  const sx = x0 + Math.floor(w / 2) - 1;
-  const sy = y0 + Math.floor(h / 2) - 2;
-  p.rect(sx, sy, sx + 2, sy + 1, BONE.mid);
-  p.set(sx, sy + 2, BONE.sh);
-  p.set(sx + 2, sy + 2, BONE.sh);
-  p.set(sx + 1, sy + 2, BONE.mid);
-  p.set(sx, sy + 1, BONE.hole);
-  p.set(sx + 2, sy + 1, BONE.hole);
-  // Заклёпки.
-  p.set(x0 + 1, y0 + 1, IRON.hi);
-  p.set(x0 + w - 2, y0 + 1, IRON.mid);
-  p.set(x0 + 1, y0 + h - 2, IRON.mid);
-}
-
-/** Щит сбоку — ребром: узкая полоса с оковкой. */
-function shieldEdge(p: Px, x0: number, y0: number, h: number, tilt = 0): void {
-  for (let y = 0; y < h; y++) {
-    const x = x0 + Math.round((y / h) * tilt);
-    p.set(x, y0 + y, IRON.hi);
-    p.set(x + 1, y0 + y, TABARD.mid);
-    p.set(x + 2, y0 + y, TABARD.dk);
-    p.set(x + 3, y0 + y, IRON.sh);
-  }
-}
-
-/** Копьё: древко от (x, y) по углу `a` длиной `len`, железный наконечник. */
-function spear(p: Px, x: number, y: number, a: number, len: number, back = 4): void {
-  const cx = Math.cos(a);
-  const cy = Math.sin(a);
-  for (let i = -back; i <= len; i++) {
-    const px = Math.round(x + cx * i);
-    const py = Math.round(y + cy * i);
-    if (i >= len - 2) p.set(px, py, i === len ? IRON.hi : IRON.mid);
-    else p.set(px, py, i % 3 === 0 ? WOOD.hi : WOOD.mid);
-  }
-  // Крылья наконечника.
-  const bx = Math.round(x + cx * (len - 2));
-  const by = Math.round(y + cy * (len - 2));
-  p.set(Math.round(bx - cy), Math.round(by + cx), IRON.sh);
-  p.set(Math.round(bx + cy), Math.round(by - cx), IRON.sh);
-}
-
-/** Шлем-ведро со смотровой щелью; `eyes` — тлеющий взгляд в щели. */
-function helm(p: Px, x: number, y: number, dir: Dir4, eyes: boolean): void {
-  // Гребень — тёмно-красный.
-  p.rect(x + 2, y - 2, x + 4, y - 1, TABARD.mid);
-  p.set(x + 2, y - 2, TABARD.hi);
-  p.rect(x, y, x + 6, y + 6, IRON.mid);
-  p.rect(x, y, x + 1, y + 6, IRON.hi);
-  p.rect(x + 5, y, x + 6, y + 6, IRON.sh);
-  p.rect(x, y + 6, x + 6, y + 6, IRON.dk);
-  if (dir === 'down') {
-    p.rect(x + 1, y + 3, x + 5, y + 3, IRON.dk);
-    p.rect(x + 3, y + 3, x + 3, y + 5, IRON.dk);
-    if (eyes) {
-      p.set(x + 2, y + 3, EYE_AMBER);
-      p.set(x + 4, y + 3, EYE_AMBER);
-    }
-  } else if (dir === 'side') {
-    p.rect(x + 3, y + 3, x + 6, y + 3, IRON.dk);
-    p.set(x + 6, y + 4, IRON.dk);
-    if (eyes) p.set(x + 5, y + 3, EYE_AMBER);
-  } else {
-    // Затылок: заклёпки по шву.
-    p.set(x + 3, y + 1, IRON.sh);
-    p.set(x + 3, y + 3, IRON.sh);
-    p.set(x + 3, y + 5, IRON.sh);
-  }
-}
-
-function paintKnight(dir: Dir4, mode: string, f: number, eyes: boolean): Px {
-  const p = new Px(KN_W, KN_H);
-  const cx = KN_CX;
-  const g = KN_G;
-  const lunge = mode === 'lunge';
-  const aim = mode === 'aim';
-  const open = mode === 'open';
-  const stag = mode === 'stagger';
-  const dead = mode === 'dead';
-  if (dead) {
-    // Латы грудой: шлем на боку, щит плашмя, копьё поперёк.
-    spear(p, 3, g - 1, -0.08, 17, 0);
-    p.rect(5, g - 4, 15, g - 1, TABARD.dk);
-    p.rect(6, g - 5, 14, g - 3, TABARD.mid);
-    p.set(8, g - 4, BONE.mid);
-    p.set(10, g - 4, BONE.mid);
-    p.rect(14, g - 5, 19, g - 1, IRON.mid);
-    p.rect(14, g - 5, 15, g - 1, IRON.hi);
-    p.rect(16, g - 3, 19, g - 3, IRON.dk);
-    p.outline(INK);
-    return p;
-  }
-  const step = mode === 'run' ? [0, 1, 0, -1][f] : 0;
-  const bob = mode === 'idle' ? [0, 0, 1, 1][f] : mode === 'run' ? f % 2 : 0;
-  const lean = lunge ? 2 : aim ? -1 : stag ? -2 : 0;
-  const top = 7 + bob;
-  // Ноги в поножах.
-  const legL = cx - 3 + (dir === 'side' ? -step : 0);
-  const legR = cx + 1 + (dir === 'side' ? step + (lunge ? 2 : 0) : 0);
-  const legH = dir === 'side' || dir === 'up' ? step : 0;
-  p.rect(legL, g - 6 + Math.max(0, legH), legL + 1, g, IRON.sh);
-  p.rect(legR, g - 6 + Math.max(0, -legH), legR + 1, g, IRON.mid);
-  p.set(legL - 1, g, IRON.dk);
-  p.set(legR + 2, g, IRON.dk);
-  // Корпус: кираса под сюрко.
-  const bx = cx - 4 + lean;
-  p.rect(bx, top + 7, bx + 8, top + 16, IRON.mid);
-  p.rect(bx, top + 7, bx + 1, top + 16, IRON.hi);
-  p.rect(bx + 7, top + 7, bx + 8, top + 16, IRON.sh);
-  // Сюрко (накидка) — тёмно-красная, с рваным низом; сбоку — узкой полосой.
-  if (dir === 'side') {
-    p.rect(bx + 5, top + 9, bx + 6, top + 18, TABARD.mid);
-    p.set(bx + 5, top + 19, TABARD.dk);
-  } else {
-    p.rect(bx + 2, top + 9, bx + 6, top + 18, TABARD.mid);
-    p.rect(bx + 2, top + 9, bx + 2, top + 18, TABARD.hi);
-    p.set(bx + 3, top + 19, TABARD.dk);
-    p.set(bx + 5, top + 19, TABARD.dk);
-  }
-  p.rect(bx + 1, top + 13, bx + 7, top + 13, WOOD.dk);
-  p.set(bx + 4, top + 13, GOLD.dk);
-  // Наплечники.
-  p.rect(bx - 1, top + 7, bx + 1, top + 9, IRON.hi);
-  p.rect(bx + 7, top + 7, bx + 9, top + 9, IRON.sh);
-  // Шлем.
-  helm(p, cx - 3 + lean, top, dir, eyes);
-
-  if (dir === 'up') {
-    // Спиной: плащ на всю спину, щит ребром слева, копьё справа.
-    p.rect(bx + 1, top + 8, bx + 7, top + 19, TABARD.dk);
-    p.rect(bx + 1, top + 8, bx + 2, top + 19, TABARD.mid);
-    for (let x = bx + 1; x <= bx + 7; x += 2) p.set(x, top + 20, TABARD.dk);
-    shieldEdge(p, bx - 3, top + 8, 13, open ? 3 : 0);
-    if (lunge) spear(p, bx + 9, top + 12, -Math.PI / 2, 16, 2);
-    else if (aim) spear(p, bx + 9, top + 18, -Math.PI / 2, 10, 2);
-    else spear(p, bx + 10, top + 17, -Math.PI / 2 - 0.05, 18, 3);
-  } else if (dir === 'down') {
-    // Лицом: щит закрывает грудь и ноги; в замахе и выпаде копьё — ПЕРЕД
-    // щитом, остриём к зрителю (иначе щит его прятал).
-    if (open) spear(p, cx + 6, top + 10, Math.PI / 2 - 0.4, 12, 3);
-    else if (!lunge && !aim) spear(p, cx + 6, top + 19, -Math.PI / 2 + 0.03, 20, 2);
-    if (open || stag) towerShield(p, bx - 4, top + 12, 7, 11, true);
-    else towerShield(p, cx - 6 + lean, top + 8 - (aim ? 1 : 0), 10, 13);
-    if (lunge) spear(p, cx + 3, top + 13, Math.PI / 2 - 0.08, 15, 2);
-    else if (aim) spear(p, cx + 6, top + 6, Math.PI / 2 - 0.25, 9, 5);
-  } else {
-    // Сбоку (вправо): плащ за спиной, кираса видна; щит впереди в три
-    // четверти — оковка, красное поле, костяной знак; копьё над щитом.
-    p.rect(bx - 2, top + 8, bx, top + 19, TABARD.dk);
-    p.set(bx - 2, top + 20, TABARD.dk);
-    p.set(bx - 1, top + 9, TABARD.mid);
-    if (lunge) spear(p, bx + 6, top + 11, 0, 14, 7);
-    else if (aim) spear(p, bx + 2, top + 10, 0, 9, 6);
-    else if (open) spear(p, bx + 7, top + 12, 0.7, 10, 4);
-    else if (stag) spear(p, bx + 4, top + 9, -1.9, 12, 3);
-    else spear(p, bx + 9, top + 18, -Math.PI / 2 + 0.2, 20, 2);
-    if (open) towerShield(p, bx - 3, top + 12, 5, 10, true);
-    else if (stag) shieldEdge(p, bx - 4, top + 5, 11, -4);
-    else towerShield(p, bx + 5 + (aim ? -1 : 0) + (lunge ? 2 : 0), top + 7, 6, 14);
-  }
-  p.outline(INK);
-  return p;
-}
-
-registerMobPainter('f4_knight', (m, pose) => {
-  const { dir, left } = dirOf(m.face);
-  let mode = pose.mode;
-  if (pose.anim === 'dead') mode = 'dead';
-  else if (mode === 'guard' || mode === 'chase')
-    mode = Math.hypot(m.vx, m.vy) > 0.4 ? 'run' : 'idle';
-  else if (mode !== 'aim' && mode !== 'lunge' && mode !== 'open' && mode !== 'stagger')
-    mode = pose.anim === 'run' ? 'run' : 'idle';
-  const f = mode === 'idle' || mode === 'run' ? mod(pose.frame, 4) : 0;
-  const flip = dir === 'side' ? left : false;
-  // Щит закрыт от героя — кант щита светлее (видно, что он «держит»).
-  const key = `kn|${dir}|${mode}|${f}|${flip ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const px = paintKnight(dir, mode, f, mode !== 'dead');
-  const out: MobFrame = {
-    img: finish(px, flip, pose.flash, pose.look),
-    ax: KN_CX,
-    ay: KN_G,
-    eye: null,
-  };
-  cache.set(key, out);
-  void knightGuards;
-  return out;
-});
-
-// ---------------------------------------------------------------------------
-// Некромант.
-// ---------------------------------------------------------------------------
-
-const NC_W = 22;
-const NC_H = 28;
-const NC_CX = 10;
-const NC_G = 26;
-
-function flame(p: Px, x: number, y: number, f: number, big = false): void {
-  const h = big ? 5 : 3;
-  const sway = [0, 1, 0, -1][f % 4];
-  for (let i = 0; i < h; i++) {
-    const w = Math.max(0, Math.round((h - i) / (big ? 2 : 2.2)));
-    const xx = x + (i > 1 ? sway : 0);
-    const c = i < 1 ? GREEN.hi : i < h - 1 ? GREEN.mid : GREEN.dk;
-    p.rect(xx - w, y - i, xx + w, y - i, c);
-  }
-  p.set(x + sway, y - h, GREEN.dk);
-}
-
-function paintNecro(mode: string, f: number, t: number): Px {
-  const p = new Px(NC_W, NC_H);
-  const cx = NC_CX;
-  const float = mode === 'dead' ? 0 : [0, -1, -1, 0][f % 4];
-  const g = NC_G + float;
-  if (mode === 'dead') {
-    // Балахон осел пустой грудой, посох рядом, гримуар раскрыт.
-    p.rect(cx - 6, g - 3, cx + 5, g, ROBE.dk);
-    p.rect(cx - 5, g - 4, cx + 3, g - 3, ROBE.mid);
-    p.set(cx - 2, g - 5, ROBE.mid);
-    spear(p, cx - 8, g + 1, -0.1, 17, 0);
-    p.rect(cx + 3, g - 1, cx + 6, g, hex('#6a2a2a'));
-    p.set(cx + 4, g - 1, BONE.hi);
-    p.outline(INK);
-    return p;
-  }
-  const lean = mode === 'run' ? 1 : mode === 'aim' ? 1 : 0;
-  // Балахон: трапеция с рваным подолом, свет слева.
-  for (let y = 9; y <= g - 1; y++) {
-    const k = (y - 9) / (g - 10);
-    const half = 3 + k * 3.5;
-    const x0 = Math.round(cx - half + lean * (1 - k));
-    const x1 = Math.round(cx + half + lean * (1 - k));
-    for (let x = x0; x <= x1; x++) {
-      const rel = (x - x0) / Math.max(1, x1 - x0);
-      let c = rel < 0.22 ? ROBE.hi : rel < 0.7 ? ROBE.mid : ROBE.dk;
-      if ((x + y) % 5 === 0 && rel > 0.3) c = ROBE.dk; // складки
-      p.set(x, y, c);
-    }
-  }
-  // Рваный подол колышется.
-  for (let x = cx - 6; x <= cx + 6; x += 2) {
-    const sway = (x + f) % 3 === 0 ? 1 : 0;
-    p.set(x + sway, g, ROBE.dk);
-  }
-  // Пояс-верёвка и гримуар.
-  p.rect(cx - 3 + lean, 15, cx + 3 + lean, 15, GOLD.dk);
-  p.rect(cx - 5 + lean, 16, cx - 3 + lean, 19, hex('#6a2a2a'));
-  p.set(cx - 5 + lean, 16, hex('#9a4a3a'));
-  p.set(cx - 4 + lean, 17, GOLD.mid);
-  // Капюшон и тьма лица, в ней — два зелёных глаза.
-  const hx = cx - 3 + lean;
-  p.rect(hx, 2, hx + 6, 9, ROBE.mid);
-  p.rect(hx, 3, hx + 1, 9, ROBE.hi);
-  erase(p, hx, 2);
-  erase(p, hx + 6, 2);
-  p.set(hx + 3, 1, ROBE.mid);
-  p.set(hx + 4, 1, ROBE.dk);
-  p.rect(hx + 2, 4, hx + 6, 8, ROBE.deep);
-  p.set(hx + 3, 6, GREEN.mid);
-  p.set(hx + 5, 6, GREEN.mid);
-  // Посох с черепом и огнём.
-  const raise = mode === 'raise';
-  const cast = mode === 'aim';
-  const sx = cx + 5 + lean + (cast ? 2 : 0);
-  const topY = raise ? 1 : cast ? 4 : 5;
-  const tilt = cast ? 0.45 : 0;
-  for (let y = topY + 3; y <= g - 1; y++) {
-    const x = Math.round(sx - (y - topY) * tilt * 0.3);
-    p.set(x, y, y % 4 === 0 ? WOOD.hi : WOOD.dk);
-  }
-  // Кисть на посохе — кость.
-  p.set(sx - 1, topY + 9, BONE.mid);
-  p.set(sx - 1, topY + 10, BONE.sh);
-  // Череп на навершии.
-  p.rect(sx - 1, topY + 1, sx + 1, topY + 2, BONE.mid);
-  p.set(sx - 1, topY + 1, BONE.hi);
-  p.set(sx, topY + 2, BONE.hole);
-  p.set(sx - 1, topY + 3, BONE.sh);
-  p.set(sx + 1, topY + 3, BONE.sh);
-  flame(p, sx, topY, f, cast || raise);
-  if (raise) {
-    // Вторая рука вверх — зовёт кости.
-    p.line(cx - 4, 10, cx - 6, 5, ROBE.mid);
-    p.set(cx - 6, 4, BONE.mid);
-    p.set(cx - 7, 3, GREEN.mid);
-  } else {
-    p.set(cx - 5 + lean, 12, ROBE.hi);
-    p.set(cx - 5 + lean, 13, BONE.sh);
-  }
-  p.outline(INK);
-  // Колдовство — зелёные искры вокруг (поверх контура).
-  if (cast || raise) {
-    const n = raise ? 5 : 3;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + t * 6;
-      p.set(Math.round(sx + Math.cos(a) * 3), Math.round(topY + 1 + Math.sin(a) * 2), GREEN.hi);
-    }
-  }
-  return p;
-}
-
-registerMobPainter('f4_necro', (m, pose) => {
-  let mode = pose.mode;
-  if (pose.anim === 'dead') mode = 'dead';
-  else if (
-    mode === 'chase' ||
-    mode === 'recover' ||
-    mode === 'stun' ||
-    mode === 'alert' ||
-    mode === 'emerge' ||
-    mode === 'sleep'
-  )
-    mode = pose.anim === 'run' ? 'run' : 'idle';
-  const fade =
-    mode === 'blink'
-      ? Math.min(1, pose.t / 0.35)
-      : mode === 'appear'
-        ? 1 - Math.min(1, pose.t / 0.35)
-        : 0;
-  const fs = Math.floor(fade * 4);
-  if (mode === 'blink' || mode === 'appear') mode = 'idle';
-  const f = mod(pose.frame, 4);
-  const ts = mode === 'aim' || mode === 'raise' ? mod(pose.t * 10, 6) : 0;
-  const key = `nc|${mode}|${f}|${ts}|${fs}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const px = paintNecro(mode, f, ts / 10);
-  // Исчезает в пыль: выпадают пиксели по шуму, снизу вверх.
-  if (fs > 0)
-    for (let y = 0; y < px.h; y++)
-      for (let x = 0; x < px.w; x++) {
-        const n = ((x * 7 + y * 13) % 11) / 11;
-        if (n < fs / 4 + (y / px.h) * 0.25 * (fs / 4)) erase(px, x, y);
-      }
-  const out: MobFrame = {
-    img: finish(px, pose.left, pose.flash, pose.look),
-    ax: pose.left ? NC_W - 1 - NC_CX : NC_CX,
-    ay: NC_G,
-    eye: fs >= 3 ? null : [pose.left ? NC_W - 1 - (NC_CX + 1) : NC_CX + 1, 6],
-  };
-  cache.set(key, out);
-  void m;
-  return out;
-});
 
 // ---------------------------------------------------------------------------
 // Анимация (v2.85): кривые, кванты, кеш кадров, память рисовальщика.
@@ -3740,31 +3349,6 @@ registerMobWarm('f4_idol', function* () {
     paint({ st: 0, vT0: -10 }, 10, i / 10);
     yield;
   }
-});
-
-// ---------------------------------------------------------------------------
-// Снаряды, лучи, плиты, кара.
-// ---------------------------------------------------------------------------
-
-registerShotPainter('f4_gravefire', (s: Shot, time: number) => {
-  const f = mod(time * 12 + s.id, 3);
-  const key = `gf|${f}`;
-  const hit = sprites.get(key);
-  if (hit) return hit;
-  const p = new Px(10, 10);
-  // Зелёный череп в огне: огонь хвостом назад, череп светлый.
-  p.ell(5, 5, 3.6, 3.2, GREEN.dk);
-  p.ell(5, 4.5, 2.6, 2.4, GREEN.mid);
-  p.rect(3, 3, 6, 5, GREEN.hi);
-  p.set(4, 4, ROBE.deep);
-  p.set(6, 4, ROBE.deep);
-  p.set(5, 6, ROBE.deep);
-  p.set(1 + f, 1, GREEN.mid);
-  p.set(8 - f, 2, GREEN.dk);
-  p.outline(hex('#0c2a12'));
-  const out = { img: p.canvas(), ax: 5, ay: 5 };
-  sprites.set(key, out);
-  return out;
 });
 
 // ---------------------------------------------------------------------------
