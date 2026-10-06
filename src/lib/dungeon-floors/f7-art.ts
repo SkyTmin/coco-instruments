@@ -39,6 +39,7 @@ import { BOSS, F7_VIEW } from './f7-brains';
 import './f7-mob-echo';
 import './f7-mob-phantom';
 import './f7-mob-golem';
+import './f7-mob-spider';
 
 type RGBA = [number, number, number, number];
 
@@ -3209,109 +3210,6 @@ registerMobPainter('f7_moth', (m: Mob, pose: MobPose) => {
     });
   }
   return frameOf('f7_moth', pose, `fly${hot}`, f, () => paintMoth(f, hot ? 1 : 0));
-});
-
-// ---------------------------------------------------------------------------
-// Осколочный паук: стеклянное брюшко с розовым сердцем, ноги-дуги, на спине
-// шипы-осколки. В прыжке — поджат и поднят над своей тенью.
-// ---------------------------------------------------------------------------
-
-const SPG: Tones = [hx('#2c4a60'), hx('#5a8aa6'), hx('#9cd0e4'), hx('#e6faff')];
-const PINK = hx('#ff6a98');
-
-function paintSpider(anim: string, f: number, lift: number): Built {
-  const H0 = 28;
-  const p = new Px(26, H0);
-  const gy = H0 - 4 - lift;
-  const cx = 12;
-  // Вид сбоку в три четверти: голова слева, брюшко справа. Ноги — ломаные
-  // с коленом ВЫШЕ спины, стопы далеко по земле; дальние — темнее и позади
-  // тела. Первый заход раскинул ноги дугами в стороны, и паук читался
-  // летучей мышью.
-  const tuck = anim === 'leap' ? 0.55 : anim === 'aim' ? 1.15 : 1;
-  const legs = (far: boolean) => {
-    for (let i = 0; i < 4; i++) {
-      // Походка «четвёрками»: 0 и 2 ближние идут с 1 и 3 дальними.
-      const grp = (i + (far ? 1 : 0)) % 2;
-      const ph = anim === 'run' ? (f + grp * 2) % 4 : 0;
-      const swing = anim === 'run' ? [1.5, 0.5, -1.5, -0.5][ph] : 0;
-      const up = anim === 'run' && (ph === 0 || ph === 1) ? 1 : 0;
-      const hx0 = cx - 2 + i * 1.3 + (far ? 1 : 0);
-      const hy0 = gy - 5 - (far ? 1 : 0);
-      const fx = cx + (-9.5 + i * 6.2) * tuck + swing + (far ? 1.5 : 0);
-      const fy = gy - (far ? 2 : 0) - up - (anim === 'leap' ? 2 : 0);
-      const kx = hx0 + (fx - hx0) * 0.42 + (i < 2 ? -1 : 1);
-      const ky = gy - 10.5 - (far ? 1 : 0) + (anim === 'aim' ? -1 : 0) + (anim === 'leap' ? 2 : 0);
-      const upper = far ? SPG[0] : SPG[2];
-      const lower = far ? SPG[0] : SPG[1];
-      stroke(p, hx0, hy0, kx, ky, upper);
-      stroke(p, kx, ky, fx, fy, lower);
-      // Коготок — светлая точка стопы (ближние).
-      if (!far) p.set(Math.round(fx), Math.round(fy), SPG[3]);
-      else p.set(Math.round(kx), Math.round(ky), SPG[1]);
-    }
-  };
-  legs(true);
-  // Брюшко — стекло, внутри розовое сердце.
-  shadeEll(p, cx + 4, gy - 6, 4.6, 3.6, SPG, 0.05);
-  p.ell(cx + 4.4, gy - 5.6, 1.6, 1.2, PINK);
-  p.set(cx + 3, gy - 8, SPG[3]);
-  // Шипы-осколки на спине.
-  poly(
-    p,
-    [
-      [cx + 2, gy - 8],
-      [cx + 3, gy - 13],
-      [cx + 4, gy - 8],
-    ],
-    (x) => (x < cx + 3 ? SPG[3] : SPG[2]),
-  );
-  poly(
-    p,
-    [
-      [cx + 5, gy - 8],
-      [cx + 7.5, gy - 12],
-      [cx + 7, gy - 6],
-    ],
-    SPG[2],
-  );
-  // Головогрудь и глаза гроздью.
-  shadeEll(p, cx - 1.5, gy - 5.5, 2.9, 2.5, [
-    hx('#1c2c3c'),
-    hx('#34506a'),
-    hx('#5a86a6'),
-    hx('#a8d4ec'),
-  ]);
-  p.set(cx - 3.5, gy - 7, PINK);
-  p.set(cx - 2.5, gy - 7, PINK);
-  p.set(cx - 3.5, gy - 6, hx('#ffb8d0'));
-  p.set(cx - 2, gy - 8, hx('#ff9ab8'));
-  // Хелицеры.
-  p.set(cx - 4, gy - 4, anim === 'bite' ? WHITE : SPG[2]);
-  p.set(cx - 4, gy - 3, anim === 'bite' ? WHITE : SPG[1]);
-  legs(false);
-  p.outline(alpha(INK, 0.9));
-  return { p, ax: 12, ay: H0 - 3, eye: [cx - 3, gy - 7] };
-}
-
-registerMobPainter('f7_spider', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim === 'run' ? 'run' : pose.anim === 'bite' ? 'bite' : 'idle';
-  let lift = 0;
-  if (pose.mode === 'aim') anim = 'aim';
-  if (pose.mode === 'leap') {
-    anim = 'leap';
-    const k = Math.min(1, pose.t / 0.36);
-    lift = Math.round(Math.sin(k * Math.PI) * 9);
-  }
-  const f = anim === 'run' ? pose.frame % 4 : pose.frame % 2;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_spider', pose, 'dead', k, () => {
-      const b = paintSpider('idle', 0, 0);
-      return { ...b, p: shatter(b.p, 12, 18, (k + 1) / 4, 9) };
-    });
-  }
-  return frameOf('f7_spider', pose, `${anim}${lift}`, f, () => paintSpider(anim, f, lift));
 });
 
 // ---------------------------------------------------------------------------
