@@ -36,6 +36,7 @@ import {
   registerItemArt,
   registerMobPainter,
   registerMobWarm,
+  registerImpactPainter,
   registerPropPainter,
   registerShotPainter,
   registerZonePainter,
@@ -916,7 +917,8 @@ function mobFrame(
     const t0 = performance.now();
     const pic = make(yaw8(d));
     const tA = performance.now(); // DBGT
-    (F1_MOB_STAT as unknown as Record<string, number>).tm = ((F1_MOB_STAT as unknown as Record<string, number>).tm ?? 0) + tA - t0; // DBGT
+    (F1_MOB_STAT as unknown as Record<string, number>).tm =
+      ((F1_MOB_STAT as unknown as Record<string, number>).tm ?? 0) + tA - t0; // DBGT
     let p = pic.p;
     if (look === 'elite') p.outline(GOLD_EDGE);
     if (buff) buffKant(p, pic.ax, buff);
@@ -2265,7 +2267,9 @@ function bipSkel(o: BP, yaw: number, K: BipK): BSk {
   // Плечи крутятся вокруг своего хребта (голова остаётся над ним) — и
   // голова наполовину отворачивает обратно, к цели.
   const tw = o.twist * 0.7 - cw * 0.3;
-  const Tf = P.pitch(lean).turn(tw).roll(o.side * 0.6);
+  const Tf = P.pitch(lean)
+    .turn(tw)
+    .roll(o.side * 0.6);
   const Hd = Tf.at(1.3 * s, 0, 7.4 * s)
     .turn(-tw * 0.5)
     .pitch(-lean * 0.85 + o.head)
@@ -8254,17 +8258,223 @@ export function cachedSprite(key: string, make: () => Sprite): Sprite {
   return s;
 }
 
-registerShotPainter('f1_stone', (s, time) => {
-  const f = Math.floor(time * 12 + s.id) % 2;
-  return cachedSprite(`stone|${f}`, () => {
-    const px = new Px(7, 7);
-    px.ell(3.5, 3.5, 2.6, 2.2, hex('#7a746a'));
-    px.set(f ? 2 : 3, 2, hex('#c8c0b0'));
-    px.set(f ? 3 : 2, 2, hex('#a8a090'));
-    px.set(4, 4, hex('#4a4640'));
-    px.outline(INK);
-    return { img: px.canvas(), ax: 3.5, ay: 3.5 };
+// Камень пращника — анимации мобов 1. Летит навесом, кувыркается (4 кадра
+// по 16 к/с), за ним след против экранной скорости: движок рисует спрайт в
+// (x, y − z), поэтому скорость на экране — (vx, vy − dz/dt). Кеш: 16 углов ×
+// 4 кадра × 3 длины следа. Контакт — два слоя: пыль, осколки, вмятина и
+// отскок камня на полу (`registerImpactPainter`), искра поверх темноты —
+// зона-картинка `f1_stone_hit` (её ставит мозг пращника через `api.vfx`).
+const STONE_W = 25;
+const STONE_PX = ['#5a554c', '#7a746a', '#9c9588', '#c8c0b0'].map((c) => hex(c));
+function stonePx(f: number): Px {
+  const px = new Px(7, 7);
+  px.ell(3.5, 3.5, 2.7, 2.3, STONE_PX[1]);
+  // Свет сверху-слева, тень снизу-справа; кувырок — блик и щербинка бегут по кругу.
+  const a = (f / 4) * Math.PI * 2;
+  px.set(4, 5, STONE_PX[0]);
+  px.set(5, 4, STONE_PX[0]);
+  px.set(2, 2, STONE_PX[2]);
+  px.set(Math.round(3.5 + Math.cos(a) * 1.4), Math.round(3.5 + Math.sin(a) * 1.2), STONE_PX[3]);
+  px.set(Math.round(3.5 - Math.cos(a) * 1.3), Math.round(3.5 - Math.sin(a) * 1.1), STONE_PX[0]);
+  px.outline(INK);
+  return px;
+}
+function stoneSprite(ai: number, f: number, li: number): Sprite {
+  return cachedSprite(`stone2|${ai}|${f}|${li}`, () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = STONE_W;
+    const g = c.getContext('2d')!;
+    const m = STONE_W / 2;
+    // След: полоса пыли и мелкие точки, гуще у камня.
+    const a = (ai / 16) * Math.PI * 2;
+    const ux = -Math.cos(a);
+    const uy = -Math.sin(a);
+    const L = [4, 7, 10][li];
+    for (let i = L; i >= 1; i--) {
+      const k = 1 - i / (L + 1);
+      g.fillStyle = `rgba(214,204,186,${(0.12 + 0.45 * k * k).toFixed(3)})`;
+      const w = i < 3 ? 3 : 2;
+      g.fillRect(
+        Math.round(m + ux * (i + 1.5) - w / 2),
+        Math.round(m + uy * (i + 1.5) - w / 2),
+        w,
+        w,
+      );
+    }
+    // Две искорки-пылинки сбоку следа.
+    g.fillStyle = 'rgba(240,232,214,0.55)';
+    g.fillRect(
+      Math.round(m + ux * (L * 0.7 + 2) - uy * 2),
+      Math.round(m + uy * (L * 0.7 + 2) + ux * 2),
+      1,
+      1,
+    );
+    g.fillRect(
+      Math.round(m + ux * (L * 0.45 + 2) + uy * 2),
+      Math.round(m + uy * (L * 0.45 + 2) - ux * 2),
+      1,
+      1,
+    );
+    g.drawImage(stonePx(f).canvas(), Math.round(m - 3.5), Math.round(m - 3.5));
+    return { img: c, ax: m, ay: m };
   });
+}
+registerShotPainter('f1_stone', (s, time) => {
+  const f = (((Math.floor(time * 16) + s.id) % 4) + 4) % 4;
+  let vz = 0;
+  if (s.lob) {
+    const T = s.lob.T;
+    const k = Math.min(1, s.age / T);
+    vz = Math.cos(k * Math.PI) * (Math.PI / T) * Math.min(3, T * 2.2);
+  }
+  const sx = s.vx;
+  const sy = s.vy - vz;
+  const sp = Math.hypot(sx, sy);
+  const ai = (((Math.round((Math.atan2(sy, sx) / (Math.PI * 2)) * 16) % 16) + 16) % 16) >>> 0;
+  const li = sp < 5 ? 0 : sp < 9 ? 1 : 2;
+  return stoneSprite(ai, f, li);
+});
+
+/** Зерно контакта → ряд чисел 0…1 (своя хеш-лесенка, без `sim.rng`). */
+function seeded(seed: number, i: number): number {
+  let x = (seed ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0;
+  x = Math.imul(x ^ (x >>> 15), 0x2c1b3c6d) >>> 0;
+  x = Math.imul(x ^ (x >>> 12), 0x297a2d39) >>> 0;
+  return ((x ^ (x >>> 15)) >>> 0) / 4294967296;
+}
+
+registerImpactPainter('f1_stone', {
+  life: 0.7,
+  shake: 0.05,
+  paint(g, rec, px, py, scale, age) {
+    const k = age / 0.7;
+    const s = scale / 16;
+    const sp = Math.hypot(rec.vx ?? 0, rec.vy ?? 0) || 1;
+    const ux = (rec.vx ?? 0) / sp;
+    const uy = (rec.vy ?? 0) / sp;
+    // Вмятина: тёмная лунка и три трещинки, гаснут к концу.
+    const dark = Math.min(1, age / 0.05) * (1 - Math.max(0, (k - 0.6) / 0.4));
+    g.fillStyle = `rgba(20,16,12,${(0.45 * dark).toFixed(3)})`;
+    g.beginPath();
+    g.ellipse(px, py, 3.2 * s, 1.8 * s, 0, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = `rgba(20,16,12,${(0.55 * dark).toFixed(3)})`;
+    g.lineWidth = Math.max(1, s);
+    g.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const a = seeded(rec.seed, i) * Math.PI * 2;
+      const r = (3 + seeded(rec.seed, i + 3) * 3) * s;
+      g.moveTo(px + Math.cos(a) * 2 * s, py + Math.sin(a) * 1.2 * s);
+      g.lineTo(px + Math.cos(a) * r, py + Math.sin(a) * r * 0.6);
+    }
+    g.stroke();
+    // Пыль: клубы расходятся кольцом, чуть дальше — по ходу камня.
+    const dk = Math.min(1, age / 0.45);
+    const da = (1 - dk) * (1 - dk);
+    if (da > 0.01)
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + seeded(rec.seed, i + 10) * 0.6;
+        const fw = 1 + 0.6 * Math.max(0, Math.cos(a) * ux + Math.sin(a) * uy);
+        const d = (2 + 9 * (1 - (1 - dk) * (1 - dk)) * fw) * s;
+        const r = (1.6 + 2.4 * dk) * s;
+        g.fillStyle = `rgba(196,184,160,${(0.6 * da).toFixed(3)})`;
+        g.beginPath();
+        g.arc(px + Math.cos(a) * d, py + Math.sin(a) * d * 0.55 - 1.5 * dk * s, r, 0, Math.PI * 2);
+        g.fill();
+      }
+    // Осколки: вылетают дугой и падают, на полу лежат до конца.
+    for (let i = 0; i < 5; i++) {
+      const a = seeded(rec.seed, i + 20) * Math.PI * 2;
+      const v = (8 + seeded(rec.seed, i + 30) * 10) * s;
+      const tt = Math.min(age, 0.32);
+      const h = Math.max(0, 70 * tt * s - 220 * tt * tt * s);
+      const x = px + Math.cos(a) * v * tt * 2.2;
+      const y = py + Math.sin(a) * v * tt * 1.3 - h;
+      g.fillStyle = i % 2 ? '#9c9588' : '#5a554c';
+      g.globalAlpha = 1 - Math.max(0, (k - 0.7) / 0.3);
+      g.fillRect(
+        Math.round(x),
+        Math.round(y),
+        Math.max(1, Math.round(s)),
+        Math.max(1, Math.round(s)),
+      );
+    }
+    // Сам камень: отскок по ходу полёта, два подскока, потом катится и лежит.
+    const bt = Math.min(age, 0.5);
+    const hop =
+      bt < 0.22
+        ? Math.sin((bt / 0.22) * Math.PI) * 5
+        : bt < 0.36
+          ? Math.sin(((bt - 0.22) / 0.14) * Math.PI) * 1.5
+          : 0;
+    const run = (1 - Math.pow(1 - bt / 0.5, 2)) * 9 * s;
+    const img = stoneSprite(0, Math.floor(bt * 16) % 4, 0).img;
+    g.globalAlpha = 1 - Math.max(0, (k - 0.75) / 0.25);
+    // Из кешированного спрайта берём только середину 7×7 — сам камень, без следа.
+    const m = STONE_W / 2 - 3.5;
+    g.drawImage(
+      img,
+      m,
+      m,
+      7,
+      7,
+      Math.round(px + ux * run - 3.5 * s),
+      Math.round(py + uy * run * 0.6 - hop * s - 3.5 * s),
+      7 * s,
+      7 * s,
+    );
+    g.globalAlpha = 1;
+    return true;
+  },
+});
+
+/** Искра удара камня поверх темноты: зона-картинка без действия. */
+registerZonePainter('f1_stone_hit', (g, z, px, py, scale) => {
+  const zz = z as Zone;
+  const age = zz.t - (zz.warn ?? 0);
+  if (age < 0) return true;
+  const s = scale / 16;
+  const k = Math.min(1, age / 0.3);
+  const seed = zz.id >>> 0;
+  // Свет складывается с темнотой, а не закрашивает её.
+  const op = g.globalCompositeOperation;
+  g.globalCompositeOperation = 'lighter';
+  // Вспышка — белая звёздочка, 3 кадра.
+  if (age < 0.12) {
+    const r = (5 - age * 20) * s;
+    g.fillStyle = `rgba(255,244,214,${(0.9 - age * 5).toFixed(3)})`;
+    g.fillRect(
+      Math.round(px - r),
+      Math.round(py - 0.5 * s),
+      Math.round(r * 2),
+      Math.max(1, Math.round(s)),
+    );
+    g.fillRect(
+      Math.round(px - 0.5 * s),
+      Math.round(py - r * 0.7),
+      Math.max(1, Math.round(s)),
+      Math.round(r * 1.4),
+    );
+    g.fillStyle = `rgba(160,120,60,${(0.5 - age * 4).toFixed(3)})`;
+    g.beginPath();
+    g.arc(px, py, 6 * s, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Искры — четыре чёрточки разлетаются и гаснут.
+  g.strokeStyle = `rgba(255,214,140,${(1 - k * k).toFixed(3)})`;
+  g.lineWidth = Math.max(1, s);
+  g.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const a = seeded(seed, i) * Math.PI * 2;
+    const d0 = (2 + 12 * k) * s;
+    const d1 = d0 + 3 * (1 - k) * s;
+    const fall = 10 * k * k * s;
+    g.moveTo(px + Math.cos(a) * d0, py + Math.sin(a) * d0 * 0.6 - 4 * s + fall);
+    g.lineTo(px + Math.cos(a) * d1, py + Math.sin(a) * d1 * 0.6 - 4 * s + fall);
+  }
+  g.stroke();
+  g.globalCompositeOperation = op;
+  return true;
 });
 
 // ---------------------------------------------------------------------------
