@@ -36,6 +36,7 @@ import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Sim, Strike, Zone } from '../dungeon-sim';
 import { F7_CRYSTAL, F7_GALLERY, F7_HALL, F7_MARK } from './f7';
 import { BOSS, F7_VIEW } from './f7-brains';
+import './f7-mob-echo';
 
 type RGBA = [number, number, number, number];
 
@@ -344,9 +345,6 @@ function shatter(p: Px, cx: number, cy: number, k: number, seed: number): Px {
 /** Лестница зеркального серебра (отражение — светлее и прозрачнее, босс —
  *  глубже, с фиолетом в тени). Первый заход клал героя в тёмно-синее, и на
  *  тёмном полу он читался звёздным пятном, а не рыцарем. */
-const ECHO_RAMP = ['#223258', '#3a5a8e', '#5e88bc', '#90b8e0', '#c6e2f6', '#f0faff'].map((c) =>
-  hx(c),
-);
 const BOSS_RAMP = ['#262a5c', '#3e5298', '#6488c8', '#9cc2ea', '#d0e8fa', '#f8fdff'].map((c) =>
   hx(c),
 );
@@ -479,109 +477,6 @@ function glassBlade(
   );
   stroke(p, x - ux * 2, y - uy * 2, x, y, GILT[0]);
 }
-
-/** Одна короткая трещина сбоку — забрало (Т-прорезь) должно читаться. */
-const ECHO_CRACK: [number, number][][] = [
-  [
-    [12, 9],
-    [11, 11],
-    [12, 13],
-  ],
-];
-
-function paintEcho(
-  tier: number,
-  dir: Dir4,
-  row: number,
-  blade: number,
-  step: number,
-): Built | null {
-  const src = heroPx(tier, dir, row);
-  if (!src) return null;
-  const body = glassify(src, ECHO_RAMP, INK, 1.6, 0.9, 0.95);
-  crackLines(body, ECHO_CRACK, hx('#16203a'), hx('#e8f8ff'));
-  // Прорези лица светятся (как глаза отражения в темноте).
-  const eyes = dir === 'down' ? [6, 9] : dir === 'left' ? [5] : dir === 'right' ? [10] : [];
-  for (const ex of eyes) body.set(ex, 7, CYAN_HOT);
-  const p = new Px(26, 22);
-  // Клинок: за спиной, если смотрит вверх.
-  const ang =
-    dir === 'down' ? Math.PI / 2 : dir === 'up' ? -Math.PI / 2 : dir === 'left' ? Math.PI : 0;
-  const hand: [number, number] =
-    dir === 'down' ? [16, 17] : dir === 'up' ? [10, 12] : dir === 'left' ? [8, 14] : [17, 14];
-  if (blade && dir === 'up')
-    glassBlade(p, hand[0], hand[1], ang + (blade > 1 ? 0 : -0.9), 8, 1.1, blade > 1 ? 1 : 0);
-  over(p, body, 5, 5);
-  if (blade && dir !== 'up')
-    glassBlade(p, hand[0], hand[1], ang + (blade > 1 ? 0 : -0.9), 8, 1.1, blade > 1 ? 1 : 0);
-  p.outline(alpha(INK, 0.55));
-  // Отражение чуть прозрачно: сквозь него угадывается пол.
-  for (let i = 3; i < p.data.length; i += 4) if (p.data[i] === 255) p.data[i] = 232;
-  // Выход из зеркала: проявляется снизу вверх рябью.
-  let q = p;
-  if (step < 4) {
-    q = new Px(p.w, p.h);
-    const cut = Math.round(p.h * (1 - (step + 1) / 5));
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (!p.data[i + 3]) continue;
-        if (y < cut && (x + y + step) % 3) continue;
-        const c: RGBA = [p.data[i], p.data[i + 1], p.data[i + 2], y < cut ? 110 : 255];
-        q.set(x, y, c);
-      }
-  }
-  return {
-    p: q,
-    ax: 13,
-    ay: 21,
-    eye: dir === 'up' ? null : [dir === 'down' ? 11 : dir === 'left' ? 10 : 15, 12],
-  };
-}
-
-registerMobPainter('f7_echo', (m: Mob, pose: MobPose) => {
-  const tier = heroGear().robe;
-  const dir = dirOf(m.face);
-  let row = 0;
-  let blade = 0;
-  let anim: string = pose.anim;
-  let step = 4;
-  if (pose.mode === 'f7_step') {
-    step = Math.min(3, Math.floor((pose.t / 0.5) * 4));
-    anim = `step${step}`;
-  } else if (pose.mode === 'copy') {
-    row = 4;
-    blade = pose.t > 0.28 ? 2 : 1;
-    anim = `copy${blade}`;
-  } else if (pose.anim === 'run') row = pose.frame % 4;
-  else if (pose.anim === 'wind' || pose.anim === 'bite') {
-    row = 4;
-    blade = pose.anim === 'bite' ? 2 : 1;
-  } else if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.16));
-    return frameOf(
-      `f7_echo${tier}${dir}`,
-      pose,
-      'dead',
-      k,
-      () => {
-        const b = paintEcho(tier, dir, 0, 0, 4);
-        if (!b) return null;
-        return { ...b, p: shatter(b.p, 13, 13, (k + 1) / 4, 7) };
-      },
-      false,
-    );
-  } else if (pose.anim === 'sleep') row = 0;
-  else row = Math.floor(pose.frame / 3) % 2 ? 2 : 0;
-  return frameOf(
-    `f7_echo${tier}${dir}`,
-    pose,
-    anim,
-    row * 10 + blade,
-    () => paintEcho(tier, dir, row, blade, step),
-    false,
-  );
-});
 
 // ---------------------------------------------------------------------------
 // Отражение героя (босс), v2.86 — движение. Облик прежний: лист героя ×2
