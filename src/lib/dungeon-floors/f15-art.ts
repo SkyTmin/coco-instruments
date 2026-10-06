@@ -462,10 +462,25 @@ function rootFloor(p: Px, c: CellCtx, grit: boolean): void {
       }
       const v = voronoi(X, Y, 11, 1532);
       const seam = v.d2 - v.d1;
-      let l = 0.2 + (n - 0.5) * 0.9 + v.id * 0.2 + dith(X, Y) * 0.16;
+      // Крупные пятна: светящийся «лишайник» кристаллов в швах и тёмная пыль.
+      const m = fbm(X, Y, 110, 1533);
+      let l = 0.2 + (n - 0.5) * 0.9 + v.id * 0.2 + dith(X, Y) * 0.16 + (m - 0.5) * 0.35;
       if (seam < 0.05) l = -0.2;
       else if (seam < 0.11) l += (v.ox * LX + v.oy * LY) > 0 ? 0.25 : -0.22;
-      p.set(x, y, tone(ROOT_FLOOR, l));
+      let col = tone(ROOT_FLOOR, l);
+      // У камней свой оттенок: одни в фиолет, другие в синеву.
+      if (seam >= 0.05) {
+        if (v.id > 0.82) col = mixc(col, VIOLET[1], 0.22);
+        else if (v.id < 0.12) col = mixc(col, LAPIS[1], 0.25);
+      }
+      // Трещина через камень со слабым светом изнутри.
+      if (v.id > 0.4 && v.id < 0.47 && seam > 0.12) {
+        const cr = Math.abs((X - Y * 0.6) * 0.25 + Math.sin(Y * 0.5) * 0.8 - Math.round((X - Y * 0.6) * 0.25));
+        if (cr < 0.07) col = mixc(INK, VIOLET[2], 0.35);
+      }
+      if (m > 0.56 && seam < 0.2 && hash(X, Y, 1534) < (m - 0.56) * 1.4) col = hash(X, Y, 1529) < 0.3 ? TEAL[3] : TEAL[2];
+      else if (m < 0.36 && seam >= 0.05) col = mixc(col, hx('#120e2a'), (0.36 - m) * 1.6);
+      p.set(x, y, col);
     }
   chips(p, c, grit ? 0.04 : 0.07, false);
 }
@@ -577,17 +592,67 @@ function floatFloor(p: Px, c: CellCtx, base: (p: Px, c: CellCtx) => void): void 
 }
 
 /** Тяжесть: плотная порода, по ней — кольца давления. */
-function heavyFloor(p: Px, c: CellCtx): void {
+/**
+ * Расстояние (px) от точки клетки до края пятна своей метки — чтобы пятна
+ * (тяжесть, гравий) кончались неровно по пикселям, а не ступеньками клеток.
+ */
+function patchEdge(c: CellCtx): (x: number, y: number) => number {
+  const no = (dx: number, dy: number) => c.markAt(dx, dy) !== c.mark;
+  const L = no(-1, 0);
+  const R = no(1, 0);
+  const U = no(0, -1);
+  const D = no(0, 1);
+  const cor: [number, number][] = [];
+  if (no(-1, -1)) cor.push([0, 0]);
+  if (no(1, -1)) cor.push([TS, 0]);
+  if (no(-1, 1)) cor.push([0, TS]);
+  if (no(1, 1)) cor.push([TS, TS]);
+  return (x, y) => {
+    let e = 99;
+    if (L) e = Math.min(e, x + 0.5);
+    if (R) e = Math.min(e, TS - 0.5 - x);
+    if (U) e = Math.min(e, y + 0.5);
+    if (D) e = Math.min(e, TS - 0.5 - y);
+    for (const [cx, cy] of cor) e = Math.min(e, Math.hypot(x + 0.5 - cx, y + 0.5 - cy));
+    return e;
+  };
+}
+
+/** Гравий старой выработки поверх пола Корней, край — россыпью. */
+function gritFloor(p: Px, c: CellCtx): void {
+  rootFloor(p, c, false);
+  const q = new Px(TS, TS);
+  rootFloor(q, c, true);
+  const ed = patchEdge(c);
+  for (let y = 0; y < TS; y++)
+    for (let x = 0; x < TS; x++) {
+      const X = c.wx * TS + x;
+      const Y = c.wy * TS + y;
+      const e = ed(x, y) + (vnoise(X, Y, 5, 1528) - 0.5) * 8;
+      if (e < 0.5 || (e < 3 && dith(X, Y) > e / 3)) continue;
+      const i = (y * TS + x) * 4;
+      p.set(x, y, [q.data[i], q.data[i + 1], q.data[i + 2], 255]);
+    }
+}
+
+function heavyFloor(p: Px, c: CellCtx, base: (p: Px, c: CellCtx) => void): void {
+  base(p, c);
   const X0 = c.wx * TS;
   const Y0 = c.wy * TS;
+  // Край пятна тяжести — неровный, по пикселям, а не по клеткам.
+  const ed = patchEdge(c);
   for (let y = 0; y < TS; y++)
     for (let x = 0; x < TS; x++) {
       const X = X0 + x;
       const Y = Y0 + y;
+      const e = ed(x, y) + (vnoise(X, Y, 6, 1571) - 0.5) * 7;
+      if (e < 0.6) continue;
       const n = fbm(X, Y, 14, 1570);
       const ring = Math.sin(Math.hypot((((X % 48) + 48) % 48) - 24, (((Y % 48) + 48) % 48) - 24) * 0.9);
       let col = tone(tn('#1c1024', '#2a1834', '#3c244a', '#543462'), (n - 0.5) * 0.8 + 0.25 + dith(X, Y) * 0.12);
       if (ring > 0.93) col = mixc(col, hx('#b0507a'), 0.45);
+      if (e < 1.8) col = mixc(col, hx('#d070a8'), 0.55);
+      else if (e < 3.2 && dith(X, Y) < 0.5) col = mixc(col, hx('#2a1834'), 0.5);
       p.set(x, y, col);
     }
 }
@@ -1000,7 +1065,7 @@ function cellOf(area: string) {
         xFloor(p, c);
         break;
       case MK.grit:
-        rootFloor(p, c, true);
+        gritFloor(p, c);
         break;
       case MK.vein:
         veinFloor(p, c);
@@ -1016,7 +1081,7 @@ function cellOf(area: string) {
         floatFloor(p, c, baseOf);
         break;
       case MK.heavy:
-        heavyFloor(p, c);
+        heavyFloor(p, c, baseOf);
         break;
       case MK.chart:
         chartFloor(p, c, false);
@@ -1366,6 +1431,125 @@ registerPropPainter('f15_stalag', (o) => {
     return { p, ax: cx, ay: 24 };
   });
 });
+
+/**
+ * Мелкий убор пола (не твёрдый): место внутри клетки — по номеру клетки,
+ * чтобы россыпь не стояла по сетке. Холст 24×24, якорь сдвигается.
+ */
+function floorBit(o: WorldObj, kind: string, n: number, build: (p: Px, v: number) => void): Sprite | null {
+  const h = hash(o.x, o.y, 1590);
+  const v = Math.floor(h * n);
+  const ox = Math.floor(hash(o.x, o.y, 1591) * 4) * 2 - 3;
+  const oy = Math.floor(hash(o.x, o.y, 1592) * 3) * 3 - 3;
+  return sprite(`${kind}|${v}|${ox}|${oy}`, () => {
+    const p = new Px(24, 24);
+    build(p, v);
+    // Низ предмета на строке 18 холста; сдвиг oy поднимает его в клетке.
+    return { p, ax: 12 - ox, ay: 18 + 4 - oy };
+  });
+}
+
+/** Ростки кристаллов у стен Корней: два-четыре кристалла и отсвет. */
+registerPropPainter('f15_sprout', (o) =>
+  floorBit(o, 'sprout', 6, (p, v) => {
+    const t = v % 3 === 0 ? VIOLET : v % 3 === 1 ? CRYST : TEAL;
+    glow(p, 12, 15, 7, t === VIOLET ? VIOLET_GLOW : TEAL_GLOW, 0.35);
+    floorShadow(p, 12, 18, 6, 1.6, 0.35);
+    const n = 2 + (v % 3);
+    for (let i = 0; i < n; i++) {
+      const bx = 12 + (i - (n - 1) / 2) * 3 + (i % 2);
+      const hh = (i === Math.floor(n / 2) ? 8 : 4) + ((v + i) % 3);
+      crystal(p, bx, 18 - (i % 2), 3, hh, (i - (n - 1) / 2) * 1.2, t, 0.4);
+    }
+    // Камешки у основания.
+    p.ell(8, 18, 1.5, 1, STONE[2]);
+    p.ell(16 + (v % 2), 18.5, 1.2, 0.8, STONE[1]);
+    if (v > 2) sparkle(p, 12 + (v % 2) * 2, 8 - (v % 3), WHITE, 1);
+  }),
+);
+
+/** Осколки метеоритов на реголите Пояса: тёмные грани, иногда тлеющий шов. */
+registerPropPainter('f15_rubble', (o) =>
+  floorBit(o, 'rubble', 6, (p, v) => {
+    floorShadow(p, 12, 18, 8, 2, 0.4);
+    const rocks: [number, number, number, number][] = [
+      [10, 16, 4.5, 3],
+      [16, 17, 2.8, 2],
+      [6, 18, 2, 1.4],
+    ];
+    rocks.slice(0, 2 + (v % 2)).forEach(([cx, cy, rx, ry], i) => {
+      const s = 1 + ((v + i) % 3) * 0.12;
+      // Гранёный камень: верх светлее, низ тёмный.
+      p.ell(cx, cy, rx * s, ry * s, (x, y) => {
+        const fy = (y + 0.5 - (cy - ry * s)) / (2 * ry * s);
+        const fx = (x + 0.5 - cx) / (rx * s);
+        const facetK = Math.floor((fx + 1) * 1.5) / 3;
+        return tone(METEOR, 0.75 - fy * 0.9 - facetK * 0.2 + hash(x, y, 1593 + v) * 0.1);
+      });
+    });
+    if (v === 1 || v === 4) {
+      // Тлеющий шов — тёплый свет из трещины.
+      stroke(p, 8, 15, 12, 17, hx('#ff9a40'));
+      p.set(10, 16, hx('#ffe0a0'));
+    } else if (v === 2) crystal(p, 11, 15, 2, 4, 0.5, CRYST, 0.3);
+    p.outline(alpha(INK, 0.7));
+  }),
+);
+
+/** Сор Обсерватории: свиток, лист звёздной карты, латунная шестерня, линза. */
+registerPropPainter('f15_scroll', (o) =>
+  floorBit(o, 'scroll', 6, (p, v) => {
+    floorShadow(p, 12, 18, 7, 1.6, 0.35);
+    const k = v % 4;
+    if (k === 0) {
+      // Свёрнутый свиток с сургучом.
+      for (let x = 6; x <= 17; x++) {
+        p.set(x, 15, IVORY[3]);
+        p.set(x, 16, IVORY[2]);
+        p.set(x, 17, IVORY[1]);
+      }
+      p.ell(6, 16, 1.4, 1.6, IVORY[0]);
+      p.ell(17.5, 16, 1.4, 1.6, IVORY[3]);
+      p.set(12, 16, ROSE[2]);
+      p.set(12, 17, ROSE[1]);
+    } else if (k === 1) {
+      // Развёрнутый лист карты неба: созвездие точками.
+      poly(
+        p,
+        [
+          [5, 14],
+          [17, 13],
+          [19, 18],
+          [7, 19],
+        ],
+        (x, y) => mixc(IVORY[2], IVORY[1], hash(x, y, 1594) * 0.5),
+      );
+      for (const [x, y] of [
+        [8, 16],
+        [11, 15],
+        [14, 16],
+        [16, 15],
+      ])
+        p.set(x, y, LAPIS[2]);
+      stroke(p, 8, 16, 11, 15, alpha(LAPIS[1], 0.6));
+      stroke(p, 11, 15, 14, 16, alpha(LAPIS[1], 0.6));
+    } else if (k === 2) {
+      // Латунная шестерня плашмя.
+      p.ell(12, 16, 5, 2.8, (x, y) => tone(BRASS, 0.7 - (y - 13) * 0.12));
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU;
+        p.set(Math.round(12 + Math.cos(a) * 5.8), Math.round(16 + Math.sin(a) * 3.2), BRASS[2]);
+      }
+      p.ell(12, 16, 1.6, 0.9, BRASS[0]);
+    } else {
+      // Выпавшая линза: голубой блик в латунной оправе.
+      p.ell(12, 16, 4, 2.4, BRASS[1]);
+      p.ell(12, 15.8, 3, 1.7, (x, y) => mixc(CRYST[2], CRYST[3], (16 - y) * 0.3));
+      p.set(11, 15, WHITE);
+    }
+    p.outline(alpha(INK, 0.6));
+  }),
+);
 
 /** Жеода: камень, на сколе — аметистовое нутро. Бьётся. */
 registerPropPainter('f15_geode', (o, _t, _alive, flash) => {

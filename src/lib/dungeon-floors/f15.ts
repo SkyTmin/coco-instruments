@@ -212,6 +212,10 @@ const COMMON: Record<string, LegendCell> = {
   J: { tile: 'floor', obj: prop('f15_lever', 0.3, { use: { label: 'Рычаг колодца' } }) },
   V: { tile: 'floor', obj: prop('f15_telescope', 0.42, { use: { label: 'Навести телескоп' } }) },
   '+': { tile: 'floor', obj: prop('f15_beacon', 0.3), light: { r: 2.2, tint: 'cold' } },
+  // Нетвёрдый убор пола: ростки кристаллов, осколки метеоритов, свитки.
+  '1': { tile: 'floor', obj: prop('f15_sprout', 0) },
+  '2': { tile: 'floor', obj: prop('f15_rubble', 0) },
+  '3': { tile: 'floor', obj: prop('f15_scroll', 0) },
 };
 
 const LEGEND_OBS: Record<string, LegendCell> = {

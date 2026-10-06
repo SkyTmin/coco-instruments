@@ -62,6 +62,7 @@ F15_SPOTS, на карте их нет.
 """
 import math
 import os
+import random
 import sys
 from collections import deque
 
@@ -69,7 +70,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from brush import Map, W, check, show, write_floor  # noqa: E402
 
 # Клетки, по которым ходят (для норы, настенного и проверки пути).
-FLOORISH = set('.,xgjrifyJV&+kIqUZhzwtmOAN6789|0p;~ETR$a%DCPlu')
+FLOORISH = set('.,xgjrifyJV&+kIqUZhzwtmOAN6789|0p;~ETR$a%DCPlu123')
 # Только «чистый» пол — на него ставим предметы.
 PLAIN = '.xgjhwtmf'
 
@@ -199,6 +200,33 @@ def crystal_walls(m, y0, y1, share, seed_ch='W'):
             if m.g[y][x] == '#' and not m.lock[y][x] and m.get(x, y + 1) in FLOORISH:
                 if rng.random() < share:
                     m.g[y][x] = seed_ch
+
+
+def dress(m, ch, wall_share, open_share, gap=3):
+    """Нетвёрдый убор пола (ростки, обломки): гуще у стен, редко посреди.
+    Ставится последним и только на чистый пол — пути и метки не меняет."""
+    rng = random.Random(9150 + ord(ch))
+    near, mid = [], []
+    for y in range(1, m.h - 1):
+        for x in range(1, W - 1):
+            if m.g[y][x] != '.' or m.lock[y][x]:
+                continue
+            nw = sum(1 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)) if wallish(m, x + dx, y + dy))
+            (near if nw else mid).append((x, y))
+    placed = []
+    for cells, share in ((near, wall_share), (mid, open_share)):
+        rng.shuffle(cells)
+        n = int(len(cells) * share)
+        k = 0
+        for (x, y) in cells:
+            if k >= n:
+                break
+            if any(abs(x - a) + abs(y - b) < gap for a, b in placed):
+                continue
+            m.g[y][x] = ch
+            placed.append((x, y))
+            k += 1
+    return placed
 
 
 def verify(areas):
@@ -455,6 +483,8 @@ def area_roots():
     item(m, 31, 22, 'i')
     item(m, 31, 6, 'T')
 
+    # Ростки кристаллов: у стен гуще, посреди залов редко (не мешают ходу).
+    dress(m, '1', 0.16, 0.02)
     return m
 
 
@@ -680,6 +710,8 @@ def area_obs():
     hole(m, 42, 46)
     m.put(31, 12, 'T')
 
+    # Обсерватория: опавшие свитки и латунный сор у стен.
+    dress(m, '3', 0.1, 0.01)
     return m
 
 
@@ -887,6 +919,9 @@ def area_orbit():
     spot('mem', A, *face(m, 26, 15, 'Q'), 'mirror')
     spot('mem', A, *face(m, 38, 15, 'Q'), 'clock')
     m.put(31, 6, 'T')
+    # Осколки метеоритов и ростки — нетвёрдый убор пола.
+    dress(m, '2', 0.14, 0.02)
+    dress(m, '1', 0.05, 0.0)
     return m
 
 
