@@ -290,6 +290,12 @@ const CONSTEL: Constel[] = CONSTEL_RAW.map((c) => {
   return { pts: c.pts.map(([x, y]) => [x + ox, y + oy] as [number, number]), lines: c.lines };
 });
 
+/** Небо арены для живого рисунка («Техники»): кольца и звёзды созвездий, клетки от центра. */
+export const F15B_SKY: { rings: readonly number[]; stars: readonly [number, number][] } = {
+  rings: RINGS,
+  stars: CONSTEL.flatMap((c) => c.pts),
+};
+
 /** Ночное небо пола: туманность и редкие тусклые звёзды. */
 function skyAt(X: number, Y: number): RGBA {
   const n = fbm(X / 46, Y / 46, 3);
@@ -361,14 +367,8 @@ function starFloor(p: Px, c: CellCtx, g: Geo): void {
         if (Math.abs(e) < 0.6) col = lit ? GOLD[4] : GOLD[3];
         else if (e >= 0.6 && e < 1.5) col = mixc(col, INK, 0.45);
         else if (i === 1 && Math.abs(e + 3) < 0.5) col = mixc(col, GOLD[2], 0.7);
-        if (i === 2 && e > 0.6 && e < 4.6) {
-          // Риски внешнего кольца: каждые 6° короткая, каждые 30° — длинная.
-          const deg = ((a * 180) / Math.PI + 360) % 360;
-          const k6 = Math.abs(((deg + 3) % 6) - 3) * (Math.PI / 180) * d16;
-          const k30 = Math.abs(((deg + 15) % 30) - 15) * (Math.PI / 180) * d16;
-          if (k30 < 0.6) col = e < 4.4 ? GOLD[3] : col;
-          else if (k6 < 0.5 && e < 2.6) col = mixc(col, GOLD[2], 0.8);
-        }
+        // Риски колец не здесь: они вращаются, их рисует небо арены
+        // (`f15b_fxsky` в f15-boss-fx.ts) — клетка собирается один раз.
       }
       // Созвездия: тонкий пунктир между звёздами.
       for (const [ax, ay, bx, by] of segs) {

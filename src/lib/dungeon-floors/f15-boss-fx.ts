@@ -42,7 +42,7 @@ import type { Mob, Shot, Sim, Strike, Zone } from '../dungeon-sim';
 import { F15B_MARK } from './f15-boss';
 import { crownSpot, f15bView, LORD } from './f15-boss-brains';
 import type { F15BState } from './f15-boss-brains';
-import { lordHandPx, planetSprite } from './f15-boss-art';
+import { F15B_SKY, lordHandPx, planetSprite } from './f15-boss-art';
 
 type RGBA = [number, number, number, number];
 
@@ -6424,6 +6424,56 @@ registerZonePainter(
     const cy = z.y * S;
     const p = new Pen(g, px, py, cx, cy);
     p.occ = occOf(S);
+    // Астролябия живая: риски колец медленно вращаются (внешнее — по
+    // часовой, среднее — против), звёзды созвездий мерцают.
+    const [vx0, vx1, vy0, vy1] = viewOf(p);
+    const seen = (x: number, y: number) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
+    const [r0, r1, r2] = F15B_SKY.rings.map((r) => r * S);
+    const rot = time * 0.045;
+    for (let j = 0; j < 60; j++) {
+      const a = rot + (j / 60) * TAU;
+      const ux = Math.cos(a);
+      const uy = Math.sin(a);
+      const x0 = cx + ux * (r2 + 1);
+      const y0 = cy + uy * (r2 + 1);
+      if (!seen(x0, y0)) continue;
+      const long = j % 5 === 0;
+      const L = long ? 4 : 2;
+      p.lineS(x0, y0, x0 + ux * L, y0 + uy * L, long ? C.gold[1] : '#a8761e', long ? 0.95 : 0.8, 0.5);
+    }
+    for (let j = 0; j < 24; j++) {
+      const a = -rot * 1.6 + (j / 24) * TAU;
+      const ux = Math.cos(a);
+      const uy = Math.sin(a);
+      const x0 = cx + ux * (r1 - 4);
+      const y0 = cy + uy * (r1 - 4);
+      if (!seen(x0, y0)) continue;
+      if (j % 6 === 0) {
+        // Указатель сети: ромб на кольце.
+        p.col(C.gold[2], 0.9);
+        p.dot(x0 - 1, y0, 3, 1);
+        p.dot(x0, y0 - 1, 1, 3);
+        p.col('#ffffff', 0.9);
+        p.dot(x0, y0);
+      } else {
+        p.col('#a8761e', 0.75);
+        p.dot(x0, y0);
+      }
+    }
+    for (let j = 0; j < 8; j++) {
+      const a = rot * 2.4 + (j / 8) * TAU;
+      const x0 = cx + Math.cos(a) * (r0 + 2);
+      const y0 = cy + Math.sin(a) * (r0 + 2);
+      if (seen(x0, y0)) twinkle(p, x0, y0, 1, C.gold[2], 0.75);
+    }
+    if (!reduced())
+      F15B_SKY.stars.forEach(([sx, sy], i) => {
+        const x = cx + sx * S;
+        const y = cy + sy * S;
+        if (!seen(x, y)) return;
+        const tw = Math.sin(time * (1.3 + hash(i, 5, 99) * 2.2) + i * 1.7);
+        if (tw > 0.35) twinkle(p, x, y, tw > 0.8 ? 2 : 1, C.ice[5], (tw - 0.35) * 1.4);
+      });
     novaBeams(p, v, S, s.time, true);
     // Свет под упавшими планетами.
     for (const pl of v.planets) {
@@ -6515,6 +6565,18 @@ registerZonePainter(
 
 // ---- Затмение: ночь на всю арену, окна у героя и у распахнутого плаща -------
 
+/** Видимая часть экрана в пикселях мира (с запасом в пиксель). */
+function viewOf(p: Pen): [number, number, number, number] {
+  const m = p.g.getTransform();
+  const sc = m.a || 1;
+  return [
+    Math.floor(-m.e / sc - p.qx) - 1,
+    Math.ceil((p.g.canvas.width - m.e) / sc - p.qx) + 1,
+    Math.floor(-m.f / sc - p.qy) - 1,
+    Math.ceil((p.g.canvas.height - m.f) / sc - p.qy) + 1,
+  ];
+}
+
 function veil(
   p: Pen,
   cx: number,
@@ -6523,18 +6585,14 @@ function veil(
   holes: [number, number, number][],
   col: string,
   a: number,
+  clip?: [number, number, number],
 ): void {
   const LV = [0, 0.35, 0.7, 1];
   const RING = [0.75, 1, 1.3];
   // Только видимая часть экрана: ночь на всю арену — сотни строк за кадром.
-  const m = p.g.getTransform();
-  const sc = m.a || 1;
-  const vx0 = Math.floor(-m.e / sc - p.qx) - 1;
-  const vx1 = Math.ceil((p.g.canvas.width - m.e) / sc - p.qx) + 1;
-  const vy0 = Math.floor(-m.f / sc - p.qy) - 1;
-  const vy1 = Math.ceil((p.g.canvas.height - m.f) / sc - p.qy) + 1;
-  const y0 = Math.max(vy0, Math.floor(cy - R));
-  const y1 = Math.min(vy1, Math.ceil(cy + R));
+  const [vx0, vx1, vy0, vy1] = viewOf(p);
+  const y0 = Math.max(vy0, Math.floor(cy - R), clip ? Math.floor(clip[1] - clip[2]) : -1e9);
+  const y1 = Math.min(vy1, Math.ceil(cy + R), clip ? Math.ceil(clip[1] + clip[2]) : 1e9);
   const lvAt = (X: number, Y: number) => {
     let lv = 3;
     for (const [hx2, hy2, hr] of holes) {
@@ -6548,8 +6606,15 @@ function veil(
     const yy = Y + 0.5 - cy;
     if (Math.abs(yy) >= R) continue;
     const hw = Math.sqrt(R * R - yy * yy);
-    const xa = Math.max(vx0, Math.ceil(cx - hw - 0.5));
-    const xb = Math.min(vx1, Math.floor(cx + hw - 0.5));
+    let xa = Math.max(vx0, Math.ceil(cx - hw - 0.5));
+    let xb = Math.min(vx1, Math.floor(cx + hw - 0.5));
+    if (clip) {
+      const cyy = Y + 0.5 - clip[1];
+      if (Math.abs(cyy) >= clip[2]) continue;
+      const cw = Math.sqrt(clip[2] * clip[2] - cyy * cyy);
+      xa = Math.max(xa, Math.ceil(clip[0] - cw - 0.5));
+      xb = Math.min(xb, Math.floor(clip[0] + cw - 0.5));
+    }
     if (xb < xa) continue;
     // Границы ступеней окон в этой строке: уровень меняется только на них.
     cuts.length = 0;
@@ -6611,15 +6676,41 @@ registerZonePainter(
     const lord = lordNow();
     const open = !!lord && lord.mode === 'f15l_open';
     if (open && lord) holes.push([lord.x * S, (lord.y - 2.2) * S, 3.4 * S * k01(lord.t / 0.4)]);
-    const a = 0.8 * v.dark;
-    veil(p, cx, cy, R, holes, C.night[0], a);
-    // Небо затмения: редкие звёзды мерцают.
+    // Ночь выходит из плаща волной: фронт бежит от владыки по арене, а когда
+    // свет возвращается — сворачивается обратно в плащ.
+    const lx = lord ? lord.x * S : cx;
+    const ly = lord ? (lord.y - 2.2) * S : cy;
+    const maxR = Math.hypot(lx - cx, ly - cy) + R;
+    const w = k01(v.dark / 0.9);
+    const Rw = maxR * w;
+    if (Rw < 2) return;
+    const a = 0.8;
+    const inArena = (x: number, y: number) => Math.hypot(x - cx, y - cy) < R;
+    veil(p, lx, ly, Rw, holes, C.night[0], a, [cx, cy, R]);
+    // Фронт волны: кайма ночи светится фиолетом, по ней бегут звёзды.
+    if (w < 0.999) {
+      const keep = (t: number) => inArena(lx + Math.cos(t) * Rw, ly + Math.sin(t) * Rw);
+      ring(p, lx, ly, Rw + 2, C.night[0], 0.45, (t) => keep(t));
+      ring(p, lx, ly, Rw, '#6a34a4', 0.85, (t, i) => keep(t) && hash(i >> 2, 3, 97) > 0.2);
+      ring(p, lx, ly, Rw - 2, '#c890f0', 0.6, (t, i) => keep(t) && i % 3 === 0);
+      if (!reduced())
+        for (let i = 0; i < 24; i++) {
+          const t = (i / 24) * TAU + time * 0.4;
+          const x = lx + Math.cos(t) * (Rw - 4);
+          const y = ly + Math.sin(t) * (Rw - 4);
+          if (inArena(x, y)) twinkle(p, x, y, 1, C.gold[3], 0.8);
+        }
+    }
+    // Небо затмения: редкие звёзды мерцают — только там, куда дошла ночь.
     for (let i = 0; i < 60; i++) {
       const rr = R * Math.sqrt(hash(i, 1, 97));
       const aa = TAU * hash(i, 2, 97);
+      const x = cx + Math.cos(aa) * rr;
+      const y = cy + Math.sin(aa) * rr * 0.9;
+      if (Math.hypot(x - lx, y - ly) > Rw - 3) continue;
       const tw = 0.5 + 0.5 * Math.sin(time * (1.5 + hash(i, 3, 97) * 3) + i);
       p.col(i % 5 ? C.ice[4] : C.gold[3], a * 0.5 * tw);
-      p.dot(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr * 0.9);
+      p.dot(x, y);
     }
     // Плащ распахнут — кромка окна золотом.
     if (open && lord)
@@ -6893,10 +6984,10 @@ registerZonePainter(
     const p = new Pen(g, px, py, cx, cy);
     const t = zz.t;
     const env = k01(t / 0.2) * (1 - k01((t - (zz.life - 0.35)) / 0.35));
-    const hx2 = lord.x * S;
-    const hy2 = (lord.y - 3.4) * S;
     const ex = qx * S;
     const ey = qy * S;
+    // Нить — от поднятой ладони (точка из кадра «Тела»).
+    const [hx2, hy2] = handAt(lord, S, ex, ey);
     const col = QUAD_HEX[mod(zz.q ?? 0, 4)];
     // Нить от поднятой руки к четверти, по ней бежит свет.
     const n = Math.max(8, Math.floor(Math.hypot(ex - hx2, ey - hy2) / 3));
