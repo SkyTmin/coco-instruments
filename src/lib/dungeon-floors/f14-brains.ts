@@ -3251,6 +3251,7 @@ function knifeRing(sim: Sim, lead: Mob, n: number, lanes: number): void {
     if (t !== T_FLOOR && t !== T_HAZARD) continue;
     const k = knife(sim, x, y, a + Math.PI, lead.dmg * 1.05, 'f14boss');
     k.life = 1.2;
+    k.art = 'f14b_lknife'; // анимации 14 — только рисунок: вылет из руки, свой контакт
     s.knives.push({ id: k.id, ang: a + Math.PI });
   }
 }
@@ -3470,6 +3471,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           life: 0.5,
           art: 'f14b_step',
           n: m.data.vTick,
+          ang: Math.atan2(m.vy, m.vx), // анимации 14 — только рисунок: ступня по ходу
         } as ZoneIn); // v2.87 — только рисунок
       } // v2.87 — только рисунок
       return;
@@ -3482,6 +3484,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       const warn = LORD.hourWarn / haste;
       if (!m.data.lit && m.t >= 0.22) {
         m.data.lit = 1;
+        m.data.vHx = m.x; // анимации 14 — только рисунок
+        m.data.vHy = m.y; // анимации 14 — только рисунок
         api.strike(sim, {
           shape: 'cone',
           x: m.x,
@@ -3500,6 +3504,9 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t >= warn) {
         m.data.lit = 0;
         m.data.vFrom = 1; // v2.87 — только рисунок
+        const hA = { x: m.data.vHx ?? m.x, y: m.data.vHy ?? m.y, r: LORD.hourR, life: 1.2 }; // анимации 14 — только рисунок
+        const hB = { ang: m.dir, arc: LORD.hourArc, art: 'f14b_hourfx', above: true, mob: m.id }; // анимации 14 — только рисунок
+        api.vfx(sim, { ...hA, ...hB } as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'recover');
         m.cd = 0.8 / haste + sim.rng() * 0.4;
       }
@@ -3542,6 +3549,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           len,
           above: true,
         } as ZoneIn); // v2.87 — только рисунок
+        const mnA = { x: m.x, y: m.y, r: 0.5, life: 1.1, art: 'f14b_scuff', ang: m.dir, len }; // анимации 14 — только рисунок
+        api.vfx(sim, mnA as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'f14_lunge');
       }
       return;
@@ -3565,8 +3574,10 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
           life: LORD.stuck + 0.9,
           art: 'f14b_stab',
           ang: m.dir,
-          above: true,
+          above: false, // анимации 14 — только рисунок: воронка и трещины — на полу
         } as ZoneIn); // v2.87 — только рисунок
+        const stA = { x: vx, y: vy, r: 0.5, life: LORD.stuck + 0.9, art: 'f14b_stabfx' }; // анимации 14 — только рисунок
+        api.vfx(sim, { ...stA, ang: m.dir, above: true, mob: m.id } as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'f14_stuck');
       }
       return;
@@ -3587,6 +3598,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       const warn = LORD.spinWarn / haste;
       if (!m.data.lit) {
         m.data.lit = 1;
+        m.data.vSx = m.x; // анимации 14 — только рисунок
+        m.data.vSy = m.y; // анимации 14 — только рисунок
         api.strike(sim, {
           shape: 'ring',
           x: m.x,
@@ -3604,6 +3617,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t >= warn) {
         m.data.lit = 0;
         m.data.vFrom = 2; // v2.87 — только рисунок
+        const spA = { x: m.data.vSx ?? m.x, y: m.data.vSy ?? m.y, r: LORD.spinR, w: LORD.spinW }; // анимации 14 — только рисунок
+        api.vfx(sim, { ...spA, life: 1, art: 'f14b_spinfx', above: true, mob: m.id } as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'recover');
         m.cd = 0.9 / haste + sim.rng() * 0.4;
       }
@@ -3646,6 +3661,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         s.need = m.maxHp * LORD.need;
         api.setMode(m, 'f14_ritual');
         api.zone(sim, { x: ax, y: ay, r: 2.4, life: LORD.ritual, art: 'f14_glassring' });
+        const rtA = { x: ax, y: ay, r: 2.4, life: LORD.ritual, art: 'f14b_ritualfx' }; // анимации 14 — только рисунок
+        api.vfx(sim, { ...rtA, above: true, mob: m.id } as ZoneIn); // анимации 14 — только рисунок
         sim.events.push({
           t: 'boss',
           what: 'f14_rewind_call',
@@ -3674,6 +3691,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         s.ritualCd = LORD.ritualEvery;
         sim.zones = sim.zones.filter((z) => z.art !== 'f14_glassring');
         api.vfx(sim, { x: ax, y: ay, r: 2.4, life: 1.8, art: 'f14b_glassbreak', above: true }); // v2.87 — только рисунок
+        api.vfx(sim, { x: ax, y: ay, r: 2.4, life: 1.8, art: 'f14b_glassfloor' }); // анимации 14 — только рисунок
         sim.events.push({ t: 'shake', k: 0.4 });
         sim.events.push({
           t: 'boss',
