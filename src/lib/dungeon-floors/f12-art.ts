@@ -316,7 +316,10 @@ export function renderRig(
       const glass = (pt.alpha ?? 1) < 1;
       return { pt, k, A, glass, d: glass ? 0 : dot(VIEW, A.c) };
     })
-    .sort((a, b) => (a.glass ? 1 : 0) - (b.glass ? 1 : 0) || (a.glass ? a.k - b.k : b.d - a.d || a.k - b.k));
+    .sort(
+      (a, b) =>
+        (a.glass ? 1 : 0) - (b.glass ? 1 : 0) || (a.glass ? a.k - b.k : b.d - a.d || a.k - b.k),
+    );
   order.forEach(({ pt, k, A, glass }) => {
     const [e1, e2, e3] = A.e;
     const [r1, r2, r3] = A.r;
@@ -499,7 +502,8 @@ export function renderRig(
     }
     const e2: [number, number] | null = eye ? [eye[0] - cx, eye[1] - cy] : null;
     const zc = new Float32Array(cw * ch);
-    for (let y = 0; y < ch; y++) zc.set(zb.subarray((y + cy) * w + cx, (y + cy) * w + cx + cw), y * cw);
+    for (let y = 0; y < ch; y++)
+      zc.set(zb.subarray((y + cy) * w + cx, (y + cy) * w + cx + cw), y * cw);
     return { p: flash > 0 ? q.tint(WHITE, flash) : q, lit, eye: e2, cx, cy, zb: zc };
   }
   p.outline(INK);
@@ -4715,26 +4719,71 @@ function shamanParts(
   };
   // Капюшон, лицо и меховая опушка кольцом вокруг лица.
   const hood = at([-0.6, 0, 0.4]);
-  sub.push({ x: hood[0], y: 0, z: hood[2], rx: 2.9 * s, ry: 3 * s, rz: 3.1 * s, ramp: park, fur: 0.25, pitch: -b.lean, id: 120 });
+  sub.push({
+    x: hood[0],
+    y: 0,
+    z: hood[2],
+    rx: 2.9 * s,
+    ry: 3 * s,
+    rz: 3.1 * s,
+    ramp: park,
+    fur: 0.25,
+    pitch: -b.lean,
+    id: 120,
+  });
   const face = at([1.5, 0, -0.2]);
-  sub.push({ x: face[0], y: 0, z: face[2], rx: 1.4 * s, ry: 1.9 * s, rz: 2.1 * s, ramp: SH_FACE, pitch: -b.lean, id: 121 });
+  sub.push({
+    x: face[0],
+    y: 0,
+    z: face[2],
+    rx: 1.4 * s,
+    ry: 1.9 * s,
+    rz: 2.1 * s,
+    ramp: SH_FACE,
+    pitch: -b.lean,
+    id: 121,
+  });
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * TAU;
     const c = at([1.5, Math.cos(a) * 2.5, Math.sin(a) * 2.7 + 0.1]);
-    sub.push({ x: c[0], y: c[1], z: c[2], rx: 1.05 * s, ry: 1.05 * s, rz: 1.05 * s, ramp: SH_TRIM, fur: 0.3, id: 122 });
+    sub.push({
+      x: c[0],
+      y: c[1],
+      z: c[2],
+      rx: 1.05 * s,
+      ry: 1.05 * s,
+      rz: 1.05 * s,
+      ramp: SH_TRIM,
+      fur: 0.3,
+      id: 122,
+    });
   }
   // Оленьи рога над капюшоном.
   // Рога назад-в стороны дугой, с отростком вперёд-вверх: сбоку — серп,
   // спереди — «рогатка» (прямые рога сбоку читались восклицательным знаком).
   for (const e of [-1, 1]) {
-    const ant = bez(at([-0.6, e * 1.6, 2.2]), at([-3.6, e * 4.6, 3.8]), at([-5.8, e * 5.4, 7.2]), 5);
+    const ant = bez(
+      at([-0.6, e * 1.6, 2.2]),
+      at([-3.6, e * 4.6, 3.8]),
+      at([-5.8, e * 5.4, 7.2]),
+      5,
+    );
     ant.forEach((pt, i) => {
       const r = (0.75 - i * 0.06) * s;
       sub.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: BONE, id: 123 });
     });
     for (const u of [0, 0.5, 1]) {
       const tp = lerp3(at([-2.7, e * 3.9, 4.4]), at([-1.6, e * 4.3, 6.8]), u);
-      sub.push({ x: tp[0], y: tp[1], z: tp[2], rx: 0.55 * s, ry: 0.55 * s, rz: 0.55 * s, ramp: BONE, id: 123 });
+      sub.push({
+        x: tp[0],
+        y: tp[1],
+        z: tp[2],
+        rx: 0.55 * s,
+        ry: 0.55 * s,
+        rz: 0.55 * s,
+        ramp: BONE,
+        id: 123,
+      });
     }
   }
   // Подол парки с опушкой: в полёте сносит назад.
@@ -4762,13 +4811,59 @@ function shamanParts(
   const hitK = clamp01((o.beat - 0.7) / 0.3);
   const skinR = hitK > 0 ? BONE.map((c) => mixc(c, AURORA[4], hitK * 0.75)) : BONE;
   const dRoll = -(0.85 + 0.35 * o.drum);
-  sub.push({ x: dc[0], y: dc[1], z: dc[2], rx: 3.9 * s, ry: 0.8 * s, rz: 3.9 * s, yaw: 0.35, roll: dRoll, ramp: skinR, glow: hitK > 0.3, id: 125 });
-  sub.push({ x: dc[0], y: dc[1], z: dc[2], rx: 4.3 * s, ry: 0.5 * s, rz: 4.3 * s, yaw: 0.35, roll: dRoll, ramp: OCHRE, id: 126 });
+  sub.push({
+    x: dc[0],
+    y: dc[1],
+    z: dc[2],
+    rx: 3.9 * s,
+    ry: 0.8 * s,
+    rz: 3.9 * s,
+    yaw: 0.35,
+    roll: dRoll,
+    ramp: skinR,
+    glow: hitK > 0.3,
+    id: 125,
+  });
+  sub.push({
+    x: dc[0],
+    y: dc[1],
+    z: dc[2],
+    rx: 4.3 * s,
+    ry: 0.5 * s,
+    rz: 4.3 * s,
+    yaw: 0.35,
+    roll: dRoll,
+    ramp: OCHRE,
+    id: 126,
+  });
   // Колотушка в правой: занесена — вверх-назад, удар — в кожу бубна.
-  const bd = o.beat < 0 ? lerp3([0.7, -0.5, 0.25], [-0.3, 0.25, 1], -o.beat) : lerp3([0.7, -0.5, 0.25], [0.25, -1, -0.1], o.beat);
+  const bd =
+    o.beat < 0
+      ? lerp3([0.7, -0.5, 0.25], [-0.3, 0.25, 1], -o.beat)
+      : lerp3([0.7, -0.5, 0.25], [0.25, -1, -0.1], o.beat);
   const bl = Math.hypot(bd[0], bd[1], bd[2]) || 1;
-  const end = haft(sub, j.handR, Math.atan2(bd[1], bd[0]), Math.asin(bd[2] / bl), 0.5 * s, 3.8 * s, 0.62 * s, WOOD, 127);
-  sub.push({ x: end[0], y: end[1], z: end[2], rx: 1.1 * s, ry: 1.1 * s, rz: 1.1 * s, ramp: SH_TRIM, fur: 0.3, id: 128 });
+  const end = haft(
+    sub,
+    j.handR,
+    Math.atan2(bd[1], bd[0]),
+    Math.asin(bd[2] / bl),
+    0.5 * s,
+    3.8 * s,
+    0.62 * s,
+    WOOD,
+    127,
+  );
+  sub.push({
+    x: end[0],
+    y: end[1],
+    z: end[2],
+    rx: 1.1 * s,
+    ry: 1.1 * s,
+    rz: 1.1 * s,
+    ramp: SH_TRIM,
+    fur: 0.3,
+    id: 128,
+  });
   // Ленты сияния от плеч: волна бежит от плеча к концу, цвет — к фиолету.
   const aur = Math.max(0, o.aurora);
   const ribR = [0, 1, 2].map((q) =>
@@ -5012,10 +5107,12 @@ function riderSh(o: MamO): ShO {
       handL: L,
       handR: R,
       kneel: off ? 1 : 0,
-      feet: off ? undefined : [
-        [1.8, -8.4, 2.2],
-        [1.8, 8.4, 2.2],
-      ],
+      feet: off
+        ? undefined
+        : [
+            [1.8, -8.4, 2.2],
+            [1.8, 8.4, 2.2],
+          ],
     },
     drum: o.rDrum,
     beat: o.rBeat,
@@ -5032,7 +5129,8 @@ function riderSh(o: MamO): ShO {
 function riderPlace(o: MamO, S: MamSkel): { place: (p: V3) => V3; onBody: boolean } {
   const hip0 = 9 * SH_S;
   const seat: V3 = [5, 0, S.z0 + 16 + o.rUp - o.rCrouch * 0.6];
-  if (o.rSlide <= 0) return { place: (p) => S.B([seat[0] + p[0], p[1], seat[2] + p[2] - hip0]), onBody: true };
+  if (o.rSlide <= 0)
+    return { place: (p) => S.B([seat[0] + p[0], p[1], seat[2] + p[2] - hip0]), onBody: true };
   // Сползает с правого бока: сперва вбок через шерсть, потом вниз — не
   // сквозь тушу.
   const A = S.B(seat);
@@ -5057,11 +5155,40 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   const ice = o.frost > 0.45;
   const P = o.pitch;
   const R = o.roll;
-  const body = (c: V3, rx: number, ry: number, rz: number, rp: RGBA[], id: number, ex: Partial<Part> = {}) => {
+  const body = (
+    c: V3,
+    rx: number,
+    ry: number,
+    rz: number,
+    rp: RGBA[],
+    id: number,
+    ex: Partial<Part> = {},
+  ) => {
     const w = S.B(c);
-    parts.push({ ...ex, x: w[0], y: w[1], z: w[2], rx, ry, rz, ramp: rp, id, pitch: (ex.pitch ?? 0) + P, roll: (ex.roll ?? 0) + R, gloss: ex.gloss || ice });
+    parts.push({
+      ...ex,
+      x: w[0],
+      y: w[1],
+      z: w[2],
+      rx,
+      ry,
+      rz,
+      ramp: rp,
+      id,
+      pitch: (ex.pitch ?? 0) + P,
+      roll: (ex.roll ?? 0) + R,
+      gloss: ex.gloss || ice,
+    });
   };
-  const head = (c: V3, rx: number, ry: number, rz: number, rp: RGBA[], id: number, ex: Partial<Part> = {}) => {
+  const head = (
+    c: V3,
+    rx: number,
+    ry: number,
+    rz: number,
+    rp: RGBA[],
+    id: number,
+    ex: Partial<Part> = {},
+  ) => {
     const w = S.H(c[0], c[1], c[2]);
     parts.push({
       ...ex,
@@ -5080,11 +5207,25 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     });
   };
   const ball = (w: V3, r: number, rp: RGBA[], id: number, ex: Partial<Part> = {}) =>
-    parts.push({ ...ex, x: w[0], y: w[1], z: w[2], rx: r, ry: r, rz: r, ramp: rp, id, gloss: ex.gloss || ice });
+    parts.push({
+      ...ex,
+      x: w[0],
+      y: w[1],
+      z: w[2],
+      rx: r,
+      ry: r,
+      rz: r,
+      ramp: rp,
+      id,
+      gloss: ex.gloss || ice,
+    });
   // Корпус: бочка, горб, загривок, круп, грудь, брюхо. Снег — пятнами по верху.
   body([-2, 0, z0], 18, 13.8, 12.5, fur, 1, { fur: 0.3, snowy });
   body([7, 0, z0 + 7], 11, 11.2, 9.5, fur, 2, { fur: 0.3, snowy });
-  body([10.5, 0, z0 + 12], 6.5, 7.2, 5.5, fur, 2, { fur: 0.3, snowy: Math.min(0.95, snowy + 0.12) });
+  body([10.5, 0, z0 + 12], 6.5, 7.2, 5.5, fur, 2, {
+    fur: 0.3,
+    snowy: Math.min(0.95, snowy + 0.12),
+  });
   body([-14, 0, z0 - 2], 9.5, 12.2, 10, fur, 1, { fur: 0.3, snowy });
   body([13, 0, z0 - 1], 8, 11.2, 10.5, fur, 3, { fur: 0.32 });
   body([-1, 0, z0 - 7.5], 15, 11.2, 5.5, hair, 4, { fur: 0.45 });
@@ -5118,16 +5259,27 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     for (let k = 0; k < 9; k++) {
       const x = -21 + k * 4.5;
       const hw = 12.8 * Math.sqrt(Math.max(0.15, 1 - ((x + 2) / 21) ** 2));
-      strand([x, e * (hw - 1), z0 - 1], 12 + hash(k, e + 3, 91) * 4 + (k > 2 && k < 7 ? 2 : 0), e, 6 + (k % 2));
+      strand(
+        [x, e * (hw - 1), z0 - 1],
+        12 + hash(k, e + 3, 91) * 4 + (k > 2 && k < 7 ? 2 : 0),
+        e,
+        6 + (k % 2),
+      );
     }
-  for (let k = 0; k < 4; k++) strand([17, -4.5 + k * 3, z0 - 5], 11 + (k % 2) * 2.5, 0, 8 + (k % 2));
+  for (let k = 0; k < 4; k++)
+    strand([17, -4.5 + k * 3, z0 - 5], 11 + (k % 2) * 2.5, 0, 8 + (k % 2));
   for (let k = 0; k < 3; k++) strand([-24, -4 + k * 4, z0 - 2], 10 + (k % 2) * 2, 0, 8 + (k % 2));
   // Голова: купол с высокой макушкой, лоб к хоботу, уши, пасть.
   head([2, 0, 3], 8.8, 8.8, 9.5, fur, 10, { fur: 0.28 });
   head([-0.5, 0, 11.5], 6.4, 6, 6, hair, 10, { fur: 0.4, snowy });
-  head([7.5, 0, -2], 5.2, 5.6, 6.6, lookRamp(frostRamp(M_SKIN, o.frost * 0.7), look), 11, { fur: 0.2 });
+  head([7.5, 0, -2], 5.2, 5.6, 6.6, lookRamp(frostRamp(M_SKIN, o.frost * 0.7), look), 11, {
+    fur: 0.2,
+  });
   for (const e of [-1, 1])
-    head([-1.5, e * 7.8, 2.5], 1.6, 3 + o.ear * 1.6, 4.4, hair, 12, { fur: 0.45, yaw: e * (0.25 + o.ear * 0.7) });
+    head([-1.5, e * 7.8, 2.5], 1.6, 3 + o.ear * 1.6, 4.4, hair, 12, {
+      fur: 0.45,
+      yaw: e * (0.25 + o.ear * 0.7),
+    });
   if (o.jaw > 0.05) head([5.5, 0, -7.5 - o.jaw], 3, 3, 1.4 + o.jaw * 1.6, M_MOUTH, 16);
   head([5, 0, -9 - o.jaw * 2.4], 2.4, 2.6, 1.3, skin, 16, { fur: 0.1 });
   // Бивни: вниз-наружу и вверх-внутрь; у основания темнее.
@@ -5135,7 +5287,9 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   T.ctl.forEach((c, j) => {
     for (let i = 0; i <= 9; i++) {
       const u = i / 9;
-      ball(bezQ(c[0], c[1], c[2], u), 2.5 - u * 1.55, u < 0.2 ? M_TUSKB : M_TUSK, 13 + j, { gloss: true });
+      ball(bezQ(c[0], c[1], c[2], u), 2.5 - u * 1.55, u < 0.2 ? M_TUSKB : M_TUSK, 13 + j, {
+        gloss: true,
+      });
     }
   });
   // Хобот: звенья по углу и завитку, кончик темнее.
@@ -5144,7 +5298,11 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   for (let i = 0; i < 10; i++) {
     a += o.tk;
     const l = o.tsw * ((i + 1) / 10);
-    tp = [tp[0] + 2.6 * Math.cos(a) * Math.cos(l), tp[1] + 2.6 * Math.sin(l), tp[2] - 2.6 * Math.sin(a) * Math.cos(l)];
+    tp = [
+      tp[0] + 2.6 * Math.cos(a) * Math.cos(l),
+      tp[1] + 2.6 * Math.sin(l),
+      tp[2] - 2.6 * Math.sin(a) * Math.cos(l),
+    ];
     ball(S.H(tp[0], tp[1], tp[2]), 3.1 - i * 0.16, skin, 15, { fur: 0.14 });
   }
   const trunkTip = S.H(tp[0], tp[1], tp[2]);
@@ -5207,12 +5365,33 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
       knee = lerp3(knee, S.Rl(knee), rolled);
       foot = lerp3(foot, S.Rl(foot), rolled);
     }
-    for (let i = 0; i < 3; i++) ball(lerp3(hip, knee, i / 3), 5.4 - i * 0.25, fur, 20 + k, { fur: 0.32 });
-    for (let i = 0; i < 3; i++) ball(lerp3(knee, foot, i / 2.6), 4.7 - i * 0.2, i < 2 ? fur : hair, 20 + k, { fur: 0.3 });
-    parts.push({ x: foot[0] + 0.5, y: foot[1], z: foot[2] + 1.2, rx: 4.9, ry: 4.7, rz: 1.9, ramp: skin, id: 24 + k, roll: R * rolled });
+    for (let i = 0; i < 3; i++)
+      ball(lerp3(hip, knee, i / 3), 5.4 - i * 0.25, fur, 20 + k, { fur: 0.32 });
+    for (let i = 0; i < 3; i++)
+      ball(lerp3(knee, foot, i / 2.6), 4.7 - i * 0.2, i < 2 ? fur : hair, 20 + k, { fur: 0.3 });
+    parts.push({
+      x: foot[0] + 0.5,
+      y: foot[1],
+      z: foot[2] + 1.2,
+      rx: 4.9,
+      ry: 4.7,
+      rz: 1.9,
+      ramp: skin,
+      id: 24 + k,
+      roll: R * rolled,
+    });
     if (front)
       for (const nn of [-1.9, 0, 1.9])
-        parts.push({ x: foot[0] + 4.6, y: foot[1] + nn, z: foot[2] + 1.1, rx: 0.9, ry: 0.9, rz: 0.7, ramp: BONE, id: 24 + k });
+        parts.push({
+          x: foot[0] + 4.6,
+          y: foot[1] + nn,
+          z: foot[2] + 1.1,
+          rx: 0.9,
+          ry: 0.9,
+          rz: 0.7,
+          ramp: BONE,
+          id: 24 + k,
+        });
   });
   // Глаза мамонта (закрыты — не светятся) и наездница.
   const eyes: Eye[] = o.shut
@@ -5230,10 +5409,20 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   if (o.trail) for (const fr2 of o.trail) extent.push(...fr2);
   if (o.daze >= 0) {
     const c = S.H(-1, 0, 20);
-    for (const [dx, dy] of [[15, 0], [-15, 0], [0, 15], [0, -15]] as const) extent.push([c[0] + dx, c[1] + dy, c[2]]);
+    for (const [dx, dy] of [
+      [15, 0],
+      [-15, 0],
+      [0, 15],
+      [0, -15],
+    ] as const)
+      extent.push([c[0] + dx, c[1] + dy, c[2]]);
   }
   if (o.breath > 0)
-    for (const [dy, dz] of [[-9, 6], [9, -6]] as const) extent.push([trunkTip[0], trunkTip[1] + dy, trunkTip[2] + dz]);
+    for (const [dy, dz] of [
+      [-9, 6],
+      [9, -6],
+    ] as const)
+      extent.push([trunkTip[0], trunkTip[1] + dy, trunkTip[2] + dz]);
   return scaleBuild(
     {
       parts,
@@ -5266,7 +5455,8 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
             prev = null;
             continue;
           }
-          const col = o.crack >= 2 ? WHITE : o.crack >= 1 ? TEAL[o.crack > 1.2 ? 4 : 3] : hx('#3e2e1e');
+          const col =
+            o.crack >= 2 ? WHITE : o.crack >= 1 ? TEAL[o.crack > 1.2 ? 4 : 3] : hx('#3e2e1e');
           if (prev) p.line(prev[0], prev[1], X, Y, col);
           else p.set(X, Y, col);
           if (lit) {
@@ -5318,10 +5508,29 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
                 [0, -1],
               ])
                 pts.push([dx * r, dy * r, r === 1 ? hi : lo]);
-            if (star) for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) pts.push([dx, dy, lo]);
-            else if (!far) for (const [dx, dy] of [[2, 2], [-2, 2], [2, -2], [-2, -2]]) pts.push([dx, dy, lo]);
+            if (star)
+              for (const [dx, dy] of [
+                [1, 1],
+                [-1, 1],
+                [1, -1],
+                [-1, -1],
+              ])
+                pts.push([dx, dy, lo]);
+            else if (!far)
+              for (const [dx, dy] of [
+                [2, 2],
+                [-2, 2],
+                [2, -2],
+                [-2, -2],
+              ])
+                pts.push([dx, dy, lo]);
             for (const [dx, dy] of pts)
-              for (const [ex, ey] of [[1, 0], [0, 1], [-1, 0], [0, -1]])
+              for (const [ex, ey] of [
+                [1, 0],
+                [0, 1],
+                [-1, 0],
+                [0, -1],
+              ])
                 if (!pts.some((q) => q[0] === dx + ex && q[1] === dy + ey))
                   p.set(X + dx + ex, Y + dy + ey, alpha(INK, 0.55));
             for (const [dx, dy, col] of pts) {
@@ -5398,7 +5607,9 @@ function scaleBuild(b: Build, s: number): Build {
     eyes: b.eyes?.map((e) => ({ ...e, x: e.x * s, y: e.y * s, z: e.z * s, r: 1 })),
     extent: b.extent?.map(sc),
     clip: b.clip === undefined ? undefined : b.clip * s,
-    post: b.post ? (p, scr, fx) => b.post?.(p, (x, y, z) => scr(x * s, y * s, z * s), fx) : undefined,
+    post: b.post
+      ? (p, scr, fx) => b.post?.(p, (x, y, z) => scr(x * s, y * s, z * s), fx)
+      : undefined,
   };
 }
 
@@ -5420,41 +5631,157 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       // Вход: трясёт головой, удар ногой — голову вверх, хобот трубой, рёв;
       // шаманка бьёт в бубен.
       o.hy = 0.25 * Math.sin(t * 14) * clamp01(1 - t / 0.5);
-      o.hp = kf(t, [[0, 0.1], [0.3, 0.2], [0.5, 0.05], [0.66, 0.32], [0.8, -0.5, 'i'], [1.9, -0.45], [2.3, 0.06]]);
-      o.crouch = kf(t, [[0.55, 0], [0.72, 1.8], [0.8, 0, 'i'], [0.87, 1.6, 'o'], [1.1, 0.3], [2.3, 0]]);
-      o.pitch = kf(t, [[0.6, 0], [0.8, 0.1, 'i'], [1.9, 0.08], [2.3, 0]]);
+      o.hp = kf(t, [
+        [0, 0.1],
+        [0.3, 0.2],
+        [0.5, 0.05],
+        [0.66, 0.32],
+        [0.8, -0.5, 'i'],
+        [1.9, -0.45],
+        [2.3, 0.06],
+      ]);
+      o.crouch = kf(t, [
+        [0.55, 0],
+        [0.72, 1.8],
+        [0.8, 0, 'i'],
+        [0.87, 1.6, 'o'],
+        [1.1, 0.3],
+        [2.3, 0],
+      ]);
+      o.pitch = kf(t, [
+        [0.6, 0],
+        [0.8, 0.1, 'i'],
+        [1.9, 0.08],
+        [2.3, 0],
+      ]);
       o.liftL = bump(t, 0.55, 0.8) * 5;
-      o.ta = kf(t - 0.08, [[0, 1.3], [0.62, 1.7], [0.85, -0.4, 'i'], [1.9, -0.55], [2.3, 1.3]]);
-      o.tk = kf(t - 0.08, [[0, -0.06], [0.85, -0.3], [1.9, -0.32], [2.3, -0.06]]);
-      o.jaw = kf(t, [[0.75, 0], [0.9, 1, 'o'], [1.85, 1], [2.05, 0]]);
-      o.ear = kf(t, [[0.7, 0.2], [0.9, 1], [1.9, 1], [2.2, 0.2]]);
-      o.furUp = kf(t, [[0.78, 0], [0.82, 0.5, 'i'], [1.05, 0]]);
+      o.ta = kf(t - 0.08, [
+        [0, 1.3],
+        [0.62, 1.7],
+        [0.85, -0.4, 'i'],
+        [1.9, -0.55],
+        [2.3, 1.3],
+      ]);
+      o.tk = kf(t - 0.08, [
+        [0, -0.06],
+        [0.85, -0.3],
+        [1.9, -0.32],
+        [2.3, -0.06],
+      ]);
+      o.jaw = kf(t, [
+        [0.75, 0],
+        [0.9, 1, 'o'],
+        [1.85, 1],
+        [2.05, 0],
+      ]);
+      o.ear = kf(t, [
+        [0.7, 0.2],
+        [0.9, 1],
+        [1.9, 1],
+        [2.2, 0.2],
+      ]);
+      o.furUp = kf(t, [
+        [0.78, 0],
+        [0.82, 0.5, 'i'],
+        [1.05, 0],
+      ]);
       o.furAmp = 0.05 + bump(t, 0.8, 2.0) * 0.07;
       o.furPh = t * 6;
-      o.rDrum = kf(t, [[0.8, 0], [1.0, 1, 'o'], [2.0, 1], [2.3, 0]]);
+      o.rDrum = kf(t, [
+        [0.8, 0],
+        [1.0, 1, 'o'],
+        [2.0, 1],
+        [2.3, 0],
+      ]);
       o.rBeat = beatAt(t, [1.15, 1.5, 1.85]);
-      o.rLean = kf(t, [[0.75, 0], [0.85, -0.2, 'o'], [1.1, -0.05]]);
+      o.rLean = kf(t, [
+        [0.75, 0],
+        [0.85, -0.2, 'o'],
+        [1.1, -0.05],
+      ]);
       return o;
     }
     case 'f12b_tusk': {
       // Бивни снизу вверх: голова вниз-назад (0–0,62) — рывок разгоном,
       // контакт в 0,85 — проводка выше головы — отдача.
-      o.hp = kf(t, [[0, 0.08], [0.5, 0.55], [0.62, 0.6, 'o'], [0.85, -0.3, 'i'], [0.98, -0.62, 'o'], [1.12, -0.55], [1.35, 0.08]]);
-      o.hy = kf(t, [[0, 0], [0.5, -0.3], [0.62, -0.34], [0.85, 0.1, 'i'], [0.98, 0.3, 'o'], [1.35, 0]]);
-      o.pitch = kf(t, [[0, 0], [0.55, -0.07], [0.85, 0.05, 'i'], [1.0, 0.11, 'o'], [1.35, 0]]);
-      o.crouch = kf(t, [[0, 0], [0.55, 2.4], [0.85, 0.4, 'i'], [1.0, 0], [1.35, 0]]);
+      o.hp = kf(t, [
+        [0, 0.08],
+        [0.5, 0.55],
+        [0.62, 0.6, 'o'],
+        [0.85, -0.3, 'i'],
+        [0.98, -0.62, 'o'],
+        [1.12, -0.55],
+        [1.35, 0.08],
+      ]);
+      o.hy = kf(t, [
+        [0, 0],
+        [0.5, -0.3],
+        [0.62, -0.34],
+        [0.85, 0.1, 'i'],
+        [0.98, 0.3, 'o'],
+        [1.35, 0],
+      ]);
+      o.pitch = kf(t, [
+        [0, 0],
+        [0.55, -0.07],
+        [0.85, 0.05, 'i'],
+        [1.0, 0.11, 'o'],
+        [1.35, 0],
+      ]);
+      o.crouch = kf(t, [
+        [0, 0],
+        [0.55, 2.4],
+        [0.85, 0.4, 'i'],
+        [1.0, 0],
+        [1.35, 0],
+      ]);
       o.liftL = bump(t, 0.6, 0.84) * 4;
-      o.reachL = kf(t, [[0.6, 0], [0.84, 4.5, 'o'], [1.2, 4.5], [1.35, 2]]);
+      o.reachL = kf(t, [
+        [0.6, 0],
+        [0.84, 4.5, 'o'],
+        [1.2, 4.5],
+        [1.35, 2],
+      ]);
       const tl = t - 0.07;
-      o.ta = kf(tl, [[0, 1.3], [0.55, 1.95], [0.85, 0.9, 'i'], [1.0, 0.35, 'o'], [1.35, 1.3]]);
-      o.tk = kf(tl, [[0, -0.06], [0.55, 0.16], [0.85, -0.05], [1.0, -0.22], [1.35, -0.06]]);
-      o.tsw = kf(tl, [[0, 0], [0.55, 0.25], [0.9, -0.35], [1.35, 0]]);
+      o.ta = kf(tl, [
+        [0, 1.3],
+        [0.55, 1.95],
+        [0.85, 0.9, 'i'],
+        [1.0, 0.35, 'o'],
+        [1.35, 1.3],
+      ]);
+      o.tk = kf(tl, [
+        [0, -0.06],
+        [0.55, 0.16],
+        [0.85, -0.05],
+        [1.0, -0.22],
+        [1.35, -0.06],
+      ]);
+      o.tsw = kf(tl, [
+        [0, 0],
+        [0.55, 0.25],
+        [0.9, -0.35],
+        [1.35, 0],
+      ]);
       o.jaw = bump(t, 0.75, 1.15) * 0.8;
       o.ear = 0.2 + bump(t, 0.7, 1.25) * 0.8;
-      o.furX = kf(t - 0.06, [[0, 0], [0.55, -1.5], [0.85, 0], [1.0, 3.5, 'o'], [1.2, -1], [1.35, 0]]);
+      o.furX = kf(t - 0.06, [
+        [0, 0],
+        [0.55, -1.5],
+        [0.85, 0],
+        [1.0, 3.5, 'o'],
+        [1.2, -1],
+        [1.35, 0],
+      ]);
       o.furAmp = 0.06 + bump(t, 0.85, 1.35) * 0.18;
       o.furPh = t * 2.2;
-      o.rLean = kf(t - 0.05, [[0, 0], [0.55, -0.32], [0.85, 0.1, 'i'], [1.0, 0.4, 'o'], [1.35, 0]]);
+      o.rLean = kf(t - 0.05, [
+        [0, 0],
+        [0.55, -0.32],
+        [0.85, 0.1, 'i'],
+        [1.0, 0.4, 'o'],
+        [1.35, 0],
+      ]);
       o.rUp = bump(t, 0.85, 1.1) * 1.5;
       return o;
     }
@@ -5466,32 +5793,121 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       const H = rear ? 0.9 : MAMMOTH.stomp.hit;
       const top = rear ? 0.8 : 0.66;
       const sh = (x: number) => (x * H) / 1.0;
-      o.pitch = kf(t, [[0, 0], [sh(0.22), -0.06], [sh(0.72), top - 0.04, 'o'], [sh(0.88), top], [H, 0, 'i'], [H + 0.08, -0.05, 'o'], [H + 0.3, 0.02], [H + 0.55, 0]]);
-      o.crouch = kf(t, [[0, 0], [sh(0.22), 3.2], [sh(0.5), 0], [H, 0], [H + 0.06, 2.8, 'o'], [H + 0.4, rear ? 0.5 : 0], [H + 0.6, 0]]);
+      o.pitch = kf(t, [
+        [0, 0],
+        [sh(0.22), -0.06],
+        [sh(0.72), top - 0.04, 'o'],
+        [sh(0.88), top],
+        [H, 0, 'i'],
+        [H + 0.08, -0.05, 'o'],
+        [H + 0.3, 0.02],
+        [H + 0.55, 0],
+      ]);
+      o.crouch = kf(t, [
+        [0, 0],
+        [sh(0.22), 3.2],
+        [sh(0.5), 0],
+        [H, 0],
+        [H + 0.06, 2.8, 'o'],
+        [H + 0.4, rear ? 0.5 : 0],
+        [H + 0.6, 0],
+      ]);
       const paw = t > sh(0.35) && t < H - 0.05;
       const sw = Math.sin((t - sh(0.35)) * 4.5 * Math.PI);
       o.liftL = paw ? Math.max(0, sw) * 4.5 : 0;
       o.liftR = paw ? Math.max(0, -sw) * 4.5 : 0;
       o.hp = rear
-        ? kf(t, [[0, 0.08], [0.2, 0.3], [0.62, -0.5], [0.85, -0.55], [H, 0.25, 'i'], [1.0, 0.35], [1.15, -0.45, 'o'], [1.45, -0.4], [1.6, 0.05]])
-        : kf(t, [[0, 0.08], [0.22, 0.25], [0.72, -0.38], [0.92, -0.42], [H, 0.3, 'i'], [1.12, 0.45, 'o'], [1.55, 0.08]]);
+        ? kf(t, [
+            [0, 0.08],
+            [0.2, 0.3],
+            [0.62, -0.5],
+            [0.85, -0.55],
+            [H, 0.25, 'i'],
+            [1.0, 0.35],
+            [1.15, -0.45, 'o'],
+            [1.45, -0.4],
+            [1.6, 0.05],
+          ])
+        : kf(t, [
+            [0, 0.08],
+            [0.22, 0.25],
+            [0.72, -0.38],
+            [0.92, -0.42],
+            [H, 0.3, 'i'],
+            [1.12, 0.45, 'o'],
+            [1.55, 0.08],
+          ]);
       const tl = t - 0.08;
       o.ta = rear
-        ? kf(tl, [[0, 1.3], [0.62, 0], [0.85, -0.1], [0.96, 1.9, 'i'], [1.15, -0.3, 'o'], [1.45, -0.2], [1.6, 1.2]])
-        : kf(tl, [[0, 1.3], [0.72, 0.1], [0.92, 0], [1.06, 1.95, 'i'], [1.25, 1.2], [1.55, 1.3]]);
+        ? kf(tl, [
+            [0, 1.3],
+            [0.62, 0],
+            [0.85, -0.1],
+            [0.96, 1.9, 'i'],
+            [1.15, -0.3, 'o'],
+            [1.45, -0.2],
+            [1.6, 1.2],
+          ])
+        : kf(tl, [
+            [0, 1.3],
+            [0.72, 0.1],
+            [0.92, 0],
+            [1.06, 1.95, 'i'],
+            [1.25, 1.2],
+            [1.55, 1.3],
+          ]);
       o.tk = rear
-        ? kf(tl, [[0, -0.06], [0.62, -0.35], [0.96, 0.1], [1.15, -0.3], [1.45, -0.3], [1.6, -0.06]])
-        : kf(tl, [[0, -0.06], [0.72, -0.32], [0.92, -0.35], [1.06, 0.12], [1.55, -0.06]]);
+        ? kf(tl, [
+            [0, -0.06],
+            [0.62, -0.35],
+            [0.96, 0.1],
+            [1.15, -0.3],
+            [1.45, -0.3],
+            [1.6, -0.06],
+          ])
+        : kf(tl, [
+            [0, -0.06],
+            [0.72, -0.32],
+            [0.92, -0.35],
+            [1.06, 0.12],
+            [1.55, -0.06],
+          ]);
       o.jaw = Math.max(bump(t, sh(0.42), H), rear ? bump(t, 1.06, 1.55) : 0) * 0.95;
       o.ear = 0.2 + Math.max(bump(t, sh(0.35), H + 0.1), rear ? bump(t, 1.05, 1.6) : 0) * 0.8;
-      o.furUp = kf(t, [[H - 0.05, 0], [H, 0.85, 'i'], [H + 0.22, -0.12, 'o'], [H + 0.45, 0]]);
-      o.furX = kf(t - 0.05, [[0, 0], [sh(0.72), -2.4], [H, -1], [H + 0.1, 1.5], [H + 0.55, 0]]);
+      o.furUp = kf(t, [
+        [H - 0.05, 0],
+        [H, 0.85, 'i'],
+        [H + 0.22, -0.12, 'o'],
+        [H + 0.45, 0],
+      ]);
+      o.furX = kf(t - 0.05, [
+        [0, 0],
+        [sh(0.72), -2.4],
+        [H, -1],
+        [H + 0.1, 1.5],
+        [H + 0.55, 0],
+      ]);
       o.furAmp = 0.05 + bump(t, H, H + 0.55) * 0.15;
       o.furPh = t * 2.5;
-      o.rLean = kf(t - 0.05, [[0, 0], [sh(0.72), 0.45], [H, 0.2], [H + 0.06, -0.25, 'o'], [H + 0.4, 0]]);
-      o.rUp = kf(t, [[H, 0], [H + 0.06, 2.5, 'o'], [H + 0.2, 0]]);
+      o.rLean = kf(t - 0.05, [
+        [0, 0],
+        [sh(0.72), 0.45],
+        [H, 0.2],
+        [H + 0.06, -0.25, 'o'],
+        [H + 0.4, 0],
+      ]);
+      o.rUp = kf(t, [
+        [H, 0],
+        [H + 0.06, 2.5, 'o'],
+        [H + 0.2, 0],
+      ]);
       if (rear) {
-        o.rDrum = kf(t, [[1.0, 0], [1.15, 1, 'o'], [1.5, 1], [1.6, 0]]);
+        o.rDrum = kf(t, [
+          [1.0, 0],
+          [1.15, 1, 'o'],
+          [1.5, 1],
+          [1.6, 0],
+        ]);
         o.rBeat = beatAt(t, [1.27, 1.47]);
       }
       return o;
@@ -5504,12 +5920,35 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       const si = Math.floor(sc);
       const su = sc - si;
       const scr2 = si >= 0 && si < 3;
-      o.liftR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 8.5 : 8.5 * Math.max(0, 1 - ease((su - 0.35) / 0.22))) : 0;
+      o.liftR = scr2
+        ? su < 0.35
+          ? ease(su / 0.35) * 8.5
+          : 8.5 * Math.max(0, 1 - ease((su - 0.35) / 0.22))
+        : 0;
       o.reachR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 6 : 6 - ease((su - 0.35) / 0.65) * 13) : 0;
-      o.hp = kf(tt, [[0, 0.1], [0.25, 0.42], [1.05, 0.46]]) + (scr2 ? bump(su, 0.35, 0.8) * 0.05 : 0);
-      o.pitch = kf(tt, [[0, 0], [0.25, -0.05], [0.85, -0.05], [1.05, -0.1]]);
-      o.crouch = kf(tt, [[0, 0], [0.25, 1.6], [0.85, 1.6], [1.05, 2.4]]);
-      o.reachB = kf(tt, [[0, 0], [0.25, -1.5], [1.05, -2.5]]);
+      o.hp =
+        kf(tt, [
+          [0, 0.1],
+          [0.25, 0.42],
+          [1.05, 0.46],
+        ]) + (scr2 ? bump(su, 0.35, 0.8) * 0.05 : 0);
+      o.pitch = kf(tt, [
+        [0, 0],
+        [0.25, -0.05],
+        [0.85, -0.05],
+        [1.05, -0.1],
+      ]);
+      o.crouch = kf(tt, [
+        [0, 0],
+        [0.25, 1.6],
+        [0.85, 1.6],
+        [1.05, 2.4],
+      ]);
+      o.reachB = kf(tt, [
+        [0, 0],
+        [0.25, -1.5],
+        [1.05, -2.5],
+      ]);
       o.ta = 1.8;
       o.tk = 0.18;
       o.tsw = 0.12 * Math.sin(tt * 9);
@@ -5525,7 +5964,7 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       // Галоп: шаг по пройденному пути (частота растёт со скоростью), корпус
       // наклонён вперёд и качается, шерсть и уши сносит назад.
       o.gait = 2;
-      o.ph = Math.floor((((c.walk / GALLOP_C) % 1) + 1) % 1 * 12) / 12;
+      o.ph = Math.floor(((((c.walk / GALLOP_C) % 1) + 1) % 1) * 12) / 12;
       o.stride = GALLOP_S;
       o.lift = 6;
       const a = o.ph * TAU;
@@ -5550,18 +5989,59 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
     case 'f12b_skid': {
       // Юз: ноги упёрты вперёд, корпус по инерции — откинут, к остановке
       // клюёт вперёд и встаёт; шерсть и хобот летят вперёд.
-      o.reachF = kf(t, [[0, 6], [0.6, 5], [0.85, 0]]);
-      o.reachB = kf(t, [[0, 3], [0.6, 2.5], [0.85, 0]]);
-      o.pitch = kf(t, [[0, 0.06], [0.45, 0.1], [0.68, -0.07, 'i'], [0.78, 0.02, 'o'], [0.85, 0]]);
-      o.crouch = kf(t, [[0, 2.6], [0.6, 2.2], [0.85, 0]]);
-      o.hp = kf(t, [[0, -0.12], [0.5, -0.08], [0.7, 0.32, 'i'], [0.85, 0.1]]);
-      o.ta = kf(t - 0.08, [[0, 0.7], [0.55, 0.6], [0.75, 1.9, 'i'], [0.85, 1.4]]);
-      o.tk = kf(t - 0.08, [[0, -0.15], [0.75, 0.1], [0.85, -0.06]]);
-      o.furX = kf(t - 0.05, [[0, 3.5], [0.55, 3], [0.72, 5, 'o'], [0.85, -1]]);
+      o.reachF = kf(t, [
+        [0, 6],
+        [0.6, 5],
+        [0.85, 0],
+      ]);
+      o.reachB = kf(t, [
+        [0, 3],
+        [0.6, 2.5],
+        [0.85, 0],
+      ]);
+      o.pitch = kf(t, [
+        [0, 0.06],
+        [0.45, 0.1],
+        [0.68, -0.07, 'i'],
+        [0.78, 0.02, 'o'],
+        [0.85, 0],
+      ]);
+      o.crouch = kf(t, [
+        [0, 2.6],
+        [0.6, 2.2],
+        [0.85, 0],
+      ]);
+      o.hp = kf(t, [
+        [0, -0.12],
+        [0.5, -0.08],
+        [0.7, 0.32, 'i'],
+        [0.85, 0.1],
+      ]);
+      o.ta = kf(t - 0.08, [
+        [0, 0.7],
+        [0.55, 0.6],
+        [0.75, 1.9, 'i'],
+        [0.85, 1.4],
+      ]);
+      o.tk = kf(t - 0.08, [
+        [0, -0.15],
+        [0.75, 0.1],
+        [0.85, -0.06],
+      ]);
+      o.furX = kf(t - 0.05, [
+        [0, 3.5],
+        [0.55, 3],
+        [0.72, 5, 'o'],
+        [0.85, -1],
+      ]);
       o.furAmp = 0.12;
       o.furPh = t * 4;
       o.ear = 0.9;
-      o.rLean = kf(t - 0.05, [[0, 0.55], [0.7, 0.75], [0.85, 0.1]]);
+      o.rLean = kf(t - 0.05, [
+        [0, 0.55],
+        [0.7, 0.75],
+        [0.85, 0.1],
+      ]);
       return o;
     }
     case 'f12b_stunned': {
@@ -5569,20 +6049,65 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       // контакта — вспышка трещины), откат; дальше — пошатывается, звёзды.
       o.crack = 1;
       if (t < 0.5) {
-        o.hp = kf(t, [[0, -0.45], [0.06, -0.5], [0.22, 0.52, 'o'], [0.36, 0.38], [0.5, 0.45]]);
-        o.pitch = kf(t, [[0, 0.12], [0.08, 0.1], [0.25, -0.06, 'o'], [0.5, -0.03]]);
-        o.crouch = kf(t, [[0, 0.5], [0.1, 3.8, 'o'], [0.3, 2.2], [0.5, 2.6]]);
-        o.roll = kf(t, [[0, 0], [0.3, 0.07], [0.5, 0.05]]);
-        o.ta = kf(t - 0.06, [[0, 0.4], [0.2, 1.95, 'i'], [0.4, 1.6], [0.5, 1.75]]);
+        o.hp = kf(t, [
+          [0, -0.45],
+          [0.06, -0.5],
+          [0.22, 0.52, 'o'],
+          [0.36, 0.38],
+          [0.5, 0.45],
+        ]);
+        o.pitch = kf(t, [
+          [0, 0.12],
+          [0.08, 0.1],
+          [0.25, -0.06, 'o'],
+          [0.5, -0.03],
+        ]);
+        o.crouch = kf(t, [
+          [0, 0.5],
+          [0.1, 3.8, 'o'],
+          [0.3, 2.2],
+          [0.5, 2.6],
+        ]);
+        o.roll = kf(t, [
+          [0, 0],
+          [0.3, 0.07],
+          [0.5, 0.05],
+        ]);
+        o.ta = kf(t - 0.06, [
+          [0, 0.4],
+          [0.2, 1.95, 'i'],
+          [0.4, 1.6],
+          [0.5, 1.75],
+        ]);
         o.tk = 0.12;
-        o.tsw = kf(t, [[0, 0], [0.3, 0.3], [0.5, 0.1]]);
-        o.furX = kf(t - 0.04, [[0, 4.5], [0.15, 2], [0.3, -1.5], [0.5, 0]]);
+        o.tsw = kf(t, [
+          [0, 0],
+          [0.3, 0.3],
+          [0.5, 0.1],
+        ]);
+        o.furX = kf(t - 0.04, [
+          [0, 4.5],
+          [0.15, 2],
+          [0.3, -1.5],
+          [0.5, 0],
+        ]);
         o.furUp = bump(t, 0, 0.3) * 0.6;
-        o.ear = kf(t, [[0, 1], [0.5, 0.1]]);
-        o.reachF = kf(t, [[0, 2], [0.5, 1]]);
+        o.ear = kf(t, [
+          [0, 1],
+          [0.5, 0.1],
+        ]);
+        o.reachF = kf(t, [
+          [0, 2],
+          [0.5, 1],
+        ]);
         o.crack = t < 0.16 ? 2 : 1;
         o.daze = t > 0.3 ? ((t - 0.3) / 1.2) % 1 : -1;
-        o.rLean = kf(t, [[0, 0.7], [0.1, 0.9], [0.3, -0.2], [0.5, 0.1]]);
+        o.rLean = kf(t, [
+          [0, 0.7],
+          [0.1, 0.9],
+          [0.3, -0.2],
+          [0.5, 0.1],
+        ]);
         o.rUp = bump(t, 0, 0.25) * 3;
         return o;
       }
@@ -5610,26 +6135,59 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
     }
     case 'f12b_getup': {
       // Подъём с усилием: упёрся — просел — встал; трясёт головой.
-      o.crouch = kf(t, [[0, 2.6], [0.14, 1.2, 'o'], [0.24, 1.9], [0.45, -0.3, 'o'], [0.6, 0]]);
-      o.pitch = kf(t, [[0, -0.03], [0.14, 0.07], [0.24, 0.02], [0.45, 0.05], [0.6, 0]]);
-      o.hp = kf(t, [[0, 0.45], [0.2, 0.3], [0.45, -0.05], [0.6, 0.08]]);
+      o.crouch = kf(t, [
+        [0, 2.6],
+        [0.14, 1.2, 'o'],
+        [0.24, 1.9],
+        [0.45, -0.3, 'o'],
+        [0.6, 0],
+      ]);
+      o.pitch = kf(t, [
+        [0, -0.03],
+        [0.14, 0.07],
+        [0.24, 0.02],
+        [0.45, 0.05],
+        [0.6, 0],
+      ]);
+      o.hp = kf(t, [
+        [0, 0.45],
+        [0.2, 0.3],
+        [0.45, -0.05],
+        [0.6, 0.08],
+      ]);
       o.hy = 0.32 * Math.sin(t * 30) * clamp01(1 - t / 0.6);
       o.ear = 0.3 + 0.6 * Math.abs(Math.sin(t * 30)) * clamp01(1 - t / 0.6);
-      o.ta = kf(t - 0.06, [[0, 1.75], [0.3, 1.0], [0.6, 1.3]]);
+      o.ta = kf(t - 0.06, [
+        [0, 1.75],
+        [0.3, 1.0],
+        [0.6, 1.3],
+      ]);
       o.tsw = -o.hy * 1.2;
       o.furAmp = 0.25 * clamp01(1 - t / 0.6);
       o.furPh = t * 5;
       o.daze = t < 0.25 ? (t * 2) % 1 : -1;
       o.liftR = bump(t, 0.1, 0.3) * 3;
-      o.reachF = kf(t, [[0, 1], [0.6, 0]]);
-      o.rLean = kf(t, [[0, 0.15], [0.3, 0.3], [0.6, 0]]);
+      o.reachF = kf(t, [
+        [0, 1],
+        [0.6, 0],
+      ]);
+      o.rLean = kf(t, [
+        [0, 0.15],
+        [0.3, 0.3],
+        [0.6, 0],
+      ]);
       return o;
     }
     case 'f12b_drum': {
       // Вьюга: шаманка заносит колотушку и бьёт в бубен ровно в такт валам
       // (0,35 / 0,70 / 1,05 с); мамонт притопывает передними в те же удары.
       const hits = [0.35, 0.7, 1.05];
-      o.rDrum = kf(t, [[0, 0], [0.14, 1, 'o'], [1.2, 1], [1.5, 0]]);
+      o.rDrum = kf(t, [
+        [0, 0],
+        [0.14, 1, 'o'],
+        [1.2, 1],
+        [1.5, 0],
+      ]);
       o.rBeat = beatAt(t, hits);
       o.rLean = -0.1 + hits.reduce((s, h) => s + bump(t, h - 0.02, h + 0.16) * 0.18, 0);
       o.liftL = bump(t, 0.35 - 0.24, 0.35) * 4.5 + bump(t, 1.05 - 0.24, 1.05) * 4.5;
@@ -5647,72 +6205,251 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
     case 'f12b_spikes': {
       // Хобот вверх (вдох) — и хоботом с бивнями в лёд ровно в 0,9 с.
       const tl = t - 0.04;
-      o.ta = kf(tl, [[0, 1.3], [0.55, -0.65, 'o'], [0.8, -0.8], [0.9, 1.9, 'i'], [1.0, 1.75], [1.4, 1.3]]);
-      o.tk = kf(tl, [[0, -0.06], [0.55, -0.12], [0.8, -0.18], [0.9, 0.05], [1.4, -0.06]]);
-      o.hp = kf(t, [[0, 0.06], [0.55, -0.42, 'o'], [0.8, -0.48], [0.9, 0.58, 'i'], [1.02, 0.5], [1.4, 0.08]]);
-      o.pitch = kf(t, [[0, 0], [0.55, 0.2, 'o'], [0.8, 0.23], [0.9, -0.06, 'i'], [1.05, 0], [1.4, 0]]);
-      o.crouch = kf(t, [[0, 0], [0.2, 1.5], [0.55, 0], [0.9, 0], [0.96, 3, 'o'], [1.3, 0]]);
-      o.liftL = o.liftR = kf(t, [[0.4, 0], [0.7, 3], [0.9, 0, 'i']]);
+      o.ta = kf(tl, [
+        [0, 1.3],
+        [0.55, -0.65, 'o'],
+        [0.8, -0.8],
+        [0.9, 1.9, 'i'],
+        [1.0, 1.75],
+        [1.4, 1.3],
+      ]);
+      o.tk = kf(tl, [
+        [0, -0.06],
+        [0.55, -0.12],
+        [0.8, -0.18],
+        [0.9, 0.05],
+        [1.4, -0.06],
+      ]);
+      o.hp = kf(t, [
+        [0, 0.06],
+        [0.55, -0.42, 'o'],
+        [0.8, -0.48],
+        [0.9, 0.58, 'i'],
+        [1.02, 0.5],
+        [1.4, 0.08],
+      ]);
+      o.pitch = kf(t, [
+        [0, 0],
+        [0.55, 0.2, 'o'],
+        [0.8, 0.23],
+        [0.9, -0.06, 'i'],
+        [1.05, 0],
+        [1.4, 0],
+      ]);
+      o.crouch = kf(t, [
+        [0, 0],
+        [0.2, 1.5],
+        [0.55, 0],
+        [0.9, 0],
+        [0.96, 3, 'o'],
+        [1.3, 0],
+      ]);
+      o.liftL = o.liftR = kf(t, [
+        [0.4, 0],
+        [0.7, 3],
+        [0.9, 0, 'i'],
+      ]);
       o.jaw = bump(t, 0.4, 0.88) * 0.9;
       o.ear = 0.2 + bump(t, 0.4, 1.1) * 0.8;
-      o.furUp = kf(t, [[0.88, 0], [0.92, 0.65, 'i'], [1.15, -0.1, 'o'], [1.35, 0]]);
+      o.furUp = kf(t, [
+        [0.88, 0],
+        [0.92, 0.65, 'i'],
+        [1.15, -0.1, 'o'],
+        [1.35, 0],
+      ]);
       o.furAmp = 0.05 + bump(t, 0.9, 1.4) * 0.12;
       o.furPh = t * 2.5;
-      o.rArms = kf(t, [[0, 0], [0.5, 1], [0.85, 1], [0.95, 0.2], [1.4, 0]]);
-      o.rLean = kf(t, [[0.85, 0], [0.92, 0.3, 'o'], [1.2, 0]]);
+      o.rArms = kf(t, [
+        [0, 0],
+        [0.5, 1],
+        [0.85, 1],
+        [0.95, 0.2],
+        [1.4, 0],
+      ]);
+      o.rLean = kf(t, [
+        [0.85, 0],
+        [0.92, 0.3, 'o'],
+        [1.2, 0],
+      ]);
       return o;
     }
     case 'f12b_blow': {
       // Дует на жаровню: вдох хоботом вверх, грудь раздувается — хобот на
       // жаровню, выдох клубами (к 0,9 с жаровня гаснет).
       const tl = t - 0.04;
-      o.ta = kf(tl, [[0, 1.3], [0.55, -0.55, 'o'], [0.72, -0.6], [0.84, 0.55, 'i'], [1.15, 0.6], [1.3, 1.3]]);
-      o.tk = kf(tl, [[0, -0.06], [0.55, -0.25], [0.84, 0], [1.15, 0], [1.3, -0.06]]);
+      o.ta = kf(tl, [
+        [0, 1.3],
+        [0.55, -0.55, 'o'],
+        [0.72, -0.6],
+        [0.84, 0.55, 'i'],
+        [1.15, 0.6],
+        [1.3, 1.3],
+      ]);
+      o.tk = kf(tl, [
+        [0, -0.06],
+        [0.55, -0.25],
+        [0.84, 0],
+        [1.15, 0],
+        [1.3, -0.06],
+      ]);
       o.tsw = t > 0.84 && t < 1.15 ? (f24(t) % 2 ? 0.03 : -0.03) : 0;
-      o.hp = kf(t, [[0, 0.06], [0.55, -0.28], [0.72, -0.3], [0.84, 0.18, 'i'], [1.15, 0.15], [1.3, 0.06]]);
-      o.pitch = kf(t, [[0, 0], [0.55, 0.05], [0.84, -0.03, 'i'], [1.15, -0.02], [1.3, 0]]);
+      o.hp = kf(t, [
+        [0, 0.06],
+        [0.55, -0.28],
+        [0.72, -0.3],
+        [0.84, 0.18, 'i'],
+        [1.15, 0.15],
+        [1.3, 0.06],
+      ]);
+      o.pitch = kf(t, [
+        [0, 0],
+        [0.55, 0.05],
+        [0.84, -0.03, 'i'],
+        [1.15, -0.02],
+        [1.3, 0],
+      ]);
       o.breath = t >= 0.84 && t < 1.2 ? ((t - 0.84) / 0.12) % 1 : 0;
       o.ear = 0.3 + bump(t, 0.3, 0.84) * 0.6;
-      o.rLean = kf(t, [[0.8, 0], [0.9, -0.2, 'o'], [1.3, 0]]);
+      o.rLean = kf(t, [
+        [0.8, 0],
+        [0.9, -0.2, 'o'],
+        [1.3, 0],
+      ]);
       return o;
     }
     case 'f12b_drop': {
       // Сияние: шаманка приседает, тянет руки к небу — мамонт вскидывается
       // и подбрасывает её в 0,7 с (дальше она — свой моб).
       o.rider = t < 0.7;
-      o.pitch = kf(t, [[0, 0], [0.45, -0.05], [0.7, 0.2, 'i'], [0.9, 0.22], [1.2, 0]]);
-      o.crouch = kf(t, [[0, 0], [0.45, 2.2], [0.7, 0, 'i'], [1.2, 0]]);
-      o.hp = kf(t, [[0, 0.06], [0.45, 0.2], [0.7, -0.4, 'i'], [0.95, -0.42], [1.2, 0.06]]);
-      o.ta = kf(t - 0.07, [[0, 1.3], [0.45, 1.5], [0.75, -0.2, 'i'], [1.0, -0.3], [1.2, 1.2]]);
-      o.tk = kf(t - 0.07, [[0, -0.06], [0.75, -0.3], [1.2, -0.06]]);
+      o.pitch = kf(t, [
+        [0, 0],
+        [0.45, -0.05],
+        [0.7, 0.2, 'i'],
+        [0.9, 0.22],
+        [1.2, 0],
+      ]);
+      o.crouch = kf(t, [
+        [0, 0],
+        [0.45, 2.2],
+        [0.7, 0, 'i'],
+        [1.2, 0],
+      ]);
+      o.hp = kf(t, [
+        [0, 0.06],
+        [0.45, 0.2],
+        [0.7, -0.4, 'i'],
+        [0.95, -0.42],
+        [1.2, 0.06],
+      ]);
+      o.ta = kf(t - 0.07, [
+        [0, 1.3],
+        [0.45, 1.5],
+        [0.75, -0.2, 'i'],
+        [1.0, -0.3],
+        [1.2, 1.2],
+      ]);
+      o.tk = kf(t - 0.07, [
+        [0, -0.06],
+        [0.75, -0.3],
+        [1.2, -0.06],
+      ]);
       o.jaw = bump(t, 0.65, 1.15);
       o.ear = 0.2 + bump(t, 0.6, 1.2) * 0.8;
-      o.rCrouch = kf(t, [[0, 0], [0.45, 1]]);
-      o.rArms = kf(t, [[0.1, 0], [0.5, 1]]);
-      o.rUp = kf(t, [[0.5, 0], [0.7, 4, 'i']]);
+      o.rCrouch = kf(t, [
+        [0, 0],
+        [0.45, 1],
+      ]);
+      o.rArms = kf(t, [
+        [0.1, 0],
+        [0.5, 1],
+      ]);
+      o.rUp = kf(t, [
+        [0.5, 0],
+        [0.7, 4, 'i'],
+      ]);
       return o;
     }
     case 'dying': {
       // Смерть 2,6 с: вздрогнул — передние колени подломились — задние —
       // завалился на бок с глухим ударом — иней затягивает шерсть.
-      o.hp = kf(t, [[0, 0.06], [0.12, -0.35, 'o'], [0.4, -0.2], [1.0, 0.45], [1.8, 0.55], [2.6, 0.6]]);
+      o.hp = kf(t, [
+        [0, 0.06],
+        [0.12, -0.35, 'o'],
+        [0.4, -0.2],
+        [1.0, 0.45],
+        [1.8, 0.55],
+        [2.6, 0.6],
+      ]);
       o.jaw = bump(t, 0.05, 0.9) * 0.9;
-      o.pitch = kf(t, [[0, 0], [0.15, 0.06], [0.45, 0], [1.05, -0.17, 'i'], [1.4, -0.12], [1.9, -0.04]]);
-      o.kneelF = kf(t, [[0.35, 0], [1.05, 1, 'i']]);
-      o.kneelB = kf(t, [[0.8, 0], [1.45, 1, 'i']]);
-      o.crouch = kf(t, [[0.3, 0], [1.05, 4.5, 'i'], [1.45, 8], [1.9, 9]]);
-      o.roll = kf(t, [[1.25, 0], [1.85, 1.38, 'i'], [1.97, 1.28, 'o'], [2.1, 1.33]]);
-      o.ta = kf(t - 0.1, [[0, 1.3], [0.2, 0.6], [1.0, 1.7], [1.9, 2.1]]);
-      o.tk = kf(t - 0.1, [[0, -0.06], [1.0, 0.15]]);
-      o.ear = kf(t, [[0, 0.8], [1.0, 0.1]]);
-      o.furUp = kf(t, [[1.8, 0], [1.87, 0.6, 'i'], [2.05, 0]]);
-      o.furX = kf(t, [[0, 0], [1.05, 2], [1.4, 0]]);
+      o.pitch = kf(t, [
+        [0, 0],
+        [0.15, 0.06],
+        [0.45, 0],
+        [1.05, -0.17, 'i'],
+        [1.4, -0.12],
+        [1.9, -0.04],
+      ]);
+      o.kneelF = kf(t, [
+        [0.35, 0],
+        [1.05, 1, 'i'],
+      ]);
+      o.kneelB = kf(t, [
+        [0.8, 0],
+        [1.45, 1, 'i'],
+      ]);
+      o.crouch = kf(t, [
+        [0.3, 0],
+        [1.05, 4.5, 'i'],
+        [1.45, 8],
+        [1.9, 9],
+      ]);
+      o.roll = kf(t, [
+        [1.25, 0],
+        [1.85, 1.38, 'i'],
+        [1.97, 1.28, 'o'],
+        [2.1, 1.33],
+      ]);
+      o.ta = kf(t - 0.1, [
+        [0, 1.3],
+        [0.2, 0.6],
+        [1.0, 1.7],
+        [1.9, 2.1],
+      ]);
+      o.tk = kf(t - 0.1, [
+        [0, -0.06],
+        [1.0, 0.15],
+      ]);
+      o.ear = kf(t, [
+        [0, 0.8],
+        [1.0, 0.1],
+      ]);
+      o.furUp = kf(t, [
+        [1.8, 0],
+        [1.87, 0.6, 'i'],
+        [2.05, 0],
+      ]);
+      o.furX = kf(t, [
+        [0, 0],
+        [1.05, 2],
+        [1.4, 0],
+      ]);
       o.furAmp = 0.05 + bump(t, 1.85, 2.4) * 0.12;
       o.furPh = t * 3;
-      o.frost = kf(t, [[1.5, 0], [2.35, 1]]);
+      o.frost = kf(t, [
+        [1.5, 0],
+        [2.35, 1],
+      ]);
       o.shut = t > 1.3;
-      o.rSlide = kf(t, [[0.25, 0], [1.0, 1]]);
-      o.rLean = kf(t, [[0, 0], [0.2, -0.4], [0.6, 0.6], [1.0, 0.9]]);
+      o.rSlide = kf(t, [
+        [0.25, 0],
+        [1.0, 1],
+      ]);
+      o.rLean = kf(t, [
+        [0, 0],
+        [0.2, -0.4],
+        [0.6, 0.6],
+        [1.0, 0.9],
+      ]);
       return o;
     }
   }
@@ -5735,9 +6472,10 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
   }
   const { fq, lq } = walkQ(c);
   const lead = lq * 0.24;
-  const ph = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12) / 12;
+  const ph = Math.floor(((((c.walk / WALK_C) % 1) + 1) % 1) * 12) / 12;
   const a = ph * TAU;
-  const ramp0 = mode === 'chase' || mode === 'f12b_douse' ? clamp01(Math.floor(t * 12) / 12 / 0.25) : 1;
+  const ramp0 =
+    mode === 'chase' || mode === 'f12b_douse' ? clamp01(Math.floor(t * 12) / 12 / 0.25) : 1;
   o.gait = 1;
   o.ph = ph;
   o.stride = [0.15, 0.55, 1][fq] * WALK_S * ease(ramp0);
@@ -5780,7 +6518,7 @@ function mamWalkKey(t: number, now: number, c: MamCtx, mode: string): string {
   const moving = c.speed > 0.25 || Math.abs(c.turn) > 0.05;
   if (!moving) return `i${Math.floor(now / 0.3) % 8}`;
   const { fq, lq } = walkQ(c);
-  const wf = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12);
+  const wf = Math.floor(((((c.walk / WALK_C) % 1) + 1) % 1) * 12);
   const r = (mode === 'chase' || mode === 'f12b_douse') && t < 0.25 ? `r${Math.floor(t * 12)}` : '';
   return `w${wf}${fq}${lq}${fq < 2 ? Math.sign(c.turn) : ''}${r}`;
 }
@@ -5843,7 +6581,12 @@ function mamFrame(
       const as = Math.abs(Math.sin(face));
       ex.sx = 1 - 0.08 * kc * ac + 0.04 * kc * as;
       ex.sy = 1 - 0.08 * kc * as + 0.04 * kc * ac;
-      const rec = kf(t, [[0, 1.5], [0.1, 0], [0.22, -3, 'o'], [0.5, -2]]);
+      const rec = kf(t, [
+        [0, 1.5],
+        [0.1, 0],
+        [0.22, -3, 'o'],
+        [0.5, -2],
+      ]);
       ex.dx = Math.cos(face) * rec;
       ex.dy = Math.sin(face) * rec;
     } else {
@@ -5855,7 +6598,10 @@ function mamFrame(
   } else if (mode === 'f12b_getup') {
     o = mamAt(mode, t, now, c);
     key = `gu${f24(t)}`;
-    const rec = kf(t, [[0, -2], [0.6, 0]]);
+    const rec = kf(t, [
+      [0, -2],
+      [0.6, 0],
+    ]);
     ex.dx = Math.cos(face) * rec;
     ex.dy = Math.sin(face) * rec;
   } else if (mode === 'f12b_paw') {
@@ -5872,7 +6618,7 @@ function mamFrame(
   }
   // Начало техники: ноги из шага встают на лёд за 0,125 с.
   if (MAM_TECH.has(mode) && t < 0.125) {
-    const wf = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 6) * 2;
+    const wf = Math.floor(((((c.walk / WALK_C) % 1) + 1) % 1) * 6) * 2;
     const k = 1 - ease(t / 0.125);
     o.gait = 1;
     o.ph = wf / 12;
@@ -5906,7 +6652,13 @@ function mamFrame(
   if (mode === 'f12b_drum') for (const h of [0.35, 0.7, 1.05]) squash(h, 0.025, 0.1);
   if (mode === 'roar' && t >= 0.8 && t < 0.92) squash(0.8, 0.05);
   if (mode === 'f12b_blow') {
-    const sw = kf(t, [[0, 0], [0.6, 1], [0.84, 1], [0.95, -0.4, 'o'], [1.3, 0]]);
+    const sw = kf(t, [
+      [0, 0],
+      [0.6, 1],
+      [0.84, 1],
+      [0.95, -0.4, 'o'],
+      [1.3, 0],
+    ]);
     ex.sx = 1 + 0.035 * sw;
     ex.sy = 1 + 0.02 * sw;
   }
@@ -5947,10 +6699,18 @@ function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<Mob
 }
 
 /** Точки кадра (px от точки моба на полу): бубен и середина кончиков бивней. */
-function mamPts(o: MamO, face: number, ex: Partial<MobFrame>): { drum: [number, number]; tusk: [number, number] } {
+function mamPts(
+  o: MamO,
+  face: number,
+  ex: Partial<MobFrame>,
+): { drum: [number, number]; tusk: [number, number] } {
   const S = mamSkel(o);
   const T = mamTusks(S);
-  const tip: V3 = [(T.tip[0][0] + T.tip[1][0]) / 2, (T.tip[0][1] + T.tip[1][1]) / 2, (T.tip[0][2] + T.tip[1][2]) / 2];
+  const tip: V3 = [
+    (T.tip[0][0] + T.tip[1][0]) / 2,
+    (T.tip[0][1] + T.tip[1][1]) / 2,
+    (T.tip[0][2] + T.tip[1][2]) / 2,
+  ];
   const sh = riderSh(o);
   const drum = riderPlace(o, S).place(shDrumLocal(sh));
   const f = dirAng(dirN(face, 16), 16);
@@ -5992,7 +6752,15 @@ export function mamPointPx(m: Mob, which: 'drum' | 'tusk'): [number, number] {
 // Прогрев: вход (лицом на юг), ходьба во все 16 сторон, бивни, топот и рытьё
 // лицом на юг (оттуда герой входит в арену).
 registerMobWarm('f12boss', function* () {
-  const c0: MamCtx = { rider: true, phase: 0, walk: 0, turn: 0, speed: 0, k: 0, stun: MAMMOTH.stun };
+  const c0: MamCtx = {
+    rider: true,
+    phase: 0,
+    walk: 0,
+    turn: 0,
+    speed: 0,
+    k: 0,
+    stun: MAMMOTH.stun,
+  };
   const S = Math.PI / 2;
   const one = (mode: string, t: number, face: number, c: MamCtx) => {
     const { o, key } = mamFrame(mode, t, 0, c, face);
@@ -6070,10 +6838,22 @@ function shamanPose(
       o.body.handR = lerp3([-1, 4, 11], [1.6, 3.4, 19.5], up);
       o.body.crouch = t < 0.1 ? 2 : 0;
       if (t < 0.3) o.body.feet = undefined;
-      o.ribUp = kf(t, [[0, -1], [0.5, -0.6], [0.9, 0.12]]);
+      o.ribUp = kf(t, [
+        [0, -1],
+        [0.5, -0.6],
+        [0.9, 0.12],
+      ]);
       o.ribA = 1.4;
-      o.aurora = kf(t, [[0, 1.3], [0.9, 1]]);
-      ex.lift = kf(t, [[0, 14], [0.1, 12, 'o'], [0.55, SH_HIGH + 8, 'o'], [0.9, SH_HIGH]]);
+      o.aurora = kf(t, [
+        [0, 1.3],
+        [0.9, 1],
+      ]);
+      ex.lift = kf(t, [
+        [0, 14],
+        [0.1, 12, 'o'],
+        [0.55, SH_HIGH + 8, 'o'],
+        [0.9, SH_HIGH],
+      ]);
       ex.ghost = { every: 0.05, life: 0.22, tint: '#9affd8', alpha: 0.3 };
       ex.shadow = 3.5;
       return { o, key: `j${f24(t)}`, ex, face };
@@ -6093,20 +6873,54 @@ function shamanPose(
     case 'f12s_cast': {
       // Колдует: торможение у пола — бубен вверх, три удара — руки к небу,
       // ленты встают и вспыхивают к 1,1 с (занавесы падают в этот миг).
-      const o = shFly(kf(t, [[0, 0.9], [0.12, -0.12, 'o'], [1.0, -0.2], [1.1, -0.3]]), t * 9);
+      const o = shFly(
+        kf(t, [
+          [0, 0.9],
+          [0.12, -0.12, 'o'],
+          [1.0, -0.2],
+          [1.1, -0.3],
+        ]),
+        t * 9,
+      );
       o.body.feet = undefined;
       o.body.wide = 0.8;
-      o.drum = kf(t, [[0.08, 0], [0.3, 1, 'o']]);
+      o.drum = kf(t, [
+        [0.08, 0],
+        [0.3, 1, 'o'],
+      ]);
       o.beat = beatAt(t, [0.45, 0.65, 0.85]);
       const hd = shHands(o.drum, o.beat);
-      const up = kf(t, [[0.92, 0], [1.05, 1, 'o']]);
+      const up = kf(t, [
+        [0.92, 0],
+        [1.05, 1, 'o'],
+      ]);
       o.body.handL = lerp3(hd.L, [1.5, -3.3, 20.5], up);
       o.body.handR = lerp3(hd.R, [1.5, 3.3, 20.5], up);
-      o.ribUp = kf(t, [[0, 1.2], [0.2, 0.6], [0.95, 1.7], [1.1, 2.2]]);
-      o.ribA = kf(t, [[0, 0.8], [1.1, 1.8]]);
-      o.aurora = kf(t, [[0, 0.8], [0.9, 1.4], [1.1, 2]]);
-      o.hem = kf(t, [[0, 1], [0.2, 0.2]]);
-      ex.lift = kf(t, [[0, 5], [0.1, 3.5, 'o'], [0.3, 4.5], [1.1, 7.5]]);
+      o.ribUp = kf(t, [
+        [0, 1.2],
+        [0.2, 0.6],
+        [0.95, 1.7],
+        [1.1, 2.2],
+      ]);
+      o.ribA = kf(t, [
+        [0, 0.8],
+        [1.1, 1.8],
+      ]);
+      o.aurora = kf(t, [
+        [0, 0.8],
+        [0.9, 1.4],
+        [1.1, 2],
+      ]);
+      o.hem = kf(t, [
+        [0, 1],
+        [0.2, 0.2],
+      ]);
+      ex.lift = kf(t, [
+        [0, 5],
+        [0.1, 3.5, 'o'],
+        [0.3, 4.5],
+        [1.1, 7.5],
+      ]);
       if (t < 0.12) {
         const q = 1 - t / 0.12;
         ex.sy = 1 - 0.1 * q;
@@ -6142,31 +6956,79 @@ function shamanPose(
     }
     case 'f12s_rise': {
       // Взмывает: присела глубже — толчок, ленты хлещут вниз.
-      const o = shFly(kf(t, [[0, 0.55], [0.12, 0.8], [0.45, 0.65]]), t * 10);
+      const o = shFly(
+        kf(t, [
+          [0, 0.55],
+          [0.12, 0.8],
+          [0.45, 0.65],
+        ]),
+        t * 10,
+      );
       if (t < 0.15) {
         o.body.feet = undefined;
         o.body.kneel = 1;
-        o.body.crouch = kf(t, [[0, 2.2], [0.12, 3]]);
+        o.body.crouch = kf(t, [
+          [0, 2.2],
+          [0.12, 3],
+        ]);
       }
-      o.ribUp = kf(t, [[0, -1.4], [0.15, -1.2], [0.45, 0.12]]);
+      o.ribUp = kf(t, [
+        [0, -1.4],
+        [0.15, -1.2],
+        [0.45, 0.12],
+      ]);
       o.ribA = 1.6;
-      o.aurora = kf(t, [[0, 0.3], [0.2, 1.2], [0.45, 1]]);
-      ex.lift = kf(t, [[0, 1.5], [0.12, 0.8, 'o'], [0.45, SH_HIGH, 'o']]);
+      o.aurora = kf(t, [
+        [0, 0.3],
+        [0.2, 1.2],
+        [0.45, 1],
+      ]);
+      ex.lift = kf(t, [
+        [0, 1.5],
+        [0.12, 0.8, 'o'],
+        [0.45, SH_HIGH, 'o'],
+      ]);
       ex.ghost = { every: 0.04, life: 0.2, tint: '#9affd8', alpha: 0.32 };
       return { o, key: `r${f24(t)}`, ex, face };
     }
     case 'dying': {
       // Падает с высоты, сгибается, ленты гаснут и опадают.
-      const o = shFly(kf(t, [[0, -0.45], [0.3, -0.2], [0.45, 0.9], [0.9, 1.35]]), t * 6);
+      const o = shFly(
+        kf(t, [
+          [0, -0.45],
+          [0.3, -0.2],
+          [0.45, 0.9],
+          [0.9, 1.35],
+        ]),
+        t * 6,
+      );
       o.body.feet = undefined;
-      o.body.kneel = kf(t, [[0.3, 0], [0.5, 1]]);
+      o.body.kneel = kf(t, [
+        [0.3, 0],
+        [0.5, 1],
+      ]);
       o.body.handL = lerp3([1, -5, 17], [3, -4, 2], clamp01((t - 0.3) / 0.4));
       o.body.handR = lerp3([1, 5, 17], [3, 4, 2], clamp01((t - 0.3) / 0.4));
-      o.ribLen = kf(t, [[0, 1], [1.0, 0]]);
-      o.ribUp = kf(t, [[0, 1.5], [0.6, -1.5]]);
-      o.aurora = kf(t, [[0, 2], [0.15, 1.5], [1.0, 0]]);
+      o.ribLen = kf(t, [
+        [0, 1],
+        [1.0, 0],
+      ]);
+      o.ribUp = kf(t, [
+        [0, 1.5],
+        [0.6, -1.5],
+      ]);
+      o.aurora = kf(t, [
+        [0, 2],
+        [0.15, 1.5],
+        [1.0, 0],
+      ]);
       o.hem = 0;
-      ex.lift = kf(t, [[0, 6], [0.3, 0.01, 'i'], [0.36, 1, 'o'], [0.45, 0.01, 'i']]);
+      ex.lift = kf(t, [
+        [0, 6],
+        [0.3, 0.01, 'i'],
+        [0.36, 1, 'o'],
+        [0.45, 0.01, 'i'],
+      ]);
       ex.linger = 1.3;
       ex.alpha = t > 0.85 ? Math.max(0, 1 - (t - 0.85) / 0.45) : 1;
       ex.shadow = 5;
