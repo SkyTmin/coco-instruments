@@ -7,9 +7,9 @@
 //     с героя, босс — вдвое крупнее (Scale2x, затем трещины, грани и блики
 //     в полный пиксель, чтобы не было «крупного пикселя»). Перекраска —
 //     холодное стекло, лицо — светящиеся прорези;
-//   • стеклянный голем — тайл DCSS `crystal_guardian` (CC0), перекрашен в
-//     стекло этажа и разрезан на части для кадров (`scripts/dungeon/f7.py
-//     --sprites` → `public/dungeon/f7/golem.png`), трещины рисует код;
+//   • мобы этажа — свои файлы `f7-mob-*.ts` (анимации мобов 7: мини-3D риг
+//     `f15-rig.ts`, Отражение — из листа героя); тайл голема
+//     `public/dungeon/f7/golem.png` больше не рисуется;
 //   • остальное рисует код: пиксели 16 на клетку, свет сверху-слева, контур
 //     тёмный. Палитра — камень 0x72 + холодное стекло + фиолетовый акцент;
 //     позолота рам — приглушённая, это материал дворца, а не акцент.
@@ -38,6 +38,7 @@ import { F7_CRYSTAL, F7_GALLERY, F7_HALL, F7_MARK } from './f7';
 import { BOSS, F7_VIEW } from './f7-brains';
 import './f7-mob-echo';
 import './f7-mob-phantom';
+import './f7-mob-golem';
 
 type RGBA = [number, number, number, number];
 
@@ -423,23 +424,6 @@ function glassify(src: Px, ramp: RGBA[], ink: RGBA, sheen = 0, top = 0.72, lift 
 function heroPx(tier: number, dir: Dir4, row: number): Px | null {
   const c = heroSprite(tier, dir, row);
   return c ? fromCanvas(c) : null;
-}
-
-/** Трещины отражения: ломаные поверх стекла (тёмная черта, светлый край). */
-function crackLines(p: Px, lines: [number, number][][], dark: RGBA, lit: RGBA): void {
-  for (const ln of lines)
-    for (let i = 0; i + 1 < ln.length; i++) {
-      const [x0, y0] = ln[i];
-      const [x1, y1] = ln[i + 1];
-      const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
-      for (let k = 0; k <= n; k++) {
-        const x = Math.round(x0 + ((x1 - x0) * k) / n);
-        const y = Math.round(y0 + ((y1 - y0) * k) / n);
-        if (!p.solid(x, y)) continue;
-        p.set(x, y, dark);
-        if (p.solid(x - 1, y - 1)) p.set(x - 1, y - 1, lit);
-      }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3075,140 +3059,6 @@ registerMobWarm('f7_boss', function* () {
         yield f;
       }
     }
-});
-
-// ---------------------------------------------------------------------------
-// Стеклянный голем: лист из тайла DCSS (`golem.png`, кадры 40×40): покой ×2,
-// шаг ×4, замах, удар, боль. Трещины — кодом, по числу принятых трещин.
-// ---------------------------------------------------------------------------
-
-const sheets = new Map<string, Px | null>();
-
-/** Картинка этажа пикселями; пока не пришла — null (движок нарисует запасной вид). */
-function sheet(name: string): Px | null {
-  if (sheets.has(name)) return sheets.get(name) ?? null;
-  sheets.set(name, null);
-  if (typeof Image === 'undefined') return null;
-  const img = new Image();
-  img.onload = () => {
-    const c = document.createElement('canvas');
-    c.width = img.width;
-    c.height = img.height;
-    const g = c.getContext('2d');
-    if (!g) return;
-    g.drawImage(img, 0, 0);
-    const p = new Px(img.width, img.height);
-    p.data.set(g.getImageData(0, 0, img.width, img.height).data);
-    sheets.set(name, p);
-  };
-  img.src = `${import.meta.env.BASE_URL}dungeon/f7/${name}.png`;
-  return null;
-}
-
-function cut(src: Px, i: number, w: number, h: number): Px {
-  const o = new Px(w, h);
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const s = (y * src.w + i * w + x) * 4;
-      const d = (y * w + x) * 4;
-      for (let k = 0; k < 4; k++) o.data[d + k] = src.data[s + k];
-    }
-  return o;
-}
-
-const GOLEM_CRACK: [number, number][][][] = [
-  [
-    [
-      [17, 17],
-      [20, 21],
-      [19, 25],
-    ],
-    [
-      [26, 18],
-      [29, 23],
-    ],
-  ],
-  [
-    [
-      [12, 12],
-      [15, 15],
-      [13, 19],
-    ],
-    [
-      [22, 30],
-      [24, 35],
-    ],
-    [
-      [8, 20],
-      [10, 23],
-    ],
-  ],
-];
-
-function paintGolem(i: number, cracks: number, glow: number, sleep: boolean): Built | null {
-  const sh = sheet('golem');
-  if (!sh) return null;
-  const p = cut(sh, i, 40, 40);
-  for (let c = 0; c < Math.min(2, cracks); c++)
-    crackLines(p, GOLEM_CRACK[c], hx('#0a0e1a'), hx('#e8faff'));
-  // Сердцевина светится: у треснувшего — ярче (стекло тоньше).
-  const core: [number, number] = [19, 18];
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++)
-      if (p.solid(core[0] + dx, core[1] + dy) && (dx === 0 || dy === 0))
-        p.set(core[0] + dx, core[1] + dy, cracks >= 2 ? VIO[3] : cracks === 1 ? VIO[2] : VIO[1]);
-  if (glow) {
-    // Перед разрывом: стекло вспыхивает изнутри.
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        if (!p.solid(x, y)) continue;
-        p.set(x, y, mixc(p.get(x, y), CYAN_HOT, 0.2 * glow));
-      }
-  }
-  if (sleep) {
-    // Стоит статуей: тусклее, без сердцевины.
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++)
-        if (p.solid(x, y)) p.set(x, y, mixc(p.get(x, y), SILV[0], 0.35));
-  }
-  return { p, ax: 20, ay: 39, eye: sleep ? null : [19, 10] };
-}
-
-registerMobPainter('f7_golem', (m: Mob, pose: MobPose) => {
-  const cracks = m.data.cracks ?? 0;
-  const mode = pose.mode;
-  let i = Math.floor(pose.frame / 3) % 2;
-  let glow = 0;
-  let a = 'idle';
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_golem', pose, `dead${cracks}`, k, () => {
-      const b = paintGolem(0, cracks, 0, false);
-      if (!b) return null;
-      return { ...b, p: shatter(b.p, 20, 20, (k + 1) / 4, 3) };
-    });
-  }
-  if (mode === 'slam') {
-    i = pose.t < 0.8 ? 6 : 7;
-    a = 'slam';
-  } else if (mode === 'rupture') {
-    i = 6;
-    glow = 1 + Math.min(2, Math.floor(pose.t / 0.2));
-    a = 'rup';
-  } else if (pose.anim === 'run') {
-    i = 2 + (Math.floor(pose.frame / 2) % 4);
-    a = 'run';
-  } else if (pose.anim === 'hurt') {
-    i = 8;
-    a = 'hurt';
-  } else if (mode === 'recover' && pose.t < 0.25) {
-    i = 7;
-    a = 'after';
-  }
-  const sleep = pose.anim === 'sleep';
-  return frameOf('f7_golem', pose, `${a}${cracks}${sleep ? 's' : ''}`, i * 10 + glow, () =>
-    paintGolem(i, cracks, glow, sleep),
-  );
 });
 
 // ---------------------------------------------------------------------------

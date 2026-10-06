@@ -251,11 +251,11 @@ export interface Kind {
   limit: number;
 }
 const KINDS: Kind[] = [];
-/** Вид: свой кеш картинок и кадров с пределом. */
-export function kindOf(name: string, limit: number): Kind {
+/** Вид: свой кеш картинок и кадров с пределом (`picsK` — доля кеша картинок поз). */
+export function kindOf(name: string, limit: number, picsK = 0.6): Kind {
   const K: Kind = {
     name,
-    pics: frameLRU<Pic>(Math.round(limit * 0.6)),
+    pics: frameLRU<Pic>(Math.max(16, Math.round(limit * picsK))),
     frames: frameLRU<MobFrame>(limit),
     limit,
   };
