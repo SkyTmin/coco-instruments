@@ -35,6 +35,7 @@ import {
   f15State,
   GRAVITON,
   METEOR as METEOR_K,
+  MOON,
   MOTIFS,
   NOVA,
   URCHIN,
@@ -2623,145 +2624,6 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-// --- Созвездие ----------------------------------------------------------------
-
-/** Звёзды лисы-созвездия (смотрит вправо): нос, глаз, ухо, затылок, спина, хвост, лапы. */
-const FOX: [number, number][] = [
-  [11, -1],
-  [6, -4],
-  [3, -10],
-  [1, -3],
-  [-6, -3],
-  [-10, -4],
-  [-15, -10],
-  [5, 7],
-  [-7, 7],
-  [4, 2],
-  [-6, 2],
-];
-const FOX_LINES: [number, number][] = [
-  [0, 1],
-  [1, 2],
-  [2, 3],
-  [1, 3],
-  [3, 4],
-  [4, 5],
-  [5, 6],
-  [3, 9],
-  [9, 7],
-  [4, 10],
-  [10, 8],
-  [9, 10],
-];
-
-/**
- * Созвездие — звёздная лиса: звёзды на нитях, внутри — лёгкая туманность.
- * `f` — бег (лапы, хвост), `rise` 0…1 — звёзды зажигаются по одной,
- * `pulse` 0…1 — набирает вспышку (все звёзды ярче, кольцо).
- */
-function constelBody(o: { f: number; rise: number; pulse: number; dk: number }): Built {
-  const p = new Px(48, 40);
-  const cx = 24;
-  const cy = 18;
-  const ph = (o.f / 8) * TAU;
-  const pts = FOX.map(([x, y], i): [number, number] => {
-    let dx = 0;
-    let dy = 0;
-    if (i === 7) dx = Math.sin(ph) * 2.5;
-    if (i === 8) dx = -Math.sin(ph) * 2.5;
-    if (i === 6) dy = Math.sin(ph * 0.5) * 2;
-    if (i === 0 || i === 1 || i === 2) dy = Math.sin(ph) * 0.5;
-    return [cx + x + dx, cy + y + dy];
-  });
-  const on = (i: number) => i / FOX.length < o.rise + 0.01;
-  // Туманность тела — бледный вдоль хребта.
-  const neb = 0.22 * o.rise + o.pulse * 0.15;
-  for (const [a, b] of [
-    [1, 3],
-    [3, 4],
-    [4, 5],
-    [9, 10],
-    [3, 9],
-    [4, 10],
-  ] as [number, number][])
-    for (let k = 0; k <= 1; k += 0.25)
-      glow(
-        p,
-        pts[a][0] + (pts[b][0] - pts[a][0]) * k,
-        pts[a][1] + (pts[b][1] - pts[a][1]) * k,
-        5,
-        hx('#6a7ae0'),
-        neb,
-      );
-  for (const [a, b] of FOX_LINES) {
-    if (!on(a) || !on(b)) continue;
-    stroke(
-      p,
-      pts[a][0],
-      pts[a][1],
-      pts[b][0],
-      pts[b][1],
-      alpha(hx('#a8c0ff'), 0.6 + o.pulse * 0.3),
-    );
-  }
-  pts.forEach(([x, y], i) => {
-    if (!on(i)) return;
-    const main = i === 1;
-    const big = main || i === 6 || i === 2;
-    glow(
-      p,
-      x,
-      y,
-      main ? 5 + o.pulse * 3 : 3 + o.pulse * 1.5,
-      main ? hx('#d0e0ff') : hx('#a8c0ff'),
-      0.7,
-    );
-    sparkle(p, Math.round(x), Math.round(y), WHITE, big ? (main ? 2 : 1) : o.pulse > 0.5 ? 1 : 0);
-  });
-  if (o.pulse > 0.4)
-    for (let a = 0; a < TAU; a += 0.12)
-      p.set(
-        cx + Math.cos(a) * (12 + o.pulse * 4),
-        cy + Math.sin(a) * (9 + o.pulse * 3),
-        alpha(WHITE, 0.3 + o.pulse * 0.4),
-      );
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1950, [WHITE, hx('#a8c8ff')], cx, cy);
-  return { p: out, ax: cx, ay: 34, eye: null, lit: true };
-}
-
-registerMobPainter('f15_constel', (_m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk)
-    return frameOf('constel', pose, 'die', dk, () =>
-      constelBody({ f: 0, rise: 1, pulse: 0.3, dk }),
-    );
-  const f = Math.floor(pose.now * 10) % 8;
-  if (pose.mode === 'f15_rise') {
-    const k = Math.min(5, Math.floor((pose.t / 1.2) * 6));
-    return frameOf(
-      'constel',
-      pose,
-      'rise',
-      k * 8 + f,
-      () => constelBody({ f, rise: (k + 1) / 6, pulse: 0, dk: 0 }),
-      { lift: 1 + k * 1.2, still: true },
-    );
-  }
-  if (pose.mode === 'windup') {
-    const k = Math.min(3, Math.floor((pose.t / 0.6) * 4));
-    return frameOf(
-      'constel',
-      pose,
-      'wind',
-      k * 8 + f,
-      () => constelBody({ f, rise: 1, pulse: (k + 1) / 4, dk: 0 }),
-      { still: true },
-    );
-  }
-  return frameOf('constel', pose, 'fly', f, () => constelBody({ f, rise: 1, pulse: 0, dk: 0 }));
-});
-
 // --- Пожиратель света -----------------------------------------------------------
 
 /**
@@ -2963,78 +2825,6 @@ registerMobPainter('f15_echo', (m: Mob, pose: MobPose) => {
     () => echoFallback({ f, motif, dk }),
     { ...extra, sy: 0.4 + born * 0.6 },
   );
-});
-
-// --- Луна -------------------------------------------------------------------------
-
-const MOON_T = tn('#34324a', '#666480', '#a8a4bc', '#f0eef8');
-
-/**
- * Луна: шарик в кратерах, тень фазы ползёт по кругу; на светлой стороне —
- * сонная мордочка. `aim` — щурится и светлеет перед пике.
- */
-function moonBody(o: { phase: number; aim: number; dk: number }): Built {
-  const p = new Px(32, 34);
-  const cx = 16;
-  const cy = 14;
-  const R = 7.5;
-  const ph = (o.phase / 16) * TAU;
-  const sx = Math.cos(ph);
-  for (let y = -R; y <= R; y++)
-    for (let x = -R; x <= R; x++) {
-      const px = x + 0.5;
-      const py = y + 0.5;
-      const d = Math.hypot(px, py) / R;
-      if (d > 1) continue;
-      const nz = Math.sqrt(1 - d * d);
-      const nx = px / R;
-      const ny = py / R;
-      let l = nx * LX + ny * LY + nz * LZ + 0.2;
-      const cr = voronoi(px + 20, py + 20, 3.8, 1980);
-      if (cr.id < 0.4 && cr.d1 < 0.36) l += cr.d1 > 0.27 ? 0.15 : -0.22;
-      // Тень фазы — серп ползёт, на тени глаз не видно.
-      if (nx * sx * 1.2 + nz * 0.25 * Math.sin(ph) < -0.3) l -= 0.5;
-      p.set(cx + x, cy + y, tone(MOON_T, l + o.aim * 0.2 + dith(x + 8, y + 8) * 0.08));
-    }
-  if (!o.dk) {
-    if (o.aim > 0) {
-      p.rect(cx - 3, cy - 1, cx - 1, cy - 1, INK);
-      p.rect(cx + 2, cy - 1, cx + 4, cy - 1, INK);
-    } else {
-      p.rect(cx - 2, cy - 1, cx - 2, cy, INK);
-      p.rect(cx + 3, cy - 1, cx + 3, cy, INK);
-    }
-    p.set(cx + 0.5, cy + 3, alpha(INK, 0.6));
-    p.set(cx - 4, cy + 2, alpha(hx('#c08aa0'), 0.7));
-    p.set(cx + 5, cy + 2, alpha(hx('#c08aa0'), 0.7));
-  }
-  edge(p, alpha(INK, 0.85));
-  glow(p, cx, cy, R + 6, hx('#d8d4ff'), 0.22 + o.aim * 0.3);
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1981, [MOON_T[2], MOON_T[3], WHITE], cx, cy);
-  return { p: out, ax: cx, ay: 28, eye: o.dk ? null : [cx + 3, cy - 1], lit: false };
-}
-
-registerMobPainter('f15_moon', (m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk) return frameOf('moon', pose, 'die', dk, () => moonBody({ phase: 0, aim: 0, dk }));
-  const phase = Math.floor(pose.now * 2 + m.id) % 16;
-  if (pose.mode === 'aim') {
-    const f = Math.floor(pose.now * 16) % 2;
-    return frameOf('moon', pose, 'aim', phase * 2 + f, () => moonBody({ phase, aim: 1, dk: 0 }), {
-      still: true,
-      dx: f ? 0.6 : -0.6,
-    });
-  }
-  if (pose.mode === 'f15_dive')
-    return frameOf('moon', pose, 'dive', phase, () => moonBody({ phase, aim: 1, dk: 0 }), {
-      still: true,
-      lift: 3,
-      sx: 0.9,
-      sy: 1.1,
-      ghost: { every: 0.03, life: 0.2, tint: '220,215,255', alpha: 0.55 },
-    });
-  return frameOf('moon', pose, 'fly', phase, () => moonBody({ phase, aim: 0, dk: 0 }), { lift: 9 });
 });
 
 // --- Сверхновая ---------------------------------------------------------------------
@@ -5067,6 +4857,341 @@ registerMobWarm('f15_astro', function* () {
           yaw,
         ),
       );
+      yield 0;
+    }
+  }
+});
+
+
+// --- Страж созвездия -----------------------------------------------------------
+//
+// Узел фигуры — живая звезда: ядро и восемь лучей-кристаллов, ведущий луч
+// смотрит по ходу, звезда кренится в сторону движения и медленно вертится
+// вокруг себя (лучи повторяются через 90° — восемь кадров). Спит рисунком
+// на полу: плоская звезда; встаёт — рисунок отрывается от пола, из него
+// вверх тянется столб света. Вспышка: лучи втягиваются, ядро белеет —
+// лучи выстреливают во всю длину ровно в кадр урона. Линии между узлами
+// рисует картинка фигуры (`f15_figure`, хлыст — `f15_lash`).
+
+const STAR_T = tn('#6a5a20', '#c0a040', '#ffe9a0', '#ffffff');
+const STAR_CORE = tn('#c09038', '#ffd060', '#fff4d0', '#ffffff');
+
+interface SPose {
+  spin: number;
+  tilt: number;
+  /** Длина лучей (1 — обычная). */
+  ext: number;
+  glow: number;
+  /** Сплющенность: 1 — рисунок на полу. */
+  flat: number;
+  /** Столб света вниз (подъём), длина в пикселях. */
+  beam: number;
+  dk: number;
+}
+const S0: SPose = { spin: 0, tilt: 0.25, ext: 1, glow: 0.4, flat: 0, beam: 0, dk: 0 };
+
+function constelRig(o: SPose, yaw: number): Rig {
+  const r = new Rig();
+  const Y = F3.yaw(yaw);
+  const base = Y.at(0, 0, 5 * (1 - o.flat) + 0.6).pitch(o.tilt).turn(o.spin);
+  const fl = 1 - o.flat * 0.9;
+  const F = new F3(base.o, base.f, base.s, vmul(base.u, fl));
+  const ray: Mat = { T: STAR_T, glow: 0.5 + o.glow * 0.5, spec: true, bias: o.glow * 0.2 - 0.1 };
+  const from = r.size;
+  const c = F.o;
+  const rays: [V3, number][] = [
+    [[1, 0, 0], 7.5],
+    [[0, 1, 0], 6],
+    [[-1, 0, 0], 6],
+    [[0, -1, 0], 6],
+    [[0, 0, 1], 5],
+    [[0, 0, -1], 4],
+  ];
+  for (const [d, L] of rays) {
+    const dir = F.v(d[0], d[1], d[2]);
+    r.cap(c, vadd(c, vmul(dir, L * o.ext)), 1.5, 0.15, ray);
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = (i + 0.5) * (TAU / 4);
+    const dir = F.v(Math.cos(a), Math.sin(a), 0);
+    r.cap(c, vadd(c, vmul(dir, 3.8 * o.ext)), 1.0, 0.1, ray);
+  }
+  r.ball(c, 1.4 + o.glow * 0.6, { T: STAR_CORE, glow: 1, soft: true, bias: 0.1 + o.glow * 0.4 });
+  if (o.beam > 0) {
+    r.line(c, vadd(c, [0, 0, -o.beam]), alpha(STAR_C, 0.8), 1, -0.5);
+    r.line(vadd(c, [0.6, 0, 0]), vadd(c, [0.6, 0, -o.beam * 0.8]), alpha(STAR_C, 0.35), 1, -0.6);
+  }
+  if (o.dk > 0) r.explode(sstep(0, 1, o.dk), c, 61, 9, 18, from, 0.6);
+  return r;
+}
+
+function constelPic(o: SPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(constelRig(o, yaw), 40, 48, 20, 34, post, { inner: 0 });
+}
+
+registerMobPainter('f15_constel', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const v = visOf(m, pose, headOf(m), 7);
+  const { d, yaw } = side16(v.yaw);
+  const o: SPose = { ...S0 };
+  const extra: Partial<MobFrame> = { shadow: 5 };
+  let anim = 'idle';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  const spin = Math.floor(pose.now * 6) % 8;
+  o.spin = (spin / 8) * (TAU / 4);
+  if (md === 'f15_rise') {
+    // Встаёт: плоский рисунок на полу отрывается и поднимается, столб света.
+    const T = 1.2;
+    f = fi(t, 28);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'rise';
+    const up = easeOut(sstep(0.3, 1, k));
+    o.flat = 1 - sstep(0.15, 0.7, k);
+    o.tilt = 0;
+    o.glow = 0.3 + 0.7 * sstep(0, 0.4, k) * (1 - up * 0.5);
+    o.beam = 6 * up;
+    o.ext = 0.7 + 0.3 * k;
+    extra.lift = 6 * up;
+    extra.still = true;
+    extra.shadow = 5 * up;
+  } else if (md === 'dying') {
+    const T = 0.9;
+    f = fi(t, 21);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    o.glow = 1 - k;
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.6, 1, k);
+    extra.lift = 6 * (1 - easeIn(k));
+    extra.still = true;
+  } else if (md === 'windup') {
+    // Вспышка: лучи втягиваются, ядро белеет — выстрел лучами в кадр урона.
+    const T = 0.8;
+    f = fi(t, 18);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'flare';
+    const pull = easeOut(k / 0.75);
+    const fire = easeOut((k - 0.88) / 0.12);
+    o.ext = 1 - 0.55 * pull + 1.2 * fire;
+    o.glow = 0.4 + 0.6 * pull;
+    o.tilt = 0;
+    o.spin = o.spin + pull * 0.6;
+    extra.still = true;
+    extra.lift = 6 - pull * 2;
+  } else if (md === 'recover') {
+    const T = 0.5;
+    f = fi(t, 11);
+    const k = (f + 0.5) / FPS / T;
+    anim = v.prev === 'windup' ? 'flarefol' : 'rec';
+    if (v.prev === 'windup') {
+      const ex = 1 - easeOut(k);
+      o.ext = 1 + 1.2 * ex;
+      o.glow = 0.4 + 0.6 * ex;
+      o.tilt = 0;
+      if (k < 0.5)
+        post = (out, P) => {
+          const [x, y] = P([0, 0, 5]);
+          const lit = litOn(out);
+          const rr = 4 + k * 26;
+          for (let i = 0; i < 24; i++) {
+            const a = (i / 24) * TAU;
+            lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.6), alpha(STAR_C, 0.9 * (1 - k * 2)));
+          }
+        };
+      extra.lift = 4 + 2 * k;
+    }
+    extra.still = true;
+  } else if (moving(m, 0.25)) {
+    anim = 'fly';
+    f = spin;
+    o.tilt = 0.35;
+  } else {
+    anim = 'idle';
+    f = spin;
+    o.tilt = 0.1;
+    o.glow = 0.4 + (spin % 4 === 1 ? 0.2 : 0);
+  }
+  return mobFrame('constel', pose, anim, f, d, () => constelPic(o, yaw, post), extra);
+});
+
+registerMobWarm('f15_constel', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('constel', pose, 'fly', f, d, () =>
+        constelPic({ ...S0, spin: (f / 8) * (TAU / 4), tilt: 0.35 }, yaw),
+      );
+      yield 0;
+    }
+  }
+});
+
+// --- Спутник -------------------------------------------------------------------------
+//
+// Малая луна с лицом: кратеры медленно проворачиваются вокруг оси (узор по
+// координатам шара — не кипит), глаза смотрят по ходу. Прицел: сжимается и
+// отводится назад-вверх, край светится; пике — вытянулась в каплю, белый
+// шлейф; после — отскок вверх с кувырком.
+
+const MOON_T = tn('#34324a', '#666480', '#a8a4bc', '#f0eef8');
+const CRATERS: [V3, number][] = [
+  [vnorm([0.3, 0.8, 0.5]), 0.93],
+  [vnorm([-0.6, 0.2, 0.7]), 0.95],
+  [vnorm([0.1, -0.7, 0.6]), 0.9],
+  [vnorm([-0.4, -0.5, -0.6]), 0.92],
+  [vnorm([0.7, 0.1, -0.6]), 0.94],
+  [vnorm([-0.9, 0.3, -0.2]), 0.9],
+];
+
+interface OPose {
+  spin: number;
+  /** Сжатие вдоль хода (−) или вытяжка (+). */
+  str: number;
+  glow: number;
+  eyes: number;
+  roll: number;
+  dk: number;
+}
+const O0: OPose = { spin: 0, str: 0, glow: 0.2, eyes: 1, roll: 0, dk: 0 };
+
+function moonRig(o: OPose, yaw: number): Rig {
+  const r = new Rig();
+  const F = F3.yaw(yaw).at(0, 0, 5).pitch(o.roll);
+  const cs = Math.cos(o.spin);
+  const sn = Math.sin(o.spin);
+  const from = r.size;
+  const sk = 1 + o.str;
+  r.ell(F, [0, 0, 0], [5 * sk, 5 / Math.sqrt(sk), 5 / Math.sqrt(sk)], {
+    T: MOON_T,
+    bias: o.glow * 0.3,
+    glow: o.glow > 0.5 ? (o.glow - 0.5) * 0.6 : 0,
+    pat: (q, l) => {
+      const p: V3 = [q[0] * cs - q[1] * sn, q[0] * sn + q[1] * cs, q[2]];
+      for (const [c, k] of CRATERS) {
+        const dd = vdot(p, c);
+        if (dd > k + (1 - k) * 0.45) return tone(MOON_T, l - 0.55);
+        if (dd > k) return tone(MOON_T, l + (vdot(c, [-0.45, 0.2, 0.8]) > 0 ? -0.3 : 0.35));
+      }
+      return null;
+    },
+  });
+  if (o.dk <= 0)
+    for (const s of [-1, 1]) {
+      const eye = F.p(4.6 * sk, s * 1.6, 1.0);
+      r.dot(eye, o.eyes > 0.5 ? hx('#1a1830') : hx('#4a4860'), 0, 1, 0.6);
+      if (o.eyes > 0.5) r.dot(vadd(eye, [0, 0, 0.9]), hx('#1a1830'), 0, 1, 0.6);
+    }
+  if (o.dk <= 0) r.eye = F.p(4.6, -1.6, 1.0);
+  if (o.dk > 0) {
+    // Раскол: две половинки разлетаются и падают.
+    r.prims.length = from;
+    const k = sstep(0, 1, o.dk);
+    for (const s of [-1, 1]) {
+      const H = F.at(0, s * (1 + k * 7), -k * k * 9).roll(s * k * 1.4);
+      r.ell(H, [0, 0, 0], [5, 5, 5], { T: MOON_T, bias: -0.1 }, (q) => q[1] * s < 0);
+    }
+  }
+  return r;
+}
+
+function moonPic(o: OPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(moonRig(o, yaw), 32, 32, 16, 22, post);
+}
+
+registerMobPainter('f15_moon', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const dive = md === 'f15_dive';
+  const tech = md === 'aim' || dive;
+  const v = visOf(m, pose, tech ? m.dir : headOf(m), dive ? 40 : 10);
+  const { d, yaw } = side16(v.yaw);
+  const o: OPose = { ...O0 };
+  const extra: Partial<MobFrame> = { shadow: 4 };
+  let anim = 'idle';
+  let f = 0;
+  const spin = Math.floor(pose.now * 4) % 8;
+  o.spin = (spin / 8) * TAU;
+  if (md === 'dying') {
+    const T = 0.85;
+    f = fi(t, 20);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.6, 1, k);
+    extra.lift = 6 * (1 - easeIn(k));
+    extra.still = true;
+  } else if (md === 'aim') {
+    // Прицел: отводится назад-вверх, сжимается, край накаляется.
+    const T = MOON.aim;
+    f = fi(t, 14);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'aim';
+    o.str = -0.22 * easeOut(k / 0.6);
+    o.glow = 0.2 + 0.8 * k;
+    o.eyes = 0;
+    o.roll = -0.3 * k;
+    extra.lift = 6 + 4 * easeOut(k);
+    extra.dx = -Math.cos(scrAng(yaw)) * 2 * easeOut(k);
+    extra.still = true;
+  } else if (dive) {
+    // Пике: капля с белым шлейфом, почти у пола.
+    f = Math.floor(pose.now * 12) % 2;
+    anim = 'dive';
+    o.str = 0.45;
+    o.glow = 1;
+    o.eyes = 0;
+    o.roll = 0.35;
+    extra.lift = 2;
+    extra.still = true;
+    extra.ghost = { every: 0.025, life: 0.2, tint: '220,215,255', alpha: 0.55 };
+  } else if (md === 'recover' && v.prev === 'f15_dive') {
+    // Отскок вверх с кувырком.
+    const T = 0.45;
+    f = fi(t, 10);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'bounce';
+    o.roll = -k * TAU * 0.75;
+    o.str = -0.15 * (1 - k);
+    o.glow = 0.6 * (1 - k);
+    extra.lift = 2 + 6 * Math.sin(PI * k * 0.75) + 2 * k;
+    extra.still = true;
+  } else {
+    anim = moving(m) ? 'fly' : 'idle';
+    f = spin;
+    o.roll = moving(m) ? 0.2 : 0;
+  }
+  return mobFrame('moon', pose, anim, f, d, () => moonPic(o, yaw), extra);
+});
+
+registerMobWarm('f15_moon', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('moon', pose, 'fly', f, d, () => moonPic({ ...O0, spin: (f / 8) * TAU, roll: 0.2 }, yaw));
       yield 0;
     }
   }
