@@ -1934,7 +1934,7 @@ const lOB: LEase = (x) => {
   return 1 + 2.4 * u * u * u + 1.4 * u * u;
 };
 /** Угол к [−π, π]. */
-const lWrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+const lWrap = (a: number) => a - TAU * Math.round(a / TAU);
 
 /** Холст, который умеет не рисовать вне области (клинок, вошедший в пол). */
 class ClipPx extends Px {
@@ -1943,28 +1943,34 @@ class ClipPx extends Px {
     if (this.clip && !this.clip(Math.round(x), Math.round(y))) return;
     super.set(x, y, c);
   }
-  /** Контур снаружи фигуры — прямо по массиву (кадр босса большой). */
+  /** Контур снаружи фигуры — прямо по массиву словами (кадр босса большой). */
   outline(c: RGBA): void {
-    const { w, h, data: d } = this;
-    const add: number[] = [];
+    const { w, h } = this;
+    const d = new Uint32Array(this.data.buffer, this.data.byteOffset, w * h);
+    const A = 0xff000000;
+    const col = ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+    const row = new Uint8Array(h + 2);
     for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++) {
-        const i = y * w + x;
-        if (d[i * 4 + 3]) continue;
+      for (let x = 0, o = y * w; x < w; x++)
+        if (d[o + x] & A) {
+          row[y + 1] = 1;
+          break;
+        }
+    const add: number[] = [];
+    for (let y = 0; y < h; y++) {
+      if (!row[y] && !row[y + 1] && !row[y + 2]) continue;
+      for (let x = 0, i = y * w; x < w; x++, i++) {
+        if (d[i] & A) continue;
         if (
-          (x > 0 && d[i * 4 - 1]) ||
-          (x < w - 1 && d[i * 4 + 7]) ||
-          (y > 0 && d[(i - w) * 4 + 3]) ||
-          (y < h - 1 && d[(i + w) * 4 + 3])
+          (x > 0 && d[i - 1] & A) ||
+          (x < w - 1 && d[i + 1] & A) ||
+          (y > 0 && d[i - w] & A) ||
+          (y < h - 1 && d[i + w] & A)
         )
           add.push(i);
       }
-    for (const i of add) {
-      d[i * 4] = c[0];
-      d[i * 4 + 1] = c[1];
-      d[i * 4 + 2] = c[2];
-      d[i * 4 + 3] = 255;
     }
+    for (const i of add) d[i] = col;
   }
 }
 
@@ -2268,7 +2274,13 @@ const lDirAng = (d: number) => (d / LDIRS) * TAU;
 function lGeo(r: LRig, d: number, sec: LSec): LGeo {
   const yB = lDirAng(d) + r.yaw;
   const yT = yB + r.tw;
-  const yH = yT + r.hyw;
+  // Голова «играет на камеру»: боком циферблат довёрнут к зрителю (до
+  // 0,75 рад), со спины — нет. Иначе в профиль он — латунная полоска.
+  const yH0 = yT + r.hyw;
+  const cam = lWrap(Math.PI / 2 - yH0);
+  const yH =
+    yH0 +
+    lclamp(cam, -0.75, 0.75) * lclamp((0.85 * Math.PI - Math.abs(cam)) / (0.3 * Math.PI), 0, 1);
   const g: LGeo = {
     yB,
     yT,
@@ -2298,7 +2310,9 @@ function lGeo(r: LRig, d: number, sec: LSec): LGeo {
   g.hemD = hf * g.B.s + hr * g.B.c;
   g.sR = lPt(g, 0, 7, 30.5);
   g.sL = lPt(g, 0, -7, 30.5);
-  g.head = lPt(g, 0.5 + r.hf + sec.hdf, 0, 43 + r.hu + sec.hdu, g.H);
+  // Кивок уводит голову вперёд и вниз, взгляд вверх — чуть назад.
+  const nod = r.hn * 2.2;
+  g.head = lPt(g, 0.5 + r.hf + sec.hdf + nod, 0, 43 + r.hu + sec.hdu - Math.max(0, nod) * 1.2, g.H);
   return g;
 }
 
@@ -2682,7 +2696,7 @@ function lChest(
       lCog(p, wx - 1 * c, wy + 1.5, 2.2, 8, o.f * 0.4, L.trim, c, 0.6);
       stroke(p, wx - 2.5 * c, wy - 4, wx + 0.5 * c, wy - 0.5, alpha(WHITE, 0.9));
       stroke(p, wx + 0.5 * c, wy - 0.5, wx + 2.5 * c, wy + 1.5, alpha(WHITE, 0.8));
-      lit.ell(wx, wy, rx + 1.5, 6.5, alpha(mixc(AMBER, WHITE, 0.25), 0.55 * wk));
+      lit.ell(wx, wy, rx + 1.5, 6.5, alpha(mixc(AMBER, WHITE, 0.25), 0.4 * wk));
       lit.ell(wx, wy, Math.max(1, rx - 1), 4, alpha(WHITE, 0.45 * wk));
     } else {
       p.set(Math.round(wx - 2 * c), Math.round(wy - 3), alpha(WHITE, 0.7));
@@ -2763,7 +2777,13 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
   }
   const w = lclamp(r.white, 0, 1);
   const dm = lclamp(r.dim, 0, 1);
-  const dimT: Tones = [L.face[0], L.face[0], L.face[1], L.face[1]];
+  const dark = hx('#0c0d16');
+  const dimT: Tones = [
+    dark,
+    mixc(dark, L.face[0], 0.3),
+    mixc(dark, L.face[0], 0.5),
+    mixc(dark, L.face[1], 0.5),
+  ];
   const faceT = L.face.map((c0, i) => mixc(mixc(c0, WHITE, w), dimT[i], dm)) as Tones;
   shadeEll(p, x0, y0, 7 * ac, 7 * ny, faceT, 0.25);
   const gk = lclamp(r.glow, 0, 1.4) * (1 - dm);
@@ -3608,8 +3628,8 @@ function lSpin(t: number, h: number): LRig {
       W,
       {
         ...OUT,
-        yaw: -1,
-        tw: -0.45,
+        yaw: -0.75,
+        tw: -0.35,
         lean: -1,
         drop: 3.5,
         sx: 1.04,
@@ -3869,17 +3889,17 @@ const RIT_FLIP = 1.45;
 const RIT_UP = 1.95;
 const RIT_LOOP = 4;
 const RIT_HOLD: Partial<LRig> = {
-  af: 3,
-  ar: 4.5,
-  au: 44,
+  af: 2,
+  ar: 7.5,
+  au: 47,
   ae: 1,
-  bf: 3,
-  br: -4.5,
-  bu: 44,
+  bf: 2,
+  br: -7.5,
+  bu: 47,
   be: 1,
   gf: 3,
   gr: 0,
-  gu: 55,
+  gu: 60,
   grot: Math.PI,
   gs: 1,
   hn: -0.45,
@@ -3999,8 +4019,8 @@ function lRitual(t: number, x: number): LRig {
     r.halo = -(TAU / 18) * 3 * (u / RIT_LOOP);
     r.side = 0.6 * Math.sin(w * 2);
     r.drop = 0.5 + 0.5 * Math.sin(w * 4);
-    r.au = r.bu = 44 + 0.6 * Math.sin(w * 4 + 1);
-    r.gu = 55 + 0.6 * Math.sin(w * 4 + 1);
+    r.au = r.bu = 47 + 0.6 * Math.sin(w * 4 + 1);
+    r.gu = 60 + 0.6 * Math.sin(w * 4 + 1);
     r.grot = Math.PI + 0.05 * Math.sin(w * 3);
     r.pend = 0.3 * Math.sin(w * 2);
     r.hd = 0.05 * Math.sin(w * 2 + 1);
@@ -5122,16 +5142,31 @@ function lCut(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanvasEl
 }
 
 function lBox(p: Px, box: number[]): boolean {
+  const { w, h } = p;
+  const d = new Uint32Array(p.data.buffer, p.data.byteOffset, w * h);
+  const A = 0xff000000;
   let any = false;
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++)
-      if (p.data[(y * p.w + x) * 4 + 3]) {
-        any = true;
-        if (x < box[0]) box[0] = x;
-        if (y < box[1]) box[1] = y;
-        if (x > box[2]) box[2] = x;
-        if (y > box[3]) box[3] = y;
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    let x0 = -1;
+    for (let x = 0; x < w; x++)
+      if (d[o + x] & A) {
+        x0 = x;
+        break;
       }
+    if (x0 < 0) continue;
+    let x1 = x0;
+    for (let x = w - 1; x > x0; x--)
+      if (d[o + x] & A) {
+        x1 = x;
+        break;
+      }
+    any = true;
+    if (x0 < box[0]) box[0] = x0;
+    if (y < box[1]) box[1] = y;
+    if (x1 > box[2]) box[2] = x1;
+    if (y > box[3]) box[3] = y;
+  }
   return any;
 }
 
@@ -5211,7 +5246,7 @@ function* lBuild(q: LReq): Generator<void, MobFrame, void> {
   if (q.tech === 'broken') {
     o.post = (p, lit, g, LL) => {
       if (t < 1.1) {
-        const G = lPt(g, RIT_HOLD.gf ?? 3, 0, RIT_HOLD.gu ?? 55);
+        const G = lPt(g, RIT_HOLD.gf ?? 3, 0, RIT_HOLD.gu ?? 60);
         lShards(p, lit, G[0], G[1], t, 16, 61, true);
       }
       if (t >= BROKEN_DAZE && t < BROKEN_UP) {
