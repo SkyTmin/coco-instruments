@@ -852,36 +852,6 @@ const buffOf = (m: Mob) => {
   return b & 4 ? 4 : b & 2 ? 2 : b & 1 ? 1 : 0;
 };
 
-/** Чары шамана: кант цвета чары снаружи контура и три искры над спиной. */
-function buffKant(p: Px, ax: number, buff: number): void {
-  const col = BUFF_C[buff];
-  p.outline([col[0], col[1], col[2], 200]);
-  let top = -1;
-  for (let y = 0; y < p.h && top < 0; y++)
-    for (let x = Math.max(0, ax - 6); x < Math.min(p.w, ax + 6); x++)
-      if (p.data[(y * p.w + x) * 4 + 3]) {
-        top = y;
-        break;
-      }
-  if (top < 0) return;
-  p.set(ax - 3, top - 2, col);
-  p.set(ax + 1, top - 3, col);
-  p.set(ax + 4, top - 1, col);
-}
-
-function mirrorCanvas(c: HTMLCanvasElement): HTMLCanvasElement {
-  const o = document.createElement('canvas');
-  o.width = c.width;
-  o.height = c.height;
-  const g = o.getContext('2d');
-  if (g) {
-    g.translate(c.width, 0);
-    g.scale(-1, 1);
-    g.drawImage(c, 0, 0);
-  }
-  return o;
-}
-
 /**
  * Кадр из кеша: `base` — вид, действие и номер кадра; сторона, вспышка,
  * облик и чары дописываются здесь. Три стороны из восьми — зеркало
@@ -896,39 +866,120 @@ function mobFrame(
   buff: number,
   make: (yaw: number) => MPic,
 ): MobFrame {
+  if (MIR8[d]) {
+    // Зеркальная сторона — тот же холст, отражённый движком (sx < 0): ни
+    // нового рисунка, ни нового холста, ни места в кеше.
+    const src = mobFrame(lru, base, SRC8[d], look, flash, buff, make);
+    let mf = MIR_F.get(src);
+    if (!mf) {
+      mf = { ...src, sx: -1, eye: src.eye ? [src.eye[0] + 1, src.eye[1]] : null };
+      MIR_F.set(src, mf);
+    }
+    return mf;
+  }
   const key = `${base}|${d}|${flash ? 1 : 0}|${look}|${buff}`;
   const hit = lru.get(key);
   if (hit) return hit;
   let fr: MobFrame;
-  if (MIR8[d]) {
-    const src = mobFrame(lru, base, SRC8[d], look, flash, buff, make);
+  if (flash || buff) {
+    // Чары и вспышка — не новый рисунок, а обработка готового кадра холстом:
+    // в толпе под чарами шамана иначе каждый кадр рисовался заново.
+    const src = mobFrame(lru, base, d, look, false, 0, make);
     const t0 = performance.now();
-    const w = src.img.width;
-    fr = {
-      img: mirrorCanvas(src.img),
-      lit: src.lit ? mirrorCanvas(src.lit) : null,
-      ax: w - src.ax,
-      ay: src.ay,
-      eye: src.eye ? [w - 1 - src.eye[0], src.eye[1]] : null,
-    };
+    fr = variantOf(src, buff, flash);
     stat(key, performance.now() - t0);
   } else {
     const t0 = performance.now();
     const pic = make(yaw8(d));
-    let p = pic.p;
+    const p = pic.p;
     if (look === 'elite') p.outline(GOLD_EDGE);
-    if (buff) buffKant(p, pic.ax, buff);
-    if (flash) p = p.tint(WHITE, 0.86);
     fr = {
       img: p.canvas(),
-      lit: pic.lit && !flash ? pic.lit.canvas() : null,
+      lit: pic.lit ? pic.lit.canvas() : null,
       ax: pic.ax,
       ay: pic.ay,
       eye: pic.eye,
     };
+    TOP.set(fr, topOf(p, pic.ax));
     stat(key, performance.now() - t0);
   }
   return lru.set(key, fr);
+}
+
+/** Верх силуэта над серединой кадра — куда сесть искрам чар. */
+const TOP = new WeakMap<MobFrame, number>();
+function topOf(p: Px, ax: number): number {
+  const x0 = Math.max(0, Math.round(ax) - 6);
+  const x1 = Math.min(p.w, Math.round(ax) + 6);
+  for (let y = 0; y < p.h; y++)
+    for (let x = x0; x < x1; x++) if (p.data[(y * p.w + x) * 4 + 3]) return y;
+  return -1;
+}
+
+/** Зеркальные кадры: исходный кадр → он же с `sx: −1`. */
+const MIR_F = new WeakMap<MobFrame, MobFrame>();
+
+/**
+ * Кадр + поля движка от рисовальщика (сдвиг, сжатие, наклон, тень). У
+ * зеркального кадра `sx` отрицательный — сжатие рисовальщика умножается на
+ * него, а не затирает отражение.
+ */
+function withEx(fr: MobFrame, ex: Partial<MobFrame>): MobFrame {
+  const o = { ...fr, ...ex };
+  if ((fr.sx ?? 1) < 0) o.sx = -(ex.sx ?? 1);
+  return o;
+}
+
+let silC: HTMLCanvasElement | null = null;
+/**
+ * Вариант готового кадра: кант чар (контур цвета чары снаружи силуэта и три
+ * искры над спиной) и белая вспышка удара — как `buffKant` и `tint(WHITE,
+ * 0.86)`, только холстом, без нового рисунка рига.
+ */
+function variantOf(src: MobFrame, buff: number, flash: boolean): MobFrame {
+  const c = src.img;
+  const w = c.width;
+  const h = c.height;
+  const o = document.createElement('canvas');
+  o.width = w;
+  o.height = h;
+  const g = o.getContext('2d')!;
+  const col = buff ? BUFF_C[buff] : null;
+  if (col) {
+    silC ??= document.createElement('canvas');
+    silC.width = w;
+    silC.height = h;
+    const sg = silC.getContext('2d')!;
+    sg.drawImage(c, 1, 0);
+    sg.drawImage(c, -1, 0);
+    sg.drawImage(c, 0, 1);
+    sg.drawImage(c, 0, -1);
+    sg.globalCompositeOperation = 'source-in';
+    sg.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+    sg.fillRect(0, 0, w, h);
+    sg.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 200 / 255;
+    g.drawImage(silC, 0, 0);
+    g.globalAlpha = 1;
+  }
+  g.drawImage(c, 0, 0);
+  if (col) {
+    const top = (TOP.get(src) ?? -1) - 1;
+    if (top >= 0) {
+      const ax = Math.round(src.ax);
+      g.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+      g.fillRect(ax - 3, top - 2, 1, 1);
+      g.fillRect(ax + 1, top - 3, 1, 1);
+      g.fillRect(ax + 4, top - 1, 1, 1);
+    }
+  }
+  if (flash) {
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255,255,255,0.86)';
+    g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = 'source-over';
+  }
+  return { img: o, lit: flash ? null : src.lit, ax: src.ax, ay: src.ay, eye: src.eye };
 }
 
 /** Слой поверх темноты: создать, если риг его не дал. */
@@ -1943,7 +1994,7 @@ registerMobPainter('f1_rat', (m, pose) => {
     const g = Math.floor(now * 9 + id * 1.7) % 14;
     if (g < 6) glint = g;
   }
-  return { ...ratFrame(K, anim, f, T, v.d, pose.look, pose.flash, buff, glint), ...ex };
+  return withEx(ratFrame(K, anim, f, T, v.d, pose.look, pose.flash, buff, glint), ex);
 });
 
 registerMobWarm('f1_rat', function* () {
@@ -4191,7 +4242,7 @@ function bipPaint(K: BipK) {
         ex.sy = 0.9;
       }
     }
-    return { ...bipFrame(K, anim, f, T, vr, v.d, pose.look, pose.flash, buffOf(m)), ...ex };
+    return withEx(bipFrame(K, anim, f, T, vr, v.d, pose.look, pose.flash, buffOf(m)), ex);
   };
 }
 
