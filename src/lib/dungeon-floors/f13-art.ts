@@ -27,7 +27,7 @@ import type { CellCtx, FrameLRU, MobFrame, MobPose, Sprite } from '../dungeon-pa
 import type { Mob } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
 import { F13_FLIES, F13_FOYER, F13_GEO, F13_HALL, F13_MARK, F13_TOP } from './f13';
-import { BOSS, f13State, F13_FX } from './f13-brains';
+import { f13State, F13_FX } from './f13-brains';
 
 export type RGBA = [number, number, number, number];
 
@@ -2244,35 +2244,35 @@ export function renderRig(
   const tk = opt.tintK ?? 0;
   for (let y = by0; y <= by1; y++)
     for (let i = y * w + bx0, e = y * w + bx1; i <= e; i++) {
-    if (idb[i] < 0) continue;
-    let r = col[i * 4];
-    let g = col[i * 4 + 1];
-    let b = col[i * 4 + 2];
-    // Внутренний контур: дальняя часть у края ближней темнеет.
-    const x = i % w;
-    const z = zb[i];
-    const id = idb[i];
-    const near = (j: number) => idb[j] >= 0 && idb[j] !== id && zb[j] - z > 2.4 * S;
-    if (
-      (x > 0 && near(i - 1)) ||
-      (x < w - 1 && near(i + 1)) ||
-      (i >= w && near(i - w)) ||
-      (i < N - w && near(i + w))
-    ) {
-      r = r * 0.45 + INK[0] * 0.55;
-      g = g * 0.45 + INK[1] * 0.55;
-      b = b * 0.45 + INK[2] * 0.55;
+      if (idb[i] < 0) continue;
+      let r = col[i * 4];
+      let g = col[i * 4 + 1];
+      let b = col[i * 4 + 2];
+      // Внутренний контур: дальняя часть у края ближней темнеет.
+      const x = i % w;
+      const z = zb[i];
+      const id = idb[i];
+      const near = (j: number) => idb[j] >= 0 && idb[j] !== id && zb[j] - z > 2.4 * S;
+      if (
+        (x > 0 && near(i - 1)) ||
+        (x < w - 1 && near(i + 1)) ||
+        (i >= w && near(i - w)) ||
+        (i < N - w && near(i + w))
+      ) {
+        r = r * 0.45 + INK[0] * 0.55;
+        g = g * 0.45 + INK[1] * 0.55;
+        b = b * 0.45 + INK[2] * 0.55;
+      }
+      if (tint && tk > 0) {
+        r += (tint[0] - r) * tk;
+        g += (tint[1] - g) * tk;
+        b += (tint[2] - b) * tk;
+      }
+      out[i * 4] = r;
+      out[i * 4 + 1] = g;
+      out[i * 4 + 2] = b;
+      out[i * 4 + 3] = col[i * 4 + 3];
     }
-    if (tint && tk > 0) {
-      r += (tint[0] - r) * tk;
-      g += (tint[1] - g) * tk;
-      b += (tint[2] - b) * tk;
-    }
-    out[i * 4] = r;
-    out[i * 4 + 1] = g;
-    out[i * 4 + 2] = b;
-    out[i * 4 + 3] = col[i * 4 + 3];
-  }
   if (!opt.noOutline) {
     // То же, что `px.outline(INK)`, но в рамке и без вызова на пиксель.
     const add: number[] = [];
@@ -2281,7 +2281,12 @@ export function renderRig(
       for (let x = bx0; x <= bx1; x++) {
         const i = y * w + x;
         if (A(i)) continue;
-        if ((x > 0 && A(i - 1)) || (x < w - 1 && A(i + 1)) || (y > 0 && A(i - w)) || (y < h - 1 && A(i + w)))
+        if (
+          (x > 0 && A(i - 1)) ||
+          (x < w - 1 && A(i + 1)) ||
+          (y > 0 && A(i - w)) ||
+          (y < h - 1 && A(i + w))
+        )
           add.push(i);
       }
     for (const i of add) {
@@ -4316,7 +4321,8 @@ function smearInto(lit: Px, segs: [number, number, number, number][], col: RGBA)
     for (let s = 0; s <= k; s++) {
       const x = Math.floor(bx + ((dx - bx) * s) / k);
       const y = Math.floor(by + ((dy - by) * s) / k);
-      if (x >= 0 && y >= 0 && x < w && y < h) A[y * w + x] = Math.max(A[y * w + x], 0.95 - i * 0.12);
+      if (x >= 0 && y >= 0 && x < w && y < h)
+        A[y * w + x] = Math.max(A[y * w + x], 0.95 - i * 0.12);
     }
   }
   for (let i = 0; i < A.length; i++)
@@ -4488,7 +4494,11 @@ const G_LANCE: readonly PKey<GP>[] = [
     ),
   ],
   [1.0, G_LUNGE, eIn],
-  [1.08, gp({ twist: -0.52, lean: 0.4, sink: 2.8, aR: limb(1.5, 0.06, 0.02), ln: 7.5, fw: 7 }, G_LUNGE), easeOut],
+  [
+    1.08,
+    gp({ twist: -0.52, lean: 0.4, sink: 2.8, aR: limb(1.5, 0.06, 0.02), ln: 7.5, fw: 7 }, G_LUNGE),
+    easeOut,
+  ],
   [1.35, gp({ twist: -0.5, lean: 0.38, ln: 6.5, fw: 6 }, G_LUNGE)],
   [1.8, G_BASE],
 ];
@@ -4540,7 +4550,11 @@ const G_SHIELD: readonly PKey<GP>[] = [
     ),
   ],
   [0.8, G_BASH, eIn],
-  [0.9, gp({ twist: 0.62, lean: 0.34, sink: 2.2, aL: limb(1.6, -0.05, 0.35), fw: 4.5 }, G_BASH), easeOut],
+  [
+    0.9,
+    gp({ twist: 0.62, lean: 0.34, sink: 2.2, aL: limb(1.6, -0.05, 0.35), fw: 4.5 }, G_BASH),
+    easeOut,
+  ],
   [1.15, gp({ twist: 0.58, aL: limb(1.55, 0.02, 0.38), fw: 4 }, G_BASH)],
   [1.6, G_BASE],
 ];
@@ -4602,7 +4616,11 @@ const G_DIP: readonly PKey<GP>[] = [
 const G_SLUMP: readonly PKey<GP>[] = [
   [0, G_BASE],
   [0.15, gp({ hp: 1.0 }, G_BASE), eIn],
-  [0.35, gp({ hp: 1.0, aL: limb(0.1, 0.5, 0.05), aR: limb(0.1, 0.45, 0.05), drop: 0.35 }, G_BASE), eIn],
+  [
+    0.35,
+    gp({ hp: 1.0, aL: limb(0.1, 0.5, 0.05), aR: limb(0.1, 0.45, 0.05), drop: 0.35 }, G_BASE),
+    eIn,
+  ],
   [
     0.6,
     gp(
@@ -4632,7 +4650,10 @@ const G_REB: readonly PKey<GP>[] = [
   [1.0, gp({ aR: G_BASE.aR, aL: G_BASE.aL, drop: 0 }, G_HEAP), eBack],
   [
     1.6,
-    gp({ aR: G_BASE.aR, aL: G_BASE.aL, drop: 0, lean: 0.05, hp: 0, hr: 0, side: 0, sink: 4.5 }, G_HEAP),
+    gp(
+      { aR: G_BASE.aR, aL: G_BASE.aL, drop: 0, lean: 0.05, hp: 0, hr: 0, side: 0, sink: 4.5 },
+      G_HEAP,
+    ),
     eBack,
   ],
   [2.2, gp({ sink: -1.2, bob: 0 }, G_BASE), eBack],
@@ -4644,7 +4665,14 @@ const G_REB: readonly PKey<GP>[] = [
 const G_STAND: readonly PKey<GP>[] = [
   [0, G_HEAP],
   [0.3, gp({ aR: G_BASE.aR, aL: G_BASE.aL, drop: 0 }, G_HEAP), eBack],
-  [0.65, gp({ aR: G_BASE.aR, aL: G_BASE.aL, drop: 0, lean: 0.05, hp: 0, hr: 0, side: 0, sink: 4.5 }, G_HEAP), eBack],
+  [
+    0.65,
+    gp(
+      { aR: G_BASE.aR, aL: G_BASE.aL, drop: 0, lean: 0.05, hp: 0, hr: 0, side: 0, sink: 4.5 },
+      G_HEAP,
+    ),
+    eBack,
+  ],
   [1.0, gp({ sink: -0.8 }, G_BASE), eBack],
   [1.2, G_BASE],
 ];
@@ -5185,8 +5213,16 @@ function hangPose(f: number, lg: number, ls: number): LP {
       bob: 0.6 * s,
       hp: HOLD.hp + 0.06 * Math.sin(ph + 1.1),
       hr: 0.05 * Math.sin(ph - 0.3),
-      lL: limb(HOLD.lL.sw + 0.1 * Math.sin(ph - 0.7) + lg, HOLD.lL.out - ls, HOLD.lL.bend + 0.1 * Math.max(0, s)),
-      lR: limb(HOLD.lR.sw - 0.1 * Math.sin(ph - 0.7) + lg, HOLD.lR.out + ls, HOLD.lR.bend + 0.1 * Math.max(0, -s)),
+      lL: limb(
+        HOLD.lL.sw + 0.1 * Math.sin(ph - 0.7) + lg,
+        HOLD.lL.out - ls,
+        HOLD.lL.bend + 0.1 * Math.max(0, s),
+      ),
+      lR: limb(
+        HOLD.lR.sw - 0.1 * Math.sin(ph - 0.7) + lg,
+        HOLD.lR.out + ls,
+        HOLD.lR.bend + 0.1 * Math.max(0, -s),
+      ),
       aL: limb(HOLD.aL.sw + 0.07 * Math.sin(ph - 0.4), HOLD.aL.out + 0.04 * s, HOLD.aL.bend),
       tb: HOLD.tb + 0.05 * Math.sin(ph - 1.3) - lg * 1.5,
       ts: ls * 1.4,
@@ -5271,11 +5307,42 @@ const ROAR: readonly PKey<LP>[] = [
   [0, LIMP],
   [0.3, lp({ side: 0.05, hr: 0.16 }, LIMP)],
   [0.47, lp({ hp: -0.25, hr: 0, side: 0.04 }, LIMP), eBack],
-  [0.74, lp({ hp: -0.15, aR: HOLD.aR, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0, side: 0.02 }, LIMP), eBack],
-  [1.02, lp({ hp: -0.1, aR: HOLD.aR, aL: HOLD.aL, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0, side: 0 }, LIMP), eBack],
+  [
+    0.74,
+    lp({ hp: -0.15, aR: HOLD.aR, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0, side: 0.02 }, LIMP),
+    eBack,
+  ],
+  [
+    1.02,
+    lp(
+      { hp: -0.1, aR: HOLD.aR, aL: HOLD.aL, wx: HOLD.wx, wy: HOLD.wy, wz: HOLD.wz, wg: 0, side: 0 },
+      LIMP,
+    ),
+    eBack,
+  ],
   [1.28, lp({ bob: 1.5 }, HOLD), eBack],
-  [1.55, lp({ aL: DOFF, aR: limb(1.55, 1.15, 0.45), wx: 1, wy: 0.35, wz: 0.25, twist: 0.25, hp: -0.1 }, HOLD)],
-  [1.85, lp({ aL: DOFF, aR: limb(1.35, -0.25, 0.7), wx: -0.8, wy: 0.3, wz: 0.6, twist: -0.25, lean: 0.12 }, HOLD)],
+  [
+    1.55,
+    lp(
+      { aL: DOFF, aR: limb(1.55, 1.15, 0.45), wx: 1, wy: 0.35, wz: 0.25, twist: 0.25, hp: -0.1 },
+      HOLD,
+    ),
+  ],
+  [
+    1.85,
+    lp(
+      {
+        aL: DOFF,
+        aR: limb(1.35, -0.25, 0.7),
+        wx: -0.8,
+        wy: 0.3,
+        wz: 0.6,
+        twist: -0.25,
+        lean: 0.12,
+      },
+      HOLD,
+    ),
+  ],
   [2.15, lp({ lean: 0.4, hp: 0.3, aL: limb(1.0, 0.8, 0.4), aR: limb(1.1, 0.3, 1.2) }, HOLD)],
   [2.4, HOLD],
 ];
@@ -5307,16 +5374,34 @@ const TRANS: readonly PKey<LP>[] = [
   [2.1, lp({ lean: 0.88, hp: 0.3 }, BOW_AIR)],
   [2.45, lp({ aL: limb(2.75, 0.35, 0.9), hat: 1, ...VAGA_LOW, lean: 0.05 }, HOLD)],
   [2.62, lp({ aL: DOFF, hat: 0, ...VAGA_LOW }, HOLD)],
-  [2.9, lp({ aL: limb(1.3, 1.25, 0.35), aR: limb(1.3, 1.2, 0.35), wx: 0.7, wy: 0.3, wz: 0.6, hp: -0.15 }, HOLD), easeOut],
+  [
+    2.9,
+    lp(
+      { aL: limb(1.3, 1.25, 0.35), aR: limb(1.3, 1.2, 0.35), wx: 0.7, wy: 0.3, wz: 0.6, hp: -0.15 },
+      HOLD,
+    ),
+    easeOut,
+  ],
   [3.2, HOLD],
 ];
 
 /** Иглы (акт III): веер в левой у уха → бросок в 0,45 (вага остаётся в правой). */
 const NEEDLE: readonly PKey<LP>[] = [
   [0, HOLD],
-  [0.3, lp({ aL: limb(2.5, 0.55, 2.1), twist: -0.15, hy: -0.15, fL: 1, nd: 1, lean: -0.05 }, HOLD), easeOut],
-  [0.38, lp({ aL: limb(2.65, 0.6, 2.25), twist: -0.22, hy: -0.15, fL: 1, nd: 1, lean: -0.08 }, HOLD)],
-  [0.45, lp({ aL: limb(1.45, 0.25, 0.1), twist: 0.4, lean: 0.12, fL: 1, nd: 0, hy: 0.05 }, HOLD), eIn],
+  [
+    0.3,
+    lp({ aL: limb(2.5, 0.55, 2.1), twist: -0.15, hy: -0.15, fL: 1, nd: 1, lean: -0.05 }, HOLD),
+    easeOut,
+  ],
+  [
+    0.38,
+    lp({ aL: limb(2.65, 0.6, 2.25), twist: -0.22, hy: -0.15, fL: 1, nd: 1, lean: -0.08 }, HOLD),
+  ],
+  [
+    0.45,
+    lp({ aL: limb(1.45, 0.25, 0.1), twist: 0.4, lean: 0.12, fL: 1, nd: 0, hy: 0.05 }, HOLD),
+    eIn,
+  ],
 ];
 const NEEDLE_FT: readonly PKey<LP>[] = [
   [0, NEEDLE[3][1]],
@@ -5325,8 +5410,14 @@ const NEEDLE_FT: readonly PKey<LP>[] = [
 ];
 
 // Жесты акта I поверх висения: вага дёргает РАНЬШЕ удара исполина.
-const G_L_PULL = lp({ aR: limb(1.5, 0.45, 1.65), wx: 0.05, wy: 0.45, wz: 0.85, twist: 0.12, lean: -0.08 }, HOLD);
-const G_L_JERK = lp({ aR: limb(0.62, 0.18, 0.35), wx: -0.1, wy: -0.65, wz: 0.75, twist: -0.3, lean: 0.16 }, HOLD);
+const G_L_PULL = lp(
+  { aR: limb(1.5, 0.45, 1.65), wx: 0.05, wy: 0.45, wz: 0.85, twist: 0.12, lean: -0.08 },
+  HOLD,
+);
+const G_L_JERK = lp(
+  { aR: limb(0.62, 0.18, 0.35), wx: -0.1, wy: -0.65, wz: 0.75, twist: -0.3, lean: 0.16 },
+  HOLD,
+);
 /** Копьё исполина (1,0) и его отдых (1 + t). */
 const LG_LANCE: readonly PKey<LP>[] = [
   [0, HOLD],
@@ -5338,8 +5429,14 @@ const LG_LANCE: readonly PKey<LP>[] = [
   [1.8, HOLD],
 ];
 /** Щит (0,8) и отдых (0,8 + t): вага влево поперёк тела → рывок вправо. */
-const G_S_SWING = lp({ aR: limb(1.15, -0.25, 1.35), wx: -0.85, wy: 0.15, wz: 0.5, twist: -0.35 }, HOLD);
-const G_S_JERK = lp({ aR: limb(0.95, 0.95, 0.55), wx: 0.95, wy: -0.25, wz: 0.35, twist: 0.32, lean: 0.06 }, HOLD);
+const G_S_SWING = lp(
+  { aR: limb(1.15, -0.25, 1.35), wx: -0.85, wy: 0.15, wz: 0.5, twist: -0.35 },
+  HOLD,
+);
+const G_S_JERK = lp(
+  { aR: limb(0.95, 0.95, 0.55), wx: 0.95, wy: -0.25, wz: 0.35, twist: 0.32, lean: 0.06 },
+  HOLD,
+);
 const LG_SHIELD: readonly PKey<LP>[] = [
   [0, HOLD],
   [0.45, G_S_SWING],
@@ -5354,15 +5451,26 @@ const LG_CHARGE: readonly PKey<LP>[] = [
   [0, HOLD],
   [0.45, lp({ lean: 0.18, aR: limb(1.35, 0.3, 0.95), wx: 0, wy: -0.1, wz: 1, hp: 0 }, HOLD)],
   [0.9, lp({ lean: 0.22, aR: limb(1.45, 0.32, 1.05), wx: 0, wy: 0.05, wz: 1, hp: -0.05 }, HOLD)],
-  [0.97, lp({ lean: 0.3, aR: limb(0.95, 0.2, 0.25), wx: 0, wy: -0.35, wz: 1, twist: -0.22 }, HOLD), eIn],
+  [
+    0.97,
+    lp({ lean: 0.3, aR: limb(0.95, 0.2, 0.25), wx: 0, wy: -0.35, wz: 1, twist: -0.22 }, HOLD),
+    eIn,
+  ],
   [1.8, lp({ lean: 0.26, aR: limb(1.05, 0.22, 0.3), wx: 0, wy: -0.3, wz: 1, twist: -0.18 }, HOLD)],
-  [1.92, lp({ lean: -0.22, aR: limb(1.9, 0.45, 1.95), wy: 0.6, wz: 0.6, twist: 0.3 }, HOLD), easeOut],
+  [
+    1.92,
+    lp({ lean: -0.22, aR: limb(1.9, 0.45, 1.95), wy: 0.6, wz: 0.6, twist: 0.3 }, HOLD),
+    easeOut,
+  ],
   [2.6, HOLD],
 ];
 /** Сборка исполина: рывок на каждую часть (0; 0,5; 1,0; 1,6). */
 const PULL_R = lp({ aR: limb(1.9, 0.45, 1.7), wy: 0.7, wz: 0.6, lean: -0.1, twist: 0.12 }, HOLD);
 const PULL_L = lp({ aL: limb(2.6, 0.5, 0.6), fL: 1, lean: -0.08, twist: -0.1, hy: -0.2 }, HOLD);
-const PULL_B = lp({ aR: limb(2.0, 0.45, 1.6), aL: limb(2.5, 0.55, 0.5), wy: 0.7, wz: 0.6, lean: -0.15, fL: 1 }, HOLD);
+const PULL_B = lp(
+  { aR: limb(2.0, 0.45, 1.6), aL: limb(2.5, 0.55, 0.5), wy: 0.7, wz: 0.6, lean: -0.15, fL: 1 },
+  HOLD,
+);
 const LG_REBUILD: readonly PKey<LP>[] = [
   [0, HOLD],
   [0.08, PULL_R, easeOut],
@@ -5468,7 +5576,23 @@ const ATK: readonly PKey<LP>[] = [
   [0.42, AT_WIND],
   [0.58, lp({ twist: 0.82, aR: limb(2.85, 0.9, 1.6) }, AT_WIND), easeOut],
   [0.7, AT_CUT, eIn],
-  [0.8, lp({ twist: -0.78, lean: 0.34, sink: 3.2, aR: limb(0.85, -0.8, 0.1), wx: -1, wy: -0.55, wz: 0.3, fw: 3.5 }, AT_CUT), easeOut],
+  [
+    0.8,
+    lp(
+      {
+        twist: -0.78,
+        lean: 0.34,
+        sink: 3.2,
+        aR: limb(0.85, -0.8, 0.1),
+        wx: -1,
+        wy: -0.55,
+        wz: 0.3,
+        fw: 3.5,
+      },
+      AT_CUT,
+    ),
+    easeOut,
+  ],
   [1.05, AT_DRAW],
   [1.2, lp({ twist: 0.5, sink: 2.3, aR: limb(1.2, 0.38, 2.05) }, AT_DRAW), easeOut],
   [1.3, AT_LUNGE, eIn],
@@ -5601,7 +5725,13 @@ const GRID: readonly PKey<LP>[] = [
   [1.2, lp({ aR: limb(2.55, 1.0, 0.3), aL: limb(2.55, 1.0, 0.3), web: 1, wx: 0.6, wy: 0.8 }, UP2)],
   [1.27, GRID_OPEN, easeOut],
   [2.0, lp({ aR: limb(1.6, 1.45, 0.15), aL: limb(1.6, 1.45, 0.15) }, GRID_OPEN)],
-  [2.4, lp({ aR: limb(0.9, 0.7, 0.3), aL: limb(0.9, 0.7, 0.3), sink: 2, lean: 0.2, fR: 0, fL: 0 }, STAND)],
+  [
+    2.4,
+    lp(
+      { aR: limb(0.9, 0.7, 0.3), aL: limb(0.9, 0.7, 0.3), sink: 2, lean: 0.2, fR: 0, fL: 0 },
+      STAND,
+    ),
+  ],
 ];
 /** Выдохся: оседает на колено, вага вниз. */
 const KNEEL = lp(
@@ -5665,7 +5795,16 @@ const LAND: readonly PKey<LP>[] = [
     }),
     easeOut,
   ],
-  [0.28, lp({ sink: 0.6, sq: 1.03, toe: -0.8, lL: dl(LP0.lL, 0.1, 0, 0.2), lR: dl(LP0.lR, 0.1, 0, 0.2) })],
+  [
+    0.28,
+    lp({
+      sink: 0.6,
+      sq: 1.03,
+      toe: -0.8,
+      lL: dl(LP0.lL, 0.1, 0, 0.2),
+      lR: dl(LP0.lR, 0.1, 0, 0.2),
+    }),
+  ],
   [0.5, LP0],
 ];
 const RISE: readonly PKey<LP>[] = [
@@ -5789,11 +5928,28 @@ const DIE: readonly PKey<LP>[] = [
   [0.35, DIE_PUP, easeOut],
   [0.45, lp({ side: 0.05 }, DIE_PUP)],
   [0.55, lp({ side: 0.2, up: 8.6, aR: limb(0.15, 0.3, 0.1), fR: 0 }, DIE_PUP), eIn],
-  [0.8, lp({ side: 0.04, up: 8.2, aR: limb(0.1, 0.25, 0.1), aL: limb(0.1, 0.25, 0.1), fR: 0, fL: 0 }, DIE_PUP), eIn],
+  [
+    0.8,
+    lp(
+      { side: 0.04, up: 8.2, aR: limb(0.1, 0.25, 0.1), aL: limb(0.1, 0.25, 0.1), fR: 0, fL: 0 },
+      DIE_PUP,
+    ),
+    eIn,
+  ],
   [
     1.05,
     lp(
-      { side: -0.28, hr: 0.6, hp: 0.55, up: 7.6, aR: limb(0.05, 0.2, 0.05), aL: limb(0.15, 0.3, 0.1), fR: 0, fL: 0, toe: 1.1 },
+      {
+        side: -0.28,
+        hr: 0.6,
+        hp: 0.55,
+        up: 7.6,
+        aR: limb(0.05, 0.2, 0.05),
+        aL: limb(0.15, 0.3, 0.1),
+        fR: 0,
+        fL: 0,
+        toe: 1.1,
+      },
       DIE_PUP,
     ),
     eIn,
@@ -5801,7 +5957,17 @@ const DIE: readonly PKey<LP>[] = [
   [
     1.15,
     lp(
-      { side: -0.32, hr: 0.62, hp: 0.6, up: 7.6, aR: limb(0.05, 0.2, 0.05), aL: limb(0.15, 0.3, 0.1), fR: 0, fL: 0, toe: 1.1 },
+      {
+        side: -0.32,
+        hr: 0.62,
+        hp: 0.6,
+        up: 7.6,
+        aR: limb(0.05, 0.2, 0.05),
+        aL: limb(0.15, 0.3, 0.1),
+        fR: 0,
+        fL: 0,
+        toe: 1.1,
+      },
       DIE_PUP,
     ),
   ],
@@ -5863,7 +6029,13 @@ const DIE: readonly PKey<LP>[] = [
   [
     3.6,
     lp(
-      { side: 0.12, aL: limb(0.6, 0.95, 0.3), aR: limb(0.6, 0.95, 0.3), lL: limb(0.05, 0.18, 0.05), lR: limb(-0.05, 0.2, 0.05) },
+      {
+        side: 0.12,
+        aL: limb(0.6, 0.95, 0.3),
+        aR: limb(0.6, 0.95, 0.3),
+        lL: limb(0.05, 0.18, 0.05),
+        lR: limb(-0.05, 0.2, 0.05),
+      },
       STAND,
     ),
     eBack,
@@ -5948,7 +6120,15 @@ function lordRig(L: LP, open: boolean): LRig {
     rig.ball(sh, 1.45, COAT);
     rig.cap(sh, el, 1.22, 1.1, COAT);
     rig.cap(el, vadd(ha, vsc(fore, -1.0)), 1.1, 1.02, COAT);
-    rig.cap(vadd(ha, vsc(fore, -1.5)), vadd(ha, vsc(fore, -0.75)), 1.12, 1.12, SHIRT, undefined, 0.2);
+    rig.cap(
+      vadd(ha, vsc(fore, -1.5)),
+      vadd(ha, vsc(fore, -0.75)),
+      1.12,
+      1.12,
+      SHIRT,
+      undefined,
+      0.2,
+    );
     rig.ball(ha, B.hand, SHIRT, undefined, 0.5);
     if (fan > 0.05) {
       const s0 = vcross(fore, v3(0, 1, 0));
@@ -5984,7 +6164,15 @@ function lordRig(L: LP, open: boolean): LRig {
     rig.dot(onHead(j, R, 0.9, r, u), LIP, 1);
   // Цилиндр: поля, тулья, бархатная лента и золотой кант.
   const hat = hatOf(j, L);
-  rig.cyl(vadd(hat.b, vsc(hat.up, -0.2)), vadd(hat.b, vsc(hat.up, 0.3)), HAT_BR, HAT, undefined, false, 0.5);
+  rig.cyl(
+    vadd(hat.b, vsc(hat.up, -0.2)),
+    vadd(hat.b, vsc(hat.up, 0.3)),
+    HAT_BR,
+    HAT,
+    undefined,
+    false,
+    0.5,
+  );
   rig.cyl(
     vadd(hat.b, vsc(hat.up, 0.3)),
     vadd(hat.b, vsc(hat.up, HAT_H)),
@@ -6006,7 +6194,16 @@ function lordRig(L: LP, open: boolean): LRig {
     );
     const a = vadd(top, vsc(pR, s * 0.15));
     const b = vadd(vadd(top, vsc(pR, s * B.waist * 1.05)), vsc(pF, 0.9));
-    rig.quad(a, b, fl(vadd(b, vadd(vsc(D, 8.6), vsc(pR, s * 0.3)))), fl(vadd(a, vsc(D, 10))), COAT, undefined, false, 0);
+    rig.quad(
+      a,
+      b,
+      fl(vadd(b, vadd(vsc(D, 8.6), vsc(pR, s * 0.3)))),
+      fl(vadd(a, vsc(D, 10))),
+      COAT,
+      undefined,
+      false,
+      0,
+    );
   }
   // Вага-крестовина: дерево и золото; горит, только когда окно открыто.
   const vg = vagaOf(j, L);
@@ -6023,7 +6220,15 @@ function lordRig(L: LP, open: boolean): LRig {
     const s = vlen(s0) < 0.2 ? j.right : vnorm(s0);
     for (let k = -1; k <= 1; k++) {
       const d = vnorm(vadd(vadd(j.foreL, vsc(s, k * 0.4 * L.nd)), v3(0, 0.25, 0)));
-      rig.cap(vadd(j.haL, vsc(d, 0.8)), vadd(j.haL, vsc(d, 0.8 + 4.4 * L.nd)), 0.22, 0.12, P.silver, undefined, 0.45);
+      rig.cap(
+        vadd(j.haL, vsc(d, 0.8)),
+        vadd(j.haL, vsc(d, 0.8 + 4.4 * L.nd)),
+        0.22,
+        0.12,
+        P.silver,
+        undefined,
+        0.45,
+      );
     }
   }
   // Аркан: петля над вагой, летит вперёд, падает.
@@ -6041,7 +6246,12 @@ function lordRig(L: LP, open: boolean): LRig {
     }
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * TAU;
-      rig.dot(vadd(c, v3(Math.cos(a) * r, Math.sin(a + L.la) * 0.5, Math.sin(a) * r)), THREAD, 1, 0.6);
+      rig.dot(
+        vadd(c, v3(Math.cos(a) * r, Math.sin(a + L.la) * 0.5, Math.sin(a) * r)),
+        THREAD,
+        1,
+        0.6,
+      );
     }
     const n = Math.max(4, Math.ceil(vlen(vsub(c, vg.tip)) / 0.8));
     for (let i = 1; i < n; i++) {
@@ -6075,7 +6285,15 @@ function lordRig(L: LP, open: boolean): LRig {
 }
 
 /** Нить, на которой висит: вверх от точки, с провисом; оборвалась — верх уходит. */
-function lordThread(lit: Px, x: number, y: number, str: number, sag: number, i: number, age: number): void {
+function lordThread(
+  lit: Px,
+  x: number,
+  y: number,
+  str: number,
+  sag: number,
+  i: number,
+  age: number,
+): void {
   const len = 64;
   const sgn = i % 2 ? 1 : -1;
   if (age < 0) {
@@ -6097,7 +6315,8 @@ function lordThread(lit: Px, x: number, y: number, str: number, sag: number, i: 
     }
   const sw = Math.sin(age * 14) * 2.5 * clamp01(1 - age / 1.2);
   const la = str * 0.75 * clamp01(1 - age / 1.6);
-  if (la > 0.02) for (let s = 0; s < 7; s++) lit.set(x + sw * (s / 7), y - 1 + s, withA(THREAD, la));
+  if (la > 0.02)
+    for (let s = 0; s < 7; s++) lit.set(x + sw * (s / 7), y - 1 + s, withA(THREAD, la));
 }
 
 interface LSmear {
@@ -6195,7 +6414,15 @@ function lordRender(d: LordDraw): LordCached {
 // ---- состояние и выбор кадра ----------------------------------------------------
 
 const HANG_MODES = new Set(['roar', 'f13_hang', 'f13_needle', 'f13_trans']);
-const ACT4 = new Set(['chase', 'f13_cut1', 'f13_cut2', 'f13_snare', 'f13_grid', 'f13_spent', 'recover']);
+const ACT4 = new Set([
+  'chase',
+  'f13_cut1',
+  'f13_cut2',
+  'f13_snare',
+  'f13_grid',
+  'f13_spent',
+  'recover',
+]);
 
 const liftOf = (m: Mob) =>
   m.mode === 'dying' ? 0 : clamp01(m.data.lift ?? (HANG_MODES.has(m.mode) ? 1 : 0));
@@ -6290,7 +6517,12 @@ function lordTick(m: Mob, now: number, flash: boolean): LState {
   if (dt > 0) {
     if (!dying) {
       if (HANG_MODES.has(m.mode)) st.yaw += clampN(angD(m.face, st.yaw), -9 * dt, 9 * dt);
-      else st.yaw = m.face;
+      else if (m.mode === 'chase' || m.mode === 'recover' || m.mode === 'idle') {
+        // Ходит лицом по ходу, стоит — к цели; поворот плавный.
+        const sp = Math.hypot(m.vx, m.vy);
+        const to = m.mode === 'chase' && sp > 0.3 ? Math.atan2(m.vy, m.vx) : m.face;
+        st.yaw += clampN(angD(to, st.yaw), -14 * dt, 14 * dt);
+      } else st.yaw = m.face;
     }
     // Маятник: вершина идёт за вагой, низ отстаёт; на остановке — перелёт.
     const thT = hang && !dying ? clampN(m.vx * 0.075, -0.3, 0.3) : 0;
@@ -6299,7 +6531,14 @@ function lordTick(m: Mob, now: number, flash: boolean): LState {
     const s = Math.sin(st.yaw);
     const vf = m.vx * c + m.vy * s;
     const vs = -m.vx * s + m.vy * c;
-    [st.lg, st.lgv] = spring(st.lg, st.lgv, hang ? clampN(-vf * 0.11, -0.45, 0.45) : 0, 4.4, 0.2, dt);
+    [st.lg, st.lgv] = spring(
+      st.lg,
+      st.lgv,
+      hang ? clampN(-vf * 0.11, -0.45, 0.45) : 0,
+      4.4,
+      0.2,
+      dt,
+    );
     [st.ls, st.lsv] = spring(st.ls, st.lsv, hang ? clampN(-vs * 0.07, -0.3, 0.3) : 0, 4.4, 0.2, dt);
     st.liftV += ((lift - st.lift) / dt - st.liftV) * Math.min(1, dt * 20);
     st.odo += Math.hypot(m.vx, m.vy) * dt;
@@ -6418,7 +6657,8 @@ function hangSpec(m: Mob, now: number, st: LState, o: LSpec): void {
     const tq = n / 24;
     o.L = track(tq, ROAR);
     o.key = `roar${n}`;
-    if (tq >= 1.55 && tq <= 1.92) o.smear = { at: (x) => track(x, ROAR), t: tq, w0: 1.55, w1: 1.85, part: 'vaga' };
+    if (tq >= 1.55 && tq <= 1.92)
+      o.smear = { at: (x) => track(x, ROAR), t: tq, w0: 1.55, w1: 1.85, part: 'vaga' };
     return;
   }
   if (m.mode === 'f13_trans') {
@@ -6460,7 +6700,14 @@ function hangSpec(m: Mob, now: number, st: LState, o: LSpec): void {
     const base = o.L;
     o.L = addP(base, track(tq, NEEDLE), HOLD);
     o.key += `nd${n}`;
-    if (tq >= 0.36) o.smear = { at: (x) => addP(base, track(x, NEEDLE), HOLD), t: tq, w0: 0.36, w1: 0.45, part: 'handL' };
+    if (tq >= 0.36)
+      o.smear = {
+        at: (x) => addP(base, track(x, NEEDLE), HOLD),
+        t: tq,
+        w0: 0.36,
+        w1: 0.45,
+        part: 'handL',
+      };
   } else {
     const na = now - st.needleAt;
     if (na >= 0 && na < 0.5) {
@@ -6487,8 +6734,10 @@ function walkSpec(m: Mob, now: number, st: LState, o: LSpec): void {
     const tq = n / 24;
     o.L = track(tq, ATK);
     o.key = `at${n}`;
-    if (tq >= 0.56 && tq <= 0.82) o.smear = { at: (x) => track(x, ATK), t: tq, w0: 0.56, w1: 0.76, part: 'vaga' };
-    if (tq >= 1.18 && tq <= 1.38) o.smear = { at: (x) => track(x, ATK), t: tq, w0: 1.18, w1: 1.33, part: 'vaga' };
+    if (tq >= 0.56 && tq <= 0.82)
+      o.smear = { at: (x) => track(x, ATK), t: tq, w0: 0.56, w1: 0.76, part: 'vaga' };
+    if (tq >= 1.18 && tq <= 1.38)
+      o.smear = { at: (x) => track(x, ATK), t: tq, w0: 1.18, w1: 1.33, part: 'vaga' };
     o.trail = tq >= 1.18 && tq <= 1.45;
   };
   switch (m.mode) {
@@ -6501,7 +6750,14 @@ function walkSpec(m: Mob, now: number, st: LState, o: LSpec): void {
       const tq = n / 24;
       o.L = { ...track(tq, SNARE), la: snareSpin(tq) };
       o.key = `sn${n}`;
-      if (tq >= 0.66) o.smear = { at: (x) => ({ ...track(x, SNARE), la: snareSpin(x) }), t: tq, w0: 0.66, w1: 0.8, part: 'vaga' };
+      if (tq >= 0.66)
+        o.smear = {
+          at: (x) => ({ ...track(x, SNARE), la: snareSpin(x) }),
+          t: tq,
+          w0: 0.66,
+          w1: 0.8,
+          part: 'vaga',
+        };
       return;
     }
     case 'f13_grid': {
@@ -6662,7 +6918,15 @@ function lordSpec(m: Mob, now: number, st: LState): LSpec {
 const LORD_CACHE = frameLRU<LordCached>(640);
 const LORD_TRAIL = { every: 0.05, life: 0.24, tint: '#2a1e3a', alpha: 0.4 };
 
-function lordKey(key: string, dir: number, flash: boolean, open: boolean, ghost: boolean, str: number, sag: number): string {
+function lordKey(
+  key: string,
+  dir: number,
+  flash: boolean,
+  open: boolean,
+  ghost: boolean,
+  str: number,
+  sag: number,
+): string {
   return `${key}:${dir}:${flash ? 1 : 0}${open ? 'o' : ''}${ghost ? 'g' : ''}:${Math.round(str * 10)}.${sag}`;
 }
 
@@ -6693,7 +6957,17 @@ function paintLord(m: Mob, pose: MobPose): MobFrame {
   if (!c)
     c = LORD_CACHE.set(
       full,
-      lordRender({ L, dir, flash, open, ghost, str: sp.str, sag: sp.sag, snap: sp.snap, smear: sp.smear }),
+      lordRender({
+        L,
+        dir,
+        flash,
+        open,
+        ghost,
+        str: sp.str,
+        sag: sp.sag,
+        snap: sp.snap,
+        smear: sp.smear,
+      }),
     );
   // Маятник вокруг подвеса, подъём на нитях, выпад, отдача.
   const th = st.th * sp.hang;
@@ -6812,7 +7086,17 @@ registerMobWarm('f13boss', function* () {
         const L = walkPose(f);
         LORD_CACHE.set(
           key,
-          lordRender({ L, dir: d, flash: false, open: false, ghost: false, str: 0, sag: 0, snap: null, smear: null }),
+          lordRender({
+            L,
+            dir: d,
+            flash: false,
+            open: false,
+            ghost: false,
+            str: 0,
+            sag: 0,
+            snap: null,
+            smear: null,
+          }),
         );
       }
       yield f;
