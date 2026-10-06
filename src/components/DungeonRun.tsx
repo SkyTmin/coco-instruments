@@ -455,16 +455,22 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f12_storm_end: () => softChime(2),
   f12_thaw_end: () => softChime(2),
   f12_hush_end: () => softChime(2),
-  // Этаж 15, «Сердце»: пульс арены, эхо прошлых боссов, память четвертей.
+  // Этаж 15, «Сердце»: астральный владыка, эхо прошлых боссов, память четвертей.
   f15b_intro_call: () => {
     heartbeat();
     deepRumble();
   },
   f15b_echo_call: () => teleport(),
-  f15b_crack_stone: () => {
-    stoneGrind();
-    heartbeat(true);
+  f15b_warp_call: () => teleport(),
+  f15b_orbit_call: () => teleport(),
+  f15b_well_call: () => deepRumble(),
+  f15b_beam_call: () => laserBeam(),
+  f15b_glint_call: () => {
+    softChime(6);
+    glassBreak();
   },
+  f15b_pulse_wall: () => deepRumble(),
+  f15b_dream_call: () => deepRumble(),
   f15b_lava_trap: () => {
     lavaBubble();
     lavaHiss();
@@ -474,11 +480,6 @@ const FLOOR_SOUND: Record<string, () => void> = {
     windGust(0.3);
   },
   f15b_mirror_trap: () => glassBreak(true),
-  f15b_hydra_trap: () => {
-    teleport();
-    fleshSquelch();
-  },
-  f15b_warp_call: () => teleport(),
   f15b_flame_trap: () => {
     lavaHiss();
     steamBurst();
@@ -497,75 +498,47 @@ const FLOOR_SOUND: Record<string, () => void> = {
     boom(1);
     deepRumble();
   },
-  f15b_squeeze_wall: () => {
-    fleshSquelch(true);
-    stoneGrind();
-  },
-  f15b_squeeze_trap: () => fleshSquelch(true),
-  // Пульс арены бьётся раз в секунду; в фазах 0–3 слышен каждый третий удар
-  // (частому событию — мягко и редко), в фазе 4 — каждый.
-  f15b_beat: () => {
-    const now = performance.now();
-    if (now - beatAt < 2600) return;
-    beatAt = now;
-    heartbeat();
-  },
-  f15b_beat_fast: () => heartbeat(true),
-  // Этаж 15, «Мир»: живой этаж — пульс, дыхание, сок, иммунитет.
-  f15_beat: () => {
-    const now = performance.now();
-    if (now - beatAt < 2600) return;
-    beatAt = now;
-    heartbeat();
-  },
-  f15_squeeze_trap: () => fleshSquelch(true),
-  f15_cough_trap: () => windGust(1),
-  f15_digest_trap: () => {
-    fleshSquelch(true);
-    lavaBubble();
-  },
-  f15_boil: () => lavaBubble(),
-  f15_acid_splash: () => lavaHiss(),
-  f15_digest_call: () => steamBurst(),
-  f15_pop: () => lavaBubble(),
-  f15_dive: () => lavaBubble(),
-  f15_splash: () => lavaBubble(),
-  f15_clot_trap: () => {
-    fleshSquelch(true);
-    deepRumble();
-  },
-  f15_clot_wall: () => fleshSquelch(true),
-  f15_clot_call: () => fleshSquelch(),
-  f15_valves_trap: () => heartbeat(true),
-  f15_alarm_trap: () => heartbeat(true),
-  f15_heart_call: () => {
-    heartbeat(true);
-    beastRoar(false);
-  },
-  f15_immune_trap: () => {
-    heartbeat(true);
-    fleshSquelch(true);
-  },
-  f15_mark_call: () => heartbeat(),
-  f15_nerve_call: () => stringBend(),
-  f15_signal: () => laserBeam(),
-  f15_seen_call: () => laserBeam(),
-  f15_numb_call: () => softChime(-5),
-  f15_gland_call: () => fleshSquelch(),
-  f15_wheel_call: () => {
-    stoneGrind();
-    fleshSquelch();
-  },
-  f15_engulf: () => fleshSquelch(true),
-  f15_engulf_trap: () => fleshSquelch(true),
-  f15_burst: () => fleshSquelch(true),
-  f15_hatch: () => fleshSquelch(),
-  f15_lay: () => fleshSquelch(),
-  f15_brood_trap: () => beastRoar(false),
-  f15_brood_call: () => fleshSquelch(),
-  f15_tonsil_trap: () => fleshSquelch(true),
-  f15_tonsil_call: () => fleshSquelch(),
-  f15_gold_call: () => softChime(4),
+  // Этаж 15, «Мир»: кристалл, звёзды, гравитация.
+  f15_awaken_trap: () => deepRumble(),
+  f15_pulse: () => deepRumble(),
+  f15_heavy_call: () => deepRumble(),
+  f15_gallery_trap: () => softChime(3),
+  f15_lamp: () => softChime(5),
+  f15_constel_end: () => softChime(2),
+  f15_starfall_end: () => softChime(2),
+  f15_awaken_end: () => softChime(2),
+  f15_gallery_end: () => softChime(2),
+  f15_storm_end: () => softChime(2),
+  f15_starfall_trap: () => laserBeam(),
+  f15_eclipse_trap: () => timeStop(),
+  f15_eclipse_end: () => timeResume(),
+  f15_sun: () => timeResume(),
+  f15_storm_trap: () => thunder(),
+  f15_float_call: () => windGust(0.5),
+  f15_slip_trap: () => windGust(0.7),
+  f15_ring_fall: () => windGust(0.7),
+  f15_drift_fall: () => windGust(0.7),
+  f15_parade_trap: () => clockBell(true),
+  f15_parade_call: () => clockBell(),
+  f15_bridge: () => chainRattle(),
+  f15_anchor: () => chainRattle(),
+  f15_parade_end: () => stoneGrind(),
+  f15_wave_call: () => stoneGrind(),
+  f15_constel_trap: () => stringPluck(),
+  f15_lash: () => stringBend(),
+  f15_scope: () => laserBeam(),
+  f15_door: () => gateSlam(),
+  f15_unseal: () => gateSlam(),
+  f15_crush: () => glassBreak(),
+  f15_burn: () => steamBurst(),
+  f15_slam: () => boom(1),
+  f15_nova: () => boom(1),
+  f15_bonk: () => hardClang(),
+  f15_parry: () => hardClang(),
+  f15_snuff: () => lavaHiss(),
+  f15_cast: () => teleport(),
+  f15_echo_call: () => teleport(),
+  f15_gold_gone: () => coinDing(),
   // Этаж 11: ветер, стражи, буря.
   f11_gust_call: () => windGust(0.5),
   f11_gust: () => windGust(0.5),
@@ -701,7 +674,6 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f14_haste: () => clockTick(),
   f14_blink: () => teleport(),
 };
-let beatAt = 0;
 
 const USE_ICON: Record<Usable['kind'], GxIconName> = {
   lift: 'lift',

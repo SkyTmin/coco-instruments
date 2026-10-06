@@ -2993,7 +2993,7 @@ function handSprite(g: Gest, a16: number, side: number): HTMLCanvasElement {
   const th = -side;
   const fingers: [number, number, number, number][] = [];
   let palmR = 2.7;
-  let palmX = 2;
+  const palmX = 2;
   if (g === 1) {
     fingers.push(
       [3, -1, 5, -1.4],

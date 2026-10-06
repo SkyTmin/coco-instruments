@@ -2055,7 +2055,7 @@ registerPropPainter('f15_armillary', (o, time) => {
       const out: [number, number, number][] = [];
       for (let t = 0; t < TAU; t += 0.05) {
         let x = Math.cos(t) * r;
-        let y = 0;
+        const y = 0;
         let z = Math.sin(t) * r;
         // Поворот вокруг оси Y на spin, затем наклон вокруг X.
         const x1 = x * Math.cos(spin) + z * Math.sin(spin);

@@ -15,7 +15,7 @@ import {
   strikeHits,
   SWORD,
   usableNear,
-  useObject,
+  useObject as operate,
 } from '../dungeon-sim';
 import type { Mob, Sim, SimInput } from '../dungeon-sim';
 import { FLOORS } from './index';
@@ -564,7 +564,7 @@ describe('этаж 15: орбиты, якорь, свет, дверь', () => {
     let used = false;
     for (let t = 0; t < 60 * 12 && !used; t++) {
       const u = usableNear(s);
-      if (u && u.obj.ref === 'f15_anchor') used = useObject(s, u);
+      if (u && u.obj.ref === 'f15_anchor') used = operate(s, u);
       stepSim(s, DT, NO_INPUT);
     }
     expect(used).toBe(true);
@@ -583,7 +583,7 @@ describe('этаж 15: орбиты, якорь, свет, дверь', () => {
     expect(tileOf(s, d.x0 + 0.5, dy + 0.5)).toBe(Tile.Wall);
     const u = usableNear(s);
     expect(u?.label).toBe('Навести телескоп');
-    expect(useObject(s, u!)).toBe(true);
+    expect(operate(s, u!)).toBe(true);
     for (let t = 0; t < 90; t++) stepSim(s, DT, NO_INPUT);
     for (let x = d.x0; x <= d.x1; x++) expect(tileOf(s, x + 0.5, dy + 0.5)).toBe(Tile.Floor);
   });
@@ -612,7 +612,7 @@ describe('этаж 15: орбиты, якорь, свет, дверь', () => {
     expect(m.hp).toBe(hp0);
     const u = usableNear(s);
     expect(u?.label).toBe('Зажечь кристалл');
-    useObject(s, u!);
+    operate(s, u!);
     m.x = lamp.x + 0.8;
     m.y = lamp.y + 0.8;
     s.hero.x = lamp.x;
@@ -801,7 +801,7 @@ describe('этаж 15: проходимость', () => {
         const ec = st(s).halls.find((x) => x.name === 'eclipse')!;
         if (ec.state === 'run' && !inp.dash && !inp.eat) {
           const u = usableNear(s);
-          if (u && (u.obj.ref === 'f15_telescope' || u.obj.ref === 'f15_lamp')) useObject(s, u);
+          if (u && (u.obj.ref === 'f15_telescope' || u.obj.ref === 'f15_lamp')) operate(s, u);
           else inp = follow(s, toSun, Math.floor(sun.x), Math.floor(sun.y) + 1);
         } else if (idle) {
           // Дверь закрыта, а герой у неё — к телескопу.
@@ -811,7 +811,7 @@ describe('этаж 15: проходимость', () => {
           const shut = !door.open && !door.at;
           if (shut && Math.abs(s.hero.y - dy) < 14 && s.hero.y > dy) {
             const u = usableNear(s);
-            if (u && u.obj.ref === 'f15_telescope') useObject(s, u);
+            if (u && u.obj.ref === 'f15_telescope') operate(s, u);
             else inp = follow(s, toScope, Math.floor(scope.x), Math.floor(scope.y) + 1);
           } else inp = follow(s, goal, gx, gy);
         }
