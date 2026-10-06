@@ -2301,3 +2301,565 @@ registerZonePainter('f5_tongue', (g, z, px, py, S) => {
   tongue(g, px, py, S, zz.ang ?? 0, zz.len ?? 3, out, Math.sin(PI * k) * 2.5, sstep(0.1, 0.7, k));
   return true;
 });
+
+// ---------------------------------------------------------------------------
+// Кролик-рогач: белый, уши розовые изнутри, золотой рог, красные глаза.
+// Прыжки — по фазе мозга (`hopSpeed`, как у жабы), уши отстают. Засада в
+// траве: торчат уши, рог и глаз, перед ним стебли. Замах (0,5 / 0,34 с):
+// припал, рог к цели, зад поднят, лапы скребут, дрожь пружины. Рывок —
+// вытянулся стрелой со шлейфом. Отдых: попал — отскок и тряска головой;
+// мимо — юз на задних. В стену — рог застрял, звёзды. Смерть: подскочил,
+// упал на бок, задняя лапа бьёт дважды, уши опали.
+// ---------------------------------------------------------------------------
+
+const RB_FUR = tn('#8e8276', '#c9bfb2', '#e9e1d5', '#fbf8f2');
+const RB_EAR = tn('#a45e5c', '#c47670', '#d88a86', '#f0b0aa');
+const RB_HORN = tn('#8a6a2c', '#c8a050', '#f0d890', '#fff6d6');
+const RB_EYE = hx('#ff2a44');
+const RB_NOSE = hx('#e07a80');
+const RB_GRASS: RGBA[] = [hx('#26330f'), hx('#3e5218'), hx('#62782a'), hx('#8ea244')];
+
+interface RabbitO {
+  fwd: number;
+  pitch: number;
+  roll: number;
+  squash: number;
+  /** Опущен в траву / прижат к земле 0…1. */
+  tuck: number;
+  /** Голова носом вниз (+), вбок; шея вперёд. */
+  head: number;
+  hturn: number;
+  neck: number;
+  /** Уши назад 0…1 (прижаты), развал; каждое отдельно — подёргивание. */
+  ears: number;
+  earL: number;
+  earR: number;
+  flop: number;
+  /** Задние лапы назад 0…1; передние вперёд; дрожь лап. */
+  ext: number;
+  reach: number;
+  /** Нос дёргается; глаза закрыты. */
+  nose: number;
+  shut: number;
+  /** Звёзды над головой (кадр) −1 — нет; блеск рога. */
+  stars: number;
+  glint: number;
+  /** Лёжа на боку: задняя лапа бьёт (фаза). */
+  kick: number;
+}
+const RB0: RabbitO = {
+  fwd: 0,
+  pitch: 0,
+  roll: 0,
+  squash: 0,
+  tuck: 0,
+  head: 0,
+  hturn: 0,
+  neck: 0,
+  ears: 0.15,
+  earL: 0,
+  earR: 0,
+  flop: 0,
+  ext: 0,
+  reach: 0,
+  nose: 0,
+  shut: 0,
+  stars: -1,
+  glint: 0,
+  kick: 0,
+};
+
+/** Масштаб кролика: прежний спрайт крупнее, чем риг в единицах. */
+const RBS = 1.5;
+
+function rabbitRig(o: RabbitO, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw).scale(RBS);
+  const cs = camSide(yaw);
+  const sq = o.squash;
+  const zc = 2.7 - o.tuck * 1.2 - sq * 0.5;
+  const C = B.at(o.fwd, 0, zc).pitch(o.pitch).roll(o.roll);
+  const fur: Mat = { T: RB_FUR };
+  // Корпус, бёдра, хвост-помпон.
+  r.ell(C, [-0.5, 0, 0], [3.0 * (1 - sq * 0.15), 2.3 * (1 + sq * 0.1), 2.3 * (1 - sq * 0.25)], fur);
+  for (const sd of [-1, 1])
+    r.ell(C, [-1.6, sd * 1.35, -0.5], [1.9, 1.15, 1.6 * (1 - sq * 0.2)], {
+      T: RB_FUR,
+      bias: sd === cs ? 0 : -0.12,
+    });
+  r.ball(C.p(-3.4, 0, 0.7), 0.95 * RBS, { T: tn('#b8b0a6', '#e6e0d8', '#fbf8f2', '#ffffff') });
+  // Голова: круглая, мордочка, нос, красные глаза.
+  const Hd = C.at(2.5 + o.neck, 0, 1.5 - o.tuck * 0.5 - sq * 0.3)
+    .turn(o.hturn)
+    .pitch(o.head);
+  r.ell(Hd, [0.3, 0, 0], [1.9, 1.55, 1.55], fur);
+  r.ell(Hd, [1.6, 0, -0.45], [0.95, 1.0, 0.8], fur);
+  r.dot(Hd.p(2.45, o.nose * 0.25, -0.3 + o.nose * 0.15), RB_NOSE, 0, 1, 0.6);
+  for (const sd of [-1, 1])
+    if (!o.shut) r.dot(Hd.p(1.05, sd * 1.15, 0.35), RB_EYE, 0.7, 1, 0.6);
+    else r.dot(Hd.p(1.05, sd * 1.15, 0.3), RB_FUR[0], 0, 1, 0.6);
+  r.eye = o.shut ? null : Hd.p(1.1, cs * 1.25, 0.35);
+  // Рог: золотой, вперёд-вверх; с блеском.
+  r.spike(
+    Hd.p(1.0, 0, 1.15),
+    Hd.v(1.0, 0, 0.9),
+    3.9 * RBS,
+    0.75 * RBS,
+    { T: RB_HORN, spec: true, glow: o.glint * 0.6 },
+    4,
+    0.4,
+  );
+  if (o.glint > 0.3) r.dot(Hd.p(3.7, 0, 3.8), WHITE, 1, 1, 1);
+  // Уши: длинные, назад и вверх; изнутри розовые; отстают в прыжке.
+  for (const sd of [-1, 1]) {
+    const own = sd < 0 ? o.earL : o.earR;
+    const back = clamp01(o.ears + own);
+    const base = Hd.p(-0.5, sd * 0.6, 1.25);
+    const dir = Hd.v(
+      -0.5 - back * 1.9,
+      sd * (0.35 + o.flop * 1.4),
+      3.0 - back * 2.1 - o.flop * 2.4,
+    );
+    const tip = vadd(base, dir);
+    const mid = vadd(vlerp(base, tip, 0.5), Hd.v(0, sd * 0.15, 0.1));
+    r.cap(base, mid, 0.62 * RBS, 0.66 * RBS, { T: RB_FUR, bias: sd === cs ? 0 : -0.1 });
+    r.cap(mid, tip, 0.66 * RBS, 0.42 * RBS, { T: RB_FUR, bias: sd === cs ? 0 : -0.1 });
+    r.cap(vadd(base, Hd.v(0.3, 0, 0.2)), vadd(tip, Hd.v(0.25, 0, -0.35)), 0.34 * RBS, 0.2 * RBS, {
+      T: RB_EAR,
+      bias: 0.1,
+    });
+  }
+  // Лапы: передние короткие; задние — длинная стопа.
+  for (const sd of [-1, 1]) {
+    const legM: Mat = { T: RB_FUR, bias: sd === cs ? -0.05 : -0.2 };
+    const S = C.p(1.5, sd * 0.95, -1.5);
+    let F = B.p(2.1 + o.fwd * 0.5 + o.reach * 1.9, sd * 1.05, 0);
+    if (o.kick > 0) F = C.p(1.8, sd * 2.4, -2.2);
+    r.cap(S, F, 0.6 * RBS, 0.45 * RBS, legM);
+    let heel = B.p(o.fwd - 1.5 - o.ext * 2.4, sd * 1.45, 0.35 + o.ext * 0.9);
+    let toe = B.p(o.fwd + 0.5 - o.ext * 3.4, sd * 1.5, 0);
+    if (o.kick > 0) {
+      const w = Math.sin(o.kick) * (sd > 0 ? 1 : 0.3);
+      heel = C.p(-2.4 + w * 0.6, sd * 2.0, -2.0);
+      toe = C.p(-1.2 + w * 1.6, sd * 2.6, -3.4 - w * 0.6);
+    }
+    r.cap(C.p(-1.7, sd * 1.4, -1.2), heel, 0.95 * RBS, 0.6 * RBS, legM);
+    r.cap(heel, toe, 0.6 * RBS, 0.55 * RBS, legM);
+  }
+  // Звёзды оглушения кружат над головой — рисует `rabbitStars` по этой точке.
+  rbStarAt = o.stars >= 0 ? Hd.p(0.2, 0, 3.6) : null;
+  return r;
+}
+
+let rbStarAt: V3 | null = null;
+/** Звёздочки-крестики над головой оглушённого (кадр f из 8). */
+function rabbitStars(f: number) {
+  return (o: RigOut, P: Proj2) => {
+    if (!rbStarAt) return;
+    const [cx, cy] = P(rbStarAt);
+    const pale = hx('#fff27a');
+    for (let i = 0; i < 3; i++) {
+      const a = (f / 8) * TAU + (i / 3) * TAU;
+      const x = Math.round(cx + Math.cos(a) * 6);
+      const y = Math.round(cy + Math.sin(a) * 6 * 0.4);
+      for (const [dx, dy, c] of [
+        [0, 0, WHITE],
+        [-1, 0, pale],
+        [1, 0, pale],
+        [0, -1, pale],
+        [0, 1, pale],
+      ] as [number, number, RGBA][])
+        if (x + dx >= 0 && y + dy >= 0 && x + dx < o.p.w && y + dy < o.p.h)
+          o.p.set(x + dx, y + dy, c);
+    }
+  };
+}
+
+/** Прыжок по фазе мозга, как у жабы: уши отстают на четверть фазы. */
+function rabbitHop(o: RabbitO, ph: number): void {
+  const air = ph < PI;
+  const u = air ? ph / PI : (ph - PI) / PI;
+  if (air) {
+    o.squash = -0.4 * Math.sin(PI * u);
+    o.pitch = trk(u, [
+      [0, -0.35],
+      [0.5, 0],
+      [1, 0.25],
+    ]);
+    o.ext = trk(u, [
+      [0, 1],
+      [0.5, 0.6],
+      [0.9, 0],
+    ]);
+    o.reach = trk(u, [
+      [0.2, -0.5],
+      [0.8, 1],
+    ]);
+  } else {
+    o.squash = trk(u, [
+      [0, 0.5],
+      [0.3, 0.05, easeOut],
+      [0.8, 0.1],
+      [1, 0.4, easeIn],
+    ]);
+    o.pitch = trk(u, [
+      [0, 0.25],
+      [0.3, 0],
+      [1, -0.15],
+    ]);
+    o.reach = trk(u, [
+      [0, 1],
+      [0.3, 0],
+    ]);
+  }
+  // Уши: в воздухе отстают назад, на приземлении хлопают вперёд.
+  const lag = (((ph - 0.9) % TAU) + TAU) % TAU;
+  o.ears = 0.25 + 0.45 * Math.max(0, Math.sin(lag));
+  o.flop = 0.15 * Math.max(0, -Math.sin(lag));
+}
+
+function rabbitPose(anim: string, f: number): RabbitO {
+  const o: RabbitO = { ...RB0 };
+  switch (anim) {
+    case 'idle': {
+      // 8 кадров по 6 к/с: нос дёргается, уши по очереди.
+      o.nose = f % 2;
+      o.earL = f === 2 || f === 3 ? 0.3 : 0;
+      o.earR = f === 5 ? 0.35 : 0;
+      o.hturn = f >= 4 && f <= 6 ? 0.25 : 0;
+      o.squash = 0.06 * Math.sin((f / 8) * TAU);
+      break;
+    }
+    case 'hop':
+      rabbitHop(o, (f / 16) * TAU);
+      break;
+    case 'hide': {
+      // В траве: прижат, видны уши, рог и глаз; уши подёргиваются.
+      o.tuck = 1;
+      o.squash = 0.3;
+      o.ears = 0.1;
+      o.earL = f === 1 ? 0.35 : 0;
+      o.earR = f === 3 ? 0.3 : 0;
+      o.nose = f % 2;
+      break;
+    }
+    case 'aim': {
+      // Замах (13 кадров на всё время замаха): припал, рог к цели, зад
+      // поднят, лапы скребут; последняя треть — дрожь пружины.
+      const k = f / 12;
+      o.tuck = trk(k, [
+        [0, 0],
+        [0.4, 0.7, easeOut],
+      ]);
+      o.head = trk(k, [
+        [0, 0],
+        [0.4, 0.45, easeOut],
+        [0.9, 0.5],
+        [1, 0.35],
+      ]);
+      o.pitch = trk(k, [
+        [0, 0],
+        [0.4, 0.22],
+        [1, 0.3],
+      ]);
+      o.fwd = trk(k, [
+        [0, 0],
+        [0.6, -0.6],
+        [0.95, -0.9],
+        [1, 0.3, easeIn],
+      ]);
+      o.ears = trk(k, [
+        [0, 0.2],
+        [0.5, 1],
+      ]);
+      o.squash = trk(k, [
+        [0.4, 0.2],
+        [0.95, 0.45],
+        [1, 0],
+      ]);
+      o.ext = k > 0.55 ? (f % 2) * 0.35 : 0;
+      o.glint = k > 0.6 ? clamp01((k - 0.6) / 0.3) : 0;
+      if (k > 0.6 && k < 0.98) o.fwd += f % 2 ? 0.12 : -0.12;
+      break;
+    }
+    case 'charge': {
+      // Рывок стрелой: вытянут, рог вперёд, задние разом толкают.
+      const a = (f / 6) * TAU;
+      o.squash = -0.5;
+      o.head = 0.5;
+      o.pitch = 0.18;
+      o.ears = 1;
+      o.ext = 0.5 + 0.5 * Math.sin(a);
+      o.reach = 0.6 + 0.4 * Math.sin(a + PI);
+      o.glint = 1;
+      break;
+    }
+    case 'hitf': {
+      // Попал (0,55 с): удар — сжался, отскок назад с подскоком, тряхнул
+      // головой, сел.
+      const t = f / FPS;
+      o.squash = trk(t, [
+        [0, 0.55],
+        [0.1, -0.2],
+        [0.3, 0.2],
+        [0.5, 0],
+      ]);
+      o.fwd = trk(t, [
+        [0, 0.8],
+        [0.25, -1.4, easeOut],
+        [0.55, -0.6],
+      ]);
+      o.head = trk(t, [
+        [0, 0.5],
+        [0.12, -0.2],
+        [0.5, 0],
+      ]);
+      o.hturn = t > 0.22 && t < 0.42 ? 0.35 * Math.sin((t - 0.22) * 50) : 0;
+      o.ears = trk(t, [
+        [0, 1],
+        [0.2, 0.1],
+        [0.55, 0.2],
+      ]);
+      o.flop = t > 0.22 && t < 0.42 ? 0.3 : 0;
+      o.glint = trk(t, [
+        [0, 1],
+        [0.2, 0],
+      ]);
+      break;
+    }
+    case 'missf': {
+      // Мимо (0,55 с): юз на задних — упёрся передними, корпус назад, рог
+      // вверх, встряхнулся.
+      const t = f / FPS;
+      o.pitch = trk(t, [
+        [0, 0.18],
+        [0.12, -0.35],
+        [0.35, -0.1],
+        [0.55, 0],
+      ]);
+      o.reach = trk(t, [
+        [0, 0.8],
+        [0.12, 1.4],
+        [0.4, 0],
+      ]);
+      o.ext = trk(t, [
+        [0, 0.6],
+        [0.15, 0],
+      ]);
+      o.squash = trk(t, [
+        [0, -0.4],
+        [0.15, 0.3],
+        [0.4, 0],
+      ]);
+      o.head = trk(t, [
+        [0, 0.5],
+        [0.15, -0.25],
+        [0.5, 0],
+      ]);
+      o.ears = trk(t, [
+        [0, 1],
+        [0.1, 0],
+        [0.3, 0.4],
+        [0.55, 0.2],
+      ]);
+      o.flop = trk(t, [
+        [0.08, 0],
+        [0.15, 0.4],
+        [0.35, 0],
+      ]);
+      break;
+    }
+    case 'dizzy': {
+      // Рог в стене (1,1 с): упёрся, шатается, звёзды кружат.
+      const a = (f / 8) * TAU;
+      o.head = 0.4;
+      o.fwd = 0.4;
+      o.roll = 0.18 * Math.sin(a);
+      o.hturn = 0.2 * Math.sin(a + 1);
+      o.ears = 0.3;
+      o.flop = 0.5 + 0.2 * Math.sin(a);
+      o.squash = 0.15;
+      o.shut = f % 4 === 0 ? 1 : 0;
+      o.stars = f;
+      break;
+    }
+    case 'flinch': {
+      // Ушиб: уши торчком, отпрянул, сжался.
+      const k = f / 4;
+      const b = Math.sin(PI * Math.min(1, k * 1.25)) * (1 - k * 0.5);
+      o.fwd = -1.2 * b;
+      o.squash = 0.4 * b;
+      o.ears = 0;
+      o.flop = -0.2 * b;
+      o.head = -0.3 * b;
+      o.shut = b > 0.4 ? 1 : 0;
+      break;
+    }
+    case 'sleep': {
+      o.tuck = 0.8;
+      o.squash = 0.35;
+      o.ears = 1;
+      o.shut = 1;
+      o.head = 0.2;
+      o.nose = f;
+      break;
+    }
+    case 'die': {
+      // 19 кадров: подскочил (0–3), упал на бок (4–8), задняя лапа бьёт
+      // дважды (9–14), уши опали, затих.
+      const t = f / FPS;
+      o.squash = trk(t, [
+        [0, -0.35],
+        [0.15, -0.1],
+        [0.3, 0.3],
+        [0.4, 0],
+      ]);
+      o.roll = trk(t, [
+        [0.1, 0],
+        [0.3, 1.45, easeIn],
+        [0.36, 1.3],
+        [0.42, 1.4],
+      ]);
+      o.head = trk(t, [
+        [0, -0.4],
+        [0.3, 0.3],
+      ]);
+      o.ears = 0.2;
+      o.flop = trk(t, [
+        [0.2, 0],
+        [0.45, 1],
+      ]);
+      o.kick = t > 0.38 && t < 0.62 ? 0.5 + (t - 0.38) * 52 : t >= 0.62 ? 0.5 : 0;
+      o.shut = t > 0.3 ? 1 : 0;
+      o.nose = 0;
+      break;
+    }
+  }
+  return o;
+}
+
+/** Стебли травы перед засадой: рисуются поверх рига. */
+function rabbitGrass(f: number) {
+  return (o: RigOut, P: Proj2) => {
+    const [gx, gy] = P([0, 0, 0]);
+    for (let i = 0; i < 15; i++) {
+      const x = Math.round(gx - 10 + i * 1.4 + (hash(i, 7) - 0.5));
+      const h = 4 + Math.floor(hash(i, 3) * 5);
+      const lean = (hash(i, 5) - 0.5) * 2 + (f % 2 ? 0.4 : -0.2) * (i % 2 ? 1 : -1);
+      const c = RB_GRASS[1 + (i % 3)];
+      for (let j = 0; j < h; j++) {
+        const xx = Math.round(x + (lean * j) / h);
+        const yy = Math.round(gy + 1 - j);
+        if (xx >= 0 && yy >= 0 && xx < o.p.w && yy < o.p.h)
+          o.p.set(xx, yy, j === h - 1 ? RB_GRASS[3] : c);
+      }
+    }
+  };
+}
+
+const RABBIT = kindOf(40, 34, 20, 24, 900);
+const rabbitPic = (anim: string, f: number, d: number): Pic =>
+  draw(
+    RABBIT,
+    rabbitRig(rabbitPose(anim, f), yawN(d)),
+    anim === 'hide' ? rabbitGrass(f) : anim === 'dizzy' ? rabbitStars(f) : undefined,
+  );
+
+registerMobPainter('f5_rabbit', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = pose.t;
+  const now = pose.now || 0;
+  const tech = md === 'aim' || md === 'charge' || md === 'recover' || md === 'dizzy';
+  const v = visOf(m, pose, tech ? (m.face ?? 0) : headOf(m), md === 'charge' ? 40 : 16);
+  const d = dirN(v.yaw);
+  const ex: Partial<MobFrame> = { shadow: 5 };
+  let anim = 'idle';
+  let f = 0;
+  let dark = 0;
+  const id = m.id ?? 0;
+  if (md === 'dying') {
+    f = fi(t, 18);
+    anim = 'die';
+    ex.linger = 0.8;
+    const k = clamp01(t / 0.3);
+    ex.dy = -Math.sin(PI * k) * 5;
+    ex.alpha = 1 - sstep(0.62, 0.8, t);
+    ex.still = true;
+  } else if (md === 'f5_hide') {
+    f = Math.floor(now * 3 + hash(id, 5) * 4) % 4;
+    anim = 'hide';
+    ex.shadow = 0;
+  } else if (md === 'aim') {
+    const T = m.data.quick ? 0.34 : 0.5;
+    f = Math.min(12, Math.floor((t / T) * 12));
+    anim = 'aim';
+    ex.still = true;
+  } else if (md === 'charge') {
+    f = Math.floor(t * FPS) % 6;
+    anim = 'charge';
+    ex.still = true;
+    ex.ghost = { every: 0.03, life: 0.16, tint: '#f4ece4', alpha: 0.35 };
+  } else if (md === 'recover') {
+    f = fi(t, 13);
+    anim = m.data.hit ? 'hitf' : 'missf';
+    ex.still = true;
+  } else if (md === 'dizzy') {
+    f = Math.floor(t * 10) % 8;
+    anim = 'dizzy';
+    ex.still = true;
+    if (t < 0.12) {
+      ex.sx = 0.86;
+      ex.sy = 1.1;
+    }
+  } else if (md === 'f5_born') {
+    const k = clamp01(t / 0.8);
+    f = Math.floor(((t * 9 + id) / TAU) * 16) % 16;
+    anim = 'hop';
+    dark = 3 - Math.min(3, Math.floor(k * 4));
+    const [wx, wy] = wallDir(m);
+    const off = (1 - easeOut(k)) * 9;
+    ex.dx = wx * off;
+    ex.dy = wy * off;
+    ex.alpha = 0.35 + 0.65 * k;
+  } else if (md === 'sleep') {
+    f = Math.floor(now * 1.3 + hash(id, 3)) % 2;
+    anim = 'sleep';
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(md === 'stun' ? t : now - v.hit, 4);
+    anim = 'flinch';
+  } else if ((md === 'chase' || md === 'hop') && moving(m, 0.2)) {
+    const ph = (((t * 9 + id) % TAU) + TAU) % TAU;
+    f = Math.floor((ph / TAU) * 16) % 16;
+    anim = 'hop';
+    if (ph < PI) {
+      ex.dy = -Math.sin(ph) * 5;
+      ex.shadow = 5 - Math.sin(ph) * 1.5;
+    }
+  } else {
+    f = Math.floor((now + hash(id, 7) * 4) * 6) % 8;
+    anim = 'idle';
+    if (md === 'alert') ex.dy = -Math.sin(PI * clamp01(t / 0.35)) * 3;
+  }
+  if (md !== 'dying') hurtFx(v, now, 1.2, ex);
+  return { ...frameOf(RABBIT, anim, f, d, pose, () => rabbitPic(anim, f, d), dark), ...ex };
+});
+
+registerMobWarm('f5_rabbit', function* () {
+  yield* warmAll(
+    RABBIT,
+    [
+      ['hop', 16],
+      ['idle', 8],
+      ['hide', 4],
+      ['aim', 13],
+      ['charge', 6],
+      ['hitf', 14],
+      ['missf', 14],
+      ['dizzy', 8],
+      ['flinch', 5],
+      ['die', 19],
+      ['sleep', 2],
+    ],
+    rabbitPic,
+  );
+});
