@@ -1,13 +1,11 @@
 // Этаж 6 «Огненный разлом» — рисовальщики: монстры, реквизит, свои клетки
 // трёх районов, метки ударов, тело Красного змея, иконки вещей.
 //
-// Часть монстров — чужие спрайты: огненный дух, пепельный летун и
-// жук-огнёвка — из Ninja Adventure (CC0), перекрашенные по ролям в палитру
-// этажа (`scripts/dungeon/f6-sheet.py` → `public/dungeon/f6/f6-sheet.png`);
-// бесёнок — кадры атласа 0x72 (CC0) с мешком. Остальное рисует код: пиксели
-// 16 на клетку, свет сверху-слева, контур тёмный. Все кадры собираются один
-// раз и лежат в кеше; лист грузится асинхронно — пока его нет, рисовальщик
-// возвращает null (движок рисует запасной вид).
+// Мобы (кроме бесёнка — кадры атласа 0x72 (CC0) с мешком) — мини-3D в
+// `f6-mob-*.ts` (анимации мобов 6); лист `public/dungeon/f6/f6-sheet.png`
+// (Ninja Adventure, CC0) больше не рисуется. Остальное рисует код: пиксели
+// 16 на клетку, свет сверху-слева, контур тёмный. Кадры собираются один раз
+// и лежат в кеше.
 
 import { Px } from '../dungeon-art';
 import {
@@ -30,6 +28,7 @@ import { GOLEM, serpentView } from './f6-brains';
 import './f6-mob-sal';
 import './f6-mob-beetle';
 import './f6-mob-wisp';
+import './f6-mob-bat';
 
 type RGBA = [number, number, number, number];
 
@@ -295,22 +294,6 @@ function frameOf(
   return frames.get(key) ?? finish(key, build(), pose.look, pose.flash, pose.left);
 }
 
-/** Кадр со стороной из листа: четыре стороны, отражать не нужно. */
-function frameDir(
-  kind: string,
-  pose: MobPose,
-  anim: string,
-  dir: number,
-  f: number,
-  build: () => Built | null,
-): MobFrame | null {
-  const key = `${kind}|${anim}|${dir}|${f}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  const b = build();
-  return b ? finish(key, b, pose.look, pose.flash, false, false) : null;
-}
-
 /** Язычок пламени высотой h (кадр f) с основанием в (x, y). */
 function flame(p: Px, x: number, y: number, h: number, f: number, w = 2.2): void {
   const sway = [0, 1, 0, -1][((f % 4) + 4) % 4];
@@ -343,58 +326,6 @@ function ripple(p: Px, cx: number, cy: number, rx: number, ry: number, f: number
   }
 }
 
-// ---------------------------------------------------------------------------
-// Лист чужих спрайтов (Ninja Adventure, перекрашенный): дух, летун, жук.
-// Грузится асинхронно; пока нет — рисовальщики отвечают null.
-// ---------------------------------------------------------------------------
-
-let sheet: ImageData | null = null;
-let sheetLoading = false;
-
-function loadSheet(): void {
-  if (sheetLoading || typeof document === 'undefined') return;
-  sheetLoading = true;
-  const img = new Image();
-  img.onload = () => {
-    const c = document.createElement('canvas');
-    c.width = img.width;
-    c.height = img.height;
-    const g = c.getContext('2d');
-    if (!g) return;
-    g.drawImage(img, 0, 0);
-    sheet = g.getImageData(0, 0, img.width, img.height);
-  };
-  img.onerror = () => {
-    sheetLoading = false;
-  };
-  img.src = `${import.meta.env.BASE_URL}dungeon/f6/f6-sheet.png`;
-}
-
-/** Кадр листа: монстр `k` (0 — дух, 1 — летун, 2 — жук), сторона, кадр шага. */
-function sheetPx(k: number, dir: number, f: number): Px | null {
-  loadSheet();
-  if (!sheet) return null;
-  const p = new Px(16, 16);
-  const sx = k * 64 + dir * 16;
-  const sy = (((f % 4) + 4) % 4) * 16;
-  for (let y = 0; y < 16; y++)
-    for (let x = 0; x < 16; x++) {
-      const i = ((sy + y) * sheet.width + sx + x) * 4;
-      const d = sheet.data;
-      if (!d[i + 3]) continue;
-      p.set(x, y, [d[i], d[i + 1], d[i + 2], d[i + 3]]);
-    }
-  return p;
-}
-
-/** Сторона листа по взгляду: 0 — вниз, 1 — вверх, 2 — влево, 3 — вправо. */
-function dir4(face: number): number {
-  const c = Math.cos(face);
-  const s = Math.sin(face);
-  if (Math.abs(c) >= Math.abs(s) * 0.9) return c < 0 ? 2 : 3;
-  return s > 0 ? 0 : 1;
-}
-
 /** Вставить кадр в больший холст (x, y — левый верх). */
 function paste(dst: Px, src: Px, ox: number, oy: number): void {
   for (let y = 0; y < src.h; y++)
@@ -414,71 +345,7 @@ const SAL = {
 
 // Огненный дух — `f6-mob-wisp.ts` (анимации мобов 6).
 
-// ---------------------------------------------------------------------------
-// Пепельный летун — «птица» Ninja Adventure в пепле и углях. Пике — крылья
-// сложены, за ним — полосы скорости и пепел; сел — крылья опущены.
-// ---------------------------------------------------------------------------
-
-function paintBat(dir: number, f: number, anim: string): Built | null {
-  const base = sheetPx(1, dir, f);
-  if (!base) return null;
-  const p = new Px(26, 24);
-  const ox = 5;
-  const oy = 3;
-  let body = base;
-  if (anim === 'swoop') {
-    // Крылья прижаты: сжимаем кадр по ширине к середине (сложены).
-    const q = new Px(16, 16);
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        const sx = Math.round(8 + (x - 8) * 1.7);
-        if (sx < 0 || sx > 15) continue;
-        const c = base.get(sx, y);
-        if (c[3]) q.set(x, y, c);
-      }
-    body = q;
-    // Полосы скорости позади и угли.
-    for (let i = 0; i < 4; i++) {
-      const y = oy + 4 + i * 3;
-      for (let k = 0; k < 4 + (i % 2) * 2; k++) p.set(ox + 1 - k, y, alpha(ASH.lt, 0.8 - k * 0.15));
-    }
-    p.set(ox + 2, oy + 14, FIRE[2]);
-    p.set(ox - 1, oy + 10, FIRE[1]);
-  }
-  if (anim === 'perch') {
-    // Сел: крылья опущены к земле, чуть ниже.
-    const q = new Px(16, 16);
-    for (let y = 0; y < 16; y++)
-      for (let x = 0; x < 16; x++) {
-        const c = base.get(x, y);
-        if (!c[3]) continue;
-        const wing = Math.abs(x - 7.5) > 3;
-        q.set(x, Math.min(15, y + (wing ? 2 : 1)), c);
-      }
-    body = q;
-  }
-  paste(p, body, ox, oy);
-  // Глаза — угольки.
-  if (dir !== 1) {
-    p.set(ox + 6, oy + 3, hx('#ffb040'));
-    p.set(ox + 9, oy + 3, hx('#ffb040'));
-  }
-  const ay = anim === 'perch' ? oy + 17 : oy + 16 - FLY + 1;
-  return { p, ax: ox + 8, ay, eye: dir === 1 ? null : [ox + 6, oy + 3] };
-}
-
-registerMobPainter('f6_ashbat', (m: Mob, pose: MobPose) => {
-  const dir = dir4(m.face);
-  const mode = pose.mode;
-  if (mode === 'f6_swoop')
-    return frameDir('f6_ashbat', pose, 'swoop', dir, 0, () => paintBat(dir, 0, 'swoop'));
-  if (mode === 'f6_perch' || pose.anim === 'dead')
-    return frameDir('f6_ashbat', pose, 'perch', dir, 2, () => paintBat(dir, 2, 'perch'));
-  // Машет крыльями: чаще, когда целится.
-  const fps = mode === 'aim' ? 16 : 9;
-  const f = ((Math.floor(pose.t * fps + m.id) % 4) + 4) % 4;
-  return frameDir('f6_ashbat', pose, 'fly', dir, f, () => paintBat(dir, f, 'fly'));
-});
+// Пепельный летун — `f6-mob-bat.ts` (анимации мобов 6).
 
 // Жук-огнёвка — `f6-mob-beetle.ts` (анимации мобов 6).
 
