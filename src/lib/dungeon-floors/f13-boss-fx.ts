@@ -2942,11 +2942,14 @@ registerZonePainter('f13_lancehit', (g, z, px, py) => {
 
 // Искры и вспышка поверх темноты — второй слой тяжёлых ударов (копьё, щит,
 // таран, обвал исполина): металл звенит, `k` — сила.
-registerZonePainter('f13_v_spark', (g, z, px, py) => {
+registerZonePainter('f13_v_spark', (g, z, px0, py0) => {
   const t = z.t;
   const kk = zf(z, 'k') || 0.6;
   const a = zf(z, 'ang');
-  pinZ(g, z, px, py);
+  pinZ(g, z, px0, py0);
+  // `off` — сдвиг по ходу удара (кромка щита), клетки.
+  const px = px0 + Math.cos(a) * zf(z, 'off') * TS;
+  const py = py0 + Math.sin(a) * zf(z, 'off') * TS;
   const seed = seedOf(z);
   const fl = 1 - k01(t / 0.12);
   if (fl > 0) {
@@ -3719,12 +3722,12 @@ registerZonePainter('f13_bolt', (g, z, px, py, _S, time) => {
 });
 
 // Копоть на палубе после молнии (на полу, под мобами): ставится вместе с
-// ударом и ждёт его (`w` — предупреждение), потом дымит и тает 2 с.
+// ударом и ждёт его предупреждение, потом дымит и тает 2 с.
 registerZonePainter('f13_v_scorch', (g, z, px, py, _S, time) => {
-  const u = z.t - zf(z, 'w');
+  const u = z.t - BOSS.bolt.warn;
   if (u < 0) return true;
   pinZ(g, z, px, py);
-  const R = z.r * TS;
+  const R = BOSS.bolt.r * TS;
   const seed = seedOf(z);
   const fade = 1 - k01((u - 1.4) / 0.8);
   if (ink(g, C.soot, 0.55 * fade)) fEll(g, px, py, R * 0.75, R * 0.6);

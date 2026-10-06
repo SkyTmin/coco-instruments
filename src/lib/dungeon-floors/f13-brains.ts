@@ -3074,6 +3074,7 @@ CUT_HOOK.giant = (sim, g, api) => {
     g.danger = 0;
     api.setMode(g, 'f13_slump');
     fx(sim, api, 'f13_v_slump', g.x, g.y, 1.6, 1.2); // анимации 13 — только рисунок
+    fx(sim, api, 'f13_v_spark', g.x, g.y - 0.6, 1.6, 0.4, { ang: -Math.PI / 2, k: 1 }, true); // анимации 13 — только рисунок
     sim.events.push({ t: 'shake', k: 0.4 });
     sim.events.push({
       t: 'boss',
@@ -3153,6 +3154,7 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
         if (canHurt(sim) && al > -0.3 && al < len + h.r && ac < BOSS.lance.w + h.r)
           api.hurtHero(sim, g.dmg, g.x, g.y, 6, g.kind);
         fx(sim, api, 'f13_lancehit', g.x + ux * len, g.y + uy * len, 0.8, 0.4, { ang: g.dir, len });
+        fx(sim, api, 'f13_v_spark', g.x + ux * len, g.y + uy * len, 0.8, 0.4, { ang: g.dir }, true); // анимации 13 — только рисунок
         sim.events.push({ t: 'shake', k: 0.3 }); // анимации 13 — только рисунок
         g.danger = 0;
         s.atkCd = 1.5;
@@ -3178,6 +3180,7 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
         if (canHurt(sim) && c.dist < BOSS.shield.r + h.r && off < BOSS.shield.arc / 2 + 0.2)
           api.hurtHero(sim, g.dmg * 0.9, g.x, g.y, 8, g.kind);
         fx(sim, api, 'f13_v_bash', g.x, g.y, BOSS.shield.r, 0.55, { ang: g.face }); // анимации 13 — только рисунок
+        fx(sim, api, 'f13_v_spark', g.x, g.y, 1, 0.4, { ang: g.face, k: 0.7, off: 1.1 }, true); // анимации 13 — только рисунок
         sim.events.push({ t: 'shake', k: 0.35 }); // анимации 13 — только рисунок
         g.danger = 0;
         s.atkCd = 1.3;
@@ -3217,6 +3220,8 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
         g.data.hitDone = 1;
         api.hurtHero(sim, g.dmg * 1.1, g.x, g.y, 9, g.kind);
         fx(sim, api, 'f13_v_ram', h.x, h.y, 1, 0.5, { ang: g.dir }, true); // анимации 13 — только рисунок
+        fx(sim, api, 'f13_v_mark', h.x, h.y, 1, 1, { ang: g.dir, kind: 3 }); // анимации 13 — только рисунок
+        sim.events.push({ t: 'shake', k: 0.5 }); // анимации 13 — только рисунок
       }
       // анимации 13 — только рисунок: пыль за тараном — не чаще 10 раз в секунду.
       g.data.vStep = ((g.data.vStep ?? 0) + dt) % 0.1; // анимации 13 — только рисунок
@@ -3483,6 +3488,7 @@ function stepFinale(sim: Sim, s: BState, m: Mob, dt: number, c: BrainCtx, api: S
         )
           api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind);
         fx(sim, api, 'f13_v_cut', m.x, m.y, BOSS.cone.r, 0.45, { ang: m.face }, true); // анимации 13 — только рисунок
+        fx(sim, api, 'f13_v_mark', m.x, m.y, BOSS.cone.r, 0.9, { ang: m.face, kind: 1 }); // анимации 13 — только рисунок
         sim.events.push({ t: 'shake', k: 0.2 }); // анимации 13 — только рисунок
         m.danger = 0;
         api.setMode(m, 'f13_cut2');
@@ -3510,6 +3516,7 @@ function stepFinale(sim: Sim, s: BState, m: Mob, dt: number, c: BrainCtx, api: S
         if (canHurt(sim) && al > -0.3 && al < len + h.r && ac < BOSS.thrust.w + h.r)
           api.hurtHero(sim, m.dmg * 1.1, m.x, m.y, 7, m.kind);
         fx(sim, api, 'f13_v_thrust', m.x, m.y, 1, 0.45, { ang: m.face, len }, true); // анимации 13 — только рисунок
+        fx(sim, api, 'f13_v_mark', m.x, m.y, 1, 0.9, { ang: m.face, len, kind: 2 }); // анимации 13 — только рисунок
         sim.events.push({ t: 'shake', k: 0.25 }); // анимации 13 — только рисунок
         m.vx = ux * 5;
         m.vy = uy * 5;
@@ -3703,6 +3710,7 @@ function stepStorm(sim: Sim, s: BState, dt: number, api: SimApi): void {
       art: 'f13_bolt',
       above: true,
     });
+    fx(sim, api, 'f13_v_scorch', h.x + h.vx * 0.3, h.y + h.vy * 0.3, 1.2, 3.2); // анимации 13 — только рисунок
   }
 }
 
