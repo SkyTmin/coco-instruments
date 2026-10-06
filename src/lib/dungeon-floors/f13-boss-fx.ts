@@ -804,6 +804,8 @@ interface ThreadOpt {
   /** Верх уходит в темноту колосников. */
   fade?: boolean;
   glints?: boolean;
+  /** Без тени тушью: на ночном небе её не видно, а длинная нить — сотни точек. */
+  flat?: boolean;
 }
 
 /** Точка нити от верха (x0, y0) к низу (x1, y1): провис, выгиб, дрожь. */
@@ -855,7 +857,7 @@ function threadPx(g: G, x0: number, y0: number, x1: number, y1: number, o: Threa
       if (ink(g, col, a)) curvePx(g, at, L, st[i], st[i + 1]);
     }
   } else {
-    if (ink(g, C.shade, o.a * 0.42)) curvePx(g, sh, L);
+    if (!o.flat && ink(g, C.shade, o.a * 0.42)) curvePx(g, sh, L);
     if (o.thick && ink(g, C.gold0, o.a)) {
       const at2 = (s: number): [number, number] => {
         const [x, y] = at(s);
@@ -1207,6 +1209,24 @@ function spr(
   }
   return s;
 }
+/**
+ * Картинка, нарисованная своим пером (нити, диски, пунктир) — один раз в кеш:
+ * привязка пера на время рисования — к углу картинки, потом возвращается.
+ */
+function penSprite(key: string, w: number, h: number, draw: (g: G) => void): Img {
+  const hit = SPR.get(key);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(w));
+  c.height = Math.max(1, Math.ceil(h));
+  const g = c.getContext('2d') as G;
+  const keep = [OX, OY, QX, QY];
+  OX = OY = QX = QY = 0;
+  draw(g);
+  g.globalAlpha = 1;
+  [OX, OY, QX, QY] = keep;
+  return SPR.set(key, c);
+}
 /** Картинка серединой в точку экрана — по сетке мира. */
 function blit(g: G, img: Img, x: number, y: number, a = 1): void {
   if (a <= 0.012) return;
@@ -1248,15 +1268,20 @@ function moon(g: G, to: To, time: number): void {
     beam(g, mx, my + 4, x, y, R, MOON, 0.09, time, 7, 12);
     glow(g, mx, my, 20, MOON, 0.22);
   });
-  for (const dx of [-4, 4])
-    threadPx(g, mx + dx, my - 70, mx + dx * 0.6, my - 8, {
-      a: 0.7,
-      sag: 0.1,
-      seed: dx,
-      time,
-      fade: true,
-    });
-  blit(g, moonSprite(), mx, my);
+  // Нити (провис 0,1 качает их меньше пикселя) и фанера — одна картинка.
+  const img = penSprite('moonT', 27, 98, (q) => {
+    for (const dx of [-4, 4])
+      threadPx(q, 13 + dx, 2, 13 + dx * 0.6, 64, {
+        a: 0.7,
+        sag: 0.1,
+        seed: dx,
+        time: 0,
+        fade: true,
+        glints: false,
+      });
+    q.drawImage(moonSprite(), 2, 61);
+  });
+  blit(g, img, mx, my - 23);
   g.globalAlpha = 1;
 }
 
@@ -1515,22 +1540,48 @@ function starNow(i: number, s: (typeof F13_FX.stars)[number]): number | null {
   return Math.hypot(x - s.x, y - s.y) < 0.6 ? th : null;
 }
 
-function starFloor(g: G, to: To, time: number): void {
-  F13_FX.stars.forEach((s, i) => {
-    if (s.cut) return;
-    const at = (th: number): [number, number] =>
-      to(s.px + Math.sin(th) * s.L, s.py + Math.cos(th) * s.L);
-    // Дуга-след на полу мелом: низ дуги (там быстрее всего) — ярче и плотнее.
+/**
+ * Дуга-след на полу мелом: низ дуги (там быстрее всего) — ярче и плотнее.
+ * Пунктир бежит (10 шагов в секунду) — 12 фаз картинками, вместо 16 отрезков
+ * в кадр на каждую звезду. `cy` — где на картинке ось маятника.
+ */
+function starArc(L: number, ph: number): { img: Img; cy: number } {
+  const Lp = L * TS;
+  const W = 2 * Math.ceil(Lp * Math.sin(STAR.amp)) + 8;
+  const top = Math.floor(Lp * Math.cos(STAR.amp)) - 4;
+  const H = Math.ceil(Lp) - top + 5;
+  const cx = W / 2;
+  const cy = -top;
+  const img = penSprite(`arc|${L}|${ph}`, W, H, (g) => {
     const n = 16;
     for (let j = 0; j < n; j++) {
       const t0 = -STAR.amp + (2 * STAR.amp * j) / n;
       const t1 = t0 + (2 * STAR.amp) / n;
       const fast = 1 - Math.min(1, Math.abs((t0 + t1) / 2) / STAR.amp);
       if (!ink(g, fast > 0.6 ? C.gold3 : C.gold2, 0.18 + 0.4 * fast * fast)) continue;
-      const [x0, y0] = at(t0);
-      const [x1, y1] = at(t1);
-      linePx(g, x0, y0, x1, y1, fast > 0.6 ? 3 : 4, reduced() ? 0 : -time * 10, fast > 0.6 ? 2 : 1);
+      linePx(
+        g,
+        cx + Math.sin(t0) * Lp,
+        cy + Math.cos(t0) * Lp,
+        cx + Math.sin(t1) * Lp,
+        cy + Math.cos(t1) * Lp,
+        fast > 0.6 ? 3 : 4,
+        -ph,
+        fast > 0.6 ? 2 : 1,
+      );
     }
+  });
+  return { img, cy };
+}
+
+function starFloor(g: G, to: To, time: number): void {
+  F13_FX.stars.forEach((s, i) => {
+    if (s.cut) return;
+    const at = (th: number): [number, number] =>
+      to(s.px + Math.sin(th) * s.L, s.py + Math.cos(th) * s.L);
+    const [ppx, ppy] = to(s.px, s.py);
+    const arc = starArc(s.L, reduced() ? 0 : mod(Math.floor(time * 10), 12));
+    blit(g, arc.img, ppx, ppy - arc.cy + arc.img.height / 2);
     const th = starNow(i, s);
     const [x, y] = to(s.x, s.y);
     // Своя тень под звездой и круг, где она бьёт.
@@ -1609,8 +1660,15 @@ function drawStars(g: G, to: To, time: number): void {
       seed: s.px * 3,
       time,
       thick: false,
+      flat: true,
     });
-    threadPx(g, px + 3, top, x + 2, sy - 7, { a: 0.9, sag: 0.25, seed: s.px * 3 + 1, time });
+    threadPx(g, px + 3, top, x + 2, sy - 7, {
+      a: 0.9,
+      sag: 0.25,
+      seed: s.px * 3 + 1,
+      time,
+      flat: true,
+    });
     glowC(g, x, sy, 15 + 3 * fast, [255, 236, 160, 255], 0.36 + 0.2 * fast);
     const rot = time * (1.2 + 5 * fast) + s.px;
     blit(g, starSprite('gold', 9, starRs(rot)), x, sy);
@@ -1634,35 +1692,26 @@ const CLOUD_PUFFS = [
  * от времени не зависят): прямо в кадр это было ~4 тыс. `fillRect`.
  */
 function cloudSprite(): Img {
-  const hit = SPR.get('cloud');
-  if (hit) return hit;
-  const c = document.createElement('canvas');
-  c.width = 40;
-  c.height = 74;
-  const g = c.getContext('2d') as G;
-  const keep = [OX, OY, QX, QY];
-  OX = OY = QX = QY = 0;
-  const x = 20;
-  const y = 64;
-  for (const [dx, seed] of [
-    [-6, 0],
-    [7, 9],
-  ])
-    threadPx(g, x + dx, y - 60, x + dx, y - 5, {
-      a: 0.5,
-      sag: 0,
-      seed,
-      time: 0,
-      fade: true,
-      glints: false,
-    });
-  if (ink(g, C.ink, 0.6)) for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx, y + dy, r + 1);
-  if (ink(g, '#9096c4', 1)) for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx, y + dy, r);
-  if (ink(g, '#e2e4f6', 1))
-    for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx - 1, y + dy - 1.5, r * 0.7);
-  g.globalAlpha = 1;
-  [OX, OY, QX, QY] = keep;
-  return SPR.set('cloud', c);
+  return penSprite('cloud', 40, 74, (g) => {
+    const x = 20;
+    const y = 64;
+    for (const [dx, seed] of [
+      [-6, 0],
+      [7, 9],
+    ])
+      threadPx(g, x + dx, y - 60, x + dx, y - 5, {
+        a: 0.5,
+        sag: 0,
+        seed,
+        time: 0,
+        fade: true,
+        glints: false,
+      });
+    if (ink(g, C.ink, 0.6)) for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx, y + dy, r + 1);
+    if (ink(g, '#9096c4', 1)) for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx, y + dy, r);
+    if (ink(g, '#e2e4f6', 1))
+      for (const [dx, dy, r] of CLOUD_PUFFS) fDisc(g, x + dx - 1, y + dy - 1.5, r * 0.7);
+  });
 }
 
 function cottonClouds(g: G, to: To, time: number): void {
@@ -4245,6 +4294,12 @@ registerMobWarm('f13boss', function* () {
   yield;
   boltSprite();
   yield;
+  cloudSprite();
+  yield;
+  for (let ph = 0; ph < 12; ph++) {
+    starArc(STAR.L, ph);
+    if (ph % 3 === 2) yield;
+  }
   starSprite('shade', 6.5, 0);
   for (let rs = 0; rs < STAR_ROT; rs++) {
     starSprite('gold', 9, rs);
