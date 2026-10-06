@@ -18,6 +18,7 @@ import type { Mob, Sim, SimInput } from '../dungeon-sim';
 import { BRAINS } from '../dungeon-ai';
 import { ECHO, f15bForce, f15bView, LORD, QUADS } from './f15-boss-brains';
 import { F15_HEART, F15_JOIN, F15B_GEO, F15B_MARK } from './f15-boss';
+import { F15_MARK } from './f15';
 
 const world = buildWorld(15);
 const W = world.w;
@@ -458,6 +459,13 @@ describe('этаж 15: механики боя', () => {
     expect([...Array(F15_JOIN.x1 - F15_JOIN.x0 + 1).keys()].some((k) => walkableTile(s.tiles[(bottom + 1) * W + F15_JOIN.x0 + k]))).toBe(true);
     const r = reach(s, (F15_JOIN.x0 + F15_JOIN.x1) / 2 + 0.5, band.top + 101.5);
     expect(r.has((gateObj.y + 1) * W + gateObj.x)).toBe(true);
+  });
+
+  it('метки района не попадают в узлы вен «Мира» (его правило ищет их по всей карте)', () => {
+    expect(Object.values(F15B_MARK)).not.toContain(F15_MARK.node);
+    const s = sim(8, 5, 31.5, band.top + 53);
+    for (let y = band.top; y < band.top + band.h; y++)
+      for (let x = 0; x < W; x++) expect(s.world.mark[y * W + x] === F15_MARK.node).toBe(false);
   });
 
   it('эхо встают по очереди — Король, Минотавр, Змей, Гидра, Король демонов — и зажигают звёзды', () => {

@@ -1761,6 +1761,25 @@ function regionOf(qd: QuadV, cells: number[], W: number, S: number): Region | nu
   return r;
 }
 
+/** Кайма четверти: отрезки [x, y, w, h] по краю клеток (кеш на массив клеток). */
+const quadEdges = new WeakMap<number[], number[]>();
+function edgesOf(cells: number[], W: number, S: number): number[] {
+  const hit = quadEdges.get(cells);
+  if (hit) return hit;
+  const set = new Set(cells);
+  const out: number[] = [];
+  for (const i of cells) {
+    const x = (i % W) * S;
+    const y = Math.floor(i / W) * S;
+    if (!set.has(i - 1)) out.push(x, y, 1, S);
+    if (!set.has(i + 1)) out.push(x + S - 1, y, 1, S);
+    if (!set.has(i - W)) out.push(x, y, S, 1);
+    if (!set.has(i + W)) out.push(x, y + S - 1, S, 1);
+  }
+  quadEdges.set(cells, out);
+  return out;
+}
+
 /** Клетки четверти нужного вида — для частиц (не больше 40). */
 const pickCells = (qd: QuadV, kind: 'pool' | 'mirror' | 'circle' | 'all'): number[] => {
   const list =
@@ -1836,9 +1855,19 @@ registerZonePainter(
     if (!qd) return;
     const W = s.world.w;
     const p = new Pen(g, px, py, zz.x * S, zz.y * S);
+    // Картинка будущего пола строится по кускам заранее.
     const reg = regionOf(qd, zz.cells, W, S);
-    if (!reg) return;
     const wakeIn = zz.life - zz.t - 0.2;
+    if (wakeIn >= 1.6) {
+      // Ждёт: дышит только кайма по краю четверти. Прежде здесь каждый кадр
+      // ложилась вся картинка четверти на 0,12 прозрачности — четыре
+      // картинки по 160×160 на кадр, самое дорогое в фазе.
+      const e = edgesOf(zz.cells, W, S);
+      p.col(QUAD_HEX[mod(zz.q ?? 0, 4)], 0.3 + 0.15 * Math.sin(time * 2 + (zz.q ?? 0)));
+      for (let j = 0; j < e.length; j += 4) p.rect(e[j], e[j + 1], e[j + 2], e[j + 3]);
+      return;
+    }
+    if (!reg) return;
     // Перемена: четверть вспыхивает своим цветом и гаснет.
     if (wakeIn < 0) {
       const u = k01(-wakeIn / 0.2);
@@ -1847,12 +1876,6 @@ registerZonePainter(
       return;
     }
     const k = k01(1 - wakeIn / 1.6);
-    if (k <= 0) {
-      // Ждёт: еле видная кайма, дышит.
-      p.alpha(0.12 + 0.06 * Math.sin(time * 2 + (zz.q ?? 0)));
-      p.img(reg.img, reg.x0, reg.y0);
-      return;
-    }
     const sig = wakeIn < SIG;
     const tk = !reduced() && tick(wakeIn);
     const on = !reduced() && Math.sin(time * (5 + 16 * k)) > 0.3;

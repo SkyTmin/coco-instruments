@@ -129,8 +129,11 @@ export const F15B_MARK = {
   crater: 2,
   /** Мрамор Зала памяти. */
   hall: 3,
-  /** Световая дорожка зала. */
-  runway: 4,
+  /**
+   * Световая дорожка зала. Не 4: правило «Мира» ищет по ВСЕЙ карте клетки
+   * с его `node` (4) и зажигало на дорожке десятки красных пульсов.
+   */
+  runway: 30,
   /** Кристальный грунт арок и гротов. */
   ground: 5,
   /** Звёздная пыль. */
@@ -191,16 +194,16 @@ const LEGEND: Record<string, LegendCell> = {
   j: { tile: 'floor', mark: M.runway },
   w: { tile: 'floor', mark: M.ground },
   y: { tile: 'floor', mark: M.dust },
-  '1': { tile: 'floor', mark: M.sigLava, light: { r: 2.6, tint: 'warm' } },
-  '2': { tile: 'floor', mark: M.sigAbyss, light: { r: 2.6, tint: 'teal' } },
-  '3': { tile: 'floor', mark: M.sigMirror, light: { r: 2.6, tint: 'cold' } },
-  '4': { tile: 'floor', mark: M.sigHydra, light: { r: 2.6, tint: 'green' } },
+  '1': { tile: 'floor', mark: M.sigLava, light: { r: 2.2, tint: 'warm' } },
+  '2': { tile: 'floor', mark: M.sigAbyss, light: { r: 2.2, tint: 'teal' } },
+  '3': { tile: 'floor', mark: M.sigMirror, light: { r: 2.2, tint: 'cold' } },
+  '4': { tile: 'floor', mark: M.sigHydra, light: { r: 2.2, tint: 'green' } },
   '5': { tile: 'floor', mark: M.sigLava },
   '6': { tile: 'floor', mark: M.sigAbyss },
   '8': { tile: 'floor', mark: M.sigMirror },
   '9': { tile: 'floor', mark: M.sigHydra },
   W: { tile: 'wall', mark: M.wall },
-  Q: { tile: 'wall', mark: M.wallCrystal, light: { r: 2.6, tint: 'cold' } },
+  Q: { tile: 'wall', mark: M.wallCrystal, light: { r: 2.2, tint: 'cold' } },
   R: { tile: 'wall', mark: M.wallCrystal },
   H: { tile: 'wall', mark: M.wallGold },
   A: wallObj('f15b_relic_crown', M.niche, { r: 2.4, tint: 'warm' }),
@@ -210,8 +213,8 @@ const LEGEND: Record<string, LegendCell> = {
   Z: wallObj('f15b_relic_sword', M.niche, { r: 2.4, tint: 'violet' }),
   '7': wallObj('f15b_relic_empty', M.niche, { r: 1.8, tint: 'cold' }),
   // Звезда парит над кратером: сквозь неё ходят (в бою над ней — владыка).
-  F: floorObj('f15b_star', 0, M.crater, { r: 6, tint: 'warm' }),
-  g: floorObj('f15b_armillary', 0.42, M.star, { r: 2.2, tint: 'warm' }),
+  F: floorObj('f15b_star', 0, M.crater, { r: 4.2, tint: 'warm' }),
+  g: floorObj('f15b_armillary', 0.42, M.star, { r: 1.8, tint: 'warm' }),
   p: floorObj('f15b_column', 0.4, M.hall),
   k: floorObj('f15b_arch', 0.36, M.ground, { r: 2.4, tint: 'cold' }),
   s: {

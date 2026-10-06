@@ -2286,10 +2286,12 @@ function wakeQuad(sim: Sim, b: BossFight, st: F15BState, api: SimApi, qd: Quad):
   qd.next = sim.time + 2.2 + qd.q * 0.4;
   // Свет памяти: лава в трещинах, бездна без звёзд, зеркала холодны, круги зелены.
   const tint = (['red', 'teal', 'cold', 'green'] as const)[qd.q];
-  // Не больше четырёх ламп на четверть: каждая лампа — два больших слоя света в кадре.
+  // Одна лампа на четверть, в её середине: каждая лампа — два больших слоя
+  // света в кадре, а клетки памяти и так светлые (кадр фазы был самым дорогим
+  // в бою: в кадре 20 ламп, из них 8 — память).
   const all = qd.kind === 'mirror' ? qd.mirrors : qd.kind === 'hydra' ? qd.circles.flat() : qd.pools.filter((_, k) => k % 7 === 0);
-  const pts = all.length <= 4 ? all : [all[0], all[Math.floor(all.length / 2)], all[all.length - 1]];
-  pts.forEach((i, n) => light(sim, st, `f15b_q${qd.q}_${n}`, (i % W) + 0.5, Math.floor(i / W) + 0.5, qd.kind === 'lava' ? 4 : 3, tint));
+  const pts = all.length ? [all[Math.floor(all.length / 2)]] : [];
+  pts.forEach((i, n) => light(sim, st, `f15b_q${qd.q}_${n}`, (i % W) + 0.5, Math.floor(i / W) + 0.5, qd.kind === 'lava' ? 3.4 : 2.8, tint));
   const names = { lava: 'ЛАВА', abyss: 'БЕЗДНА', mirror: 'ЗЕРКАЛА', hydra: 'КРУГИ ГИДРЫ' } as const;
   const hints = {
     lava: 'кристалл треснул — корка жжёт, из трещин бьёт огонь',
@@ -2642,7 +2644,8 @@ registerBoss('f15boss', {
     api.setMode(lead, 'f15l_sleep');
     st.planets = Array.from({ length: 5 }, () => ({ stage: 0 as const, x: lead.x, y: lead.y - 4, sx: 0, sy: 0, tx: 0, ty: 0, cx: 0, cy: 0, at: 0 }));
     st.echoAt = sim.time + 2.4;
-    light(sim, st, 'f15b_core', st.cx, st.cy, 5, 'warm');
+    // Ядро звезды светит лампой легенды (r 4,2); свой свет боя — только в
+    // затмении и сверхновой (две лампы в одной точке стоили кадру).
     // Небо арены (сетка, кольца, колодцы) и планеты в полёте — рисунок.
     vfx(sim, api, 'f15b_fxsky', st.cx, st.cy, 1e9);
     vfx(sim, api, 'f15b_fxplanets', st.cx, st.cy, 1e9, { above: true });
@@ -2674,12 +2677,16 @@ registerBoss('f15boss', {
     if (b.phase === 3) stepQuads(sim, b, st, api);
     if (b.phase === 5) stepNova(sim, st, api, lord, dt);
     // Свет: звезда — по фазе; во тьме — только распахнутый плащ.
-    const glow = [5, 5.5, 6, 6, 1.6, 8.5][b.phase] ?? 5;
-    light(sim, st, 'f15b_core', st.cx, st.cy, glow, b.phase === 4 ? 'violet' : 'warm');
-    if (b.phase === 4 && lord.mode === 'f15l_open') light(sim, st, 'f15b_lord', lord.x, lord.y - 1, 6.5, 'warm');
+    // В той же точке горит лампа звезды из легенды (r 4,2): своё ядро — только
+    // в затмении (фиолетовый огонёк) и в сверхновой. Цена ореола растёт с
+    // квадратом радиуса, вторая лампа в одной точке ничего не добавляла.
+    const glow = [0, 0, 0, 0, 1.6, 7.5][b.phase] ?? 0;
+    if (glow > 0) light(sim, st, 'f15b_core', st.cx, st.cy, glow, b.phase === 4 ? 'violet' : 'warm');
+    else unlight(sim, st, 'f15b_core');
+    if (b.phase === 4 && lord.mode === 'f15l_open') light(sim, st, 'f15b_lord', lord.x, lord.y - 1, 4.8, 'warm');
     else if (b.phase === 5) unlight(sim, st, 'f15b_lord');
     else if (b.phase === 4) unlight(sim, st, 'f15b_lord');
-    else light(sim, st, 'f15b_lord', lord.x, lord.y - 1.2, 3, 'cold');
+    else light(sim, st, 'f15b_lord', lord.x, lord.y - 1.2, 2.6, 'cold');
   },
   onPartDown(sim, b, m, api) {
     const st = stateOf(sim, api);
