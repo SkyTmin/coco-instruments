@@ -4983,8 +4983,8 @@ const SHOE: Tone = [hx('#050307'), hx('#121016'), hx('#2c2834'), hx('#9a94a6')];
 const LIP = hx('#a01c2c');
 const ROUGE = hx('#e88aa2');
 const GHOST_T = hx('#7a68b0');
-const RIM = hx('#ffe6be', 118);
-const RIM_G = hx('#c8b4ff', 90);
+const RIM = hx('#ffe6be', 150);
+const RIM_G = hx('#d8caff', 140);
 const THREAD = P.gold[2];
 
 /** Перед и право торса — для манишки (узор читает нормаль модели). */
@@ -5949,14 +5949,14 @@ function lordRig(L: LP, open: boolean): LRig {
     rig.cap(sh, el, 1.22, 1.1, COAT);
     rig.cap(el, vadd(ha, vsc(fore, -1.0)), 1.1, 1.02, COAT);
     rig.cap(vadd(ha, vsc(fore, -1.5)), vadd(ha, vsc(fore, -0.75)), 1.12, 1.12, SHIRT, undefined, 0.2);
-    rig.ball(ha, B.hand, SHIRT, undefined, 0.4);
+    rig.ball(ha, B.hand, SHIRT, undefined, 0.5);
     if (fan > 0.05) {
       const s0 = vcross(fore, v3(0, 1, 0));
       const s = vlen(s0) < 0.2 ? j.right : vnorm(s0);
       for (let k = 0; k < 4; k++) {
         const o = (k - 1.5) * 0.62 * fan;
         const along = 1.0 + 0.5 * fan * (1 - Math.abs(k - 1.5) / 3);
-        rig.ball(vadd(vadd(ha, vsc(fore, along)), vsc(s, o)), 0.42, SHIRT, undefined, 0.4);
+        rig.ball(vadd(vadd(ha, vsc(fore, along)), vsc(s, o)), 0.42, SHIRT, undefined, 0.5);
       }
     }
   };
@@ -5968,7 +5968,7 @@ function lordRig(L: LP, open: boolean): LRig {
   rig.ball(vadd(bt, vsc(j.right, -0.6)), 0.6, P.velvet);
   rig.ball(vadd(bt, vsc(j.right, 0.6)), 0.6, P.velvet);
   const R = B.head;
-  rig.ball(j.head, R, P.porcelain, undefined, 0.32);
+  rig.ball(j.head, R, P.porcelain, undefined, 0.45);
   for (const s of [-1, 1]) {
     rig.dot(onHead(j, R, 0.93, 0.36 * s, 0.16), INK, 1);
     rig.dot(onHead(j, R, 0.84, 0.44 * s, 0.44), INK, 1);
@@ -6133,7 +6133,7 @@ function lordRender(d: LordDraw): LordCached {
     scale: LS,
     flash: d.flash,
     tint: d.ghost ? GHOST_T : undefined,
-    tintK: d.ghost ? 0.22 : 0,
+    tintK: d.ghost ? 0.1 : 0,
   });
   const proj = rigProj(yaw, LS, LAX, LAY);
   let lit = rimLight(o, o.lit, d.ghost ? RIM_G : RIM);
@@ -6711,7 +6711,7 @@ function paintLord(m: Mob, pose: MobPose): MobFrame {
     dx,
     dy,
     shadow: dying ? 15 * sp.alpha : 15 - 7 * st.lift,
-    alpha: (ghost ? 0.84 : 1) * sp.alpha,
+    alpha: (ghost ? 0.92 : 1) * sp.alpha,
     ghost: sp.trail ? LORD_TRAIL : null,
   };
   const sy = L.sq;
