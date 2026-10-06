@@ -4612,15 +4612,20 @@ const GIANT_BODY: Body = {
   torsoPat: bandPat(0, 0.32, P.red),
 };
 
-/** Поза исполина: копьё по древку (ln), копьё на полу (drop), сжатие, выпад. */
+/**
+ * Поза исполина: копьё по древку (ln), копьё на полу (drop), сжатие, выпад;
+ * наплечники и гребень отстают от корпуса (pl, cr — вверх, единицы модели).
+ */
 interface GP extends Pose {
   toe: number;
   ln: number;
   drop: number;
   sq: number;
   fw: number;
+  pl: number;
+  cr: number;
 }
-const GP0: GP = { ...pose0(), toe: 0, ln: 0, drop: 0, sq: 1, fw: 0 };
+const GP0: GP = { ...pose0(), toe: 0, ln: 0, drop: 0, sq: 1, fw: 0, pl: 0, cr: 0 };
 const gp = (o: Partial<GP>, b: GP = GP0): GP => ({ ...b, ...o });
 
 const GS = 2;
@@ -4653,35 +4658,49 @@ const G_HEAP = gp({
   toe: 0.3,
 });
 
-/** Шаг на нитях: 6 кадров на шаг, вторая половина — другой ногой. */
+/**
+ * Шаг на нитях: 8 кадров на шаг (16 на два), вторая половина — другой ногой.
+ * Толчок (0) → нить дёргает колено вверх (1) → висит (2–3) → падает (4–5) →
+ * тяжёлое приземление со сжатием (6) → оседает (7). Наплечники и гребень —
+ * та же высота корпуса на 1–2 кадра раньше: латы догоняют тело.
+ */
 const G_STEP: readonly [number, number, number, Limb, Limb, number][] = [
   // bob, sink, sq, нога в переносе, опорная, носок
-  [0, 0.9, 0.97, limb(-0.3, 0.08, 0.5), limb(0.3, 0.08, 0.15), 0.1],
-  [1.5, 0, 1.02, limb(0.2, 0.1, 1.1), limb(0.15, 0.08, 0.05), 0.35],
-  [2.8, 0, 1.03, limb(0.75, 0.1, 1.45), limb(0, 0.08, 0.05), 0.5],
-  [3.0, 0, 1.02, limb(0.85, 0.1, 0.9), limb(-0.12, 0.08, 0.05), 0.3],
-  [1.2, 0, 1, limb(0.55, 0.1, 0.2), limb(-0.25, 0.08, 0.1), 0],
-  [-0.4, 1.7, 0.92, limb(0.35, 0.1, 0.25), limb(-0.32, 0.08, 0.2), 0],
+  [0.2, 0.6, 0.99, limb(-0.32, 0.08, 0.55), limb(0.3, 0.08, 0.15), 0.15],
+  [1.6, 0, 1.04, limb(-0.05, 0.1, 1.15), limb(0.2, 0.08, 0.05), 0.4],
+  [2.7, 0, 1.03, limb(0.45, 0.1, 1.5), limb(0.06, 0.08, 0.05), 0.5],
+  [3.1, 0, 1.02, limb(0.8, 0.1, 1.2), limb(-0.06, 0.08, 0.05), 0.4],
+  [2.2, 0, 1, limb(0.75, 0.1, 0.55), limb(-0.16, 0.08, 0.05), 0.15],
+  [0.6, 0, 1.01, limb(0.5, 0.1, 0.2), limb(-0.26, 0.08, 0.08), 0],
+  [-0.6, 2.0, 0.9, limb(0.36, 0.1, 0.3), limb(-0.32, 0.08, 0.22), 0],
+  [-0.2, 1.2, 0.97, limb(0.33, 0.1, 0.22), limb(-0.32, 0.08, 0.18), 0],
 ];
+const gStepH = (k: number) => {
+  const e = G_STEP[((k % 8) + 8) % 8];
+  return e[0] - e[1];
+};
 function giantWalk(f: number): GP {
-  const k = f % 6;
-  const left = f < 6;
+  const k = f % 8;
+  const left = f < 8;
   const [bob, sink, sq, swing, stand, toe] = G_STEP[k];
   const fwdL = left ? swing.sw : stand.sw;
+  const h = gStepH(k);
   return gp(
     {
       bob,
       sink,
       sq,
       toe,
-      lean: 0.08,
+      lean: 0.08 + (k === 6 ? 0.06 : 0),
       side: (left ? -1 : 1) * 0.04,
       twist: -0.08 * fwdL,
       lL: left ? swing : stand,
       lR: left ? stand : swing,
       aL: limb(0.4 - 0.25 * fwdL, 0.32, 1.1 - 0.1 * Math.abs(fwdL)),
-      aR: limb(0.55 + 0.06 * fwdL, 0.15, 0.95),
-      hp: 0.05 + 0.04 * (sq < 1 ? 1 : 0),
+      aR: limb(0.55 + 0.06 * fwdL, 0.15, 0.95 - (k === 6 ? 0.15 : 0)),
+      hp: 0.05 + (sq < 1 ? 0.06 : 0),
+      pl: clampN(0.45 * (gStepH(k - 2) - h), -1.4, 1.4),
+      cr: clampN(0.6 * (gStepH(k - 1) - h), -1.6, 1.6),
     },
     G_BASE,
   );
@@ -4719,6 +4738,9 @@ const G_LUNGE = gp(
     lR: limb(-0.6, 0.12, 0.1),
     ln: 6,
     fw: 6,
+    sq: 0.95,
+    pl: -0.9,
+    cr: 1.2,
   },
   G_BASE,
 );
@@ -4758,15 +4780,31 @@ const G_LANCE: readonly PKey<GP>[] = [
   ],
   [1.0, G_LUNGE, eIn],
   [
-    1.08,
-    gp({ twist: -0.52, lean: 0.4, sink: 2.8, aR: limb(1.5, 0.06, 0.02), ln: 7.5, fw: 7 }, G_LUNGE),
+    26 / 24,
+    gp(
+      {
+        twist: -0.52,
+        lean: 0.4,
+        sink: 2.8,
+        aR: limb(1.5, 0.06, 0.02),
+        ln: 7.5,
+        fw: 7,
+        sq: 1.03,
+        pl: 0.5,
+        cr: -0.6,
+      },
+      G_LUNGE,
+    ),
     easeOut,
   ],
-  [1.35, gp({ twist: -0.5, lean: 0.38, ln: 6.5, fw: 6 }, G_LUNGE)],
+  // Отдача: копьё упёрлось — корпус чуть назад.
+  [28 / 24, gp({ twist: -0.5, lean: 0.36, ln: 6.4, fw: 5.8, sq: 1, pl: 0, cr: 0.3 }, G_LUNGE)],
+  [33 / 24, gp({ twist: -0.5, lean: 0.38, ln: 6.5, fw: 6, sq: 1, pl: 0, cr: 0 }, G_LUNGE)],
   [1.8, G_BASE],
 ];
 
-// Щит: замах в сторону → удар (0,8) → проводка.
+// Щит: замах в сторону (кадры 0–17) → удар — кадр 20 (`recover` с 0, урон
+// щита 0,8) → проводка. Кадры, а не секунды: контакт ровно в кадре урона.
 const G_BASH = gp(
   {
     twist: 0.5,
@@ -4777,13 +4815,16 @@ const G_BASH = gp(
     lL: limb(0.55, 0.12, 0.45),
     lR: limb(-0.4, 0.14, 0.15),
     fw: 4,
+    sq: 0.95,
+    pl: -0.8,
+    cr: 1.0,
   },
   G_BASE,
 );
 const G_SHIELD: readonly PKey<GP>[] = [
   [0, G_BASE],
   [
-    0.55,
+    13 / 24,
     gp(
       {
         twist: -0.6,
@@ -4798,29 +4839,44 @@ const G_SHIELD: readonly PKey<GP>[] = [
     ),
   ],
   [
-    0.7,
+    17 / 24,
     gp(
       {
-        twist: -0.68,
-        lean: -0.12,
-        sink: 1.5,
-        aL: limb(0.5, 1.22, 0.85),
+        twist: -0.7,
+        lean: -0.13,
+        sink: 1.6,
+        aL: limb(0.5, 1.24, 0.85),
         aR: limb(0.5, 0.2, 1.0),
         lL: limb(0.28, 0.14, 0.28),
         lR: limb(-0.28, 0.14, 0.28),
+        pl: 0.4,
       },
       G_BASE,
     ),
   ],
-  [0.8, G_BASH, eIn],
+  [20 / 24, G_BASH, eIn],
   [
-    0.9,
-    gp({ twist: 0.62, lean: 0.34, sink: 2.2, aL: limb(1.6, -0.05, 0.35), fw: 4.5 }, G_BASH),
+    22 / 24,
+    gp(
+      {
+        twist: 0.62,
+        lean: 0.34,
+        sink: 2.2,
+        aL: limb(1.6, -0.05, 0.35),
+        fw: 4.5,
+        sq: 1.03,
+        pl: 0.4,
+        cr: -0.5,
+      },
+      G_BASH,
+    ),
     easeOut,
   ],
-  [1.15, gp({ twist: 0.58, aL: limb(1.55, 0.02, 0.38), fw: 4 }, G_BASH)],
-  [1.6, G_BASE],
+  [28 / 24, gp({ twist: 0.58, aL: limb(1.55, 0.02, 0.38), fw: 4, sq: 1, pl: 0, cr: 0 }, G_BASH)],
+  [38 / 24, G_BASE],
 ];
+/** Кадр удара щитом (начало `recover`). */
+const G_SHIELD_N = 20;
 
 // Разгон: присел, голова вперёд, бьёт ногой землю.
 const G_CROUCH = gp(
@@ -4901,8 +4957,10 @@ const G_SLUMP: readonly PKey<GP>[] = [
     ),
     eIn,
   ],
-  [0.9, G_HEAP, eIn],
-  [1.0, gp({ sink: 6.6, lean: 0.88 }, G_HEAP), easeOut],
+  // Латы о пол: сжатие, наплечники бьют позже корпуса, отскок.
+  [0.9, gp({ sq: 0.9, pl: 1.2, cr: 1.4 }, G_HEAP), eIn],
+  [0.96, gp({ sq: 0.95, pl: -1.2, cr: -0.8 }, G_HEAP)],
+  [1.04, gp({ sink: 6.6, lean: 0.88, sq: 1.04, pl: 0.4 }, G_HEAP), easeOut],
   [1.12, G_HEAP],
 ];
 
@@ -4976,29 +5034,39 @@ function giantCut(g: Mob): number {
   return bits;
 }
 
-function giantCutPose(q: GP, bits: number, k: number): GP {
+/**
+ * Срезанная нить: часть обвисает сценой — падает с перелётом (`eBack`) за
+ * 0,35 с и качается; `ks[i]` — доля обвисания части `i` (бит).
+ */
+function giantCutPose(q: GP, bits: number, ks: readonly number[]): GP {
   if (!bits) return q;
   let o = q;
   let side = 0;
   let hr = 0;
+  let pl = 0;
   if (bits & 1) {
-    o = mixP(o, gp({ aR: limb(0.05, 0.18, 0.05) }, o), k);
-    side += 0.08;
+    o = mixP(o, gp({ aR: limb(0.05, 0.18, 0.05) }, o), ks[0]);
+    side += 0.08 * ks[0];
   }
   if (bits & 2) {
-    side += 0.16;
-    hr += 0.25;
+    side += 0.16 * ks[1];
+    hr += 0.25 * ks[1];
+    pl -= 0.6 * ks[1];
   }
   if (bits & 4) {
-    o = mixP(o, gp({ aL: limb(0.05, 0.2, 0.05) }, o), k);
-    side -= 0.08;
+    o = mixP(o, gp({ aL: limb(0.05, 0.2, 0.05) }, o), ks[2]);
+    side -= 0.08 * ks[2];
   }
   if (bits & 8) {
-    side -= 0.16;
-    hr -= 0.25;
+    side -= 0.16 * ks[3];
+    hr -= 0.25 * ks[3];
+    pl -= 0.6 * ks[3];
   }
-  return gp({ side: o.side + side * k, hr: o.hr + hr * k }, o);
+  return gp({ side: o.side + side, hr: o.hr + hr, pl: o.pl + pl }, o);
 }
+/** Доля обвисания по времени со среза: кадр (до 9-го) и доля с перелётом. */
+const CUT_N = 9;
+const cutK = (n: number) => eBack(n / 8);
 
 interface GRig {
   rig: Rig;
@@ -5015,9 +5083,16 @@ function giantRig(q: GP): GRig {
   rig.dot(onHead(j, R, 0.98, 0.35, 0.05), INK, 1);
   rig.dot(onHead(j, R, 0.98, 0, 0.05), INK, 1);
   rig.dot(onHead(j, R, 1.0, -0.35, 0.05), hx('#ffe08a'), 0.5, true);
-  rig.cap(onHead(j, R, 0.1, 0, 0.95), onHead(j, R, -1.3, 0, 1.6), 1.3, 0.8, P.gold);
-  rig.ball(vadd(j.shL, v3(0, 0.6, 0)), 1.9, P.silver);
-  rig.ball(vadd(j.shR, v3(0, 0.6, 0)), 1.9, P.silver);
+  // Гребень и наплечники отстают от корпуса (шаг, удар, приземление).
+  rig.cap(
+    onHead(j, R, 0.1, 0, 0.95),
+    vadd(onHead(j, R, -1.3, 0, 1.6), v3(0, q.cr, 0)),
+    1.3,
+    0.8,
+    P.gold,
+  );
+  rig.ball(vadd(j.shL, v3(0, 0.6 + q.pl, 0)), 1.9, P.silver);
+  rig.ball(vadd(j.shR, v3(0, 0.6 + q.pl, 0)), 1.9, P.silver);
   // Копьё: держит у пояса, ходит по древку (ln); упало — лежит рядом.
   const ld = vnorm(vadd(j.foreR, vsc(j.fwd, 1.4)));
   let a = vadd(j.haR, vsc(ld, -4 + q.ln));
@@ -5087,16 +5162,22 @@ function giantSpec(
     case 'f13_lance':
       return tk(G_LANCE, t, 'L', [0.88, 1.05]);
     case 'f13_shield':
-      return tk(G_SHIELD, t, 'S', [0.66, 0.86], 'shield');
+      return tk(G_SHIELD, Math.min(G_SHIELD_N - 1, F24(t)) / 24, 'S', [17 / 24, 0.86], 'shield');
     case 'f13_charge_aim':
       return tk(G_AIM, t, 'A');
     case 'f13_charge': {
       const f = Math.floor(((odo / 2.4) % 1) * 8) % 8;
-      return { q: giantRun(f), key: `R${f}`, smear: null, trail: true, alpha: 1 };
+      // Разгон: первые кадры клонится сильнее, наплечники отстают.
+      const a = Math.min(7, F24(t));
+      const r = giantRun(f);
+      const k = 1 - a / 7;
+      const q = gp({ lean: r.lean + 0.2 * k, hp: r.hp + 0.1 * k, pl: 0.8 * k, cr: 1.2 * k }, r);
+      return { q, key: `R${f}.${a}`, smear: null, trail: true, alpha: 1 };
     }
     case 'recover':
       if (prev === 'f13_lance') return tk(G_LANCE, 1 + t, 'L', [0.88, 1.05]);
-      if (prev === 'f13_shield') return tk(G_SHIELD, 0.8 + t, 'S', [0.66, 0.86], 'shield');
+      if (prev === 'f13_shield')
+        return tk(G_SHIELD, (G_SHIELD_N + F24(t)) / 24, 'S', [17 / 24, 0.86], 'shield');
       if (prev === 'f13_charge') return tk(G_DIP, t, 'D');
       break;
     case 'f13_slump': {
@@ -5117,7 +5198,7 @@ function giantSpec(
     }
   }
   if (speed > 0.2) {
-    const f = Math.floor(((odo / G_STRIDE) % 1) * 12) % 12;
+    const f = Math.floor(((odo / G_STRIDE) % 1) * 16) % 16;
     return { q: giantWalk(f), key: `W${f}`, smear: null, trail: false, alpha: 1 };
   }
   const f = Math.floor(now * 6) % 8;
@@ -5145,8 +5226,8 @@ function giantRender(q: GP, dir: number, flash: boolean, smear: GSmear | null): 
   let lit = o.lit;
   if (smear) {
     const segs: [number, number, number, number][] = [];
-    for (let k = 0; k < 7; k++) {
-      const ts = smear.T - k / 72;
+    for (let k = 0; k < 8; k++) {
+      const ts = smear.T - k / 48;
       if (ts < smear.w0 - 1e-6) break;
       if (ts > smear.w1 + 1e-6) continue;
       const g = k === 0 ? giantRig(q) : giantRig(track(ts, smear.keys));
@@ -5178,6 +5259,9 @@ interface GState {
   hitAt: number;
   hdx: number;
   hdy: number;
+  /** Срезанные части и когда (сцена обвисания). */
+  cut: number;
+  cutAt: number[];
 }
 const GST = new Map<number, GState>();
 const GIANT_CACHE = frameLRU<GCached>(500);
@@ -5192,7 +5276,19 @@ paintMob('f13_giant', (m, pose) => {
   let st = GST.get(m.id);
   if (!st || now < st.now - 1e-4 || now - st.now > 1) {
     if (GST.size > 8) GST.clear();
-    st = { now, mode: m.mode, prev: '', odo: 0, sh: 34, fl: pose.flash, hitAt: -9, hdx: 0, hdy: 0 };
+    st = {
+      now,
+      mode: m.mode,
+      prev: '',
+      odo: 0,
+      sh: 34,
+      fl: pose.flash,
+      hitAt: -9,
+      hdx: 0,
+      hdy: 0,
+      cut: 0,
+      cutAt: [-9, -9, -9, -9],
+    };
     GST.set(m.id, st);
   }
   const dt = Math.min(0.1, Math.max(0, now - st.now));
@@ -5215,10 +5311,17 @@ paintMob('f13_giant', (m, pose) => {
   st.fl = pose.flash;
   const s = giantSpec(m.mode, m.t, st.prev, st.odo, now, speed);
   const cut = m.mode === 'dying' ? 0 : giantCut(m);
+  for (let i = 0; i < 4; i++) if (cut & (1 << i) && !(st.cut & (1 << i))) st.cutAt[i] = now;
+  st.cut = cut;
   const busy = m.mode !== 'chase' && m.mode !== 'f13_stand';
-  const q = giantCutPose(s.q, cut, busy ? 0.6 : 1);
+  const cn = st.cutAt.map((a) => Math.min(CUT_N, F24(now - a)));
+  const q = giantCutPose(
+    s.q,
+    cut,
+    cn.map((n) => cutK(n) * (busy ? 0.6 : 1)),
+  );
   const dir = dirOf(m.face, 16);
-  const key = giantKey(s, dir, pose.flash, cut);
+  const key = giantKey(s, dir, pose.flash, cut) + (cut ? `.${cn.join('')}` : '');
   let c = GIANT_CACHE.get(key);
   if (!c) c = GIANT_CACHE.set(key, giantRender(q, dir, pose.flash, s.smear));
   const yaw = (dir / 16) * TAU;
@@ -8117,8 +8220,8 @@ registerMobWarm('f13boss', function* () {
 /** Исполин: шаг во все 16 сторон, копьё и щит — в четыре стороны к залу. */
 registerMobWarm('f13_giant', function* () {
   for (let d = 0; d < 16; d++)
-    for (let f = 0; f < 12; f++) {
-      const s = giantSpec('chase', 0, '', (f / 12) * G_STRIDE + 0.01, 0, 2);
+    for (let f = 0; f < 16; f++) {
+      const s = giantSpec('chase', 0, '', (f / 16) * G_STRIDE + 0.01, 0, 2);
       const key = giantKey(s, d, false, 0);
       if (!GIANT_CACHE.get(key)) GIANT_CACHE.set(key, giantRender(s.q, d, false, s.smear));
       yield f;
