@@ -5044,25 +5044,32 @@ function giantCutPose(q: GP, bits: number, ks: readonly number[]): GP {
   let side = 0;
   let hr = 0;
   let pl = 0;
+  let sink = 0;
   if (bits & 1) {
     o = mixP(o, gp({ aR: limb(0.05, 0.18, 0.05) }, o), ks[0]);
     side += 0.08 * ks[0];
   }
+  // Плечо без нити: кукла валится на этот бок, оседает, рука того же бока
+  // наполовину повисает, голова клонится следом.
   if (bits & 2) {
-    side += 0.16 * ks[1];
-    hr += 0.25 * ks[1];
-    pl -= 0.6 * ks[1];
+    o = mixP(o, gp({ aR: limb(0.1, 0.25, 0.1) }, o), 0.45 * ks[1]);
+    side += 0.26 * ks[1];
+    hr += 0.35 * ks[1];
+    pl -= 0.9 * ks[1];
+    sink += 1.2 * ks[1];
   }
   if (bits & 4) {
     o = mixP(o, gp({ aL: limb(0.05, 0.2, 0.05) }, o), ks[2]);
     side -= 0.08 * ks[2];
   }
   if (bits & 8) {
-    side -= 0.16 * ks[3];
-    hr -= 0.25 * ks[3];
-    pl -= 0.6 * ks[3];
+    o = mixP(o, gp({ aL: limb(0.1, 0.25, 0.1) }, o), 0.45 * ks[3]);
+    side -= 0.26 * ks[3];
+    hr -= 0.35 * ks[3];
+    pl -= 0.9 * ks[3];
+    sink += 1.2 * ks[3];
   }
-  return gp({ side: o.side + side, hr: o.hr + hr, pl: o.pl + pl }, o);
+  return gp({ side: o.side + side, hr: o.hr + hr, pl: o.pl + pl, sink: o.sink + sink }, o);
 }
 /** Доля обвисания по времени со среза: кадр (до 9-го) и доля с перелётом. */
 const CUT_N = 9;
