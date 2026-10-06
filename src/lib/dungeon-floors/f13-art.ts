@@ -7772,6 +7772,18 @@ function walkSpec(m: Mob, now: number, mt: number, st: LState, D: Drive, o: LSpe
       // Нити натянуты: пальцы дрожат.
       if (n > 12 && n < 26 && n % 2)
         o.L = lp({ aR: dl(o.L.aR, 0, 0.05, 0), aL: dl(o.L.aL, 0, 0.05, 0) }, o.L);
+      // Сетка держится на его руках: руки дрожат от натуги, корпус вздрагивает.
+      if (n > 31 && n < 48) {
+        const k = [0, 1, -1, 0.5][n % 4];
+        o.L = lp(
+          {
+            aR: dl(o.L.aR, 0.03 * k, -0.04 * k, 0),
+            aL: dl(o.L.aL, -0.03 * k, 0.04 * k, 0),
+            bob: o.L.bob + 0.35 * Math.abs(k),
+          },
+          o.L,
+        );
+      }
       o.key = `gr${n}`;
       return;
     }
