@@ -510,7 +510,9 @@ function rootFloor(p: Px, c: CellCtx, grit: boolean): void {
         const cr = Math.abs((X - Y * 0.6) * 0.25 + Math.sin(Y * 0.5) * 0.8 - Math.round((X - Y * 0.6) * 0.25));
         if (cr < 0.07) col = mixc(INK, VIOLET[2], 0.35);
       }
-      if (m > 0.56 && seam < 0.2 && hash(X, Y, 1534) < (m - 0.56) * 1.4) col = hash(X, Y, 1529) < 0.3 ? TEAL[3] : TEAL[2];
+      // Лишайник — кустиками в швах, а не ровной крошкой.
+      const clump = vnoise(X, Y, 5, 1527);
+      if (m > 0.58 && seam < 0.13 && clump > 0.62 && hash(X, Y, 1534) < (m - 0.58) * 2.2) col = hash(X, Y, 1529) < 0.3 ? TEAL[3] : TEAL[2];
       else if (m < 0.36 && seam >= 0.05) col = mixc(col, hx('#120e2a'), (0.36 - m) * 1.6);
       p.set(x, y, col);
     }
