@@ -77,7 +77,7 @@ interface WispO {
 const O0: WispO = {
   rx: 5.2,
   ry: 5.0,
-  cy: 7,
+  cy: 5,
   tongue: 5,
   sway: 0,
   flick: 0,
@@ -226,7 +226,7 @@ function wispPose(anim: string, f: number, d: number): WispO {
       o.flick = f % 4;
       o.rx = 5.2 + k * 3.6;
       o.ry = 5.0 + k * 3.2;
-      o.cy = 7 + k * 2.6;
+      o.cy = 5 + k * 2.6;
       o.tongue = 5 + k * 3;
       o.crown = sstep(0.15, 1, k);
       o.white = k * 0.9;
@@ -267,7 +267,7 @@ function wispPose(anim: string, f: number, d: number): WispO {
       const q = sstep(0, 0.7, t);
       o.rx = 5.2 + q * 1.4;
       o.ry = 5 - q * 3.6;
-      o.cy = 7 - q * 5.4;
+      o.cy = 5 - q * 3.4;
       o.tongue = 5 * (1 - sstep(0, 0.4, t));
       o.squint = sstep(0, 0.2, t);
       o.dark = sstep(0.1, 0.65, t);
@@ -278,7 +278,7 @@ function wispPose(anim: string, f: number, d: number): WispO {
       // Взрыв: ядро схлопывается за три кадра.
       o.rx = 8.8 - f * 2.6;
       o.ry = 8.2 - f * 2.4;
-      o.cy = 9.6;
+      o.cy = 7.6;
       o.white = 1.1 - f * 0.1;
       o.crown = 1 - f * 0.45;
       o.tongue = 6 - f * 2;
@@ -316,7 +316,8 @@ function risePic(k: number, d: number): Pic {
   const q = (k + 1) / 15;
   const e = 1 - (1 - q) ** 3;
   const surf = AY;
-  o.cy = 7 - (1 - e) * 13;
+  // Конец подъёма — там же, где дух висит в ходе (5 + `lift` 6).
+  o.cy = 11 - (1 - e) * 17;
   o.cut = surf;
   o.tongue = 5 * sstep(0.1, 0.4, q) + 1;
   if (q < 0.3) o.look = -1;
