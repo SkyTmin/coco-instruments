@@ -2735,12 +2735,35 @@ function lChest(
 function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number, number] | null {
   const [x0, y0] = g.head;
   const c = g.fv;
-  const ac = Math.max(0.16, Math.abs(c));
+  const ac = Math.max(0.26, Math.abs(c));
   // Кивок: циферблат наклоняется — круг сплющен по высоте.
   const ny = 1 - 0.22 * Math.min(1, Math.abs(r.hn));
+  // Корпус часов — барабан в 6 px: в профиль голова не становится палкой.
+  // Лицо — на шее (x0), крышка — позади; ближняя к зрителю плоскость — сверху.
+  const D = 6 * g.H.c;
+  const xn = c >= 0 ? x0 : x0 - D;
+  if (Math.abs(D) > 0.8) {
+    const xf = c >= 0 ? x0 - D : x0;
+    const ry = 8.6 * ny;
+    shadeEll(p, xf, y0, 8.6 * ac, ry, L.trim, -0.15);
+    p.rect(
+      Math.round(Math.min(xn, xf)),
+      Math.round(y0 - ry),
+      Math.round(Math.max(xn, xf)),
+      Math.round(y0 + ry),
+      L.trim[1],
+    );
+    p.rect(
+      Math.round(Math.min(xn, xf)),
+      Math.round(y0 - ry),
+      Math.round(Math.max(xn, xf)),
+      Math.round(y0 - ry),
+      L.trim[2],
+    );
+  }
   for (const a0 of [-Math.PI / 2, -Math.PI / 2 - 0.62, -Math.PI / 2 + 0.62]) {
     const a = a0 + r.hd;
-    const bx = x0 + Math.cos(a) * 8.5 * ac;
+    const bx = xn + Math.cos(a) * 8.5 * ac;
     const by = y0 + Math.sin(a) * 8.5 * ny;
     const tall = a0 === -Math.PI / 2 ? 5 : 3.2;
     poly(
@@ -2754,25 +2777,25 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
     );
     p.set(Math.round(bx + Math.cos(a) * tall * ac), Math.round(by + Math.sin(a) * tall), L.trim[3]);
   }
-  shadeEll(p, x0, y0, 8.6 * ac, 8.6 * ny, L.trim, 0.05);
+  shadeEll(p, xn, y0, 8.6 * ac, 8.6 * ny, L.trim, 0.05);
   if (c < -0.12) {
     // Крышка часов: заклёпки и ось механизма.
-    shadeEll(p, x0, y0, 7 * ac, 7 * ny, L.trim, -0.18);
+    shadeEll(p, xn, y0, 7 * ac, 7 * ny, L.trim, -0.18);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * TAU + 0.78;
       p.set(
-        Math.round(x0 + Math.cos(a) * 5 * ac),
+        Math.round(xn + Math.cos(a) * 5 * ac),
         Math.round(y0 + Math.sin(a) * 5 * ny),
         L.trim[3],
       );
     }
-    lCog(p, x0, y0, 3, 8, -r.halo * 2.25, L.trim, ac, 0.6);
+    lCog(p, xn, y0, 3, 8, -r.halo * 2.25, L.trim, ac, 0.6);
     return null;
   }
   if (c < 0.12) {
     // Ребро циферблата: латунная полоса с заклёпкой.
     for (let y = Math.round(y0 - 6 * ny); y <= Math.round(y0 + 6 * ny); y += 3)
-      p.set(Math.round(x0), y, L.trim[3]);
+      p.set(Math.round(xn), y, L.trim[3]);
     return null;
   }
   const w = lclamp(r.white, 0, 1);
