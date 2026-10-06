@@ -196,7 +196,7 @@ interface Pic {
 }
 
 /** Сырые кадры всех видов: вспышка, облик и зеркало строятся из них дёшево. */
-const RAWS = frameLRU<Pic>(2400);
+const RAWS = frameLRU<Pic>(3200);
 const LRU = new Map<string, FrameLRU<MobFrame>>();
 const lruOf = (kind: string, limit: number) => {
   let c = LRU.get(kind);
@@ -211,6 +211,7 @@ export const F3_MOB_STAT = {
   max: 0,
   maxKey: '',
   last: [] as number[],
+  keys: [] as string[],
   /** По видам: [новых кадров, мс, из них с рисованием рига, мс рига]. */
   kinds: {} as Record<string, number[]>,
   size: () => [...LRU.values()].reduce((s, c) => s + c.size, 0),
@@ -326,17 +327,17 @@ function frameOf(
   const lru = lruOf(kind, limit);
   const fk = `${key}|${b}${mir ? 'm' : ''}|${pose.flash ? 1 : 0}${pose.look[0]}`;
   let fr = lru.get(fk);
-  if (!fr && curId !== null) {
+  if (!fr && curMob) {
     // Кадр «на потом»: в этом кадре игры новые рисунки уже съели бюджет —
     // моб ещё кадр игры (не дольше двух подряд) показывает прежнюю картинку.
     if (pose.now !== budNow) {
       budNow = pose.now;
       budMs = 0;
     }
-    const prev = LAST.get(curId);
-    const w = WAIT.get(curId) ?? 0;
+    const prev = LAST.get(curMob);
+    const w = WAIT.get(curMob) ?? 0;
     if (prev && budMs >= AHEAD_MS && w < 2) {
-      WAIT.set(curId, w + 1);
+      WAIT.set(curMob, w + 1);
       return extra ? { ...prev, ...extra } : prev;
     }
   }
@@ -357,18 +358,18 @@ function frameOf(
     F3_MOB_STAT.n++;
     F3_MOB_STAT.ms += ms;
     F3_MOB_STAT.last.push(ms);
+    F3_MOB_STAT.keys.push(`${kind}|${fk}`);
     if (F3_MOB_STAT.last.length > 4000) F3_MOB_STAT.last.splice(0, 2000);
+    if (F3_MOB_STAT.keys.length > 4000) F3_MOB_STAT.keys.splice(0, 2000);
     if (ms > F3_MOB_STAT.max) {
       F3_MOB_STAT.max = ms;
       F3_MOB_STAT.maxKey = `${kind}|${fk}`;
     }
     budMs += ms;
   }
-  if (curId !== null) {
-    WAIT.delete(curId);
-    LAST.delete(curId);
-    LAST.set(curId, fr);
-    if (LAST.size > 96) LAST.delete(LAST.keys().next().value as number);
+  if (curMob) {
+    WAIT.delete(curMob);
+    LAST.set(curMob, fr);
   }
   return extra ? { ...fr, ...extra } : fr;
 }
@@ -380,19 +381,22 @@ function frameOf(
 const AHEAD_MS = 0.5;
 let budNow = NaN;
 let budMs = 0;
-/** Моб, которого рисует рисовальщик сейчас (null — прогрев и листы вне игры). */
-let curId: number | null = null;
-const LAST = new Map<number, MobFrame>();
-const WAIT = new Map<number, number>();
+/** Моб, которого рисует рисовальщик сейчас (null — прогрев). */
+let curMob: Mob | null = null;
+const LAST = new WeakMap<Mob, MobFrame>();
+const WAIT = new WeakMap<Mob, number>();
+/** Рисовальщики видов без обёртки (для прогрева). */
+const INNER = new Map<string, (m: Mob, pose: MobPose) => MobFrame | null>();
 
 /** Рисовальщик вида: запоминает моба для кадра «на потом». */
 function paintMob(id: string, f: (m: Mob, pose: MobPose) => MobFrame | null): void {
+  INNER.set(id, f);
   registerMobPainter(id, (m, pose) => {
-    curId = m.id;
+    curMob = m;
     try {
       return f(m, pose);
     } finally {
-      curId = null;
+      curMob = null;
     }
   });
 }
@@ -1219,7 +1223,7 @@ const MH = 36;
 const MAX = 20;
 const MAY = 27;
 /** Полёт 8 × 2, зов 16, замах 15, пике 6, посадка 21, оглушение 20, … × 5 сторон. */
-const MOCK_LIM = 900;
+const MOCK_LIM = 1300;
 
 function mockPic(o: MockO, yaw: number, post?: ((o: RigOut, P: Proj2) => void) | null): Pic {
   return draw(mockRig(o, yaw), MW, MH, MAX, MAY, post);
@@ -1704,7 +1708,7 @@ const JAX = 15;
 const JAY = 29;
 const JBY = 10;
 /** Ход 2 × 24, жало 12, отход 12, оглушение 12, смерть 10, … — без сторон. */
-const JELLY_LIM = 260;
+const JELLY_LIM = 520;
 
 /** Пульс: сжатие колокола на фазе 0…1 — быстро сжался, медленно расслабился. */
 function jPulse(p: number): number {
@@ -2266,7 +2270,7 @@ const SH = 30;
 const SAX = 18;
 const SAY = 18;
 /** Ход 8, покой 8, замах 24, катится 4 + смаз, отход 15, в стене 22, … × 5 сторон. */
-const SPEAR_LIM = 800;
+const SPEAR_LIM = 1100;
 
 function spearPic(o: SpearO, yaw: number, post?: ((o: RigOut, P: Proj2) => void) | null): Pic {
   return draw(spearRig(o, yaw), SW, SH, SAX, SAY, post);
@@ -2647,7 +2651,7 @@ const GH = 46;
 const GAX = 26;
 const GAY = 30;
 /** Под водой 16 × 2, хват 20, держит 23, уходит 11, смерть 11, удар 4 × 5 сторон. */
-const GRASP_LIM = 700;
+const GRASP_LIM = 1200;
 
 /** Срез эллипсоида кромкой воды: всё ниже `G_WL` не рисуется. */
 function wcut(F: Fr, rad: V3): (q: V3) => boolean {
@@ -3179,3 +3183,75 @@ registerZonePainter('f3_grab', (g, z, px, py) => {
   g.globalAlpha = 1;
   return true;
 });
+
+// ---------------------------------------------------------------------------
+// Прогрев действий: замахи, удары и проводки каждого вида по пяти рисуемым
+// сторонам (запад — зеркало, его холст дешёвый). Без него толпа рисовала
+// первые кадры атак прямо в бою — 2–4 новых кадра за кадр игры.
+// ---------------------------------------------------------------------------
+
+/** [режим, длительность с, скорость кл/с] — как режимы мозга этажа. */
+type WarmStep = [string, number, number];
+const WARM_ACTS: Record<string, WarmStep[]> = {
+  f3_crab: [
+    ['windup', 0.65, 0],
+    ['recover', 1.05, 0],
+    ['stun', 0.25, 0],
+  ],
+  f3_mocker: [
+    ['aim', 0.6, 0],
+    ['dive', 0.4, 12],
+    ['perch', 0.95, 0],
+    ['call', 2, 0],
+    ['dizzy', 1.4, 0],
+  ],
+  f3_jelly: [
+    ['chase', 1, 1.2],
+    ['windup', 0.5, 0],
+    ['recover', 0.5, 0],
+    ['stun', 0.5, 0],
+  ],
+  f3_spear: [
+    ['curl', 1, 0],
+    ['roll', 0.5, 10],
+    ['recover', 0.6, 0],
+    ['dizzy', 1.8, 0],
+  ],
+  f3_grasp: [
+    ['lurk', 1.4, 2.6],
+    ['hold', 1.6, 0],
+    ['sink', 0.45, 0],
+  ],
+};
+
+for (const [kind, acts] of Object.entries(WARM_ACTS))
+  registerMobWarm(kind, function* () {
+    const paint = INNER.get(kind);
+    if (!paint) return;
+    for (let d = 0; d < 8; d++) {
+      if (MIRR[d]) continue;
+      const face = (d * PI) / 4;
+      for (const [mode, dur, sp] of acts)
+        for (let f = 0; f < dur * FPS; f++) {
+          const t = (f + 0.5) / FPS;
+          const m = {
+            id: 1,
+            kind,
+            x: 0,
+            y: 0,
+            vx: Math.cos(face) * sp,
+            vy: Math.sin(face) * sp,
+            face,
+            mode,
+            t,
+            data: mode === 'roll' ? { v: sp } : {},
+            flash: 0,
+            kx: 0,
+            ky: 0,
+            r: 0.4,
+          } as unknown as Mob;
+          paint(m, { ...warmPose(mode), t, now: t });
+          yield 0;
+        }
+    }
+  });
