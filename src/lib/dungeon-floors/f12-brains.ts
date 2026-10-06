@@ -3005,13 +3005,13 @@ function meltGlacier(sim: Sim, api: SimApi): void {
 }
 
 // анимации 12 — только рисунок: комья снега из-под ног (набег, рытьё), не чаще `every`.
-function vKick(sim: Sim, api: SimApi, m: Mob, dt: number, every: number, r: number): void {
-  // анимации 12 — только рисунок
+type KickFn = (sim: Sim, api: SimApi, m: Mob, dt: number, every: number, r: number) => void; // анимации 12 — только рисунок
+const vKick: KickFn = function (sim, api, m, dt, every, r) /* анимации 12 — только рисунок */ {
   m.data.vKick = (m.data.vKick ?? 0) + dt; // анимации 12 — только рисунок
   if (m.data.vKick < every) return; // анимации 12 — только рисунок
   m.data.vKick = 0; // анимации 12 — только рисунок
   fx(sim, api, { x: m.x, y: m.y, r, life: 0.6, art: 'f12_kick', dur: m.face } as ZoneIn); // анимации 12 — только рисунок
-} // анимации 12 — только рисунок
+}; // анимации 12 — только рисунок
 
 /** Ход танком: разворот с ограничением, скорость — по косинусу. */
 function tankStep(m: Mob, dt: number, tx: number, ty: number, v: number): void {
