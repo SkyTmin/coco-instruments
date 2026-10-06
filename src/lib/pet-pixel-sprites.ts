@@ -24,7 +24,7 @@ export interface PetPx extends PetPxSet {
 export const PET_PX: Record<string, PetPx> = {
   dragon: {
     box: 48,
-    rev: '34283667da',
+    rev: 'c708dc452c',
     anims: {
       idle: { n: 72, fps: 24, x: 1, y: -1, w: 46, h: 52 },
       walk: { n: 24, fps: 24, x: -2, y: -2, w: 52, h: 53 },

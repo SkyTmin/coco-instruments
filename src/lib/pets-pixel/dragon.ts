@@ -387,9 +387,10 @@ function idlePose(t: number): Pose {
   o.thL = REST.thL - 0.16 * shk - 0.02 * br;
   o.thR = REST.thR - 0.16 * shk - 0.02 * br;
   o.fanL = o.fanR = REST.fanL + 0.14 * shk + 0.02 * br;
-  // Хвост: кончик ходит медленной петлёй и вздрагивает после потягушек.
+  // Хвост: кончик ходит восьмёркой и вздрагивает после потягушек; в начале петли — в нуле,
+  // туда же приходят разовые (их ключи кончаются нулём).
   o.tailSw = 0.5 * Math.sin((t / T) * Math.PI * 2) + 0.6 * bump(t, 1.9, 2.4);
-  o.tailUp = 0.3 * Math.sin((t / T) * Math.PI * 4 + 0.6);
+  o.tailUp = 0.3 * Math.sin((t / T) * Math.PI * 4);
   return o;
 }
 
@@ -747,6 +748,12 @@ function workPose(t: number): Pose {
     [1.8, 0],
     [T, 1],
   ]);
+  if (!o.stone) {
+    // Камень убран — его величины возвращаются к покою (на картинке их уже нет, стык чистый).
+    o.melt = REST.melt;
+    o.nugZ = REST.nugZ;
+    o.nugK = REST.nugK;
+  }
   return o;
 }
 
@@ -2457,18 +2464,22 @@ export function lagOf(a: Anim, t: number): Lag {
   const P = (tt: number) => poseAt(a, LOOP[a] ? wrap(tt, T) : Math.max(0, tt));
   const sk = (tt: number) => skel(P(tt));
   const env = LOOP[a] ? 1 : clamp01((T - t) / 0.18);
-  const lagged = (fn: (tt: number) => number, freq: number, damp: number) => {
+  // Разовая к концу приходит не в чистую позу, а в запаздывание покоя на кадре 0: стык без сдвига.
+  const L0 = LOOP[a] ? null : lagOf('idle', 0);
+  const P0 = poseAt('idle', 0);
+  const S0 = skel(P0);
+  const lagged = (fn: (tt: number) => number, freq: number, damp: number, off: number) => {
     const now = fn(t);
-    return now + (spring(fn, t, t0, freq, damp) - now) * env;
+    return now + (spring(fn, t, t0, freq, damp) - now) * env + (L0 ? off * (1 - env) : 0);
   };
   const r: Lag = {
-    headX: lagged((tt) => sk(tt).head[0], 3.0, 0.3),
-    headZ: lagged((tt) => sk(tt).head[2], 3.0, 0.3),
-    thL: lagged((tt) => P(tt).thL, 3.6, 0.34),
-    thR: lagged((tt) => P(tt).thR, 3.6, 0.34),
-    tailX: lagged((tt) => sk(tt).body[0], 1.6, 0.24),
-    tailZ: lagged((tt) => sk(tt).body[2], 1.7, 0.26),
-    turn: lagged((tt) => P(tt).turn, 2.6, 0.22),
+    headX: lagged((tt) => sk(tt).head[0], 3.0, 0.3, (L0?.headX ?? 0) - S0.head[0]),
+    headZ: lagged((tt) => sk(tt).head[2], 3.0, 0.3, (L0?.headZ ?? 0) - S0.head[2]),
+    thL: lagged((tt) => P(tt).thL, 3.6, 0.34, (L0?.thL ?? 0) - P0.thL),
+    thR: lagged((tt) => P(tt).thR, 3.6, 0.34, (L0?.thR ?? 0) - P0.thR),
+    tailX: lagged((tt) => sk(tt).body[0], 1.6, 0.24, (L0?.tailX ?? 0) - S0.body[0]),
+    tailZ: lagged((tt) => sk(tt).body[2], 1.7, 0.26, (L0?.tailZ ?? 0) - S0.body[2]),
+    turn: lagged((tt) => P(tt).turn, 2.6, 0.22, (L0?.turn ?? 0) - P0.turn),
   };
   LAGS.set(key, r);
   return r;
