@@ -30,6 +30,7 @@ import { F9_VIEW, RS } from './f9-brains';
 import './f9-mob-lizards';
 import './f9-mob-toad';
 import './f9-mob-kobold';
+import './f9-mob-serpent';
 
 type RGBA = [number, number, number, number];
 
@@ -346,122 +347,6 @@ const LZ_ = {
   scaleDk: hx('#1c3a26'),
   scaleLt: hx('#6aa45c'),
 };
-
-// ---------------------------------------------------------------------------
-// Каменный змей: серо-зелёная каменная чешуя, капюшон с «глазами»,
-// голова поднята над кольцами; во взгляде глаза горят бирюзой. 28×22.
-// ---------------------------------------------------------------------------
-
-const SP = {
-  body: T('#232a26', '#46524a', '#6e7c70', '#9eac9c'),
-  belly: T('#4a4632', '#7c7656', '#a8a07a', '#cec6a0'),
-  hood: T('#1c2420', '#3a4a40', '#5e7064', '#8a9c8a'),
-  moss: hx('#4a6a2a'),
-  crack: hx('#1a201c'),
-  eye: hx('#6affe0'),
-  eyeHot: hx('#e8fff8'),
-  tongue: hx('#c83a4a'),
-};
-
-function paintSerpent(anim: string, f: number): Built {
-  const W = 30;
-  const H = 24;
-  const p = new Px(W, H);
-  const G = 22;
-  if (anim === 'dead') {
-    const pts = spline(
-      [
-        [3, 20],
-        [9, 21],
-        [15, 19.5],
-        [21, 21],
-        [26, 20],
-      ],
-      3,
-    );
-    chain(p, pts, 1.6, 2.4, SP.body);
-    scales(p, 0, 16, W - 1, G, SP.crack, null, 9);
-    p.outline(INK);
-    p.set(26, 19, INK);
-    return { p, ax: 14, ay: G, eye: null };
-  }
-  const k = (f % 4) / 4;
-  const slither = anim === 'run' ? Math.sin(k * TAU) : 0;
-  const gaze = anim === 'gaze';
-  const strike = anim === 'bite';
-  // Кольца на земле: две петли, волна сдвигается при ползании.
-  const coil = spline(
-    [
-      [3, 20 + slither * 0.6],
-      [7, 18.5 - slither * 0.8],
-      [12, 20.5 + slither * 0.6],
-      [16, 19],
-      [18, 16],
-    ],
-    4,
-  );
-  chain(p, coil, 1.3, 2.9, SP.body);
-  shadeEll(p, 11, 20.8, 4.2, 1.3, SP.belly, 0.1);
-  // Шея вверх и голова. Во взгляде — выше и с раскрытым капюшоном.
-  const hy = gaze ? 5.5 : strike ? 9 : 7.5 + (anim === 'idle' ? [0, 0.5, 0.8, 0.4][f % 4] : 0);
-  const hx0 = strike ? 24 : gaze ? 20 : 21;
-  const neck = spline(
-    [
-      [18, 16],
-      [19.5, 12],
-      [hx0 - 1.5, hy + 2.5],
-    ],
-    4,
-  );
-  chain(p, neck, 2.4, 1.9, SP.body);
-  // Капюшон: веер пластин за головой, в центре — «глаза» узора.
-  const hood = gaze ? 1 : strike ? 0.3 : 0.55;
-  shadeEll(p, hx0 - 1.3, hy + 2.2, 2.4 + hood * 2.4, 3.2 + hood * 1.6, SP.hood);
-  if (hood > 0.5) {
-    p.set(Math.round(hx0 - 3), Math.round(hy + 2), SP.eye);
-    p.set(Math.round(hx0 + 0.4), Math.round(hy + 2), SP.eye);
-  }
-  shadeEll(p, hx0, hy, 2.6, 2, SP.body);
-  limb(p, hx0 + 1, hy + 0.3, hx0 + 3.8, hy + 0.8, 1.5, 1, SP.body);
-  // Мох и трещины камня по чешуе.
-  scales(p, 0, 0, W - 1, G, SP.crack, SP.body[3], 11);
-  for (let i = 0; i < 5; i++) {
-    const x = Math.round(3 + hash(i, 21) * 16);
-    const y = Math.round(17 + hash(i, 22) * 4);
-    if (p.solid(x, y)) p.set(x, y, SP.moss);
-  }
-  p.outline(INK);
-  // Язык в укусе, глаза: во взгляде — белый жар.
-  if (strike || (anim === 'idle' && f === 2)) {
-    p.set(Math.round(hx0 + 4.6), Math.round(hy + 1), SP.tongue);
-    p.set(Math.round(hx0 + 5.4), Math.round(hy + 0.4), SP.tongue);
-    p.set(Math.round(hx0 + 5.4), Math.round(hy + 1.6), SP.tongue);
-  }
-  const ex = Math.round(hx0 + 0.6);
-  const ey = Math.round(hy - 0.6);
-  if (anim === 'sleep' || anim === 'hurt') p.set(ex, ey, INK);
-  else {
-    p.set(ex, ey, gaze ? SP.eyeHot : SP.eye);
-    if (gaze) {
-      p.set(ex + 1, ey, SP.eye);
-      p.set(ex, ey - 1, alpha(SP.eye, 0.6));
-    }
-  }
-  return { p, ax: 13, ay: G, eye: anim === 'sleep' ? null : [ex, ey] };
-}
-
-registerMobPainter('f9_serpent', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim;
-  let f = pose.frame;
-  if (pose.mode === 'gaze') {
-    anim = 'gaze';
-    f = cyc(pose.t * 10, 2);
-  } else if (anim === 'run') f = cyc(pose.t * 7 + m.id, 4);
-  else if (anim === 'idle') f = cyc(f, 4);
-  else if (anim === 'wind' || anim === 'bite') f = cyc(f, 2);
-  else f = 0;
-  return frameOf('f9_serpent', pose, anim, f, () => paintSerpent(anim, f));
-});
 
 // ---------------------------------------------------------------------------
 // Болотный огонь: сине-зелёное пламя с тёмной сердцевиной и глазами, хвост
