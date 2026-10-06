@@ -2588,12 +2588,22 @@ function spike(
 // `WeakMap` по мобу: в `m.data` рисунок не пишет.
 // ---------------------------------------------------------------------------
 
-const MF = frameLRU<MobFrame>(2600);
+// 3000: прогрев (ход в 16 сторон всех видов) и толпа из десяти видов держат
+// ~3000–3500 кадров по ~24 КБ; при 2600 толпа вытесняла и перестраивала по
+// 6–7 кадров за кадр. Больше — дорого по памяти телефона.
+const MF = frameLRU<MobFrame>(3000);
 const FPS = 24;
 const NDIR = 16;
 
 /** Замер для стенда: сколько кадров монстров построено и за сколько. */
-export const F15_MOB_STAT = { n: 0, ms: 0, max: 0, size: () => MF.size };
+export const F15_MOB_STAT = {
+  n: 0,
+  ms: 0,
+  max: 0,
+  maxKey: '',
+  size: () => MF.size,
+  by: {} as Record<string, number>,
+};
 
 interface Vis {
   now: number;
@@ -2754,7 +2764,12 @@ function mobFrame(
     const ms = performance.now() - t0;
     F15_MOB_STAT.n++;
     F15_MOB_STAT.ms += ms;
-    F15_MOB_STAT.max = Math.max(F15_MOB_STAT.max, ms);
+    if (ms > F15_MOB_STAT.max) {
+      F15_MOB_STAT.max = ms;
+      F15_MOB_STAT.maxKey = key;
+    }
+    const bk = `${kind}|${anim}`;
+    F15_MOB_STAT.by[bk] = (F15_MOB_STAT.by[bk] ?? 0) + 1;
   }
   return extra ? { ...fr, ...extra } : fr;
 }
