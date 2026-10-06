@@ -709,7 +709,9 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
 // Верх стены — гранёный обсидиан: грани светлее сверху-слева, тёмные швы.
 // Прежде порода была «ночным небом» со звёздами и читалась провалом, а не
 // стеной: звёзды — примета пола.
-const WT = [hx('#0b0a22'), hx('#131133'), hx('#1a1744'), hx('#231f56'), hx('#2d2868')];
+// Порода светлее и серее звёздного пола: пол — синий с фиолетом и звёздами,
+// стена — сизый камень с бликами граней. С одного взгляда видно, где край.
+const WT = [hx('#0a0a1c'), hx('#1f2140'), hx('#2a2e54'), hx('#373d68'), hx('#4a5280')];
 function facet(X: number, Y: number): [number, number] {
   const gx = Math.floor(X / 7);
   const gy = Math.floor(Y / 7);
@@ -931,7 +933,36 @@ function cellOf(c: CellCtx, g: Geo): Px | null {
   else if (m === MK.hall) hallFloor(p, c);
   else if (m === MK.runway) runwayFloor(p, c);
   else groundFloor(p, c, m === MK.dust);
+  wallShadow(p, c);
   return p;
+}
+
+/**
+ * Тень стены на полу: под лицом стены и у боковых стен пол темнеет на
+ * несколько пикселей. Звёздный пол и гранёная порода близки по яркости —
+ * без тени край арены читался не сразу. Свет сверху-слева: тень с севера и
+ * запада шире, с востока — узкая.
+ */
+const SHADE = [0.5, 0.64, 0.78, 0.9];
+function wallShadow(p: Px, c: CellCtx): void {
+  const n = !c.open(0, -1) ? 4 : 0;
+  const w = !c.open(-1, 0) ? 4 : 0;
+  const e = !c.open(1, 0) ? 2 : 0;
+  if (!n && !w && !e) return;
+  const d = p.data;
+  for (let v = 0; v < 16; v++)
+    for (let u = 0; u < 16; u++) {
+      let k = 9;
+      if (v < n) k = Math.min(k, v);
+      if (u < w) k = Math.min(k, u);
+      if (15 - u < e) k = Math.min(k, (15 - u) * 2);
+      if (k > 3) continue;
+      const f = SHADE[k];
+      const i = (v * 16 + u) * 4;
+      d[i] *= f;
+      d[i + 1] *= f;
+      d[i + 2] = d[i + 2] * (f * 0.85 + 0.15);
+    }
 }
 
 // =============================================================================
