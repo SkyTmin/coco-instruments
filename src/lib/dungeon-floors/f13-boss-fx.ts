@@ -1979,9 +1979,56 @@ function lassoSpin(g: G, hx0: number, hy0: number, k: number, f: number, t: numb
   g.globalAlpha = 1;
 }
 
+/**
+ * Таран на бегу: метка гаснет с первым шагом, а увернуться ещё надо — остаток
+ * пути (`run − t`) лежит перед исполином шевронами, стена его обрезает.
+ */
+function chargeAhead(g: G, m: Mob, to: To, time: number): void {
+  const sim = paintSim();
+  const left = (BOSS.charge.run - m.t) * BOSS.charge.speed;
+  if (left <= 0.3) return;
+  const ca = Math.cos(m.dir);
+  const sa = Math.sin(m.dir);
+  let len = 0.6;
+  while (len < left) {
+    const nx = len + 0.5;
+    if (sim && solidTile(sim, Math.floor(m.x + ca * nx), Math.floor(m.y + sa * nx))) break;
+    len = Math.min(left, nx);
+  }
+  const [x0, y0] = to(m.x + ca * 0.6, m.y + sa * 0.6);
+  const L = (len - 0.6) * TS;
+  const w = BOSS.charge.w * TS * 0.5;
+  const a = 0.75 * (1 - k01((m.t - BOSS.charge.run + 0.15) / 0.15));
+  for (const s of [-1, 1])
+    if (ink(g, T_LANCE.edge, a * 0.8))
+      linePx(
+        g,
+        x0 - sa * w * s,
+        y0 + ca * w * s,
+        x0 - sa * w * s + ca * L,
+        y0 + ca * w * s + sa * L,
+        4,
+        -time * 40,
+        2,
+      );
+  // Шевроны бегут вперёд быстрее исполина.
+  const ph = mod(time * 90, 14);
+  for (let u = ph; u < L - 2; u += 14) {
+    if (!ink(g, T_LANCE.band, a * (1 - u / (L + 8)))) continue;
+    const cx = x0 + ca * u;
+    const cy = y0 + sa * u;
+    const q = Math.min(w - 2, 6);
+    linePx(g, cx - ca * 4 - sa * q, cy - sa * 4 + ca * q, cx, cy);
+    linePx(g, cx, cy, cx - ca * 4 + sa * q, cy - sa * 4 - ca * q);
+  }
+  g.globalAlpha = 1;
+}
+
 /** Метки Кукловода и исполина по `m.tele` (обе в мозге — `vNoTele`). */
 function bossMarks(g: G, layer: Layer, to: To, time: number): void {
   for (const m of F13_FX.mobs) {
+    if (layer === 'floor' && m.kind === 'f13_giant' && m.mode === 'f13_charge')
+      chargeAhead(g, m, to, time);
     const t = m.tele;
     if (!t || (m.kind !== 'f13boss' && m.kind !== 'f13_giant')) continue;
     const [ox, oy] = to(t.x ?? m.x, t.y ?? m.y);
@@ -3012,6 +3059,23 @@ registerZonePainter('f13_lancehit', (g, z, px, py) => {
   const a = zf(z, 'ang');
   const seed = seedOf(z);
   const fade = 1 - k01((k - 0.7) / 0.3);
+  // Удар со следом: древко короче своей досягаемости, поэтому в кадр урона
+  // вдоль всей полосы проходит толчок — от наконечника до точки контакта.
+  const reach = (zf(z, 'len') - 1.5) * TS;
+  const wk = 1 - k01(t / 0.16);
+  if (reach > 0 && wk > 0) {
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const head = reach * Math.min(1, 0.55 + t / 0.06);
+    for (let j = -1; j <= 1; j++) {
+      const nx = -sa * j * 3;
+      const ny = ca * j * 3;
+      if (!ink(g, j ? C.gold2 : C.cream, (j ? 0.35 : 0.6) * wk)) continue;
+      const x0 = px - ca * reach + nx;
+      const y0 = py - sa * reach + ny;
+      linePx(g, x0, y0, x0 + ca * head, y0 + sa * head, j ? 3 : 0, j ? 2 : 0);
+    }
+  }
   dent(g, px, py, 4 + 2 * easeOut(t / 0.06), seed, fade);
   // Борозда от древка: копьё вошло в доски и выдернуто назад.
   if (ink(g, C.shade, 0.45 * fade)) linePx(g, px - Math.cos(a) * 9, py - Math.sin(a) * 5, px, py);
@@ -3154,8 +3218,9 @@ registerZonePainter('f13_snareline', (g, z, px, py, _S, time) => {
   const hx1 = sim ? px + (sim.hero.x - z.x) * TS : px + (zf(z, 'tx') - z.x) * TS;
   const hy1 = (sim ? py + (sim.hero.y - z.y) * TS : py + (zf(z, 'ty') - z.y) * TS) - 7;
   const fade = 1 - k01((t - 0.45) / 0.15);
-  if (t < 0.1 || fade <= 0) return true;
-  const u = t - 0.1;
+  if (fade <= 0) return true;
+  // Контакт — в кадр урона: петля уже на герое, бросок — смазом (f13_v_snarethrow).
+  const u = t;
   // Натяг: рывок — струна звенит, потом слабнет.
   const buzz = 2 * Math.exp(-u * 8);
   threadPx(g, hx0, hy0, hx1, hy1, {
@@ -3188,8 +3253,24 @@ registerZonePainter('f13_v_snarethrow', (g, z, px, py, _S, time) => {
   const lord = lordNow();
   const hit = lord ? (lord.data.vYank ?? 0) > 0 : false;
   const [hx0, hy0] = lordHand(z, px, py);
-  const T1 = hit ? 0.1 : 0.2;
-  if (hit && t > T1) return true;
+  if (hit) {
+    // Попал: бросок быстрее кадра — смаз из петель от руки к герою, гаснет
+    // за 0,08 с; петлю на поясе рисует f13_snareline с того же кадра.
+    const sim = paintSim();
+    if (!sim || t > 0.08) return true;
+    const tx = px + (sim.hero.x - z.x) * TS;
+    const ty = py + (sim.hero.y - z.y) * TS - 7;
+    const k = 1 - t / 0.08;
+    for (let j = 0; j < 3; j++) {
+      const u = 0.3 + j * 0.22;
+      const bx = lerp(hx0, tx, u);
+      const by = lerp(hy0, ty, u) - Math.sin(u * Math.PI) * 6;
+      loopPx(g, bx, by, 4 + j, 2 + j * 0.5, k * (0.25 + 0.2 * j), 0);
+    }
+    g.globalAlpha = 1;
+    return true;
+  }
+  const T1 = 0.2;
   const ex = px + Math.cos(a) * L;
   const ey = py + Math.sin(a) * L - 4;
   let lx: number;
