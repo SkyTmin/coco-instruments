@@ -3174,6 +3174,13 @@ const EMBER = ['#1e0a16', '#36101c', '#5a1c1c', '#80301a', '#a8481a', '#d07020']
 const CLOTH_BASE = ['#07061a', '#0c0b28', '#14113c', '#1d1852', '#282068', '#362c82'].map((c) =>
   hx(c),
 );
+/**
+ * Вспышка попадания по владыке: плащ во весь кадр — поэтому треть пути к
+ * бледной сирени, а не 60% к белому (иначе каждый удар героя заливал
+ * полэкрана белым).
+ */
+const FLASH_C = hx('#d8d0ff');
+const FLASH_K = 0.32;
 function clothTable(): Uint32Array {
   if (CLOTH) return CLOTH;
   const t = new Uint32Array(6 * 4 * 4 * 2);
@@ -3194,7 +3201,7 @@ function clothTable(): Uint32Array {
               : mixc(base, soft[h], amt[d] * (0.8 + s * 0.06));
         const i = (s * 4 + d) * 4 + h;
         t[i] = pack(c);
-        t[96 + i] = pack(mixc(c, WHITE, 0.6));
+        t[96 + i] = pack(mixc(c, FLASH_C, FLASH_K));
       }
   CLOTH = t;
   return t;
@@ -3208,7 +3215,7 @@ function edgeTable(): Uint32Array {
     for (let s = 0; s < 6; s++) {
       const c = mixc(lo[h], hi[h], 0.25 + s * 0.15);
       t[h * 6 + s] = pack(c);
-      t[18 + h * 6 + s] = pack(mixc(c, WHITE, 0.6));
+      t[18 + h * 6 + s] = pack(mixc(c, FLASH_C, FLASH_K));
     }
   EDGE = t;
   return t;
@@ -3327,7 +3334,9 @@ function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
   for (let y = 0; y < LH; y++) TWIST[y] = Math.round(L.twist * ROW_W[y]);
   // Выгорание: всё ниже фронта — тело света, у фронта — тлеющая кайма.
   // Фронт идёт до самой пелерины (её ткань помечена высотой +20).
-  const bz = burnQ > 0 ? HEM - 3 + (CORE + 13 - HEM) * (burnQ / 24) : -1e9;
+  // Догорел целиком — светом становятся и поднятые руки (иначе тёмные рукава
+  // над пелериной торчат из тела света и при рассыпании в смерти).
+  const bz = burnQ >= 24 ? 1e6 : burnQ > 0 ? HEM - 3 + (CORE + 13 - HEM) * (burnQ / 24) : -1e9;
   const cyc = Math.floor(now * 2.5);
   for (let i = 0; i < geo.cIdx.length; i++) {
     const pi = geo.cIdx[i];
@@ -3368,9 +3377,9 @@ function paintBody(geo: LGeo, L: BodyLook): HTMLCanvasElement {
       const g = (c >> 8) & 255;
       const b = (c >> 16) & 255;
       c = pack([
-        Math.round(r + (255 - r) * 0.6),
-        Math.round(g + (255 - g) * 0.6),
-        Math.round(b + (255 - b) * 0.6),
+        Math.round(r + (FLASH_C[0] - r) * FLASH_K),
+        Math.round(g + (FLASH_C[1] - g) * FLASH_K),
+        Math.round(b + (FLASH_C[2] - b) * FLASH_K),
         c >>> 24,
       ]);
     }
@@ -3861,14 +3870,17 @@ function paintLit(
     }
     // Искры бегут по руке от плеча к кулаку (колодец).
     if (p.spark > 0 && p.spark < 1 && h.side > 0) {
-      for (let k = 0; k < 6; k++) {
-        const t = p.spark * 1.5 - k * 0.12;
+      for (let k = 0; k < 8; k++) {
+        const t = p.spark * 1.5 - k * 0.1;
         if (t < 0 || t > 1) continue;
         const u = t * 2;
         const x = u < 1 ? lerp(h.shx, h.elx, u) : lerp(h.elx, h.x, u - 1);
         const y = u < 1 ? lerp(h.shy, h.ely, u) : lerp(h.ely, h.y, u - 1);
         const j = hash(k, Math.floor(now * 24), 61) - 0.5;
-        px1(sh(x, y) + j * 2, y - 1, k % 2 ? VIO[5] : WHITE, 0.95, k === 0 ? 2 : 1, 1);
+        const X = sh(x, y) + j * 2;
+        // Ореол — чтобы искру было видно и на светлом рукаве.
+        px1(X, y - 1, VIO[3], 0.35, k === 0 ? 4 : 3, k === 0 ? 4 : 3);
+        px1(X, y - 1, k % 2 ? VIO[5] : WHITE, 0.95, k === 0 ? 2 : 1, k === 0 ? 2 : 1);
       }
     }
     // Пальцы врозь — короткие лучи от ладони.
