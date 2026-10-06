@@ -423,16 +423,40 @@ function groundFloor(p: Px, c: CellCtx, dust: boolean): void {
       const pb = vnoise(X / 2.5, Y / 2.5, 42);
       if (pb > 0.8) col = mixc(col, NIGHT[5], 0.6);
       else if (pb > 0.74) col = mixc(col, INK, 0.3);
-      // Ростки кристалла: треугольник 3 пикселя.
+      // Россыпь звёзд в грунте: пять разных форм и три цвета, редкие.
       const bx = X >> 3;
       const by = Y >> 3;
-      if (hash(bx, by, 43) < 0.1) {
+      if (hash(bx, by, 43) < 0.09) {
         const sx = (bx << 3) + 2 + Math.floor(hash(bx, by, 44) * 4);
-        const sy = (by << 3) + 3 + Math.floor(hash(bx, by, 45) * 3);
+        const sy = (by << 3) + 2 + Math.floor(hash(bx, by, 45) * 4);
         const ddx = X - sx;
         const ddy = Y - sy;
-        if (ddy >= -2 && ddy <= 0 && Math.abs(ddx) <= ddy + 2) col = ddy === -2 ? ICE[5] : ddx < 0 ? ICE[4] : ICE[2];
-        else if (ddy === 1 && Math.abs(ddx) <= 2) col = mixc(col, INK, 0.5);
+        const ad = Math.abs(ddx) + Math.abs(ddy);
+        if (ad <= 3) {
+          const kind = Math.floor(hash(bx, by, 48) * 5);
+          const tint = hash(bx, by, 49);
+          const hi = tint < 0.55 ? ICE[5] : tint < 0.8 ? GOLD[5] : VIO[5];
+          const mid = tint < 0.55 ? ICE[3] : tint < 0.8 ? GOLD[3] : VIO[3];
+          if (kind === 0) {
+            // Крест в пять точек с белым сердцем.
+            if (ad === 0) col = WHITE;
+            else if ((ddx === 0 || ddy === 0) && ad <= 2) col = ad === 1 ? hi : mixc(col, mid, 0.6);
+          } else if (kind === 1) {
+            // Точка с ореолом.
+            if (ad === 0) col = hi;
+            else if (ad === 1) col = mixc(col, mid, 0.45);
+          } else if (kind === 2) {
+            // Осколок кристалла наискось и его тень.
+            if (ad === 0) col = mid;
+            else if (ddx === 1 && ddy === -1) col = hi;
+            else if (ddx === 0 && ddy === 1) col = mixc(col, INK, 0.5);
+          } else if (kind === 3) {
+            // Две звезды рядом — яркая и тусклая.
+            if (ad === 0) col = hi;
+            else if (ddx === 2 && ddy === 1) col = mid;
+          } else if (ad === 0) col = hi;
+          else if (Math.abs(ddx) === 1 && Math.abs(ddy) === 1) col = mixc(col, mid, 0.5);
+        }
       }
       if (dust) {
         if (vnoise(X / 7, Y / 7, 46) > 0.45) col = mixq(col, VIO[1], 0.4, X, Y);
@@ -523,6 +547,11 @@ function wallTop(p: Px, c: CellCtx): void {
       const n = vnoise(X / 5, Y / 5, 71);
       let col = n > 0.64 ? hx('#100e2c') : n > 0.4 ? hx('#0b0a22') : NIGHT[0];
       if (kind === MK.wallGold) col = mixc(col, GOLD[0], 0.3);
+      // Порода — ночное небо: редкие тусклые звёзды.
+      else {
+        const hs = hash(X, Y, 73);
+        if (hs < 0.007) col = hs < 0.002 ? ICE[3] : NIGHT[5];
+      }
       if (kind === MK.wallCrystal) {
         const bx = X >> 3;
         const by = Y >> 3;
@@ -575,6 +604,39 @@ function wallFace(p: Px, c: CellCtx): void {
         if (((X + sh) % 5 + 5) % 5 === 0) col = mixc(col, VIO[2], kind === 0 ? 0.25 : 0.5);
         if (v >= 13) col = mixc(col, INK, (v - 12) * 0.18);
         if (kind !== 0 && Math.abs((((X * 0.7 + Y) % 29) + 29) % 29 - 14) < 0.5 && hash(fx, 2, 84) < 0.5) col = ICE[2];
+        // Своё у каждой третьей клетки: звёздное окно, жила света, созвездие.
+        const feat = hash(c.wx, c.wy, 87);
+        if (kind !== MK.wallCrystal && v >= 3 && v <= 13) {
+          if (feat < 0.1) {
+            const ex = (u + 0.5 - 8) / 3.6;
+            const ey = (v + 0.5 - 8.5) / 3.4;
+            const d = ex * ex + ey * ey;
+            if (d < 1) {
+              col = mixq(INK, NIGHT[2], 0.3 + ey * 0.3, X, Y);
+              const hs = hash(X, Y, 88);
+              if (hs < 0.09) col = hs < 0.025 ? WHITE : hs < 0.06 ? ICE[4] : GOLD[4];
+            } else if (d < 1.55) col = ex + ey < -0.3 ? GOLD[3] : ex + ey < 0.4 ? GOLD[2] : GOLD[1];
+          } else if (feat < 0.26) {
+            const ph = hash(c.wx, c.wy, 89) * 6;
+            const lx = Math.round(7.5 + 4 * Math.sin(v * 0.55 + ph));
+            if (u === lx) col = (v + Math.floor(ph)) % 4 === 0 ? ICE[4] : VIO[3];
+            else if (u === lx - 1) col = mixc(col, VIO[2], 0.6);
+            else if (u === lx + 1) col = mixc(col, INK, 0.35);
+          } else if (feat < 0.4) {
+            const P: [number, number][] = [0, 1, 2].map((i) => [2 + Math.floor(hash(c.wx * 3 + i, c.wy, 90) * 12), 4 + Math.floor(hash(c.wx * 3 + i, c.wy, 91) * 9)]);
+            for (let i = 0; i < 2; i++) {
+              const [ax, ay] = P[i];
+              const [bx, by] = P[i + 1];
+              const L = Math.max(Math.abs(bx - ax), Math.abs(by - ay), 1);
+              for (let k = 1; k < L; k++)
+                if (u === Math.round(ax + ((bx - ax) * k) / L) && v === Math.round(ay + ((by - ay) * k) / L)) col = mixc(col, GOLD[2], 0.55);
+            }
+            for (const [px, py] of P) {
+              if (u === px && v === py) col = GOLD[5];
+              else if (Math.abs(u - px) + Math.abs(v - py) === 1) col = mixc(col, GOLD[3], 0.45);
+            }
+          }
+        }
         if (kind === MK.wallCrystal) {
           // Друза: три призмы со светом.
           for (let i = 0; i < 3; i++) {

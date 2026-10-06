@@ -2286,13 +2286,10 @@ function wakeQuad(sim: Sim, b: BossFight, st: F15BState, api: SimApi, qd: Quad):
   qd.next = sim.time + 2.2 + qd.q * 0.4;
   // Свет памяти: лава в трещинах, бездна без звёзд, зеркала холодны, круги зелены.
   const tint = (['red', 'teal', 'cold', 'green'] as const)[qd.q];
-  const pts =
-    qd.kind === 'mirror'
-      ? qd.mirrors
-      : qd.kind === 'hydra'
-        ? qd.circles.flat()
-        : qd.pools.filter((_, k) => k % 7 === 0).slice(0, 4);
-  pts.forEach((i, n) => light(sim, st, `f15b_q${qd.q}_${n}`, (i % W) + 0.5, Math.floor(i / W) + 0.5, qd.kind === 'lava' ? 3.6 : 2.4, tint));
+  // Не больше четырёх ламп на четверть: каждая лампа — два больших слоя света в кадре.
+  const all = qd.kind === 'mirror' ? qd.mirrors : qd.kind === 'hydra' ? qd.circles.flat() : qd.pools.filter((_, k) => k % 7 === 0);
+  const pts = all.length <= 4 ? all : [all[0], all[Math.floor(all.length / 2)], all[all.length - 1]];
+  pts.forEach((i, n) => light(sim, st, `f15b_q${qd.q}_${n}`, (i % W) + 0.5, Math.floor(i / W) + 0.5, qd.kind === 'lava' ? 4 : 3, tint));
   const names = { lava: 'ЛАВА', abyss: 'БЕЗДНА', mirror: 'ЗЕРКАЛА', hydra: 'КРУГИ ГИДРЫ' } as const;
   const hints = {
     lava: 'кристалл треснул — корка жжёт, из трещин бьёт огонь',
