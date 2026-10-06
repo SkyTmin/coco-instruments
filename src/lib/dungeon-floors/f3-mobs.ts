@@ -196,7 +196,7 @@ interface Pic {
 }
 
 /** Сырые кадры всех видов: вспышка, облик и зеркало строятся из них дёшево. */
-const RAWS = frameLRU<Pic>(900);
+const RAWS = frameLRU<Pic>(2400);
 const LRU = new Map<string, FrameLRU<MobFrame>>();
 const lruOf = (kind: string, limit: number) => {
   let c = LRU.get(kind);
@@ -211,6 +211,8 @@ export const F3_MOB_STAT = {
   max: 0,
   maxKey: '',
   last: [] as number[],
+  /** По видам: [новых кадров, мс, из них с рисованием рига, мс рига]. */
+  kinds: {} as Record<string, number[]>,
   size: () => [...LRU.values()].reduce((s, c) => s + c.size, 0),
   raws: () => RAWS.size,
 };
@@ -227,6 +229,60 @@ function pale(src: Px): Px {
     o.data[i + 3] = d[i + 3];
   }
   return o;
+}
+
+/**
+ * Обрезать кадр по рисунку (тело и слой свечения): движок рисует холст целиком,
+ * и пустые поля холста риг-кадра стоили бы столько же, сколько тело. Пустой
+ * слой свечения отбрасывается.
+ */
+function cropPic(pc: Pic): Pic {
+  const { p, lit } = pc;
+  const w = p.w;
+  const h = p.h;
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  let litAny = false;
+  const scan = (q: Px, isLit: boolean) => {
+    const d = q.data;
+    for (let y = 0; y < h; y++) {
+      const row = y * w * 4 + 3;
+      for (let x = 0; x < w; x++)
+        if (d[row + x * 4]) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+          if (isLit) litAny = true;
+        }
+    }
+  };
+  scan(p, false);
+  if (lit) scan(lit, true);
+  if (x1 < 0) return { p: new Px(1, 1), lit: null, ax: 0, ay: 0, eye: null };
+  x0 = Math.max(0, x0 - 1);
+  y0 = Math.max(0, y0 - 1);
+  x1 = Math.min(w - 1, x1 + 1);
+  y1 = Math.min(h - 1, y1 + 1);
+  const cw = x1 - x0 + 1;
+  const ch = y1 - y0 + 1;
+  const cut = (q: Px): Px => {
+    const o = new Px(cw, ch);
+    for (let y = 0; y < ch; y++) {
+      const s = ((y + y0) * w + x0) * 4;
+      o.data.set(q.data.subarray(s, s + cw * 4), y * cw * 4);
+    }
+    return o;
+  };
+  return {
+    p: cut(p),
+    lit: lit && litAny ? cut(lit) : null,
+    ax: pc.ax - x0,
+    ay: pc.ay - y0,
+    eye: pc.eye ? [pc.eye[0] - x0, pc.eye[1] - y0] : null,
+  };
 }
 
 function finish(raw: Pic, mir: boolean, flash: boolean, look: MobPose['look']): MobFrame {
@@ -270,13 +326,34 @@ function frameOf(
   const lru = lruOf(kind, limit);
   const fk = `${key}|${b}${mir ? 'm' : ''}|${pose.flash ? 1 : 0}${pose.look[0]}`;
   let fr = lru.get(fk);
+  if (!fr && curId !== null) {
+    // Кадр «на потом»: в этом кадре игры новые рисунки уже съели бюджет —
+    // моб ещё кадр игры (не дольше двух подряд) показывает прежнюю картинку.
+    if (pose.now !== budNow) {
+      budNow = pose.now;
+      budMs = 0;
+    }
+    const prev = LAST.get(curId);
+    const w = WAIT.get(curId) ?? 0;
+    if (prev && budMs >= AHEAD_MS && w < 2) {
+      WAIT.set(curId, w + 1);
+      return extra ? { ...prev, ...extra } : prev;
+    }
+  }
   if (!fr) {
     const t0 = performance.now();
     const rk = `${kind}|${key}|${b}`;
     let raw = RAWS.get(rk);
-    if (!raw) raw = RAWS.set(rk, build(yawOfSide(b)));
+    const st = (F3_MOB_STAT.kinds[kind] ??= [0, 0, 0, 0]);
+    if (!raw) {
+      raw = RAWS.set(rk, cropPic(build(yawOfSide(b))));
+      st[2]++;
+      st[3] += performance.now() - t0;
+    }
     fr = lru.set(fk, finish(raw, mir, pose.flash, pose.look));
     const ms = performance.now() - t0;
+    st[0]++;
+    st[1] += ms;
     F3_MOB_STAT.n++;
     F3_MOB_STAT.ms += ms;
     F3_MOB_STAT.last.push(ms);
@@ -285,8 +362,39 @@ function frameOf(
       F3_MOB_STAT.max = ms;
       F3_MOB_STAT.maxKey = `${kind}|${fk}`;
     }
+    budMs += ms;
+  }
+  if (curId !== null) {
+    WAIT.delete(curId);
+    LAST.delete(curId);
+    LAST.set(curId, fr);
+    if (LAST.size > 96) LAST.delete(LAST.keys().next().value as number);
   }
   return extra ? { ...fr, ...extra } : fr;
+}
+
+/**
+ * Бюджет новых кадров на кадр игры (мс). Толпа в 18 мобов с ригами рисовала
+ * по 2–4 новых кадра за кадр игры; сверх бюджета кадр откладывается.
+ */
+const AHEAD_MS = 0.5;
+let budNow = NaN;
+let budMs = 0;
+/** Моб, которого рисует рисовальщик сейчас (null — прогрев и листы вне игры). */
+let curId: number | null = null;
+const LAST = new Map<number, MobFrame>();
+const WAIT = new Map<number, number>();
+
+/** Рисовальщик вида: запоминает моба для кадра «на потом». */
+function paintMob(id: string, f: (m: Mob, pose: MobPose) => MobFrame | null): void {
+  registerMobPainter(id, (m, pose) => {
+    curId = m.id;
+    try {
+      return f(m, pose);
+    } finally {
+      curId = null;
+    }
+  });
 }
 
 /** Поза для прогрева: без вспышки, обычный облик. */
@@ -726,7 +834,7 @@ function crabStuck(t: number, o: CrabO): void {
   o.side = 0;
 }
 
-registerMobPainter('f3_crab', (m: Mob, pose: MobPose) => {
+paintMob('f3_crab', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = Math.max(0, pose.t);
   const now = pose.now;
@@ -1227,7 +1335,7 @@ function mockHurt(o: MockO, hf: number): void {
   o.mouth = 0.7 * q;
 }
 
-registerMobPainter('f3_mocker', (m: Mob, pose: MobPose) => {
+paintMob('f3_mocker', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = Math.max(0, pose.t);
   const now = pose.now;
@@ -1877,7 +1985,7 @@ function jStrike(f: number, o: JellyO): number {
   ]);
 }
 
-registerMobPainter('f3_jelly', (m: Mob, pose: MobPose) => {
+paintMob('f3_jelly', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = Math.max(0, pose.t);
   const now = pose.now;
@@ -2239,7 +2347,7 @@ function spearStuck(q: number, o: SpearO): number {
   return -pull * 1.1;
 }
 
-registerMobPainter('f3_spear', (m: Mob, pose: MobPose) => {
+paintMob('f3_spear', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = Math.max(0, pose.t);
   const now = pose.now;
@@ -2845,7 +2953,7 @@ function graspHold(q: number, o: GraspO): void {
   o.rip = q * 1.5;
 }
 
-registerMobPainter('f3_grasp', (m: Mob, pose: MobPose) => {
+paintMob('f3_grasp', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = Math.max(0, pose.t);
   const now = pose.now;
