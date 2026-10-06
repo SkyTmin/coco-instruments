@@ -1686,3 +1686,618 @@ registerImpactPainter('f5_fire', {
     return true;
   },
 });
+
+// ---------------------------------------------------------------------------
+// Жаба-арканщица: оливковая, бородавки, жёлтое брюхо, глаза-бугры, горловой
+// мешок. Прыжки — по фазе мозга (`hopSpeed`: в воздухе, пока синус фазы
+// положителен), так что взлёт и приземление совпадают с рывком скорости.
+// Аркан (0,7 с): поднялась на передних, мешок качает дважды, откинулась,
+// мешок толкает — пасть настежь в кадр удара; язык вылетает зоной
+// `f5_tongue_out` за 0,1 с до удара и втягивается зоной `f5_tongue`. Отдых:
+// глотает (глаза проваливаются). Укус: присела и бросок. Смерть: подпрыгнула,
+// перевернулась на спину, дрыгнула лапами, сдулась.
+// ---------------------------------------------------------------------------
+
+const FR_SKIN = tn('#24360f', '#4a6a24', '#76963a', '#a8c464');
+const FR_BELLY = tn('#8a7030', '#c8b058', '#e2d07c', '#f4e6a4');
+const FR_LEG = tn('#18260a', '#36521a', '#5a7c2c', '#88a64c');
+const FR_WART = hx('#2a3c10');
+const FR_WART_HI = hx('#b0cc60');
+const FR_IRIS = hx('#f0dc40');
+const FR_PUPIL = hx('#101008');
+const FR_MOUTH = tn('#2a0808', '#6a1a1a', '#a03030', '#d06060');
+const FR_TONGUE = hx('#e87890');
+
+interface FrogO {
+  fwd: number;
+  pitch: number;
+  roll: number;
+  /** Сплющена (+) / вытянута (−). */
+  squash: number;
+  /** Голова: вперёд, вверх носом (−) / вниз (+). */
+  neck: number;
+  head: number;
+  jaw: number;
+  /** Горловой мешок 0…1; глоток (комок в горле). */
+  throat: number;
+  /** Задние лапы вытянуты назад 0…1; передние вперёд. */
+  ext: number;
+  reach: number;
+  /** Глаза закрыты 0…1 (глотает — проваливаются). */
+  blink: number;
+  /** Лапы врозь кверху (на спине), дрыг. */
+  splay: number;
+  kick: number;
+}
+const FG0: FrogO = {
+  fwd: 0,
+  pitch: 0,
+  roll: 0,
+  squash: 0,
+  neck: 0,
+  head: 0,
+  jaw: 0,
+  throat: 0.2,
+  ext: 0,
+  reach: 0,
+  blink: 0,
+  splay: 0,
+  kick: 0,
+};
+
+const FROG_WARTS: V3[] = [
+  [-1.6, -1.4, 2.2],
+  [-0.4, 1.6, 2.3],
+  [0.9, -0.6, 2.5],
+  [-2.6, 0.6, 1.8],
+  [-1.0, 2.6, 1.4],
+  [-1.2, -2.7, 1.4],
+  [1.5, 1.9, 1.9],
+];
+
+function frogRig(o: FrogO, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const cs = camSide(yaw);
+  const sq = o.squash;
+  const zc = 3.1 - sq * 0.7;
+  const C = B.at(o.fwd, 0, zc).pitch(o.pitch).roll(o.roll);
+  const skin: Mat = { T: FR_SKIN };
+  // Брюхо снизу, спина сверху (сплющивается и вытягивается).
+  r.ell(C, [0.2, 0, -0.6], [4.0 * (1 + sq * 0.12), 3.5 * (1 + sq * 0.1), 2.0], { T: FR_BELLY });
+  r.ell(
+    C,
+    [0, 0, 0.2],
+    [4.3 * (1 + sq * 0.15), 3.8 * (1 + sq * 0.12), 2.5 * (1 - sq * 0.28)],
+    skin,
+  );
+  for (const w of FROG_WARTS) {
+    r.dot(C.p(w[0], w[1], w[2] * (1 - sq * 0.28)), FR_WART, 0, 1, 0.5);
+    r.dot(C.p(w[0] + 0.35, w[1], w[2] * (1 - sq * 0.28) + 0.25), FR_WART_HI, 0, 1, 0.55);
+  }
+  // Голова: широкая и плоская, глаза-бугры, пасть во всю ширину.
+  const Hd = C.at(3.0 + o.neck, 0, 0.8 - sq * 0.3).pitch(o.head);
+  r.ell(Hd, [0.6, 0, 0], [2.5, 3.2, 1.7], skin);
+  const J = Hd.at(-0.2, 0, -0.7).pitch(o.jaw * 0.85);
+  r.ell(J, [1.3, 0, -0.2], [2.0, 2.8, 0.7], { T: FR_BELLY });
+  if (o.jaw > 0.12) {
+    r.ell(Hd, [1.4, 0, -0.85 - o.jaw * 0.6], [1.7, 2.3, 0.35 + o.jaw * 0.7], {
+      T: FR_MOUTH,
+      soft: true,
+    });
+    r.ball(Hd.p(1.4, 0, -1.0 - o.jaw * 0.6), 0.9, {
+      T: tn('#8a3040', '#c05068', '#e87890', '#f8b0c0'),
+    });
+  } else
+    r.line(Hd.p(2.6, -2.3, -0.4), Hd.p(3.1, 0, -0.55), FR_MOUTH[1], 0, 0.5).line(
+      Hd.p(3.1, 0, -0.55),
+      Hd.p(2.6, 2.3, -0.4),
+      FR_MOUTH[1],
+      0,
+      0.5,
+    );
+  // Горловой мешок: раздувается под челюстью, блестит.
+  const th = clamp01(o.throat);
+  if (th > 0.05)
+    r.ell(
+      Hd,
+      [1.0 - th * 0.2, 0, -1.2 - th * 0.6],
+      [1.2 + th * 1.0, 1.8 + th * 1.0, 0.6 + th * 1.2],
+      {
+        T: FR_BELLY,
+        spec: th > 0.6,
+      },
+    );
+  // Глаза: бугры с жёлтой радужкой и чёрной щелью зрачка.
+  const sink = o.blink * 0.7;
+  for (const sd of [-1, 1]) {
+    const E = Hd.p(0.3, sd * 1.8, 1.5 - sink);
+    r.ell(Hd, [0.3, sd * 1.8, 1.5 - sink], [1.35, 1.25, 1.25], skin);
+    if (o.blink < 0.5) {
+      r.dot(vadd(E, Hd.v(0.85, sd * 0.3, 0.5)), FR_IRIS, 0.3, 2, 0.9);
+      r.dot(vadd(E, Hd.v(1.05, sd * 0.3, 0.55)), FR_PUPIL, 0, 1, 1.0);
+    } else
+      r.line(vadd(E, Hd.v(0.6, sd * -0.3, 0.6)), vadd(E, Hd.v(0.6, sd * 0.7, 0.6)), FR_WART, 0, 1);
+  }
+  r.eye = o.blink < 0.5 ? Hd.p(1.15, cs * 2.1, 2.0 - sink) : null;
+  // Передние лапы: короткие, пальцы врозь.
+  for (const sd of [-1, 1]) {
+    const legM: Mat = { T: FR_LEG, bias: sd === cs ? 0 : -0.15 };
+    const S = C.p(2.0, sd * 2.6, -1.0);
+    let F = B.p(3.4 + o.fwd * 0.4 + o.reach * 1.8, sd * 3.7, 0);
+    if (o.splay > 0) F = vlerp(F, C.p(3.4, sd * 4.6, -2.6 + Math.sin(o.kick + sd) * 0.6), o.splay);
+    const El = vadd(vlerp(S, F, 0.5), C.v(0, sd * 0.9, 0.5));
+    r.cap(S, El, 0.95, 0.7, legM);
+    r.cap(El, F, 0.7, 0.55, legM);
+    for (const k of [-1, 0, 1])
+      r.dot(vadd(F, B.v(0.7, sd * 0.2 + k * 0.6, 0)), FR_SKIN[1], 0, 1, 0.2);
+  }
+  // Задние: сложены «гармошкой»; в прыжке вытянуты назад.
+  for (const sd of [-1, 1]) {
+    const legM: Mat = { T: FR_LEG, bias: sd === cs ? 0 : -0.15 };
+    const H = C.p(-2.6, sd * 2.4, -0.4);
+    let K = B.p(o.fwd - 0.2, sd * 4.7, 1.9);
+    let E = B.p(o.fwd - 3.5, sd * 4.1, 0.7);
+    let T = B.p(o.fwd - 1.4, sd * 4.9, 0);
+    const ex = clamp01(o.ext);
+    if (ex > 0) {
+      K = vlerp(K, C.p(-5.0, sd * 3.0, -0.8), ex);
+      E = vlerp(E, C.p(-7.6, sd * 2.6, -1.0), ex);
+      T = vlerp(T, C.p(-9.4, sd * 2.4, -1.1), ex);
+    }
+    if (o.splay > 0) {
+      const w = Math.sin(o.kick * 1.3 + sd * 1.1) * 1.2;
+      K = vlerp(K, C.p(-3.4, sd * 5.0, -2.2), o.splay);
+      E = vlerp(E, C.p(-5.2 + w * 0.5, sd * 5.6, -3.0 - w * 0.4), o.splay);
+      T = vlerp(T, C.p(-6.4 + w, sd * 6.2, -2.6 - w * 0.5), o.splay);
+    }
+    r.cap(H, K, 1.55, 1.0, legM);
+    r.cap(K, E, 0.9, 0.6, legM);
+    r.cap(E, T, 0.6, 0.5, legM);
+    for (const k of [-1, 0, 1])
+      r.dot(vadd(T, C.v(-0.6, sd * 0.2 + k * 0.6, 0)), FR_SKIN[1], 0, 1, 0.2);
+  }
+  return r;
+}
+
+/** Прыжок по фазе мозга φ ∈ [0, 2π): в воздухе при sin φ > 0. */
+function frogHop(o: FrogO, ph: number): void {
+  if (ph < PI) {
+    const u = ph / PI;
+    o.squash = -0.45 * Math.sin(PI * u);
+    o.pitch = trk(u, [
+      [0, -0.3],
+      [0.5, 0],
+      [1, 0.22],
+    ]);
+    o.ext = trk(u, [
+      [0, 1],
+      [0.45, 0.8],
+      [0.9, 0.1],
+    ]);
+    o.reach = trk(u, [
+      [0.3, -0.4],
+      [0.85, 1],
+    ]);
+    o.throat = 0.1;
+  } else {
+    const v = (ph - PI) / PI;
+    o.squash = trk(v, [
+      [0, 0.55],
+      [0.3, 0.05, easeOut],
+      [0.75, 0.05],
+      [1, 0.4, easeIn],
+    ]);
+    o.pitch = trk(v, [
+      [0, 0.22],
+      [0.3, 0],
+      [0.8, 0.05],
+      [1, -0.2],
+    ]);
+    o.reach = trk(v, [
+      [0, 1],
+      [0.35, 0],
+    ]);
+    o.throat = 0.2 + 0.1 * Math.sin(v * TAU);
+  }
+}
+
+function frogPose(anim: string, f: number): FrogO {
+  const o: FrogO = { ...FG0 };
+  switch (anim) {
+    case 'idle': {
+      // 8 кадров по 6 к/с: мешок дышит, моргнула.
+      const a = (f / 8) * TAU;
+      o.throat = 0.35 + 0.3 * Math.max(0, Math.sin(a * 2));
+      o.squash = 0.05 + 0.04 * Math.sin(a);
+      o.blink = f === 6 ? 1 : 0;
+      o.head = -0.05 * Math.sin(a);
+      break;
+    }
+    case 'hop':
+      frogHop(o, (f / 16) * TAU);
+      break;
+    case 'aim': {
+      // Аркан, 0,7 с (17 кадров): поднялась на передних, мешок качает
+      // дважды (до 0,42); откинулась, мешок полон (до 0,62); толчок —
+      // пасть открывается в удар.
+      const k = kf(f, 0.7);
+      o.pitch = trk(k, [
+        [0, 0],
+        [0.25, -0.3, easeOut],
+        [0.6, -0.26],
+        [0.88, -0.36],
+        [1, -0.05, easeIn],
+      ]);
+      o.reach = trk(k, [
+        [0, 0],
+        [0.25, 0.5],
+        [0.88, 0.5],
+        [1, 0.3],
+      ]);
+      o.fwd = trk(k, [
+        [0.6, 0],
+        [0.88, -0.9, easeOut],
+        [1, 0.3, easeIn],
+      ]);
+      o.squash = trk(k, [
+        [0.6, 0],
+        [0.88, 0.25],
+        [1, -0.15],
+      ]);
+      o.throat =
+        k < 0.6
+          ? 0.35 + 0.65 * Math.max(0, Math.sin((k / 0.6) * TAU * 2 - PI / 2) * 0.5 + 0.5)
+          : trk(k, [
+              [0.6, 0.7],
+              [0.88, 1],
+              [1, 0.35, easeIn],
+            ]);
+      o.neck = trk(k, [
+        [0.88, -0.3],
+        [1, 0.8, easeIn],
+      ]);
+      o.jaw = trk(k, [
+        [0.88, 0],
+        [1, 0.75, easeIn],
+      ]);
+      o.blink = k > 0.6 && k < 0.88 ? 0.4 : 0;
+      break;
+    }
+    case 'lashf': {
+      // Отдых после аркана (0,8 с): пасть настежь, пока язык втягивается
+      // (0,3 с), голова за ним; захлопнула — глоток (глаза проваливаются),
+      // успокоилась.
+      const t = f / FPS;
+      o.jaw = trk(t, [
+        [0, 1],
+        [0.24, 0.8],
+        [0.32, 0, easeIn],
+      ]);
+      o.neck = trk(t, [
+        [0, 1],
+        [0.3, -0.4],
+        [0.55, 0],
+      ]);
+      o.fwd = trk(t, [
+        [0, 0.6],
+        [0.3, -0.5],
+        [0.6, 0],
+      ]);
+      o.pitch = trk(t, [
+        [0, -0.05],
+        [0.3, 0.1],
+        [0.6, 0],
+      ]);
+      o.throat = trk(t, [
+        [0, 0.1],
+        [0.3, 0.1],
+        [0.38, 0.75, easeOut],
+        [0.7, 0.25],
+      ]);
+      o.blink = t > 0.32 && t < 0.5 ? 1 : 0;
+      o.squash = trk(t, [
+        [0.3, 0],
+        [0.38, 0.2],
+        [0.6, 0.05],
+      ]);
+      break;
+    }
+    case 'bite': {
+      // Укус, 0,4 с (10 кадров): присела, голова низко, задние под себя.
+      const k = kf(f, 0.4);
+      o.squash = trk(k, [
+        [0, 0],
+        [0.6, 0.4, easeOut],
+        [0.85, 0.45],
+        [1, -0.3, easeIn],
+      ]);
+      o.fwd = trk(k, [
+        [0, 0],
+        [0.6, -0.9],
+        [1, 1.2, easeIn],
+      ]);
+      o.head = trk(k, [
+        [0, 0],
+        [0.6, 0.2],
+        [1, -0.1],
+      ]);
+      o.ext = trk(k, [
+        [0.85, 0],
+        [1, 0.7],
+      ]);
+      o.jaw = trk(k, [
+        [0.6, 0],
+        [0.85, 0.2],
+        [1, 0.9, easeIn],
+      ]);
+      o.throat = 0.3;
+      if (k > 0.6 && k < 0.86) o.fwd += f % 2 ? 0.15 : -0.15;
+      break;
+    }
+    case 'bitef': {
+      // После укуса (0,8 с): захлопнула пасть, отдача, села.
+      const t = f / FPS;
+      o.fwd = trk(t, [
+        [0, 1.8],
+        [0.06, 2.0],
+        [0.35, 0],
+      ]);
+      o.ext = trk(t, [
+        [0, 0.8],
+        [0.2, 0],
+      ]);
+      o.jaw = trk(t, [
+        [0, 0.9],
+        [0.08, 0],
+      ]);
+      o.squash = trk(t, [
+        [0.05, -0.2],
+        [0.2, 0.3],
+        [0.45, 0.05],
+      ]);
+      o.throat = trk(t, [
+        [0.08, 0.2],
+        [0.2, 0.6],
+        [0.5, 0.3],
+      ]);
+      break;
+    }
+    case 'flinch': {
+      // Ушиб: сжалась, зажмурилась, мешок выдохнул.
+      const k = f / 4;
+      const b = Math.sin(PI * Math.min(1, k * 1.25)) * (1 - k * 0.5);
+      o.squash = 0.5 * b - 0.15 * (k > 0.6 ? 1 : 0);
+      o.fwd = -1.2 * b;
+      o.pitch = -0.2 * b;
+      o.blink = b > 0.3 ? 1 : 0;
+      o.throat = 0.6 * b;
+      o.jaw = 0.3 * b;
+      break;
+    }
+    case 'sleep': {
+      o.blink = 1;
+      o.squash = 0.3;
+      o.throat = 0.25 + f * 0.25;
+      o.head = 0.12;
+      break;
+    }
+    case 'die': {
+      // 20 кадров: подпрыгнула (0–2), перевернулась в воздухе на спину
+      // (2–8), дрыгнула лапами дважды (9–15), сдулась (16–19).
+      const t = f / FPS;
+      o.jaw = trk(t, [
+        [0, 0.9],
+        [0.3, 0.5],
+        [0.8, 0.2],
+      ]);
+      o.roll = trk(t, [
+        [0.08, 0],
+        [0.34, PI * 0.95, easeIn],
+        [0.4, PI],
+      ]);
+      o.squash = trk(t, [
+        [0, -0.3],
+        [0.34, -0.1],
+        [0.38, 0.35],
+        [0.5, 0.1],
+        [0.7, 0.1],
+        [0.84, 0.45],
+      ]);
+      o.splay = trk(t, [
+        [0.1, 0],
+        [0.36, 1],
+      ]);
+      o.kick = t > 0.4 && t < 0.66 ? (t - 0.4) * 36 : 0;
+      o.throat = trk(t, [
+        [0, 0.6],
+        [0.4, 0.8],
+        [0.84, 0],
+      ]);
+      o.blink = t > 0.4 ? 1 : 0;
+      break;
+    }
+  }
+  return o;
+}
+
+const FROG = kindOf(34, 26, 17, 17, 900);
+const frogPic = (anim: string, f: number, d: number): Pic =>
+  draw(FROG, frogRig(frogPose(anim, f), yawN(d)));
+
+registerMobPainter('f5_frog', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = pose.t;
+  const now = pose.now || 0;
+  const tech = md === 'windup' || md === 'recover' || md === 'aim';
+  const v = visOf(m, pose, tech ? (m.face ?? 0) : headOf(m), 14);
+  const d = dirN(v.yaw);
+  const ex: Partial<MobFrame> = { shadow: 6 };
+  let anim = 'idle';
+  let f = 0;
+  let dark = 0;
+  const id = m.id ?? 0;
+  if (md === 'dying') {
+    f = fi(t, 19);
+    anim = 'die';
+    ex.linger = 0.85;
+    // Подскок на переворот — дугой над тенью.
+    const k = clamp01((t - 0.04) / 0.34);
+    ex.dy = -Math.sin(PI * k) * 7;
+    ex.shadow = 6 - Math.sin(PI * k) * 2;
+    ex.alpha = 1 - sstep(0.68, 0.85, t);
+    ex.still = true;
+  } else if (md === 'aim') {
+    f = fi(t, 16);
+    anim = 'aim';
+    ex.still = true;
+  } else if (md === 'windup') {
+    f = fi(t, 9);
+    anim = 'bite';
+    ex.still = true;
+  } else if (md === 'recover') {
+    f = fi(t, 19);
+    anim = v.prev === 'aim' ? 'lashf' : 'bitef';
+    if (anim === 'lashf' && f === 0) {
+      ex.sx = 1.06;
+      ex.sy = 0.95;
+    }
+    ex.still = true;
+  } else if (md === 'f5_born') {
+    const k = clamp01(t / 0.8);
+    f = Math.floor(((t * 9 + id) / TAU) * 16) % 16;
+    anim = 'hop';
+    dark = 3 - Math.min(3, Math.floor(k * 4));
+    const [wx, wy] = wallDir(m);
+    const off = (1 - easeOut(k)) * 9;
+    ex.dx = wx * off;
+    ex.dy = wy * off;
+    ex.alpha = 0.35 + 0.65 * k;
+  } else if (md === 'sleep') {
+    f = Math.floor(now * 1.2 + hash(id, 3)) % 2;
+    anim = 'sleep';
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(md === 'stun' ? t : now - v.hit, 4);
+    anim = 'flinch';
+  } else if (md === 'chase' && moving(m, 0.2)) {
+    // Фаза прыжка — та же, что у скорости мозга (`hopSpeed`).
+    const ph = (((t * 9 + id) % TAU) + TAU) % TAU;
+    f = Math.floor((ph / TAU) * 16) % 16;
+    anim = 'hop';
+    if (ph < PI) {
+      ex.dy = -Math.sin(ph) * 6;
+      ex.shadow = 6 - Math.sin(ph) * 2;
+    }
+  } else {
+    f = Math.floor((now + hash(id, 7) * 4) * 6) % 8;
+    anim = 'idle';
+    if (md === 'alert') ex.dy = -Math.sin(PI * clamp01(t / 0.35)) * 3;
+  }
+  if (md !== 'dying') hurtFx(v, now, 1.4, ex);
+  return { ...frameOf(FROG, anim, f, d, pose, () => frogPic(anim, f, d), dark), ...ex };
+});
+
+registerMobWarm('f5_frog', function* () {
+  yield* warmAll(
+    FROG,
+    [
+      ['hop', 16],
+      ['idle', 8],
+      ['aim', 17],
+      ['lashf', 20],
+      ['bite', 10],
+      ['bitef', 20],
+      ['flinch', 5],
+      ['die', 20],
+      ['sleep', 2],
+    ],
+    frogPic,
+  );
+});
+
+// ---- Язык жабы: вылет (`f5_tongue_out`, 0,1 с до удара — `api.vfx` мозга) и
+// втягивание (`f5_tongue`, 0,3 с от удара); оба поверх темноты, от пасти
+// кадра. Липкая подушечка на конце, слюна на втягивании.
+
+/** Точка пасти жабы на экране от середины моба (кадр аркана, сторона по углу). */
+function frogMouth(a: number): [number, number] {
+  const ya = yawN(dirN(a));
+  const L = 6.4;
+  return [Math.cos(ya) * L, Math.sin(ya) * L * SE - 3.4 * CE];
+}
+
+function tongue(
+  g: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  S: number,
+  a: number,
+  len: number,
+  out: number,
+  sag: number,
+  drip: number,
+): void {
+  const [mx, my] = frogMouth(a);
+  const x0 = px + mx;
+  const y0 = py + my;
+  const L = len * S * out;
+  if (L < 1) return;
+  const x1 = px + Math.cos(a) * L;
+  const y1 = py + Math.sin(a) * L - 2.5;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2 + sag;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(x0, y0);
+  g.quadraticCurveTo(cx, cy, x1, y1);
+  g.strokeStyle = 'rgba(96,20,32,0.95)';
+  g.lineWidth = 3.2;
+  g.stroke();
+  g.strokeStyle = css(FR_TONGUE, 1);
+  g.lineWidth = 1.8;
+  g.stroke();
+  g.strokeStyle = 'rgba(255,200,214,0.85)';
+  g.lineWidth = 0.7;
+  g.beginPath();
+  g.moveTo(x0, y0 - 0.6);
+  g.quadraticCurveTo(cx, cy - 0.6, x1, y1 - 0.6);
+  g.stroke();
+  g.lineCap = 'butt';
+  // Липкая подушечка.
+  g.fillStyle = 'rgba(96,20,32,0.95)';
+  g.beginPath();
+  g.arc(x1, y1, 2.9, 0, TAU);
+  g.fill();
+  g.fillStyle = 'rgba(240,140,160,1)';
+  g.beginPath();
+  g.arc(x1, y1, 2.1, 0, TAU);
+  g.fill();
+  g.fillStyle = 'rgba(255,224,232,1)';
+  g.fillRect(Math.round(x1 - 1), Math.round(y1 - 1), 1, 1);
+  if (drip > 0) {
+    g.fillStyle = css(hx('#e8f0ff'), 0.8 * drip);
+    for (let i = 0; i < 3; i++)
+      g.fillRect(
+        Math.round(x1 + (i - 1) * 1.5),
+        Math.round(y1 + 2 + (1 - drip) * (2 + i * 2)),
+        1,
+        1,
+      );
+  }
+}
+
+registerZonePainter('f5_tongue_out', (g, z, px, py, S) => {
+  const zz = z as Zone & ZoneArt;
+  const u = clamp01(zz.t / (zz.life || 0.1));
+  tongue(g, px, py, S, zz.ang ?? 0, zz.len ?? 3, u ** 1.3, 0, 0);
+  return true;
+});
+
+registerZonePainter('f5_tongue', (g, z, px, py, S) => {
+  const zz = z as Zone & ZoneArt;
+  const k = clamp01(zz.t / (zz.life || 0.3));
+  // Удар — язык во всю длину; держит миг и втягивается с ускорением.
+  const out = k < 0.12 ? 1 : 1 - easeIn((k - 0.12) / 0.88);
+  tongue(g, px, py, S, zz.ang ?? 0, zz.len ?? 3, out, Math.sin(PI * k) * 2.5, sstep(0.1, 0.7, k));
+  return true;
+});

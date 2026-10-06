@@ -819,7 +819,8 @@ registerMobPainter('f5_shade', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Жаба-арканщица: оливковая, бородавки, жёлтое брюхо, глаза-бугры. 22×16.
+// Жаба-арканщица — рисует `f5-mobs.ts` (мини-3D, 8 сторон, язык зонами);
+// здесь — палитра для иконок.
 // ---------------------------------------------------------------------------
 
 const FR = {
@@ -832,147 +833,6 @@ const FR = {
   mouth: hx('#6a1a1a'),
   tongue: hx('#e87890'),
 };
-
-function paintFrog(anim: string, f: number): Built {
-  const W = 22;
-  const H = 16;
-  const G = 14;
-  const p = new Px(W, H);
-  if (anim === 'dead') {
-    shadeEll(p, 11, 11, 6, 3.4, FR.belly);
-    limb(p, 7, 10, 4, 7, 1, 0.7, FR.skin);
-    limb(p, 15, 10, 18, 7, 1, 0.7, FR.skin);
-    p.outline(INK);
-    return { p, ax: 11, ay: G, eye: null };
-  }
-  let by = 10;
-  let bx = 10;
-  let rx = 6.6;
-  let ry = 4.2;
-  let jump = 0;
-  let throat = 0;
-  let mouth = 0;
-  let legOut = 0;
-  let blink = false;
-  if (anim === 'idle') {
-    throat = [0, 0.6, 1, 0.4][f % 4];
-    blink = f === 3;
-  } else if (anim === 'hop') {
-    const k = f % 4;
-    if (k === 0) {
-      by += 1;
-      ry -= 0.6;
-      rx += 0.5;
-    } else if (k === 1) {
-      by -= 2;
-      bx += 1;
-      rx += 1.2;
-      ry -= 0.8;
-      legOut = 1;
-    } else if (k === 2) {
-      jump = 3;
-      legOut = 0.6;
-    } else {
-      by += 0.6;
-      ry -= 0.3;
-    }
-  } else if (anim === 'wind') {
-    by -= 1;
-    ry += 0.6;
-    throat = 1.2;
-    mouth = 0.3 + f * 0.2;
-  } else if (anim === 'lash') {
-    by -= 0.5;
-    mouth = 1;
-    bx += 0.6;
-  } else if (anim === 'hurt') {
-    ry -= 0.8;
-    by += 0.8;
-    blink = true;
-  }
-  const y0 = by - jump;
-  // Задние лапы: мощные бёдра сзади.
-  const lx = bx - rx + 1.5 - legOut * 3;
-  shadeEll(p, bx - rx + 2.6, y0 + 1.6, 2.6, 2.2, FR.skin, -0.1);
-  limb(p, bx - rx + 2, y0 + 3, lx, G - jump * 0.3, 1.2, 0.8, FR.skin, -0.2);
-  stroke(p, lx - 2, G - jump * 0.3, lx + 1, G - jump * 0.3, FR.skin[1]);
-  // Тело.
-  shadeEll(p, bx, y0, rx, ry, FR.skin);
-  // Брюхо и горловой мешок.
-  p.ell(bx + 1.5, y0 + ry * 0.55, rx * 0.72, ry * 0.45, (x, y) =>
-    tone(FR.belly, 0.5 - (y - y0) * 0.12),
-  );
-  if (throat > 0)
-    shadeEll(
-      p,
-      bx + rx - 1.8,
-      y0 + 2 + throat * 0.3,
-      1.8 + throat,
-      1.2 + throat * 0.6,
-      FR.belly,
-      0.2,
-    );
-  // Передние лапки.
-  limb(p, bx + rx - 2.5, y0 + 2, bx + rx - 1.5, G - jump * 0.3, 0.8, 0.6, FR.skin);
-  // Глаза-бугры.
-  shadeEll(p, bx + rx - 3, y0 - ry + 0.6, 1.9, 1.7, FR.skin, 0.1);
-  // Бородавки.
-  for (let i = 0; i < 6; i++) {
-    const x = bx - rx * 0.7 + hash(i, 11) * rx * 1.3;
-    const y = y0 - ry * 0.5 + hash(i, 13) * ry * 0.7;
-    if (p.solid(Math.floor(x), Math.floor(y)))
-      p.set(Math.floor(x), Math.floor(y), i % 2 ? FR.wart : FR.wartHi);
-  }
-  p.outline(INK);
-  // Рот — линия вдоль морды; открыт — тёмная щель и язык.
-  const mx0 = Math.floor(bx + 1);
-  const my = Math.floor(y0 + 1);
-  const mx1 = Math.floor(bx + rx);
-  for (let x = mx0; x <= mx1; x++) p.set(x, my, FR.mouth);
-  if (mouth > 0.2) {
-    for (let x = mx0 + 1; x <= mx1; x++) p.set(x, my + 1, FR.mouth);
-    if (mouth > 0.8) {
-      p.set(mx1, my, FR.tongue);
-      p.set(mx1 + 1, my, FR.tongue);
-    }
-  }
-  const ex = Math.floor(bx + rx - 2.6);
-  const ey = Math.floor(y0 - ry + 0.4);
-  if (blink) p.set(ex, ey, FR.skin[0]);
-  else {
-    p.set(ex, ey, FR.iris);
-    p.set(ex - 1, ey, FR.pupil);
-    p.set(ex, ey - 1, FR.iris);
-  }
-  return { p, ax: Math.round(bx), ay: G, eye: blink ? null : [ex, ey] };
-}
-
-registerMobPainter('f5_frog', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim;
-  let f = pose.frame;
-  if (pose.mode === 'aim') {
-    anim = 'wind';
-    f = pose.t > 0.4 ? 1 : 0;
-  } else if (pose.mode === 'recover' && pose.t < 0.3) {
-    anim = 'lash';
-    f = 0;
-  } else if (pose.mode === 'f5_born') {
-    const k = Math.min(3, Math.floor((pose.t / 0.8) * 4));
-    return frameOf('f5_frog', pose, 'born', k, () => bornFrom(paintFrog('idle', 0), k));
-  } else if (anim === 'run' || (pose.mode === 'chase' && Math.hypot(m.vx, m.vy) > 0.3)) {
-    anim = 'hop';
-    f = Math.floor(pose.t * 9 + m.id) % 4;
-  }
-  if (anim === 'idle' || anim === 'sleep') {
-    anim = 'idle';
-    f = ((f % 4) + 4) % 4;
-  } else if (anim === 'wind') f = Math.min(1, Math.max(0, f));
-  else if (anim === 'bite') {
-    anim = 'lash';
-    f = 0;
-  } else if (anim !== 'hop') f = 0;
-  return frameOf('f5_frog', pose, anim, f, () => paintFrog(anim, f));
-});
 
 // ---------------------------------------------------------------------------
 // Минотавр (v2.85): громадный бык с двуручной секирой — скелет в трёх
@@ -4727,30 +4587,7 @@ registerZonePainter('f5_pher', (g, z, px, py, S, time) => {
   return true;
 });
 
-registerZonePainter('f5_tongue', (g, z, px, py, S) => {
-  const zz = z as Zone & { ang?: number; len?: number };
-  const t = Math.min(1, zz.t / zz.life);
-  // Выстрел и возврат языка.
-  const out = t < 0.5 ? t * 2 : (1 - t) * 2;
-  const L = (zz.len ?? 3) * S * out;
-  const a = zz.ang ?? 0;
-  const x1 = px + Math.cos(a) * L;
-  const y1 = py - 4 + Math.sin(a) * L;
-  g.strokeStyle = 'rgba(120,30,40,0.95)';
-  g.lineWidth = 3;
-  g.beginPath();
-  g.moveTo(px, py - 4);
-  g.lineTo(x1, y1);
-  g.stroke();
-  g.strokeStyle = 'rgba(232,120,144,1)';
-  g.lineWidth = 1.6;
-  g.stroke();
-  g.fillStyle = 'rgba(240,140,160,1)';
-  g.beginPath();
-  g.arc(x1, y1, 2.2, 0, TAU);
-  g.fill();
-  return true;
-});
+// Язык жабы (`f5_tongue`, `f5_tongue_out`) рисует `f5-mobs.ts`.
 
 registerZonePainter('f5_spike', (g, z, px, py, S) => {
   const k = kOf(z as ZoneX);

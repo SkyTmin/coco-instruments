@@ -821,6 +821,7 @@ registerBrain('f5_frog', {
         const see = api.lineOfSight(sim, m.x, m.y, h.x, h.y);
         if (see && dist > 1.8 && dist < TONGUE - 0.3 && m.cd <= 0) {
           m.dir = Math.atan2(dy, dx);
+          m.data.vTongue = 0; // анимации мобов 5 — только рисунок
           api.setMode(m, 'aim');
           return;
         }
@@ -847,6 +848,13 @@ registerBrain('f5_frog', {
         const len = Math.min(TONGUE, wallDist(sim, api, m.x, m.y, m.dir, TONGUE));
         m.tele = { shape: 'line', r: len, w: 0.26, ang: m.dir, k: Math.min(1, m.t / T) };
         if (m.t > T - 0.24) m.danger = TONGUE + 0.4;
+        // анимации мобов 5 — только рисунок (язык вылетает за 0,1 с до удара)
+        const vOut = m.t >= T - 0.1 && !m.data.vTongue; // анимации мобов 5 — только рисунок
+        if (vOut) m.data.vTongue = 1; // анимации мобов 5 — только рисунок
+        const vHit = vOut && lineHits(m.x, m.y, m.dir, len, 0.26, h.x, h.y, h.r); // анимации мобов 5 — только рисунок
+        const vLen = vHit ? Math.min(len, dist) : len; // анимации мобов 5 — только рисунок
+        const vz = { x: m.x, y: m.y, r: 0.3, life: 0.1, art: 'f5_tongue_out', ang: m.dir }; // анимации мобов 5 — только рисунок
+        if (vOut) api.vfx(sim, { ...vz, len: vLen, above: true } as ZoneIn & FxIn); // анимации мобов 5 — только рисунок
         if (m.t >= T) {
           const hit =
             h.inv <= 0 && h.mode !== 'dash' && lineHits(m.x, m.y, m.dir, len, 0.26, h.x, h.y, h.r);
@@ -862,8 +870,10 @@ registerBrain('f5_frog', {
             art: 'f5_tongue',
             ang: m.dir,
             len: hit ? Math.min(len, dist) : len,
+            above: true, // анимации мобов 5 — только рисунок
           };
           api.zone(sim, z);
+          m.data.vTongue = 0; // анимации мобов 5 — только рисунок
           api.setMode(m, 'recover');
           m.cd = 2.6 + sim.rng();
         }
