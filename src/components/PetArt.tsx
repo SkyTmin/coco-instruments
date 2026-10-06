@@ -40,8 +40,7 @@ const LARGE_FROM = 110;
 const stripSrc = (id: PetId, anim: PetAnim, large: boolean, v = 0): string => {
   const px = PET_PX[id];
   // У пиксельных золотой и радужный — свои запечённые полосы, а не CSS-фильтр.
-  if (px)
-    return `/ui/pets/${id}/${anim}${large ? '-l' : ''}${v ? `-v${v}` : ''}.webp?v=${px.rev}`;
+  if (px) return `/ui/pets/${id}/${anim}${large ? '-l' : ''}${v ? `-v${v}` : ''}.webp?v=${px.rev}`;
   return `/ui/pets/${id}/${anim}${large && (PET_LARGE as readonly string[]).includes(anim) ? '-l' : ''}.webp?v=${PET_REV}`;
 };
 

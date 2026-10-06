@@ -346,7 +346,8 @@ export function rimLight(
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
       if (pal[i] < 0 || (only && !only(pal[i]))) continue;
-      const open = from === 'tl' ? pal[i - w] < 0 || pal[i - 1] < 0 : pal[i + w] < 0 || pal[i + 1] < 0;
+      const open =
+        from === 'tl' ? pal[i - w] < 0 || pal[i - 1] < 0 : pal[i + w] < 0 || pal[i + 1] < 0;
       if (open) hit.push(i);
     }
   for (const i of hit) tone[i] = Math.min(pals[pal[i]].length - 1, tone[i] + 1);

@@ -50,7 +50,8 @@ for (const id of ids) {
       const t0 = Date.now();
       for (let i = 0; i < n; i++) {
         const p = pet.frame(a, i, res);
-        if (p.w !== cv.cw || p.h !== cv.ch) throw new Error(`${id}/${res}/${a}: кадр ${p.w}×${p.h}`);
+        if (p.w !== cv.cw || p.h !== cv.ch)
+          throw new Error(`${id}/${res}/${a}: кадр ${p.w}×${p.h}`);
         buf.set(p.data, i * cv.cw * cv.ch * 4);
       }
       fs.writeFileSync(path.join(dir, `${a}.rgba`), buf);

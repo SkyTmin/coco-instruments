@@ -1001,7 +1001,17 @@ function strand(
   along: [number, number],
   op: FOpt = {},
 ): void {
-  chain(out, (u) => catmull(pts, u), wid, thick, nrm, pal, along, op, op.segs ?? (pts.length - 1) * 3);
+  chain(
+    out,
+    (u) => catmull(pts, u),
+    wid,
+    thick,
+    nrm,
+    pal,
+    along,
+    op,
+    op.segs ?? (pts.length - 1) * 3,
+  );
 }
 
 /** Мерцание пера: своя фаза у каждого, частоты — целые числа кругов за петлю. */
@@ -1316,7 +1326,14 @@ function crest(out: Part[], c: Ctx): void {
     const sway = flick(c.tau, 80 + j) * 0.05;
     const P = (al: number, ac: number): V3 =>
       add(add(base, mul(d, al * L)), mul(sd, (ac + sway * al) * L));
-    const loc = [P(0, 0), P(0.34, -0.04), P(0.66, 0.0), P(0.88, 0.12), P(0.94, 0.28), P(0.82, 0.36)];
+    const loc = [
+      P(0, 0),
+      P(0.34, -0.04),
+      P(0.66, 0.0),
+      P(0.88, 0.12),
+      P(0.94, 0.28),
+      P(0.82, 0.36),
+    ];
     const pts = loc.map((q, i) => add(h.at(q), mul([dx, 0, dz], (i / (loc.length - 1)) ** 1.5)));
     strand(
       out,
@@ -1424,7 +1441,11 @@ function body(out: Part[], c: Ctx): void {
   out.push({
     c: S.chest,
     ax,
-    r: [(4.2 + fl * 0.8) * (1 + sq * 0.5) * k, (3.4 + fl * 0.4) * k, (7.8 + fl * 0.3) * (1 - sq) * k],
+    r: [
+      (4.2 + fl * 0.8) * (1 + sq * 0.5) * k,
+      (3.4 + fl * 0.4) * k,
+      (7.8 + fl * 0.3) * (1 - sq) * k,
+    ],
     pal: P_BELLY,
     id: nid(),
     tex: HI ? scallop(7, 4.6, 0.14, 0.95) : scallop(3, 2.4, 0.15, 0.95),
@@ -1509,7 +1530,8 @@ function head(out: Part[], c: Ctx): void {
   }
   // Клюв: восковица светлее, гребень с бликом, крюк темнее.
   const bid = nid();
-  const ridge = (_qx: number, qy: number, qz: number) => (qz > 0.55 && Math.abs(qy) < 0.45 ? 0.16 : 0);
+  const ridge = (_qx: number, qy: number, qz: number) =>
+    qz > 0.55 && Math.abs(qy) < 0.45 ? 0.16 : 0;
   out.push({
     c: h.at([0, 4.2, -0.5]),
     ax: axes(h.dir(norm([0, 1, -0.15])), ez),
@@ -1628,7 +1650,9 @@ function burnFront(f: Frame, yLine: number, tau: number): void {
       const d = y - yl;
       if (d > band) {
         const glow = clamp01(1 - (d - band) / (16 * RR));
-        const v = Math.abs(Math.sin(cx * 0.9 + Math.sin(cy * 0.55) * 2.2) + Math.sin(cy * 1.05 - cx * 0.35));
+        const v = Math.abs(
+          Math.sin(cx * 0.9 + Math.sin(cy * 0.55) * 2.2) + Math.sin(cy * 1.05 - cx * 0.35),
+        );
         if (v < 0.3 && glow > 0.08) {
           pal[i] = P_EMBER;
           tone[i] = Math.min(5, 1 + Math.round(glow * 4.4));
@@ -1763,14 +1787,7 @@ function eyes(p: Px, f: Frame, c: Ctx, glow: boolean): void {
 // ---------------------------------------------------------------------------
 
 /** Угольки: рождаются по расписанию петли, летят вверх, гаснут ступенями огня; на крупной молодые — звёздочкой. */
-function sparks(
-  p: Px,
-  c: Ctx,
-  n: number,
-  life: number,
-  origin: (j: number) => V3,
-  rise = 9,
-): void {
+function sparks(p: Px, c: Ctx, n: number, life: number, origin: (j: number) => V3, rise = 9): void {
   for (let j = 0; j < n; j++) {
     const born = ((j / n) * FLICK_T + hash(j, 3, 9) * 0.3) * (PER / FLICK_T);
     const age = wrap(c.tau - born, PER);
@@ -1921,7 +1938,8 @@ export function phoenixFrame(a: Anim, i: number, res: Res = 's'): Px {
   const p = toPx(f, pals);
   selOutline(p, INK, o.front > 0.5 || o.sil > 0.5 || !birdOn ? 0.6 : 0.8);
   if (birdOn && o.front < 0.62 && o.flash < 0.5) eyes(p, f, c, o.sil > 0.5);
-  if (birdOn && o.sil > 0.3) speckles(p, f, o.sil * (0.35 + 0.65 * clamp01((t - 1.36) / 0.22)), tau);
+  if (birdOn && o.sil > 0.3)
+    speckles(p, f, o.sil * (0.35 + 0.65 * clamp01((t - 1.36) / 0.22)), tau);
   // Угольки: от хохолка и концов хвоста всегда, в трюке — гуще.
   const nsp = a === 'sleep' || a === 'walk' ? 2 : 4;
   if (birdOn && o.front <= 0)
