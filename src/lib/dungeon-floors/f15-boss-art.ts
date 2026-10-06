@@ -4167,6 +4167,16 @@ registerMobWarm('f15boss', function* () {
     tt: 0,
     pre: null,
   });
+  // Растры плаща (~3 мс каждый): все раскрытия на месте и фазы подола в полёте —
+  // иначе первый приём в бою платит сборку растра в кадре.
+  for (let f = -4; f <= 4; f++) {
+    rasterOf(f / 4, 0);
+    yield;
+  }
+  for (let ph2 = 1; ph2 < 5; ph2++) {
+    rasterOf(0, ph2);
+    yield;
+  }
   for (const spQ of [0, 1])
     for (const d of order)
       for (let b = 0; b < (spQ ? 5 : 3); b++) {
