@@ -4484,7 +4484,7 @@ function astroMark(
   p.col(C.night[1], 0.32 + 0.28 * k);
   fillSector(p, cx, cy, 0, R, 0, TAU);
   const rf = R * (0.12 + 0.88 * Math.pow(k, 1.25));
-  p.col(sig ? hot : fill, (0.16 + 0.24 * k) * (tk ? 1.6 : 1));
+  p.col(sig ? hot : fill, sig ? (tk ? 0.26 : 0.14) : 0.16 + 0.24 * k);
   fillSector(p, cx, cy, 0, rf, 0, TAU);
   ring(
     p,
@@ -4541,7 +4541,7 @@ function bandAstro(
   const kk = (a: number) => !keep || keep(a);
   p.col(C.night[1], 0.3 + 0.2 * k);
   band();
-  p.col(sig ? hot : fill, (0.16 + 0.26 * k) * (tk ? 1.6 : 1));
+  p.col(sig ? hot : fill, sig ? (tk ? 0.26 : 0.14) : 0.16 + 0.26 * k);
   band();
   const ec = sig ? (tk ? C.white : hot) : edge;
   ring(p, cx, cy, r1, ec, 0.7 + 0.3 * k, (a) => kk(a), 0.6);
@@ -4679,30 +4679,45 @@ const PALM_LINES: [number, number][] = [
   [2, 15],
   [15, 16],
 ];
-/** Пальцы силуэта: поперёк у основания, кончик вдоль, полуширина. */
-const FINGERS: [number, number, number][] = [
-  [-0.36, 0.84, 0.1],
-  [-0.12, 0.96, 0.105],
-  [0.12, 0.96, 0.105],
-  [0.36, 0.84, 0.095],
+/** Пальцы силуэта: поперёк у основания, кончик вдоль; веером расходятся. */
+const FINGERS: [number, number][] = [
+  [-0.33, 0.78],
+  [-0.11, 0.93],
+  [0.11, 0.93],
+  [0.33, 0.8],
 ];
+const FING_W = 0.078;
 
-/** Силуэт ладони (тень, отпечаток): ладонь овалом, пальцы, большой палец. */
+/** Отрезок (ax, ay) → (bx, by) полуширины w: попала ли точка. */
+function inSeg(u: number, v: number, ax: number, ay: number, bx: number, by: number, w: number) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const t = k01(((u - ax) * dx + (v - ay) * dy) / (dx * dx + dy * dy));
+  return Math.hypot(u - ax - dx * t, v - ay - dy * t) <= w;
+}
+
+/** Силуэт ладони (тень, отпечаток): ладонь овалом, четыре пальца веером, большой. */
 function inPalm(u: number, v: number): boolean {
-  const pu = (u + 0.22) / 0.6;
-  const pv = v / 0.48;
+  const pu = (u + 0.25) / 0.5;
+  const pv = v / 0.42;
   if (pu * pu + pv * pv <= 1) return true;
-  for (const [v0, tip, w] of FINGERS) {
-    if (u < 0.05 || u > tip) continue;
-    const vc = v0 * (1 + (u - 0.1) * 0.3);
-    const ww = u > tip - w ? Math.sqrt(Math.max(0, w * w - (u - (tip - w)) ** 2)) : w;
-    if (Math.abs(v - vc) <= ww) return true;
-  }
-  // Большой палец: отрезок (−0.32, 0.4) → (0.1, 0.84), полуширина 0,11.
-  const ax = u + 0.32;
-  const ay = v - 0.4;
-  const t = k01((ax * 0.42 + ay * 0.44) / (0.42 * 0.42 + 0.44 * 0.44));
-  return Math.hypot(ax - 0.42 * t, ay - 0.44 * t) <= 0.11;
+  for (const [v0, tip] of FINGERS)
+    if (inSeg(u, v, 0.05, v0 * 0.9, tip, v0 * 1.35, FING_W)) return true;
+  return inSeg(u, v, -0.36, 0.34, 0.02, 0.76, 0.088);
+}
+
+/** Кромка фигуры: точка внутри, а сосед на пиксель — снаружи. */
+function edgeOf(inside: (u: number, v: number) => boolean, R: number, a: number) {
+  const ex = Math.cos(a) / R;
+  const ey = Math.sin(a) / R;
+  return (u: number, v: number) =>
+    inside(u, v) &&
+    !(
+      inside(u + ex, v - ey) &&
+      inside(u - ex, v + ey) &&
+      inside(u + ey, v + ex) &&
+      inside(u - ey, v - ex)
+    );
 }
 
 function palmDraw(
@@ -4762,7 +4777,7 @@ registerZonePainter(
     const a = angOf(st);
     astroMark(p, cx, cy, R, k, left, time, sd, C.gold[1], C.gold[3], C.vio[1]);
     // Высота: ладонь встаёт над целью, висит, в последние 0,2 с падает.
-    const H = S * 2.3;
+    const H = S * 1.7;
     const rise = eOut2(k01(st.t / PALM_RISE));
     const drop = k01(1 - left / SIG);
     const h = H * (1 - eIn3(drop)) + Math.sin(time * 6) * 1.5 * (1 - drop) * rise;
@@ -4790,8 +4805,11 @@ registerZonePainter(
         p.dot(hx2 + (wx - hx2) * f, hy2 + (wy - hy2) * f - Math.sin(f * Math.PI) * 6);
       }
     }
-    p.col(C.vio[1], 0.3 + 0.2 * k);
+    // Ладонь: ночной силуэт с золотой кромкой — читается и на плаще владыки.
+    p.col(C.night[0], 0.55 + 0.2 * k);
     shapeRows(p, ax, ay, Rp, a, inPalm);
+    p.col(sig ? C.white : C.gold[1], 0.7 + 0.3 * k);
+    shapeRows(p, ax, ay, Rp, a, edgeOf(inPalm, Rp, a));
     palmDraw(
       p,
       ax,
@@ -4841,7 +4859,7 @@ registerImpactPainter('f15b_palm', {
       p.occ = occOf(S);
       p.col(C.night[0], 0.5 * f);
       fillSector(p, cx, cy, 0, R * 0.95, 0, TAU);
-      p.col(
+      const hot =
         age < 0.05
           ? C.white
           : age < 0.16
@@ -4850,10 +4868,11 @@ registerImpactPainter('f15b_palm', {
               ? C.gold[2]
               : age < 0.7
                 ? '#c890f0'
-                : '#6a34a4',
-        Math.min(1, 1.6 * f),
-      );
+                : '#6a34a4';
+      p.col(hot, (age < 0.1 ? 0.75 : 0.4) * f);
       shapeRows(p, cx, cy, R * 0.92, a, inPalm);
+      p.col(hot, Math.min(1, 1.5 * f));
+      shapeRows(p, cx, cy, R * 0.92, a, edgeOf(inPalm, R * 0.92, a));
       ring(p, cx, cy, R, C.gold[2], 0.8 * f * f, (_a, i) => hash(i >> 1, sd, 5) > 0.3);
       p.occ = null;
       hitStar(p, cx, cy - 2, age, 0.1, R * 1.05, sd * 0.01, C.gold[2]);
@@ -4948,7 +4967,7 @@ registerZonePainter(
     fillSector(p, cx, cy, r0, R, a0, a0 + arc);
     // Налив от владыки к краю веера.
     const rf = r0 + (R - r0) * Math.pow(k, 1.2);
-    p.col(sig ? C.gold[2] : C.vio[1], (0.14 + 0.22 * k) * (tk ? 1.6 : 1));
+    p.col(sig ? C.gold[2] : C.vio[1], sig ? (tk ? 0.26 : 0.14) : 0.14 + 0.22 * k);
     fillSector(p, cx, cy, r0, rf, a0, a0 + arc);
     ring(
       p,
@@ -5196,7 +5215,10 @@ function wellGrid(p: Pen, cx: number, cy: number, PR: number, pull: number, few:
         const q = o ? warp(c, s) : warp(s, c);
         if (prev) {
           const f = (prev[2] + q[2]) / 2;
-          p.col(f < 0.4 ? C.vio[2] : C.night[7], 0.12 + 0.5 * (1 - f) * pull);
+          p.col(
+            f < 0.3 ? '#c890f0' : f < 0.65 ? C.vio[2] : C.night[7],
+            0.2 + 0.55 * (1 - f) * Math.min(1, pull),
+          );
           p.line(prev[0], prev[1], q[0], q[1]);
         }
         prev = q;
@@ -5257,11 +5279,19 @@ registerZonePainter(
     const grow = Math.min(1, u * 4);
     // Последние 0,8 с — воронка сжимается перед схлопыванием.
     const end = k01(1 - left / 0.8);
-    p.col(C.night[0], 0.16 * grow);
-    fillSector(p, cx, cy, 0, PR, 0, TAU);
-    p.col(C.blood[1], 0.2 * grow);
-    fillSector(p, cx, cy, 0, PR * 0.55, 0, TAU);
-    wellGrid(p, cx, cy, PR, grow * (0.55 + 0.7 * end), few);
+    // Воронка: пол темнеет ступенями к центру — глубина.
+    const shrink = 1 - 0.25 * end;
+    const DEPTH: [number, string, number][] = [
+      [1, C.night[0], 0.2],
+      [0.72, C.night[0], 0.14],
+      [0.48, C.blood[1], 0.22],
+      [0.28, C.blood[0], 0.3],
+    ];
+    for (const [f, c, al] of DEPTH) {
+      p.col(c, al * grow);
+      fillSector(p, cx, cy, 0, PR * f * (f < 1 ? shrink : 1), 0, TAU);
+    }
+    wellGrid(p, cx, cy, PR, grow * (0.6 + 0.8 * end), few);
     // Граница тяги: золотой пунктир, точки бегут внутрь.
     ring(
       p,
@@ -5269,49 +5299,55 @@ registerZonePainter(
       cy,
       PR,
       C.gold[1],
-      0.5 * grow,
+      0.7 * grow,
       (_a, i) => mod(i + Math.floor(time * 6), 8) < 4,
-      0.4,
+      0.5,
     );
     if (!few)
-      for (let i = 0; i < 14; i++) {
-        const aa = (i / 14) * TAU + time * 0.3;
+      for (let i = 0; i < 18; i++) {
+        const aa = (i / 18) * TAU + time * 0.3;
         const f = mod(time * 0.9 + hash(sd, i, 63), 1);
-        const rr = PR * (1 - 0.4 * f);
-        p.col(C.gold[2], 0.6 * grow * (1 - f));
-        p.dot(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr);
+        const r1 = PR * (1 - 0.45 * f);
+        const r2 = PR * (1 - 0.45 * Math.max(0, f - 0.08));
+        p.col(C.gold[2], 0.75 * grow * (1 - f));
+        p.line(cx + Math.cos(aa) * r2, cy + Math.sin(aa) * r2, cx + Math.cos(aa) * r1, cy + Math.sin(aa) * r1);
       }
-    // Рукава звёзд закручиваются к центру.
+    // Рукава звёзд закручиваются к центру — со следом по ходу.
     const per = few ? 12 : 22;
     const sp = 1 + end;
+    const arm = (ar: number, f: number): [number, number] => {
+      const rr = R * 0.3 + (PR * 0.9 * shrink - R * 0.3) * f;
+      const aa = (ar / 3) * TAU + Math.log(1 + rr / S) * 2.6 - time * 2.4 * sp;
+      return [cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr];
+    };
     for (let ar = 0; ar < 3; ar++)
       for (let i = 0; i < per; i++) {
         const f = mod(i / per - time * 0.35 * sp, 1);
-        const rr = R * 0.3 + (PR * 0.9 - R * 0.3) * f;
-        const aa = (ar / 3) * TAU + Math.log(1 + rr / S) * 2.6 - time * 2.4 * sp;
-        const x = cx + Math.cos(aa) * rr;
-        const y = cy + Math.sin(aa) * rr;
-        p.col(f < 0.3 ? '#ffffff' : f < 0.55 ? C.gold[3] : f < 0.8 ? '#c890f0' : '#6a34a4', grow * (0.95 - f * 0.6));
-        p.dot(x, y);
-        if (f < 0.3) p.dot(x + 1, y);
+        const [x, y] = arm(ar, f);
+        const [x2, y2] = arm(ar, Math.min(1, f + 0.035));
+        const c = f < 0.3 ? '#ffffff' : f < 0.55 ? C.gold[3] : f < 0.8 ? '#c890f0' : '#6a34a4';
+        p.col(c, grow * (1 - f * 0.55));
+        p.line(x2, y2, x, y);
+        if (f < 0.35) p.dot(x - 0.5, y - 0.5, 2, 2);
       }
     // Кольцо взрыва: риски, к схлопыванию — золото и белое.
     p.col(C.night[1], 0.2 + 0.35 * end);
     fillSector(p, cx, cy, 0, R, 0, TAU);
-    const bc = sig ? (tk ? C.white : C.gold[3]) : end > 0 ? C.gold[2] : '#9a5ad0';
+    const bc = sig ? (tk ? C.white : C.gold[3]) : end > 0 ? C.gold[2] : C.gold[1];
+    ring(p, cx, cy, R + 1, '#9a5ad0', 0.6, undefined, 0.4);
     ring(
       p,
       cx,
       cy,
       R,
       bc,
-      0.55 + 0.45 * end,
+      0.65 + 0.35 * end,
       (_a, i) => sig || mod(i - Math.floor(time * 20), 6) < 4,
       0.5,
     );
     ticks(p, cx, cy, R, 12, -time * 1.5, 2, bc, 0.5 + 0.45 * end);
     // Горизонт: чёрный диск, кольцо аккреции бежит.
-    const hr = S * 0.45 * (0.6 + 0.4 * grow) * (1 + 0.35 * end) * (1 + 0.08 * Math.sin(time * 9));
+    const hr = S * 0.6 * (0.6 + 0.4 * grow) * (1 + 0.35 * end) * (1 + 0.08 * Math.sin(time * 9));
     p.col(C.ink, 0.95);
     oval(p, cx, cy, hr, hr);
     const run = Math.floor(time * 24);
@@ -5799,7 +5835,7 @@ registerZonePainter(
     p.col(C.night[3], 0.2 + 0.22 * k);
     fillSector(p, cx, cy, r0, R, a0, a0 + arc);
     const rf = r0 + (R - r0) * Math.pow(k, 1.2);
-    p.col(sig ? '#9a5ad0' : C.vio[1], (0.12 + 0.2 * k) * (tk ? 1.6 : 1));
+    p.col(sig ? '#9a5ad0' : C.vio[1], sig ? (tk ? 0.3 : 0.18) : 0.12 + 0.2 * k);
     fillSector(p, cx, cy, r0, rf, a0, a0 + arc);
     sectorRim(
       p,
