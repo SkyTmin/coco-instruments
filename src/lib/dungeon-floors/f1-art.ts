@@ -825,7 +825,7 @@ export const F1_MOB_STAT = {
   /** Последние 4000 замеров, мс: p50/p90 на стенде. */
   list: [] as number[],
   /** Бюджет новых кадров на кадр рендера, мс (см. `held`). */
-  budget: 0.6,
+  budget: 0.3,
   size: () => RAT_LRU.size + BIP_LRU.size + VAR_LRU.size,
   /** Стенд: сбросить кеши кадров (замер нового кадра на прогретом JIT). */
   clear: () => {
@@ -2800,14 +2800,23 @@ function bipRig(o: BP, yaw: number, K: BipK, c: Fur, sk: BSk, spell: number): Ri
     };
     const lo = ring(-0.7 * s, 2.75 * s);
     const hi = ring(3.2 * s, 2.3 * s);
+    // Высота точки над дном ведра — без новых массивов на каждый пиксель.
+    const [o0, o1, o2] = Hb.o;
+    const [u0, u1, u2] = Hb.u;
     const hoop = (q: V3, l: number): RGBA | null => {
-      const h = vdot(vsub(q, Hb.o), Hb.u) / s;
+      const h = ((q[0] - o0) * u0 + (q[1] - o1) * u1 + (q[2] - o2) * u2) / s;
       if (Math.abs(h - 0.1) < 0.32 || Math.abs(h - 2.6) < 0.32)
         return l > 0.2 ? METAL.steel[3] : METAL.steel[2];
       return null;
     };
+    // Задние грани стоящего ведра закрыты передними — их не растрируем
+    // (слетевшее ведро кувыркается открытым дном — тогда рисуем все).
+    const mid = Hb.p(-0.3 * s, 0, 1.25 * s);
+    const upright = Hb.u[2] > 0.6;
     for (let j = 0; j < 8; j++) {
       const j2 = (j + 1) % 8;
+      const n = vsub(vmul(vadd(vadd(lo[j], lo[j2]), vadd(hi[j2], hi[j])), 0.25), mid);
+      if (upright && n[1] * CE + n[2] * SE < -0.05 * s) continue;
       r.poly([lo[j], lo[j2], hi[j2], hi[j]], { T: STEEL_T, pat: hoop });
     }
     r.poly(hi, { T: STEEL_T, bias: 0.2 });
