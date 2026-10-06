@@ -2193,17 +2193,15 @@ registerMobWarm('f1_rat', function* () {
         yield 0;
       }
     }
-  // Укус и проводка — пять сторон-источников (три зеркалом даром).
+  // Замах укуса — пять сторон-источников (три зеркалом даром). Проводку не
+  // греем: весь прогрев идёт по 3 мс в кадр, и с проводками всех видов он
+  // тянулся 7–9 с после входа на этаж; её кадры дорисует бюджет в бою.
   for (const id of ['rat', 'fatrat'])
     for (const d of [0, 1, 2, 6, 7]) {
       const K = RAT_K[id];
       const wu = MOB_WU.get(id) || 0.6;
       for (let f = 0; f < Math.max(1, Math.round(wu * MF_FPS)); f++) {
         ratFrame(K, 'bite', f, wu, d, 'normal', false, 0);
-        yield 0;
-      }
-      for (let f = 0; f <= 8; f++) {
-        ratFrame(K, 'rec', f, 0, d, 'normal', false, 0);
         yield 0;
       }
     }
@@ -2907,9 +2905,10 @@ function bipRig(o: BP, yaw: number, K: BipK, c: Fur, sk: BSk, spell: number): Ri
       return null;
     };
     // Задние грани стоящего ведра закрыты передними — их не растрируем
-    // (слетевшее ведро кувыркается открытым дном — тогда рисуем все).
+    // (на голове ведро не видно изнутри даже в наклоне; слетевшее кувыркается
+    // открытым дном — тогда рисуем все).
     const mid = Hb.p(-0.3 * s, 0, 1.25 * s);
-    const upright = Hb.u[2] > 0.6;
+    const upright = o.hat <= 0 || Hb.u[2] > 0.6;
     for (let j = 0; j < 8; j++) {
       const j2 = (j + 1) % 8;
       const n = vsub(vmul(vadd(vadd(lo[j], lo[j2]), vadd(hi[j2], hi[j])), 0.25), mid);
@@ -4455,25 +4454,27 @@ function bipPaint(K: BipK) {
 
 /** Стороны-источники: остальные три — их зеркало (`MIR8`). */
 const WARM_D = [0, 1, 2, 6, 7];
-/** Что прогреть сверх покоя и хода: [действие, длина (0 — цикл 8), vr]. */
+/**
+ * Что прогреть сверх покоя и хода: [действие, длина (0 — цикл 8), vr]. Только
+ * подготовки, сами приёмы и две самые дорогие проводки (удар латника о пол —
+ * 0,7 мс кадр, посох шамана); прочие проводки и редкий зов дорисует бюджет в
+ * бою (см. прогрев крыс).
+ */
 function bipWarmList(kind: string): [string, number, number[]][] {
   const wu = MOB_WU.get(kind) || 0.6;
   switch (kind) {
     case 'f1_ratman':
       return [
         ['jab', wu, [0]],
-        ['jabR', 0.55, [0]],
         ['coil', 0.42, [0]],
         ['coil', 0.34, [0]],
         ['lunge', 0.24, [0, 1, 2]],
-        ['skid', 0.55, [0]],
         ['feint', 0.3, [0]],
         ['hop', 0.22, [-1, 1]],
       ];
     case 'f1_slinger':
       return [
         ['punch', wu, [0]],
-        ['punchR', 0.45, [0]],
         ['spin', 0.8, [0]],
         ['throw', 0.45, [0]],
         ['run', 0, [0, 2, 3, 4, 5]],
@@ -4481,10 +4482,8 @@ function bipWarmList(kind: string): [string, number, number[]][] {
     case 'f1_shaman':
       return [
         ['poke', wu, [0]],
-        ['pokeR', 0.5, [0]],
         ['cast', 0.9, [1, 2, 3]],
         ['castR', 0.5, [0]],
-        ['call', 0.9, [0]],
       ];
     default:
       return [
@@ -4492,8 +4491,6 @@ function bipWarmList(kind: string): [string, number, number[]][] {
         ['smashR', 0.8, [0]],
         ['brace', 0.8, [0]],
         ['charge', 0, [0]],
-        ['bashR', 0.8, [0]],
-        ['skidG', 1.15, [0]],
         ['run', 0, [0, 2, 3, 4, 5]],
       ];
   }
