@@ -3944,6 +3944,14 @@ function giantPose(c: Ctx): { q: Pose; key: string } {
   return { q, key: 'idle0' };
 }
 
+/**
+ * Высота плеч исполина над его точкой на полу, игровые пиксели. Сюда
+ * `f13-boss-fx.ts` крепит его нити: меняя позу, держи её в согласии с кадром.
+ */
+export function giantShoulderPx(_m: Mob, _now: number): number {
+  return 34;
+}
+
 const GIANT_CACHE = cacheOf('f13_giant', 500);
 paintMob('f13_giant', (m, pose) => {
   const c: Ctx = { m, pose, f: pose.frame, now: pose.now };

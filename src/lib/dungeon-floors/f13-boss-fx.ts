@@ -21,7 +21,7 @@ import type { ImpactRec, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { Px } from '../dungeon-art';
 import { BOSS, F13_FX, F13_SCENERY, SPOT, stringsOf } from './f13-brains';
-import { css, hash, hx, INK, lordVagaPx, P, spiderLift, TAU } from './f13-art';
+import { css, giantShoulderPx, hash, hx, INK, lordVagaPx, P, spiderLift, TAU } from './f13-art';
 import type { RGBA } from './f13-art';
 
 const GOLD = P.gold;
@@ -44,10 +44,10 @@ function viewOf(z: { x: number; y: number }, px: number, py: number, S: number) 
 // ---------------------------------------------------------------------------
 
 /** Высота плеч куклы над её точкой на полу, пиксели (куда крепится нить). */
-function shoulderH(m: Mob): number {
+function shoulderH(m: Mob, time: number): number {
   switch (m.kind) {
     case 'f13_giant':
-      return 34;
+      return giantShoulderPx(m, time);
     case 'f13_nutcracker':
       return 24;
     case 'f13_spider':
@@ -128,7 +128,7 @@ function drawStrings(
     if (Math.abs(m.x - hx0) > 14 || Math.abs(m.y - hy0) > 12) continue;
     const segs = stringsOf(m);
     if (!segs.length) continue;
-    const sh = shoulderH(m);
+    const sh = shoulderH(m, time);
     const ghost = (m.data.ghost ?? 0) > 0;
     const a = ghost ? 0.25 : 0.85;
     const giant = m.kind === 'f13_giant';
