@@ -42,7 +42,7 @@ import type { Mob, Shot, Sim, Strike, Zone } from '../dungeon-sim';
 import { F15B_MARK } from './f15-boss';
 import { crownSpot, f15bView, LORD } from './f15-boss-brains';
 import type { F15BState } from './f15-boss-brains';
-import { F15B_SKY, lordHandPx, planetSprite } from './f15-boss-art';
+import { F15B_SKY, lordHandPx } from './f15-boss-art';
 
 type RGBA = [number, number, number, number];
 
@@ -3425,11 +3425,12 @@ registerZonePainter(
     const run = Math.floor(time * (12 + 30 * k));
     const pts = circle(R);
     const edge = sig ? (tk ? C.white : G[5]) : k > 0.5 ? G[4] : G[3];
+    // Кромка сплошная с первого кадра («куда»), по ней бегут светлые штрихи.
     for (let i = 0; i < pts.x.length; i++) {
-      if (!sig && mod(i - run, 7) >= 4) continue;
-      p.col(C.ink, 0.5);
+      const lit = sig || mod(i - run, 7) < 4;
+      p.col(C.ink, lit ? 0.5 : 0.3);
       p.dot(cx + pts.x[i] + 1, cy + pts.y[i] * 0.75 + 1);
-      p.col(edge, 0.9);
+      p.col(lit ? edge : G[3], lit ? 0.9 : 0.5);
       p.dot(cx + pts.x[i], cy + pts.y[i] * 0.75);
     }
     if (sig) {
@@ -3477,10 +3478,10 @@ registerImpactPainter('f15b_axe', {
       p.col(C.ink, fade);
       lens(p, cx, cy, 1, 0, 6.5, 1.7);
       // Призрачная секира в полу: тает строками.
-      if (age < 0.4) {
+      if (age < 0.55) {
         const im = ghostAxe();
         p.scan = scanOf(time);
-        p.alpha(1 - age / 0.4);
+        p.alpha(1 - age / 0.55);
         p.img(im, cx - 15, cy - im.height + 5);
         p.scan = -1;
       }
@@ -3741,7 +3742,8 @@ registerZonePainter(
     fillLane(p, cx, cy, ux, uy, 0, L, hw);
     // Фитиль: огонь бежит от змея к концу полосы.
     const lf = L * Math.pow(k, 1.25);
-    p.col(sig ? G[2] : G[1], (tk ? 0.7 : 0.42) + 0.14 * k);
+    // Сигнал мигает умеренно: полоса не должна слепить и прятать героя.
+    p.col(sig ? G[2] : G[1], (tk ? 0.56 : 0.42) + 0.1 * k);
     fillLane(p, cx, cy, ux, uy, 0, lf, hw * (0.5 + 0.5 * k));
     for (let j = -1; j <= 1; j++) {
       const f = mod(Math.floor(time * 14) + j + sd, 4);
@@ -7108,6 +7110,12 @@ const WARM_STRIKES: [string, 'circle' | 'line' | 'cone' | 'ring', number, number
 ];
 const WARM_SHOTS = ['f15b_fireball', 'f15b_ice'];
 const WARM_FX = [
+  'f15b_fxsky',
+  'f15b_fxplanets',
+  'f15b_fxeclipse',
+  'f15b_fxconduct',
+  'f15b_fxaim',
+  'f15b_fxqwake',
   'f15b_fxswirl',
   'f15b_fxwarp',
   'f15b_flames',
@@ -7143,7 +7151,14 @@ function* warmFx(): Generator<void> {
   hydraHead(0);
   hydraHead(1);
   ghostAxe();
-  for (let i = 0; i < 5; i++) planetSprite(i);
+  yield;
+  // Планеты: все радиусы полёта (от короны до ×1,8) и лёжа, по 8 кадров.
+  for (let i = 0; i < 5; i++) {
+    for (let r = Math.round(PL_R[i]); r <= Math.round(PL_R[i] * 1.8); r++)
+      for (let f = 0; f < 8; f++) planetImg(i, r, f);
+    yield;
+  }
+  for (const sz of [5, 6]) for (let f = 0; f < 8; f++) rockImg(sz, f);
   yield;
   for (let h = 2; h <= 56; h += 2) {
     for (let f = 0; f < 4; f++) waterCol(h, f);
