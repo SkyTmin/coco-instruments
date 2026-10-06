@@ -542,21 +542,43 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
     }
 }
 
-/** Верх стены: тёмная порода с гранями кристалла, кромка к полу — светлая. */
+// Верх стены — гранёный обсидиан: грани светлее сверху-слева, тёмные швы.
+// Прежде порода была «ночным небом» со звёздами и читалась провалом, а не
+// стеной: звёзды — примета пола.
+const WT = [hx('#0b0a22'), hx('#131133'), hx('#1a1744'), hx('#231f56'), hx('#2d2868')];
+function facet(X: number, Y: number): [number, number] {
+  const gx = Math.floor(X / 7);
+  const gy = Math.floor(Y / 7);
+  let d1 = 1e9;
+  let d2 = 1e9;
+  let id = 0;
+  for (let j = -1; j <= 1; j++)
+    for (let i = -1; i <= 1; i++) {
+      const fx = (gx + i) * 7 + 1 + hash(gx + i, gy + j, 74) * 5;
+      const fy = (gy + j) * 7 + 1 + hash(gx + i, gy + j, 75) * 5;
+      const d = (X + 0.5 - fx) ** 2 + (Y + 0.5 - fy) ** 2;
+      if (d < d1) {
+        d2 = d1;
+        d1 = d;
+        id = (gx + i) * 7919 + (gy + j) * 104729;
+      } else if (d < d2) d2 = d;
+    }
+  return [id, Math.sqrt(d2) - Math.sqrt(d1)];
+}
+
+/** Верх стены: гранёная тёмная порода, кромка к полу — светлая. */
 function wallTop(p: Px, c: CellCtx): void {
   const kind = c.mark;
   for (let v = 0; v < 16; v++)
     for (let u = 0; u < 16; u++) {
       const X = c.wx * 16 + u;
       const Y = c.wy * 16 + v;
-      const n = vnoise(X / 5, Y / 5, 71);
-      let col = n > 0.64 ? hx('#100e2c') : n > 0.4 ? hx('#0b0a22') : NIGHT[0];
+      const [id, seam] = facet(X, Y);
+      const nx = hash(id, 1, 76) * 2 - 1;
+      const ny = hash(id, 2, 76) * 2 - 1;
+      const lit = clamp01(0.45 - (nx * 0.6 + ny * 0.8) * 0.4);
+      let col = seam < 0.8 ? WT[0] : mixq(WT[1], WT[4], lit, X, Y);
       if (kind === MK.wallGold) col = mixc(col, GOLD[0], 0.3);
-      // Порода — ночное небо: редкие тусклые звёзды.
-      else {
-        const hs = hash(X, Y, 73);
-        if (hs < 0.007) col = hs < 0.002 ? ICE[3] : NIGHT[5];
-      }
       if (kind === MK.wallCrystal) {
         const bx = X >> 3;
         const by = Y >> 3;
@@ -565,7 +587,9 @@ function wallTop(p: Px, c: CellCtx): void {
         const m = Math.abs(X - cx) + Math.abs(Y - cy) * 0.7;
         if (hash(bx, by, 72) < 0.6 && m < 3) col = m < 1.2 ? ICE[5] : X < cx ? ICE[3] : ICE[2];
       }
-      if ((v === 0 && c.open(0, -1)) || (u === 0 && c.open(-1, 0)) || (u === 15 && c.open(1, 0))) col = kind === MK.wallGold ? GOLD[2] : VIO[1];
+      const rimC = kind === MK.wallGold ? GOLD[2] : VIO[2];
+      if ((v === 0 && c.open(0, -1)) || (u === 0 && c.open(-1, 0)) || (u === 15 && c.open(1, 0))) col = rimC;
+      else if ((v === 1 && c.open(0, -1)) || (u === 1 && c.open(-1, 0)) || (u === 14 && c.open(1, 0))) col = mixc(col, rimC, 0.45);
       p.set(u, v, col);
     }
 }
