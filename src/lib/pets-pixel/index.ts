@@ -3,25 +3,22 @@
 // манифесту `lib/pet-pixel-sprites.ts`. Запекание — `scripts/pets-pixel/bake.ts`.
 //
 // Новый пиксельный питомец: файл `<id>.ts` с рисовальщиком кадра на холсте
-// `cw×ch` (рамка тела `box` в точке `bx, by`) и строка здесь. Запекание само
-// внесёт его в `scripts/pets-pixel/pets.json`, и тушь перестанет его выгружать.
+// `cw×ch` (рамка тела `box` в точке `bx, by`) и строка здесь. Полос две:
+// малая `s` (шахта, списки) и крупная `l` (карточка, вылупление, Питомник) —
+// у каждой свой холст и свой рисунок. Запекание само внесёт питомца в
+// `scripts/pets-pixel/pets.json`, и тушь перестанет его выгружать.
 
 import type { Px } from '../dungeon-art';
-import { BOX, BX, BY, CH, CW, FPS, FRAMES, phoenixFrame } from './phoenix';
-import type { Anim } from './phoenix';
+import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
+import type { Anim, Canvas, Res } from './phoenix';
 
-export type { Anim };
+export type { Anim, Canvas, Res };
 
 export interface PixelPet {
-  /** Сторона рамки тела в пикселях рисунка. */
-  box: number;
-  /** Холст кадра и левый верхний угол рамки тела на нём. */
-  cw: number;
-  ch: number;
-  bx: number;
-  by: number;
+  /** Холст и рамка тела у каждой полосы: малая обязательна, крупная — если есть. */
+  res: { s: Canvas; l?: Canvas };
   anims: Record<Anim, { n: number; fps: number }>;
-  frame: (a: Anim, i: number) => Px;
+  frame: (a: Anim, i: number, res: Res) => Px;
 }
 
 const at24 = (f: Record<Anim, number>, fps: number) =>
@@ -29,11 +26,7 @@ const at24 = (f: Record<Anim, number>, fps: number) =>
 
 export const PIXEL_PETS: Record<string, PixelPet> = {
   phoenix: {
-    box: BOX,
-    cw: CW,
-    ch: CH,
-    bx: BX,
-    by: BY,
+    res: RES,
     anims: at24(FRAMES, FPS),
     frame: phoenixFrame,
   },

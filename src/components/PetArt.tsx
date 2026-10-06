@@ -15,10 +15,13 @@
 // `scripts/pets-pixel`) играют так же, но их полосы — в родном размере
 // рисунка: рамка подгоняется к ЦЕЛОМУ числу точек экрана на пиксель рисунка
 // (`pxFit`) и растягивается без сглаживания, иначе пиксели размываются или
-// выходят разной ширины. У них свой `rev` в адресе и нет крупных полос.
-// Золотой и радужный у них запечены в свои полосы (`<anim>-v1/-v2.webp`,
-// `thumb-v1/-v2`): класс `is-pxpet` снимает CSS-фильтр с полосы и миниатюры
-// при любом масштабе — фильтр на длинной полосе растеризовал её целиком.
+// выходят разной ширины. У них свой `rev` в адресе и две полосы своего
+// рисунка: малая (рамка `box`) и крупная (`large`, `<anim>-l.webp`) —
+// `pxFit` берёт крупную, если на её пиксель приходится целое число точек
+// экрана (от двух), иначе малую. Золотой и радужный у них запечены в свои
+// полосы (`<anim>[-l]-v1/-v2.webp`, `thumb-v1/-v2`): класс `is-pxpet`
+// снимает CSS-фильтр с полосы и миниатюры при любом масштабе — фильтр на
+// длинной полосе растеризовал её целиком.
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -26,7 +29,7 @@ import { rarityVars } from '@/components/PickArt';
 import { eggOf, petOf } from '@/lib/pets';
 import type { EggId, PetId } from '@/lib/pets';
 import { PET_PX } from '@/lib/pet-pixel-sprites';
-import type { PetPx } from '@/lib/pet-pixel-sprites';
+import { pxFit } from '@/lib/pet-pixel-fit';
 import { PET_LARGE, PET_REV, PET_SPRITES } from '@/lib/pet-sprites';
 
 export type PetAnim = 'idle' | 'walk' | 'happy' | 'work' | 'attack' | 'sleep';
@@ -37,24 +40,10 @@ const LARGE_FROM = 110;
 const stripSrc = (id: PetId, anim: PetAnim, large: boolean, v = 0): string => {
   const px = PET_PX[id];
   // У пиксельных золотой и радужный — свои запечённые полосы, а не CSS-фильтр.
-  if (px) return `/ui/pets/${id}/${anim}${v ? `-v${v}` : ''}.webp?v=${px.rev}`;
+  if (px)
+    return `/ui/pets/${id}/${anim}${large ? '-l' : ''}${v ? `-v${v}` : ''}.webp?v=${px.rev}`;
   return `/ui/pets/${id}/${anim}${large && (PET_LARGE as readonly string[]).includes(anim) ? '-l' : ''}.webp?v=${PET_REV}`;
 };
-
-/**
- * Размер рамки пиксельного питомца: целое число точек экрана на пиксель
- * рисунка. Мельче полутора точек — как есть и со сглаживанием (пиксели всё
- * равно не различить); если до целого дальше 15% — размер прежний, без
- * сглаживания (мелочь неровной ширины лучше мыла).
- */
-function pxFit(size: number, px: PetPx): { s: number; crisp: boolean } {
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const k = (size * dpr) / px.box;
-  if (k < 1.5) return { s: size, crisp: false };
-  const kr = Math.round(k);
-  if (Math.abs(kr / k - 1) > 0.15) return { s: size, crisp: true };
-  return { s: (kr * px.box) / dpr, crisp: true };
-}
 
 /** Разовые анимации подгружаем заранее: иначе на первой ласке — пустая рамка. */
 const preloaded = new Set<string>();
@@ -114,9 +103,13 @@ export function PetArt({
 }) {
   const def = petOf(id);
   const px = PET_PX[id];
-  const sprites = px ? px.anims : PET_SPRITES[id]?.anims;
-  const fit = px ? pxFit(size, px) : null;
-  const large = size >= LARGE_FROM;
+  const fit = px
+    ? pxFit(size, px, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)
+    : null;
+  // Пиксельный: полоса той точности, что выбрал `pxFit`; тушь — крупная с 110.
+  const pxSet = px && fit?.large && px.large ? px.large : px;
+  const sprites = pxSet ? pxSet.anims : PET_SPRITES[id]?.anims;
+  const large = px ? !!fit?.large : size >= LARGE_FROM;
   const [once, setOnce] = useState<{ anim: PetAnim; k: number } | null>(
     intro && !still && !ghost && !reduce() ? { anim: intro, k: 0 } : null,
   );
@@ -212,7 +205,7 @@ export function PetArt({
           alt=""
           draggable={false}
         />
-      ) : px && fit ? (
+      ) : pxSet && fit ? (
         <span
           className="pet__px"
           style={{ width: fit.s, height: fit.s, left: (size - fit.s) / 2, top: size - fit.s }}
@@ -220,16 +213,16 @@ export function PetArt({
           <span
             className="pet__frame"
             style={{
-              left: (st.x * fit.s) / px.box,
-              top: (st.y * fit.s) / px.box,
-              width: (st.w * fit.s) / px.box,
-              height: (st.h * fit.s) / px.box,
+              left: (st.x * fit.s) / pxSet.box,
+              top: (st.y * fit.s) / pxSet.box,
+              width: (st.w * fit.s) / pxSet.box,
+              height: (st.h * fit.s) / pxSet.box,
             }}
           >
             <img
               key={`${cur}:${once?.k ?? 'loop'}`}
               className={`pet__strip${once ? ' is-once' : ''}`}
-              src={stripSrc(id, cur, false, v)}
+              src={stripSrc(id, cur, large, v)}
               style={
                 {
                   width: `${st.n * 100}%`,

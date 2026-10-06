@@ -5,11 +5,13 @@
 
 Normally run by bake.ts (npx vite-node scripts/pets-pixel/bake.ts). Needs Pillow and numpy.
 
-For every pixel pet in scripts/pets-pixel/.tmp/<id>/:
+For every pixel pet in scripts/pets-pixel/.tmp/<id>/<res>/ (res: s — the small strip, l — the large one,
+each drawn by the pet's own painter at its own resolution):
   * every animation is cropped to the union of its own frames (+1 empty pixel round it, so a
     nearest-neighbour sample at a frame's edge never picks the neighbour frame) and laid out as one
-    horizontal strip of equal frames at the NATIVE size: lossless WebP, public/ui/pets/<id>/<anim>.webp;
-  * thumb.webp — the first idle frame inside the body box (box × box), for lists;
+    horizontal strip of equal frames at the NATIVE size: lossless WebP, public/ui/pets/<id>/<anim>.webp
+    (large: <anim>-l.webp);
+  * thumb.webp — the first idle frame of the small strip inside the body box (box × box), for lists;
   * golden and rainbow copies of every strip and of the thumb (<anim>-v1/-v2.webp, thumb-v1/-v2):
     the colour matrices of the CSS filters plus a 1–2 px pixel glow, baked — PetArt drops the CSS
     filter for pixel pets (a filter on a long strip rasterises the whole strip);
@@ -50,8 +52,8 @@ SHEET = arg('--sheet')
 GAME = '--no-game' not in sys.argv
 
 
-def load(pid):
-    d = os.path.join(TMP, pid)
+def load(pid, res):
+    d = os.path.join(TMP, pid, res)
     meta = json.load(open(os.path.join(d, 'meta.json')))
     frames = {}
     for a, m in meta['anims'].items():
@@ -144,9 +146,9 @@ def save_webp(img, path):
     return os.path.getsize(path)
 
 
-def sheet(pid, a, fr, meta, box):
+def sheet(pid, res, a, fr, meta, box):
     x0, y0, x1, y1 = box
-    k = 4
+    k = 4 if res == 's' else 1
     n = len(fr)
     cols = 12
     w, h = (x1 - x0) * k, (y1 - y0) * k
@@ -169,20 +171,15 @@ def sheet(pid, a, fr, meta, box):
                          outline=(90, 90, 120))
             dr.text((ox + 2, oy + h + 2), str(i), fill=(200, 190, 170) if not half else (90, 70, 50))
     os.makedirs(SHEET, exist_ok=True)
-    img.save(os.path.join(SHEET, f'{pid}-{a}.png'))
+    img.save(os.path.join(SHEET, f'{pid}-{res}-{a}.png'))
 
 
-def cut(pid):
-    meta, frames = load(pid)
-    B = meta['box']
+def strips(pid, res, out_dir, sizes):
+    """Strips of one resolution, all variants: {box, anims} for the manifest, meta and frames."""
+    meta, frames = load(pid, res)
     bx, by = meta['bx'], meta['by']
-    out_dir = os.path.join(OUT, pid)
-    man = {'box': B, 'anims': {}}
-    sizes = {}
-    if GAME:
-        os.makedirs(out_dir, exist_ok=True)
-        for f in os.listdir(out_dir):
-            os.remove(os.path.join(out_dir, f))
+    suf = '-l' if res == 'l' else ''
+    man = {'box': meta['box'], 'anims': {}}
     for a in ORDER:
         if a not in frames:
             continue
@@ -193,9 +190,9 @@ def cut(pid):
         m = HALO + 1
         x0, y0, x1, y1 = x0 - m, y0 - m, x1 + m, y1 + m
         if x0 < 0 or y0 < 0 or x1 > meta['cw'] or y1 > meta['ch']:
-            raise SystemExit(f'{pid}/{a}: рисунок упёрся в край холста {x0, y0, x1, y1}')
+            raise SystemExit(f'{pid}/{res}/{a}: рисунок упёрся в край холста {x0, y0, x1, y1}')
         if SHEET:
-            sheet(pid, a, fr, meta, (x0, y0, x1, y1))
+            sheet(pid, res, a, fr, meta, (x0, y0, x1, y1))
         if not GAME:
             continue
         w, h = x1 - x0, y1 - y0
@@ -205,14 +202,30 @@ def cut(pid):
             strip = np.zeros((h, w * n, 4), np.uint8)
             for i in range(n):
                 strip[:, i * w:(i + 1) * w] = fv[i][y0:y1, x0:x1]
-            name = a + (f'-v{v}' if v else '')
+            name = a + suf + (f'-v{v}' if v else '')
             sizes[name] = save_webp(Image.fromarray(strip, 'RGBA'), os.path.join(out_dir, name + '.webp'))
         man['anims'][a] = {'n': n, 'fps': meta['anims'][a]['fps'], 'x': x0 - bx, 'y': y0 - by, 'w': w, 'h': h}
+    return man, meta, frames
+
+
+def cut(pid):
+    out_dir = os.path.join(OUT, pid)
+    sizes = {}
+    if GAME:
+        os.makedirs(out_dir, exist_ok=True)
+        for f in os.listdir(out_dir):
+            os.remove(os.path.join(out_dir, f))
+    have = [r for r in ('s', 'l') if os.path.isdir(os.path.join(TMP, pid, r))]
+    sets = {r: strips(pid, r, out_dir, sizes) for r in have}
     if not GAME:
         return None, 0
+    man, meta, frames = sets['s']
+    if 'l' in sets:
+        man['large'] = sets['l'][0]
+    B, bx, by = meta['box'], meta['bx'], meta['by']
     idle = frames['idle']
-    # Значок — кадр 0 покоя в рамке тела: обрезанный хохолок или крыло на нём
-    # мелькнёт, пока грузится полоса. Искры над рамкой — можно, они не в значке.
+    # Значок — кадр 0 покоя малой полосы в рамке тела: обрезанный хохолок или
+    # крыло на нём мелькнёт, пока грузится полоса. Искры над рамкой — можно.
     ix0, iy0, ix1, iy1 = bbox(idle[:1])
     if ix0 < bx or iy0 < by or ix1 > bx + B or iy1 > by + B:
         print(f'  ! {pid}: кадр 0 покоя вылезает из рамки тела {ix0 - bx, iy0 - by, ix1 - bx, iy1 - by} при {B}')
@@ -226,12 +239,23 @@ def cut(pid):
         h.update(open(os.path.join(out_dir, f), 'rb').read())
     man['rev'] = h.hexdigest()[:10]
     tot = sum(sizes.values())
-    for v in (0, 1, 2):
-        part = {k: s for k, s in sizes.items() if k.endswith(f'-v{v}') == bool(v) and (v or '-v' not in k)}
-        print(f'{pid} v{v}: ' + ', '.join(f'{k} {s / 1024:.1f}' for k, s in part.items())
+    for name, part in group_sizes(sizes).items():
+        print(f'{pid} {name}: ' + ', '.join(f'{k} {s / 1024:.1f}' for k, s in part.items())
               + f' КБ; итого {sum(part.values()) / 1024:.0f} КБ')
     print(f'{pid}: всего {tot / 1024:.0f} КБ')
     return man, tot
+
+
+def group_sizes(sizes):
+    """Веса по группам: полоса (малая, крупная, значок) × вариант (v0, v1, v2)."""
+    out = {}
+    for k, s in sizes.items():
+        mv = re.search(r'-v(\d)$', k)
+        v = int(mv.group(1)) if mv else 0
+        base = k[:mv.start()] if mv else k
+        res = 'значок' if base == 'thumb' else 'крупная' if base.endswith('-l') else 'малая'
+        out.setdefault(f'{res} v{v}', {})[k] = s
+    return out
 
 
 def read_manifest():
@@ -262,21 +286,29 @@ def main():
     # Манифест пишется сразу в стиле prettier (одинарные кавычки, ключи без
     # кавычек, запятые в конце, строка на полосу): `prettier --check` зелёный
     # без прогона, а read_manifest читает его обратно.
+    def anims(m, ind):
+        out = [ind + 'anims: {']
+        for a in sorted(m['anims'], key=lambda a: ORDER.index(a) if a in ORDER else 99):
+            s = m['anims'][a]
+            out.append(f'{ind}  {a}: {{ ' + ', '.join(f'{k}: {s[k]}' for k in ('n', 'fps', 'x', 'y', 'w', 'h')) + ' },')
+        return out + [ind + '},']
+
     rows = []
     for pid in sorted(old):
         m = old[pid]
-        rows += [f'  {pid}: {{', f"    box: {m['box']},", f"    rev: '{m['rev']}',", '    anims: {']
-        for a in sorted(m['anims'], key=lambda a: ORDER.index(a) if a in ORDER else 99):
-            s = m['anims'][a]
-            rows.append(f'      {a}: {{ ' + ', '.join(f'{k}: {s[k]}' for k in ('n', 'fps', 'x', 'y', 'w', 'h')) + ' },')
-        rows += ['    },', '  },']
+        rows += [f'  {pid}: {{', f"    box: {m['box']},", f"    rev: '{m['rev']}',"] + anims(m, '    ')
+        if 'large' in m:
+            rows += ['    large: {', f"      box: {m['large']['box']},"] + anims(m['large'], '      ') + ['    },']
+        rows += ['  },']
     body = '{\n' + '\n'.join(rows) + '\n}'
     with open(MANIFEST, 'w', encoding='utf-8') as fh:
         fh.write('// Сгенерировано scripts/pets-pixel/post.py — руками не править.\n')
         fh.write('// Пиксельные питомцы: полосы кадров в пикселях рисунка от левого верхнего угла рамки\n')
-        fh.write('// тела (`box` × `box`), своя метка `rev` в адресе у каждого питомца.\n')
+        fh.write('// тела (`box` × `box`), своя метка `rev` в адресе у каждого питомца. `large` — крупная\n')
+        fh.write('// полоса своего рисунка (`<anim>-l.webp`) для карточки, вылупления и Питомника.\n')
         fh.write('export interface PetPxStrip {\n  n: number;\n  fps: number;\n  x: number;\n  y: number;\n  w: number;\n  h: number;\n}\n\n')
-        fh.write('export interface PetPx {\n  box: number;\n  rev: string;\n  anims: Record<string, PetPxStrip>;\n}\n\n')
+        fh.write('export interface PetPxSet {\n  box: number;\n  anims: Record<string, PetPxStrip>;\n}\n\n')
+        fh.write('export interface PetPx extends PetPxSet {\n  rev: string;\n  large?: PetPxSet;\n}\n\n')
         fh.write('export const PET_PX: Record<string, PetPx> = ')
         fh.write(body)
         fh.write(';\n')
