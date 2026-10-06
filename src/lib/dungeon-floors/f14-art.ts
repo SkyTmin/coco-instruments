@@ -5252,6 +5252,8 @@ const LORD_POINTS: LordPoint[] = [
 const LPTS = new WeakMap<MobFrame, Record<LordPoint, [number, number]>>();
 /** Точки тела в последнем нарисованном кадре, с ходом кадра — по `m.id`. */
 const LPT_LAST = new Map<number, Record<LordPoint, [number, number]>>();
+/** Где и когда (часы рендера) Повелителя рисовали последний раз. */
+let lordSeen: { id: number; x: number; y: number; now: number; alpha: number } | null = null;
 
 /**
  * Точка тела Повелителя в последнем нарисованном кадре — px от точки моба
@@ -5879,6 +5881,8 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
     LPT_LAST.set(m.id, put);
     if (LPT_LAST.size > 8) LPT_LAST.delete(LPT_LAST.keys().next().value as number);
   }
+  // Для стрелок арены: копию в смерти (`linger`) мир уже убрал.
+  lordSeen = { id: m.id, x: m.x, y: m.y, now: pose.now, alpha: out.alpha ?? 1 };
   // Следующий кадр — заранее, кусками.
   const nq = lNext(q);
   if (nq) lAhead({ ...nq, d: lNextD });
@@ -8274,11 +8278,82 @@ registerZonePainter('f14_flood', (g, _z, px, py, S) => {
   return true;
 });
 
+/**
+ * Стрелки арены лежат поверх темноты (`above`), то есть после всех тел, и
+ * накрывали Повелителя и героя. Из рисунка вырезаются стоящие рядом:
+ * Повелитель — по точкам последнего кадра (круг циферблата у `face`,
+ * колокол робы от `chest` к полу), и в сцене смерти, пока он не растаял;
+ * прочие — прямоугольником по росту.
+ * `ox`/`oy` — сдвиг мира в холст. Вызывать между `save`/`restore`.
+ */
+function clipStanding(
+  g: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  S: number,
+  time: number,
+): void {
+  const sim = paintSim();
+  if (!sim) return;
+  const cut = (shape: () => void) => {
+    g.beginPath();
+    g.rect(-8192, -8192, 16384, 16384);
+    shape();
+    g.clip('evenodd');
+  };
+  const box = (x: number, hw: number, y0: number, y1: number) =>
+    cut(() =>
+      g.rect(Math.floor(x - hw + ox), Math.floor(y0 + oy), Math.ceil(hw * 2), Math.ceil(y1 - y0)),
+    );
+  const lord = (id: number, wx: number, wy: number) => {
+    const pt = LPT_LAST.get(id);
+    const [fx, fy] = pt?.face ?? [0, -43];
+    const [cx, cy] = pt?.chest ?? [0, -30];
+    const x = wx * S + ox;
+    const y = wy * S + oy;
+    cut(() => {
+      g.moveTo(x + fx + 13, y + fy);
+      g.ellipse(x + fx, y + fy, 13, 13, 0, 0, TAU);
+    });
+    cut(() => {
+      g.moveTo(x + cx - 12, y + Math.min(cy, fy + 9));
+      g.lineTo(x + cx + 12, y + Math.min(cy, fy + 9));
+      g.lineTo(x + 16, y + 3);
+      g.lineTo(x - 16, y + 3);
+      g.closePath();
+    });
+  };
+  const h = sim.hero;
+  let lordLive = false;
+  for (const m of sim.mobs) {
+    const boss = m.kind === 'f14boss';
+    if (m.mode === 'dying' && m.t > 0.5 && !boss) continue;
+    if (Math.abs(m.x - h.x) > 12 || Math.abs(m.y - h.y) > 16) continue;
+    if (boss) {
+      lordLive = true;
+      if (lordSeen?.id === m.id && lordSeen.alpha < 0.5) continue;
+      lord(m.id, m.x, m.y);
+    } else if (m.r >= 0.8) box(m.x * S, 0.85 * S, m.y * S + 2 - 3.6 * S, m.y * S + 3);
+    else box(m.x * S, Math.max(5, m.r * S), m.y * S + 2 - m.r * S * 3.4, m.y * S + 3);
+  }
+  // Смерть доигрывает копия, которой в мире уже нет: место — из рисовальщика.
+  const ls = lordSeen;
+  if (!lordLive && ls && time - ls.now >= 0 && time - ls.now < 0.25 && ls.alpha >= 0.5)
+    lord(ls.id, ls.x, ls.y);
+  box(h.x * S, 0.42 * S, h.y * S + 2 - 1.25 * S, h.y * S + 3);
+}
+
 /** Стрелки площади и арены — клинки из ступицы; за минутной — шлейф. */
-registerZonePainter('f14_hands', (g, z, px, py, S) => {
+registerZonePainter('f14_hands', (g, z, px, py, S, time) => {
   const which = (z as ZoneX).which === 'arena' ? 'arena' : 'plaza';
   const H = F14_FX.hands[which];
   if (!H.on) return true;
+  // Стрелки арены — поверх темноты, но за телами (v2.97).
+  const arena = which === 'arena';
+  if (arena) {
+    g.save();
+    clipStanding(g, px - z.x * S, py - z.y * S, S, time);
+  }
   const minLen = (which === 'arena' ? 9.6 : NOON.minLen) * S;
   const hourLen = (which === 'arena' ? 6.2 : NOON.hourLen) * S;
   const w = NOON.w * 2 * S;
@@ -8327,6 +8402,7 @@ registerZonePainter('f14_hands', (g, z, px, py, S) => {
   g.stroke();
   g.fillStyle = rgba(metal[3], 1);
   g.fillRect(Math.round(px) - 1, Math.round(py) - 2, 2, 2);
+  if (arena) g.restore();
   return true;
 });
 
@@ -8396,19 +8472,49 @@ registerZonePainter('f14_anchor', (g, z, px, py, S) => {
   return true;
 });
 
+let knifeRmq: MediaQueryList | null | undefined;
+/** Когда рендер впервые увидел нож кольца — те же часы, что `knifeBornAt` «Техник». */
+const knifeLineBorn = new Map<number, number>();
+/**
+ * Доля линии ножа. Нож кольца (`f14b_lknife`) «Техники» выпускают из руки:
+ * задержка по месту в кольце до 0,3 с и полёт 0,24 с (`knifeDelay`,
+ * `KNIFE_FLY` в `f14-boss-fx.ts`) — линия проявляется, когда нож на месте,
+ * а не раньше него (v2.97).
+ */
+function knifeLineK(id: number, art: string | undefined, time: number): number {
+  if (art !== 'f14b_lknife') return 1;
+  if (knifeRmq === undefined)
+    knifeRmq =
+      typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+  if (knifeRmq?.matches) return 1;
+  let b = knifeLineBorn.get(id);
+  if (b === undefined || b > time) {
+    b = time;
+    knifeLineBorn.set(id, b);
+    if (knifeLineBorn.size > 96) knifeLineBorn.delete(knifeLineBorn.keys().next().value as number);
+  }
+  const ang = KNIFE_ANG.get(id) ?? Math.PI;
+  const delay = (((((ang - Math.PI - 0.2) % TAU) + TAU) % TAU) / TAU) * 0.3;
+  return Math.max(0, Math.min(1, (time - b - delay - 0.24) / 0.12));
+}
+
 /** Линия висящего ножа — куда полетит, когда время пойдёт. */
-registerZonePainter('f14_knifeline', (g, z, px, py, S) => {
+registerZonePainter('f14_knifeline', (g, z, px, py, S, time) => {
   const zz = z as ZoneX;
   const sim = paintSim();
   const s = sim?.shots.find((q) => q.id === zz.shot);
   if (!s || s.age > -1e5) return true;
+  const kIn = knifeLineK(s.id, s.art, time);
+  if (kIn <= 0) return true;
   const a = zz.ang ?? 0;
   const L = 7 * S;
   // Сплошная тонкая линия, тающая к концу, и по ней бегут штрихи к цели.
   const ux = Math.cos(a);
   const uy = Math.sin(a);
   const grad = g.createLinearGradient(px, py, px + ux * L, py + uy * L);
-  grad.addColorStop(0, rgba(RED, 0.55));
+  grad.addColorStop(0, rgba(RED, 0.55 * kIn));
   grad.addColorStop(1, rgba(RED, 0));
   g.strokeStyle = grad;
   g.lineWidth = 1;
@@ -8419,7 +8525,7 @@ registerZonePainter('f14_knifeline', (g, z, px, py, S) => {
   const t = F14_FX.clock;
   for (let k = 0; k < 3; k++) {
     const d = 8 + ((t * 1.2 + k / 3) % 1) * (L - 12);
-    g.fillStyle = rgba(hx('#ffd0c0'), 0.8 * (1 - d / L));
+    g.fillStyle = rgba(hx('#ffd0c0'), 0.8 * kIn * (1 - d / L));
     g.fillRect(Math.round(px + ux * d) - 1, Math.round(py + uy * d) - 1, 2, 2);
   }
   return true;

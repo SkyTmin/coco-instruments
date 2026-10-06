@@ -415,6 +415,10 @@ const LORD_PT_FALLBACK: Record<LordPoint, [number, number]> = {
   minTip: [20, 4],
   hourTip: [-15, -2],
   glass: [0, -24],
+  // Точки «Тела» v2.97 — на случай, когда кадра ещё не было.
+  minHand: [11, -22],
+  hourHand: [-10, -22],
+  chest: [0, -30],
 };
 function lordPt(m: Mob, which: LordPoint, S: number): [number, number] {
   const pt = lordPointPx(m, which);
