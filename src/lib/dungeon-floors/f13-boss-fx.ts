@@ -1591,7 +1591,9 @@ registerZonePainter('f13_snap', (g, z, px, py, S, time) => {
   const m = puppetAt(z.x, z.y);
   const sh = m ? shoulderH(m, time) : 18;
   const giant = m?.kind === 'f13_giant';
-  const star = !m || Math.hypot(zf(z, 'bx') - z.x, zf(z, 'by') - z.y) > 6;
+  const star = F13_FX.stars.some(
+    (s) => Math.abs(s.px - zf(z, 'bx')) < 0.3 && Math.abs(s.py - zf(z, 'by')) < 0.3,
+  );
   // Низ нити (плечо) и верх (вага, крестовина или балка звезды).
   const [lx, lyF] = [px, py];
   const ly = star ? lyF - 14 : lyF - sh + (giant ? 0 : 0.18 * 16);

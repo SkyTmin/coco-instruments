@@ -332,7 +332,7 @@ function cutString(sim: Sim, m: Mob, i: number, api: SimApi): void {
   if (!s || s.cut) return;
   m.data.cut = (m.data.cut ?? 0) | (1 << i);
   m.data.cutAt = sim.time;
-  fx(sim, api, 'f13_snap', s.ax, s.ay, 0.6, 0.5, { bx: s.bx, by: s.by }, true);
+  fx(sim, api, 'f13_snap', s.ax, s.ay, 0.6, 0.9, { bx: s.bx, by: s.by }, true); // анимации 13 — только рисунок
   sim.events.push({ t: 'boss', what: 'f13_snap_fall' });
   if (m.kind === 'f13_giant') {
     CUT_HOOK.giant?.(sim, m, api);
@@ -3073,6 +3073,7 @@ CUT_HOOK.giant = (sim, g, api) => {
     g.tele = null;
     g.danger = 0;
     api.setMode(g, 'f13_slump');
+    fx(sim, api, 'f13_v_slump', g.x, g.y, 1.6, 1.2); // анимации 13 — только рисунок
     sim.events.push({ t: 'shake', k: 0.4 });
     sim.events.push({
       t: 'boss',
@@ -3087,6 +3088,7 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
   const s = bstate(sim);
   const h = sim.hero;
   g.tele = null;
+  g.data.vNoTele = 1; // анимации 13 — только рисунок
   if (s.trans > 0 || s.act !== 0 || heroDown(sim)) {
     g.vx *= 0.8;
     g.vy *= 0.8;
@@ -3111,6 +3113,12 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
       if (go) {
         const along = Math.max(0.15, Math.cos(angDiff(want, g.face)));
         api.steer(sim, g, Math.cos(g.face), Math.sin(g.face), g.speed * along, dt);
+        // анимации 13 — только рисунок: пыль из-под ноги на каждом шаге.
+        g.data.vStep = (g.data.vStep ?? 0) + Math.hypot(g.vx, g.vy) * dt;
+        if (g.data.vStep > 1.15) {
+          g.data.vStep = 0;
+          fx(sim, api, 'f13_v_dust', g.x, g.y + 0.3, 0.6, 0.7, { ang: g.face });
+        }
       } else {
         g.vx *= 0.8;
         g.vy *= 0.8;
@@ -3147,6 +3155,7 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
         if (canHurt(sim) && al > -0.3 && al < len + h.r && ac < BOSS.lance.w + h.r)
           api.hurtHero(sim, g.dmg, g.x, g.y, 6, g.kind);
         fx(sim, api, 'f13_lancehit', g.x + ux * len, g.y + uy * len, 0.8, 0.4, { ang: g.dir, len });
+        sim.events.push({ t: 'shake', k: 0.3 }); // анимации 13 — только рисунок
         g.danger = 0;
         s.atkCd = 1.5;
         api.setMode(g, 'recover');
@@ -3170,6 +3179,8 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
         const off = Math.abs(angDiff(to, g.face));
         if (canHurt(sim) && c.dist < BOSS.shield.r + h.r && off < BOSS.shield.arc / 2 + 0.2)
           api.hurtHero(sim, g.dmg * 0.9, g.x, g.y, 8, g.kind);
+        fx(sim, api, 'f13_v_bash', g.x, g.y, BOSS.shield.r, 0.55, { ang: g.face }); // анимации 13 — только рисунок
+        sim.events.push({ t: 'shake', k: 0.35 }); // анимации 13 — только рисунок
         g.danger = 0;
         s.atkCd = 1.3;
         api.setMode(g, 'recover');
@@ -3207,6 +3218,13 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
       if (!g.data.hitDone && c.dist < g.r + h.r + 0.2 && canHurt(sim)) {
         g.data.hitDone = 1;
         api.hurtHero(sim, g.dmg * 1.1, g.x, g.y, 9, g.kind);
+        fx(sim, api, 'f13_v_ram', h.x, h.y, 1, 0.5, { ang: g.dir }, true); // анимации 13 — только рисунок
+      }
+      // анимации 13 — только рисунок: пыль за тараном — не чаще 10 раз в секунду.
+      g.data.vStep = (g.data.vStep ?? 0) + dt;
+      if (g.data.vStep > 0.1) {
+        g.data.vStep = 0;
+        fx(sim, api, 'f13_v_dust', g.x, g.y + 0.3, 0.6, 0.6, { ang: g.dir });
       }
       if (
         g.t >= BOSS.charge.run ||
@@ -3221,6 +3239,7 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
         g.danger = 0;
         s.atkCd = 1.6;
         sim.events.push({ t: 'shake', k: 0.25 });
+        fx(sim, api, 'f13_v_slump', g.x, g.y, 0.9, 0.8); // анимации 13 — только рисунок
         api.setMode(g, 'recover');
       }
       return;
@@ -3468,6 +3487,8 @@ function stepFinale(sim: Sim, s: BState, m: Mob, dt: number, c: BrainCtx, api: S
           Math.abs(angDiff(to, m.face)) < BOSS.cone.arc / 2 + 0.15
         )
           api.hurtHero(sim, m.dmg, m.x, m.y, 5, m.kind);
+        fx(sim, api, 'f13_v_cut', m.x, m.y, BOSS.cone.r, 0.45, { ang: m.face }, true); // анимации 13 — только рисунок
+        sim.events.push({ t: 'shake', k: 0.2 }); // анимации 13 — только рисунок
         m.danger = 0;
         api.setMode(m, 'f13_cut2');
       }
@@ -3493,6 +3514,8 @@ function stepFinale(sim: Sim, s: BState, m: Mob, dt: number, c: BrainCtx, api: S
         const ac = Math.abs(-(h.x - m.x) * uy + (h.y - m.y) * ux);
         if (canHurt(sim) && al > -0.3 && al < len + h.r && ac < BOSS.thrust.w + h.r)
           api.hurtHero(sim, m.dmg * 1.1, m.x, m.y, 7, m.kind);
+        fx(sim, api, 'f13_v_thrust', m.x, m.y, 1, 0.45, { ang: m.face, len }, true); // анимации 13 — только рисунок
+        sim.events.push({ t: 'shake', k: 0.25 }); // анимации 13 — только рисунок
         m.vx = ux * 5;
         m.vy = uy * 5;
         m.tele = null;
@@ -3523,10 +3546,12 @@ function stepFinale(sim: Sim, s: BState, m: Mob, dt: number, c: BrainCtx, api: S
         m.tele = null;
         m.danger = 0;
         s.snareCd = BOSS.snare.cd;
+        fx(sim, api, 'f13_v_snarethrow', m.x, m.y, 1, 0.6, { ang: m.face, len }, true); // анимации 13 — только рисунок
         if (canHurt(sim) && al > 0 && al < len + h.r && ac < BOSS.snare.w + h.r) {
           api.hurtHero(sim, rawShare(sim, 0.04), m.x, m.y, 0, m.kind);
           api.pullHero(sim, m.x + ux * 1.3, m.y + uy * 1.3, { speed: 11, max: 1 });
           fx(sim, api, 'f13_snareline', m.x, m.y, 0.5, 0.6, { tx: h.x, ty: h.y }, true);
+          sim.events.push({ t: 'shake', k: 0.2 }); // анимации 13 — только рисунок
           sim.events.push({ t: 'boss', what: 'f13_hook_call' });
           s.atkCd = 0;
         }
@@ -3662,6 +3687,7 @@ function stepStorm(sim: Sim, s: BState, dt: number, api: SimApi): void {
       if (!inGap && !shipShelter(sim, h.x, h.y, w.dir) && canHurt(sim)) {
         api.hurtHero(sim, rawShare(sim, W.share), h.x, h.y - w.dir, 6);
         fx(sim, api, 'f13_splash', h.x, h.y, 1.2, 0.6);
+        sim.events.push({ t: 'shake', k: 0.2 }); // анимации 13 — только рисунок
       }
     }
     return y > ARENA[1] - 1 && y < ARENA[3] + 2;
@@ -3707,7 +3733,7 @@ function stepNight(sim: Sim, s: BState, dt: number, api: SimApi, lead: Mob): voi
     const t = s.stars[k];
     if (t.cut) return;
     t.cut = 1;
-    fx(sim, api, 'f13_snap', t.x, t.y, 0.6, 0.5, { bx: t.px, by: t.py }, true);
+    fx(sim, api, 'f13_snap', t.x, t.y, 0.6, 0.9, { bx: t.px, by: t.py }, true); // анимации 13 — только рисунок
     fx(sim, api, 'f13_starfall', t.x, t.y, 1, 1.2);
     sim.events.push({ t: 'boss', what: 'f13_snap_fall' });
   };
@@ -3873,6 +3899,7 @@ registerBoss('f13boss', {
     F13_FX.stars.length = 0;
     api.light(sim, 'f13moon', null);
     fx(sim, api, 'f13_bow', m.x, m.y, 21, 6.5, { cx: ACX, cy: ACY }, true);
+    fx(sim, api, 'f13_v_lordsnap', m.x, m.y, 1, 1.4, { lift: m.data.lift ?? 0 }, true); // анимации 13 — только рисунок
     CLEAN.set(sim, { at: sim.time + 5.7, s });
     api.camera(sim, m.x, m.y, 3.5);
     sim.events.push({
