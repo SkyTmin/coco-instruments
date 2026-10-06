@@ -2622,114 +2622,6 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-// --- Комета -------------------------------------------------------------------
-
-/** Комета: ледяное ядро с мордочкой и хвост света против хода. */
-function cometBody(o: { dir: number; tail: number; f: number; aim: number; dk: number }): Built {
-  const p = new Px(48, 40);
-  const cx = 24;
-  const cy = 22;
-  const ux = Math.cos(o.dir);
-  const uy = Math.sin(o.dir);
-  // Хвост: два языка — бирюзовый (газ) и белый (пыль), чуть врозь.
-  for (const [off, col] of [
-    [0.18, hx('#7ae8ff')],
-    [-0.12, hx('#e8f4ff')],
-  ] as [number, RGBA][]) {
-    const a = o.dir + PI + off;
-    for (let i = 0; i < 22; i++) {
-      const k = i / 22;
-      const d = 3 + k * 18 * o.tail;
-      const wob = Math.sin(o.f * 1.3 + i * 0.7) * k * 1.4;
-      const x = cx + Math.cos(a) * d - Math.sin(a) * wob;
-      const y = cy + Math.sin(a) * d * 0.85 + Math.cos(a) * wob;
-      glow(p, x, y, (1 - k) * 4 + 0.8, col, 0.55 * (1 - k));
-    }
-  }
-  // Ядро.
-  glow(p, cx, cy, 8 + o.aim * 3, TEAL_GLOW, 0.4 + o.aim * 0.3);
-  shadeEll(p, cx, cy, 5, 4.6, tn('#4a8ab0', '#8ad0f0', '#d0f4ff', '#ffffff'), 0.2);
-  // Ледяные гребни по ядру.
-  for (let i = 0; i < 5; i++) {
-    const a = o.dir + PI * 0.6 + i * 0.5;
-    spike(p, cx + Math.cos(a) * 3.5, cy + Math.sin(a) * 3.2, a, 3.5, 2.2, CRYST);
-  }
-  // Мордочка — по ходу.
-  if (!o.dk) {
-    const ex = cx + ux * 2.2;
-    const ey = cy + uy * 1.8 - 1;
-    p.set(ex - 1.2, ey, INK);
-    p.set(ex + 1.2, ey, INK);
-    if (o.aim > 0.5) {
-      p.set(ex - 1.2, ey - 1, INK);
-      p.set(ex + 1.2, ey - 1, INK);
-    }
-  }
-  edge(p, alpha(INK, 0.8));
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1920, [WHITE, CRYST[3], TEAL[2]], cx, cy);
-  return {
-    p: out,
-    ax: cx,
-    ay: 30,
-    eye: o.dk ? null : [cx + Math.round(ux * 2), cy - 1],
-    lit: true,
-  };
-}
-
-registerMobPainter('f15_comet', (m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  const sp = Math.hypot(m.vx, m.vy);
-  const ang = sp > 1 ? Math.atan2(m.vy, m.vx) : m.dir;
-  const b = dirBucket(ang, 16);
-  if (dk)
-    return frameOf(
-      'comet',
-      pose,
-      'die',
-      dk * 16 + b,
-      () => cometBody({ dir: (b / 16) * TAU, tail: 0.3, f: 0, aim: 0, dk }),
-      null,
-      false,
-    );
-  const f = Math.floor(pose.now * 10) % 4;
-  if (pose.mode === 'aim') {
-    const k = Math.min(2, Math.floor((pose.t / COMET.aim) * 3));
-    return frameOf(
-      'comet',
-      pose,
-      'aim',
-      (b * 3 + k) * 4 + f,
-      () => cometBody({ dir: (b / 16) * TAU, tail: 0.35 - k * 0.1, f, aim: 0.4 + k * 0.3, dk: 0 }),
-      { still: true },
-      false,
-    );
-  }
-  if (pose.mode === 'f15_dash')
-    return frameOf(
-      'comet',
-      pose,
-      'dash',
-      b * 4 + f,
-      () => cometBody({ dir: (b / 16) * TAU, tail: 1.2, f, aim: 1, dk: 0 }),
-      {
-        still: true,
-        ghost: { every: 0.03, life: 0.22, tint: '140,240,255', alpha: 0.55 },
-      },
-      false,
-    );
-  const tail = Math.min(1, 0.45 + sp * 0.08);
-  return frameOf(
-    'comet',
-    pose,
-    'fly',
-    b * 4 + f,
-    () => cometBody({ dir: (b / 16) * TAU, tail, f, aim: 0, dk: 0 }),
-    null,
-    false,
-  );
-});
-
 // --- Гравитон -----------------------------------------------------------------
 
 const GRAV_T = tn('#0e0c1e', '#1c1a36', '#2e2c54', '#48467c');
@@ -4558,6 +4450,277 @@ registerMobWarm('f15_meteor', function* () {
       mobFrame('meteor', pose, 'run', f, d, () =>
         meteorPic(
           { ...M0, ph: f / 8, lift: f % 4 === 1 ? 0.4 : 0, side: Math.sin((f / 8) * TAU) * 0.04 },
+          yaw,
+        ),
+      );
+      yield 0;
+    }
+  }
+});
+
+
+// --- Комета-гончая --------------------------------------------------------------
+//
+// Поджарая гончая из звёздного льда: голова-ядро кометы, грива и хвост —
+// светящийся шлейф, который тянется назад по ходу. Галоп — ноги парами с
+// фазой, корпус качается. Замах — припала к земле, хвост вспыхнул; рывок —
+// вытянулась в струну, ноги в «летящем галопе», хвост во всю длину; на
+// дуге кренится внутрь виража. После рывка — занос с упором лап и пылью.
+
+const HOUND = tn('#1c2a4e', '#2e4a80', '#5a86c0', '#bfe4ff');
+const HOUND_D = tn('#101a34', '#1a2a50', '#2e4a80', '#5a86c0');
+const COMA = tn('#1a6a9a', '#3ab0e0', '#9ae8ff', '#ffffff');
+
+interface CPose {
+  ph: number;
+  /** 0 — шаг, 1 — летящий галоп (ноги врозь), 2 — упор (занос). */
+  legs: number;
+  crouch: number;
+  pitch: number;
+  bank: number;
+  /** Длина хвоста-шлейфа 0…1. */
+  tail: number;
+  /** Свечение ядра 0…1. */
+  glow: number;
+  stretch: number;
+  head: number;
+  jaw: number;
+  /** Кадр языков шлейфа. */
+  fl: number;
+  dk: number;
+}
+const C0: CPose = {
+  ph: 0,
+  legs: 0,
+  crouch: 0,
+  pitch: 0,
+  bank: 0,
+  tail: 0.3,
+  glow: 0.3,
+  stretch: 0,
+  head: 0,
+  jaw: 0,
+  fl: 0,
+  dk: 0,
+};
+
+function cometRig(o: CPose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const H = 7.8 - o.crouch * 2.8;
+  const body = B.at(0, 0, H).pitch(o.pitch).roll(o.bank);
+  const L = 1 + o.stretch * 0.35;
+  const fur: Mat = { T: HOUND, pat: (q, l) => (q[2] < -0.45 ? tone(HOUND_D, l + 0.2) : null) };
+  const from = r.size;
+  r.ell(body, [-1.6 * L, 0, 0], [3.6 * L, 2.8, 2.5], fur);
+  r.ell(body, [2.1 * L, 0, 0.4], [3.0, 3.0, 3.0], fur);
+  // Шея и голова-ядро.
+  const nk = body.at(4.0 * L, 0, 1.8).pitch(o.head - 0.25);
+  const hd = nk.at(2.0, 0, 1.0).pitch(0.25);
+  r.cap(body.p(3.0 * L, 0, 1.0), hd.o, 1.8, 1.5, fur);
+  r.ell(hd, [0.3, 0, 0.2], [2.6, 2.3, 2.1], { T: HOUND, bias: 0.1 });
+  r.cap(hd.p(1.6, 0, -0.2), hd.p(4.0, 0, -0.6 - o.jaw * 0.3), 1.4, 0.9, { T: HOUND });
+  r.dot(hd.p(4.4, 0, -0.5), INK, 0, 1, 0.6);
+  if (o.jaw > 0.1) r.cap(hd.p(1.4, 0, -0.9), hd.p(3.0, 0, -1.2 - o.jaw * 1.3), 0.7, 0.45, { T: HOUND_D });
+  for (const s of [-1, 1]) {
+    r.spike(hd.p(-0.6, s * 1.2, 1.5), hd.v(-0.8, s * 0.45, 1), 3.4, 1.1, { T: HOUND, bias: 0.1 }, 3);
+    r.dot(hd.p(1.6, s * 1.4, 0.7), o.dk > 0 ? INK : WHITE, o.dk > 0 ? 0 : 1, 1, 0.5);
+  }
+  if (o.dk <= 0) r.eye = hd.p(1.6, -1.4, 0.7);
+  // Ноги: передние и задние парами, галоп с фазой.
+  const legs: [number, number, number][] = [
+    [2.6 * L, -1.7, 0],
+    [2.6 * L, 1.7, 0.12],
+    [-3.8 * L, -1.7, 0.5],
+    [-3.8 * L, 1.7, 0.62],
+  ];
+  const legM: Mat = { T: HOUND_D, bias: 0.1 };
+  for (const [lf, ls, off] of legs) {
+    const front = lf > 0;
+    const hip = body.p(lf, ls, -1.2);
+    let foot: V3;
+    if (o.legs === 1) {
+      foot = B.p(lf + (front ? 5.5 : -6), ls * 0.9, H - 3.4);
+    } else if (o.legs === 2) {
+      foot = B.p(lf + (front ? 3.6 : -1.6), ls * 1.3, 0);
+    } else {
+      const p = (o.ph + off) % 1;
+      const sw = -Math.cos(p * TAU) * 2.6;
+      const up = Math.max(0, Math.sin(p * TAU)) * 1.8;
+      foot = B.p(lf * 1.05 + sw, ls * 1.05, up);
+    }
+    const mid = vlerp(hip, foot, 0.5);
+    const knee = vadd(mid, B.v(front ? -0.8 : 1.0, 0, 0.5));
+    r.cap(hip, knee, 1.45, 0.95, legM);
+    r.cap(knee, foot, 0.95, 0.7, legM);
+  }
+  // Хвост-шлейф: цепочка светящихся сгустков назад и вверх, дрожит кадрами.
+  const n = 7;
+  let prev = body.p(-4.6 * L, 0, 0.8);
+  for (let i = 1; i <= n; i++) {
+    const k = i / n;
+    const wob = (hash(i, o.fl, 41) - 0.5) * 1.6 * k;
+    const P = vadd(body.p(-4.6 * L - k * (4 + 12 * o.tail), wob, 0.8 + k * (2.4 - o.stretch * 1.4)), [0, 0, 0]);
+    const rr = (1.7 - k * 1.2) * (0.7 + o.tail * 0.5);
+    r.cap(prev, P, rr + 0.2, rr, {
+      T: COMA,
+      glow: 0.55 + o.glow * 0.4 - k * 0.3,
+      soft: true,
+      bias: -0.05 - k * 0.45 + o.glow * 0.25,
+    });
+    prev = P;
+  }
+  // Грива — искры вдоль шеи.
+  for (let i = 0; i < 3; i++)
+    r.dot(nk.p(-0.4 - i * 1.3, 0, 2.3 - i * 0.3), mixc(COMA[2], WHITE, o.glow), 0.8, 1, 0.6);
+  if (o.dk > 0) r.explode(sstep(0.1, 1, o.dk), body.o, 31, 10, 24, from, 0.4);
+  return r;
+}
+
+function cometPic(o: CPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(cometRig(o, yaw), 64, 48, 32, 32, post);
+}
+
+registerMobPainter('f15_comet', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const dash = md === 'f15_dash';
+  const tech = md !== 'chase' && md !== 'idle' && md !== 'wander';
+  const v = visOf(m, pose, dash ? headOf(m) : tech ? m.face : headOf(m), dash ? 40 : 12);
+  const { d, yaw } = side16(v.yaw);
+  const sa = scrAng(yaw);
+  const o: CPose = { ...C0 };
+  const extra: Partial<MobFrame> = { shadow: 7 };
+  let anim = 'idle';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  if (md === 'dying') {
+    const T = 0.95;
+    f = fi(t, 22);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    o.crouch = sstep(0, 0.3, k);
+    o.tail = 0.3 * (1 - k);
+    o.glow = 1 - k;
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.65, 1, k);
+    extra.shadow = 7 * (1 - k);
+  } else if (md === 'aim') {
+    // Замах: припала к земле, зад вверх, хвост вспыхнул и вытянулся.
+    const T = COMET.aim;
+    f = fi(t, 13);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'aim';
+    const dn = easeOut(k / 0.5);
+    o.crouch = 0.9 * dn;
+    o.pitch = 0.22 * dn;
+    o.head = 0.2 * dn;
+    o.tail = 0.3 + 0.5 * k;
+    o.glow = 0.3 + 0.7 * k;
+    o.legs = 0;
+    o.ph = 0.25 + (k > 0.7 ? (f % 2) * 0.04 : 0);
+    o.fl = f % 4;
+    extra.still = true;
+  } else if (dash) {
+    // Рывок: струна, летящий галоп, шлейф во всю длину; крен в вираже.
+    f = Math.floor(pose.now * 16) % 4;
+    const bank = Math.max(-1, Math.min(1, Math.round(v.yr / 5)));
+    anim = 'dash' + bank;
+    o.legs = 1;
+    o.stretch = 1;
+    o.pitch = 0.05;
+    o.head = 0.15;
+    o.tail = 1;
+    o.glow = 1;
+    o.jaw = 0.6;
+    o.fl = f;
+    o.bank = bank * 0.35;
+    extra.ghost = { every: 0.03, life: 0.22, tint: '140,240,255', alpha: 0.55 };
+    extra.still = true;
+  } else if (md === 'recover' && v.prev === 'f15_dash') {
+    // Приземление с заносом: упёрлась лапами, корпус откинут, пыль и искры.
+    const T = 0.45;
+    f = fi(t, 10);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'skid';
+    const br = 1 - easeOut(k);
+    o.legs = k < 0.7 ? 2 : 0;
+    o.pitch = -0.25 * br;
+    o.crouch = 0.6 * br;
+    o.tail = 0.4 + 0.6 * br;
+    o.glow = 0.3 + 0.7 * br;
+    o.fl = f % 4;
+    o.ph = 0.25;
+    post = (out, P) => {
+      const [x, y] = P([Math.cos(yaw) * 6, Math.sin(yaw) * 6, 0]);
+      dustPuffs(out.p, x, y, sa + PI, Math.min(0.99, k * 1.2), 5, 21);
+      if (k < 0.5) {
+        const lit = litOn(out);
+        for (let i = 0; i < 4; i++) {
+          const a = sa + PI + (hash(i, 7, 3) - 0.5) * 1.4;
+          const rr = 4 + k * 14 * (0.6 + hash(i, 8, 3));
+          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.6 - k * 4), alpha(COMA[2], 1 - k * 2));
+        }
+      }
+    };
+    extra.still = true;
+  } else if (md === 'recover') {
+    f = fi(t, 10);
+    anim = 'rec';
+    o.crouch = 0.3 * (1 - f / 10);
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(t, 6);
+    anim = 'hurt';
+    const k = 1 - f / 6;
+    o.pitch = -0.2 * k;
+    o.head = -0.3 * k;
+    o.crouch = 0.3 * k;
+  } else if (moving(m)) {
+    f = Math.floor((v.dist / 1.1) * 8) % 8;
+    anim = 'run';
+    o.ph = f / 8;
+    o.pitch = Math.sin((f / 8) * TAU) * 0.07;
+    o.tail = 0.55;
+    o.glow = 0.45;
+    o.fl = f % 4;
+    extra.dy = -Math.max(0, Math.sin((f / 8) * TAU + 0.6)) * 1.2;
+  } else {
+    f = Math.floor(pose.now * 5) % 4;
+    anim = 'idle';
+    o.fl = f;
+    o.crouch = f === 1 || f === 2 ? 0.1 : 0;
+    o.glow = 0.3 + (f === 2 ? 0.15 : 0);
+  }
+  return mobFrame('comet', pose, anim, f, d, () => cometPic(o, yaw, post), extra);
+});
+
+registerMobWarm('f15_comet', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('comet', pose, 'run', f, d, () =>
+        cometPic(
+          { ...C0, ph: f / 8, pitch: Math.sin((f / 8) * TAU) * 0.07, tail: 0.55, glow: 0.45, fl: f % 4 },
+          yaw,
+        ),
+      );
+      yield 0;
+    }
+    for (let f = 0; f < 4; f++) {
+      mobFrame('comet', pose, 'dash0', f, d, () =>
+        cometPic(
+          { ...C0, legs: 1, stretch: 1, pitch: 0.05, head: 0.15, tail: 1, glow: 1, jaw: 0.6, fl: f },
           yaw,
         ),
       );
