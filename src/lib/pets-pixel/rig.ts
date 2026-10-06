@@ -329,15 +329,26 @@ export function seams(f: Frame, gap = 1.6, steps = 1): void {
   for (const i of hit) tone[i] = Math.max(0, tone[i] - steps);
 }
 
-/** Кант света по кромке сверху-слева: ступень вверх у пикселей с пустотой выше или левее. */
-export function rimLight(f: Frame, pals: RGBA[][], only?: (pal: number) => boolean): void {
+/**
+ * Кант света по кромке: ступень вверх у пикселей с пустотой со стороны света.
+ * `from`: 'tl' — свет сверху-слева (небо), 'br' — снизу-справа (отсвет своего
+ * огня: крыльев и хвоста).
+ */
+export function rimLight(
+  f: Frame,
+  pals: RGBA[][],
+  only?: (pal: number) => boolean,
+  from: 'tl' | 'br' = 'tl',
+): void {
   const { w, h, pal, tone } = f;
   const hit: number[] = [];
-  for (let y = 1; y < h; y++)
-    for (let x = 1; x < w; x++) {
+  for (let y = 1; y < h - 1; y++)
+    for (let x = 1; x < w - 1; x++) {
       const i = y * w + x;
       if (pal[i] < 0 || (only && !only(pal[i]))) continue;
-      if (pal[i - w] < 0 || pal[i - 1] < 0) hit.push(i);
+      const open =
+        from === 'tl' ? pal[i - w] < 0 || pal[i - 1] < 0 : pal[i + w] < 0 || pal[i + 1] < 0;
+      if (open) hit.push(i);
     }
   for (const i of hit) tone[i] = Math.min(pals[pal[i]].length - 1, tone[i] + 1);
 }
