@@ -846,7 +846,7 @@ function headF(o: Pose, S: Skel): HeadF {
   const nb = o.nod + o.bow;
   const tl = o.tilt + o.lean;
   const dir = (v: V3): V3 => rollY(yawZ0(pitchX(v, nb), o.turn), tl);
-  const k = S.k * (HI ? 1 : 1.2);
+  const k = S.k * (HI ? 1.08 : 1.2);
   return { dir, k, at: (p) => add(S.head, mul(dir(p), k)) };
 }
 
@@ -883,6 +883,10 @@ function scales2(rows: number, cols: number, amp: number) {
 /** Перо: блик стержня по середине (на крупной) и тень одной кромки — перья ряда не сливаются. */
 const featherTex = (qx: number, qy: number): number =>
   (qy < -0.5 ? -0.15 : 0) + (HI && Math.abs(qy) < 0.17 && qx > -0.8 ? 0.08 : 0);
+
+/** Кроющее: круглый кончик обведён тенью — ряд читается чешуёй, а не полосой. */
+const covertTex = (qx: number, qy: number): number =>
+  featherTex(qx, qy) + (qx > 0.55 || Math.abs(qy) > 0.8 ? -0.14 : 0);
 
 let NEXT_ID = 0;
 const nid = () => ++NEXT_ID;
@@ -1018,7 +1022,7 @@ let PER = FLICK_T;
 const dirFront = (th: number, side: number, fwd = 0): V3 =>
   norm([side * Math.sin(th), fwd, -Math.cos(th)]);
 
-const COVERT_W = [1.3, 1.9, 2.1, 1.8, 1.0];
+const COVERT_W = [1.2, 1.8, 2.1, 2.1, 1.5];
 const SEC_W = [1.1, 1.6, 1.8, 1.85, 1.8, 1.5, 0.8];
 const PRIM_W = [1.0, 1.5, 1.75, 1.85, 1.85, 1.75, 1.45, 0.9];
 const PLUME_W = [0.5, 0.8, 1.2, 1.6, 2.1, 2.3, 1.7, 0.9, 0.45];
@@ -1078,7 +1082,7 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
     add(add(sh, mul(A, u * LA * k)), mul(N0, depth * k));
   // На малой полосе перьев меньше, и они шире.
   const wk = HI ? 1 : 1.2;
-  const sc = scales2(2, 4, 0.1);
+  const sc = scales2(1, 4, 0.1);
   // Перья ряда лежат черепицей: каждое следующее — глубже на шов (вдоль
   // взгляда, на кадре не сдвигается), и по кромке ближнего ложится тень.
   const back = (d: number): V3 => mul(VIEW, -d);
@@ -1086,20 +1090,20 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
   out.push({
     c: onArm(0.48, 1.4),
     ax: axes(A, N0),
-    r: [(LA * 0.56 + 1.7) * k, 2.5 * k, 1.8 * k],
+    r: [(LA * 0.52 + 1.4) * k, 1.8 * k, 1.5 * k],
     pal: P_BODY,
     id: nid(),
     bias: 0.04,
     tex: HI ? (qx, qy) => sc(side < 0 ? -qy : qy, qx) : undefined,
   });
   // Большие кроющие: ряд золотых перьев под рукой.
-  const nC = HI ? 7 : 4;
+  const nC = HI ? 6 : 4;
   for (let j = 0; j < nC; j++) {
     const q = j / (nC - 1);
-    const u = 0.1 + q * 0.9;
+    const u = 0.14 + q * 0.88;
     const phi = lerp(1.42, (0.05 + 0.3 * q) * fan, open);
-    const root = add(add(onArm(u, 0.4), mul(D, 1.3 * k)), back(-1.5 + j * 1.7));
-    const L = (3.6 + q * 1.4) * k;
+    const root = add(add(onArm(u, 0.4), mul(D, 0.9 * k)), back(-1.5 + j * 1.7));
+    const L = (3.3 + q * 0.9) * k;
     const d = fdir(phi);
     feather(
       out,
@@ -1110,19 +1114,19 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
       0.6 * k,
       N0,
       P_BELLY,
-      [0.36, 0.86],
-      { lit: 0.9, tex: featherTex, segs: 4 },
+      [0.3, 0.74],
+      { lit: 0.9, tex: covertTex, segs: 4 },
     );
   }
   // Второстепенные: огненные, висят от руки вниз; кончики отстают пружиной.
   const nS = HI ? 6 : 3;
   for (let j = 0; j < nS; j++) {
     const q = j / (nS - 1);
-    const u = 0.05 + q * 0.6;
-    const phi = lerp(1.42, 0.16 * q * fan, open);
-    const root = add(add(onArm(u, -0.9 - q * 0.2), mul(D, 1.7 * k)), back(2.5 + j * 1.7));
+    const u = 0.2 + q * 0.55;
+    const phi = lerp(1.42, (0.04 + 0.26 * q) * fan, open);
+    const root = add(add(onArm(u, -0.9 - q * 0.2), mul(D, 1.3 * k)), back(2.5 + j * 1.7));
     const fl = 1 + 0.06 * (o.fire - 1) + 0.04 * o.fire * flick(c.tau, 20 + j + side * 10);
-    const L = (7 + q * 0.8) * k * fl;
+    const L = (8 + q * 1.2) * k * fl;
     const mid = add(root, mul(fdir(phi), L * 0.55));
     const tip = add(mid, mul(fdir(phi * 1.05, true), L * 0.48));
     feather(
@@ -1142,11 +1146,11 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
   const nP = HI ? 7 : 4;
   for (let j = 0; j < nP; j++) {
     const q = j / (nP - 1);
-    const u = 0.68 + q * 0.34;
-    const phi = lerp(1.45, (0.32 + q * 0.95) * fan, open);
+    const u = 0.7 + q * 0.32;
+    const phi = lerp(1.45, (0.45 + q * 0.85) * fan, open);
     const root = add(add(onArm(u, -2.3 - q * 0.3), mul(D, 0.5 * k)), back(3.5 + (nS + j) * 1.7));
     const fl = 1 + 0.08 * (o.fire - 1) + 0.05 * o.fire * flick(c.tau, 40 + j + side * 10);
-    const L = (9.2 + q * 4.2) * k * fl;
+    const L = (10 + q * 4) * k * fl;
     const d = fdir(phi);
     const mid = add(root, mul(d, L * 0.55));
     const tip = add(mid, mul(fdir(phi + 0.06, true), L * 0.5));
@@ -1483,9 +1487,9 @@ function head(out: Part[], c: Ctx): void {
   });
   // Щёки и горло — золото груди поднимается до клюва.
   out.push({
-    c: h.at([0, 2.2, -2.4]),
+    c: h.at([0, 1.6, -2.8]),
     ax: axes(ex, ez),
-    r: [3.0 * k, 2.6 * k, 2.3 * k],
+    r: [2.6 * k, 2.4 * k, 2.0 * k],
     pal: P_BELLY,
     id: nid(),
     bias: -0.04,
@@ -1507,26 +1511,26 @@ function head(out: Part[], c: Ctx): void {
   const bid = nid();
   const ridge = (_qx: number, qy: number, qz: number) => (qz > 0.55 && Math.abs(qy) < 0.45 ? 0.16 : 0);
   out.push({
-    c: h.at([0, 4.1, -0.6]),
+    c: h.at([0, 4.2, -0.5]),
     ax: axes(h.dir(norm([0, 1, -0.15])), ez),
-    r: [1.5 * k, 1.5 * k, 1.3 * k],
+    r: [1.7 * k, 1.7 * k, 1.5 * k],
     pal: P_GOLD,
     id: bid,
     bias: -0.04,
     tex: ridge,
   });
   out.push({
-    c: h.at([0, 5.6, -1.25]),
+    c: h.at([0, 5.9, -1.3]),
     ax: axes(h.dir(norm([0, 1, -0.35])), ez),
-    r: [1.9 * k, 1.25 * k, 1.1 * k],
+    r: [2.1 * k, 1.35 * k, 1.2 * k],
     pal: P_GOLD,
     id: bid,
     tex: ridge,
   });
   out.push({
-    c: h.at([0, 6.6, -2.6]),
+    c: h.at([0, 7.0, -2.9]),
     ax: axes(h.dir(norm([0, 0.3, -1])), ey),
-    r: [1.5 * k, 0.85 * k, 0.8 * k],
+    r: [1.6 * k, 0.95 * k, 0.9 * k],
     pal: P_GOLD,
     id: bid,
     bias: -0.3,
@@ -1693,8 +1697,8 @@ const EYE_PAL_L: Record<string, RGBA> = {
 };
 const EYES_L: Record<string, string[]> = {
   // Крупная: тёмное кольцо, золотая радужка, зрачок, блик.
-  // Верх века прямой — взгляд строгий, а не круглый «совиный».
-  open: ['ooooo', 'oaKWo', 'obKKo', '.ooo.'],
+  // Строгость взгляду даёт надбровье над глазом, а не форма самого глаза.
+  open: ['.ooo.', 'oaKWo', 'obKKo', '.ooo.'],
   half: ['.....', 'ooooo', 'obKKo', '.ooo.'],
   shut: ['.....', '.....', 'ooooo', '.....'],
   happy: ['.....', '.ooo.', 'o...o', '.....'],
