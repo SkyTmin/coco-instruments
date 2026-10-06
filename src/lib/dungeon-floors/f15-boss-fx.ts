@@ -20,8 +20,8 @@
 //     темноты; то, что в этом слое лежит на полу, прячется за телами,
 //     стоящими ближе к камере (`occOf`).
 //
-// Плоти и крови нет (запрет владельца): старые «раны» и «кровь» приёмов эха
-// перекрашены в звёздный шрам и фиолетовую туманность.
+// Ни плоти, ни крови (запрет владельца): след удара — светящийся шрам
+// звёздного света в полу, брызги — фиолетовая туманность.
 //
 // Пиксели — на СЕТКЕ МИРА (`Pen`): эффект не «плывёт» по полу при движении
 // камеры. Частицы детерминированы — позиция считается от зерна и возраста.
@@ -72,17 +72,17 @@ const SIG = 0.2;
 const tick = (left: number) => left < SIG && Math.floor(left / 0.05) % 2 === 1;
 
 // ---- Палитра: ночь, звёздный шрам, золото, угли, память, созвездия ------------
-// Плоти и крови здесь нет (запрет владельца): «рана» — светящийся шрам
-// звёздного света в полу, «кровь» — фиолетовая туманность.
+// Ни плоти, ни крови: `neb` — фиолетовая туманность брызг, `scarCol` —
+// остывание светящегося шрама в полу.
 
 const C = {
   ink: '#05040f',
   groove: '#03020a',
-  flesh: ['#0a0920', '#100e30', '#171442', '#201b56', '#2b246c'],
+  dusk: ['#0a0920', '#100e30', '#171442', '#201b56', '#2b246c'],
   lip: '#6a5ab0',
   lipHi: '#a898e0',
-  blood: ['#0a0620', '#24104a', '#46207a', '#9a5ad0', '#c890f0'],
-  bloodHi: '#ecd4ff',
+  neb: ['#0a0620', '#24104a', '#46207a', '#9a5ad0', '#c890f0'],
+  nebHi: '#ecd4ff',
   ember: ['#4a0a04', '#9a2a08', '#e05010', '#ff8a2a', '#ffd080', '#fff4c8'],
   stone: ['#08071a', '#14122e', '#22204a', '#3a3870', '#5c5a9a', '#8c8ac4'],
   gold: ['#6e4a14', '#dcaa3c', '#ffd866', '#fff0b8'],
@@ -112,9 +112,9 @@ const emberCol = (k: number) =>
         : k < 0.88
           ? C.ember[2]
           : C.ember[1];
-/** Капля крови по доле жизни: светлая → алая → тёмная. */
-const bloodCol = (k: number) =>
-  k < 0.2 ? C.bloodHi : k < 0.55 ? C.blood[4] : k < 0.8 ? C.blood[3] : C.blood[2];
+/** Капля туманности по доле жизни: светлая → сиреневая → тёмная. */
+const nebCol = (k: number) =>
+  k < 0.2 ? C.nebHi : k < 0.55 ? C.neb[4] : k < 0.8 ? C.neb[3] : C.neb[2];
 /** Пылинка в ветре: белая → бледная → тает в пол. */
 const windCol = (k: number) => (k < 0.3 ? C.white : k < 0.7 ? C.wind : C.windMid);
 /** Призрачная искра: белая → голубая → синяя. */
@@ -133,19 +133,19 @@ const heatCol = (k: number) =>
           : k < 0.88
             ? C.ember[1]
             : C.ember[0];
-/** Свежая рана в плоти по остыванию: белая → алая → тёмная борозда. */
-const woundCol = (k: number) =>
+/** Свежий звёздный шрам по остыванию: белый → сиреневый → тёмная борозда. */
+const scarCol = (k: number) =>
   k < 0.08
     ? C.white
     : k < 0.2
-      ? C.bloodHi
+      ? C.nebHi
       : k < 0.38
-        ? C.blood[4]
+        ? C.neb[4]
         : k < 0.6
-          ? C.blood[3]
+          ? C.neb[3]
           : k < 0.82
-            ? C.blood[2]
-            : C.blood[1];
+            ? C.neb[2]
+            : C.neb[1];
 
 let rmq: MediaQueryList | null | undefined;
 /** Пользователь просил меньше движения: меньше частиц, без мигания. */
@@ -174,7 +174,7 @@ interface Box {
 }
 
 /**
- * Тела вылазки, что сейчас на экране: лев (огромный), сердце, эхо, сгустки,
+ * Тела вылазки, что сейчас на экране: владыка, эхо, осколки, хранители,
  * герой. Размеры — по кадрам их рисовальщиков, с запасом внутрь: лучше
  * чуть меньше спрятать, чем лечь метке герою на грудь.
  */
@@ -733,7 +733,7 @@ const PUFF_PAL: [RGBA, RGBA, RGBA][] = [
   [hx('#2a5a68'), hx('#6aa8b8'), hx('#d0f4f8')], // 5 — брызги и пар бездны
   [hx('#1a3a10'), hx('#3e7020'), hx('#84b440')], // 6 — яд топи
   [hx('#24104a'), hx('#46207a'), hx('#7a4ab0')], // 7 — фиолетовая туманность
-  [hx('#5a4a30'), hx('#a08a5a'), hx('#e8d8a0')], // 8 — золотая пыль сердца
+  [hx('#5a4a30'), hx('#a08a5a'), hx('#e8d8a0')], // 8 — золотая пыль
 ];
 
 /**
@@ -847,7 +847,7 @@ function flameImg(h: number, f: number, pal = 0): HTMLCanvasElement {
   });
 }
 
-/** Тёмное пятно радиуса r: выжженное (0), лужа крови (1), копоть призрака (2). */
+/** Тёмное пятно радиуса r: выжженное (0), лужа туманности (1), копоть призрака (2). */
 function scorchImg(r: number, tone: number): HTMLCanvasElement {
   const R = Math.max(2, Math.min(24, Math.round(r)));
   return sprite(60000 + R * 4 + tone, () => {
@@ -1157,7 +1157,7 @@ const cracks = new Map<string, Crack>();
  * Сеть трещин из точки (0, 0): ветви `[угол, длина, ширина-у-корня]`,
  * извилистость `jag`, развилки с шансом `forkP`. Каждый пиксель знает путь
  * от корня — трещина «бежит», а не проявляется. Кромка — светлый пиксель
- * снизу-справа (свет сверху-слева), как разрыв в плоти.
+ * снизу-справа (свет сверху-слева), как трещина в камне.
  */
 function crackOf(
   key: string,
@@ -1457,7 +1457,7 @@ function sweepOf(a: number, arc: number): { as: number; dir: number } {
 /** Когда фронт `eOut2` на пути `span` за `T` с проходит точку s. */
 const sweepT = (s: number, span: number, T: number) => T * (1 - Math.sqrt(1 - k01(s / span)));
 
-/** Крошка плоти на полу метки дрожит, к удару — подскакивает. */
+/** Крошка звёздного пола в метке дрожит, к удару — подскакивает. */
 function hopBits(
   p: Pen,
   sd: number,
@@ -1537,7 +1537,7 @@ function gashOf(
  * Рана по пикселям: где удар прошёл раньше — там уже потемнела.
  * `when(u)` — когда удар прошёл долю u, `cool` — за сколько остывает.
  */
-function drawWound(
+function drawScar(
   p: Pen,
   gs: Gash,
   ox: number,
@@ -1547,7 +1547,7 @@ function drawWound(
   when: (u: number) => number,
   cool: number,
   fade: number,
-  colOf: (k: number) => string = woundCol,
+  colOf: (k: number) => string = scarCol,
   lip: string | null = C.lip,
 ): void {
   if (fade <= 0 || reveal <= 0) return;
@@ -1570,19 +1570,6 @@ function drawWound(
     }
   }
 }
-
-// =============================================================================
-// КОГТИ — веер r 3,1 дуга 1,8 от льва; метка встаёт в 0,2 с режима, удар —
-// в 0,9 (во второй фазе «КРЫЛЬЕВ» бывает вторая лапа следом). Метка: весь
-// веер тёмной кровью; налив от льва к краю с разгоном; три борозды —
-// где пройдут когти — процарапываются по ходу будущего взмаха; тень
-// занесённой лапы висит у того края, откуда она пойдёт. Контакт: три
-// когтя проходят веер дугами за 0,12 с (белое остриё, алое тело, тёмный
-// хвост) с проводкой за край; в плоти остаются три рваные раны, остывающие
-// от белого к тёмной борозде, кровь брызжет по ходу лапы, у края — пыль.
-// =============================================================================
-
-/** Радиусы трёх когтей — доли радиуса веера. */
 
 // =============================================================================
 // ПОДЗЕМЕЛЬЕ ПОМНИТ — четверти арены по очереди становятся прошлыми этажами:
@@ -3035,14 +3022,14 @@ registerImpactPainter('f15b_slash', {
       p.scan = -1;
       if (age < 0.07)
         ring(p, cx, cy, R, C.white, 1 - age / 0.07, (ang) => inArc(ang, a - arc / 2, arc), 0.5);
-      // Рубец в плоти: холодное свечение памяти остывает к тёмной ране.
+      // Рубец в полу: холодное свечение памяти остывает к тёмной борозде.
       const g0 = 0.12;
       const gspan = arc - 0.24;
       const gs = gashOf(sd, R * 0.78, at(g0), dir, gspan);
       const reveal = k01((front - g0) / gspan);
       const fade = 1 - k01((age - 0.95) / 0.4);
       const when = (u: number) => sweepT(g0 + u * gspan, span, ESLASH_SWEEP);
-      drawWound(p, gs, cx, cy, age, reveal, when, 0.85, fade, (h) =>
+      drawScar(p, gs, cx, cy, age, reveal, when, 0.85, fade, (h) =>
         h < 0.1
           ? C.white
           : h < 0.25
@@ -3052,8 +3039,8 @@ registerImpactPainter('f15b_slash', {
               : h < 0.65
                 ? G[3]
                 : h < 0.85
-                  ? C.blood[2]
-                  : C.blood[1],
+                  ? C.neb[2]
+                  : C.neb[1],
       );
       const pick = (i: number) =>
         Math.min(gs.x.length - 1, Math.floor(hash(sd, i, 81) * gs.x.length));
@@ -3283,7 +3270,7 @@ registerImpactPainter('f15b_cleave', {
         cx + ux * s0,
         cy + uy * s0,
         reach,
-        cool < 0.3 ? G[5] : cool < 0.6 ? G[3] : C.blood[1],
+        cool < 0.3 ? G[5] : cool < 0.6 ? G[3] : C.neb[1],
         C.lip,
         fade,
       );
@@ -3303,7 +3290,7 @@ registerImpactPainter('f15b_cleave', {
         p.scan = -1;
       }
       hitStar(p, bx, by - 2, age, 0.12, 16, a + 0.3, G[4]);
-      // Волна по полосе: плоть вскидывает, крошка и пыль в стороны.
+      // Волна по полосе: пол вскидывает, крошка и пыль в стороны.
       const n = few ? 6 : 16;
       const passT = (s: number) => ECLEAVE_RUN * k01((s - s0) / (L - s0));
       chunks(
@@ -3695,7 +3682,7 @@ registerImpactPainter('f15b_bite', {
           0.5,
         );
       }
-      // Брызги эктоплазмы и кровь из прикуса.
+      // Брызги эктоплазмы и туманность из прикуса.
       drops(
         p,
         sd,
@@ -3722,8 +3709,8 @@ registerImpactPainter('f15b_bite', {
         20,
         30,
         () => 0.03,
-        bloodCol,
-        C.blood[2],
+        nebCol,
+        C.neb[2],
         [0.6, 0.95],
       );
     },
@@ -4292,7 +4279,7 @@ registerZonePainter(
   }),
 );
 
-/** Лужа крови: рваное пятно с брызгами вокруг (вариант v). */
+/** Лужа туманности: рваное пятно с брызгами вокруг (вариант v). */
 registerZonePainter(
   'f15b_mist',
   guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
@@ -5284,8 +5271,8 @@ registerZonePainter(
     const DEPTH: [number, string, number][] = [
       [1, C.night[0], 0.2],
       [0.72, C.night[0], 0.14],
-      [0.48, C.blood[1], 0.22],
-      [0.28, C.blood[0], 0.3],
+      [0.48, C.neb[1], 0.22],
+      [0.28, C.neb[0], 0.3],
     ];
     for (const [f, c, al] of DEPTH) {
       p.col(c, al * grow);
@@ -6129,7 +6116,7 @@ registerZonePainter(
       seedOf(st.id),
       time,
       S * 0.6,
-      C.blood[2],
+      C.neb[2],
       '#9a5ad0',
       '#ecd4ff',
     );
@@ -6192,43 +6179,28 @@ registerZonePainter(
     p.occ = occOf(S);
     const R = st.r * S;
     const sd = seedOf(st.id);
-    p.col(C.gold[0], 0.22 + 0.16 * k);
-    fillSector(p, cx, cy, 0, R, 0, TAU);
-    // Круг рун: восемь засечек ходят по кругу — архив листает память.
+    // Метка владыки (астролябия) золотом, внутри — круг рун: восемь засечек
+    // ходят по кругу — архив листает память.
+    astroMark(p, cx, cy, R, k, left, time, sd, C.gold[2], C.gold[3], C.vio[1], 12);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU + time * 0.8;
-      const r1 = R * 0.72;
+      const r1 = R * 0.62;
       p.lineS(
         cx + Math.cos(a) * r1,
         cy + Math.sin(a) * r1,
         cx + Math.cos(a) * (r1 + 4),
         cy + Math.sin(a) * (r1 + 4),
-        C.gold[2],
+        sig ? C.white : C.gold[2],
         0.4 + 0.5 * k,
         0.3,
       );
     }
-    ring(p, cx, cy, R * 0.72 - 2, C.gold[1], 0.35 + 0.3 * k, (_a, i) => i % 2 === 0);
-    ring(
-      p,
-      cx,
-      cy,
-      5 + (R - 5) * Math.pow(k, 1.3),
-      sig ? C.white : C.gold[3],
-      (tk ? 1 : 0.7) * (0.35 + 0.6 * k),
-      (_a, i) => hash(i >> 2, sd, 3) > 0.25,
-      0.4,
-    );
-    ring(
-      p,
-      cx,
-      cy,
-      R,
-      sig ? C.white : C.gold[2],
-      0.7 + 0.3 * k,
-      sig ? undefined : (_a, i) => mod(i - Math.floor(time * 18), 9) < 6,
-      0.6,
-    );
+    ring(p, cx, cy, R * 0.62 - 2, C.gold[1], 0.35 + 0.3 * k, (_a, i) => i % 2 === 0);
+    // Посох над меткой: светлая риска падает к центру в последние 0,2 с.
+    if (sig) {
+      const f = 1 - left / SIG;
+      p.lineS(cx, cy - S * 2.2 * (1 - f), cx, cy - S * 0.2, tk ? C.white : C.gold[3], 0.9, 0.5);
+    }
   }),
 );
 
@@ -6244,7 +6216,14 @@ registerImpactPainter('f15b_kslam', {
     const few = reduced();
     hitStar(p, cx, cy, age, 0.1, S * 0.9, 0, C.gold[2]);
     crest(p, cx, cy, R, age, 0.45, S * 1.1, C.gold[3], sd);
-    chunks(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 50, 60, 70, 60, [0.55, 0.95], 0.3, 0);
+    // Руны вспыхивают по кругу удара и гаснут.
+    if (age < 0.4) {
+      const f = age / 0.4;
+      ring(p, cx, cy, R * (0.62 + 0.38 * eOut2(f)), C.white, 0.9 * (1 - f), (_a, i) => i % 3 !== 2);
+      ticks(p, cx, cy, R * 0.62, 8, 0, 3, C.gold[3], 1 - f);
+    }
+    chunks(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 50, 60, 70, 60, [0.55, 0.95], 0.3, 1);
+    sparks(p, sd + 3, age, cx, cy, few ? 4 : 10, 0, TAU, 40, 50, 0.45, 30, starCol);
     dust(
       p,
       sd,
@@ -6260,7 +6239,7 @@ registerImpactPainter('f15b_kslam', {
       7,
       5,
       0.9,
-      8,
+      0,
       0.55,
       undefined,
       (i) => {

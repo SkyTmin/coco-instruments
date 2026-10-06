@@ -571,7 +571,7 @@ function groundFloor(p: Px, c: CellCtx, dust: boolean): void {
           const hi = tint < 0.55 ? ICE[5] : tint < 0.8 ? GOLD[5] : VIO[5];
           const mid = tint < 0.55 ? ICE[3] : tint < 0.8 ? GOLD[3] : VIO[3];
           if (kind === 0) {
-            // Крест в пять точек с белым сердцем.
+            // Крест в пять точек с белой серединой.
             if (ad === 0) col = WHITE;
             else if ((ddx === 0 || ddy === 0) && ad <= 2) col = ad === 1 ? hi : mixc(col, mid, 0.6);
           } else if (kind === 1) {
