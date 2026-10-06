@@ -6019,7 +6019,15 @@ registerZonePainter(
     const w = (st.w ?? 0.6) * S;
     const sd = seedOf(st.id);
     const keep = arcKeep(st);
-    bandAstro(p, cx, cy, R, w, k, left, sd, time, S * 0.9, C.gold[0], C.gold[2], C.gold[3], keep);
+    bandAstro(p, cx, cy, R, w, k, left, sd, time, S * 0.9, C.vio[1], C.gold[2], C.gold[3], keep);
+    // В полосе копится звёздный свет: искры бегут поперёк полосы наружу.
+    if (!reduced())
+      for (let i = 0; i < 36; i++) {
+        const t = hash(sd, i, 94) * TAU;
+        if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) continue;
+        const rr = R - w + 2 * w * mod(hash(sd, i, 95) + time * (0.6 + 0.8 * k), 1);
+        twinkle(p, cx + Math.cos(t) * rr, cy + Math.sin(t) * rr, 1, C.gold[3], 0.35 + 0.55 * k);
+      }
     const span = st.arc ?? TAU;
     if (span >= TAU - 1e-3) return;
     // Проход: края — столбы кристального света, в проходе — голубой путь.
@@ -6058,21 +6066,23 @@ registerImpactPainter('f15b_pulse', {
     const sd = rec.seed >>> 0;
     const few = reduced();
     const keep = arcKeep(rec);
-    // Гребень звёздного пламени встаёт по полосе и опадает.
+    // Стена света: по полосе встают столбы — снизу белые, вверху тают в фиолет.
     const hk = Math.sin(Math.PI * k01(age / 0.45));
-    if (hk > 0.15) {
-      p.occ = occOf(S);
-      const n = few ? 10 : Math.round((TAU * R) / 14);
+    if (hk > 0.1) {
+      const n = few ? 14 : Math.round((TAU * R) / 7);
       for (let i = 0; i < n; i++) {
-        const t = (i / n) * TAU + hash(sd, i, 92) * 0.2;
+        const t = (i / n) * TAU + hash(sd, i, 92) * 0.1;
         if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) continue;
-        const im = flameImg(4 + 8 * hk * (0.7 + 0.3 * hash(sd, i, 93)), Math.floor(age * 16) + i, 1);
         const x = cx + Math.cos(t) * R;
         const y = cy + Math.sin(t) * R;
-        p.alpha(Math.min(1, hk * 1.4));
-        p.img(im, x - im.width / 2, y - im.height + 1, y);
+        const H = S * 1.5 * hk * (0.55 + 0.45 * hash(sd, i, 93));
+        p.col(C.white, 0.9 * hk);
+        p.line(x, y, x, y - H * 0.3);
+        p.col(C.gold[3], 0.75 * hk);
+        p.line(x, y - H * 0.3, x, y - H * 0.65);
+        p.col('#c890f0', 0.5 * hk);
+        p.line(x, y - H * 0.65, x, y - H);
       }
-      p.occ = null;
     }
     crest(p, cx, cy, R, age, 0.45, S * 1.2, C.gold[3], sd, keep);
     sparks(
@@ -6832,43 +6842,74 @@ registerZonePainter(
   'f15b_fxnova',
   guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
     const zz = z as FxZone;
-    const cx = zz.x * S;
-    const cy = zz.y * S;
-    const p = new Pen(g, px, py, cx, cy);
+    const fx = zz.x * S;
+    const fy = zz.y * S;
+    const p = new Pen(g, px, py, fx, fy);
+    const lord = lordNow();
+    // Звезда копится в ядре владыки (над полом), волна идёт по полу.
+    const cx = lord ? lord.x * S : fx;
+    const cy = lord ? (lord.y - 3.5) * S : fy - 3.5 * S;
+    const few = reduced();
     const t = zz.t;
     const T = LORD.nova - 0.6;
     if (t < T + 0.1) {
       const k = k01(t / T);
+      // Звёздная пыль арены стекается спиралью в ядро — всё быстрее.
+      const n = few ? 18 : 40;
+      const Rm = S * 7;
+      for (let i = 0; i < n; i++) {
+        const f = mod(hash(i, 1, 141) + t * (0.35 + 0.9 * k), 1);
+        const pos = (q: number): [number, number] => {
+          const rr = Rm * Math.pow(1 - q, 1.6);
+          const aa = hash(i, 2, 141) * TAU + q * 2.6;
+          return [cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr * 0.75];
+        };
+        const [x0, y0] = pos(Math.max(0, f - 0.05));
+        const [x1, y1] = pos(f);
+        p.col(starCol(1 - f), (0.3 + 0.6 * k) * (f < 0.1 ? f * 10 : 1));
+        p.line(x0, y0, x1, y1);
+      }
+      // Лучи из ядра: растут и крутятся.
       const rays = 12;
       for (let i = 0; i < rays; i++) {
         const a = (i / rays) * TAU + time * 0.3;
-        const L = S * (0.8 + 6 * eIn2(k)) * (i % 2 ? 0.7 : 1);
+        const L = S * (0.5 + 2.6 * eIn2(k)) * (i % 2 ? 0.6 : 1);
         p.lineS(
           cx,
           cy,
           cx + Math.cos(a) * L,
           cy + Math.sin(a) * L,
           i % 2 ? C.gold[2] : C.gold[3],
-          0.3 + 0.5 * k,
+          0.35 + 0.5 * k,
           0,
         );
       }
-      const r = S * (0.5 + 2.2 * eIn2(k)) * (1 + 0.05 * Math.sin(time * 20));
-      p.col(C.gold[1], 0.3);
-      oval(p, cx, cy, r * 1.4, r * 1.4);
-      p.col(C.gold[3], 0.6);
+      // Ядро разгорается: кольца света, белая сердцевина.
+      const r = S * (0.25 + 0.75 * eIn2(k)) * (1 + 0.06 * Math.sin(time * 20));
+      ring(p, cx, cy, r * 1.6, C.gold[2], 0.35 + 0.4 * k, (_a, i) => i % 2 === 0);
+      ring(p, cx, cy, r * 1.25, C.gold[3], 0.6);
+      p.col(C.gold[3], 0.75);
       oval(p, cx, cy, r, r);
-      p.col('#ffffff', 0.9);
-      oval(p, cx, cy, r * 0.5, r * 0.5);
+      p.col('#ffffff', 0.95);
+      oval(p, cx, cy, r * 0.55, r * 0.55);
+      // На полу — кольцо астролябии сходится к звезде.
+      const f = mod(t * 0.9, 1);
+      ring(p, fx, fy, S * (6 - 5 * f), C.gold[2], 0.5 * k * (1 - f), (_a, i) => i % 3 !== 0, 0.4);
     }
     const e = t - T;
     if (e >= 0) {
-      if (e < 0.4) {
-        const u = e / 0.4;
-        p.col('#ffffff', 0.9 * (1 - u));
-        oval(p, cx, cy, S * (2 + 9 * eOut2(u)), S * (2 + 9 * eOut2(u)));
+      // Вспышка — кольцами, а не белым экраном: сцену видно.
+      if (e < 0.5) {
+        const u = e / 0.5;
+        p.col('#ffffff', (few ? 0.35 : 0.55) * (1 - u));
+        oval(p, cx, cy, S * (0.8 + 1.6 * eOut2(u)), S * (0.8 + 1.6 * eOut2(u)));
+        for (let j = 0; j < 3; j++) {
+          const uu = k01(u * 1.2 - j * 0.15);
+          if (uu <= 0 || uu >= 1) continue;
+          ring(p, fx, fy, S * (1 + 11 * eOut2(uu)), j === 1 ? '#c890f0' : C.gold[3], 0.9 * (1 - uu), undefined, 0.5);
+        }
       }
-      sparks(p, 4141, e, cx, cy, reduced() ? 10 : 30, 0, Math.PI, 120, 160, 1.0, 40, starCol);
+      sparks(p, 4141, e, cx, cy, few ? 10 : 30, 0, Math.PI, 120, 160, 1.0, 40, starCol);
     }
   }),
 );

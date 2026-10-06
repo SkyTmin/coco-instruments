@@ -600,6 +600,18 @@ function groundFloor(p: Px, c: CellCtx, dust: boolean): void {
     }
 }
 
+/** Восемь соседей клетки. */
+const NB8: [number, number][] = [
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+];
+
 /** Клетки памяти: прошлые этажи — в кристалле и звёздном свете. */
 function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
   const mk = c.mark;
@@ -675,14 +687,16 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         if (hash(X, Y, 60) < 0.012) col = BOG[4];
       } else {
         // Ожог: на месте лавы остывшие жилы той же лавы тусклым золотом,
-        // пепел гаснет к краю пятна — край не режется по клеткам.
-        const ex = Math.min(
-          same(-1, 0) ? 99 : u + 0.5,
-          same(1, 0) ? 99 : 15.5 - u,
-          same(0, -1) ? 99 : v + 0.5,
-          same(0, 1) ? 99 : 15.5 - v,
-        );
-        const fade = Math.min(1, ex / 7);
+        // пепел гаснет к краю пятна. Край — по расстоянию до ближней чужой
+        // клетки (и по диагонали тоже) с шумом: углы скруглены, лесенки клеток нет.
+        let ex = 99;
+        for (const [dx, dy] of NB8) {
+          if (same(dx, dy)) continue;
+          const gx = Math.max(dx * 16 - (u + 0.5), u + 0.5 - (dx * 16 + 16), 0);
+          const gy = Math.max(dy * 16 - (v + 0.5), v + 0.5 - (dy * 16 + 16), 0);
+          ex = Math.min(ex, Math.hypot(gx, gy));
+        }
+        const fade = clamp01((ex + (vnoise(X / 4, Y / 4, 61) - 0.5) * 6 - 1) / 8);
         col = mixq(skyAt(X, Y), INK, 0.45 * fade, X, Y);
         const dd = Math.abs(fbm(X / 7, Y / 7, 51) - 0.5);
         if (dd < 0.006 + 0.03 * fade) col = fade > 0.55 ? GOLD[3] : GOLD[2];
@@ -883,7 +897,12 @@ registerCellPainter(F15_HEART, (c: CellCtx) => {
     (c.open(1, 0) ? 4 : 0) |
     (c.open(0, -1) ? 8 : 0) |
     (c.open(0, 1) ? 16 : 0);
-  const key = `${c.wx},${c.wy},${g.top}|${c.tile}|${c.mark}|${ob}|${c.markAt(-1, 0)},${c.markAt(1, 0)},${c.markAt(0, -1)},${c.markAt(0, 1)}`;
+  // Ожог скругляет углы по диагональным соседям — им они нужны в ключе.
+  const diag =
+    c.mark === MK.scorch
+      ? `|${c.markAt(-1, -1)},${c.markAt(1, -1)},${c.markAt(-1, 1)},${c.markAt(1, 1)}`
+      : '';
+  const key = `${c.wx},${c.wy},${g.top}|${c.tile}|${c.mark}|${ob}|${c.markAt(-1, 0)},${c.markAt(1, 0)},${c.markAt(0, -1)},${c.markAt(0, 1)}${diag}`;
   const hit = CELL_LRU.get(key);
   if (hit !== undefined) return hit;
   return CELL_LRU.set(key, cellOf(c, g));
