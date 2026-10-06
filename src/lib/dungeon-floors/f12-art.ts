@@ -796,35 +796,42 @@ function crackLines(p: Px, X0: number, Y0: number, k: number, dark: boolean): vo
 function rugPx(p: Px, c: CellCtx): void {
   const X0 = c.wx * TS;
   const Y0 = c.wy * TS;
-  // Ковёр шаманки: охра и бирюза ромбами, бахрома по краю ковра.
+  // Ковёр шаманки: тёмный войлок, ступенчатый северный ромб на две клетки
+  // (одна клетка повторялась сеткой и кричала), протёртости и снежная пыль.
+  const N = noise();
+  const RUG = ramp('#240c12', '#3a141a', '#562026', '#743230', '#8e4636');
   for (let y = 0; y < TS; y++)
     for (let x = 0; x < TS; x++) {
       const X = X0 + x;
       const Y = Y0 + y;
-      const u = ((X % 16) + 16) % 16;
-      const v = ((Y % 16) + 16) % 16;
-      const d = Math.abs(u - 7.5) + Math.abs(v - 7.5);
-      let col = OCHRE[1];
-      if (d < 2) col = TEAL[2];
-      else if (d < 3) col = BONE[2];
-      else if (d > 6.5 && d < 7.6) col = OCHRE[3];
-      else if (d >= 7.6) col = OCHRE[2];
-      if ((X + Y) % 4 === 0) col = mixc(col, INK, 0.18);
+      const u = ((X % 32) + 32) % 32;
+      const v = ((Y % 32) + 32) % 32;
+      const q = Math.floor((Math.abs(u - 15.5) + Math.abs(v - 15.5)) / 2);
+      let col = RUG[1];
+      if (q === 0) col = TEAL[1];
+      else if (q === 2 || q === 5) col = BONE[1];
+      else if (q === 3 || q === 4) col = RUG[2];
+      else if (q === 7) col = RUG[3];
+      else if (q >= 13) col = RUG[0];
+      const wear = at(N.fbm, X, Y);
+      if (wear < 0.4) col = mixc(col, RUG[0], 0.5);
+      const sn = at(N.big, X * 2, Y * 2);
+      if (sn > 0.66) col = mixc(col, SNOW[3], Math.min(0.7, (sn - 0.66) * 2.4));
       col = mixc(col, INK, wallShade(c, x, y));
       p.set(x, y, col);
     }
   const edge = (dx: number, dy: number) => c.markAt(dx, dy) !== MK.rug || !c.open(dx, dy);
   for (let i = 0; i < TS; i++) {
     if (edge(0, -1)) {
-      p.set(i, 0, BONE[1]);
-      if (i % 2 === 0) p.set(i, 1, BONE[2]);
+      p.set(i, 0, BONE[0]);
+      if (i % 2 === 0) p.set(i, 1, BONE[1]);
     }
     if (edge(0, 1)) {
-      p.set(i, 15, BONE[1]);
-      if (i % 2 === 0) p.set(i, 14, BONE[2]);
+      p.set(i, 15, BONE[0]);
+      if (i % 2 === 0) p.set(i, 14, BONE[1]);
     }
-    if (edge(-1, 0)) p.set(0, i, BONE[1]);
-    if (edge(1, 0)) p.set(15, i, BONE[1]);
+    if (edge(-1, 0)) p.set(0, i, BONE[0]);
+    if (edge(1, 0)) p.set(15, i, BONE[0]);
   }
 }
 
@@ -929,7 +936,12 @@ function waterPx(p: Px, c: CellCtx, mark: number): void {
       const Y = Y0 + y;
       let k = 0.38 + (at(N.fbm, X, Y) - 0.5) * 0.35;
       if (mark === MK.water) k -= 0.1;
-      if (flow) k += (Math.sin(X * 0.9 + at(N.big, X, Y * 0.3) * 12) * 0.5 + 0.5) * 0.12;
+      if (flow) {
+        // Струи течения — рваными штрихами вдоль протоки, а не сплошными
+        // полосами (сплошные читались дождём).
+        const dash = at(N.fine, X * 3, Y * 0.3) > 0.52 ? 1 : 0.15;
+        k += (Math.sin(X * 0.9 + at(N.big, X, Y * 0.3) * 12) * 0.5 + 0.5) * 0.12 * dash;
+      }
       // Мелко у кромки: светлее.
       let edge = 99;
       if (dryUp) edge = Math.min(edge, y);
