@@ -1190,17 +1190,100 @@ function wallFacePx(c: CellCtx, look: Look): Px {
   return p;
 }
 
-/** Верх ледника (стена над стеной): плотный лёд, видно, что это не порода. */
+/**
+ * Лицо ледника (анимации 12): живой лёд — грани-призмы со светом слева и
+ * тенью справа (счёт от мира, швов на стыке клеток нет), пузырьки воздуха,
+ * бирюзовая жила в толще, снежная шапка с наплывами сверху, иней у подножия.
+ */
+function glacierFacePx(c: CellCtx): Px {
+  const p = new Px(TS, TS);
+  const N = noise();
+  const X0 = c.wx * TS;
+  const Y0 = c.wy * TS;
+  const capped = c.markAt(0, -1) !== MK.glacier;
+  for (let x = 0; x < TS; x++) {
+    const X = X0 + x;
+    // Грань: столбцы шириной 5 со сдвигом по шуму — призмы.
+    const fx = X + Math.floor(at(N.big, X, 7) * 4);
+    const col = Math.floor(fx / 5);
+    const pos = ((fx % 5) + 5) % 5;
+    const facet = (hash(col, 0, 300) - 0.5) * 0.16;
+    const vein = hash(col, 1, 300) < 0.22;
+    for (let y = 0; y < TS; y++) {
+      const Y = Y0 + y;
+      let k = 0.6 - (y / 15) * 0.26 + (at(N.streak, X, Y) - 0.5) * 0.22 + facet;
+      if (pos === 0) k += 0.24;
+      else if (pos === 1) k += 0.08;
+      else if (pos === 4) k -= 0.2;
+      p.set(x, y, toneOf(ICE, k, X, Y));
+      if (vein && pos === 2 && y > 3 && y < 14) p.set(x, y, alpha(TEAL[3], 0.4));
+    }
+  }
+  // Пузырьки воздуха: кольцо и блик слева сверху.
+  for (let q = 0; q < 3; q++) {
+    if (hash(X0, Y0, 310 + q) > 0.55) continue;
+    const bx = 2 + Math.floor(hash(X0, Y0, 320 + q) * 11);
+    const by = 5 + Math.floor(hash(X0, Y0, 330 + q) * 8);
+    const big = hash(X0, Y0, 340 + q) < 0.4;
+    p.set(bx, by, alpha(ICE[4], 0.75));
+    if (big) {
+      p.set(bx + 1, by, alpha(ICE[3], 0.7));
+      p.set(bx, by + 1, alpha(ICE[3], 0.7));
+      p.set(bx + 1, by + 1, alpha(ICE[2], 0.6));
+    }
+    p.set(bx, by, alpha(WHITE, 0.85));
+  }
+  crackLines(p, X0, Y0, 0.35, false);
+  // Снежная шапка с наплывами (если сверху не тот же ледник).
+  if (capped)
+    for (let x = 0; x < TS; x++) {
+      const X = X0 + x;
+      const n = 2 + Math.round(at(N.fine, X, Y0) * 2);
+      const drip = hash(X, Y0, 350) < 0.18 ? 1 + Math.floor(hash(X, Y0, 351) * 2) : 0;
+      for (let y = 0; y < n + drip; y++)
+        p.set(x, y, y === 0 ? WHITE : y < n - 1 ? SNOW[4] : SNOW[3]);
+      p.set(x, n + drip, alpha(ICE[0], 0.55));
+    }
+  else for (let x = 0; x < TS; x++) p.set(x, 0, alpha(ICE[4], 0.6));
+  // Подножие: тень и иней.
+  for (let x = 0; x < TS; x++) {
+    p.set(x, 14, alpha(ICE[0], 0.35));
+    if (hash(X0 + x, Y0 + 15, 142) < 0.55) p.set(x, 15, alpha(SNOW[3], 0.85));
+  }
+  return p;
+}
+
+/**
+ * Верх ледника (стена над стеной, анимации 12): снег, сдутый ветром до
+ * голубого льда пятнами, заструги; открытые края — светлая кромка с
+ * севера и запада, тень с востока.
+ */
 function glacierTopPx(c: CellCtx): Px {
   const p = new Px(TS, TS);
   const N = noise();
+  const X0 = c.wx * TS;
+  const Y0 = c.wy * TS;
   for (let y = 0; y < TS; y++)
     for (let x = 0; x < TS; x++) {
-      const X = c.wx * TS + x;
-      const Y = c.wy * TS + y;
-      p.set(x, y, toneOf(ICE, 0.74 + (at(N.fbm, X, Y) - 0.5) * 0.5, X, Y));
+      const X = X0 + x;
+      const Y = Y0 + y;
+      const ice = at(N.big, X, Y) > 0.6;
+      if (ice) p.set(x, y, toneOf(ICE, 0.66 + (at(N.fbm, X, Y) - 0.5) * 0.4, X, Y));
+      else {
+        p.set(x, y, toneOf(SNOW, 0.8 + (at(N.fbm, X, Y) - 0.5) * 0.3, X, Y));
+        // Заструги: косые гребни — тень и свет рядом.
+        const s = (X + Y * 2 + Math.floor(at(N.big, X, Y) * 9)) % 11;
+        if (s === 0) p.set(x, y, SNOW[2]);
+        else if (s === 1) p.set(x, y, SNOW[4]);
+      }
     }
-  crackLines(p, c.wx * TS, c.wy * TS, 0.5, false);
+  if (c.open(0, -1))
+    for (let x = 0; x < TS; x++) {
+      p.set(x, 0, WHITE);
+      p.set(x, 1, SNOW[4]);
+    }
+  if (c.open(-1, 0)) for (let y = 0; y < TS; y++) p.set(0, y, SNOW[4]);
+  if (c.open(1, 0)) for (let y = 0; y < TS; y++) p.set(15, y, ICE[1]);
   return p;
 }
 
@@ -1316,8 +1399,8 @@ function cellPainter(area: string) {
     const mk = c.mark;
     if (!c.open(0, 0)) {
       // Стена: лицо — если под ней открыто; верх — порода движка.
+      if (mk === MK.glacier) return c.open(0, 1) ? glacierFacePx(c) : glacierTopPx(c);
       if (c.open(0, 1)) return wallFacePx(c, look);
-      if (mk === MK.glacier) return glacierTopPx(c);
       return null;
     }
     if (WETS.has(mk)) {
