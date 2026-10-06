@@ -946,6 +946,9 @@ registerBrain('f1_slinger', {
             }
           }
           api.shoot(sim, m, Math.atan2(ty - m.y, tx - m.x), def.shot, tx, ty);
+          const lob = sim.shots[sim.shots.length - 1]?.lob; // анимации мобов 1 — только рисунок
+          const hit = { art: 'f1_stone_hit', above: true }; // анимации мобов 1 — только рисунок
+          if (lob) api.vfx(sim, { ...hit, x: lob.x1, y: lob.y1, r: 0.5, life: 0.35, warn: lob.T }); // анимации мобов 1 — только рисунок
           api.setMode(m, 'recover');
           m.cd = def.rest * (0.8 + sim.rng() * 0.4);
         }
