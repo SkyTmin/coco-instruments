@@ -399,7 +399,16 @@ registerZonePainter('f13_strings', (g, z, px, py, S, time) => {
     if (!s.on || Math.abs(s.x - z.x) > 18 || Math.abs(s.y - z.y) > 14) continue;
     const [lx, ly] = to(s.lx, s.ly);
     const [x, y] = to(s.x, s.y);
-    beam(g, lx, ly - 13, x, y, SPOT.r * 16, WARM, 0.13);
+    beam(g, lx, ly - 13, x, y, SPOT.r * 16, WARM, 0.16);
+    // Пятно — поверх темноты сложением: «где луч — там тебя видят» должно
+    // читаться с первого взгляда; край пятна — чёткий, как у прожектора.
+    const R = SPOT.r * 16;
+    pool(g, x, y, R, WARM, 0.2 + 0.03 * Math.sin(time * 3 + s.x));
+    g.strokeStyle = rgba(WARM, s.turned ? 0.5 : 0.3);
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.ellipse(x, y, R * 0.97, R * 0.9, 0, 0, TAU);
+    g.stroke();
   }
   g.globalCompositeOperation = old;
   if (F13_FX.act === 2 && F13_FX.moon.r > 0) moon(g, to, time);
@@ -415,7 +424,7 @@ registerZonePainter('f13_stage', (g, z, px, py, S, time) => {
   for (const s of F13_FX.spots) {
     if (!s.on || Math.abs(s.x - z.x) > 18 || Math.abs(s.y - z.y) > 14) continue;
     const [x, y] = to(s.x, s.y);
-    pool(g, x, y, SPOT.r * 16, WARM, 0.2 + 0.03 * Math.sin(time * 3 + s.x));
+    pool(g, x, y, SPOT.r * 16, WARM, 0.25);
     // Пылинки в луче.
     g.fillStyle = rgba(WARM, 0.5);
     for (let i = 0; i < 5; i++) {
