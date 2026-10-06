@@ -3222,7 +3222,8 @@ function blazeTable(): Uint32Array {
       for (let d = 0; d < 4; d++) {
         const r = ramps[h];
         // Плотность туманности — светлые струи плазмы: 0 — тень, 3 — ступень выше.
-        const c = d === 0 ? r[Math.max(0, s - 1)] : mixc(r[s], r[Math.min(5, s + 1)], (d - 1) * 0.5);
+        const c =
+          d === 0 ? r[Math.max(0, s - 1)] : mixc(r[s], r[Math.min(5, s + 1)], (d - 1) * 0.5);
         t[(h * 6 + s) * 4 + d] = pack(c);
       }
   BLAZE_T = t;
@@ -3633,12 +3634,7 @@ function handSprite(g: Gest, a16: number, side: number): HTMLCanvasElement {
     // Пальцы врозь — всплеск силы.
     for (const o of [-0.95, -0.35, 0.25, 0.85])
       fingers.push([3, o * 1.6, 3 + Math.cos(o) * 4, o * 1.6 + Math.sin(o) * 4]);
-    fingers.push([
-      1.2,
-      th * 1.6,
-      1.2 + Math.cos(th * 1.6) * 3,
-      th * 1.6 + Math.sin(th * 1.6) * 3,
-    ]);
+    fingers.push([1.2, th * 1.6, 1.2 + Math.cos(th * 1.6) * 3, th * 1.6 + Math.sin(th * 1.6) * 3]);
   }
   for (const f of fingers) for (let q = 0; q < 4; q++) f[q] *= 1.3;
   const tips: [number, number][] = fingers.map((f) => [f[2], f[3]]);
@@ -3688,7 +3684,14 @@ interface LitCtx {
   mk: string;
 }
 
-function paintLit(m: Mob, p: LPose, geo: LGeo, now: number, s: Sim | null, X: LitCtx): HTMLCanvasElement {
+function paintLit(
+  m: Mob,
+  p: LPose,
+  geo: LGeo,
+  now: number,
+  s: Sim | null,
+  X: LitCtx,
+): HTMLCanvasElement {
   const v = f15bView(s);
   const sl = slot(LIT, litI);
   litI = (litI + 1) % 4;
@@ -3848,7 +3851,10 @@ function paintLit(m: Mob, p: LPose, geo: LGeo, now: number, s: Sim | null, X: Li
         }
     }
     if (gl > 0.05) {
-      g.fillStyle = css(h.g === 3 || h.g === 6 ? VIO[3] : claw ? VIO[4] : GOLD[4], 0.12 + gl * 0.16);
+      g.fillStyle = css(
+        h.g === 3 || h.g === 6 ? VIO[3] : claw ? VIO[4] : GOLD[4],
+        0.12 + gl * 0.16,
+      );
       g.beginPath();
       g.arc(hxp, h.y, 3 + gl * 3.5, 0, TAU);
       g.fill();
@@ -3872,7 +3878,12 @@ function paintLit(m: Mob, p: LPose, geo: LGeo, now: number, s: Sim | null, X: Li
         const r0 = 5;
         const r1 = 5 + 2.5 * gl + hash(k, Math.floor(now * 12), 63) * 2;
         for (let r = r0; r < r1; r += 1)
-          px1(hxp + Math.cos(an) * r, h.y + Math.sin(an) * r, GOLD[5], 0.7 * (1 - (r - r0) / (r1 - r0)));
+          px1(
+            hxp + Math.cos(an) * r,
+            h.y + Math.sin(an) * r,
+            GOLD[5],
+            0.7 * (1 - (r - r0) / (r1 - r0)),
+          );
       }
     const a16 = ((Math.round((h.ang / TAU) * 16) % 16) + 16) % 16;
     g.drawImage(handSprite(h.g, a16, h.side), Math.round(hxp - 10), Math.round(h.y - 10));
@@ -3994,7 +4005,9 @@ function inertia(m: Mob, now: number, face: number, hxT: number): Iner {
 }
 
 const hkKey = (h: HK) =>
-  h[3] === 0 ? 'h' : `${Math.round(h[0] * 2)},${Math.round(h[1] * 2)},${Math.round(h[2] * 2)},${h[3]}`;
+  h[3] === 0
+    ? 'h'
+    : `${Math.round(h[0] * 2)},${Math.round(h[1] * 2)},${Math.round(h[2] * 2)},${h[3]}`;
 function cloakKey(dirB: number, p: LPose): string {
   return `${dirB}|${Math.round(p.flare * 4)}|${Math.round(p.open * 4)}|${p.train}|${p.sway}|${cph(p)}|${Math.round(p.dissolve * 20)}`;
 }
@@ -4011,10 +4024,7 @@ function lordGeo(dirB: number, dirF: number, p: LPose): LGeo {
     open: Math.round(p.open * 4) / 4,
     dissolve: Math.round(p.dissolve * 20) / 20,
   };
-  return LGEO.set(
-    key,
-    buildLord((dirB * TAU) / DIRS, (dirF * TAU) / DIRS, q, cloakKey(dirB, p)),
-  );
+  return LGEO.set(key, buildLord((dirB * TAU) / DIRS, (dirF * TAU) / DIRS, q, cloakKey(dirB, p)));
 }
 
 const LIT_LAST: { k: string; c: HTMLCanvasElement | null } = { k: '', c: null };
@@ -5143,6 +5153,86 @@ function buildKeeper(
   return [(flash ? p.tint(WHITE, 0.6) : p).canvas(), lit.canvas()];
 }
 
+/** Трещины статуи по стороне: точки изолинии шума на камне и их даль от груди. */
+const KEEP_CRACK = new Map<number, Float32Array>();
+const KEEP_WAKE = frameLRU<[HTMLCanvasElement, HTMLCanvasElement]>(160);
+function crackPts(dir: number, base: HTMLCanvasElement): Float32Array {
+  const hit = KEEP_CRACK.get(dir);
+  if (hit) return hit;
+  const d = base.getContext('2d')?.getImageData(0, 0, KW, KH).data;
+  const pts: number[] = [];
+  if (d)
+    for (let y = 0; y < KH; y++)
+      for (let x = 0; x < KW; x++) {
+        if (d[(y * KW + x) * 4 + 3] < 200) continue;
+        const e = Math.abs(vnoise(x * 0.21, y * 0.21, 631) - 0.5);
+        if (e > 0.028) continue;
+        pts.push(x, y, Math.hypot(x - KAX, (y - (KAY - 20)) * 0.8), e < 0.012 ? 1 : 0);
+      }
+  const o = new Float32Array(pts);
+  KEEP_CRACK.set(dir, o);
+  return o;
+}
+
+/** Кадр пробуждения `q` (1/24 с): низ — статуя, верх — живой мрамор, трещины, осколки. */
+function keeperWakeFrame(
+  dir: number,
+  q: number,
+  st: [HTMLCanvasElement, HTMLCanvasElement],
+  mb: [HTMLCanvasElement, HTMLCanvasElement],
+): [HTMLCanvasElement, HTMLCanvasElement] {
+  const key = `${dir}|${q}`;
+  const hit = KEEP_WAKE.get(key);
+  if (hit) return hit;
+  const tq = q / 24;
+  const crack = clamp01(tq / 0.35);
+  const shell = 1 - clamp01((tq - 0.35) / 0.5);
+  const chips = clamp01((tq - 0.35) / 0.55);
+  // Граница скорлупы: выше неё — уже мрамор.
+  const yTop = Math.round(KAY - 44 + (1 - shell) * 47);
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = KW;
+    c.height = KH;
+    return c;
+  };
+  const img = mk();
+  const lit = mk();
+  const g = img.getContext('2d');
+  const gl = lit.getContext('2d');
+  if (g && gl) {
+    const top = Math.max(0, Math.min(KH, yTop));
+    if (top > 0) {
+      g.drawImage(mb[0], 0, 0, KW, top, 0, 0, KW, top);
+      gl.drawImage(mb[1], 0, 0, KW, top, 0, 0, KW, top);
+    }
+    if (top < KH) g.drawImage(st[0], 0, top, KW, KH - top, 0, top, KW, KH - top);
+    const pts = crackPts(dir, st[0]);
+    const R = crack * 30;
+    for (let i = 0; i < pts.length; i += 4) {
+      const y = pts[i + 1];
+      if (y < top || pts[i + 2] > R) continue;
+      const core = pts[i + 3] > 0;
+      g.fillStyle = css(core ? WHITE : GOLD[5]);
+      g.fillRect(pts[i], y, 1, 1);
+      gl.fillStyle = css(core ? WHITE : GOLD[4], 0.85);
+      gl.fillRect(pts[i], y, 1, 1);
+    }
+    for (let k = 0; k < 16 && chips > 0; k++) {
+      const t = clamp01((chips - hash(k, 4, 633) * 0.35) / 0.65);
+      if (t <= 0) continue;
+      const x = Math.round(KAX + (hash(k, 1, 633) - 0.5) * 16 + (hash(k, 5, 633) - 0.5) * 8 * t);
+      const y0 = KAY - 6 - hash(k, 2, 633) * 28;
+      const y = Math.round(Math.min(KAY - 1 - hash(k, 3, 633) * 3, y0 + t * t * 40));
+      g.fillStyle = css(STONE_K[2]);
+      g.fillRect(x, y, 2, 2);
+      g.fillStyle = css(STONE_K[4]);
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  return KEEP_WAKE.set(key, [img, lit]);
+}
+
 // Толпа хранителей: новых сборок (~5–7 мс каждая) не больше двух за кадр,
 // остальные держат свой прошлый кадр. Без этого 15 хранителей в ударе
 // вытесняли кадры друг друга из кеша и кадр рендера уходил за 30 мс.
@@ -5189,7 +5279,6 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
   let crumble = 0;
   let crack = 0;
   let chips = 0;
-  let chipStone = false;
   let f = fr24(T);
   let kp: KPose;
   let key: string;
@@ -5204,23 +5293,39 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
   if (!waking) keeperWake.delete(m);
   if (mode === 'sleep') {
     stone = 1;
-    kp = K_STATUE;
+    kp = K_IDLE;
     key = 'sl';
   } else if (waking) {
-    // Статуя оживает: свет трещинами от груди, потом каменная скорлупа
-    // сходит сверху вниз и осыпается к ногам; голова поднимается.
+    // Статуя оживает: свет трещинами от груди, потом каменная скорлупа сходит
+    // сверху вниз и осыпается к ногам. Кадр — склейка готовых «статуи» и
+    // «покоя» той же стороны (без новой сборки фигуры, ~0,1 мс).
     const q = fr24(wake);
-    const tq = q / 24;
-    crack = Math.round(clamp01(tq / 0.35) * 8) / 8;
-    stone = Math.round((1 - clamp01((tq - 0.35) / 0.5)) * 12) / 12;
-    chips = Math.round(clamp01((tq - 0.35) / 0.55) * 12) / 12;
-    chipStone = true;
-    kp = kmix(K_STATUE, K_IDLE, smooth((tq - 0.3) / 0.5));
-    if (tq < 0.35) {
-      // Дрожь проснувшегося камня.
-      dx = (q & 1 ? 0.5 : -0.5) * (tq / 0.35);
+    const st0 = KEEP_LRU.get(`${dir}|sl`);
+    let mb0 = KEEP_LRU.get(`${dir}|c0`);
+    if (st0 && !mb0)
+      mb0 = KEEP_LRU.set(
+        `${dir}|c0`,
+        buildKeeper(dir, keeperPose('chase', 0, 0, 0), 0, 0, false, 0),
+      );
+    if (st0 && mb0) {
+      const wf = keeperWakeFrame(dir, q, st0, mb0);
+      KEEP_PREV.set(m, wf);
+      return {
+        img: pose.flash ? keeperFlash(wf[0]) : wf[0],
+        ax: KAX,
+        ay: KAY,
+        eye: null,
+        still: true,
+        // Дрожь проснувшегося камня — пока бегут трещины.
+        dx: q < 8 ? (q & 1 ? 0.5 : -0.5) * (q / 8) : 0,
+        shadow: 8,
+        lit: wf[1],
+        linger: 1.1,
+      };
     }
-    key = `w${q}`;
+    stone = 1;
+    kp = K_IDLE;
+    key = 'sl';
   } else if (mode === 'dying') {
     // Раскол: трещины света 0…0,35, камень от ног 0,15…0,5, рассыпается
     // кристаллами 0,55…1,05 — они падают к подолу.
@@ -5266,10 +5371,7 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
     if (prev && keepBudget.n >= KEEP_BUILDS) fr = prev;
     else {
       keepBudget.n++;
-      fr = KEEP_LRU.set(
-        k,
-        buildKeeper(dir, kp, stone, crumble, false, ph, crack, chips, chipStone),
-      );
+      fr = KEEP_LRU.set(k, buildKeeper(dir, kp, stone, crumble, false, ph, crack, chips));
     }
   }
   KEEP_PREV.set(m, fr);
@@ -5366,7 +5468,8 @@ function constellate(src: HTMLCanvasElement, st: 'n' | 'r' | 'd', q: number): HT
   };
   // Доли трёх слоёв по стадии.
   const fillK = st === 'r' ? clamp01((q - 0.62) / 0.38) : st === 'd' ? clamp01(1 - q / 0.3) : 1;
-  const lineK = st === 'r' ? clamp01((q - 0.3) / 0.36) : st === 'd' ? clamp01(1 - (q - 0.05) / 0.45) : 1;
+  const lineK =
+    st === 'r' ? clamp01((q - 0.3) / 0.36) : st === 'd' ? clamp01(1 - (q - 0.05) / 0.45) : 1;
   // Середина фигуры — от неё обегает контур и разлетаются звёзды.
   const cx = w / 2;
   const cy = h * 0.6;
@@ -5623,7 +5726,11 @@ registerZonePainter('f15b_echobody', (g, z, px, py, S, time) => {
       const sp = (6 + j * 7) * e;
       g.globalAlpha = starA * (j === 0 ? 0.9 : 0.55);
       const a = (j * TAU) / 3 + m.id;
-      g.drawImage(B, bx0 + Math.round(Math.cos(a) * sp), by0 + Math.round(Math.sin(a) * sp - 4 * k));
+      g.drawImage(
+        B,
+        bx0 + Math.round(Math.cos(a) * sp),
+        by0 + Math.round(Math.sin(a) * sp - 4 * k),
+      );
     }
   }
   g.globalAlpha = prevA;
