@@ -2614,6 +2614,9 @@ export const F15_MOB_STAT = {
   ms: 0,
   max: 0,
   maxKey: '',
+  /** Кадров дороже 2 и 5 мс. */
+  over2: 0,
+  over5: 0,
   size: () => MF.size,
   by: {} as Record<string, number>,
 };
@@ -2786,6 +2789,8 @@ function mobFrame(
     const ms = performance.now() - t0;
     F15_MOB_STAT.n++;
     F15_MOB_STAT.ms += ms;
+    if (ms > 2) F15_MOB_STAT.over2++;
+    if (ms > 5) F15_MOB_STAT.over5++;
     if (ms > F15_MOB_STAT.max) {
       F15_MOB_STAT.max = ms;
       F15_MOB_STAT.maxKey = key;
