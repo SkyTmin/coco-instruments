@@ -2302,6 +2302,16 @@ registerMobWarm('f1_rat', function* () {
         yield 0;
       }
     }
+  // Смерть — тоже: крыс бьют пачками, и при сведении смерти были главной
+  // ценой новых кадров в бою (~140 мс из ~170 за 8 с толпы).
+  for (const id of ['rat', 'fatrat', 'bomber'])
+    for (const d of [0, 1, 2, 6, 7]) {
+      const K = RAT_K[id];
+      for (let f = 0; f < Math.ceil(K.die * MF_FPS); f++) {
+        deferWarm(() => ratFrame(K, 'die', f, K.die, d, 'normal', false, 0));
+        yield 0;
+      }
+    }
 });
 
 // ---------------------------------------------------------------------------
@@ -4554,6 +4564,10 @@ const WARM_D = [0, 1, 2, 6, 7];
 /** Что прогреть сверх покоя и хода: [действие, длина (0 — цикл 8), vr]. */
 function bipWarmList(kind: string): [string, number, number[]][] {
   const wu = MOB_WU.get(kind) || 0.6;
+  // Смерть каждого вида — при сведении она строилась в бою (см. прогрев крыс).
+  return [...bipActs(kind, wu), ['die', BIP_K[kind].die, [0]]];
+}
+function bipActs(kind: string, wu: number): [string, number, number[]][] {
   switch (kind) {
     case 'f1_ratman':
       return [
