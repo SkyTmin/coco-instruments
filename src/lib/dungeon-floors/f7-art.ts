@@ -40,6 +40,7 @@ import './f7-mob-echo';
 import './f7-mob-phantom';
 import './f7-mob-golem';
 import './f7-mob-spider';
+import './f7-mob-moth';
 
 type RGBA = [number, number, number, number];
 
@@ -3137,82 +3138,6 @@ registerMobPainter('f7_shadow', (m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Зеркальная бабочка: четыре крыла-зеркальца в тонкой оправе, фиолетовое
-// тельце. Вспышка — крылья раскрыты и раскалены добела.
-// ---------------------------------------------------------------------------
-
-function mothWing(p: Px, pts: [number, number][], hot: number): void {
-  const base: Tones = hot
-    ? [hx('#a8c8ec'), hx('#dcecff'), hx('#f6fbff'), WHITE]
-    : [hx('#3a4a6c'), hx('#6c86ae'), hx('#b0c8e4'), hx('#eef6ff')];
-  // Стекло с отражением: свет сверху-слева по плоскости крыла.
-  const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length;
-  const cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
-  poly(p, pts, (x, y) => tone(base, 0.5 - (x - cx) * 0.08 - (y - cy) * 0.1));
-  // Оправа — тонкий кант.
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i];
-    const b = pts[(i + 1) % pts.length];
-    stroke(p, a[0], a[1], b[0], b[1], hot ? CYAN_HOT : SILV[1]);
-  }
-  // Блик по диагонали.
-  stroke(p, cx - 1.5, cy - 1, cx + 0.5, cy + 1, base[3]);
-}
-
-function paintMoth(f: number, hot: number): Built {
-  const p = new Px(22, 16);
-  // Взмах: раскрыто, полураскрыто, сложено, полураскрыто.
-  const open = hot ? 1 : [1, 0.55, 0.15, 0.55][f % 4];
-  const cx = 11;
-  const cy = 8;
-  const wy = (1 - open) * 3;
-  for (const s of [-1, 1]) {
-    const W1 = 2 + 7 * open;
-    mothWing(
-      p,
-      [
-        [cx + s * 1, cy - 1],
-        [cx + s * W1, cy - 6 + wy],
-        [cx + s * (W1 + 1), cy - 1],
-        [cx + s * 1.5, cy + 0.5],
-      ],
-      hot,
-    );
-    mothWing(
-      p,
-      [
-        [cx + s * 1, cy + 1],
-        [cx + s * (1 + 5 * open), cy + 1],
-        [cx + s * (1 + 4 * open), cy + 5 - wy * 0.5],
-        [cx + s * 1, cy + 3],
-      ],
-      hot,
-    );
-  }
-  // Тельце и усики.
-  limb(p, cx, cy - 2, cx, cy + 4, 1.1, 0.7, VIO, 0.2);
-  stroke(p, cx - 0.5, cy - 3, cx - 2.5, cy - 6, VIO[2]);
-  stroke(p, cx + 0.5, cy - 3, cx + 2.5, cy - 6, VIO[2]);
-  p.set(cx - 3, cy - 7, hx('#fff4b8'));
-  p.set(cx + 3, cy - 7, hx('#fff4b8'));
-  p.outline(alpha(INK, 0.85));
-  return { p, ax: 11, ay: 15, eye: [cx, cy - 2] };
-}
-
-registerMobPainter('f7_moth', (m: Mob, pose: MobPose) => {
-  const hot = pose.mode === 'flash' ? Math.min(2, Math.floor(pose.t / 0.35)) : 0;
-  const f = pose.mode === 'flash' ? 0 : Math.floor(pose.frame * 1.5) % 4;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_moth', pose, 'dead', k, () => {
-      const b = paintMoth(0, 0);
-      return { ...b, p: shatter(b.p, 11, 8, (k + 1) / 4, 5) };
-    });
-  }
-  return frameOf('f7_moth', pose, `fly${hot}`, f, () => paintMoth(f, hot ? 1 : 0));
-});
-
-// ---------------------------------------------------------------------------
 // Призма: парящая трёхгранная призма; вращается (кадры — поворот модели),
 // внутри радуга. В прицеле сердцевина раскаляется.
 // ---------------------------------------------------------------------------
@@ -5657,6 +5582,25 @@ registerItemArt('f7_core', () => {
   p.outline(INK);
   return p;
 });
+
+/** Крыло-зеркальце в оправе (иконка крыла; бабочка — в `f7-mob-moth.ts`). */
+function mothWing(p: Px, pts: [number, number][], hot: number): void {
+  const base: Tones = hot
+    ? [hx('#a8c8ec'), hx('#dcecff'), hx('#f6fbff'), WHITE]
+    : [hx('#3a4a6c'), hx('#6c86ae'), hx('#b0c8e4'), hx('#eef6ff')];
+  // Стекло с отражением: свет сверху-слева по плоскости крыла.
+  const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length;
+  const cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
+  poly(p, pts, (x, y) => tone(base, 0.5 - (x - cx) * 0.08 - (y - cy) * 0.1));
+  // Оправа — тонкий кант.
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    stroke(p, a[0], a[1], b[0], b[1], hot ? CYAN_HOT : SILV[1]);
+  }
+  // Блик по диагонали.
+  stroke(p, cx - 1.5, cy - 1, cx + 0.5, cy + 1, base[3]);
+}
 
 registerItemArt('f7_wing', () => {
   const p = new Px(10, 10);
