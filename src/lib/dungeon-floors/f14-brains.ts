@@ -3251,6 +3251,7 @@ function knifeRing(sim: Sim, lead: Mob, n: number, lanes: number): void {
     if (t !== T_FLOOR && t !== T_HAZARD) continue;
     const k = knife(sim, x, y, a + Math.PI, lead.dmg * 1.05, 'f14boss');
     k.life = 1.2;
+    k.art = 'f14b_lknife'; // анимации 14 — только рисунок: вылет из руки, свой контакт
     s.knives.push({ id: k.id, ang: a + Math.PI });
   }
 }
