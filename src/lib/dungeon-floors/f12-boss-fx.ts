@@ -801,12 +801,12 @@ registerZonePainter('f12_curtain', (g, st, px, py, _s, time) => {
   const uy = Math.sin(ang);
   for (let x = 0; x < L; x += 3) {
     const wv = Math.sin(time * 4 + x * 0.25) * 0.5 + 0.5;
-    const hgt = (8 + 14 * wv) * k;
+    const hgt = (6 + 10 * wv) * k;
     const cx = px + ux * x;
     const cy = py + uy * x;
     const lg = g.createLinearGradient(0, cy - hgt, 0, cy);
     lg.addColorStop(0, rgba(P.aurL, 0));
-    lg.addColorStop(1, rgba(P.aur, 0.35 * k));
+    lg.addColorStop(1, rgba(P.aur, 0.2 * k));
     g.fillStyle = lg;
     g.fillRect(Math.round(cx), Math.round(cy - hgt), 2, Math.round(hgt));
   }
@@ -833,8 +833,8 @@ registerImpactPainter('f12_curtain', {
       const cy = py + uy * x;
       const lg = g.createLinearGradient(0, cy - hgt, 0, cy);
       lg.addColorStop(0, rgba(P.aurL, 0));
-      lg.addColorStop(0.7, rgba(P.aurL, 0.5 * fade));
-      lg.addColorStop(1, rgba(P.white, 0.7 * fade));
+      lg.addColorStop(0.7, rgba(P.aurL, 0.32 * fade));
+      lg.addColorStop(1, rgba(P.white, 0.45 * fade));
       g.fillStyle = lg;
       g.fillRect(Math.round(cx), Math.round(cy - hgt), 2, Math.round(hgt));
     }

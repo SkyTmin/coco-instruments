@@ -1427,25 +1427,38 @@ registerPropPainter('f12_brazier', (o, time) => {
   const f = lit ? fr8(time + o.x * 0.21) : Math.floor(time * 2) % 2;
   return spr(`brazier|${lit}|${f}`, () => {
     const p = new Px(18, 22);
-    // Треножник и чаша из бронзы, иней на ободе, если холодная.
+    // Треножник и чаша из бронзы. Холодная — пепел под снежной шапкой и
+    // сосульки по ободу («зажги меня»), без огоньков-«глаз».
+    const BR = ramp('#2e1c10', '#5a3a20', '#8a5a2a', '#b07a3a', '#d8a860');
     for (const [a, b] of [
       [4, 21],
-      [13, 21],
-      [9, 21],
-    ])
-      p.line(9, 14, a, b, WOOD[2]);
-    p.ell(9, 13, 7, 3.4, hx('#5a3a20'));
-    p.ell(9, 12, 7, 2.6, hx('#8a5a2a'));
-    p.ell(9, 12, 5.5, 1.8, lit ? FIRE[1] : hx('#2a1a14'));
+      [14, 21],
+    ]) {
+      p.line(9, 14, a, b, BR[1]);
+      p.line(9, 15, a + (a < 9 ? 1 : -1), b, BR[0]);
+      p.set(a, b, BR[3]);
+    }
+    p.line(9, 14, 9, 21, BR[2]);
+    p.set(9, 21, BR[3]);
+    p.ell(9, 12.6, 7.4, 3.6, BR[1]);
+    p.ell(9, 13.8, 6.2, 2.2, BR[0]);
+    p.ell(9, 11.6, 7, 2.4, BR[3]);
+    p.ell(9, 11.6, 5.8, 1.7, lit ? FIRE[1] : hx('#2e2a30'));
+    p.line(4, 11, 7, 10, BR[4]);
     if (lit) {
       flame(p, 7, 12, 8, 2.4, f);
       flame(p, 11, 12, 6, 2, (f + 3) % 8);
       p.set(6 + (f % 3), 11, FIRE[4]);
     } else {
-      // Угли тлеют, по ободу иней — «зажги меня».
-      p.set(7, 12, f ? FIRE[1] : FIRE[0]);
-      p.set(10, 12, f ? FIRE[0] : FIRE[1]);
-      for (let x = 2; x <= 16; x += 2) p.set(x, 10 + (x % 4 === 0 ? 1 : 0), SNOW[3]);
+      p.ell(9, 11.2, 4.6, 1.5, hx('#57535e'));
+      p.ell(9, 10.6, 3.6, 1, SNOW[3]);
+      p.set(8, 10, SNOW[4]);
+      p.set(10, 10, WHITE);
+      if (f) p.set(12, 11, FIRE[1]);
+      for (const x of [4, 8, 12, 15]) {
+        p.set(x, 14, ICE[3]);
+        p.set(x, 15, ICE[2]);
+      }
     }
     p.outline(INK);
     return [p, 9, 20];
