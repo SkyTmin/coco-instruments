@@ -1516,6 +1516,9 @@ function stringsZone(sim: Sim, api: SimApi): void {
   }
 }
 
+/** Когда убрать декорации последнего акта после победы (под опущенным занавесом). */
+const CLEAN = new WeakMap<Sim, { at: number; s: BState }>();
+
 registerFloor(13, {
   start(sim, api) {
     API_REF.api = api;
@@ -1540,6 +1543,12 @@ registerFloor(13, {
     stepOverture(sim, st, api, dt);
     stepTurn(sim, st, api, dt);
     stepIron(sim, st, api);
+    // Занавес поклона опустился — за ним сцену убирают к прежнему виду.
+    const cl = CLEAN.get(sim);
+    if (cl && sim.time >= cl.at) {
+      CLEAN.delete(sim);
+      restoreArena(sim, cl.s, api);
+    }
     st.doors = st.doors.filter((d) => {
       if (sim.time < d.until) return true;
       for (const i of d.cells) restoreTile(sim, st, api, i);
@@ -3494,6 +3503,7 @@ registerBoss('f13boss', {
     F13_FX.stars.length = 0;
     api.light(sim, 'f13moon', null);
     fx(sim, api, 'f13_bow', m.x, m.y, 21, 6.5, { cx: ACX, cy: ACY }, true);
+    CLEAN.set(sim, { at: sim.time + 5.7, s });
     api.camera(sim, m.x, m.y, 3.5);
     sim.events.push({ t: 'boss', what: 'f13_bow_call', text: 'ПОКЛОН', sub: 'нити лопнули — занавес' });
     return false;
