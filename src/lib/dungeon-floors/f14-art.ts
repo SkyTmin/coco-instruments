@@ -4712,9 +4712,16 @@ function lDeathBlade(g: LGeo, right: boolean, t: number): LBlade | null {
     t > DEATH_DROP + 0.17 && t < DEATH_DROP + 0.27
       ? Math.sin(((t - DEATH_DROP - 0.17) / 0.1) * Math.PI) * 1.6
       : 0;
+  // Ложится на пол под углом к телу: в кадре — с ракурсом пола (глубина ×LDEP).
+  const gf = right ? 0.55 : 0.75;
+  const gr = right ? 0.85 : -0.65;
+  const vx = gf * g.B.c - gr * g.B.s;
+  const vy = (gf * g.B.s + gr * g.B.c) * LDEP;
   const a0 = Math.atan2(b0.uy, b0.ux);
-  const aE = Math.cos(a0) >= 0 ? 0.1 : Math.PI - 0.1;
+  const aE = Math.atan2(vy, vx);
   const a = a0 + lWrap(aE - a0) * lIn(k);
+  const len = right ? 20 : 13;
+  const fl = Math.max(0.5, Math.hypot(vx, vy) / Math.hypot(gf, gr));
   const x = b0.x + (F[0] - b0.x) * k;
   const y = b0.y + (F[1] - 1.5 - b0.y) * k * k - hop;
   return {
@@ -4722,10 +4729,11 @@ function lDeathBlade(g: LGeo, right: boolean, t: number): LBlade | null {
     y,
     ux: Math.cos(a),
     uy: Math.sin(a),
-    len: right ? 20 : 13,
+    len: len * (1 + (fl - 1) * k),
     full: b0.full,
     pin: 3,
-    z: F[2],
+    // Глубина середины лежащего клинка: за телом — рисуется до тела.
+    z: F[2] + (len * 0.5 * (gf * g.B.s + gr * g.B.c)) / Math.hypot(gf, gr),
   };
 }
 
@@ -4753,14 +4761,7 @@ function lDeathPost(p: ClipPx, lit: Px, g: LGeo, L: LordLook, t: number): void {
       if (t - rel < 0.12) lit.set(Math.round(x), Math.round(y), alpha(L.glow, 0.8));
     }
   }
-  // Выроненные клинки.
-  for (const right of [true, false]) {
-    const b = lDeathBlade(g, right, t);
-    if (!b) continue;
-    const ang = Math.atan2(b.uy, b.ux);
-    if (right) minuteHand(p, b.x, b.y, ang, b.len, L.trim, null);
-    else hourHand(p, b.x, b.y, ang, b.len, L.trim);
-  }
+  lDeathBlades(p, g, L, t, true);
   // Стекло лица осыпается.
   if (t > 0.5 && t < 1) lShards(p, lit, g.head[0] - 2, g.head[1] - 2, t - 0.5, 7, 71, false);
   // Малые часы падают с пояса и бьются.
@@ -4773,14 +4774,26 @@ function lDeathPost(p: ClipPx, lit: Px, g: LGeo, L: LordLook, t: number): void {
   }
 }
 
+/** Выроненные клинки: перед телом (front) — поверх, за ним — до тела. */
+function lDeathBlades(p: Px, g: LGeo, L: LordLook, t: number, front: boolean): void {
+  for (const right of [true, false]) {
+    const b = lDeathBlade(g, right, t);
+    if (!b || b.z >= 0 !== front) continue;
+    const ang = Math.atan2(b.uy, b.ux);
+    if (right) minuteHand(p, b.x, b.y, ang, b.len, L.trim, null);
+    else hourHand(p, b.x, b.y, ang, b.len, L.trim);
+  }
+}
+
 /** Нимб соскальзывает за спину и ложится плашмя (до тела — оно его закрывает). */
 function lDeathHalo(p: Px, g: LGeo, L: LordLook, t: number): void {
   const bx = g.head[0] - g.H.c * 1.6;
   const by = g.head[1] - g.H.s * 1.6 * LDEP;
   const k = lclamp((t - DEATH_HALO) / 0.25, 0, 1);
   const bounce = t > DEATH_HALO + 0.25 && t < DEATH_HALO + 0.35 ? 0.06 : 0;
-  const cx = bx - g.B.c * 6 * k;
-  const cy = by + (LG - 6 - g.B.s * 4 - by) * k * k;
+  // Катится назад и к левому плечу: из-за коленопреклонённого тела виден край.
+  const cx = bx - g.B.c * 6 * k + g.B.s * 10 * k;
+  const cy = by + (LG - 6 - g.B.s * 4 - g.B.c * 6 - by) * k * k;
   const sx = Math.max(0.14, Math.abs(g.fv)) + (1 - Math.max(0.14, Math.abs(g.fv))) * k;
   lCog(p, cx, cy, 13, 18, -1 + 0.5 * k, L.halo, sx, 4, 6, 1 - (0.72 - bounce) * k);
 }
@@ -5268,7 +5281,10 @@ function* lBuild(q: LReq): Generator<void, MobFrame, void> {
   }
   if (q.tech === 'death') {
     o.noHalo = t >= DEATH_HALO;
-    if (o.noHalo) o.pre = (p, _lit, g, LL) => lDeathHalo(p, g, LL, t);
+    o.pre = (p, _lit, g, LL) => {
+      if (o.noHalo) lDeathHalo(p, g, LL, t);
+      lDeathBlades(p, g, LL, t, false);
+    };
     o.post = (p, lit, g, LL) => lDeathPost(p, lit, g, LL, t);
   }
   yield;
