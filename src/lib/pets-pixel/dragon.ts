@@ -169,7 +169,7 @@ export const RES: Record<Res, Canvas> = {
   s: { box: 48, cw: 128, ch: 104, bx: 40, by: 34 },
   l: { box: 112, cw: 300, ch: 244, bx: 94, by: 80 },
 };
-const GROUND = 45;
+const GROUND = 44;
 /** Насколько уголь темнее общего света рига. */
 const COAL_DARK = 0.15;
 let RR = 1;
@@ -2270,10 +2270,14 @@ function rainbow(p: Px, f: Frame, o: Pose): void {
       const i = y * w + x;
       const pl = pal[i];
       if (pl < 0 || pl === P_STONE || pl === P_MOUTH || pl === P_GOLD) continue;
+      // Пламя (струя, языки у камня, вспышка атаки) остаётся огнём — розовое пятно читалось брюхом.
+      // (части пламени без шва — в буфере номер −2).
+      if (pl === P_LAVA && f.idb[i] === -2) continue;
       const W = mul(worldAt(f, x, y), 1 / RR);
       const hz = (W[2] - o.z) / G;
       const hxx = (W[0] - o.x) / G;
-      const hue = 0.97 + (42 - hz) * 0.0185 + hxx * 0.004;
+      // Оттенок ступенями (14 на круг): радуга лентами, как в пиксельной палитре, и полоса легче.
+      const hue = Math.round((0.0 + (29 - hz) * 0.025 + hxx * 0.004) * 14) / 14;
       const u = tone[i] / (PAL[pl].length - 1);
       let col: RGBA;
       if (pl === P_COAL) col = hsl(hue, 0.78, 0.17 + u * 0.5);
@@ -2361,30 +2365,38 @@ function smoke(p: Px, c: Ctx, amt: number): void {
   if (amt <= 0.02) return;
   const { h } = c;
   const n = c.o.curl > 0.5 ? 2 : 3;
+  // Выше ноздрей дым идёт ЗА головой: поверх морды он закрывал глаза.
+  const body = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < p.w && y < p.h && p.data[(y * p.w + x) * 4 + 3] > 0;
+  const mask = new Uint8Array(p.w * p.h);
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++) mask[y * p.w + x] = body(x, y) ? 1 : 0;
   for (const side of [-1, 1]) {
     const nose = h.at([side * 1.45, 8.2, 0.4]);
     for (let j = 0; j < n; j++) {
       const born = (j / n + (side > 0 ? 0.17 : 0)) * PER;
-      const life = PER * (c.o.curl > 0.5 ? 0.55 : 0.4);
+      const life = PER * (c.o.curl > 0.5 ? 0.55 : 0.45);
       const age = wrap(c.tau - born, PER);
       if (age > life) continue;
       const u = age / life;
       const pt: V3 = add(nose, [
-        side * (1.2 + 4.5 * u) + Math.sin(u * 5 + j) * 0.6,
+        side * (1.6 + 6.5 * u) + Math.sin(u * 5 + j) * 0.6,
         0.5,
-        2.0 + 8 * u - 2 * u * u,
+        1.6 + 9.5 * u - 2 * u * u,
       ]);
       const [sx, sy] = project(mul(pt, RR));
       const cx = OX + sx;
       const cy = OY + sy;
-      const rad = (0.7 + 1.6 * u) * RR * (HI ? 0.9 : 1);
-      const dens = amt * (1 - u) * 0.95;
-      const tone = Math.max(0, Math.min(4, Math.round(3.5 - u * 2.5)));
+      // Клуб растёт и светлеет к краю силуэта головы: серый на сером не читался (2–6 пикселей на малой).
+      const rad = (1.0 + 2.1 * u) * RR * (HI ? 0.85 : 1);
+      const dens = amt * (1 - 0.85 * u);
+      const tone = Math.max(0, Math.min(4, Math.round(4.2 - u * 2.6)));
       for (let y = Math.floor(cy - rad); y <= Math.ceil(cy + rad); y++)
         for (let x = Math.floor(cx - rad); x <= Math.ceil(cx + rad); x++) {
           const dd = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / rad;
           if (dd > 1) continue;
           if (!dith(x, y, dens * (1.1 - dd * 0.6))) continue;
+          if (u > 0.16 && x >= 0 && y >= 0 && x < p.w && y < p.h && mask[y * p.w + x]) continue;
           p.set(x, y, SMOKE[dd < 0.5 ? tone : Math.max(0, tone - 1)]);
         }
     }
