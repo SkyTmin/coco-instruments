@@ -4252,229 +4252,6 @@ regMob('f12_keeper', (m, pose) => {
   return mobFrame(c, CV_KEEP, ex);
 });
 
-// ---- Шаманка (наездница мамонта) ---------------------------------------------
-
-const SH_PARKA = ramp('#3a2414', '#5e3c22', '#8a5e36', '#b88a56', '#e2bc88');
-const SH_FACE = ramp('#5a3a2a', '#86563c', '#b07a56', '#d4a07a', '#f0c8a0');
-const CV_SHA: Canvas = { w: 40, h: 46, ox: 20, oy: 38 };
-
-interface ShO {
-  body: Body;
-  drum: number;
-  aurora: number;
-}
-
-function shamanParts(parts: Part[], o: ShO, look: MobPose['look'], dx = 0, dz = 0): { head: V3 } {
-  const sub: Part[] = [];
-  const park = lookRamp(SH_PARKA, look);
-  const d: Dress = { skin: SH_FACE, torso: park, legs: park, arms: park };
-  const j = humanoid(sub, o.body, d);
-  // Капюшон с мехом и рога-оленьи.
-  sub.push({
-    x: j.head[0] - 0.5,
-    y: 0,
-    z: j.head[2] + 0.4,
-    rx: 2.9,
-    ry: 3,
-    rz: 3,
-    ramp: park,
-    fur: 0.3,
-    id: 120,
-  });
-  sub.push({
-    x: j.head[0] + 1.5,
-    y: 0,
-    z: j.head[2] - 0.2,
-    rx: 1.2,
-    ry: 1.8,
-    rz: 2,
-    ramp: SH_FACE,
-    id: 121,
-  });
-  for (const e of [-1, 1]) {
-    const ant = bez(
-      [j.head[0] - 1, e * 1.5, j.head[2] + 2.4],
-      [j.head[0] - 2, e * 4, j.head[2] + 5],
-      [j.head[0] - 1, e * 5, j.head[2] + 8],
-      4,
-    );
-    ant.forEach((pt, i) =>
-      sub.push({
-        x: pt[0],
-        y: pt[1],
-        z: pt[2],
-        rx: 0.6,
-        ry: 0.6,
-        rz: 0.6,
-        ramp: BONE,
-        id: 122 + e,
-      }),
-    );
-    sub.push({
-      x: j.head[0] - 1.5,
-      y: e * 4.4,
-      z: j.head[2] + 5.4,
-      rx: 0.5,
-      ry: 1.6,
-      rz: 0.5,
-      ramp: BONE,
-      id: 122 + e,
-    });
-  }
-  // Бубен в левой руке: плоский диск, обод охрой.
-  sub.push({
-    x: j.handL[0] + 1,
-    y: j.handL[1] - 0.6,
-    z: j.handL[2] + 0.6,
-    rx: 3.2,
-    ry: 0.6,
-    rz: 3.2,
-    yaw: 0.2,
-    roll: o.drum * 0.3,
-    ramp: BONE,
-    id: 125,
-  });
-  sub.push({
-    x: j.handL[0] + 1,
-    y: j.handL[1] - 0.2,
-    z: j.handL[2] + 0.6,
-    rx: 3.5,
-    ry: 0.4,
-    rz: 3.5,
-    yaw: 0.2,
-    ramp: OCHRE,
-    id: 126,
-  });
-  if (o.aurora > 0)
-    sub.push({
-      x: j.handR[0],
-      y: j.handR[1],
-      z: j.handR[2] + 1,
-      rx: 1.6 * o.aurora,
-      ry: 1.6 * o.aurora,
-      rz: 1.6 * o.aurora,
-      ramp: AURORA,
-      glow: true,
-      id: 127,
-    });
-  for (const pt of sub) parts.push({ ...pt, x: pt.x + dx, z: pt.z + dz });
-  return { head: [j.head[0] + dx, 0, j.head[2] + dz] };
-}
-
-function shamanBuild(look: MobPose['look'], o: ShO): Build {
-  const parts: Part[] = [];
-  const { head } = shamanParts(parts, o, look);
-  return {
-    parts,
-    eyes: [
-      { x: head[0] + 2.4, y: -0.8, z: head[2] + 0.2, c: hx('#6cff9a') },
-      { x: head[0] + 2.4, y: 0.8, z: head[2] + 0.2, c: hx('#6cff9a') },
-    ],
-  };
-}
-
-const SH_BASE: ShO = {
-  body: { ...BODY0, s: 0.85, handL: [3, -4, 11], handR: [2.5, 4, 9] },
-  drum: 0,
-  aurora: 0,
-};
-
-regMob('f12_shaman', (m, pose) => {
-  const mode = pose.mode;
-  let o = SH_BASE;
-  let key = '';
-  const HIGH = 24;
-  const ex: Partial<MobFrame> = { shadow: 4.5, still: true, lift: 0.01 };
-  if (mode === 'f12s_jump') {
-    const k = Math.min(1, pose.t / 0.9);
-    o = {
-      ...SH_BASE,
-      body: {
-        ...SH_BASE.body,
-        crouch: k < 0.15 ? 2 : 0,
-        handR: [1, 4.5, 15],
-        handL: [1, -4.5, 15],
-      },
-    };
-    key = `jump${k < 0.15 ? 0 : 1}`;
-    ex.lift = HIGH * easeOut(k) + 8 * (1 - k);
-    ex.ghost = { every: 0.06, life: 0.25, tint: '#9affd8', alpha: 0.3 };
-  } else if (mode === 'f12s_high') {
-    // Под сводом в ленте сияния: недосягаема.
-    const f = Math.floor(pose.now * 4) % 4;
-    o = {
-      ...SH_BASE,
-      body: { ...SH_BASE.body, handR: [1, 4.5, 15 + (f % 2)], handL: [1, -4.5, 15] },
-      aurora: 1,
-    };
-    key = `high${f}`;
-    ex.lift = HIGH + Math.sin(pose.now * 2) * 2;
-    ex.alpha = 0.85;
-    ex.shadow = 3;
-  } else if (mode === 'f12s_dive') {
-    const k = Math.min(1, pose.t / 0.45);
-    o = { ...SH_BASE, body: { ...SH_BASE.body, lean: 0.5, handR: [4, 3, 11], handL: [4, -3, 11] } };
-    key = 'dive';
-    ex.lift = HIGH * (1 - k * k) + 0.01;
-    ex.ghost = { every: 0.04, life: 0.2, tint: '#9affd8', alpha: 0.35 };
-  } else if (mode === 'f12s_cast') {
-    // Бьёт в бубен: руки вверх и вниз в такт, кристалл сияния в кулаке.
-    const k = Math.min(1, pose.t / 1.1);
-    const beat = Math.floor(pose.t * 8) % 2;
-    o = {
-      ...SH_BASE,
-      body: {
-        ...SH_BASE.body,
-        wide: 0.6,
-        lean: -0.1,
-        handR: [2, 3.5, beat ? 16 : 12],
-        handL: [3, -3.5, 14],
-      },
-      drum: beat,
-      aurora: 0.6 + k * 0.6,
-    };
-    key = `cast${beat}${Math.round(k * 4)}`;
-  } else if (mode === 'f12s_low') {
-    // Выдохлась: на колене, тяжело дышит — бей.
-    const f = Math.floor(pose.t * 3) % 2;
-    o = {
-      ...SH_BASE,
-      body: {
-        ...SH_BASE.body,
-        kneel: 1,
-        lean: 0.5 + f * 0.08,
-        handR: [3, 4, 4],
-        handL: [3.5, -3, 6],
-      },
-    };
-    key = `low${f}`;
-  } else if (mode === 'f12s_rise') {
-    const k = Math.min(1, pose.t / 0.45);
-    o = {
-      ...SH_BASE,
-      body: { ...SH_BASE.body, crouch: k < 0.2 ? 2 : 0, handR: [1, 4.5, 15], handL: [1, -4.5, 15] },
-    };
-    key = `rise${k < 0.2 ? 0 : 1}`;
-    ex.lift = HIGH * easeOut(Math.max(0, (k - 0.2) / 0.8)) + 0.01;
-  } else if (mode === 'dying' || mode === 'escape') {
-    const k = Math.min(1, pose.t / 0.8);
-    o = {
-      ...SH_BASE,
-      body: { ...SH_BASE.body, kneel: 1, lean: 0.9 * k, handR: [3, 4, 2], handL: [3, -4, 2] },
-    };
-    key = `die${Math.round(k * 6)}`;
-    ex.alpha = 1 - k;
-    ex.linger = 0.8;
-  } else {
-    o = SH_BASE;
-    key = 'idle';
-  }
-  const c = rigCached('f12_shaman', `${pose.look}|${key}`, m.face, CV_SHA, pose.flash, () =>
-    shamanBuild(pose.look, o),
-  );
-  return mobFrame(c, CV_SHA, ex);
-});
-
 // ---- Снежный голем ----------------------------------------------------------
 
 const G_SNOW = ramp('#3a4c72', '#5a7098', '#8098c0', '#aec2e0', '#dce8f6');
@@ -4700,631 +4477,1614 @@ regMob('f12_golem', (m, pose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Ледниковый мамонт с шаманкой на спине. Боком не ходит: 16 сторон,
-// шаг ног по пройденному пути (`data.walk`, поворот на месте тоже шагает),
-// тяжёлый корпус качается в такт. Кадр контакта = кадр урона мозга.
+// Ледниковый мамонт с шаманкой сияния (анимации 12 — стандарт v2.85).
+//
+// Тот же риг из эллипсоидов, что у зверей этажа, но поза — из полусотни
+// чисел (`MamO`, `ShO`), а кадр техники — от времени режима мозга по ключам
+// с кривыми (`kf`): подготовка медленная, удар — разгоном, проводка —
+// торможением; кадр контакта = кадр урона мозга. Запаздывающие части (хобот,
+// шерсть, уши, наездница, ленты) — те же ключи со сдвигом времени. Шаг — по
+// пройденному пути: стопа в опоре стоит на льду, переступ на развороте
+// идёт вбок. Боком не ходит: 16 сторон, тело всегда по `m.face`.
 // ---------------------------------------------------------------------------
 
-const M_FUR = ramp('#170c08', '#2e1a10', '#4c2e1a', '#6e4628', '#946238');
-const M_FUR2 = ramp('#120a06', '#26160c', '#3e2414', '#5a3820', '#7a5030');
-const M_TUSK = ramp('#6a604c', '#9a8e72', '#c8bc98', '#e8e0c4', '#fffaea');
-const M_SKIN = ramp('#1a1210', '#2e221c', '#4a3a30', '#6a5446', '#8a705e');
-/** Мамонт крупнее модели в 1,3 раза: на арене он должен давить массой. */
-const MAM_SC = 1.3;
-const CV_MAM: Canvas = { w: 144, h: 128, ox: 72, oy: 84 };
-
-/** Масштаб сборки: части, глаза и рисунок поверх. */
-function scaleBuild(b: Build, s: number): Build {
-  return {
-    ...b,
-    parts: b.parts.map((p) => ({
-      ...p,
-      x: p.x * s,
-      y: p.y * s,
-      z: p.z * s,
-      rx: p.rx * s,
-      ry: p.ry * s,
-      rz: p.rz * s,
-    })),
-    eyes: b.eyes?.map((e) => ({ ...e, x: e.x * s, y: e.y * s, z: e.z * s, r: 1 })),
-    clip: b.clip === undefined ? undefined : b.clip * s,
-    post: b.post ? (p, scr) => b.post?.(p, (x, y, z) => scr(x * s, y * s, z * s)) : undefined,
-  };
+/** Ключ позы: [время, значение, подход — i разгон, o торможение, l ровно, иначе плавно]. */
+type Key = [number, number, string?];
+function kf(t: number, keys: Key[]): number {
+  if (t <= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < keys.length; i++) {
+    const k = keys[i];
+    if (t < k[0]) {
+      const p = keys[i - 1];
+      const u = (t - p[0]) / (k[0] - p[0]);
+      const e = k[2];
+      const w =
+        e === 'i' ? u * u * u : e === 'o' ? 1 - (1 - u) ** 3 : e === 'l' ? u : u * u * (3 - 2 * u);
+      return p[1] + (k[1] - p[1]) * w;
+    }
+  }
+  return keys[keys.length - 1][1];
+}
+/** Горб 0 → 1 → 0 на отрезке [a, b]. */
+const bump = (t: number, a: number, b: number) =>
+  t <= a || t >= b ? 0 : Math.sin(((t - a) / (b - a)) * Math.PI);
+const lerp3 = (a: V3, b: V3, k: number): V3 => [
+  lerp(a[0], b[0], k),
+  lerp(a[1], b[1], k),
+  lerp(a[2], b[2], k),
+];
+function bezQ(a: V3, b: V3, c: V3, u: number): V3 {
+  const v = 1 - u;
+  return [
+    v * v * a[0] + 2 * u * v * b[0] + u * u * c[0],
+    v * v * a[1] + 2 * u * v * b[1] + u * u * c[1],
+    v * v * a[2] + 2 * u * v * b[2] + u * u * c[2],
+  ];
+}
+/** Колотушка по ударам `hits`: занос (−1) за 0,22 с, удар разгоном, контакт (1) ровно в ударе, отскок. */
+function beatAt(t: number, hits: number[]): number {
+  for (const h of hits) {
+    if (t >= h - 0.22 && t < h - 0.07) return -ease((t - (h - 0.22)) / 0.15);
+    if (t >= h - 0.07 && t < h) return -1 + 2 * ((t - (h - 0.07)) / 0.07) ** 2;
+    if (t >= h && t < h + 0.14) return 1 - ease((t - h) / 0.14);
+  }
+  return 0;
 }
 
+const FROST_C = hx('#d4e6f8');
+/** Иней на шерсти: светлые тона седеют сильнее тёмных. */
+function frostRamp(r: RGBA[], k: number): RGBA[] {
+  if (k <= 0) return r;
+  return r.map((c, i) => mixc(c, FROST_C, Math.min(0.9, k * (0.35 + i * 0.16))));
+}
+
+const RIM_C = hx('#a9c8f2');
+/** Свет луны по кромке сверху-слева: тёмный силуэт не тонет в ночном полу. */
+function rimLight(p: Px, c: RGBA, k: number): void {
+  const { w, h, data } = p;
+  const dark = (i: number) =>
+    data[i + 3] === 0 || (data[i] === INK[0] && data[i + 1] === INK[1] && data[i + 2] === INK[2]);
+  const hits: number[] = [];
+  for (let y = 1; y < h; y++)
+    for (let x = 1; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (data[i + 3] < 255 || dark(i)) continue;
+      const up = dark(i - w * 4);
+      const lf = dark(i - 4);
+      if (up || lf) hits.push(i, up ? (lf ? 1 : 0.8) : 0.45);
+    }
+  for (let j = 0; j < hits.length; j += 2) {
+    const i = hits[j];
+    const a = hits[j + 1] * k;
+    data[i] += (c[0] - data[i]) * a;
+    data[i + 1] += (c[1] - data[i + 1]) * a;
+    data[i + 2] += (c[2] - data[i + 2]) * a;
+  }
+}
+
+/** Треугольник в маску следа (максимум доли), за телом — не рисуется. */
+function fillTri(
+  mask: Float32Array,
+  w: number,
+  h: number,
+  a: number[],
+  b: number[],
+  c: number[],
+  v: number,
+  fx: PostFx,
+  zt: number,
+): void {
+  const d = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  if (Math.abs(d) < 1e-3) return;
+  const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0])));
+  const x1 = Math.min(w - 1, Math.ceil(Math.max(a[0], b[0], c[0])));
+  const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], c[1])));
+  const y1 = Math.min(h - 1, Math.ceil(Math.max(a[1], b[1], c[1])));
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const w0 = ((b[0] - px) * (c[1] - py) - (b[1] - py) * (c[0] - px)) / d;
+      const w1 = ((c[0] - px) * (a[1] - py) - (c[1] - py) * (a[0] - px)) / d;
+      if (w0 < -0.02 || w1 < -0.02 || 1 - w0 - w1 < -0.02) continue;
+      if (fx.z(x, y) > zt + 3) continue;
+      const i = y * w + x;
+      if (mask[i] < v) mask[i] = v;
+    }
+}
+
+// ---- Шаманка сияния ----------------------------------------------------------
+// Наездница мамонта и (в фазе 3) летунья под сводом — одна модель: парка с
+// меховой опушкой, капюшон, оленьи рога, бубен в левой, колотушка в правой,
+// две ленты сияния от плеч (светятся поверх темноты). На спине мамонта и в
+// небе она одна и та же — и одного размера.
+
+const SH_PARKA = ramp('#3a2414', '#5e3c22', '#8a5e36', '#b88a56', '#e2bc88');
+const SH_FACE = ramp('#5a3a2a', '#86563c', '#b07a56', '#d4a07a', '#f0c8a0');
+const SH_TRIM = ramp('#5a5e6e', '#8a90a2', '#b8bece', '#dde2ec', '#ffffff');
+const SH_LEG = ramp('#1a120c', '#2e2016', '#4a3424', '#664a34', '#86664a');
+const RIB_V = ramp('#3a1a6a', '#5a2ea0', '#8a5ad8', '#b89aff', '#eee0ff');
+const SH_EYE = hx('#6cff9a');
+/** Масштаб наездницы и летуньи — как у мамонта: спрыгнув, она не уменьшается. */
+const SH_SC = 1.3;
+const CV_SHA: Canvas = { w: 76, h: 92, ox: 38, oy: 70 };
+const SH_HIGH = 30;
+
+interface ShO {
+  body: Body;
+  /** Бубен: 0 у груди … 1 над головой. */
+  drum: number;
+  /** Колотушка: −1 занесена, 0 у груди, 1 удар в бубен. */
+  beat: number;
+  /** Сила сияния лент 0…2. */
+  aurora: number;
+  /** Ленты: фаза волны, размах, подъём (−1 висят … 2 вверх), длина 0…1. */
+  rib: number;
+  ribA: number;
+  ribUp: number;
+  ribLen: number;
+  /** Подол парки снесён назад (полёт) 0…1. */
+  hem: number;
+}
+
+/** Кисти по бубну и колотушке (оси фигуры до масштаба). */
+function shHands(drum: number, beat: number): { L: V3; R: V3 } {
+  const L = lerp3([3.6, -3.4, 11], [2.4, -3, 17.5], drum);
+  const rest = lerp3([3.4, 3.6, 10], [2.6, 3.6, 15.5], drum);
+  const up = lerp3([-0.8, 4.6, 16.5], [-1, 4.4, 21.5], drum);
+  const hit: V3 = [L[0] + 1.4, L[1] + 3.4, L[2] + 0.4];
+  return { L, R: beat < 0 ? lerp3(rest, up, -beat) : lerp3(rest, hit, beat) };
+}
+
+/** Середина бубна в осях фигуры (с масштабом фигуры) — та же точка, что рисуется. */
+function shDrumLocal(o: ShO): V3 {
+  const b = o.body;
+  const s = b.s;
+  return [
+    b.handL[0] * s + 0.9 * s,
+    b.handL[1] * s + 1.1 * s,
+    b.handL[2] * s + b.up - b.crouch + 0.2 * s,
+  ];
+}
+
+/** Наклон вектора фигуры вперёд (как корпус `humanoid`). */
+function tiltV(v: V3, a: number): V3 {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return [v[0] * c + v[2] * s, v[1], v[2] * c - v[0] * s];
+}
+
+function shamanParts(
+  parts: Part[],
+  o: ShO,
+  look: MobPose['look'],
+  place: (p: V3) => V3,
+  pitch = 0,
+  roll = 0,
+): { head: V3; drum: V3; eyes: Eye[] } {
+  const sub: Part[] = [];
+  const b = o.body;
+  const s = b.s;
+  const park = lookRamp(SH_PARKA, look);
+  const j = humanoid(sub, b, { skin: SH_FACE, torso: park, legs: SH_LEG, arms: park });
+  const hd = j.head;
+  const at = (v: V3): V3 => {
+    const t = tiltV(v, b.lean);
+    return [hd[0] + t[0] * s, hd[1] + t[1] * s, hd[2] + t[2] * s];
+  };
+  // Капюшон, лицо и меховая опушка кольцом вокруг лица.
+  const hood = at([-0.6, 0, 0.4]);
+  sub.push({ x: hood[0], y: 0, z: hood[2], rx: 2.9 * s, ry: 3 * s, rz: 3.1 * s, ramp: park, fur: 0.25, pitch: -b.lean, id: 120 });
+  const face = at([1.5, 0, -0.2]);
+  sub.push({ x: face[0], y: 0, z: face[2], rx: 1.4 * s, ry: 1.9 * s, rz: 2.1 * s, ramp: SH_FACE, pitch: -b.lean, id: 121 });
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * TAU;
+    const c = at([1.5, Math.cos(a) * 2.5, Math.sin(a) * 2.7 + 0.1]);
+    sub.push({ x: c[0], y: c[1], z: c[2], rx: 1.05 * s, ry: 1.05 * s, rz: 1.05 * s, ramp: SH_TRIM, fur: 0.3, id: 122 });
+  }
+  // Оленьи рога над капюшоном.
+  for (const e of [-1, 1]) {
+    const ant = bez(at([-0.8, e * 1.4, 2.4]), at([-2, e * 4, 5]), at([-1.2, e * 5, 8]), 4);
+    ant.forEach((pt) =>
+      sub.push({ x: pt[0], y: pt[1], z: pt[2], rx: 0.6 * s, ry: 0.6 * s, rz: 0.6 * s, ramp: BONE, id: 123 }),
+    );
+    const tine = at([-1.6, e * 4.2, 5.8]);
+    sub.push({ x: tine[0], y: tine[1], z: tine[2], rx: 0.5 * s, ry: 1.5 * s, rz: 0.5 * s, ramp: BONE, id: 123 });
+  }
+  // Подол парки с опушкой: в полёте сносит назад.
+  const hipZ = (9 - b.crouch - b.kneel * 4.5) * s + b.up;
+  for (const [dz, r, rp] of [
+    [-1.3, 3.3, park],
+    [-2.9, 3.6, SH_TRIM],
+  ] as const)
+    sub.push({
+      x: -o.hem * (dz < -2 ? 2.6 : 1.4) * s,
+      y: 0,
+      z: hipZ + (dz + o.hem * (dz < -2 ? 1.8 : 0.8)) * s,
+      rx: r * s,
+      ry: r * 1.05 * s,
+      rz: 1.5 * s,
+      ramp: rp,
+      fur: 0.2,
+      pitch: o.hem * 0.6,
+      id: 124,
+    });
+  // Бубен в левой: кожа и обод охрой; поднятый — смотрит вверх.
+  const dc = shDrumLocal(o);
+  sub.push({ x: dc[0], y: dc[1], z: dc[2], rx: 3.6 * s, ry: 0.75 * s, rz: 3.6 * s, yaw: 0.15, roll: -o.drum * 0.75, ramp: BONE, id: 125 });
+  sub.push({ x: dc[0], y: dc[1] - 0.3 * s, z: dc[2], rx: 3.95 * s, ry: 0.45 * s, rz: 3.95 * s, yaw: 0.15, roll: -o.drum * 0.75, ramp: OCHRE, id: 126 });
+  // Колотушка в правой: занесена — вверх-назад, удар — в кожу бубна.
+  const bd = o.beat < 0 ? lerp3([0.7, -0.5, 0.25], [-0.3, 0.25, 1], -o.beat) : lerp3([0.7, -0.5, 0.25], [0.25, -1, -0.1], o.beat);
+  const bl = Math.hypot(bd[0], bd[1], bd[2]) || 1;
+  const end = haft(sub, j.handR, Math.atan2(bd[1], bd[0]), Math.asin(bd[2] / bl), 0.6 * s, 4.6 * s, 0.42 * s, WOOD, 127);
+  sub.push({ x: end[0], y: end[1], z: end[2], rx: 1.05 * s, ry: 1.05 * s, rz: 1.05 * s, ramp: SH_TRIM, id: 128 });
+  // Ленты сияния от плеч: волна бежит от плеча к концу, цвет — к фиолету.
+  const aur = Math.max(0, o.aurora);
+  const ribR = [0, 1, 2].map((q) =>
+    AURORA.map((c, i) => mixc(mixc(c, RIB_V[i], q * 0.42), WHITE, Math.max(0, aur - 1) * 0.35)),
+  );
+  const n = Math.round(10 * Math.max(0, Math.min(1, o.ribLen)));
+  for (const e of [-1, 1]) {
+    const base: V3 = [
+      j.chest[0] + tiltV([-1.7, 0, 0.8], b.lean)[0] * s,
+      e * 2.7 * s,
+      j.chest[2] + tiltV([-1.7, 0, 0.8], b.lean)[2] * s,
+    ];
+    for (let i = 1; i <= n; i++) {
+      const u = i / 10;
+      const ph = o.rib - u * 4.2 + (e > 0 ? 1.3 : 0);
+      const r = (0.95 - u * 0.35) * s;
+      sub.push({
+        x: base[0] - u * 12 * s,
+        y: base[1] * (1 + u * 0.45) + Math.sin(ph) * o.ribA * u * 2.4 * s,
+        z: base[2] + o.ribUp * u * 8 * s + Math.cos(ph * 0.9) * o.ribA * u * 1.4 * s,
+        rx: r,
+        ry: r,
+        rz: r,
+        ramp: ribR[Math.min(2, Math.floor(u * 3))],
+        glow: aur > 0.05,
+        id: 130 + (e > 0 ? 1 : 0),
+      });
+    }
+  }
+  for (const pt of sub) {
+    const c = place([pt.x, pt.y, pt.z]);
+    parts.push({ ...pt, x: c[0], y: c[1], z: c[2], pitch: (pt.pitch ?? 0) + pitch, roll: (pt.roll ?? 0) + roll });
+  }
+  const eyes: Eye[] = [-1, 1].map((e) => {
+    const c = place(at([2.75, e * 0.75, 0.15]));
+    return { x: c[0], y: c[1], z: c[2], c: SH_EYE };
+  });
+  return { head: place(hd), drum: place(dc), eyes };
+}
+
+// ---- Мамонт -------------------------------------------------------------------
+
+const M_FUR = ramp('#1a0e0a', '#38200f', '#5c3519', '#84512a', '#b0763e');
+const M_HAIR = ramp('#120906', '#2a160b', '#472613', '#6a3b1d', '#93572b');
+const M_TUSK = ramp('#6a604c', '#9a8e72', '#c8bc98', '#e8e0c4', '#fffaea');
+const M_TUSKB = ramp('#4a3e2c', '#6e5e44', '#968466', '#bcae8c', '#ddd2b4');
+const M_SKIN = ramp('#1c1310', '#33241c', '#4f3b2e', '#6e5444', '#8e705c');
+const M_MOUTH = ramp('#2a0a0a', '#4a1414', '#6a2222', '#8a3434', '#aa4a4a');
+const M_EYE = hx('#8ad8ff');
+/** Мамонт крупнее модели в 1,3 раза: на арене он должен давить массой. */
+const MAM_SC = 1.3;
+const CV_MAM: Canvas = { w: 176, h: 160, ox: 88, oy: 108 };
+/** Цикл шага и галопа, клеток пути; ход стопы в опоре — доля цикла (ноги не скользят). */
+const WALK_C = 2.0;
+const GALLOP_C = 3.6;
+const WALK_S = (0.7 * WALK_C * 16) / MAM_SC;
+const GALLOP_S = (0.42 * GALLOP_C * 16) / MAM_SC;
+
 interface MamO {
-  /** Шаг: фаза 0…1 и длина шага (0 — стоит). */
-  walk: number;
+  /** Шаг: фаза 0…1, походка (0 стоит, 1 шаг, 2 галоп), ход стопы в опоре, подъём стопы. */
+  ph: number;
+  gait: number;
   stride: number;
-  /** Голова: вверх(−)/вниз(+) и в стороны (рад). */
+  lift: number;
+  /** Переступ на месте при развороте: вбок, со знаком поворота. */
+  side: number;
+  /** Корпус: вверх-вниз, тангаж (перед вверх +) вокруг задних ног, крен, присед. */
+  bob: number;
+  pitch: number;
+  roll: number;
+  crouch: number;
+  /** Голова: вниз (+), вбок; пасть; уши (0 прижаты … 1 развёрнуты). */
   hp: number;
   hy: number;
-  /** Хобот: −1 завит вверх, 0 висит, 1 вытянут вперёд. */
-  trunk: number;
-  /** На дыбы 0…1 (перед вверх), присел. */
-  rear: number;
-  crouch: number;
-  /** Подъём передней правой/левой ноги (топот, рытьё). */
-  liftR: number;
+  jaw: number;
+  ear: number;
+  /** Хобот: угол первого звена вниз от «вперёд», завиток на звено, вбок. */
+  ta: number;
+  tk: number;
+  tsw: number;
+  /** Передние ноги: подъём и вынос левой/правой; вынос всех передних и задних. */
   liftL: number;
-  /** Крен корпуса (оглушён, падение). */
-  roll: number;
-  /** Пасть открыта (рёв). */
-  mouth: number;
+  liftR: number;
+  reachL: number;
+  reachR: number;
+  reachF: number;
+  reachB: number;
+  /** На коленях: передние, задние (0…1). */
+  kneelF: number;
+  kneelB: number;
+  /** Шерсть: снос кончиков (+ вперёд), подлёт, фаза и сила волны, снос вбок. */
+  furX: number;
+  furUp: number;
+  furPh: number;
+  furAmp: number;
+  furRoll: number;
+  /** Наездница: подскок, наклон, колотушка, бубен, присед, руки вверх, сползание. */
   rider: boolean;
-  /** Поза наездницы: 0 сидит, 1 бьёт в бубен вверх. */
-  drum: number;
-  /** Трещина бивня светится (оглушён — слабое место). */
-  crack: boolean;
-  /** Иней на шерсти по фазам. */
+  rUp: number;
+  rLean: number;
+  rBeat: number;
+  rDrum: number;
+  rCrouch: number;
+  rArms: number;
+  rSlide: number;
+  rRib: number;
+  /** Трещина бивня: 0 тёмная, 1 светится (оглушён), 2 вспышка (удар в стену). */
+  crack: number;
+  /** Кольцо звёзд над головой: фаза (−1 — нет); глаза закрыты. */
+  daze: number;
+  shut: boolean;
+  /** Фаза боя (иней растёт), иней смерти поверх всего. */
   phase: number;
-  /** Смерть: доля заваливания на бок и иней. */
-  fall: number;
   frost: number;
-  /** Отклонение назад (тормозит). */
-  brace: number;
+  /** Пар из хобота 0…1 (клуб выдоха). */
+  breath: number;
+  /** След бивней: прошлые кадры [кончик Л, кончик П, середина Л, середина П]. */
+  trail: V3[][] | null;
 }
 
 const MAM0: MamO = {
-  walk: 0,
+  ph: 0,
+  gait: 0,
   stride: 0,
-  hp: 0,
-  hy: 0,
-  trunk: 0,
-  rear: 0,
-  crouch: 0,
-  liftR: 0,
-  liftL: 0,
+  lift: 0,
+  side: 0,
+  bob: 0,
+  pitch: 0,
   roll: 0,
-  mouth: 0,
+  crouch: 0,
+  hp: 0.06,
+  hy: 0,
+  jaw: 0,
+  ear: 0.2,
+  ta: 1.3,
+  tk: -0.06,
+  tsw: 0,
+  liftL: 0,
+  liftR: 0,
+  reachL: 0,
+  reachR: 0,
+  reachF: 0,
+  reachB: 0,
+  kneelF: 0,
+  kneelB: 0,
+  furX: 0,
+  furUp: 0,
+  furPh: 0,
+  furAmp: 0.04,
+  furRoll: 0,
   rider: true,
-  drum: 0,
-  crack: false,
+  rUp: 0,
+  rLean: 0,
+  rBeat: 0,
+  rDrum: 0,
+  rCrouch: 0,
+  rArms: 0,
+  rSlide: 0,
+  rRib: 0,
+  crack: 0,
+  daze: -1,
+  shut: false,
   phase: 0,
-  fall: 0,
   frost: 0,
-  brace: 0,
+  breath: 0,
+  trail: null,
 };
 
-/** Повернуть точку вокруг оси y (наклон корпуса вокруг задних ног). */
-function pitchAbout(p: V3, piv: V3, a: number): V3 {
-  if (!a) return p;
-  const dx = p[0] - piv[0];
-  const dz = p[2] - piv[2];
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  return [piv[0] + dx * c - dz * s, p[1], piv[2] + dx * s + dz * c];
+/** Скелет позы: тело (тангаж вокруг задних ног, крен) и голова в своих осях. */
+interface MamSkel {
+  z0: number;
+  /** Точка тела → модель. */
+  B: (p: V3) => V3;
+  /** Только крен (стопы на льду при падении на бок). */
+  Rl: (p: V3) => V3;
+  /** Точка головы (от основания шеи) → модель. */
+  H: (x: number, y: number, z: number) => V3;
 }
-/** Крен вокруг продольной оси (x) на высоте `z0`. */
-function rollAbout(p: V3, z0: number, a: number): V3 {
-  if (!a) return p;
-  const dz = p[2] - z0;
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  return [p[0], p[1] * c - dz * s, z0 + p[1] * s + dz * c];
+
+function mamSkel(o: MamO): MamSkel {
+  const z0 = 26 - o.crouch + o.bob;
+  const piv: V3 = [-13, 0, 16 - o.crouch * 0.6];
+  const cp = Math.cos(o.pitch);
+  const sp = Math.sin(o.pitch);
+  const cr = Math.cos(o.roll);
+  const sr = Math.sin(o.roll);
+  const ZR = 5;
+  const Rl = (p: V3): V3 => {
+    const z = p[2] - ZR;
+    return [p[0], p[1] * cr - z * sr, ZR + p[1] * sr + z * cr];
+  };
+  const B = (p: V3): V3 => {
+    const dx = p[0] - piv[0];
+    const dz = p[2] - piv[2];
+    return Rl([piv[0] + dx * cp - dz * sp, p[1], piv[2] + dx * sp + dz * cp]);
+  };
+  const N: V3 = [17, 0, z0 + 4];
+  const ch = Math.cos(o.hp);
+  const sh = Math.sin(o.hp);
+  const cy = Math.cos(o.hy);
+  const sy = Math.sin(o.hy);
+  const H = (x: number, y: number, z: number): V3 => {
+    const px = x * ch + z * sh;
+    const pz = z * ch - x * sh;
+    return B([N[0] + px * cy - y * sy, px * sy + y * cy, N[2] + pz]);
+  };
+  return { z0, B, Rl, H };
+}
+
+/** Бивни: опорные точки кривых (левый, правый), кончики и середины — оси модели. */
+function mamTusks(S: MamSkel): { ctl: V3[][]; tip: V3[]; mid: V3[] } {
+  const ctl: V3[][] = [];
+  for (const e of [-1, 1])
+    ctl.push([S.H(6, e * 4.8, -3.5), S.H(18, e * 14.5, -17), S.H(27.5, e * 6.5, -3)]);
+  return {
+    ctl,
+    tip: ctl.map((c) => c[2]),
+    mid: ctl.map((c) => bezQ(c[0], c[1], c[2], 0.5)),
+  };
+}
+
+/** Поза наездницы по позе мамонта. */
+function riderSh(o: MamO): ShO {
+  const hd = shHands(o.rDrum, o.rBeat);
+  const L = lerp3(hd.L, [1.6, -3.4, 19.5], o.rArms);
+  const R = lerp3(hd.R, [1.6, 3.4, 19.5], o.rArms);
+  const off = o.rSlide > 0.7;
+  return {
+    body: {
+      ...BODY0,
+      s: 0.85,
+      lean: o.rLean + o.rCrouch * 0.35,
+      crouch: o.rCrouch * 1.6,
+      wide: 1.6,
+      handL: L,
+      handR: R,
+      kneel: off ? 1 : 0,
+      feet: off ? undefined : [
+        [1.8, -7.4, 1.6],
+        [1.8, 7.4, 1.6],
+      ],
+    },
+    drum: o.rDrum,
+    beat: o.rBeat,
+    aurora: 0.35 + o.phase * 0.22 + o.rArms * 0.9,
+    rib: o.rRib,
+    ribA: 0.55 + o.rArms * 0.6,
+    ribUp: -0.45 + o.rArms * 1.6,
+    ribLen: 0.8,
+    hem: 0,
+  };
+}
+
+/** Где сидит наездница: седло на загривке (за горбом), при смерти — сползает с бока. */
+function riderPlace(o: MamO, S: MamSkel): { place: (p: V3) => V3; onBody: boolean } {
+  const hip0 = 9 * 0.85;
+  const seat: V3 = [5, 0, S.z0 + 16 + o.rUp - o.rCrouch * 0.6];
+  if (o.rSlide <= 0) return { place: (p) => S.B([seat[0] + p[0], p[1], seat[2] + p[2] - hip0]), onBody: true };
+  const A = S.B(seat);
+  const k = ease(o.rSlide);
+  const pos: V3 = [lerp(A[0], 2, k), lerp(A[1], 21, k), lerp(A[2], hip0 * 0.4, k) + Math.sin(o.rSlide * Math.PI) * 5];
+  return { place: (p) => [pos[0] + p[0], pos[1] + p[1], pos[2] + p[2] - hip0], onBody: false };
 }
 
 function mammothBuild(look: MobPose['look'], o: MamO): Build {
-  const raw: Part[] = [];
-  const fur = lookRamp(
-    o.frost > 0.5 ? M_FUR.map((c) => mixc(c, hx('#b8d0ec'), o.frost * 0.55)) : M_FUR,
-    look,
-  );
-  const fur2 = lookRamp(M_FUR2, look);
-  const tuskR = M_TUSK;
-  const bob = o.stride > 0 ? Math.abs(Math.sin(o.walk * TAU * 2)) * 1.2 : 0;
-  const z0 = 23 - o.crouch * 3 + bob;
-  // Наклон корпуса: на дыбы — вокруг задних ног.
-  const pa = o.rear * 0.55 - o.brace * 0.12;
-  const piv: V3 = [-10, 0, 14];
-  // Корпус, горб, круп. Снег на холке — рваными пятнами по верху меха (с
-  // фазой гуще): гладким эллипсом он читался сверху бледной тарелкой.
-  const snowy = 0.2 + o.phase * 0.06;
-  raw.push({ x: 0, y: 0, z: z0, rx: 17, ry: 12, rz: 12, ramp: fur, fur: 0.32, snowy, id: 1 });
-  raw.push({ x: 6, y: 0, z: z0 + 8, rx: 10, ry: 9.5, rz: 8, ramp: fur, fur: 0.3, snowy, id: 2 });
-  raw.push({
-    x: -10,
-    y: 0,
-    z: z0 - 1,
-    rx: 9,
-    ry: 10.5,
-    rz: 10,
-    ramp: fur,
-    fur: 0.32,
-    snowy,
-    id: 3,
-  });
-  // Бахрома шерсти: свисает по бокам до колен.
-  for (let k = 0; k < 6; k++) {
-    const x = -14 + k * 5.6;
-    for (const e of [-1, 1])
-      raw.push({
-        x,
-        y: e * 10.5,
-        z: z0 - 8,
-        rx: 3.4,
-        ry: 2.2,
-        rz: 6.5,
-        ramp: fur2,
-        fur: 0.5,
-        id: 5,
-      });
-  }
-  // Голова: лоб куполом, глаза малые.
-  const H: V3 = [17, 0, z0 + 3];
-  const hc = Math.cos(o.hy);
-  const hs = Math.sin(o.hy);
-  /** Точка головы (в её осях от основания шеи) → модель: рыскание и тангаж. */
-  const head = (x: number, y: number, z: number): V3 => {
-    const pz = z * Math.cos(o.hp) - x * Math.sin(o.hp);
-    const px = x * Math.cos(o.hp) + z * Math.sin(o.hp);
-    return [H[0] + px * hc - y * hs, px * hs + y * hc, H[2] + pz];
+  const S = mamSkel(o);
+  const z0 = S.z0;
+  const parts: Part[] = [];
+  const fr = o.phase * 0.08 + o.frost * 0.85;
+  const fur = lookRamp(frostRamp(M_FUR, fr), look);
+  const hair = lookRamp(frostRamp(M_HAIR, fr * 1.5), look);
+  const skin = frostRamp(M_SKIN, o.frost * 0.7);
+  const snowy = Math.min(0.9, 0.16 + o.phase * 0.07 + o.frost * 0.6);
+  const ice = o.frost > 0.45;
+  const P = o.pitch;
+  const R = o.roll;
+  const body = (c: V3, rx: number, ry: number, rz: number, rp: RGBA[], id: number, ex: Partial<Part> = {}) => {
+    const w = S.B(c);
+    parts.push({ ...ex, x: w[0], y: w[1], z: w[2], rx, ry, rz, ramp: rp, id, pitch: (ex.pitch ?? 0) + P, roll: (ex.roll ?? 0) + R, gloss: ex.gloss || ice });
   };
-  const hp = (
-    pt: V3,
-    rx: number,
-    ry: number,
-    rz: number,
-    R: RGBA[],
-    id: number,
-    extra: Partial<Part> = {},
-  ) =>
-    raw.push({
-      x: pt[0],
-      y: pt[1],
-      z: pt[2],
+  const head = (c: V3, rx: number, ry: number, rz: number, rp: RGBA[], id: number, ex: Partial<Part> = {}) => {
+    const w = S.H(c[0], c[1], c[2]);
+    parts.push({
+      ...ex,
+      x: w[0],
+      y: w[1],
+      z: w[2],
       rx,
       ry,
       rz,
-      ramp: R,
+      ramp: rp,
       id,
-      yaw: o.hy,
-      pitch: -o.hp,
-      ...extra,
+      yaw: (ex.yaw ?? 0) + o.hy,
+      pitch: (ex.pitch ?? 0) - o.hp + P,
+      roll: (ex.roll ?? 0) + R,
+      gloss: ex.gloss || ice,
     });
-  hp(head(2, 0, 2), 8, 8.4, 9, fur, 10, { fur: 0.28 });
-  hp(head(1, 0, 9), 6, 6, 4.5, fur, 11, { fur: 0.3 });
-  for (const e of [-1, 1]) hp(head(-2, e * 7.5, 3), 1.6, 3.4, 4.2, fur2, 12, { fur: 0.4 });
-  // Бивни: из-под глаз вперёд-вниз-наружу и вверх-внутрь.
-  const tuskPts: V3[][] = [];
-  for (const e of [-1, 1]) {
-    const pts = bez(head(7, e * 4.4, -4), head(17, e * 12.5, -14), head(25, e * 6.5, -2), 7);
-    tuskPts.push(pts as V3[]);
-    pts.forEach((pt, i) => {
-      const r = 2.3 - i * 0.2;
-      const cr = o.crack && i > 1 && i < 6;
-      raw.push({
-        x: pt[0],
-        y: pt[1],
-        z: pt[2],
-        rx: r,
-        ry: r,
-        rz: r,
-        ramp: cr ? TEAL : tuskR,
-        gloss: true,
-        glow: cr,
-        id: 13 + (e > 0 ? 1 : 0),
-      });
+  };
+  const ball = (w: V3, r: number, rp: RGBA[], id: number, ex: Partial<Part> = {}) =>
+    parts.push({ ...ex, x: w[0], y: w[1], z: w[2], rx: r, ry: r, rz: r, ramp: rp, id, gloss: ex.gloss || ice });
+  // Корпус: бочка, горб, загривок, круп, грудь, брюхо. Снег — пятнами по верху.
+  body([-2, 0, z0], 18, 12.5, 12.5, fur, 1, { fur: 0.3, snowy });
+  body([7, 0, z0 + 7], 11, 10, 9.5, fur, 2, { fur: 0.3, snowy });
+  body([10.5, 0, z0 + 12], 6.5, 6.5, 5.5, fur, 2, { fur: 0.3, snowy: Math.min(0.95, snowy + 0.12) });
+  body([-14, 0, z0 - 2], 9.5, 11, 10, fur, 1, { fur: 0.3, snowy });
+  body([13, 0, z0 - 1], 8, 10, 10.5, fur, 3, { fur: 0.32 });
+  body([-1, 0, z0 - 7.5], 15, 10, 5.5, hair, 4, { fur: 0.45 });
+  // Длинная шерсть — пряди по бокам, груди и крупу. Висят по отвесу (не по
+  // корпусу), качаются волной с отставанием от шага, подлетают на ударе.
+  const tips: V3[] = [];
+  const strand = (a: V3, len: number, e: number, id: number) => {
+    const at = S.B(a);
+    const wave = o.furAmp * Math.sin((o.furPh - a[0] / 28) * TAU);
+    const p = clamp01((o.furX * 0.06 + wave + 1.1) / 2.2) * 2.2 - 1.1;
+    const r = Math.max(-1.4, Math.min(1.4, e * (0.1 + o.furUp * 0.95) + o.furRoll));
+    const half = (len * (1 - o.furUp * 0.25)) / 2;
+    const n3: V3 = [-Math.sin(p) * Math.cos(r), -Math.sin(r), Math.cos(p) * Math.cos(r)];
+    parts.push({
+      x: at[0] - n3[0] * half,
+      y: at[1] - n3[1] * half,
+      z: at[2] - n3[2] * half,
+      rx: 2.5,
+      ry: 1.6,
+      rz: half,
+      pitch: p,
+      roll: r,
+      ramp: hair,
+      fur: 0.5,
+      id,
+      gloss: ice,
     });
-  }
-  // Хобот: висит, завит вверх (рёв) или вытянут (выдох).
-  const tr = o.trunk;
-  const t0 = head(8, 0, -3);
-  const t1 = tr < 0 ? head(13, 0, -6 - tr * 8) : head(11 + tr * 8, 0, -12 + tr * 6);
-  const t2 = tr < 0 ? head(10 - tr * 2, 0, 4 - tr * 6) : head(10 + tr * 15, 0, -20 + tr * 17);
-  bez(t0, t1, t2, 8).forEach((pt, i) => {
-    const r = 2.7 - i * 0.2;
-    raw.push({ x: pt[0], y: pt[1], z: pt[2], rx: r, ry: r, rz: r, ramp: M_SKIN, fur: 0.1, id: 15 });
-  });
-  // Пасть (рёв): тёмный провал под хоботом.
-  if (o.mouth > 0)
-    hp(
-      head(7, 0, -6),
-      2.2 * o.mouth,
-      2.6,
-      1.8 * o.mouth,
-      ramp('#2a0a0a', '#4a1414', '#6a2222', '#8a3434', '#aa4a4a'),
-      16,
-    );
-  // Хвост с кисточкой.
-  raw.push({ x: -26, y: 0, z: z0 - 2, rx: 1.4, ry: 1.4, rz: 4, ramp: fur2, pitch: 0.5, id: 17 });
-  raw.push({ x: -27.5, y: 0, z: z0 - 7, rx: 1.8, ry: 1.8, rz: 2.4, ramp: fur2, fur: 0.5, id: 17 });
-  // Ноги: тумбы. Боковой порядок (ЛЗ, ЛП, ПЗ, ПП), стопа — плоский диск.
-  const LEGS: [number, number, number, number][] = [
-    [10, -7, 0.25, 0],
-    [10, 7, 0.75, 1],
-    [-12, -7.5, 0, 2],
-    [-12, 7.5, 0.5, 3],
-  ];
-  const legParts: Part[] = [];
-  for (const [lx, ly, off, k] of LEGS) {
-    const ph = (o.walk + off) * TAU;
-    let fx = lx + Math.sin(ph) * o.stride;
-    let fz = Math.max(0, Math.cos(ph)) * o.stride * 0.55;
-    if (k === 1) fz += o.liftR;
-    if (k === 0) fz += o.liftL;
-    if (k < 2) fx += o.brace * 4;
-    let hip: V3 = [lx, ly, z0 - 6];
-    let foot: V3 = [fx, ly * 1.05, fz + 2.2];
-    // На дыбах передние ноги поднимаются вместе с корпусом.
-    if (k < 2 && pa) {
-      hip = pitchAbout(hip, piv, pa);
-      foot = pitchAbout([lx + 3, ly, Math.max(fz, 2.2) + 4], piv, pa * 1.15);
+    tips.push([at[0] - n3[0] * half * 2, at[1] - n3[1] * half * 2, at[2] - n3[2] * half * 2]);
+  };
+  for (const e of [-1, 1])
+    for (let k = 0; k < 9; k++) {
+      const x = -21 + k * 4.5;
+      const hw = 11.6 * Math.sqrt(Math.max(0.15, 1 - ((x + 2) / 21) ** 2));
+      strand([x, e * (hw - 0.6), z0 - 4], 7 + hash(k, e + 3, 91) * 2.2 + (k > 2 && k < 7 ? 1.2 : 0), e, 6 + (k % 2));
     }
-    const knee: V3 = [(hip[0] + foot[0]) / 2 + (k < 2 ? 1 : -1.5), ly, (hip[2] + foot[2]) / 2];
-    bez(hip, knee, foot, 4).forEach((pt, i) => {
-      const r = 4.8 - i * 0.2;
-      legParts.push({
-        x: pt[0],
-        y: pt[1],
-        z: pt[2],
-        rx: r,
-        ry: r,
-        rz: r,
-        ramp: fur,
-        fur: 0.3,
-        id: 20 + k,
+  for (let k = 0; k < 4; k++) strand([17, -4.5 + k * 3, z0 - 7], 6.5 + (k % 2), 0, 8 + (k % 2));
+  for (let k = 0; k < 3; k++) strand([-24, -4 + k * 4, z0 - 4], 6, 0, 8 + (k % 2));
+  // Голова: купол с высокой макушкой, лоб к хоботу, уши, пасть.
+  head([2, 0, 2], 8.6, 8.6, 9, fur, 10, { fur: 0.28 });
+  head([-1, 0, 9.5], 6.6, 6.4, 5.6, fur, 10, { fur: 0.3, snowy });
+  head([7.5, 0, -2], 5, 5.4, 6.2, fur, 11, { fur: 0.24 });
+  for (const e of [-1, 1])
+    head([-1.5, e * 7.6, 2.5], 1.5, 2.4 + o.ear * 1.4, 3.8, hair, 12, { fur: 0.45, yaw: e * (0.25 + o.ear * 0.7) });
+  if (o.jaw > 0.05) head([5.5, 0, -7.5 - o.jaw], 3, 3, 1.4 + o.jaw * 1.6, M_MOUTH, 16);
+  head([5, 0, -9 - o.jaw * 2.4], 2.4, 2.6, 1.3, skin, 16, { fur: 0.1 });
+  // Бивни: вниз-наружу и вверх-внутрь; у основания темнее.
+  const T = mamTusks(S);
+  T.ctl.forEach((c, j) => {
+    for (let i = 0; i <= 9; i++) {
+      const u = i / 9;
+      ball(bezQ(c[0], c[1], c[2], u), 2.5 - u * 1.55, u < 0.2 ? M_TUSKB : M_TUSK, 13 + j, { gloss: true });
+    }
+  });
+  // Хобот: звенья по углу и завитку, кончик темнее.
+  let tp: V3 = [9, 0, -3];
+  let a = o.ta;
+  for (let i = 0; i < 10; i++) {
+    a += o.tk;
+    const l = o.tsw * ((i + 1) / 10);
+    tp = [tp[0] + 2.6 * Math.cos(a) * Math.cos(l), tp[1] + 2.6 * Math.sin(l), tp[2] - 2.6 * Math.sin(a) * Math.cos(l)];
+    ball(S.H(tp[0], tp[1], tp[2]), 3.1 - i * 0.16, skin, 15, { fur: 0.14 });
+  }
+  const trunkTip = S.H(tp[0], tp[1], tp[2]);
+  ball(trunkTip, 1.9, M_SKIN, 15);
+  // Хвост с кисточкой: качается с шагом.
+  const tw = Math.sin(o.furPh * TAU) * 1.6;
+  ball(S.B([-24, 0, z0 + 2]), 1.5, hair, 17);
+  ball(S.B([-25.5, tw * 0.5, z0 - 2]), 1.3, hair, 17);
+  ball(S.B([-26.5, tw, z0 - 6]), 1.9, hair, 17, { fur: 0.5 });
+  // Ноги-тумбы. Шаг — диагональная последовательность (ЛЗ, ПП, ПЗ, ЛП),
+  // галоп — поворотный; в опоре стопа идёт назад ровно со скоростью хода.
+  const LEGS: [number, number, number, number, boolean][] = [
+    [11, -7.5, 0.75, 0.55, true],
+    [11, 7.5, 0.25, 0.43, true],
+    [-14, -7.8, 0, 0, false],
+    [-14, 7.8, 0.5, 0.12, false],
+  ];
+  const rolled = clamp01((Math.abs(R) - 0.2) / 0.7);
+  LEGS.forEach(([lx, ly, offW, offG, front], k) => {
+    const hip = S.B([lx, ly * 0.92, z0 - 5]);
+    let foot: V3 = [lx + (front ? o.reachF + (k === 0 ? o.reachL : o.reachR) : o.reachB), ly, 0];
+    let lifted = 0;
+    if (o.gait > 0 && (o.stride > 0.01 || o.side !== 0)) {
+      const beta = o.gait === 2 ? 0.42 : 0.7;
+      const phi = (((o.ph + (o.gait === 2 ? offG : offW)) % 1) + 1) % 1;
+      const sg = front ? 1 : -1;
+      if (phi < beta) {
+        const u = phi / beta;
+        foot[0] += o.stride * (0.5 - u);
+        foot[1] -= sg * o.side * (u - 0.5);
+      } else {
+        const u = (phi - beta) / (1 - beta);
+        const w = ease(u);
+        foot[0] += o.stride * (w - 0.5);
+        foot[1] -= sg * o.side * (0.5 - w);
+        lifted = Math.sin(u * Math.PI) * o.lift;
+        foot[2] = lifted;
+      }
+    }
+    if (front) {
+      const up = k === 0 ? o.liftL : o.liftR;
+      foot[2] += up;
+      foot[0] += up * 0.35;
+      lifted += up;
+      // На дыбах передние ноги уходят вместе с грудью, согнутые.
+      const w = clamp01((P - 0.08) / 0.25);
+      if (w > 0) foot = lerp3(foot, S.B([lx + 4, ly, z0 - 20 + up * 0.6]), w);
+    }
+    let knee: V3 = [
+      (hip[0] + foot[0]) / 2 + (front ? -0.5 - lifted * 0.3 : 1 + lifted * 0.35),
+      (hip[1] + foot[1]) / 2,
+      (hip[2] + foot[2]) / 2,
+    ];
+    const kn = front ? o.kneelF : o.kneelB;
+    if (kn > 0) {
+      knee = lerp3(knee, [lx + 3.5, ly, 3.6], kn);
+      foot = lerp3(foot, [lx - 5.5, ly, 2.4], kn);
+    }
+    if (rolled > 0) {
+      knee = lerp3(knee, S.Rl(knee), rolled);
+      foot = lerp3(foot, S.Rl(foot), rolled);
+    }
+    for (let i = 0; i < 3; i++) ball(lerp3(hip, knee, i / 3), 5.4 - i * 0.25, fur, 20 + k, { fur: 0.32 });
+    for (let i = 0; i < 3; i++) ball(lerp3(knee, foot, i / 2.6), 4.7 - i * 0.2, i < 2 ? fur : hair, 20 + k, { fur: 0.3 });
+    parts.push({ x: foot[0] + 0.5, y: foot[1], z: foot[2] + 1.2, rx: 4.9, ry: 4.7, rz: 1.9, ramp: skin, id: 24 + k, roll: R * rolled });
+    for (const nn of [-1.9, 0, 1.9])
+      parts.push({ x: foot[0] + 4.6, y: foot[1] + nn, z: foot[2] + 1.1, rx: 0.9, ry: 0.9, rz: 0.7, ramp: BONE, id: 24 + k });
+  });
+  // Глаза мамонта (закрыты — не светятся) и наездница.
+  const eyes: Eye[] = o.shut
+    ? []
+    : [-1, 1].map((e) => {
+        const c = S.H(8.8, e * 5.5, 3.4);
+        return { x: c[0], y: c[1], z: c[2], c: M_EYE };
       });
-    });
-    legParts.push({
-      x: foot[0] + 0.6,
-      y: foot[1],
-      z: foot[2] - 1.4,
-      rx: 4.6,
-      ry: 4.4,
-      rz: 1.8,
-      ramp: M_SKIN,
-      id: 24 + k,
-    });
-  }
-  // Наклон «на дыбы» — для всего, кроме задних ног.
-  const parts: Part[] = [];
-  const zRoll = 10;
-  const rot = (p: Part, legs: boolean): Part => {
-    let c: V3 = [p.x, p.y, p.z];
-    if (!legs) c = pitchAbout(c, piv, pa);
-    c = rollAbout(c, zRoll, o.roll);
-    return {
-      ...p,
-      x: c[0],
-      y: c[1],
-      z: c[2],
-      pitch: (p.pitch ?? 0) + (legs ? 0 : -pa),
-      roll: (p.roll ?? 0) + o.roll,
-    };
-  };
-  for (const p of raw) parts.push(rot(p, false));
-  for (const p of legParts) parts.push(rot(p, true));
-  // Наездница на холке.
   if (o.rider) {
-    const sub: Part[] = [];
-    const sh: ShO = {
-      body: {
-        ...BODY0,
-        s: 0.85,
-        wide: 1.6,
-        handL: [3, -4.2, 12],
-        handR: o.drum > 0 ? [2, 3.5, 16] : [3, 3.8, 10],
-      },
-      drum: o.drum,
-      aurora: o.phase >= 2 ? 0.8 : 0,
-    };
-    shamanParts(sub, sh, look, 2, z0 + 9);
-    for (const p of sub) parts.push(rot(p, false));
+    const rp = riderPlace(o, S);
+    const r = shamanParts(parts, riderSh(o), look, rp.place, rp.onBody ? P : 0, rp.onBody ? R : 0);
+    eyes.push(...r.eyes);
   }
-  // Глаза.
-  const eyeP = (e: number) => {
-    let c = head(8.6, e * 5.2, 3.4);
-    c = pitchAbout(c, piv, pa);
-    c = rollAbout(c, zRoll, o.roll);
-    return { x: c[0], y: c[1], z: c[2], c: hx('#8ad8ff') };
-  };
+  const extent: V3[] = [];
+  if (o.trail) for (const fr2 of o.trail) extent.push(...fr2);
   return scaleBuild(
     {
       parts,
-      eyes: o.fall > 0.7 ? [] : [eyeP(-1), eyeP(1)],
-      post: (p, scr) => {
-        // Сосульки на бахроме (по фазам их больше).
-        const n = 4 + o.phase * 3;
-        for (let k = 0; k < n; k++) {
-          const x = -14 + (k * 29) / n;
-          let c: V3 = [x, (k % 2 ? 1 : -1) * 11, z0 - 14];
-          c = pitchAbout(c, piv, pa);
-          c = rollAbout(c, zRoll, o.roll);
-          const [sx, sy] = scr(c[0], c[1], c[2]);
-          p.set(sx, sy, ICE[4]);
-          p.set(sx, sy + 1, ICE[2]);
+      eyes,
+      extent,
+      post: (p, scr, fx) => {
+        rimLight(p, RIM_C, 0.42);
+        // Сосульки на кончиках прядей: с каждой фазой больше, в смерти — везде.
+        const nIce = Math.min(tips.length, Math.round(o.phase * 3 + o.frost * 14));
+        for (let k = 0; k < nIce; k++) {
+          const tip = tips[(k * 7) % tips.length];
+          const [x, y, d] = scr(tip[0], tip[1], tip[2]);
+          if (fx.z(x, y - 1) > d + 4) continue;
+          p.set(x, y, ICE[4]);
+          p.set(x, y + 1, ICE[3]);
+          if (k % 2) p.set(x, y + 2, ICE[2]);
         }
-        if (o.crack) {
-          let hc2 = head(4, 0, 14);
-          hc2 = pitchAbout(hc2, piv, pa);
-          hc2 = rollAbout(hc2, zRoll, o.roll);
-          stars(p, scr, hc2[2], (o.hy + 1) * 0.5, hc2[0], hc2[1], 7);
+        // Трещина левого бивня — видна всегда; светится только в оглушении.
+        const [ca, cb, cc] = T.ctl[0];
+        const lit = o.crack > 0 ? fx.lit() : null;
+        let prev: [number, number] | null = null;
+        for (let i = 0; i <= 6; i++) {
+          const u = 0.28 + i * 0.055;
+          const q = bezQ(ca, cb, cc, u);
+          const r = 2.5 - u * 1.55;
+          const [x, y, d] = scr(q[0], q[1] + (i % 2 ? 0.5 : -0.5), q[2] + r * 0.85);
+          const X = Math.round(x);
+          const Y = Math.round(y);
+          if (fx.z(X, Y) > d + 2.5) {
+            prev = null;
+            continue;
+          }
+          const col = o.crack >= 2 ? WHITE : o.crack >= 1 ? TEAL[o.crack > 1.2 ? 4 : 3] : hx('#3e2e1e');
+          if (prev) p.line(prev[0], prev[1], X, Y, col);
+          else p.set(X, Y, col);
+          if (lit) {
+            if (prev) lit.line(prev[0], prev[1], X, Y, o.crack >= 2 ? WHITE : TEAL[4]);
+            for (const [dx, dy] of [
+              [1, 0],
+              [-1, 0],
+              [0, 1],
+              [0, -1],
+            ])
+              if (!lit.solid(X + dx, Y + dy)) lit.set(X + dx, Y + dy, alpha(TEAL[2], 0.55));
+          }
+          prev = [X, Y];
         }
-        if (o.crack)
-          // Трещина по бивням — светится (бей сюда, он оглушён).
-          for (const pts of tuskPts)
-            for (let i = 2; i < 6; i++) {
-              let c = pts[i];
-              c = pitchAbout(c, piv, pa);
-              c = rollAbout(c, zRoll, o.roll);
-              const [sx, sy] = scr(c[0], c[1], c[2] + 1);
-              p.set(sx, sy, i % 2 ? WHITE : TEAL[4]);
+        // Клуб пара у кончика хобота (выдох): прицеплен к хоботу.
+        if (o.breath > 0) {
+          const [x, y] = scr(trunkTip[0], trunkTip[1], trunkTip[2]);
+          const k = o.breath;
+          for (let i = 0; i < 9; i++) {
+            const an = hash(i, 3, 77) * TAU;
+            const rr = (1 + k * 6) * (0.35 + hash(i, 5, 78) * 0.65);
+            p.set(x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.6 - k * 2.5, alpha(hx('#e4eef8'), 0.85 * (1 - k)));
+          }
+        }
+        // Оглушён: звёзды и снежинки кругом над головой.
+        if (o.daze >= 0) {
+          const c = S.H(-1, 0, 19);
+          const gl = fx.lit();
+          for (let i = 0; i < 4; i++) {
+            const an = o.daze * TAU + (i / 4) * TAU;
+            const [x, y] = scr(c[0] + Math.cos(an) * 10, c[1] + Math.sin(an) * 10, c[2]);
+            const X = Math.round(x);
+            const Y = Math.round(y);
+            const far = Math.sin(an) < -0.2;
+            const col = i % 2 ? hx(far ? '#c8a838' : '#fff2a0') : hx(far ? '#7a9ac0' : '#e8f6ff');
+            for (const [dx, dy] of i % 2
+              ? [
+                  [0, 0],
+                  [1, 0],
+                  [-1, 0],
+                  [0, 1],
+                  [0, -1],
+                ]
+              : [
+                  [0, 0],
+                  [1, 1],
+                  [-1, -1],
+                  [1, -1],
+                  [-1, 1],
+                ]) {
+              p.set(X + dx, Y + dy, col);
+              if (!far) gl.set(X + dx, Y + dy, col);
             }
+          }
+        }
+        // След кончиков бивней: полосы между прошлыми кадрами, гаснут к хвосту.
+        if (o.trail && o.trail.length > 1) {
+          const tr = o.trail.map((f) => f.map((v) => scr(v[0], v[1], v[2])));
+          const mask = new Float32Array(p.w * p.h);
+          for (let j = 0; j < 2; j++)
+            for (let k = 0; k < tr.length - 1; k++) {
+              const v = 0.85 * (1 - k / (tr.length - 1));
+              const a0 = tr[k][2 + j];
+              const a1 = tr[k][j];
+              const b1 = tr[k + 1][j];
+              const b0 = tr[k + 1][2 + j];
+              const zt = (a1[2] + b1[2]) / 2;
+              fillTri(mask, p.w, p.h, a0, a1, b1, v, fx, zt);
+              fillTri(mask, p.w, p.h, a0, b1, b0, v * 0.7, fx, zt);
+            }
+          for (let i = 0; i < mask.length; i++)
+            if (mask[i] > 0.04) {
+              const x = i % p.w;
+              const y = (i / p.w) | 0;
+              p.set(x, y, alpha(mask[i] > 0.6 ? WHITE : M_TUSK[4], Math.min(1, mask[i])));
+            }
+        }
       },
     },
     MAM_SC,
   );
 }
 
-/** Позы мамонта по режиму мозга. */
-function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<MobFrame> } {
-  const mode = pose.mode;
-  const t = pose.t;
-  const T = MAMMOTH;
-  const rider = (m.data.rider ?? 0) > 0;
-  const phase = Math.max(0, Math.min(3, m.data.phase ?? 0));
-  const base: MamO = { ...MAM0, rider, phase };
-  const walkPh = ((((m.data.walk ?? 0) / 2.4) % 1) + 1) % 1;
-  const wf = Math.floor(walkPh * 12) % 12;
-  const ex: Partial<MobFrame> = { shadow: 26, still: true };
-  let o = base;
-  let key = '';
-  const sw = (n: number) => Math.round(n);
+/** Масштаб сборки: части, глаза, точки кадра и рисунок поверх. */
+function scaleBuild(b: Build, s: number): Build {
+  const sc = (v: V3): V3 => [v[0] * s, v[1] * s, v[2] * s];
+  return {
+    ...b,
+    parts: b.parts.map((p) => ({ ...p, x: p.x * s, y: p.y * s, z: p.z * s, rx: p.rx * s, ry: p.ry * s, rz: p.rz * s })),
+    eyes: b.eyes?.map((e) => ({ ...e, x: e.x * s, y: e.y * s, z: e.z * s, r: 1 })),
+    extent: b.extent?.map(sc),
+    clip: b.clip === undefined ? undefined : b.clip * s,
+    post: b.post ? (p, scr, fx) => b.post?.(p, (x, y, z) => scr(x * s, y * s, z * s), fx) : undefined,
+  };
+}
+
+interface MamCtx {
+  rider: boolean;
+  phase: number;
+  walk: number;
+  turn: number;
+  speed: number;
+  k: number;
+  stun: number;
+}
+
+/** Поза мамонта в режиме `mode` на время `t` (с; уже квантовано по кадрам). */
+function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
+  const o: MamO = { ...MAM0, rider: c.rider, phase: c.phase, rRib: now * 4.5 };
   switch (mode) {
     case 'roar': {
-      // Вход: поднял голову, хобот вверх, рёв.
-      const k = Math.min(1, t / T.intro);
-      const up = ease(Math.min(1, k / 0.3)) * (k > 0.85 ? 1 - (k - 0.85) / 0.15 : 1);
-      o = { ...base, hp: -0.45 * up, trunk: -1 * up, mouth: up > 0.5 ? 1 : 0, rear: 0.12 * up };
-      key = `roar${sw(k * 24)}`;
-      ex.dx = up > 0.6 ? (f24(t) % 2 ? 0.6 : -0.6) : 0;
-      break;
-    }
-    case 'f12b_rear': {
-      // Смена фазы: на дыбы, удар передними к 0,9 с — кольцо снега.
-      const k = t / T.rear;
-      const up = t < 0.9 ? ease(t / 0.75) : Math.max(0, 1 - (t - 0.9) / 0.12);
-      o = {
-        ...base,
-        rear: up,
-        hp: -0.4 * up,
-        trunk: -0.8 * up,
-        mouth: up > 0.4 ? 1 : 0,
-        crouch: t > 0.9 && t < 1.2 ? 1 : 0,
-      };
-      key = `rear${sw(Math.min(1, k) * 38)}`;
-      break;
+      // Вход: трясёт головой, удар ногой — голову вверх, хобот трубой, рёв;
+      // шаманка бьёт в бубен.
+      o.hy = 0.25 * Math.sin(t * 14) * clamp01(1 - t / 0.5);
+      o.hp = kf(t, [[0, 0.1], [0.3, 0.2], [0.5, 0.05], [0.66, 0.32], [0.8, -0.5, 'i'], [1.9, -0.45], [2.3, 0.06]]);
+      o.crouch = kf(t, [[0.55, 0], [0.72, 1.8], [0.8, 0, 'i'], [0.87, 1.6, 'o'], [1.1, 0.3], [2.3, 0]]);
+      o.pitch = kf(t, [[0.6, 0], [0.8, 0.1, 'i'], [1.9, 0.08], [2.3, 0]]);
+      o.liftL = bump(t, 0.55, 0.8) * 5;
+      o.ta = kf(t - 0.08, [[0, 1.3], [0.62, 1.7], [0.85, -0.4, 'i'], [1.9, -0.55], [2.3, 1.3]]);
+      o.tk = kf(t - 0.08, [[0, -0.06], [0.85, -0.3], [1.9, -0.32], [2.3, -0.06]]);
+      o.jaw = kf(t, [[0.75, 0], [0.9, 1, 'o'], [1.85, 1], [2.05, 0]]);
+      o.ear = kf(t, [[0.7, 0.2], [0.9, 1], [1.9, 1], [2.2, 0.2]]);
+      o.furUp = kf(t, [[0.78, 0], [0.82, 0.5, 'i'], [1.05, 0]]);
+      o.furAmp = 0.05 + bump(t, 0.8, 2.0) * 0.07;
+      o.furPh = t * 6;
+      o.rDrum = kf(t, [[0.8, 0], [1.0, 1, 'o'], [2.0, 1], [2.3, 0]]);
+      o.rBeat = beatAt(t, [1.15, 1.5, 1.85]);
+      o.rLean = kf(t, [[0.75, 0], [0.85, -0.2, 'o'], [1.1, -0.05]]);
+      return o;
     }
     case 'f12b_tusk': {
-      // Замах бивнями: голова вниз и вбок — взмах через середину к 0,85 с.
-      const w = T.tusk;
-      let hy = 0;
-      let hp = 0.15;
-      if (t < 0.6) {
-        const k = ease(t / 0.6);
-        hy = -0.65 * k;
-        hp = 0.15 + 0.15 * k;
-      } else if (t < 1.0) {
-        const k = (t - 0.6) / 0.4;
-        hy = -0.65 + 1.45 * easeOut(k);
-        hp = 0.3 - 0.1 * k;
-      } else {
-        const k = Math.min(1, (t - 1.0) / (w.end - 1.0));
-        hy = 0.8 * (1 - ease(k));
-        hp = 0.2 * (1 - k);
-      }
-      o = { ...base, hy, hp, trunk: 0.15, liftL: t > 0.6 && t < 0.85 ? 2.5 : 0 };
-      key = `tusk${sw(Math.min(w.end, t) * 24)}`;
-      break;
+      // Бивни снизу вверх: голова вниз-назад (0–0,62) — рывок разгоном,
+      // контакт в 0,85 — проводка выше головы — отдача.
+      o.hp = kf(t, [[0, 0.08], [0.5, 0.55], [0.62, 0.6, 'o'], [0.85, -0.3, 'i'], [0.98, -0.62, 'o'], [1.12, -0.55], [1.35, 0.08]]);
+      o.hy = kf(t, [[0, 0], [0.5, -0.3], [0.62, -0.34], [0.85, 0.1, 'i'], [0.98, 0.3, 'o'], [1.35, 0]]);
+      o.pitch = kf(t, [[0, 0], [0.55, -0.07], [0.85, 0.05, 'i'], [1.0, 0.11, 'o'], [1.35, 0]]);
+      o.crouch = kf(t, [[0, 0], [0.55, 2.4], [0.85, 0.4, 'i'], [1.0, 0], [1.35, 0]]);
+      o.liftL = bump(t, 0.6, 0.84) * 4;
+      o.reachL = kf(t, [[0.6, 0], [0.84, 4.5, 'o'], [1.2, 4.5], [1.35, 2]]);
+      const tl = t - 0.07;
+      o.ta = kf(tl, [[0, 1.3], [0.55, 1.95], [0.85, 0.9, 'i'], [1.0, 0.35, 'o'], [1.35, 1.3]]);
+      o.tk = kf(tl, [[0, -0.06], [0.55, 0.16], [0.85, -0.05], [1.0, -0.22], [1.35, -0.06]]);
+      o.tsw = kf(tl, [[0, 0], [0.55, 0.25], [0.9, -0.35], [1.35, 0]]);
+      o.jaw = bump(t, 0.75, 1.15) * 0.8;
+      o.ear = 0.2 + bump(t, 0.7, 1.25) * 0.8;
+      o.furX = kf(t - 0.06, [[0, 0], [0.55, -1.5], [0.85, 0], [1.0, 3.5, 'o'], [1.2, -1], [1.35, 0]]);
+      o.furAmp = 0.06 + bump(t, 0.85, 1.35) * 0.18;
+      o.furPh = t * 2.2;
+      o.rLean = kf(t - 0.05, [[0, 0], [0.55, -0.32], [0.85, 0.1, 'i'], [1.0, 0.4, 'o'], [1.35, 0]]);
+      o.rUp = bump(t, 0.85, 1.1) * 1.5;
+      return o;
     }
-    case 'f12b_stomp': {
-      // Встаёт передом — и обоими передними в лёд ровно к 1,0 с.
-      const w = T.stomp;
-      const up =
-        t < 0.8
-          ? ease(t / 0.8) * 0.45
-          : t < w.hit
-            ? 0.45 * (1 - (t - 0.8) / (w.hit - 0.8)) ** 2
-            : 0;
-      o = {
-        ...base,
-        rear: up,
-        hp: -0.3 * (up / 0.45),
-        trunk: -0.6 * (up / 0.45),
-        crouch: t >= w.hit && t < w.hit + 0.25 ? 1 : 0,
-      };
-      key = `stomp${sw(Math.min(w.end, t) * 24)}`;
-      break;
+    case 'f12b_stomp':
+    case 'f12b_rear': {
+      // На дыбы: присел — поднялся, передние молотят воздух — вниз разгоном,
+      // контакт ровно в ударе мозга — сжатие, шерсть подлетает.
+      const rear = mode === 'f12b_rear';
+      const H = rear ? 0.9 : MAMMOTH.stomp.hit;
+      const top = rear ? 0.8 : 0.66;
+      const sh = (x: number) => (x * H) / 1.0;
+      o.pitch = kf(t, [[0, 0], [sh(0.22), -0.06], [sh(0.72), top - 0.04, 'o'], [sh(0.88), top], [H, 0, 'i'], [H + 0.08, -0.05, 'o'], [H + 0.3, 0.02], [H + 0.55, 0]]);
+      o.crouch = kf(t, [[0, 0], [sh(0.22), 3.2], [sh(0.5), 0], [H, 0], [H + 0.06, 3.4, 'o'], [H + 0.4, rear ? 0.5 : 0], [H + 0.6, 0]]);
+      const paw = t > sh(0.35) && t < H - 0.05;
+      const sw = Math.sin((t - sh(0.35)) * 4.5 * Math.PI);
+      o.liftL = paw ? Math.max(0, sw) * 4.5 : 0;
+      o.liftR = paw ? Math.max(0, -sw) * 4.5 : 0;
+      o.hp = rear
+        ? kf(t, [[0, 0.08], [0.2, 0.3], [0.62, -0.5], [0.85, -0.55], [H, 0.25, 'i'], [1.0, 0.35], [1.15, -0.45, 'o'], [1.45, -0.4], [1.6, 0.05]])
+        : kf(t, [[0, 0.08], [0.22, 0.25], [0.72, -0.38], [0.92, -0.42], [H, 0.3, 'i'], [1.12, 0.45, 'o'], [1.55, 0.08]]);
+      const tl = t - 0.08;
+      o.ta = rear
+        ? kf(tl, [[0, 1.3], [0.62, 0], [0.85, -0.1], [0.96, 1.9, 'i'], [1.15, -0.3, 'o'], [1.45, -0.2], [1.6, 1.2]])
+        : kf(tl, [[0, 1.3], [0.72, 0.1], [0.92, 0], [1.06, 1.95, 'i'], [1.25, 1.2], [1.55, 1.3]]);
+      o.tk = rear
+        ? kf(tl, [[0, -0.06], [0.62, -0.35], [0.96, 0.1], [1.15, -0.3], [1.45, -0.3], [1.6, -0.06]])
+        : kf(tl, [[0, -0.06], [0.72, -0.32], [0.92, -0.35], [1.06, 0.12], [1.55, -0.06]]);
+      o.jaw = Math.max(bump(t, sh(0.42), H), rear ? bump(t, 1.06, 1.55) : 0) * 0.95;
+      o.ear = 0.2 + Math.max(bump(t, sh(0.35), H + 0.1), rear ? bump(t, 1.05, 1.6) : 0) * 0.8;
+      o.furUp = kf(t, [[H - 0.05, 0], [H, 0.85, 'i'], [H + 0.22, -0.12, 'o'], [H + 0.45, 0]]);
+      o.furX = kf(t - 0.05, [[0, 0], [sh(0.72), -2.4], [H, -1], [H + 0.1, 1.5], [H + 0.55, 0]]);
+      o.furAmp = 0.05 + bump(t, H, H + 0.55) * 0.15;
+      o.furPh = t * 2.5;
+      o.rLean = kf(t - 0.05, [[0, 0], [sh(0.72), 0.45], [H, 0.2], [H + 0.06, -0.25, 'o'], [H + 0.4, 0]]);
+      o.rUp = kf(t, [[H, 0], [H + 0.06, 2.5, 'o'], [H + 0.2, 0]]);
+      if (rear) {
+        o.rDrum = kf(t, [[1.0, 0], [1.15, 1, 'o'], [1.5, 1], [1.6, 0]]);
+        o.rBeat = beatAt(t, [1.27, 1.47]);
+      }
+      return o;
     }
     case 'f12b_paw': {
-      // Роет копытом: три гребка, голова вниз, бивни на героя, пар из хобота.
-      const k = m.data.k ?? Math.min(1, t / T.paw);
-      const sc = Math.sin(k * Math.PI * 6);
-      o = { ...base, hp: 0.3, liftR: Math.max(0, sc) * 4, brace: -0.2, trunk: 0.1 };
-      key = `paw${sw(k * 24)}`;
-      ex.dx = sc * 0.4;
-      break;
+      // Роет копытом: три гребка правой передней (вперёд — и назад по льду),
+      // голова низко, бивни на героя, пар из хобота; к концу — сжался пружиной.
+      const tt = clamp01(c.k) * MAMMOTH.paw;
+      const sc = (tt - 0.1) / 0.3;
+      const si = Math.floor(sc);
+      const su = sc - si;
+      const scr2 = si >= 0 && si < 3;
+      o.liftR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 5 : 5 * Math.max(0, 1 - ease((su - 0.35) / 0.25))) : 0;
+      o.reachR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 4 : 4 - ease((su - 0.35) / 0.65) * 9) : 0;
+      o.hp = kf(tt, [[0, 0.1], [0.25, 0.42], [1.05, 0.46]]) + (scr2 ? bump(su, 0.35, 0.8) * 0.05 : 0);
+      o.pitch = kf(tt, [[0, 0], [0.25, -0.05], [0.85, -0.05], [1.05, -0.1]]);
+      o.crouch = kf(tt, [[0, 0], [0.25, 1.6], [0.85, 1.6], [1.05, 2.4]]);
+      o.reachB = kf(tt, [[0, 0], [0.25, -1.5], [1.05, -2.5]]);
+      o.ta = 1.8;
+      o.tk = 0.18;
+      o.tsw = 0.12 * Math.sin(tt * 9);
+      o.breath = scr2 && su > 0.5 ? (su - 0.5) / 0.5 : 0;
+      o.ear = 0.85 + 0.15 * Math.sin(tt * 20);
+      o.furAmp = 0.08;
+      o.furPh = tt * 3;
+      o.rLean = 0.35;
+      o.rCrouch = 0.5;
+      return o;
     }
     case 'f12b_charge': {
-      o = { ...base, walk: walkPh, stride: 7, hp: 0.32, trunk: 0.3 };
-      key = `charge${wf}`;
-      ex.ghost = { every: 0.06, life: 0.28, tint: '#9ac8ff', alpha: 0.28 };
-      break;
+      // Галоп: шаг по пройденному пути (частота растёт со скоростью), корпус
+      // наклонён вперёд и качается, шерсть и уши сносит назад.
+      o.gait = 2;
+      o.ph = Math.floor((((c.walk / GALLOP_C) % 1) + 1) % 1 * 12) / 12;
+      o.stride = GALLOP_S;
+      o.lift = 6;
+      const a = o.ph * TAU;
+      const st = clamp01(1 - t / 0.25);
+      o.pitch = -0.08 + 0.07 * Math.sin(a + 0.6) - 0.08 * st;
+      o.bob = 1.4 * Math.max(0, Math.sin(a + 1.2)) + 0.4;
+      o.crouch = 0.8 + 1.2 * st;
+      o.hp = 0.36 + 0.06 * Math.sin(a - 0.8);
+      o.ta = 1.95;
+      o.tk = 0.18;
+      o.tsw = 0.12 * Math.sin(a - 1.6);
+      o.ear = 0.75 + 0.25 * Math.sin(a * 2);
+      o.jaw = 0.25;
+      o.furX = -3.8;
+      o.furAmp = 0.16;
+      o.furPh = o.ph * 2;
+      o.rLean = 0.5 + 0.08 * Math.sin(a - 1);
+      o.rUp = Math.sin(a - 0.6);
+      o.rCrouch = 0.4;
+      return o;
     }
     case 'f12b_skid': {
-      const k = Math.min(1, t / T.charge.skid);
-      o = { ...base, brace: 1 - k * 0.6, hp: 0.15, crouch: 0.4 };
-      key = `skid${sw(k * 12)}`;
-      break;
+      // Юз: ноги упёрты вперёд, корпус по инерции — откинут, к остановке
+      // клюёт вперёд и встаёт; шерсть и хобот летят вперёд.
+      o.reachF = kf(t, [[0, 6], [0.6, 5], [0.85, 0]]);
+      o.reachB = kf(t, [[0, 3], [0.6, 2.5], [0.85, 0]]);
+      o.pitch = kf(t, [[0, 0.06], [0.45, 0.1], [0.68, -0.07, 'i'], [0.78, 0.02, 'o'], [0.85, 0]]);
+      o.crouch = kf(t, [[0, 2.6], [0.6, 2.2], [0.85, 0]]);
+      o.hp = kf(t, [[0, -0.12], [0.5, -0.08], [0.7, 0.32, 'i'], [0.85, 0.1]]);
+      o.ta = kf(t - 0.08, [[0, 0.7], [0.55, 0.6], [0.75, 1.9, 'i'], [0.85, 1.4]]);
+      o.tk = kf(t - 0.08, [[0, -0.15], [0.75, 0.1], [0.85, -0.06]]);
+      o.furX = kf(t - 0.05, [[0, 3.5], [0.55, 3], [0.72, 5, 'o'], [0.85, -1]]);
+      o.furAmp = 0.12;
+      o.furPh = t * 4;
+      o.ear = 0.9;
+      o.rLean = kf(t - 0.05, [[0, 0.55], [0.7, 0.75], [0.85, 0.1]]);
+      return o;
     }
     case 'f12b_stunned': {
-      // В стене: голова опущена и свёрнута, бивни треснули — светятся.
-      const ph = Math.floor(pose.now * 3) % 4;
-      o = {
-        ...base,
-        hp: 0.35,
-        hy: [0.15, 0.05, -0.05, 0.05][ph],
-        roll: 0.1,
-        trunk: -0.05,
-        crack: true,
-        crouch: 0.8,
-      };
-      key = `stun${ph}`;
-      break;
+      // Удар в стену: сжатие, голова отскакивает, бивень трескается (кадр
+      // контакта — вспышка трещины), откат; дальше — пошатывается, звёзды.
+      o.crack = 1;
+      if (t < 0.5) {
+        o.hp = kf(t, [[0, -0.45], [0.06, -0.5], [0.22, 0.52, 'o'], [0.36, 0.38], [0.5, 0.45]]);
+        o.pitch = kf(t, [[0, 0.12], [0.08, 0.1], [0.25, -0.06, 'o'], [0.5, -0.03]]);
+        o.crouch = kf(t, [[0, 0.5], [0.1, 3.8, 'o'], [0.3, 2.2], [0.5, 2.6]]);
+        o.roll = kf(t, [[0, 0], [0.3, 0.07], [0.5, 0.05]]);
+        o.ta = kf(t - 0.06, [[0, 0.4], [0.2, 1.95, 'i'], [0.4, 1.6], [0.5, 1.75]]);
+        o.tk = 0.12;
+        o.tsw = kf(t, [[0, 0], [0.3, 0.3], [0.5, 0.1]]);
+        o.furX = kf(t - 0.04, [[0, 4.5], [0.15, 2], [0.3, -1.5], [0.5, 0]]);
+        o.furUp = bump(t, 0, 0.3) * 0.6;
+        o.ear = kf(t, [[0, 1], [0.5, 0.1]]);
+        o.reachF = kf(t, [[0, 2], [0.5, 1]]);
+        o.crack = t < 0.16 ? 2 : 1;
+        o.daze = t > 0.3 ? ((t - 0.3) / 1.2) % 1 : -1;
+        o.rLean = kf(t, [[0, 0.7], [0.1, 0.9], [0.3, -0.2], [0.5, 0.1]]);
+        o.rUp = bump(t, 0, 0.25) * 3;
+        return o;
+      }
+      const fl = Math.floor(((t - 0.5) / 1.2) * 12) % 12;
+      const u = fl / 12;
+      const a = u * TAU;
+      o.hp = 0.45 + 0.05 * Math.sin(a * 2);
+      o.hy = 0.16 * Math.sin(a);
+      o.roll = 0.05 + 0.04 * Math.sin(a + 0.6);
+      o.crouch = 2.6;
+      o.pitch = -0.03;
+      o.ta = 1.75 + 0.06 * Math.sin(a * 2);
+      o.tk = 0.12;
+      o.tsw = 0.3 * Math.sin(a - 0.9);
+      o.ear = 0.1;
+      o.reachF = 1;
+      o.shut = fl >= 4 && fl <= 6;
+      o.daze = (u + 0.17) % 1;
+      o.crack = fl % 4 < 2 ? 1.3 : 1;
+      o.liftL = bump(u, 0.15, 0.35) * 2;
+      o.furAmp = 0.05;
+      o.furPh = u;
+      o.rLean = 0.15 + 0.06 * Math.sin(a);
+      return o;
     }
     case 'f12b_getup': {
-      const k = Math.min(1, t / 0.6);
-      o = {
-        ...base,
-        hp: 0.35 * (1 - k),
-        hy: Math.sin(k * Math.PI * 3) * 0.35,
-        roll: 0.1 * (1 - k),
-        crouch: 0.8 * (1 - k),
-      };
-      key = `getup${sw(k * 14)}`;
-      break;
+      // Подъём с усилием: упёрся — просел — встал; трясёт головой.
+      o.crouch = kf(t, [[0, 2.6], [0.14, 1.2, 'o'], [0.24, 1.9], [0.45, -0.3, 'o'], [0.6, 0]]);
+      o.pitch = kf(t, [[0, -0.03], [0.14, 0.07], [0.24, 0.02], [0.45, 0.05], [0.6, 0]]);
+      o.hp = kf(t, [[0, 0.45], [0.2, 0.3], [0.45, -0.05], [0.6, 0.08]]);
+      o.hy = 0.32 * Math.sin(t * 30) * clamp01(1 - t / 0.6);
+      o.ear = 0.3 + 0.6 * Math.abs(Math.sin(t * 30)) * clamp01(1 - t / 0.6);
+      o.ta = kf(t - 0.06, [[0, 1.75], [0.3, 1.0], [0.6, 1.3]]);
+      o.tsw = -o.hy * 1.2;
+      o.furAmp = 0.25 * clamp01(1 - t / 0.6);
+      o.furPh = t * 5;
+      o.daze = t < 0.25 ? (t * 2) % 1 : -1;
+      o.liftR = bump(t, 0.1, 0.3) * 3;
+      o.reachF = kf(t, [[0, 1], [0.6, 0]]);
+      o.rLean = kf(t, [[0, 0.15], [0.3, 0.3], [0.6, 0]]);
+      return o;
     }
     case 'f12b_drum': {
-      // Шаманка бьёт в бубен; мамонт топает в такт (бит 0,35 с).
-      const bt = (t % T.drum.beat) / T.drum.beat;
-      const beat = Math.floor(t / T.drum.beat);
-      const lift = bt < 0.6 ? Math.sin((bt / 0.6) * Math.PI) * 5 : 0;
-      o = {
-        ...base,
-        liftR: beat % 2 ? lift : 0,
-        liftL: beat % 2 ? 0 : lift,
-        drum: bt < 0.4 ? 1 : 0,
-        hp: -0.1,
-      };
-      key = `drum${beat % 2}${sw(bt * 8)}`;
-      break;
+      // Вьюга: шаманка заносит колотушку и бьёт в бубен ровно в такт валам
+      // (0,35 / 0,70 / 1,05 с); мамонт притопывает передними в те же удары.
+      const hits = [0.35, 0.7, 1.05];
+      o.rDrum = kf(t, [[0, 0], [0.14, 1, 'o'], [1.2, 1], [1.5, 0]]);
+      o.rBeat = beatAt(t, hits);
+      o.rLean = -0.1 + hits.reduce((s, h) => s + bump(t, h - 0.02, h + 0.16) * 0.18, 0);
+      o.liftL = bump(t, 0.35 - 0.24, 0.35) * 4.5 + bump(t, 1.05 - 0.24, 1.05) * 4.5;
+      o.liftR = bump(t, 0.7 - 0.24, 0.7) * 4.5;
+      o.bob = -hits.reduce((s, h) => s + bump(t, h, h + 0.14), 0) * 0.9;
+      o.hp = -0.12 + hits.reduce((s, h) => s + bump(t, h, h + 0.2) * 0.07, 0);
+      o.ta = 1.1 + 0.2 * Math.sin((t * TAU) / 0.7);
+      o.tsw = 0.3 * Math.sin((t * TAU) / 0.7 - 1);
+      o.ear = 0.5;
+      o.furAmp = 0.08;
+      o.furPh = t / 0.35;
+      o.rUp = hits.reduce((s, h) => s + bump(t, h, h + 0.18) * 0.8, 0);
+      return o;
     }
     case 'f12b_spikes': {
-      // Голову вверх — и бивнями в лёд к 0,9 с: шипы идут от бивней.
-      const w = T.spikes;
-      const hp =
-        t < 0.7
-          ? -0.35 * ease(t / 0.7)
-          : t < w.hit
-            ? -0.35 + 0.9 * ((t - 0.7) / (w.hit - 0.7))
-            : 0.55 * (1 - Math.min(1, (t - w.hit) / 0.5));
-      o = {
-        ...base,
-        hp,
-        rear: t < 0.7 ? 0.15 * ease(t / 0.7) : 0,
-        crouch: t >= w.hit && t < w.hit + 0.3 ? 1 : 0,
-        trunk: -0.4,
-      };
-      key = `spikes${sw(Math.min(w.end, t) * 24)}`;
-      break;
+      // Хобот вверх (вдох) — и хоботом с бивнями в лёд ровно в 0,9 с.
+      const tl = t - 0.04;
+      o.ta = kf(tl, [[0, 1.3], [0.55, -0.65, 'o'], [0.8, -0.8], [0.9, 1.9, 'i'], [1.0, 1.75], [1.4, 1.3]]);
+      o.tk = kf(tl, [[0, -0.06], [0.55, -0.12], [0.8, -0.18], [0.9, 0.05], [1.4, -0.06]]);
+      o.hp = kf(t, [[0, 0.06], [0.55, -0.42, 'o'], [0.8, -0.48], [0.9, 0.58, 'i'], [1.02, 0.5], [1.4, 0.08]]);
+      o.pitch = kf(t, [[0, 0], [0.55, 0.2, 'o'], [0.8, 0.23], [0.9, -0.06, 'i'], [1.05, 0], [1.4, 0]]);
+      o.crouch = kf(t, [[0, 0], [0.2, 1.5], [0.55, 0], [0.9, 0], [0.96, 3, 'o'], [1.3, 0]]);
+      o.liftL = o.liftR = kf(t, [[0.4, 0], [0.7, 3], [0.9, 0, 'i']]);
+      o.jaw = bump(t, 0.4, 0.88) * 0.9;
+      o.ear = 0.2 + bump(t, 0.4, 1.1) * 0.8;
+      o.furUp = kf(t, [[0.88, 0], [0.92, 0.65, 'i'], [1.15, -0.1, 'o'], [1.35, 0]]);
+      o.furAmp = 0.05 + bump(t, 0.9, 1.4) * 0.12;
+      o.furPh = t * 2.5;
+      o.rArms = kf(t, [[0, 0], [0.5, 1], [0.85, 1], [0.95, 0.2], [1.4, 0]]);
+      o.rLean = kf(t, [[0.85, 0], [0.92, 0.3, 'o'], [1.2, 0]]);
+      return o;
     }
     case 'f12b_blow': {
-      // Набирает воздух (хобот вверх) и дует к 0,9 с — жаровня гаснет.
-      const w = T.blow;
-      const tr = t < w.hit ? -0.8 * ease(t / w.hit) : 1;
-      o = { ...base, trunk: tr, hp: t < w.hit ? -0.15 : 0.1 };
-      key = `blow${sw(Math.min(w.end, t) * 24)}`;
-      break;
+      // Дует на жаровню: вдох хоботом вверх, грудь раздувается — хобот на
+      // жаровню, выдох клубами (к 0,9 с жаровня гаснет).
+      const tl = t - 0.04;
+      o.ta = kf(tl, [[0, 1.3], [0.55, -0.55, 'o'], [0.72, -0.6], [0.84, 0.55, 'i'], [1.15, 0.6], [1.3, 1.3]]);
+      o.tk = kf(tl, [[0, -0.06], [0.55, -0.25], [0.84, 0], [1.15, 0], [1.3, -0.06]]);
+      o.tsw = t > 0.84 && t < 1.15 ? (f24(t) % 2 ? 0.03 : -0.03) : 0;
+      o.hp = kf(t, [[0, 0.06], [0.55, -0.28], [0.72, -0.3], [0.84, 0.18, 'i'], [1.15, 0.15], [1.3, 0.06]]);
+      o.pitch = kf(t, [[0, 0], [0.55, 0.05], [0.84, -0.03, 'i'], [1.15, -0.02], [1.3, 0]]);
+      o.breath = t >= 0.84 && t < 1.2 ? ((t - 0.84) / 0.12) % 1 : 0;
+      o.ear = 0.3 + bump(t, 0.3, 0.84) * 0.6;
+      o.rLean = kf(t, [[0.8, 0], [0.9, -0.2, 'o'], [1.3, 0]]);
+      return o;
     }
     case 'f12b_drop': {
-      // Шаманка спрыгивает к 0,7 с: мамонт вскидывает голову.
-      const up = Math.sin(Math.min(1, t / 1.2) * Math.PI);
-      o = {
-        ...base,
-        rider: t < 0.7,
-        rear: 0.15 * up,
-        hp: -0.3 * up,
-        trunk: -0.6 * up,
-        mouth: up > 0.5 ? 1 : 0,
-      };
-      key = `drop${sw(Math.min(1.2, t) * 24)}`;
-      break;
+      // Сияние: шаманка приседает, тянет руки к небу — мамонт вскидывается
+      // и подбрасывает её в 0,7 с (дальше она — свой моб).
+      o.rider = t < 0.7;
+      o.pitch = kf(t, [[0, 0], [0.45, -0.05], [0.7, 0.2, 'i'], [0.9, 0.22], [1.2, 0]]);
+      o.crouch = kf(t, [[0, 0], [0.45, 2.2], [0.7, 0, 'i'], [1.2, 0]]);
+      o.hp = kf(t, [[0, 0.06], [0.45, 0.2], [0.7, -0.4, 'i'], [0.95, -0.42], [1.2, 0.06]]);
+      o.ta = kf(t - 0.07, [[0, 1.3], [0.45, 1.5], [0.75, -0.2, 'i'], [1.0, -0.3], [1.2, 1.2]]);
+      o.tk = kf(t - 0.07, [[0, -0.06], [0.75, -0.3], [1.2, -0.06]]);
+      o.jaw = bump(t, 0.65, 1.15);
+      o.ear = 0.2 + bump(t, 0.6, 1.2) * 0.8;
+      o.rCrouch = kf(t, [[0, 0], [0.45, 1]]);
+      o.rArms = kf(t, [[0.1, 0], [0.5, 1]]);
+      o.rUp = kf(t, [[0.5, 0], [0.7, 4, 'i']]);
+      return o;
     }
     case 'dying': {
-      // Сцена: шатается, валится на бок, иней затягивает шерсть.
-      const k = Math.min(1, t / 2.6);
-      const stag = Math.min(1, t / 0.6);
-      const fall = t < 0.6 ? 0 : ease(Math.min(1, (t - 0.6) / 1.0));
-      o = {
-        ...base,
-        rider: false,
-        hp: 0.3 * stag,
-        hy: Math.sin(t * 6) * 0.2 * (1 - fall),
-        roll: fall * 1.25,
-        crouch: stag * 1.5,
-        fall,
-        frost: t > 1.4 ? Math.min(1, (t - 1.4) / 0.8) : 0,
-      };
-      key = `die${sw(k * 40)}`;
-      ex.linger = 2.6;
-      ex.alpha = t > 2.1 ? Math.max(0, 1 - (t - 2.1) / 0.5) : 1;
-      break;
-    }
-    default: {
-      // Ходьба (погоня, к жаровне) и стоянка.
-      const moving = speedOf(m) > 0.25 || Math.abs(m.data.turn ?? 0) > 0.05;
-      if (moving) {
-        const swing = Math.sin(walkPh * TAU) * 0.25;
-        o = { ...base, walk: walkPh, stride: 4.5, trunk: swing * 0.4, hy: swing * 0.2 };
-        key = `walk${wf}`;
-      } else {
-        const f = Math.floor(pose.now * 1.5) % 4;
-        o = { ...base, trunk: [0, 0.1, 0.15, 0.05][f], hp: f === 2 ? 0.05 : 0 };
-        key = `idle${f}`;
-      }
+      // Смерть 2,6 с: вздрогнул — передние колени подломились — задние —
+      // завалился на бок с глухим ударом — иней затягивает шерсть.
+      o.hp = kf(t, [[0, 0.06], [0.12, -0.35, 'o'], [0.4, -0.2], [1.0, 0.45], [1.8, 0.55], [2.6, 0.6]]);
+      o.jaw = bump(t, 0.05, 0.9) * 0.9;
+      o.pitch = kf(t, [[0, 0], [0.15, 0.06], [0.45, 0], [1.05, -0.17, 'i'], [1.4, -0.12], [1.9, -0.04]]);
+      o.kneelF = kf(t, [[0.35, 0], [1.05, 1, 'i']]);
+      o.kneelB = kf(t, [[0.8, 0], [1.45, 1, 'i']]);
+      o.crouch = kf(t, [[0.3, 0], [1.05, 4.5, 'i'], [1.45, 8], [1.9, 9]]);
+      o.roll = kf(t, [[1.25, 0], [1.85, 1.38, 'i'], [1.97, 1.28, 'o'], [2.1, 1.33]]);
+      o.ta = kf(t - 0.1, [[0, 1.3], [0.2, 0.6], [1.0, 1.7], [1.9, 2.1]]);
+      o.tk = kf(t - 0.1, [[0, -0.06], [1.0, 0.15]]);
+      o.ear = kf(t, [[0, 0.8], [1.0, 0.1]]);
+      o.furUp = kf(t, [[1.8, 0], [1.87, 0.6, 'i'], [2.05, 0]]);
+      o.furX = kf(t, [[0, 0], [1.05, 2], [1.4, 0]]);
+      o.furAmp = 0.05 + bump(t, 1.85, 2.4) * 0.12;
+      o.furPh = t * 3;
+      o.frost = kf(t, [[1.5, 0], [2.35, 1]]);
+      o.shut = t > 1.3;
+      o.rSlide = kf(t, [[0.25, 0], [1.0, 1]]);
+      o.rLean = kf(t, [[0, 0], [0.2, -0.4], [0.6, 0.6], [1.0, 0.9]]);
+      return o;
     }
   }
-  return { o, key: `${pose.look}|${rider ? 'r' : ''}${phase}|${key}`, ex };
+  // Ходьба (погоня, к жаровне) и стоянка.
+  const rot = Math.abs(c.turn) > 0.02 ? 1.5 * 1.6 : 0;
+  const moving = c.speed > 0.25 || Math.abs(c.turn) > 0.05;
+  if (!moving) {
+    const fI = Math.floor(now / 0.3) % 8;
+    const u = fI / 8;
+    o.bob = 0.5 * Math.sin(u * TAU);
+    o.hp = 0.06 + 0.03 * Math.sin(u * TAU - 0.6);
+    o.tsw = 0.22 * Math.sin(u * TAU - 1.2);
+    o.ta = 1.3 + 0.08 * Math.sin(u * TAU * 2);
+    o.tk = -0.06 - 0.05 * Math.sin(u * TAU - 1);
+    o.ear = 0.2 + (fI === 5 ? 0.6 : fI === 6 ? 0.3 : 0);
+    o.furAmp = 0.05;
+    o.furPh = u;
+    o.rUp = 0.4 * Math.sin(u * TAU - 0.8);
+    o.rRib = u * TAU;
+    return o;
+  }
+  const fwd = c.speed / (c.speed + rot + 1e-6);
+  const fq = fwd > 0.75 ? 2 : fwd > 0.35 ? 1 : 0;
+  const lq = Math.abs(c.turn) < 0.12 ? 0 : Math.sign(c.turn) * (Math.abs(c.turn) < 0.5 ? 1 : 2);
+  const lead = lq * 0.18;
+  const ph = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12) / 12;
+  const a = ph * TAU;
+  const ramp0 = mode === 'chase' || mode === 'f12b_douse' ? clamp01(t / 0.25) : 1;
+  o.gait = 1;
+  o.ph = ph;
+  o.stride = [0.15, 0.55, 1][fq] * WALK_S * ease(ramp0);
+  o.side = (1 - [0.15, 0.55, 1][fq]) * 6 * Math.sign(c.turn);
+  o.lift = 4.5;
+  o.bob = 0.7 * Math.cos(a * 2);
+  o.roll = 0.03 * Math.sin(a);
+  o.pitch = 0.012 * Math.sin(a * 2 + 1);
+  o.hp = 0.08 + 0.035 * Math.sin(a * 2 - 1.2);
+  o.hy = lead + 0.05 * Math.sin(a - 0.8);
+  o.tsw = 0.32 * Math.sin(a - 1.6) - lead * 0.6;
+  o.ta = 1.28 + 0.1 * Math.sin(a * 2 - 2);
+  o.ear = 0.25 + 0.1 * Math.sin(a * 2 - 2.2);
+  o.furPh = ph - 0.15;
+  o.furAmp = 0.1;
+  o.furRoll = -lead * 0.3 + 0.06 * Math.sin(a - 1.9);
+  o.rUp = 0.8 * Math.cos(a * 2 - 0.9);
+  o.rLean = 0.06 * Math.sin(a * 2 - 1.4);
+  o.rRib = a;
+  return o;
 }
+
+/** Ключ кадра ходьбы/стоянки (всё, что меняет картинку). */
+function mamWalkKey(t: number, now: number, c: MamCtx, mode: string): string {
+  const moving = c.speed > 0.25 || Math.abs(c.turn) > 0.05;
+  if (!moving) return `i${Math.floor(now / 0.3) % 8}`;
+  const rot = Math.abs(c.turn) > 0.02 ? 2.4 : 0;
+  const fwd = c.speed / (c.speed + rot + 1e-6);
+  const fq = fwd > 0.75 ? 2 : fwd > 0.35 ? 1 : 0;
+  const lq = Math.abs(c.turn) < 0.12 ? 0 : Math.sign(c.turn) * (Math.abs(c.turn) < 0.5 ? 1 : 2);
+  const wf = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12);
+  const r = (mode === 'chase' || mode === 'f12b_douse') && t < 0.25 ? `r${f24(t)}` : '';
+  return `w${wf}${fq}${lq}${fq < 2 ? Math.sign(c.turn) : ''}${r}`;
+}
+
+/** Техники мамонта: в первые 0,18 с ноги ставятся из шага (без скачка позы). */
+const MAM_TECH = new Set([
+  'f12b_tusk',
+  'f12b_stomp',
+  'f12b_paw',
+  'f12b_drum',
+  'f12b_spikes',
+  'f12b_blow',
+  'f12b_rear',
+  'f12b_drop',
+]);
+const MAM_LEN: Record<string, number> = {
+  roar: MAMMOTH.intro,
+  f12b_tusk: MAMMOTH.tusk.end,
+  f12b_stomp: MAMMOTH.stomp.end,
+  f12b_rear: MAMMOTH.rear,
+  f12b_skid: MAMMOTH.charge.skid,
+  f12b_getup: 0.6,
+  f12b_drum: MAMMOTH.drum.end,
+  f12b_spikes: MAMMOTH.spikes.end,
+  f12b_blow: MAMMOTH.blow.end,
+  f12b_drop: 1.2,
+  dying: 2.6,
+};
+/** Где след бивней: [с, по] времени режима. */
+const MAM_TRAIL: Record<string, [number, number]> = {
+  f12b_tusk: [0.72, 1.06],
+  f12b_spikes: [0.82, 1.0],
+};
+
+/** Кадр мамонта: поза на квантованное время, ключ и поля движка. */
+function mamFrame(
+  mode: string,
+  tRaw: number,
+  now: number,
+  c: MamCtx,
+  face: number,
+): { o: MamO; key: string; ex: Partial<MobFrame> } {
+  const len = MAM_LEN[mode];
+  const t = len !== undefined ? Math.min(len, f24(tRaw) / 24) : f24(tRaw) / 24;
+  const ex: Partial<MobFrame> = { shadow: 30, still: true };
+  let key: string;
+  let o: MamO;
+  if (mode === 'f12b_charge') {
+    o = mamAt(mode, t, now, c);
+    key = `ch${Math.round(o.ph * 12)}${t < 0.25 ? `s${f24(t)}` : ''}`;
+    ex.ghost = { every: 0.05, life: 0.26, tint: '#9ac8ff', alpha: 0.26 };
+  } else if (mode === 'f12b_stunned') {
+    o = mamAt(mode, t, now, c);
+    key = t < 0.5 ? `sn${f24(t)}` : `sd${Math.floor(((t - 0.5) / 1.2) * 12) % 12}`;
+    if (t < 0.5) {
+      // Удар в стену: вжат в неё (сжатие по ходу), потом откат назад.
+      const kc = clamp01(1 - t / 0.1);
+      const ac = Math.abs(Math.cos(face));
+      const as = Math.abs(Math.sin(face));
+      ex.sx = 1 - 0.08 * kc * ac + 0.04 * kc * as;
+      ex.sy = 1 - 0.08 * kc * as + 0.04 * kc * ac;
+      const rec = kf(t, [[0, 1.5], [0.1, 0], [0.22, -3, 'o'], [0.5, -2]]);
+      ex.dx = Math.cos(face) * rec;
+      ex.dy = Math.sin(face) * rec;
+    } else {
+      ex.dx = -Math.cos(face) * 2;
+      ex.dy = -Math.sin(face) * 2;
+    }
+  } else if (mode === 'f12b_getup') {
+    o = mamAt(mode, t, now, c);
+    key = `gu${f24(t)}`;
+    const rec = kf(t, [[0, -2], [0.6, 0]]);
+    ex.dx = Math.cos(face) * rec;
+    ex.dy = Math.sin(face) * rec;
+  } else if (mode === 'f12b_paw') {
+    const tt = clamp01(c.k) * MAMMOTH.paw;
+    o = mamAt(mode, t, now, { ...c, k: f24(tt) / 24 / MAMMOTH.paw });
+    key = `paw${f24(tt)}`;
+  } else if (len !== undefined) {
+    o = mamAt(mode, t, now, c);
+    key = `${mode.replace('f12b_', '')}${f24(t)}`;
+  } else {
+    o = mamAt(mode, t, now, c);
+    key = mamWalkKey(tRaw, now, c, mode);
+  }
+  // Начало техники: ноги из шага встают на лёд за 0,18 с.
+  if (MAM_TECH.has(mode) && t < 0.18) {
+    const wf = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12);
+    const k = 1 - ease(t / 0.18);
+    o.gait = 1;
+    o.ph = wf / 12;
+    o.stride = WALK_S * k;
+    o.lift = 4.5 * k;
+    key += `b${wf}`;
+  }
+  // След бивней: те же ключи на 1–3 кадра раньше.
+  const tw = MAM_TRAIL[mode];
+  if (tw && t >= tw[0] && t <= tw[1]) {
+    const tr: V3[][] = [];
+    for (let k = 0; k <= 3; k++) {
+      const ok = k === 0 ? o : mamAt(mode, t - k / 24, now, c);
+      const T = mamTusks(mamSkel(ok));
+      tr.push([T.tip[0], T.tip[1], T.mid[0], T.mid[1]]);
+    }
+    o.trail = tr;
+  }
+  // Сжатие на контакте: дыбы и шипы — в лёд, бубен — в такт.
+  const squash = (at: number, k: number, d = 0.14) => {
+    if (t >= at && t < at + d) {
+      const q = 1 - (t - at) / d;
+      ex.sy = 1 - k * q;
+      ex.sx = 1 + k * 0.7 * q;
+    }
+  };
+  if (mode === 'f12b_stomp') squash(MAMMOTH.stomp.hit, 0.09);
+  if (mode === 'f12b_rear') squash(0.9, 0.1);
+  if (mode === 'f12b_spikes') squash(MAMMOTH.spikes.hit, 0.07);
+  if (mode === 'f12b_tusk') squash(MAMMOTH.tusk.hit, 0.035, 0.1);
+  if (mode === 'f12b_drum') for (const h of [0.35, 0.7, 1.05]) squash(h, 0.025, 0.1);
+  if (mode === 'roar' && t >= 0.8 && t < 0.92) squash(0.8, 0.05);
+  if (mode === 'f12b_blow') {
+    const sw = kf(t, [[0, 0], [0.6, 1], [0.84, 1], [0.95, -0.4, 'o'], [1.3, 0]]);
+    ex.sx = 1 + 0.035 * sw;
+    ex.sy = 1 + 0.02 * sw;
+  }
+  // Рёв и вздыбленный рёв: мелкая дрожь всего тела (не кадрами).
+  if ((mode === 'roar' && t > 0.9 && t < 1.85) || (mode === 'f12b_rear' && t > 1.1 && t < 1.45))
+    ex.dx = (ex.dx ?? 0) + Math.sin(now * 55) * 0.35;
+  if (mode === 'dying') {
+    ex.linger = 2.6;
+    ex.alpha = t > 2.25 ? Math.max(0, 1 - (t - 2.25) / 0.35) : 1;
+    if (t >= 1.85 && t < 2.0) {
+      const q = 1 - (t - 1.85) / 0.15;
+      ex.sy = 1 - 0.06 * q;
+      ex.sx = 1 + 0.04 * q;
+    }
+  }
+  return { o, key, ex };
+}
+
+function mamCtx(m: Mob): MamCtx {
+  return {
+    rider: (m.data.rider ?? 0) > 0,
+    phase: Math.max(0, Math.min(3, m.data.phase ?? 0)),
+    walk: m.data.walk ?? 0,
+    turn: m.data.turn ?? 0,
+    speed: speedOf(m),
+    k: m.data.k ?? 0,
+    stun: m.data.stunT || MAMMOTH.stun,
+  };
+}
+
+/** Позы мамонта по режиму мозга. */
+function mamPose(m: Mob, pose: MobPose): { o: MamO; key: string; ex: Partial<MobFrame> } {
+  const c = mamCtx(m);
+  const { o, key, ex } = mamFrame(pose.mode, pose.t, pose.now, c, m.face);
+  return { o, key: `${pose.look}|${c.rider ? 'r' : ''}${c.phase}|${key}`, ex };
+}
+
+/** Точки кадра (px от точки моба на полу): бубен и середина кончиков бивней. */
+function mamPts(o: MamO, face: number, ex: Partial<MobFrame>): { drum: [number, number]; tusk: [number, number] } {
+  const S = mamSkel(o);
+  const T = mamTusks(S);
+  const tip: V3 = [(T.tip[0][0] + T.tip[1][0]) / 2, (T.tip[0][1] + T.tip[1][1]) / 2, (T.tip[0][2] + T.tip[1][2]) / 2];
+  const sh = riderSh(o);
+  const drum = riderPlace(o, S).place(shDrumLocal(sh));
+  const f = dirAng(dirN(face, 16), 16);
+  const px = (p: V3): [number, number] => {
+    const [wx, wy, wz] = toWorld(p[0] * MAM_SC, p[1] * MAM_SC, p[2] * MAM_SC, f);
+    const [sx, sy] = project(wx, wy, wz);
+    return [(ex.dx ?? 0) + sx * (ex.sx ?? 1), 2 + (ex.dy ?? 0) + sy * (ex.sy ?? 1)];
+  };
+  return { drum: px(drum), tusk: px(tip) };
+}
+const MAM_PTS = new Map<number, { drum: [number, number]; tusk: [number, number] }>();
+
+lruOf('f12boss', 560);
+lruOf('f12_shaman', 320);
 
 regMob('f12boss', (m, pose) => {
   const { o, key, ex } = mamPose(m, pose);
-  const c = rigCached('f12boss', key, m.face, CV_MAM, pose.flash, () => mammothBuild(pose.look, o));
+  const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => mammothBuild(pose.look, o));
+  MAM_PTS.set(m.id, mamPts(o, m.face, ex));
+  if (MAM_PTS.size > 8) MAM_PTS.delete(MAM_PTS.keys().next().value as number);
   return mobFrame(c, CV_MAM, ex);
 });
 
 /**
  * Точки тела мамонта для эффектов «Техник» — px кадра от точки моба на
  * полу: `drum` — бубен шаманки на спине, `tusk` — кончик бивня (середина
- * пары). Сейчас — точки модели в покое, повёрнутые по `m.face`; «Тело»
- * держит их в согласии с кадром (поза, дыбы, подъём головы).
+ * пары). Берутся из той же позы, что последний нарисованный кадр (дыбы,
+ * подъём головы, наклон, сжатие, откат), повёрнутой на сторону кадра.
  */
 export function mamPointPx(m: Mob, which: 'drum' | 'tusk'): [number, number] {
-  const p: V3 = which === 'drum' ? [2, 0, 48] : [38, 0, 14];
-  const [wx, wy, wz] = toWorld(p[0], p[1], p[2], m.face);
-  const [sx, sy] = project(wx, wy, wz);
-  return [sx, sy];
+  let p = MAM_PTS.get(m.id);
+  if (!p) {
+    const { o, ex } = mamFrame(m.mode, m.t, performance.now() / 1000, mamCtx(m), m.face);
+    p = mamPts(o, m.face, ex);
+  }
+  return which === 'drum' ? p.drum : p.tusk;
 }
 
-// Прогрев: ходьба во все 16 сторон (с наездницей и без), рёв, оглушение.
+// Прогрев: вход (лицом на юг), ходьба во все 16 сторон, бивни, топот и рытьё
+// лицом на юг (оттуда герой входит в арену).
 registerMobWarm('f12boss', function* () {
-  for (const rider of [true, false])
-    for (let d = 0; d < 16; d++)
-      for (let wf = 0; wf < 12; wf++) {
-        const f = (d / 16) * TAU;
-        const m = {
-          id: 0,
-          mode: 'chase',
-          vx: Math.cos(f),
-          vy: Math.sin(f),
-          face: f,
-          data: { walk: (wf / 12) * 2.4 + 0.01, rider: rider ? 1 : 0, phase: rider ? 0 : 3 },
-        } as unknown as Mob;
-        const pose: MobPose = {
-          anim: 'run',
-          frame: 0,
-          mode: 'chase',
-          t: 0,
-          left: false,
-          flash: false,
-          look: 'normal',
-          now: 0,
-        };
-        const { o, key } = mamPose(m, pose);
-        rigCached('f12boss', key, f, CV_MAM, false, () => mammothBuild('normal', o));
-        yield 0;
+  const c0: MamCtx = { rider: true, phase: 0, walk: 0, turn: 0, speed: 0, k: 0, stun: MAMMOTH.stun };
+  const S = Math.PI / 2;
+  const one = (mode: string, t: number, face: number, c: MamCtx) => {
+    const { o, key } = mamFrame(mode, t, 0, c, face);
+    rigCached('f12boss', `normal|r0|${key}`, face, CV_MAM, false, () => mammothBuild('normal', o));
+  };
+  for (let i = 0; i < Math.round(MAMMOTH.intro * 24); i++) {
+    one('roar', i / 24, S, c0);
+    yield 0;
+  }
+  for (let d = 0; d < 16; d++)
+    for (let wf = 0; wf < 12; wf++) {
+      one('chase', 1, (d / 16) * TAU, { ...c0, speed: 2.3, walk: (wf / 12) * WALK_C + 0.01 });
+      yield 0;
+    }
+  for (const [mode, end] of [
+    ['f12b_tusk', MAMMOTH.tusk.end],
+    ['f12b_stomp', MAMMOTH.stomp.end],
+  ] as const)
+    for (let i = 0; i <= Math.round(end * 24); i++) {
+      one(mode, i / 24, S, c0);
+      yield 0;
+    }
+  for (let i = 0; i <= Math.round(MAMMOTH.paw * 24); i++) {
+    one('f12b_paw', 0.5, S, { ...c0, k: i / 24 / MAMMOTH.paw });
+    yield 0;
+  }
+});
+
+// ---- Шаманка в небе (фаза 3) -----------------------------------------------------
+
+/** Полёт: корпус наклонён по ходу, ноги отстают, бубен вперёд, ленты сзади. */
+function shFly(lean: number, rib: number): ShO {
+  return {
+    body: {
+      ...BODY0,
+      s: 0.85,
+      lean,
+      handL: [3.5, -3.2, 12.5],
+      handR: [-1, 4, 11],
+      feet: [
+        [-3.5 - lean * 2.5, -1.6, 1.5 + lean * 3.5],
+        [-2.5 - lean * 2.5, 1.6, 0.5 + lean * 4],
+      ],
+    },
+    drum: 0,
+    beat: 0,
+    aurora: 1,
+    rib,
+    ribA: 1.1,
+    ribUp: 0.12,
+    ribLen: 1,
+    hem: Math.min(1, lean * 1.3),
+  };
+}
+
+function shamanPose(
+  m: Mob,
+  pose: MobPose,
+): { o: ShO; key: string; ex: Partial<MobFrame>; face: number } {
+  const t = f24(pose.t) / 24;
+  const ex: Partial<MobFrame> = { shadow: 4, still: true, lift: 0.01 };
+  let face = m.face;
+  const fI = Math.floor(pose.now * 10) % 10;
+  const fly = shFly(0.65, (fI / 10) * TAU);
+  switch (pose.mode) {
+    case 'f12s_jump': {
+      // Спрыгнула со спины мамонта и взмыла: смотрит туда же, куда он.
+      const mam = paintSim()?.mobs.find((x) => x.kind === 'f12boss');
+      if (mam) face = mam.face;
+      const k = clamp01((t - 0.1) / 0.5);
+      const o = shFly(lerp(-0.1, 0.65, ease(k)), t * 7);
+      const up = 1 - ease(clamp01((t - 0.3) / 0.6));
+      const hd = shHands(0, 0);
+      o.body.handL = lerp3(hd.L, [1.6, -3.4, 19.5], up);
+      o.body.handR = lerp3([-1, 4, 11], [1.6, 3.4, 19.5], up);
+      o.body.crouch = t < 0.1 ? 2 : 0;
+      if (t < 0.3) o.body.feet = undefined;
+      o.ribUp = kf(t, [[0, -1], [0.5, -0.6], [0.9, 0.12]]);
+      o.ribA = 1.4;
+      o.aurora = kf(t, [[0, 1.3], [0.9, 1]]);
+      ex.lift = kf(t, [[0, 14], [0.1, 12, 'o'], [0.55, SH_HIGH + 8, 'o'], [0.9, SH_HIGH]]);
+      ex.ghost = { every: 0.05, life: 0.22, tint: '#9affd8', alpha: 0.3 };
+      ex.shadow = 3.5;
+      return { o, key: `j${f24(t)}`, ex, face };
+    }
+    case 'f12s_dive': {
+      // Пике к месту колдовства: головой вниз, руки назад, ленты рвутся вверх.
+      const k = clamp01(t / 0.45);
+      const o = shFly(1.0, t * 12);
+      o.body.handL = [-1.5, -4, 12];
+      o.body.handR = [-1.5, 4, 12];
+      o.ribUp = 1.3;
+      o.ribA = 0.6;
+      ex.lift = lerp(SH_HIGH, 5, k * k);
+      ex.ghost = { every: 0.035, life: 0.18, tint: '#9affd8', alpha: 0.4 };
+      return { o, key: `d${f24(t)}`, ex, face };
+    }
+    case 'f12s_cast': {
+      // Колдует: торможение у пола — бубен вверх, три удара — руки к небу,
+      // ленты встают и вспыхивают к 1,1 с (занавесы падают в этот миг).
+      const o = shFly(kf(t, [[0, 0.9], [0.12, -0.12, 'o'], [1.0, -0.2], [1.1, -0.3]]), t * 9);
+      o.body.feet = undefined;
+      o.body.wide = 0.8;
+      o.drum = kf(t, [[0.08, 0], [0.3, 1, 'o']]);
+      o.beat = beatAt(t, [0.45, 0.65, 0.85]);
+      const hd = shHands(o.drum, o.beat);
+      const up = kf(t, [[0.92, 0], [1.05, 1, 'o']]);
+      o.body.handL = lerp3(hd.L, [1.5, -3.3, 20.5], up);
+      o.body.handR = lerp3(hd.R, [1.5, 3.3, 20.5], up);
+      o.ribUp = kf(t, [[0, 1.2], [0.2, 0.6], [0.95, 1.7], [1.1, 2.2]]);
+      o.ribA = kf(t, [[0, 0.8], [1.1, 1.8]]);
+      o.aurora = kf(t, [[0, 0.8], [0.9, 1.4], [1.1, 2]]);
+      o.hem = kf(t, [[0, 1], [0.2, 0.2]]);
+      ex.lift = kf(t, [[0, 5], [0.1, 3.5, 'o'], [0.3, 4.5], [1.1, 7.5]]);
+      if (t < 0.12) {
+        const q = 1 - t / 0.12;
+        ex.sy = 1 - 0.1 * q;
+        ex.sx = 1 + 0.08 * q;
       }
+      ex.shadow = 5;
+      return { o, key: `c${f24(t)}`, ex, face };
+    }
+    case 'f12s_low': {
+      // Выдохлась: у самого пола, на коленях, грудь ходит — бей сейчас.
+      const fP = Math.floor(t * 10) % 4;
+      const o = shFly(0.55 + 0.07 * Math.sin((fP / 4) * TAU), fP * 0.6);
+      o.body.feet = undefined;
+      o.body.kneel = 1;
+      o.body.crouch = 2.2 + 0.4 * Math.sin((fP / 4) * TAU);
+      o.body.handL = [2.5, -3.6, 5];
+      o.body.handR = [2.5, 3.6, 4.5];
+      o.ribUp = -1.4;
+      o.ribA = 0.25;
+      o.ribLen = 0.85;
+      o.aurora = 0.25;
+      o.hem = 0;
+      if (t < 0.12) {
+        const k = ease(t / 0.12);
+        o.body.handL = lerp3([1.5, -3.3, 20.5], [2.5, -3.6, 5], k);
+        o.body.handR = lerp3([1.5, 3.3, 20.5], [2.5, 3.6, 4.5], k);
+        o.ribUp = lerp(2.2, -1.4, k);
+        o.aurora = lerp(2, 0.25, k);
+      }
+      ex.lift = t < 0.12 ? lerp(7.5, 1.5, ease(t / 0.12)) : 1.5;
+      ex.shadow = 5;
+      return { o, key: t < 0.12 ? `lb${f24(t)}` : `l${fP}`, ex, face };
+    }
+    case 'f12s_rise': {
+      // Взмывает: присела глубже — толчок, ленты хлещут вниз.
+      const o = shFly(kf(t, [[0, 0.55], [0.12, 0.8], [0.45, 0.65]]), t * 10);
+      if (t < 0.15) {
+        o.body.feet = undefined;
+        o.body.kneel = 1;
+        o.body.crouch = kf(t, [[0, 2.2], [0.12, 3]]);
+      }
+      o.ribUp = kf(t, [[0, -1.4], [0.15, -1.2], [0.45, 0.12]]);
+      o.ribA = 1.6;
+      o.aurora = kf(t, [[0, 0.3], [0.2, 1.2], [0.45, 1]]);
+      ex.lift = kf(t, [[0, 1.5], [0.12, 0.8, 'o'], [0.45, SH_HIGH, 'o']]);
+      ex.ghost = { every: 0.04, life: 0.2, tint: '#9affd8', alpha: 0.32 };
+      return { o, key: `r${f24(t)}`, ex, face };
+    }
+    case 'dying': {
+      // Падает с высоты, сгибается, ленты гаснут и опадают.
+      const o = shFly(kf(t, [[0, -0.45], [0.3, -0.2], [0.45, 0.9], [0.9, 1.35]]), t * 6);
+      o.body.feet = undefined;
+      o.body.kneel = kf(t, [[0.3, 0], [0.5, 1]]);
+      o.body.handL = lerp3([1, -5, 17], [3, -4, 2], clamp01((t - 0.3) / 0.4));
+      o.body.handR = lerp3([1, 5, 17], [3, 4, 2], clamp01((t - 0.3) / 0.4));
+      o.ribLen = kf(t, [[0, 1], [1.0, 0]]);
+      o.ribUp = kf(t, [[0, 1.5], [0.6, -1.5]]);
+      o.aurora = kf(t, [[0, 2], [0.15, 1.5], [1.0, 0]]);
+      o.hem = 0;
+      ex.lift = kf(t, [[0, 6], [0.3, 0.01, 'i'], [0.36, 1, 'o'], [0.45, 0.01, 'i']]);
+      ex.linger = 1.3;
+      ex.alpha = t > 0.85 ? Math.max(0, 1 - (t - 0.85) / 0.45) : 1;
+      ex.shadow = 5;
+      return { o, key: `x${f24(t)}`, ex, face };
+    }
+    case 'escape':
+      ex.lift = SH_HIGH + t * 50;
+      ex.alpha = Math.max(0, 1 - t / 0.4);
+      return { o: fly, key: `h${fI}`, ex, face };
+    default:
+      // Под сводом кругами — недосягаема: чуть прозрачна, ленты по ветру.
+      ex.lift = SH_HIGH + Math.sin(pose.now * 1.7) * 1.5;
+      ex.alpha = 0.88;
+      ex.shadow = 3.2;
+      return { o: fly, key: `h${fI}`, ex, face };
+  }
+}
+
+function shamanBuild(look: MobPose['look'], o: ShO): Build {
+  const parts: Part[] = [];
+  const r = shamanParts(parts, o, look, (p) => p);
+  return scaleBuild({ parts, eyes: r.eyes, post: (p) => rimLight(p, RIM_C, 0.38) }, SH_SC);
+}
+
+regMob('f12_shaman', (m, pose) => {
+  const { o, key, ex, face } = shamanPose(m, pose);
+  const c = rigFrame('f12_shaman', `${pose.look}|${key}`, face, CV_SHA, pose.flash, () =>
+    shamanBuild(pose.look, o),
+  );
+  return mobFrame(c, CV_SHA, ex);
+});
+
+// Прогрев шаманки: полёт под сводом во все 16 сторон.
+registerMobWarm('f12_shaman', function* () {
+  for (let d = 0; d < 16; d++)
+    for (let fI = 0; fI < 10; fI++) {
+      const o = shFly(0.65, (fI / 10) * TAU);
+      rigCached('f12_shaman', `normal|h${fI}`, (d / 16) * TAU, CV_SHA, false, () =>
+        shamanBuild('normal', o),
+      );
+      yield 0;
+    }
 });
 
 // ---------------------------------------------------------------------------
