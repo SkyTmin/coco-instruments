@@ -627,6 +627,40 @@ describe('этаж 15: механики боя', () => {
     expect(cut).toEqual([]);
   });
 
+  it('зеркала четверти стреляют лучом, когда герой рядом (до v2.95 — почти никогда)', () => {
+    const s = started();
+    expect(f15bForce(s, API, 3)).toBe(true);
+    run(s, 10);
+    const mk = s.world.mark;
+    const mirrors = [...s.boss!.cells].filter(
+      (i) => s.tiles[i] === Tile.Wall && mk[i] === MK.mirror,
+    );
+    expect(mirrors.length).toBeGreaterThan(0);
+    let beams = 0;
+    for (const i of mirrors) {
+      for (const d of [W, -W, 1, -1]) {
+        const j = i + 3 * d;
+        if (!walkableTile(s.tiles[j]) || !walkableTile(s.tiles[i + d])) continue;
+        if (!walkableTile(s.tiles[i + 2 * d])) continue;
+        // Не по оси клеток: от середины зеркала первый шаг видимости короче
+        // половины клетки и попадал в само зеркало.
+        API.moveHero(s, (j % W) + 0.8, Math.floor(j / W) + 0.7);
+        run(
+          s,
+          4,
+          () => NO_INPUT,
+          (x) => {
+            beams += x.strikes.filter((st) => st.art === 'f15b_mbeam').length;
+            return beams > 0;
+          },
+        );
+        break;
+      }
+      if (beams > 0) break;
+    }
+    expect(beams).toBeGreaterThan(0);
+  });
+
   it('затмение гасит память и свет; запахнут — почти не берёт, распахнут — окно', () => {
     const s = started();
     f15bForce(s, API, 3);

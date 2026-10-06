@@ -2589,6 +2589,14 @@ function quadHazard(sim: Sim, st: F15BState, api: SimApi, qd: Quad, power = 1): 
   const lord = lordOf(sim);
   const dmg = (lord?.dmg ?? api.def('f15boss').dmg) * 1.1;
   const near = (i: number) => hypot((i % W) + 0.5 - h.x, Math.floor(i / W) + 0.5 - h.y);
+  /** Точка на краю клетки зеркала `i` по лучу к (tx, ty) и угол луча. */
+  const mirrorEdge = (i: number, tx: number, ty: number): [number, number, number] => {
+    const cx = (i % W) + 0.5;
+    const cy = Math.floor(i / W) + 0.5;
+    const a = Math.atan2(ty - cy, tx - cx);
+    const e = 0.5 / Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a))) + 0.02;
+    return [cx + Math.cos(a) * e, cy + Math.sin(a) * e, a];
+  };
   switch (qd.kind) {
     case 'lava': {
       const spots = qd.area.filter((i) => walkT(sim.tiles[i]) && near(i) < 4.5);
@@ -2644,21 +2652,23 @@ function quadHazard(sim: Sim, st: F15BState, api: SimApi, qd: Quad, power = 1): 
     }
     case 'mirror': {
       for (let n = 0; n < power; n++) {
-        const seen = qd.mirrors.filter(
-          (i) =>
-            near(i) < 11 && api.lineOfSight(sim, (i % W) + 0.5, Math.floor(i / W) + 0.5, h.x, h.y),
-        );
+        // Зеркало — клетка-стена: и видимость, и луч считаются от края его
+        // клетки к герою. От середины `lineOfSight` первым шагом попадал в
+        // само зеркало — беда четверти почти никогда не стреляла (до v2.95).
+        const seen = qd.mirrors.filter((i) => {
+          if (near(i) >= 11) return false;
+          const [ex, ey] = mirrorEdge(i, h.x, h.y);
+          return api.lineOfSight(sim, ex, ey, h.x, h.y);
+        });
         if (!seen.length) return;
         qd.shots += 1;
         const i = seen[(qd.shots + n) % seen.length];
-        const x = (i % W) + 0.5;
-        const y = Math.floor(i / W) + 0.5;
-        const a = Math.atan2(h.y - y, h.x - x);
+        const [x, y, a] = mirrorEdge(i, h.x, h.y);
         api.strike(sim, {
           shape: 'line',
-          x: x + Math.cos(a) * 0.55,
-          y: y + Math.sin(a) * 0.55,
-          r: wallDist(sim, x + Math.cos(a) * 0.6, y + Math.sin(a) * 0.6, a, 14),
+          x,
+          y,
+          r: wallDist(sim, x + Math.cos(a) * 0.05, y + Math.sin(a) * 0.05, a, 14),
           w: 0.38,
           ang: a,
           warn: 0.9,
