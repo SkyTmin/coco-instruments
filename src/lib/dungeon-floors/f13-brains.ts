@@ -3102,13 +3102,19 @@ function giantStep(sim: Sim, g: Mob, dt: number, c: BrainCtx, api: SimApi): void
       return;
     case 'chase': {
       g.danger = 0;
+      // Боком не ходит: идёт туда, куда смотрит, а поворачивает плавно —
+      // на крутом повороте почти стоит.
       const [dx, dy] = api.chaseDir(sim, g, h.x, h.y);
-      if (c.dist > 1.8) api.steer(sim, g, dx, dy, g.speed, dt);
-      else {
+      const go = c.dist > 1.8;
+      const want = go ? Math.atan2(dy, dx) : Math.atan2(c.dy, c.dx);
+      g.face += clamp(angDiff(want, g.face), -2.5 * dt, 2.5 * dt);
+      if (go) {
+        const along = Math.max(0.15, Math.cos(angDiff(want, g.face)));
+        api.steer(sim, g, Math.cos(g.face), Math.sin(g.face), g.speed * along, dt);
+      } else {
         g.vx *= 0.8;
         g.vy *= 0.8;
       }
-      g.face += clamp(angDiff(Math.atan2(c.dy, c.dx), g.face), -2.5 * dt, 2.5 * dt);
       if (s.atkCd > 0) return;
       const see = api.lineOfSight(sim, g.x, g.y, h.x, h.y);
       if (c.dist < BOSS.shield.r + 0.4) api.setMode(g, 'f13_shield');
