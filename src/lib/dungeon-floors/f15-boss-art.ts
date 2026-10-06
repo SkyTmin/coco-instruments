@@ -292,7 +292,9 @@ function craterFloor(p: Px, c: CellCtx, g: Geo): void {
       const dy = (Y + 0.5) / 16 - g.cy;
       const d = Math.hypot(dx, dy);
       const a = Math.atan2(dy, dx);
-      let col = mixq(NIGHT[0], VIO[0], 0.5 - d * 0.12 + vnoise(X / 5, Y / 5, 17) * 0.4, X, Y);
+      // Дно — ночная синь темнее пола: фиолетовый плащ владыки над кратером
+      // не должен с ним сливаться.
+      let col = mixq(NIGHT[0], NIGHT[2], 0.25 + d * 0.12 + vnoise(X / 5, Y / 5, 17) * 0.35, X, Y);
       // Вал кратера.
       if (d > 2.2 && d < 2.75) col = mixq(NIGHT[3], VIO[1], vnoise(X / 3, Y / 3, 18), X, Y);
       if (d > 2.75) col = skyAt(X, Y);
