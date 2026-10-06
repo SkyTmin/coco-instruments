@@ -3724,8 +3724,100 @@ function glassCracks(seed: number, R: number): GlassCrack[] {
   return out;
 }
 
-// Часы разбиты: обод стекла разлетается осколками (вращаются, падают,
-// отскакивают), песок взрывом и оседает, вспышка бирюзой.
+// Ритуал, слой ПОВЕРХ ТЕМНОТЫ (`f14b_ritualfx`, мозг ставит рядом с
+// `f14_glassring`): песок течёт ВСПЯТЬ — с обода на полу струйками вверх по
+// спирали против часовой прямо в песочные часы у него в руках (точка «Тела»);
+// у колбы — венец, к отмотке чаще и ярче; снятый порог — по трещинам обода
+// бегут блики. Ушёл из ритуала (разбили или отмотал) — гаснет сразу.
+registerZonePainter(
+  'f14b_ritualfx',
+  guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
+    const zz = z as FxZone;
+    const m = mobById(zz.mob);
+    if (!m || m.mode !== 'f14_ritual') return;
+    const sim = paintSim();
+    const cx = zz.x * S;
+    const cy = zz.y * S;
+    const p = new Pen(g, px, py, cx, cy);
+    const R = zz.r * S;
+    const t = zz.t;
+    const life = zz.life > 0 ? zz.life : LORD.ritual;
+    const left = life - t;
+    const late = k01((0.6 - left) / 0.6);
+    const born = eOut2(k01(t / 0.35));
+    const sd = seedAt(zz.x, zz.y);
+    const few = reduced();
+    const [gx, gy] = lordPt(m, 'glass', S);
+    // Струйки песка: с обода вверх в колбу, против часовой, к колбе быстрее.
+    const NS = few ? 10 : 26;
+    const speed = 0.55 * (1 + 1.5 * late);
+    for (let i = 0; i < NS; i++) {
+      const h1 = hash(sd, i, 91);
+      const h2 = hash(sd, i, 92);
+      const u = mod(h1 + time * speed * (0.7 + 0.5 * h2), 1);
+      const pos = (q: number): [number, number] => {
+        const a0 = h2 * TAU - q * 2.2;
+        const rr = R * (1 - eIn2(q));
+        const lift = 30 * Math.sin(q * Math.PI * 0.5) * q;
+        const bx = cx + Math.cos(a0) * rr;
+        const by = cy + Math.sin(a0) * rr * 0.9;
+        return [bx + (gx - bx) * eIn2(q), by + (gy - by) * eIn2(q) - lift * (1 - q)];
+      };
+      const [x1, y1] = pos(u);
+      const [x0, y0] = pos(Math.max(0, u - 0.06));
+      p.col(i % 4 ? C.sand[3] : C.teal[4], (0.3 + 0.65 * u) * born * k01((1 - u) * 12));
+      p.line(x0, y0, x1, y1);
+    }
+    // Венец у колбы (поверх самой колбы не рисуем — она в руках у «Тела»).
+    const beat = few ? 0.5 : 0.5 + 0.5 * Math.sin(time * (6 + 10 * late));
+    ring(p, gx, gy, 9 + beat, C.teal[4], (0.35 + 0.4 * late) * born, (_a, i) => (i >> 1) % 3 !== 2);
+    ring(p, gx, gy, 11 + beat, '#ffffff', (0.15 + 0.5 * late) * born * beat, (_a, i) => i % 4 === 0);
+    // Снятый порог: по трещинам обода бегут блики.
+    const cut = ritualCut(sim);
+    const ringZ = sim?.zones.find((q) => q.art === 'f14_glassring');
+    if (cut > 0 && !few && ringZ) {
+      const cr = glassCracks(seedOf(ringZ.id), R);
+      g.save();
+      clipBodies(g, p, S);
+      for (let i = 0; i < cr.length; i++) {
+        const grow = k01((cut - i * 0.13) / 0.4);
+        if (grow <= 0) continue;
+        const c = cr[i];
+        const run = mod(time * 0.9 + i * 0.3, 1) * grow;
+        p.col('#ffffff', 0.9);
+        for (let j = 0; j < c.x.length; j++)
+          if (Math.abs(c.s[j] - run) < 0.05) p.dot(cx + c.x[j], cy + c.y[j]);
+      }
+      g.restore();
+    }
+  }),
+);
+
+// Часы разбиты. Слой ПОЛА (`f14b_glassfloor`): осколки обода летят,
+// вращаясь, падают, отскакивают и ЛОЖАТСЯ на пол; песок взрывом и оседает.
+// Слой поверх темноты (`f14b_glassbreak`): вспышка у колбы в его руках (точка
+// «Тела»), белый обод, бирюзовая волна, искры времени.
+const glassAt = (sd: number, cx: number, cy: number, R: number): At => (i) => {
+  const a = hash(sd, i, 81) * TAU;
+  return [cx + Math.cos(a) * R, cy + Math.sin(a) * R, a];
+};
+registerZonePainter(
+  'f14b_glassfloor',
+  guarded((g, z: Zone | Strike, px: number, py: number, S: number) => {
+    const zz = z as FxZone;
+    const t = zz.t;
+    const cx = zz.x * S;
+    const cy = zz.y * S;
+    const p = new Pen(g, px, py, cx, cy);
+    const R = zz.r * S;
+    const sd = seedAt(zz.x, zz.y);
+    const few = reduced();
+    const at = glassAt(sd, cx, cy, R);
+    chips(p, sd, t, cx, cy, few ? 8 : 22, 0, 0.5, 24, 40, 60, 80, [1.3, 1.8], 0.4, 5, undefined, at);
+    dust(p, sd + 1, t, cx, cy, few ? 4 : 10, 0, 0.5, 18, 20, 2, 6, 6, 1.2, 5, 0.6, undefined, at);
+  }),
+);
+
 registerZonePainter(
   'f14b_glassbreak',
   guarded((g, z: Zone | Strike, px: number, py: number, S: number) => {
@@ -3735,14 +3827,13 @@ registerZonePainter(
     const cy = zz.y * S;
     const p = new Pen(g, px, py, cx, cy);
     const R = zz.r * S;
-    const sd = seedOf(zz.id);
+    const sd = seedAt(zz.x, zz.y);
     const few = reduced();
-    if (t < 0.12) {
-      const k = t / 0.12;
-      ring(p, cx, cy, R, '#ffffff', 1 - k, undefined, 0.6);
-      p.col('#ffffff', 1 - k);
-      star(p, cx, cy - 20, 18 * (1 - k * 0.5), 8, 0.3);
-    }
+    const [tip] = contactPts(zz.id, lordNow(), ['glass'], S);
+    const [gx, gy] = tip ?? [cx, cy - 24];
+    g.save();
+    clipBodies(g, p, S);
+    if (t < 0.12) ring(p, cx, cy, R, '#ffffff', 1 - t / 0.12, undefined, 0.6);
     if (t < 0.5)
       ring(
         p,
@@ -3754,31 +3845,15 @@ registerZonePainter(
         (_a, i) => hash(i >> 2, sd, 7) > 0.2,
         0.5,
       );
-    const at: At = (i) => {
-      const a = hash(sd, i, 81) * TAU;
-      return [cx + Math.cos(a) * R, cy + Math.sin(a) * R, a];
-    };
-    chips(
-      p,
-      sd,
-      t,
-      cx,
-      cy,
-      few ? 8 : 22,
-      0,
-      0.5,
-      24,
-      40,
-      60,
-      80,
-      [1.0, 1.5],
-      0.4,
-      5,
-      undefined,
-      at,
-    );
-    dust(p, sd + 1, t, cx, cy, few ? 4 : 10, 0, 0.5, 18, 20, 2, 6, 6, 1.2, 5, 0.6, undefined, at);
-    sparks(p, sd + 2, t, cx, cy, few ? 4 : 12, 0, 0.4, 40, 50, 0.5, 40, timeSpark, undefined, at);
+    g.restore();
+    if (t < 0.12) {
+      const k = t / 0.12;
+      p.col('#ffffff', 1 - k);
+      star(p, gx, gy, 18 * (1 - k * 0.5), 8, 0.3);
+    }
+    // Осколки колбы из рук — брызгами стекла вверх и в стороны.
+    sparks(p, sd + 3, t, gx, gy, few ? 3 : 8, -Math.PI / 2, 1.4, 30, 40, 0.45, 50, iceSpark);
+    sparks(p, sd + 2, t, cx, cy, few ? 4 : 12, 0, 0.4, 40, 50, 0.5, 40, timeSpark, undefined, glassAt(sd, cx, cy, R));
   }),
 );
 
@@ -3797,6 +3872,11 @@ registerZonePainter(
     const D = 1.0;
     if (t > D) return;
     const k = t / D;
+    // Песок уходит в колбу у него в руках (точка «Тела»).
+    const lord = lordNow();
+    const [gx, gy] = lord ? lordPt(lord, 'glass', S) : [cx, cy - 20];
+    g.save();
+    clipBodies(g, p, S);
     // Волна сходится.
     ring(
       p,
@@ -3816,15 +3896,18 @@ registerZonePainter(
       sector(p, cx, cy, 4, R, a, a + 0.6);
       p.lineS(cx, cy, cx + Math.cos(a) * R, cy + Math.sin(a) * R, '#ffffff', 0.95, 0.5);
     }
-    // Песок втягивается.
+    g.restore();
+    // Песок втягивается в колбу.
     for (let i = 0; i < 26; i++) {
       const a = hash(sd, i, 5) * TAU;
       const r0 = R * (1 + 1.4 * hash(sd, i, 6));
       const u = eIn2(k01(t / (0.5 + 0.3 * hash(sd, i, 7))));
       const r = r0 * (1 - u);
       if (u >= 1) continue;
+      const bx = cx + Math.cos(a - u * 1.5) * r;
+      const by = cy + Math.sin(a - u * 1.5) * r;
       p.col(i % 3 ? C.sand[3] : C.teal[4], 0.9);
-      p.dot(cx + Math.cos(a - u * 1.5) * r, cy + Math.sin(a - u * 1.5) * r - 20 * u);
+      p.dot(bx + (gx - bx) * u, by + (gy - by) * u);
     }
   }),
 );
@@ -3854,6 +3937,14 @@ registerZonePainter(
     const n = Math.max(1, Math.min(12, zz.n ?? 1));
     const R = zz.r * S;
     const few = reduced();
+    g.save();
+    clipBodies(g, p, S);
+    // Удар колокола в ступице: кольцо сжимается к ней и отскакивает — звон
+    // идёт ОТ ступицы (там бьёт час).
+    if (t < 0.18) {
+      const k = t / 0.18;
+      ring(p, cx, cy, S * 2 * (1 - 0.35 * Math.sin(k * Math.PI)), '#ffffff', 1 - k, undefined, 0.5);
+    }
     // Звон: два кольца от ступицы к ободу.
     for (let w = 0; w < 2; w++) {
       const tt = t - w * 0.12;
@@ -3880,6 +3971,7 @@ registerZonePainter(
       star(p, nx, ny, 9 * (1 - k * 0.5), 4, 0.4);
       ring(p, nx, ny, 4 + 10 * eOut2(k), C.moon[3], 0.8 * (1 - k));
     }
+    g.restore();
     // Лампа своего часа гаснет: дым вверх и падающий уголёк.
     const st = sim ? f14State(sim) : null;
     const lamp = st?.lamps.find((l) => l.hour === n - 1);
@@ -3921,6 +4013,9 @@ registerZonePainter(
     const top = -Math.PI / 2;
     const { hand } = nightOf(k, T);
     const born = k01(st.t / 0.12);
+    // Всё это лежит на полу: стрелка, ступица, шевроны и часы на ободе —
+    // под телами (стрелка накрывала самого Повелителя).
+    clipBodies(g, p, S);
     // Ступица — спасение: белый круг дышит, «тик-тик» под конец.
     const pulse = 0.5 + 0.5 * Math.sin(time * 10);
     const hubC = sig ? (tk ? '#ffffff' : C.moon[3]) : '#ffffff';
@@ -4102,7 +4197,10 @@ registerImpactPainter('f14_midnight', {
     const Rm = (rec.r ?? 6.6) * S;
     const ri = Rm - w;
     const ro = Rm + w;
-    // Лунная волна от ступицы к ободу: белый фронт, лиловый хвост.
+    // Лунная волна от ступицы к ободу: белый фронт, лиловый хвост — по полу,
+    // за телами.
+    g.save();
+    clipBodies(g, p, S);
     if (age < 0.5) {
       const k = age / 0.5;
       const r = ri + (ro - ri) * eOut2(k);
@@ -4112,6 +4210,7 @@ registerImpactPainter('f14_midnight', {
     }
     // Ступица уцелела: белое кольцо держит.
     if (age < 0.3) ring(p, cx, cy, ri, '#ffffff', 1 - age / 0.3, undefined, 0.5);
+    g.restore();
     // Звёзды по всей арене: вспыхивают, гаснут.
     const NS = few ? 10 : 30;
     for (let i = 0; i < NS; i++) {

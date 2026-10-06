@@ -3655,6 +3655,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         s.need = m.maxHp * LORD.need;
         api.setMode(m, 'f14_ritual');
         api.zone(sim, { x: ax, y: ay, r: 2.4, life: LORD.ritual, art: 'f14_glassring' });
+        api.vfx(sim, { x: ax, y: ay, r: 2.4, life: LORD.ritual, art: 'f14b_ritualfx', above: true, mob: m.id } as ZoneIn); // анимации 14 — только рисунок
         sim.events.push({
           t: 'boss',
           what: 'f14_rewind_call',
@@ -3683,6 +3684,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
         s.ritualCd = LORD.ritualEvery;
         sim.zones = sim.zones.filter((z) => z.art !== 'f14_glassring');
         api.vfx(sim, { x: ax, y: ay, r: 2.4, life: 1.8, art: 'f14b_glassbreak', above: true }); // v2.87 — только рисунок
+        api.vfx(sim, { x: ax, y: ay, r: 2.4, life: 1.8, art: 'f14b_glassfloor' }); // анимации 14 — только рисунок
         sim.events.push({ t: 'shake', k: 0.4 });
         sim.events.push({
           t: 'boss',
