@@ -435,13 +435,41 @@ function seaFloor(p: Px, c: CellCtx, T: Tone): void {
   });
 }
 
+// ---- полы актов (анимации 13 — «Техники») ---------------------------------
+//
+// Пол каждого акта читается полом с одного взгляда: доски вдоль, швы
+// поперёк света, а стены акта — вертикальные плоскости с кромкой и тенью.
+
+/** Акт II: тканевое море — полотнища по 8 точек, каждое волной вдоль. */
+function actSeaFloor(p: Px, c: CellCtx): void {
+  const T = P.sea;
+  fill(p, (x, y) => {
+    const X = c.wx * 16 + x;
+    const Y = c.wy * 16 + y;
+    const strip = Math.floor(Y / 8);
+    const ly = Y - strip * 8;
+    // Шов полотнищ: тёмная строчка с редкими стежками.
+    if (ly === 7) return (X & 3) === 1 ? mixc(T[1], T[2], 0.5) : darken(T[0], 0.2);
+    const ph = hash(strip, 0, 71) * TAU;
+    const crest = 2.6 + Math.sin(X * 0.17 + ph) * 1.5 + Math.sin(X * 0.06 + ph * 2) * 0.7;
+    const d = ly - crest;
+    // Склон к свету (север) светлее, гребень — кружевом, за ним тень.
+    if (d < -1.6) return mixc(T[1], T[2], 0.35);
+    if (d < -0.5) return T[2];
+    if (d < 0.5) return hash(X >> 1, strip, 72) < 0.35 ? T[3] : mixc(T[2], T[3], 0.45);
+    if (d < 1.6) return mixc(T[0], T[1], 0.45);
+    return d > 3.2 ? mixc(T[1], T[0], 0.15) : T[1];
+  });
+}
+
+/** Акт III: тёмно-синие доски, краской — звёзды и созвездия, блёстки. */
 function nightFloor(p: Px, c: CellCtx): void {
   boards(p, c, NIGHT_BOARDS, false);
   const n = hash(c.wx, c.wy, 41);
+  const s = hx('#e8d890');
   if (n < 0.3) {
     const x = 2 + Math.floor(hash(c.wx, c.wy, 42) * 12);
     const y = 2 + Math.floor(hash(c.wx, c.wy, 43) * 12);
-    const s = hx('#e8d890');
     p.set(x, y, s);
     if (n < 0.1) {
       p.set(x - 1, y, withA(s, 0.6));
@@ -449,37 +477,77 @@ function nightFloor(p: Px, c: CellCtx): void {
       p.set(x, y - 1, withA(s, 0.6));
       p.set(x, y + 1, withA(s, 0.6));
     }
+    // Созвездие: тонкий пунктир к соседней звезде.
+    if (n < 0.16) {
+      const tx = 2 + Math.floor(hash(c.wx + 1, c.wy, 42) * 12) + 16;
+      const ty = 2 + Math.floor(hash(c.wx + 1, c.wy, 43) * 12);
+      const L = Math.hypot(tx - x, ty - y);
+      for (let i = 2; i < L - 1; i += 2)
+        p.set(x + ((tx - x) * i) / L, y + ((ty - y) * i) / L, withA(s, 0.32));
+    }
   }
+  // Блёстки краски.
+  for (let i = 0; i < 3; i++)
+    if (hash(c.wx, c.wy, 44 + i) < 0.4)
+      p.set(
+        Math.floor(hash(c.wx, c.wy, 47 + i) * 16),
+        Math.floor(hash(c.wx, c.wy, 50 + i) * 16),
+        withA(P.silver[3], 0.35),
+      );
 }
 
+/** Акт I: голые доски сцены, мел и опилки — замок только в задниках. */
 function castleFloor(p: Px, c: CellCtx): void {
-  // Двор замка, нарисованный на досках: булыжник крашеной краской.
-  boards(p, c, STAGE, false);
-  // Песчаник задника: тёплая краска плоскими тонами, швы тушью.
-  const T = [hx('#3a2a22'), hx('#8a7258'), hx('#a88e6c'), hx('#cdb48a')];
-  fill(p, (x, y) => {
-    const X = c.wx * 16 + x;
-    const Y = c.wy * 16 + y;
-    const row = Math.floor(Y / 8);
-    const bx = Math.floor((X + (row & 1) * 6) / 12);
-    const lx = (X + (row & 1) * 6) % 12;
-    const ly = Y % 8;
-    if (lx === 11 || ly === 7) return withA(T[0], 0.9);
-    if (lx === 10 || ly === 6) return withA(darken(T[1], 0.25), 0.92);
-    const n = hash(bx, row, 44);
-    const base = n < 0.4 ? T[1] : n < 0.8 ? mixc(T[1], T[2], 0.5) : mixc(T[1], P.forest[2], 0.35);
-    // Краска облезла: местами видны доски.
-    if (hash(X >> 2, Y >> 2, 45) < 0.12) return [0, 0, 0, 0];
-    return lx === 0 || ly === 0 ? lighten(base, 0.12) : withA(base, 0.92);
-  });
+  boards(p, c, STAGE, true);
+  if (hash(c.wx, c.wy, 46) < 0.25)
+    for (let i = 0; i < 4; i++)
+      p.set(
+        Math.floor(hash(c.wx, c.wy, 60 + i) * 16),
+        Math.floor(hash(c.wx, c.wy, 64 + i) * 16),
+        withA(P.cream[2], 0.5),
+      );
+  // Мелом — дорожка прохода актёров по середине сцены.
+  if (c.wy === 12)
+    for (let x = 0; x < 16; x++)
+      if (((c.wx * 16 + x) & 7) < 4) p.set(x, 8, withA(hx('#d8cca8'), 0.45));
 }
 
+/** Акт IV: пустая тёмная сцена, золотая лента разметки, метки актёров. */
 function gridFloor(p: Px, c: CellCtx): void {
   boards(p, c, [hx('#0c080e'), hx('#18101a'), hx('#221824'), hx('#302432')], false);
-  const g = withA(P.gold[1], 0.55);
+  const g = withA(P.gold[1], 0.6);
+  const gd = withA(P.gold[0], 0.5);
+  const ex = (c.wx & 1) === 0;
+  const ey = (c.wy & 1) === 0;
+  // Лента местами стёрта.
+  const worn = (n: number) => hash(n >> 2, c.wx * 7 + c.wy, 48) < 0.15;
   for (let i = 0; i < 16; i++) {
-    if ((c.wx & 1) === 0) p.set(0, i, g);
-    if ((c.wy & 1) === 0) p.set(i, 0, g);
+    if (ex && !worn(c.wy * 16 + i)) {
+      p.set(0, i, g);
+      p.set(1, i, gd);
+    }
+    if (ey && !worn(c.wx * 16 + i)) {
+      p.set(i, 0, g);
+      p.set(i, 1, gd);
+    }
+  }
+  // Крест на пересечении ленты.
+  if (ex && ey) {
+    for (let i = 0; i <= 2; i++) {
+      p.set(i, i, P.gold[2]);
+      p.set(i, 0, P.gold[2]);
+      p.set(0, i, P.gold[2]);
+    }
+    p.set(2, 2, P.gold[3]);
+  }
+  // Метки актёров цветной лентой — «Т».
+  const m = hash(c.wx, c.wy, 49);
+  if (m < 0.06) {
+    const col = m < 0.03 ? hx('#c84050') : hx('#4a8ac8');
+    const ox = 6 + Math.floor(hash(c.wx, c.wy, 52) * 5);
+    const oy = 6 + Math.floor(hash(c.wx, c.wy, 53) * 5);
+    p.rect(ox - 2, oy, ox + 2, oy, col);
+    p.rect(ox, oy, ox, oy + 3, col);
   }
 }
 
@@ -780,59 +848,192 @@ const TREE_FLAT = flatLook((p, c, face) => {
   });
 });
 
-const CASTLE_FLAT = flatLook((p, c, face) => {
+// ---- стены актов (анимации 13 — «Техники») --------------------------------
+
+/** Доски сцены в тени — видны за задником сквозь просвет зубцов. */
+const behind = (X: number, Y: number): RGBA =>
+  (Y & 3) === 3
+    ? darken(STAGE[0], 0.5)
+    : darken(mixc(STAGE[1], STAGE[2], hash(X >> 4, Y >> 2, 11) * 0.5), 0.45);
+
+/** Плоский картонный замок: зубцы, крашеный камень, бойница, брус внизу. */
+function castleFace(p: Px, c: CellCtx): void {
   const T = P.castle;
-  if (!face) {
-    p.rect(1, 4, 14, 9, T[1]);
-    return;
-  }
   fill(p, (x, y) => {
     const X = c.wx * 16 + x;
-    // Зубцы.
-    if (y < 4 && X % 8 >= 4) return [0, 0, 0, 0];
-    const row = y >> 2;
-    const lx = (X + (row & 1) * 3) % 6;
-    if ((y & 3) === 3 || lx === 5) return T[0];
-    return y < 4 || (y & 3) === 0 ? T[2] : T[1];
+    const Y = c.wy * 16 + y;
+    const m = ((X % 8) + 8) % 8;
+    if (y < 4 && m >= 4) return behind(X, Y);
+    // Срез картона: кремовая кромка сверху зубца и над просветом.
+    if ((y === 0 && m < 4) || (y === 4 && m >= 4)) return P.cream[3];
+    if ((y === 1 && m < 4) || (y === 5 && m >= 4)) return P.cream[1];
+    if (y < 4 && m === 3) return T[0];
+    // Брус, на котором стоит задник.
+    if (y === 14) return X % 8 === 3 ? P.iron[3] : P.wood[2];
+    if (y === 15) return P.wood[0];
+    // Крашеный камень: плоские тона, шов краской, мазок света.
+    const course = Math.floor((y - 2) / 4);
+    const ly = (y - 2) % 4;
+    const sx = (X + (course & 1) * 4) % 8;
+    if (ly === 3 || sx === 7) return mixc(T[0], T[1], 0.35);
+    const n = hash(Math.floor((X + (course & 1) * 4) / 8), course + c.wy * 4, 77);
+    const base = n < 0.45 ? T[1] : n < 0.85 ? mixc(T[1], T[2], 0.55) : mixc(T[1], P.forest[1], 0.4);
+    if (ly === 0 || sx === 0) return mixc(base, T[3], 0.35);
+    return (X + y * 2) % 9 === 0 ? mixc(base, T[2], 0.4) : base;
   });
-  // Окошко-бойница.
-  if (((c.wx % 3) + 3) % 3 === 1) p.rect(7, 7, 8, 11, INK);
-});
+  // Бойница нарисована: тёмная щель с аркой и крашеным бликом.
+  if (((c.wx % 3) + 3) % 3 === 1) {
+    p.rect(7, 7, 8, 11, INK);
+    p.set(7, 6, INK);
+    p.set(8, 6, INK);
+    p.rect(9, 7, 9, 11, T[3]);
+    p.rect(6, 12, 9, 12, T[0]);
+  }
+  // Торцы задника: толщина картона и тень.
+  if (c.open(-1, 0))
+    for (let y = 0; y < 14; y++) if (y >= 4 || (c.wx * 16) % 8 < 4) p.set(0, y, P.cream[2]);
+  if (c.open(1, 0)) for (let y = 0; y < 14; y++) p.set(15, y, P.cream[0]);
+}
+
+/** За задником: кромка картона и подпорка с мешком-противовесом. */
+function castleBack(p: Px, c: CellCtx): void {
+  for (let x = 0; x < 16; x++) {
+    const m = (((c.wx * 16 + x) % 8) + 8) % 8;
+    if (m < 4) p.set(x, 15, P.cream[2]);
+  }
+  if ((c.wx & 1) === 0) {
+    const x = 6 + (c.wx & 2 ? 3 : 0);
+    // Подпорка: брусок от верха задника назад к полу.
+    p.rect(x, 5, x + 1, 14, P.wood[2]);
+    p.rect(x + 2, 6, x + 2, 14, P.wood[0]);
+    p.set(x, 5, P.wood[3]);
+    // Мешок с песком прижимает подпорку.
+    p.ell(x + 1, 4, 3.4, 2.4, P.cream[1]);
+    p.ell(x + 0.5, 3.5, 2.4, 1.5, P.cream[2]);
+    p.set(x + 1, 2, P.wood[0]);
+    p.set(x + 1, 6, darken(P.cream[0], 0.2));
+  }
+}
+
+const CASTLE_FLAT: WallLook = {
+  top: (p, c) => {
+    darkTop(p, c, hx('#16100c'), hx('#22180e'));
+    p.rect(0, 6, 15, 7, P.cream[1]);
+    p.rect(0, 6, 15, 6, P.cream[2]);
+    castleBack(p, c);
+  },
+  face: castleFace,
+  cap: (p, c) => castleBack(p, c),
+};
 
 const SHIP: WallLook = {
   top: (p, c) => {
-    // Палуба: доски вдоль.
+    // Палуба: доски вдоль, нагели на стыках.
     fill(p, (x, y) => {
       const X = c.wx * 16 + x;
+      const row = c.wy * 4 + (y >> 2);
+      const off = Math.floor(hash(row, 1, 81) * 16);
+      const px = (X + off) % 24;
       if ((y & 3) === 3) return P.wood[0];
-      return hash(X >> 3, c.wy * 4 + (y >> 2), 81) < 0.5 ? P.wood[2] : P.wood[1];
+      if (px === 23) return P.wood[0];
+      if ((px === 1 || px === 21) && (y & 3) === 1) return P.brass[1];
+      const n = hash(Math.floor((X + off) / 24), row, 82);
+      const base = n < 0.5 ? P.wood[2] : mixc(P.wood[2], P.wood[3], 0.35);
+      return (y & 3) === 0 ? lighten(base, 0.08) : base;
     });
-    if (c.open(0, -1)) p.rect(0, 0, 15, 1, P.gold[2]);
+    // Фальшборт: золотой планширь и стойки по краю.
+    if (c.open(0, -1)) {
+      p.rect(0, 0, 15, 0, P.gold[3]);
+      p.rect(0, 1, 15, 1, P.gold[1]);
+      for (let x = 0; x < 16; x += 4) p.set(x + 1, 2, P.wood[0]);
+    }
+    if (c.open(-1, 0)) p.rect(0, 0, 1, 15, P.gold[2]);
+    if (c.open(1, 0)) p.rect(14, 0, 15, 15, P.gold[1]);
+    // Мачта (обрубок), люк и бухта каната.
+    if (c.wx === 31 || c.wx === 32) {
+      const cx = c.wx === 31 ? 16 : 0;
+      p.ell(cx, 8, 4.2, 3.6, P.brass[1]);
+      p.ell(cx, 8, 3.2, 2.6, P.wood[1]);
+      p.ell(cx - 0.5, 7.5, 2, 1.5, P.wood[3]);
+    }
+    if (c.wx === 29) {
+      p.rect(4, 4, 11, 11, P.wood[0]);
+      for (let i = 5; i <= 10; i += 2) {
+        p.rect(i, 5, i, 10, P.wood[1]);
+        p.rect(5, i, 10, i, P.wood[1]);
+      }
+    }
+    if (c.wx === 34) {
+      p.ell(8, 9, 4, 3, P.cream[0]);
+      p.ell(8, 9, 3, 2.2, P.cream[2]);
+      p.ell(8, 9, 1.6, 1.1, P.cream[0]);
+    }
   },
   face: (p, c) => {
-    // Борт: толстые доски, золотой пояс, иллюминатор.
+    const bow = c.open(-1, 0);
+    const stern = c.open(1, 0);
+    // Нос и корма скошены: за ними — тканевое море.
+    if (bow || stern) actSeaFloor(p, c);
     fill(p, (x, y) => {
-      if (y < 2) return P.gold[2];
-      if ((y & 3) === 1) return P.wood[0];
-      return y < 8 ? P.wood[2] : P.wood[1];
+      if (bow && x < Math.round(y * 0.7)) return [0, 0, 0, 0];
+      if (stern && x > 15 - Math.round(y * 0.4)) return [0, 0, 0, 0];
+      const X = c.wx * 16 + x;
+      if (y === 0) return P.gold[3];
+      if (y === 1) return P.gold[2];
+      if (y === 2) return P.wood[0];
+      if (y === 12) return P.cream[3];
+      if (y === 13) return P.red[1];
+      if (y >= 14) {
+        // Ткань моря плещет о борт.
+        const w = 14.5 + Math.sin(X * 0.5) * 0.9;
+        if (y > w) return y === 15 ? P.sea[1] : P.sea[3];
+        return P.red[0];
+      }
+      const pl = (y - 3) % 3;
+      if (pl === 2) return P.wood[0];
+      const n = hash(X >> 3, y >> 1, 83);
+      const base = n < 0.5 ? P.wood[2] : P.wood[1];
+      return pl === 0 ? lighten(base, 0.1) : base;
     });
-    if (((c.wx % 2) + 2) % 2 === 0) {
-      p.ell(8, 9, 3, 3, P.brass[2]);
-      p.ell(8, 9, 2, 2, hx('#2a3e5a'));
-      p.set(7, 8, hx('#8ac4dc'));
+    // Срез фанеры на скосах — кремовая кромка.
+    if (bow) for (let y = 0; y < 14; y++) p.set(Math.round(y * 0.7), y, P.cream[2]);
+    if (stern) for (let y = 0; y < 14; y++) p.set(15 - Math.round(y * 0.4), y, P.cream[0]);
+    if (!bow && !stern && ((c.wx % 2) + 2) % 2 === 0) {
+      p.ell(8, 7.5, 3, 3, P.brass[2]);
+      p.ell(8, 7.5, 2, 2, hx('#1a2e48'));
+      p.set(7, 6, hx('#8ac4dc'));
+      p.set(9, 9, P.brass[0]);
+    }
+  },
+  cap: (p, c) => {
+    // Над носом — бушприт, над кормой — фонарь на столбике.
+    if (c.open(-1, 1) && !c.open(1, 1)) {
+      p.line(15, 15, 3, 9, P.wood[2]);
+      p.line(15, 14, 4, 9, P.wood[1]);
+      p.set(2, 9, P.gold[3]);
+      p.set(3, 8, P.gold[2]);
+    } else if (c.open(1, 1) && !c.open(-1, 1)) {
+      p.rect(3, 6, 3, 15, P.wood[1]);
+      p.rect(1, 3, 5, 6, P.brass[1]);
+      p.rect(2, 4, 4, 5, hx('#ffd890'));
     }
   },
 };
 
-const CLOUD_FLAT = flatLook((p, c, face) => {
-  if (!face) return;
-  fill(p, (x, y) => {
-    const X = c.wx * 16 + x;
-    const top = 4 + Math.abs(Math.sin(X * 0.25)) * -3 + 3;
-    if (y < top) return [0, 0, 0, 0];
-    return y < top + 2 ? hx('#e4e0ee') : y > 12 ? hx('#8a86a4') : hx('#c4c0d8');
-  });
-});
+const CLOUD_FLAT: WallLook = {
+  top: (p, c) => darkTop(p, c, P.night[0], P.night[1]),
+  face: (p, c) => {
+    // Фанерное облако из ваты на тёмно-синем заднике.
+    boards(p, c, NIGHT_BOARDS, false);
+    fill(p, (x, y) => {
+      const X = c.wx * 16 + x;
+      const top = 5 - Math.abs(Math.sin(X * 0.3)) * 3;
+      if (y < top || y > 13) return [0, 0, 0, 0];
+      if (y < top + 1.5) return hx('#eeeaf6');
+      return y > 11 ? hx('#8a86a4') : (X + y) % 5 === 0 ? hx('#dcd8ea') : hx('#c4c0d8');
+    });
+  },
+};
 
 function wallLookOf(mark: number, area: AreaKey): WallLook {
   switch (mark) {
@@ -894,8 +1095,9 @@ function floorBase(p: Px, c: CellCtx, look: number, area: AreaKey): void {
     case MK.ramp:
       return ramp(p, c, false);
     case MK.setSea:
-    case MK.actSea:
       return seaFloor(p, c, P.sea);
+    case MK.actSea:
+      return actSeaFloor(p, c);
     case MK.actNight:
       return nightFloor(p, c);
     case MK.actCastle:
