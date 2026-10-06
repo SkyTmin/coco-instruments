@@ -20,11 +20,10 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
-import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Zone } from '../dungeon-sim';
 import { Tile } from '../dungeon-world';
 import type { WorldObj } from '../dungeon-world';
 import { F3_MARK } from './f3';

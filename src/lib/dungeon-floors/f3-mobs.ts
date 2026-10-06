@@ -216,6 +216,7 @@ export const F3_MOB_STAT = {
   kinds: {} as Record<string, number[]>,
   size: () => [...LRU.values()].reduce((s, c) => s + c.size, 0),
   raws: () => RAWS.size,
+  sizes: () => Object.fromEntries([...LRU].map(([k, c]) => [k, c.size])),
 };
 
 function pale(src: Px): Px {
@@ -352,6 +353,14 @@ function frameOf(
       st[3] += performance.now() - t0;
     }
     fr = lru.set(fk, finish(raw, mir, pose.flash, pose.look));
+    // Прогрев кладёт и зеркало: без него запад, юго-запад и северо-запад
+    // собирались в бою — flipX и новый холст на каждый кадр (сведение v2.99).
+    // Медуза без сторон (зеркало только в наклоне) — ей не нужно.
+    const hasMir = b === 0 || b === 1 || b === 7;
+    if (!curMob && !mir && !pose.flash && pose.look === 'normal' && hasMir && kind !== 'jelly') {
+      const mk = `${key}|${b}m|0n`;
+      if (!lru.get(mk)) lru.set(mk, finish(raw, true, false, 'normal'));
+    }
     const ms = performance.now() - t0;
     st[0]++;
     st[1] += ms;
@@ -378,7 +387,7 @@ function frameOf(
  * Бюджет новых кадров на кадр игры (мс). Толпа в 18 мобов с ригами рисовала
  * по 2–4 новых кадра за кадр игры; сверх бюджета кадр откладывается.
  */
-const AHEAD_MS = 0.5;
+const AHEAD_MS = 0.3;
 let budNow = NaN;
 let budMs = 0;
 /** Моб, которого рисует рисовальщик сейчас (null — прогрев). */
@@ -700,7 +709,7 @@ function crabPic(
 }
 
 /** Сколько ключей у краба: ход 8 × 2 оси × щит 2, покой 8 × 2, замах 16, удар 22, … × 8 сторон. */
-const CRAB_LIM = 900;
+const CRAB_LIM = 1200;
 
 /** Замах: поза на время `t` (0…0,65). */
 function crabWind(t: number, o: CrabO): void {
@@ -1045,17 +1054,36 @@ registerMobWarm('f3_crab', function* () {
     if (MIRR[d]) continue;
     const yaw = yawOfSide(d);
     for (const g of [true, false])
+      for (const s of [false, true])
+        for (let f = 0; f < 8; f++) {
+          const o: CrabO = { ...CRAB0, ph: f / 8, str: 1, side: s ? 1 : 0 };
+          if (!g) {
+            o.bigE = 0.45;
+            o.smE = 0.3;
+            o.bigO = 0.25;
+          }
+          o.h = Math.abs(Math.sin(o.ph * TAU * 2)) * 0.35;
+          o.roll = s ? 0 : Math.sin(o.ph * TAU) * 0.05;
+          o.bigE += Math.sin(o.ph * TAU) * 0.06;
+          const key = `walk${s ? 's' : 'f'}${g ? 'g' : ''}${f}`;
+          frameOf('crab', CRAB_LIM, key, d, pose, () => crabPic(o, yaw, 0));
+          yield 0;
+        }
+    // Покой со щитом и без: краб чаще всего стоит щитом к герою — без
+    // прогрева эти кадры рисовались прямо в бою (сведение v2.99).
+    for (const g of [true, false])
       for (let f = 0; f < 8; f++) {
-        const o: CrabO = { ...CRAB0, ph: f / 8, str: 1 };
+        const o: CrabO = { ...CRAB0 };
         if (!g) {
           o.bigE = 0.45;
           o.smE = 0.3;
           o.bigO = 0.25;
         }
-        o.h = Math.abs(Math.sin(o.ph * TAU * 2)) * 0.35;
-        o.roll = Math.sin(o.ph * TAU) * 0.05;
-        o.bigE += Math.sin(o.ph * TAU) * 0.06;
-        frameOf('crab', CRAB_LIM, `walkf${g ? 'g' : ''}${f}`, d, pose, () => crabPic(o, yaw, 0));
+        o.h = [0, 0.15, 0.3, 0.35, 0.3, 0.15, 0, -0.05][f];
+        o.glow = 0.25 + 0.15 * Math.sin((f / 8) * TAU);
+        o.eyes = f === 5 ? 0.7 : 1;
+        o.bigO = f >= 3 && f <= 5 ? 0.35 : o.bigO;
+        frameOf('crab', CRAB_LIM, `idle${g ? 'g' : ''}${f}`, d, pose, () => crabPic(o, yaw, 0));
         yield 0;
       }
   }
@@ -3185,20 +3213,23 @@ registerZonePainter('f3_grab', (g, z, px, py) => {
 });
 
 // ---------------------------------------------------------------------------
-// Прогрев действий: замахи, удары и проводки каждого вида по пяти рисуемым
-// сторонам (запад — зеркало, его холст дешёвый). Без него толпа рисовала
-// первые кадры атак прямо в бою — 2–4 новых кадра за кадр игры.
+// Прогрев действий: замахи, удары, проводки и смерть каждого вида по пяти
+// рисуемым сторонам; зеркала (запад) кладёт `frameOf` тут же из сырого кадра.
+// Без него толпа рисовала первые кадры атак прямо в бою — 2–4 новых кадра за
+// кадр игры; смерть — потому что бьют пачками (сведение v2.99).
 // ---------------------------------------------------------------------------
 
 /** [режим, длительность с, скорость кл/с] — как режимы мозга этажа. */
 type WarmStep = [string, number, number];
 const WARM_ACTS: Record<string, WarmStep[]> = {
   f3_crab: [
+    ['dying', 0.9, 0],
     ['windup', 0.65, 0],
     ['recover', 1.05, 0],
     ['stun', 0.25, 0],
   ],
   f3_mocker: [
+    ['dying', 0.9, 0],
     ['aim', 0.6, 0],
     ['dive', 0.4, 12],
     ['perch', 0.95, 0],
@@ -3206,18 +3237,21 @@ const WARM_ACTS: Record<string, WarmStep[]> = {
     ['dizzy', 1.4, 0],
   ],
   f3_jelly: [
+    ['dying', 0.9, 0],
     ['chase', 1, 1.2],
     ['windup', 0.5, 0],
     ['recover', 0.5, 0],
     ['stun', 0.5, 0],
   ],
   f3_spear: [
+    ['dying', 0.9, 0],
     ['curl', 1, 0],
     ['roll', 0.5, 10],
     ['recover', 0.6, 0],
     ['dizzy', 1.8, 0],
   ],
   f3_grasp: [
+    ['dying', 0.9, 0],
     ['lurk', 1.4, 2.6],
     ['hold', 1.6, 0],
     ['sink', 0.45, 0],
