@@ -2088,6 +2088,577 @@ registerImpactPainter('f2_split', {
 });
 
 // ---------------------------------------------------------------------------
+// Мандрагора. Корень-человечек с розеткой листьев, сидит в земле и
+// поворачивается к герою. Вылезает (0,4 с) рывком — корень выдирается из
+// земли с комьями; крик (урон в 1,05): вдох с откидом → рот раскрывается,
+// руки вверх, листья дыбом, дрожь растёт → пик в 1,05 (кадр контакта:
+// вытянута, кольцо визга) → крик гаснет до 1,35; выдохлась — вянет и
+// пыхтит; уходит в землю винтом. Смерть — сохнет, валится набок, крошится.
+// ---------------------------------------------------------------------------
+
+const MD_W = 34;
+const MD_H = 38;
+const MD_GY = 32;
+const MD_CX = 17;
+/** Тайминги мозга (`f2-brains.ts`): rise 0,4, SCREAM_T 1,05 (+0,3), sink 0,5. */
+const MD_RISE = 0.4;
+const MD_SCREAM = 1.05;
+const MD_SCREAM_END = 1.35;
+const MD_SINK = 0.5;
+const MD_DIE = 0.85;
+const MD_DIE_F = 20;
+
+type MdEyes = 'open' | 'shut' | 'wide' | 'half' | 'wince' | 'x';
+
+interface MdO {
+  d: number;
+  /** 0 — в земле (видна розетка), 1 — стоит; больше 1 — подпрыгнула. */
+  out: number;
+  /** Корпус: ширина и высота (доли), наклон вперёд (px), дрожь вбок (px). */
+  bw: number;
+  bh: number;
+  lean: number;
+  shake: number;
+  /** Руки: −1 висят, 0 в стороны, 1 вверх. */
+  arms: number;
+  /** Рот 0…1. */
+  mouth: number;
+  eyes: MdEyes;
+  /** Листья: подъём (рад), разлёт, длина, качание. */
+  lEl: number;
+  lSp: number;
+  lLen: number;
+  sway: number;
+  /** Сохнет 0…1. */
+  dry: number;
+  /** Визг поверх темноты 0…1. */
+  yell: number;
+  /** Комья земли: фаза 0…1 (−1 — нет). */
+  clods: number;
+}
+
+const MD0: MdO = {
+  d: 2,
+  out: 1,
+  bw: 1,
+  bh: 1,
+  lean: 0,
+  shake: 0,
+  arms: -1,
+  mouth: 0,
+  eyes: 'open',
+  lEl: 1.05,
+  lSp: 0.6,
+  lLen: 1,
+  sway: 0,
+  dry: 0,
+  yell: 0,
+  clods: -1,
+};
+
+const YELL = hex('#fff2a0');
+
+function mandrakePic(o: MdO, withLit = false): Pic {
+  const p = new Px(MD_W, MD_H);
+  const lit = withLit || o.yell > 0 ? new Px(MD_W, MD_H) : null;
+  const yaw = SIDE_YAW[o.d];
+  const c = Math.cos(yaw);
+  const n = Math.sin(yaw);
+  const GY = MD_GY;
+  const cx = MD_CX + 0.5 + o.shake;
+  const pal = o.dry > 0 ? MDR.body.map((q) => mix(q, hex('#5a4a3a'), o.dry * 0.7)) : MDR.body;
+  const leafC = (q: RGBA) => (o.dry > 0 ? mix(q, hex('#6a5a30'), o.dry) : q);
+  // Ямка с холмиком.
+  p.ell(cx - o.shake, GY, 7, 2.2, MDR.soil);
+  p.ell(cx - o.shake - 1, GY - 0.5, 5.2, 1.3, MDR.soilL);
+  const rx = 4.4 * o.bw;
+  const ry = 5.8 * o.bh;
+  const sink = (1 - Math.min(1, o.out)) * (ry * 2 + 1);
+  const hop = Math.max(0, o.out - 1) * 10;
+  const by = GY - ry - 0.5 + sink - hop;
+  const lean = o.lean;
+  const bx = cx + c * lean * 0.5;
+  const bodyY = by + n * lean * 0.3 * SE;
+  const body: Ell = { x: bx, y: bodyY, rx, ry };
+  const top = bodyY - ry;
+  // Корона листьев: направления в теле → экран; дальние — до тела.
+  const crown = { x: bx + c * lean * 0.4, y: top + 1.5 };
+  const leaves: { a: number; l: number; dp: number; i: number }[] = [];
+  for (let i = 0; i < 5; i++) {
+    const phi = yaw + PI + (i - 2) * o.lSp + o.sway * (i % 2 ? 1 : -1);
+    const el = o.lEl + (i === 2 ? 0.25 : 0);
+    const f = Math.cos(el) * Math.cos(phi - yaw);
+    const s = Math.cos(el) * Math.sin(phi - yaw);
+    const [sx, sy, dp] = prj(yaw, f, s, Math.sin(el));
+    const L = (i === 2 ? 8 : 6.6) * o.lLen;
+    const m = Math.hypot(sx, sy);
+    leaves.push({ a: Math.atan2(sy, sx), l: L * Math.max(0.45, m), dp, i });
+  }
+  const drawLeaf = (lf: (typeof leaves)[number]) =>
+    leaf(
+      p,
+      crown.x,
+      crown.y,
+      lf.a,
+      lf.l,
+      1.7,
+      leafC(lf.i % 2 ? MDR.leafM : MDR.leafL),
+      leafC(MDR.vein),
+    );
+  for (const lf of leaves) if (lf.dp < 0) drawLeaf(lf);
+  // Руки-корешки: плечи по бокам, дальняя — до тела.
+  const arms = [-1, 1].map((sd) => {
+    const [ox, oy, dp] = prj(yaw, 0, sd * rx * 0.85, 0);
+    const up = o.arms;
+    const [ex, ey] = prj(
+      yaw,
+      0.6 + 0.6 * Math.max(0, up),
+      sd * (1.6 + 1.4 * (1 - Math.abs(up))),
+      up * 5,
+    );
+    return {
+      x0: bx + ox,
+      y0: bodyY - ry * 0.05 + oy,
+      x1: bx + ox + ex,
+      y1: bodyY - ry * 0.05 + oy + ey,
+      dp,
+    };
+  });
+  const drawArm = (a: (typeof arms)[number]) => {
+    thick(p, a.x0, a.y0, a.x1, a.y1, 0.5, MDR.root);
+    p.set(
+      Math.round(a.x1 + (a.x1 > a.x0 ? 1 : -1)),
+      Math.round(a.y1 - (o.arms > 0.3 ? 1 : -1)),
+      MDR.root,
+    );
+  };
+  for (const a of arms) if (a.dp < 0) drawArm(a);
+  if (o.out > 0.04) {
+    ball(p, body, pal);
+    // Бороздки корня — на теле, поворачиваются с ним.
+    for (const [az, h] of [
+      [-0.9, -0.35],
+      [0.5, 0.15],
+      [-0.3, 0.55],
+      [1.3, -0.1],
+    ] as [number, number][]) {
+      const a = yaw + az;
+      if (Math.sin(a) < -0.2) continue;
+      const x = Math.round(bx + Math.cos(a) * rx * 0.75);
+      const y = Math.round(bodyY + h * ry);
+      p.rect(x - 1, y, x, y, pal[0]);
+    }
+    // Корешок-хвостик снизу (виден, когда выдралась).
+    if (o.out > 0.9) thick(p, bx + 1, bodyY + ry - 0.5, bx + 2.5, bodyY + ry + 1.5, 0.4, MDR.root);
+    // Лицо: глаза на азимуте ±0,45, рот — по морде.
+    const ey = Math.round(bodyY - ry * 0.25);
+    for (const da of [-0.48, 0.48]) {
+      const a = yaw + da;
+      if (Math.sin(a) < -0.25) continue;
+      const x = Math.round(bx - 0.5 + Math.cos(a) * rx * 0.72);
+      const col = MDR.eyeD;
+      switch (o.eyes) {
+        case 'open':
+          p.rect(x, ey, x, ey + 1, col);
+          break;
+        case 'wide':
+          p.rect(x, ey - 1, x, ey + 1, col);
+          p.set(x + (da < 0 ? -1 : 1), ey - 2, col);
+          break;
+        case 'half':
+          p.rect(x - 1, ey + 1, x, ey + 1, col);
+          break;
+        case 'shut':
+          p.set(x, ey + 1, col);
+          break;
+        case 'wince':
+          p.set(x, ey, col);
+          p.set(x + (da < 0 ? -1 : 1), ey + 1, col);
+          break;
+        case 'x':
+          p.set(x - 1, ey - 1, col);
+          p.set(x + 1, ey - 1, col);
+          p.set(x, ey, col);
+          p.set(x - 1, ey + 1, col);
+          p.set(x + 1, ey + 1, col);
+          break;
+      }
+      if (o.yell > 0.2 && lit) lit.set(x, ey, alpha(MDR.eye, Math.min(1, o.yell * 1.4)));
+    }
+    if (Math.sin(yaw) > -0.25) {
+      const mx = bx - 0.5 + Math.cos(yaw) * rx * 0.62;
+      const my = bodyY + ry * 0.22;
+      if (o.mouth > 0.08) {
+        const mw = 0.8 + o.mouth * 1.5;
+        const mh = 0.6 + o.mouth * 2.4;
+        p.ell(mx + 0.5, my + mh * 0.3, mw, mh, MDR.mouth);
+        if (o.mouth > 0.5) p.ell(mx + 0.5, my + mh * 0.75, mw * 0.55, 0.8, MDR.tongue);
+        if (lit && o.yell > 0)
+          glowAt(lit, mx + 0.5, my + mh * 0.3, 3 + o.yell * 2, YELL, 0.5 * o.yell);
+      } else
+        p.rect(Math.round(mx - 1), Math.round(my), Math.round(mx + 1), Math.round(my), MDR.mouth);
+    }
+  }
+  for (const a of arms) if (a.dp >= 0) drawArm(a);
+  for (const lf of leaves) if (lf.dp >= 0) drawLeaf(lf);
+  // Цветок на макушке.
+  if (o.dry < 0.5) {
+    const fx = Math.round(crown.x - 0.5);
+    const fy = Math.round(crown.y - 2 - o.lEl * 1.5);
+    p.set(fx, fy, MDR.flower);
+    p.set(fx + 1, fy, mix(MDR.flower, WHITE, 0.3));
+  }
+  // Ниже земли — пусто, спереди — край ямки.
+  for (let y = GY + 1; y < MD_H; y++)
+    for (let x = 0; x < MD_W; x++) p.data[(y * MD_W + x) * 4 + 3] = 0;
+  if (o.out < 1) {
+    p.ell(cx - o.shake, GY + 0.6, 6.4, 1.4, MDR.soil);
+    p.rect(Math.round(cx - o.shake - 5), GY, Math.round(cx - o.shake + 5), GY, MDR.soilL);
+  }
+  // Комья: летят дугой из ямки.
+  if (o.clods >= 0) {
+    for (let i = 0; i < 7; i++) {
+      const a = PI + (i / 6) * PI + (hash(i, 41) - 0.5) * 0.4;
+      const v = 0.6 + hash(i, 43) * 0.6;
+      const k = o.clods;
+      const x = cx + Math.cos(a) * (3 + k * 12 * v);
+      const y = GY - 1 + Math.sin(a) * (1 + k * 9 * v) + k * k * 14;
+      if (y < GY + 1) p.set(Math.round(x), Math.round(y), i % 3 ? MDR.soil : MDR.soilL);
+      if (i % 2 && y < GY) p.set(Math.round(x) + 1, Math.round(y), MDR.soil);
+    }
+  }
+  p.outline(INK);
+  // Визг: дуги-чёрточки у головы (поверх темноты и на кадре).
+  if (o.yell > 0) {
+    const hy = bodyY - ry * 0.2;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU + 0.2;
+      const r = 7 + o.yell * 4 + (i % 2) * 1.5;
+      const x = Math.round(bx + Math.cos(a) * r);
+      const y = Math.round(hy + Math.sin(a) * r * 0.75);
+      const x2 = Math.round(bx + Math.cos(a) * (r + 1.5));
+      const y2 = Math.round(hy + Math.sin(a) * (r + 1.5) * 0.75);
+      const col = alpha(YELL, Math.min(1, o.yell));
+      p.set(x, y, col);
+      p.set(x2, y2, col);
+      lit?.set(x, y, col);
+      lit?.set(x2, y2, col);
+    }
+  }
+  const eye: [number, number] | null =
+    o.out >= 0.8 && (o.eyes === 'open' || o.eyes === 'wide') && Math.sin(yaw) > -0.25
+      ? [Math.round(bx - 0.5 + Math.cos(yaw + 0.48) * rx * 0.72), Math.round(bodyY - ry * 0.25)]
+      : null;
+  return { p, ax: MD_CX, ay: MD_GY, eye, lit };
+}
+
+/** В земле: розетка листьев лежит, качается; изредка вздрагивает. */
+function mdBuried(d: number, i: number, shiver: boolean): MdO {
+  const s = Math.sin((i / 8) * TAU);
+  return {
+    ...MD0,
+    d,
+    out: 0.12,
+    lEl: 0.35,
+    lSp: 1.2,
+    lLen: 0.95,
+    sway: s * 0.12 + (shiver ? (i % 2 ? 0.1 : -0.1) : 0),
+    eyes: 'shut',
+  };
+}
+
+/** Вылезает (0,4 с): листья тянет вниз, земля вспучилась → рывок вверх с комьями → встала. */
+function mdRise(d: number, f: number): MdO {
+  const t = (f + 0.5) / FPS;
+  const pre = eOut(seg(t, 0, 0.12));
+  const pop = seg(t, 0.12, 0.3);
+  const land = seg(t, 0.3, MD_RISE);
+  const out =
+    t < 0.12 ? 0.12 - 0.06 * pre : t < 0.3 ? lerp(0.06, 1.25, eOut(pop)) : lerp(1.25, 1, eIn(land));
+  return {
+    ...MD0,
+    d,
+    out,
+    bw: t < 0.3 ? 0.92 : 1 + 0.08 * Math.sin(land * PI),
+    bh: t < 0.3 ? 1.08 : 1 - 0.1 * Math.sin(land * PI),
+    shake: t < 0.12 ? (f % 2 ? 0.6 : -0.6) : 0,
+    arms: t < 0.3 ? 0.8 : lerp(0.8, -0.4, land),
+    lEl: t < 0.12 ? 0.2 : lerp(1.4, 1.05, land),
+    lSp: t < 0.12 ? 1.3 : 0.5,
+    eyes: t < 0.12 ? 'shut' : 'wide',
+    mouth: t < 0.3 ? 0.2 : 0,
+    clods: t > 0.1 ? seg(t, 0.1, MD_RISE) : -1,
+  };
+}
+
+/** Крик (1,35 с): вдох → раскрытие → дрожь растёт → пик в 1,05 → гаснет. */
+function mdScream(d: number, f: number): MdO {
+  const t = (f + 0.5) / FPS;
+  const inhale = eOut(seg(t, 0, 0.25));
+  const open = eIO(seg(t, 0.2, 0.75));
+  const build = eIn(seg(t, 0.7, MD_SCREAM));
+  const after = seg(t, MD_SCREAM, MD_SCREAM_END);
+  const peak = t >= MD_SCREAM - 1 / FPS / 2 ? 1 - eOut(after) * 0.6 : build;
+  const amp = (0.3 + 0.7 * peak) * (t > 0.3 ? 1 : 0) * (1 - after * 0.5);
+  return {
+    ...MD0,
+    d,
+    lean: -1.6 * inhale * (1 - open) + 0.6 * peak,
+    bw: 1 + 0.1 * inhale * (1 - open) - 0.06 * peak,
+    bh: 1 - 0.05 * inhale * (1 - open) + 0.12 * peak,
+    shake: f % 2 ? amp : -amp,
+    arms: lerp(-1, 1, eOut(seg(t, 0.1, 0.6))) - after * 0.6,
+    mouth: Math.min(1, 0.25 * inhale + 0.55 * open + 0.3 * peak),
+    eyes: t < 0.25 ? 'shut' : 'wide',
+    lEl: lerp(1.05, 1.3, open) + 0.12 * peak,
+    lSp: lerp(0.6, 0.72, open) + 0.1 * peak,
+    lLen: 1 + 0.08 * open + 0.1 * peak,
+    yell: t < 0.75 ? 0 : clamp01(0.35 + peak * 0.8 - after * 0.9),
+  };
+}
+
+/** Выдохлась: листья поникли, пыхтит (8 кадров на 1,1 с). */
+function mdTired(d: number, i: number): MdO {
+  const b = Math.sin((i / 8) * TAU);
+  return {
+    ...MD0,
+    d,
+    out: 0.86,
+    bw: 1 + 0.05 * b,
+    bh: 0.94 - 0.04 * b,
+    lean: 1.2,
+    arms: -1,
+    mouth: 0.25 + 0.15 * b,
+    eyes: 'half',
+    lEl: -0.25 + 0.08 * b,
+    lSp: 0.95,
+    lLen: 0.95,
+  };
+}
+
+/** Уходит в землю (0,5 с): присела, крутится винтом вниз, листья — последними. */
+function mdSink(d: number, f: number): MdO {
+  const t = (f + 0.5) / FPS;
+  const k = eIn(seg(t, 0.06, 0.42));
+  return {
+    ...MD0,
+    d,
+    out: lerp(0.86, 0.1, k),
+    shake: f % 2 ? 0.6 : -0.6,
+    arms: 0.4 * k,
+    eyes: 'shut',
+    lEl: lerp(-0.2, 0.3, k),
+    lSp: lerp(0.95, 1.2, k),
+    sway: (f % 3) * 0.12,
+    clods: t > 0.08 ? seg(t, 0.08, MD_SINK) * 0.6 : -1,
+  };
+}
+
+/** Смерть 0,85 с: беззвучный крик → сохнет → валится набок → крошится. */
+function mandrakeDeathPic(d: number, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  if (t < 0.3) {
+    const k = seg(t, 0, 0.3);
+    const pic = mandrakePic({
+      ...MD0,
+      d,
+      mouth: 0.8 - k * 0.3,
+      eyes: 'x',
+      arms: lerp(0.6, -1, k),
+      bw: 1 - 0.12 * k,
+      bh: 1 - 0.08 * k,
+      lEl: lerp(0.6, -0.3, k),
+      lSp: 0.9,
+      dry: k * 0.6,
+      shake: f % 2 ? 0.5 : -0.5,
+    });
+    pic.eye = null;
+    return pic;
+  }
+  // Лежит набок и крошится в землю.
+  const p = new Px(MD_W, MD_H);
+  const GY = MD_GY;
+  const cx = MD_CX + 0.5;
+  const k = eOut(seg(t, 0.3, 0.5));
+  const crumble = seg(t, 0.5, MD_DIE);
+  p.ell(cx, GY, 7, 2.2, MDR.soil);
+  p.ell(cx - 1, GY - 0.5, 5.2, 1.3, MDR.soilL);
+  const dryPal = MDR.body.map((q) => mix(q, hex('#5a4a3a'), 0.7));
+  const e: Ell = {
+    x: cx + k * 3,
+    y: lerp(GY - 6.3, GY - 2.4, k),
+    rx: lerp(4, 6, k),
+    ry: lerp(5.4, 2.6, k),
+  };
+  ball(p, e, dryPal, (x, y) => hash(x, y, 51) > crumble * 0.85);
+  for (let i = 0; i < 4; i++)
+    leaf(
+      p,
+      e.x - e.rx + 0.5,
+      e.y - 0.5,
+      PI + 0.5 - i * 0.28 + k * 0.3,
+      5.5 * (1 - crumble * 0.5),
+      1.2,
+      mix(MDR.leafM, hex('#6a5a30'), 0.85),
+    );
+  p.set(Math.round(e.x + 2), Math.round(e.y - 1), MDR.eyeD);
+  // Крошки сыплются на землю.
+  for (let i = 0; i < 8 * crumble; i++) {
+    const x = e.x - e.rx + hash(i, 53) * e.rx * 2;
+    const y = Math.min(GY, e.y + hash(i, 55) * 3 + crumble * 3);
+    p.set(Math.round(x), Math.round(y), i % 2 ? dryPal[1] : MDR.soilL);
+  }
+  p.outline(INK);
+  return { p, ax: MD_CX, ay: MD_GY, eye: null, lit: null };
+}
+
+/** Режим мандрагоры → кадр. */
+function mandrakeFrame(m: Mob, pose: MobPose): MobFrame {
+  const md = pose.mode;
+  const t = pose.t;
+  const awake = md === 'rise' || md === 'scream' || md === 'tired' || md === 'stun';
+  const want = awake ? (heroAng(m) ?? m.face ?? PI / 2) : (VIS.get(m)?.yaw ?? m.face ?? PI / 2);
+  const v = visOf(m, pose, want, md === 'scream' ? 3 : 6);
+  const { d, flip } = side8(v.yaw);
+  const sh = { shadow: 6 };
+  if (md === 'dying') {
+    const f = fi(t, MD_DIE_F);
+    const key = t < 0.3 ? `die${f}d${d}` : `die${f}`;
+    return frame('mdr', key, pose, () => mandrakeDeathPic(d, f), {
+      ...merge(flip && t < 0.3),
+      linger: MD_DIE,
+      alpha: 1 - seg(t, 0.7, MD_DIE),
+      shadow: 0,
+      still: true,
+    });
+  }
+  const hurt = hurtOf(m, pose, v, 0.6);
+  if (md === 'rise') {
+    const f = fi(t, Math.round(MD_RISE * FPS) - 1);
+    return frame('mdr', `r${f}d${d}`, pose, () => mandrakePic(mdRise(d, f)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'scream') {
+    const f = fi(t, Math.round(MD_SCREAM_END * FPS) - 1);
+    return frame('mdr', `s${f}d${d}`, pose, () => mandrakePic(mdScream(d, f)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'sink') {
+    const f = fi(t, Math.round(MD_SINK * FPS) - 1);
+    return frame('mdr', `k${f}d${d}`, pose, () => mandrakePic(mdSink(d, f)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'tired' || md === 'stun') {
+    if (hurt?.wince) {
+      const o: MdO = { ...mdTired(d, 0), eyes: 'wince', mouth: 0.5, lean: -1 };
+      return frame('mdr', `tw${d}`, pose, () => mandrakePic(o), { ...merge(flip, hurt.ex), ...sh });
+    }
+    const i = Math.floor(idlePh(m, pose.now, 1.1) * 8);
+    return frame('mdr', `t${i}d${d}`, pose, () => mandrakePic(mdTired(d, i)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+    });
+  }
+  if (md !== 'emerge') {
+    // Портрет бестиария и незнакомые режимы: стоит, листья качаются.
+    const i = Math.floor(idlePh(m, pose.now, 1.8) * 8);
+    const o: MdO = {
+      ...MD0,
+      d,
+      sway: Math.sin((i / 8) * TAU) * 0.1,
+      bh: 1 + 0.03 * Math.sin((i / 8) * TAU),
+    };
+    return frame('mdr', `i${i}d${d}`, pose, () => mandrakePic(o), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+    });
+  }
+  // В земле: розетка качается, изредка вздрагивает.
+  const ph = idlePh(m, pose.now, 2.4);
+  const i = Math.floor(ph * 8);
+  const shiver = hash(m.id ?? 0, Math.floor(pose.now / 2.4 + hash(m.id ?? 0, 3))) < 0.25;
+  return frame(
+    'mdr',
+    `b${i}${shiver ? 'v' : ''}d${d}`,
+    pose,
+    () => mandrakePic(mdBuried(d, i, shiver)),
+    { ...merge(flip, hurt?.ex), shadow: 0 },
+  );
+}
+
+registerMobPainter('f2_mandrake', mandrakeFrame);
+
+registerMobWarm('f2_mandrake', function* () {
+  const P = { flash: false, look: 'normal' as Look };
+  for (let d = 0; d < 5; d++) {
+    for (let i = 0; i < 8; i++) {
+      frame('mdr', `b${i}d${d}`, P, () => mandrakePic(mdBuried(d, i, false)));
+      yield 0;
+    }
+  }
+  for (const d of [2, 1, 0, 3, 4]) {
+    for (let f = 0; f < Math.round(MD_RISE * FPS); f++) {
+      frame('mdr', `r${f}d${d}`, P, () => mandrakePic(mdRise(d, f)));
+      yield 0;
+    }
+    for (let f = 0; f < Math.round(MD_SCREAM_END * FPS); f++) {
+      frame('mdr', `s${f}d${d}`, P, () => mandrakePic(mdScream(d, f)));
+      yield 0;
+    }
+  }
+});
+
+// Визг мандрагоры: кольцо ударной волны по полу до края круга, пыль
+// вскинута по радиусам, трава прижата. На полу; свет визга — в кадре (`lit`).
+registerImpactPainter('f2_scream', {
+  life: 0.75,
+  shake: 0.28,
+  flash: 0.25,
+  flashRgb: '255,240,170',
+  paint(g, rec, px, py, _s, age) {
+    const R = (rec.r ?? 3) * TS;
+    const sd = rec.seed >>> 0;
+    const k = eOut(seg(age, 0, 0.3));
+    const fade = 1 - seg(age, 0.3, 0.75);
+    for (let ring = 0; ring < 3; ring++) {
+      const kr = clamp01(k - ring * 0.12);
+      if (kr <= 0) continue;
+      g.globalAlpha = 0.55 * fade * (1 - ring * 0.25);
+      g.strokeStyle = ring ? 'rgb(255,242,160)' : 'rgb(255,255,235)';
+      g.lineWidth = ring ? 1 : 2;
+      g.beginPath();
+      g.ellipse(px, py, R * kr, R * kr * SE, 0, 0, TAU);
+      g.stroke();
+    }
+    // Пыль по радиусам: чёрточки у фронта волны.
+    g.fillStyle = 'rgb(122,96,70)';
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * TAU + hash(sd, i, 1) * 0.3;
+      const r = R * k * (0.85 + 0.15 * hash(sd, i, 2));
+      g.globalAlpha = 0.7 * fade;
+      for (let j = 0; j < 3; j++)
+        g.fillRect(
+          Math.round(px + Math.cos(a) * (r - j * 2)),
+          Math.round(py + Math.sin(a) * (r - j * 2) * SE),
+          1,
+          1,
+        );
+    }
+    g.globalAlpha = 1;
+    return age < 0.75;
+  },
+});
+
+// ---------------------------------------------------------------------------
 // ВРЕМЕННО: прежние рисовальщики — заменяются по одному.
 // ---------------------------------------------------------------------------
 
@@ -2138,169 +2709,6 @@ function finish(
 }
 
 const lookKey = (pose: MobPose) => `${pose.left ? 1 : 0}${pose.flash ? 1 : 0}${pose.look[0]}`;
-
-// ---------------------------------------------------------------------------
-// Мандрагора.
-// ---------------------------------------------------------------------------
-
-interface MandrakePose {
-  /** 0 — в земле, 1 — весь снаружи. */
-  out: number;
-  /** Крик: пасть нараспашку, руки вверх. */
-  scream: boolean;
-  shake: number;
-  /** Вялые листья (после крика). */
-  wilt: boolean;
-  sway: number;
-  dead: boolean;
-}
-
-function mandrakePx(s: MandrakePose): { px: Px; eye: [number, number] | null } {
-  const W = 20;
-  const H = 26;
-  const GY = 23;
-  const px = new Px(W, H);
-  const cx = 10 + s.shake;
-  const sink = Math.round((1 - s.out) * 13);
-  const clip = (y: number) => y <= GY;
-  if (s.dead) {
-    // Лежит корнем на боку.
-    ball(px, { x: cx, y: GY - 2, rx: 6, ry: 2.6 }, MDR.body);
-    for (let i = 0; i < 4; i++)
-      leaf(px, cx - 6, GY - 2, Math.PI + 0.4 - i * 0.25, 5, 1.2, MDR.leafM);
-    px.set(Math.round(cx + 2), GY - 3, MDR.eyeD);
-    px.outline(INK);
-    return { px, eye: null };
-  }
-  // Земляной холмик.
-  px.ell(cx, GY, 6, 2, MDR.soil);
-  px.ell(cx - 1, GY - 0.5, 4.5, 1.2, MDR.soilL);
-  const top = GY - 13 + sink;
-  // Тело-корень.
-  if (s.out > 0.05) {
-    const body: Ell = { x: cx, y: top + 7, rx: 4.3, ry: 5.6 };
-    for (let y = Math.floor(body.y - body.ry); y <= Math.ceil(body.y + body.ry); y++)
-      for (let x = Math.floor(body.x - body.rx); x <= Math.ceil(body.x + body.rx); x++)
-        if (inE(body, x, y) && clip(y)) px.set(x, y, tone(MDR.body, body, x, y));
-    // Бороздки на корне.
-    for (const yy of [top + 4, top + 8, top + 11])
-      if (clip(yy)) px.line(Math.round(cx - 2.5), yy, Math.round(cx - 1), yy + 1, MDR.body[0]);
-    // Ручки-корешки.
-    const arm = (side: number) => {
-      const bx = cx + side * 3.8;
-      const by = top + 6;
-      const up = s.scream;
-      const ex = bx + side * (up ? 2.5 : 1.5);
-      const ey = up ? by - 5 : by + (s.wilt ? 5 : 3);
-      if (clip(by)) thick(px, bx, by, ex, Math.min(GY, ey), 0.5, MDR.root);
-      if (up && clip(ey)) {
-        px.set(Math.round(ex + side), Math.round(ey - 1), MDR.root);
-        px.set(Math.round(ex - side * 0.5), Math.round(ey - 1.5), MDR.root);
-      }
-    };
-    arm(-1);
-    arm(1);
-    // Лицо.
-    const fy = top + 5;
-    if (clip(fy + 4)) {
-      if (s.scream) {
-        px.ell(cx + 0.5, fy + 4, 2.1, 2.6, MDR.mouth);
-        px.ell(cx + 0.5, fy + 5.2, 1.2, 0.9, MDR.tongue);
-        px.set(Math.round(cx - 1.5), fy, MDR.eyeD);
-        px.set(Math.round(cx + 2.5), fy, MDR.eyeD);
-        px.set(Math.round(cx - 2), fy - 1, MDR.eyeD);
-        px.set(Math.round(cx + 3), fy - 1, MDR.eyeD);
-      } else if (s.wilt) {
-        px.rect(Math.round(cx - 2), fy + 1, Math.round(cx - 1), fy + 1, MDR.eyeD);
-        px.rect(Math.round(cx + 2), fy + 1, Math.round(cx + 3), fy + 1, MDR.eyeD);
-        px.set(Math.round(cx + 0.5), fy + 4, MDR.mouth);
-      } else {
-        px.set(Math.round(cx - 1.5), fy + 1, MDR.eyeD);
-        px.set(Math.round(cx + 2.5), fy + 1, MDR.eyeD);
-        px.rect(Math.round(cx - 0.5), fy + 3, Math.round(cx + 1.5), fy + 3, MDR.mouth);
-      }
-    }
-  }
-  // Листья — розеткой из макушки (или из земли, пока сидит).
-  const ly = Math.min(GY - 1, top + 1);
-  const n = 5;
-  for (let i = 0; i < n; i++) {
-    const spread = s.scream ? 1.25 : s.wilt ? 1.6 : 0.95;
-    let a = -Math.PI / 2 + (i - (n - 1) / 2) * 0.42 * spread + s.sway;
-    if (s.wilt) a += (i < n / 2 ? -1 : 1) * 0.55;
-    const len = (i === 2 ? 7.5 : 6) * (s.scream ? 1.1 : 1);
-    leaf(px, cx, ly, a, len, 1.6, i % 2 ? MDR.leafM : MDR.leafL, MDR.vein);
-  }
-  // Цветок на макушке.
-  if (!s.wilt) px.set(Math.round(cx), Math.round(ly - 7.5 + (s.scream ? -0.5 : 0)), MDR.flower);
-  // Земля спереди прикрывает то, что ещё внизу.
-  if (s.out < 1) {
-    px.ell(cx, GY + 0.5, 6, 1.5, MDR.soil);
-    px.rect(Math.round(cx - 5), GY, Math.round(cx + 5), GY + 1, MDR.soil);
-  }
-  px.outline(INK);
-  let eye: [number, number] | null = null;
-  if (s.scream && s.out >= 1) {
-    const fy = top + 5;
-    px.set(Math.round(cx - 1.5), fy, MDR.eye);
-    px.set(Math.round(cx + 2.5), fy, MDR.eye);
-    eye = [Math.round(cx + 2.5), fy];
-    // Визг — чёрточки у головы.
-    for (const [dx, dy] of [
-      [-7, -2],
-      [-8, 1],
-      [7, -2],
-      [8, 1],
-      [-6, -5],
-      [6, -5],
-    ])
-      px.set(Math.round(cx + dx), Math.round(fy + dy), alpha(hex('#fff2a0'), 0.9));
-  }
-  return { px, eye };
-}
-
-registerMobPainter('f2_mandrake', (m, pose) => {
-  const t = pose.t;
-  const f = pose.frame;
-  const s: MandrakePose = {
-    out: 1,
-    scream: false,
-    shake: 0,
-    wilt: false,
-    sway: [0, 0.08, 0, -0.08][mod(f, 4)],
-    dead: false,
-  };
-  switch (pose.mode) {
-    case 'emerge':
-      s.out = 0;
-      break;
-    case 'rise':
-      s.out = q(t / 0.4, 4) / 3;
-      break;
-    case 'scream':
-      s.scream = true;
-      s.shake = f % 2 ? 1 : 0;
-      break;
-    case 'tired':
-    case 'stun':
-      s.wilt = true;
-      s.out = 0.8;
-      break;
-    case 'sink':
-      s.out = 1 - q(t / 0.5, 4) / 4;
-      s.wilt = true;
-      break;
-    case 'dying':
-      s.dead = true;
-      break;
-  }
-  if (pose.anim === 'dead') s.dead = true;
-  const key = `mdr|${JSON.stringify(s)}|${lookKey(pose)}`;
-  return cachedFrame(key, () => {
-    const { px, eye } = mandrakePx(s);
-    return finish(px, 10, 23, eye, pose);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Сундучный рак (мимик). Сундук — тот же кадр атласа, что у настоящих
