@@ -954,6 +954,7 @@ function waterPx(p: Px, c: CellCtx, mark: number): void {
       for (let d = 0; d < n; d++) p.set(15 - d, i, d === 0 ? ICE[2] : alpha(ICE[3], 0.7));
     }
   }
+  if (mark === MK.hole || mark === MK.sealHole || mark === MK.holeNew) holeShape(p, c, X0, Y0);
   if (mark === MK.holeNew) {
     // Свежая полынья: плавают обломки льда.
     for (let k = 0; k < 3; k++) {
@@ -981,6 +982,46 @@ function waterPx(p: Px, c: CellCtx, mark: number): void {
       p.set(bx + 1, by, alpha(R[3], 0.7));
     }
   }
+}
+
+/**
+ * Полынья — дыра во льду, а не квадрат с рамкой: углы у сухих сторон
+ * скруглены, край рваный, снаружи — шуга и битый лёд (по ней тоже не
+ * пройти: клетка целиком глубокая, поэтому снаружи не гладкий лёд, а
+ * каша), под верхней кромкой — толща льдины.
+ */
+function holeShape(p: Px, c: CellCtx, X0: number, Y0: number): void {
+  const dryU = !wetAt(c, 0, -1);
+  const dryD = !wetAt(c, 0, 1);
+  const dryL = !wetAt(c, -1, 0);
+  const dryR = !wetAt(c, 1, 0);
+  const RC = 7;
+  for (let y = 0; y < TS; y++)
+    for (let x = 0; x < TS; x++) {
+      const X = X0 + x;
+      const Y = Y0 + y;
+      const du = dryU ? y : 99;
+      const dd = dryD ? 15 - y : 99;
+      const dl = dryL ? x : 99;
+      const dr = dryR ? 15 - x : 99;
+      const dx = Math.min(dl, dr);
+      const dy = Math.min(du, dd);
+      // Скругление только там, где сухие обе стороны угла.
+      const dist =
+        dx < RC && dy < RC ? RC - Math.hypot(RC - dx - 0.5, RC - dy - 0.5) : Math.min(dx, dy) + 0.5;
+      // Рваный край: шум по миру, чтобы соседние полыньи не повторялись.
+      const ins = 1.2 + at(noise().fine, X * 2, Y * 2) * 2.2;
+      if (dist < ins) {
+        // Шуга: серо-голубая каша с белыми крошками.
+        const h = hash(X, Y, 71);
+        p.set(x, y, h < 0.18 ? SNOW[4] : h < 0.5 ? ICE[2] : h < 0.8 ? ICE[1] : SNOW[2]);
+      } else if (dist < ins + 1) {
+        p.set(x, y, dy <= dx && dryU && du <= dd ? ICE[4] : WHITE);
+      } else if (dryU && du <= dd && dy <= dx && dist < ins + 3.5) {
+        // Толща льдины под верхней кромкой.
+        p.set(x, y, dist < ins + 2.2 ? ICE[2] : ICE[1]);
+      }
+    }
 }
 
 function bridgePx(p: Px, c: CellCtx): void {
