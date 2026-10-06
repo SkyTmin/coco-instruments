@@ -1582,6 +1582,512 @@ registerMobWarm('f2_sprout', function* () {
 });
 
 // ---------------------------------------------------------------------------
+// Сводовая слизь. Бесформенная — сторон нет, есть ход массы: ползёт толчками
+// (мозг меняет скорость пульсом), и тело следует за скоростью: на рывке
+// растекается вперёд, на паузе собирается горбом. Прыжок: собралась
+// (0,6 с, вся подготовка) → оторвалась вытянутой → летит каплей (дуга —
+// сдвигом кадра, тень на месте) → шлёп (контакт = первый кадр `recover`):
+// блин и брызги, потом желе дрожит затухая. Удар режет надвое — половинки
+// разлетаются рваными и собираются. Смерть — растекается лужей, ядро гаснет.
+// ---------------------------------------------------------------------------
+
+const SL_W = 40;
+const SL_H = 34;
+const SL_GY = 28;
+const SL_CX = 20;
+/** Тайминги мозга (`f2-brains.ts`): HOP_AIM 0,6, HOP_T 0,32, recover 0,7, stunT 0,35. */
+const SL_AIM = 0.6;
+const SL_AIM_F = 14;
+const SL_HOP = 0.32;
+const SL_HOP_F = 7;
+const SL_REC = 0.7;
+const SL_DIE = 0.8;
+const SL_DIE_F = 19;
+
+interface SlO {
+  big: boolean;
+  /** Ширина и высота тела (доли покоя). */
+  w: number;
+  h: number;
+  /** Масса вперёд: верх сдвинут по ходу на столько пикселей. */
+  lean: number;
+  /** В воздухе: низ круглый. */
+  air: boolean;
+  /** Хвост капли вверх, px (падает со свода). */
+  tail: number;
+  /** Пузыри внутри: фаза 0…1. */
+  bub: number;
+  /** Брызги шлепка: 0 — нет, иначе 0…1 разлёт. */
+  splat: number;
+  /** Рваный край (разрезали). */
+  torn: number;
+  /** Свечение ядра поверх темноты 0…1. */
+  glow: number;
+}
+
+const SL0: SlO = {
+  big: true,
+  w: 1,
+  h: 1,
+  lean: 0,
+  air: false,
+  tail: 0,
+  bub: 0,
+  splat: 0,
+  torn: 0,
+  glow: 0,
+};
+
+function slimePic(o: SlO): Pic {
+  const p = new Px(SL_W, SL_H);
+  const lit = o.glow > 0 || o.splat > 0 ? new Px(SL_W, SL_H) : null;
+  const R0 = o.big ? 7.8 : 5.4;
+  const H0 = o.big ? 5.8 : 4.2;
+  const rx = R0 * o.w;
+  const ry = H0 * o.h;
+  const GY = SL_GY;
+  const cx = SL_CX + 0.5;
+  const cy = o.air ? GY - ry - 1 : GY - ry * 0.8;
+  const bot = o.air ? ry : ry * 0.8;
+  const H = ry + bot;
+  // Сдвиг массы: верх уходит по ходу, низ стоит.
+  const sh = (y: number) => o.lean * clamp01((GY - y) / H);
+  const inBody = (x: number, y: number) => {
+    const dx = (x + 0.5 - cx - sh(y)) / rx;
+    const yy = y + 0.5 - cy;
+    let dy = yy > 0 ? yy / bot : yy / ry;
+    if (o.torn > 0 && yy < 0) dy += o.torn * 0.18 * Math.abs(Math.sin(x * 1.7));
+    return dx * dx + dy * dy <= 1;
+  };
+  const e: Ell = { x: cx, y: cy, rx, ry };
+  for (let y = 0; y < SL_H; y++)
+    for (let x = 0; x < SL_W; x++) {
+      if (!inBody(x, y)) continue;
+      let c = tone(SLM.body, { ...e, x: cx + sh(y) }, x, y);
+      if (!o.air && y >= GY - 1) c = SLM.body[0];
+      const edge = !inBody(x - 1, y) || !inBody(x + 1, y) || !inBody(x, y - 1);
+      p.set(x, y, alpha(c, edge ? 0.72 : 0.94));
+    }
+  if (o.tail > 0)
+    for (let i = 1; i <= o.tail; i++) {
+      const w = Math.max(0, 1.4 - i * 0.25);
+      p.rect(
+        Math.round(cx - w),
+        Math.round(cy - ry - i + 1),
+        Math.round(cx + w - 0.5),
+        Math.round(cy - ry - i + 1),
+        alpha(SLM.body[i < 2 ? 2 : 1], 0.85),
+      );
+    }
+  // Ядро, недоеденная косточка, пузыри — плывут вместе с массой.
+  const kx = cx + rx * 0.15 + sh(cy) * 0.8;
+  const ky = cy + ry * 0.15;
+  p.ell(kx, ky, Math.max(1.2, rx * 0.34), Math.max(1, ry * 0.32), SLM.core);
+  p.set(Math.round(kx - 0.5), Math.round(ky - 0.5), SLM.coreL);
+  if (o.big) {
+    const bx = cx - rx * 0.45 + sh(cy) * 0.6;
+    p.line(
+      Math.round(bx),
+      Math.round(cy + ry * 0.15),
+      Math.round(bx + rx * 0.3),
+      Math.round(cy + ry * 0.32),
+      SLM.bone,
+    );
+    p.set(Math.round(bx - 0.6), Math.round(cy + ry * 0.05), SLM.bone);
+  }
+  for (let i = 0; i < 3; i++) {
+    const ph = mod(o.bub + i / 3, 1);
+    const x = cx + [0.42, -0.12, 0.2][i] * rx + sh(cy) * 0.7 + Math.sin(ph * 6 + i) * 0.6;
+    const y = cy + bot * 0.6 - ph * H * 0.85;
+    if (inBody(Math.round(x), Math.round(y)) && inBody(Math.round(x), Math.round(y) - 1))
+      p.set(Math.round(x), Math.round(y), SLM.bubble);
+  }
+  // Блик — дугой слева сверху: влажный глянец.
+  for (let a = 3.5; a <= 4.6; a += 0.18) {
+    const y = cy + Math.sin(a) * ry * 0.62;
+    p.set(Math.round(cx + sh(y) + Math.cos(a) * rx * 0.62), Math.round(y), SLM.hi);
+  }
+  p.outline(SLM.rim);
+  // Брызги шлепка: капли летят по кругу земли и падают.
+  if (o.splat > 0) {
+    const k = o.splat;
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * TAU + 0.3;
+      const r = rx * 0.8 + eOut(k) * (5 + (i % 3) * 2.5);
+      const x = cx + Math.cos(a) * r;
+      const up = Math.sin(k * PI) * (3 + (i % 2) * 2);
+      const y = GY - 1 + Math.sin(a) * r * SE - up;
+      const c = i % 2 ? SLM.body[2] : SLM.body[3];
+      p.set(Math.round(x), Math.round(y), alpha(c, 1 - k * 0.5));
+      if (i % 3 === 0 && k < 0.6) p.set(Math.round(x), Math.round(y) + 1, alpha(SLM.body[1], 0.8));
+    }
+    if (lit) glowAt(lit, cx, GY - 2, rx + 4, SLM.bubble, 0.45 * (1 - k));
+  }
+  if (lit && o.glow > 0) glowAt(lit, kx, ky, 3.5, SLM.coreL, o.glow);
+  return { p, ax: SL_CX, ay: SL_GY, eye: [Math.round(kx - 0.5), Math.round(ky - 0.5)], lit };
+}
+
+/** Ход массы по экрану: −1 влево, 0 — вверх/вниз, 1 вправо. */
+const slLean = (a: number) => {
+  const c = Math.cos(a);
+  return c > 0.38 ? 1 : c < -0.38 ? -1 : 0;
+};
+
+/** Ползёт: `k` — рывок (0 собралась горбом … 4 растеклась вперёд). */
+function slCrawl(big: boolean, k: number, L: number, b: number): SlO {
+  const q = k / 4;
+  return {
+    ...SL0,
+    big,
+    w: lerp(0.9, 1.16, q),
+    h: lerp(1.12, 0.86, q),
+    lean: L * lerp(-0.6, 2.2, q),
+    bub: b / 4,
+  };
+}
+
+/** Собирается для прыжка (0,6 с): вжимается и ширится, дрожит, к концу тянется вверх. */
+function slAim(big: boolean, f: number, L: number): SlO {
+  const t = (f + 0.5) / FPS;
+  const sq = eOut(seg(t, 0, 0.42));
+  const up = eIn(seg(t, 0.5, SL_AIM));
+  const quiver = t > 0.42 && t < 0.52 ? (f % 2 ? 0.03 : -0.03) : 0;
+  return {
+    ...SL0,
+    big,
+    w: 1 + 0.26 * sq * (1 - up) - 0.12 * up + quiver,
+    h: 1 - 0.3 * sq * (1 - up) + 0.28 * up - quiver,
+    lean: L * (-1.2 * sq * (1 - up) + 1.4 * up),
+    bub: 0.1 + 0.2 * sq,
+  };
+}
+
+/** Полёт (0,32 с): вытянута вверх → капля → вытянута к земле. */
+function slHop(big: boolean, f: number, L: number): SlO {
+  const k = (f + 0.5) / (SL_HOP_F + 1);
+  const st = k < 0.25 ? 1 - k / 0.25 : k > 0.7 ? (k - 0.7) / 0.3 : 0;
+  return {
+    ...SL0,
+    big,
+    air: true,
+    w: 1 - 0.2 * st,
+    h: 1.02 + 0.26 * st,
+    lean: L * (k < 0.5 ? 1.2 : -0.4),
+    bub: 0.4 + k * 0.3,
+  };
+}
+
+/** Шлепок (кадр контакта и три следом): блин, брызги, свет. */
+function slSplat(big: boolean, f: number): SlO {
+  const k = (f + 0.5) / 4;
+  return {
+    ...SL0,
+    big,
+    w: lerp(1.42, 1.15, eOut(k)),
+    h: lerp(0.55, 0.85, eOut(k)),
+    splat: k,
+    bub: 0.7,
+  };
+}
+
+/** Желе дрожит после шлепка: поля движка (кадр — покой). */
+function slJelly(t: number, a = 0.16): Partial<MobFrame> {
+  const w = Math.exp(-4.5 * t) * Math.cos(t * TAU * 3.2);
+  return { sx: 1 + a * w, sy: 1 - a * 1.1 * w };
+}
+
+/** Смерть 0,8 с: дрожь → растекается лужей → ядро гаснет, лужа сохнет. */
+function slimeDeathPic(big: boolean, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  if (t < 0.12) {
+    const pic = slimePic({
+      ...SL0,
+      big,
+      w: 1 + (f % 2 ? 0.06 : -0.04),
+      h: 1,
+      glow: 0.6,
+      torn: 0.5,
+    });
+    pic.eye = null;
+    return pic;
+  }
+  const p = new Px(SL_W, SL_H);
+  const lit = new Px(SL_W, SL_H);
+  const k = eOut(seg(t, 0.12, 0.5));
+  const dry = seg(t, 0.5, SL_DIE);
+  const R = (big ? 7.8 : 5.4) * lerp(1, 1.85, k) * (1 - 0.25 * dry);
+  const hh = (big ? 5.8 : 4.2) * lerp(0.8, 0.22, k);
+  const cx = SL_CX + 0.5;
+  const cy = SL_GY - hh * 0.6;
+  // Лужа: широкий плоский овал, края рябят.
+  const e: Ell = { x: cx, y: cy, rx: R, ry: Math.max(1.6, hh + R * SE * 0.25 * k) };
+  for (let y = 0; y < SL_H; y++)
+    for (let x = 0; x < SL_W; x++) {
+      const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx);
+      const wav = 1 + 0.08 * Math.sin(a * 5 + f * 0.7) * k;
+      const dx = (x + 0.5 - cx) / (e.rx * wav);
+      const dy = (y + 0.5 - cy) / e.ry;
+      if (dx * dx + dy * dy > 1) continue;
+      const c = tone(SLM.body, e, x, y, -0.2 * k);
+      p.set(x, y, alpha(mix(c, BLACK, 0.25 * dry), lerp(0.9, 0.55, dry)));
+    }
+  // Косточка остаётся на дне лужи.
+  if (big)
+    p.line(
+      Math.round(cx - 4),
+      Math.round(SL_GY - 1),
+      Math.round(cx - 1),
+      Math.round(SL_GY),
+      SLM.bone,
+    );
+  // Ядро: тонет и гаснет; пузыри лопаются.
+  const ck = 1 - seg(t, 0.25, 0.6);
+  if (ck > 0) {
+    p.ell(cx + 1, cy, 1.6 * ck + 0.4, 1, SLM.core);
+    glowAt(lit, cx + 1, cy, 4 * ck + 1, SLM.coreL, 0.7 * ck);
+  }
+  for (let i = 0; i < 4; i++) {
+    const bt = seg(t, 0.15 + i * 0.09, 0.3 + i * 0.09);
+    if (bt <= 0 || bt >= 1) continue;
+    const x = cx + (hash(i, 31) - 0.5) * R * 1.4;
+    const y = cy - 1 - bt * 2;
+    p.set(Math.round(x), Math.round(y), alpha(SLM.bubble, 1 - bt));
+    if (bt > 0.6) {
+      p.set(Math.round(x) - 1, Math.round(y), alpha(SLM.hi, 0.7));
+      p.set(Math.round(x) + 1, Math.round(y), alpha(SLM.hi, 0.7));
+    }
+  }
+  p.outline(SLM.rim);
+  return { p, ax: SL_CX, ay: SL_GY, eye: null, lit };
+}
+
+/** Режим слизи → кадр. */
+function slimeFrame(m: Mob, pose: MobPose): MobFrame {
+  const md = pose.mode;
+  const t = pose.t;
+  const big = !((m.data?.gen ?? 0) > 0 || (m.r ?? 0.36) < 0.3);
+  const z = big ? 'b' : 's';
+  const aimed = md === 'hopAim' || md === 'hop';
+  const v = visOf(m, pose, aimed ? (m.face ?? 0) : headOf(m, 0.15), 8);
+  const L = slLean(v.yaw);
+  const Lk = 'lmr'[L + 1];
+  const sh = { shadow: big ? 8 : 6 };
+  if (md === 'dying') {
+    const f = fi(t, SL_DIE_F);
+    return frame('slm', `die${f}${z}`, pose, () => slimeDeathPic(big, f), {
+      linger: SL_DIE,
+      alpha: 1 - seg(t, 0.62, SL_DIE),
+      shadow: 0,
+      still: true,
+    });
+  }
+  const hurt = hurtOf(m, pose, v, 0.8);
+  if (md === 'hopAim') {
+    const f = fi(t, SL_AIM_F);
+    return frame('slm', `a${f}${Lk}${z}`, pose, () => slimePic(slAim(big, f, L)), {
+      ...merge(false, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'hop') {
+    const f = fi(t, SL_HOP_F);
+    const k = clamp01(t / SL_HOP);
+    const hgt = (big ? 10 : 8) * Math.sin(k * PI);
+    return frame('slm', `h${f}${Lk}${z}`, pose, () => slimePic(slHop(big, f, L)), {
+      dy: -hgt,
+      shadow: Math.round(sh.shadow * (1 - 0.35 * Math.sin(k * PI))),
+      still: true,
+      ghost: { every: 0.035, life: 0.12, tint: '200,255,150', alpha: 0.25 },
+    });
+  }
+  // Шлепок: после прыжка (контакт) и после падения со свода.
+  const landed = md === 'recover' || (md === 'stun' && v.prev === 'drop');
+  if (landed && t < 4 / FPS) {
+    const f = fi(t, 3);
+    return frame('slm', `sp${f}${z}`, pose, () => slimePic(slSplat(big, f)), {
+      ...merge(false, hurt?.ex),
+      ...sh,
+      still: true,
+    });
+  }
+  if (md === 'drop') {
+    // Падает каплей: хвост ещё тянется к своду, низ круглый.
+    const f = Math.floor(mod(t * 10, 3));
+    const o: SlO = { ...SL0, big, air: true, w: 0.74 + f * 0.03, h: 1.24 - f * 0.04, tail: 5 - f };
+    return frame('slm', `dr${f}${z}`, pose, () => slimePic(o), { shadow: 0, still: true });
+  }
+  const base = (b: number) =>
+    frame('slm', `i${b}${z}`, pose, () => slimePic({ ...SL0, big, bub: b / 8 }), null);
+  if (landed) {
+    const fr = base(Math.floor(mod(pose.now * 3, 1) * 8));
+    return { ...fr, ...merge(false, slJelly(t - 4 / FPS), hurt?.ex), ...sh };
+  }
+  if (md === 'stun') {
+    // Разрезали: половинки летят рваными и собираются в шар.
+    const f = fi(t, 3);
+    if (f < 3 && !big) {
+      const o: SlO = { ...SL0, big, torn: 1 - f / 3, w: 1.1, h: 0.9, lean: 0, glow: 0 };
+      return frame('slm', `tr${f}${z}`, pose, () => slimePic(o), {
+        ...merge(false, { sx: 1.18 - f * 0.05, sy: 0.84 + f * 0.04 }, hurt?.ex),
+        ...sh,
+      });
+    }
+    const fr = base(0);
+    return { ...fr, ...merge(false, slJelly(t - 3 / FPS, 0.14), hurt?.ex), ...sh };
+  }
+  if (md === 'sleep') {
+    const fr = base(0);
+    const b = Math.sin(idlePh(m, pose.now, 2.8) * TAU);
+    return { ...fr, sx: 1 + 0.04 * b, sy: 0.9 - 0.05 * b, ...sh };
+  }
+  if (md === 'alert') {
+    const fr = base(2);
+    const k = clamp01(t / 0.35);
+    return {
+      ...fr,
+      ...merge(false, { sy: 1 + 0.2 * Math.sin(k * PI), sx: 1 - 0.12 * Math.sin(k * PI) }),
+      ...sh,
+    };
+  }
+  const sp = spd(m);
+  if (sp > 0.15) {
+    // Толчки мозга: скорость — доля рывка; тело следует за ней.
+    const r = sp / Math.max(0.5, m.speed ?? 1.5);
+    const k = Math.round(clamp01((r - 0.45) / 0.55) * 4);
+    const b = Math.floor(mod(v.dist * 3, 4));
+    return frame('slm', `c${k}${Lk}${b}${z}`, pose, () => slimePic(slCrawl(big, k, L, b)), {
+      ...merge(false, hurt?.ex),
+      ...sh,
+    });
+  }
+  const ph = idlePh(m, pose.now, 2.2);
+  const fr = base(Math.floor(mod(pose.now * 0.5 + hash(m.id ?? 0, 5), 1) * 8));
+  const b = Math.sin(ph * TAU);
+  return { ...fr, ...merge(false, { sx: 1 + 0.05 * b, sy: 1 - 0.06 * b }, hurt?.ex), ...sh };
+}
+
+registerMobPainter('f2_slime', slimeFrame);
+
+registerMobWarm('f2_slime', function* () {
+  const P = { flash: false, look: 'normal' as Look };
+  for (const big of [true, false]) {
+    const z = big ? 'b' : 's';
+    for (let b = 0; b < 8; b++) {
+      frame('slm', `i${b}${z}`, P, () => slimePic({ ...SL0, big, bub: b / 8 }));
+      yield 0;
+    }
+    for (let L = -1; L <= 1; L++)
+      for (let k = 0; k <= 4; k++)
+        for (let b = 0; b < 4; b++) {
+          frame('slm', `c${k}${'lmr'[L + 1]}${b}${z}`, P, () => slimePic(slCrawl(big, k, L, b)));
+          yield 0;
+        }
+    for (let f = 0; f < 4; f++) {
+      frame('slm', `sp${f}${z}`, P, () => slimePic(slSplat(big, f)));
+      yield 0;
+    }
+  }
+  for (let L = -1; L <= 1; L++) {
+    for (let f = 0; f <= SL_AIM_F; f++) {
+      frame('slm', `a${f}${'lmr'[L + 1]}b`, P, () => slimePic(slAim(true, f, L)));
+      yield 0;
+    }
+    for (let f = 0; f <= SL_HOP_F; f++) {
+      frame('slm', `h${f}${'lmr'[L + 1]}b`, P, () => slimePic(slHop(true, f, L)));
+      yield 0;
+    }
+  }
+  for (let f = 0; f <= SL_DIE_F; f++) {
+    frame('slm', `die${f}b`, P, () => slimeDeathPic(true, f));
+    yield 0;
+  }
+});
+
+/** Капли слизи на полу: шлепок прыжка/падения и разрез. */
+function gooDrops(
+  g: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  seed: number,
+  n: number,
+  R: number,
+  age: number,
+  life: number,
+): void {
+  const fade = 1 - seg(age, life * 0.55, life);
+  for (let i = 0; i < n; i++) {
+    const a = hash(seed, i, 1) * TAU;
+    const d = R * (0.45 + 0.75 * hash(seed, i, 2));
+    const k = eOut(seg(age, 0, 0.16 + 0.1 * hash(seed, i, 3)));
+    const x = px + Math.cos(a) * d * k;
+    const y = py + Math.sin(a) * d * k * SE - Math.sin(k * PI) * 4;
+    const s = 1 + (hash(seed, i, 4) > 0.6 ? 1 : 0);
+    g.globalAlpha = 0.9 * fade;
+    g.fillStyle = i % 3 ? CSS.slm2 : CSS.slm3;
+    g.fillRect(Math.round(x), Math.round(y), s, s);
+    if (k >= 1 && s > 1) {
+      g.fillStyle = CSS.slm1;
+      g.fillRect(Math.round(x), Math.round(y) + s, s, 1);
+    }
+  }
+  g.globalAlpha = 1;
+}
+
+const css = (c: RGBA) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const CSS = {
+  slm1: css(SLM.body[1]),
+  slm2: css(SLM.body[2]),
+  slm3: css(SLM.body[3]),
+  hi: css(SLM.hi),
+};
+
+// Шлепок прыжка и падения со свода: волна слизи по полу и капли (на полу,
+// под мобами; свет удара — в кадре слизи `lit`).
+registerImpactPainter('f2_hop', {
+  life: 0.7,
+  shake: 0.1,
+  paint(g, rec, px, py, _s, age) {
+    const R = (rec.r ?? 0.75) * TS;
+    const k = eOut(seg(age, 0, 0.18));
+    const fade = 1 - seg(age, 0.25, 0.7);
+    g.globalAlpha = 0.5 * fade;
+    g.strokeStyle = CSS.slm2;
+    g.lineWidth = 1;
+    g.beginPath();
+    g.ellipse(px, py, R * (0.5 + 0.6 * k), R * (0.5 + 0.6 * k) * SE, 0, 0, TAU);
+    g.stroke();
+    g.globalAlpha = 1;
+    gooDrops(g, px, py, rec.seed >>> 0, 12, R * 1.2, age, 0.7);
+    return age < 0.7;
+  },
+});
+
+// Разрез слизи надвое: брызги веером в обе стороны и белая черта среза.
+registerImpactPainter('f2_split', {
+  life: 0.6,
+  shake: 0.08,
+  paint(g, rec, px, py, _s, age) {
+    const sd = rec.seed >>> 0;
+    if (age < 0.08) {
+      const a = hash(sd, 9) * PI;
+      g.globalAlpha = 1 - age / 0.08;
+      g.fillStyle = CSS.hi;
+      for (let i = -7; i <= 7; i++)
+        g.fillRect(
+          Math.round(px + Math.cos(a) * i),
+          Math.round(py - 4 + Math.sin(a) * i * SE),
+          1,
+          1,
+        );
+      g.globalAlpha = 1;
+    }
+    gooDrops(g, px, py - 2, sd, 10, 14, age, 0.6);
+    return age < 0.6;
+  },
+});
+
+// ---------------------------------------------------------------------------
 // ВРЕМЕННО: прежние рисовальщики — заменяются по одному.
 // ---------------------------------------------------------------------------
 
@@ -1632,149 +2138,6 @@ function finish(
 }
 
 const lookKey = (pose: MobPose) => `${pose.left ? 1 : 0}${pose.flash ? 1 : 0}${pose.look[0]}`;
-
-// ---------------------------------------------------------------------------
-// Сводовая слизь.
-// ---------------------------------------------------------------------------
-
-/**
- * Слизь: капля с плоским дном, внутри — ядро и недоеденное (косточка,
- * пузырь). Полупрозрачная: сквозь край видно пол.
- */
-function slimePx(rx: number, ry: number, lift: number, drop: boolean, dead: boolean): Px {
-  const W = Math.ceil(rx * 2 + 6);
-  const H = Math.ceil(ry * 2 + lift + (drop ? 6 : 0) + 5);
-  const px = new Px(W, H);
-  const GY = H - 2;
-  const cx = W / 2;
-  const cy = GY - ry * 0.8 - lift;
-  const e: Ell = { x: cx, y: cy, rx, ry };
-  // Низ плоский: ниже центра овал сплюснут.
-  const inBody = (x: number, y: number) => {
-    const dx = (x + 0.5 - cx) / rx;
-    const yy = y + 0.5 - cy;
-    const dy = yy > 0 ? yy / (ry * 0.8) : yy / ry;
-    return dx * dx + dy * dy <= 1;
-  };
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++) {
-      if (!inBody(x, y)) continue;
-      let c = tone(SLM.body, e, x, y);
-      // Дно темнее — слизь лежит на полу, а не висит.
-      if (y >= GY - lift - 1 && !drop) c = SLM.body[0];
-      // Край прозрачнее середины: сквозь кромку видно пол.
-      const edge = !inBody(x - 1, y) || !inBody(x + 1, y) || !inBody(x, y - 1);
-      px.set(x, y, dead ? mix(c, BLACK, 0.3) : alpha(c, edge ? 0.72 : 0.94));
-    }
-  if (drop) {
-    // Хвостик капли сверху — ещё тянется со свода.
-    for (let i = 1; i <= 5; i++)
-      px.rect(
-        Math.round(cx - 1 + i * 0.1),
-        Math.round(cy - ry - i),
-        Math.round(cx),
-        Math.round(cy - ry - i),
-        alpha(SLM.body[1], 0.85),
-      );
-  }
-  if (!dead) {
-    // Ядро (в темноте светится) и то, что внутри.
-    px.ell(cx + rx * 0.15, cy + ry * 0.15, rx * 0.34, ry * 0.32, SLM.core);
-    px.set(Math.round(cx + rx * 0.15), Math.round(cy + ry * 0.15), SLM.coreL);
-    if (rx > 6) {
-      px.line(
-        Math.round(cx - rx * 0.5),
-        Math.round(cy + ry * 0.2),
-        Math.round(cx - rx * 0.2),
-        Math.round(cy + ry * 0.35),
-        SLM.bone,
-      );
-      px.set(Math.round(cx - rx * 0.55), Math.round(cy + ry * 0.12), SLM.bone);
-    }
-    px.set(Math.round(cx + rx * 0.45), Math.round(cy - ry * 0.1), SLM.bubble);
-    px.set(Math.round(cx - rx * 0.1), Math.round(cy + ry * 0.45), SLM.bubble);
-    // Блик — дугой слева сверху: влажный глянец.
-    for (let a = 3.5; a <= 4.6; a += 0.18)
-      px.set(
-        Math.round(cx + Math.cos(a) * rx * 0.62),
-        Math.round(cy + Math.sin(a) * ry * 0.62),
-        SLM.hi,
-      );
-    px.set(Math.round(cx - rx * 0.62), Math.round(cy - ry * 0.05), SLM.body[3]);
-  }
-  px.outline(SLM.rim);
-  return px;
-}
-
-registerMobPainter('f2_slime', (m, pose) => {
-  const small = (m.data.gen ?? 0) > 0 || m.r < 0.3;
-  let rx = small ? 5.4 : 7.8;
-  let ry = small ? 4.2 : 5.8;
-  let lift = 0;
-  let drop = false;
-  let dead = false;
-  const f = pose.frame;
-  const t = pose.t;
-  if (pose.mode === 'hopAim') {
-    const k = Math.min(1, t / 0.6);
-    const qk = q(k, 4) / 3;
-    rx *= 1 + 0.25 * qk;
-    ry *= 1 - 0.3 * qk;
-  } else if (pose.mode === 'hop') {
-    const k = Math.min(1, t / 0.32);
-    lift = Math.round(Math.sin(k * Math.PI) * 7);
-    rx *= 0.84;
-    ry *= 1.2;
-  } else if (pose.mode === 'drop') {
-    rx *= 0.72;
-    ry *= 1.25;
-    drop = true;
-  } else if (pose.mode === 'recover' && t < 0.25) {
-    rx *= 1.32;
-    ry *= 0.62;
-  } else
-    switch (pose.anim) {
-      case 'run': {
-        const s = Math.sin((mod(f, 6) / 6) * TAU);
-        rx *= 1 + 0.13 * s;
-        ry *= 1 - 0.1 * s;
-        break;
-      }
-      case 'hurt':
-        rx *= 1.12;
-        ry *= 0.88;
-        break;
-      case 'dead':
-        rx *= 1.45;
-        ry *= 0.35;
-        dead = true;
-        break;
-      case 'sleep':
-        ry *= 0.85;
-        break;
-      default: {
-        const s = [0, 1, 0, -1][mod(f, 4)];
-        rx *= 1 + 0.05 * s;
-        ry *= 1 - 0.06 * s;
-      }
-    }
-  rx = Math.round(rx * 2) / 2;
-  ry = Math.round(ry * 2) / 2;
-  const key = `slm|${rx}|${ry}|${lift}|${drop ? 1 : 0}|${dead ? 1 : 0}|${lookKey(pose)}`;
-  return cachedFrame(key, () => {
-    const px = slimePx(rx, ry, lift, drop, dead);
-    const GY = px.h - 2;
-    const cx = px.w / 2;
-    const cy = GY - ry * 0.8 - lift;
-    return finish(
-      px,
-      cx,
-      GY,
-      dead ? null : [Math.round(cx + rx * 0.15), Math.round(cy + ry * 0.15)],
-      pose,
-    );
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Мандрагора.
