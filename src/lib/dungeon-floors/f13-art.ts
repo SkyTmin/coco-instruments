@@ -1947,6 +1947,8 @@ export interface RigOut {
   eye: [number, number] | null;
   /** Номер примитива в каждом пикселе (−1 — пусто): контровой свет, обрезка. */
   ids?: Int16Array;
+  /** Рамка нарисованного вместе с контуром: x0, y0, x1, y1 включительно (пусто — x1 < x0). */
+  box?: [number, number, number, number];
 }
 
 export interface RenderOpt {
@@ -1961,6 +1963,14 @@ export interface RenderOpt {
 }
 
 /** Нарисовать риг на холст w×h; (ax, ay) — точка ног. */
+let RIG_SCR: {
+  n: number;
+  zb: Float32Array;
+  idb: Int16Array;
+  col: Uint8ClampedArray;
+  glowB: Uint8Array;
+} | null = null;
+
 export function renderRig(
   rig: Rig,
   yaw: number,
@@ -1981,10 +1991,20 @@ export function renderRig(
     return [ax + gx, ay + gy * DEPTH - p.y * S, gy * 0.77 + p.y * S * 0.64];
   };
   const N = w * h;
-  const zb = new Float32Array(N).fill(-1e9);
-  const idb = new Int16Array(N).fill(-1);
-  const col = new Uint8ClampedArray(N * 4);
-  const glowB = new Uint8Array(N);
+  // Буферы общие на все вызовы (рисуем по одному кадру за раз): без мусора.
+  // `ids` из ответа живёт до следующего `renderRig`.
+  if (!RIG_SCR || RIG_SCR.n < N)
+    RIG_SCR = {
+      n: N,
+      zb: new Float32Array(N),
+      idb: new Int16Array(N),
+      col: new Uint8ClampedArray(N * 4),
+      glowB: new Uint8Array(N),
+    };
+  const { zb, idb, col, glowB } = RIG_SCR;
+  zb.fill(-1e9, 0, N);
+  idb.fill(-1, 0, N);
+  glowB.fill(0, 0, N);
   let eye: [number, number] | null = null;
   const put = (i: number, c: RGBA, z: number, id: number, glow: Glow | undefined) => {
     zb[i] = z;
@@ -2197,11 +2217,33 @@ export function renderRig(
         }
     }
   });
+  // Рамка нарисованного: дальше всё считается только в ней (+1 на контур) —
+  // у больших холстов (Кукловод, исполин) пустые поля стоили больше рисунка.
+  let bx0 = w;
+  let by0 = h;
+  let bx1 = -1;
+  let by1 = -1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++)
+      if (idb[row + x] >= 0) {
+        if (x < bx0) bx0 = x;
+        if (x > bx1) bx1 = x;
+        if (y < by0) by0 = y;
+        if (y > by1) by1 = y;
+      }
+  }
   const px = new Px(w, h);
   const out = px.data;
+  if (bx1 < 0) return { px, lit: null, eye, ids: idb, box: [0, 0, -1, -1] };
+  bx0 = Math.max(0, bx0 - 1);
+  by0 = Math.max(0, by0 - 1);
+  bx1 = Math.min(w - 1, bx1 + 1);
+  by1 = Math.min(h - 1, by1 + 1);
   const tint = opt.tint;
   const tk = opt.tintK ?? 0;
-  for (let i = 0; i < N; i++) {
+  for (let y = by0; y <= by1; y++)
+    for (let i = y * w + bx0, e = y * w + bx1; i <= e; i++) {
     if (idb[i] < 0) continue;
     let r = col[i * 4];
     let g = col[i * 4 + 1];
@@ -2231,18 +2273,36 @@ export function renderRig(
     out[i * 4 + 2] = b;
     out[i * 4 + 3] = col[i * 4 + 3];
   }
-  if (!opt.noOutline) px.outline(INK);
+  if (!opt.noOutline) {
+    // То же, что `px.outline(INK)`, но в рамке и без вызова на пиксель.
+    const add: number[] = [];
+    const A = (j: number) => out[j * 4 + 3] > 0;
+    for (let y = by0; y <= by1; y++)
+      for (let x = bx0; x <= bx1; x++) {
+        const i = y * w + x;
+        if (A(i)) continue;
+        if ((x > 0 && A(i - 1)) || (x < w - 1 && A(i + 1)) || (y > 0 && A(i - w)) || (y < h - 1 && A(i + w)))
+          add.push(i);
+      }
+    for (const i of add) {
+      out[i * 4] = INK[0];
+      out[i * 4 + 1] = INK[1];
+      out[i * 4 + 2] = INK[2];
+      out[i * 4 + 3] = 255;
+    }
+  }
   if (opt.flash) flashPx(px);
   let lit: Px | null = null;
-  for (let i = 0; i < N; i++)
-    if (glowB[i]) {
-      lit ??= new Px(w, h);
-      lit.data[i * 4] = out[i * 4];
-      lit.data[i * 4 + 1] = out[i * 4 + 1];
-      lit.data[i * 4 + 2] = out[i * 4 + 2];
-      lit.data[i * 4 + 3] = glowB[i] === 255 ? out[i * 4 + 3] : (out[i * 4 + 3] * glowB[i]) / 255;
-    }
-  return { px, lit, eye, ids: idb };
+  for (let y = by0; y <= by1; y++)
+    for (let i = y * w + bx0, e = y * w + bx1; i <= e; i++)
+      if (glowB[i]) {
+        lit ??= new Px(w, h);
+        lit.data[i * 4] = out[i * 4];
+        lit.data[i * 4 + 1] = out[i * 4 + 1];
+        lit.data[i * 4 + 2] = out[i * 4 + 2];
+        lit.data[i * 4 + 3] = glowB[i] === 255 ? out[i * 4 + 3] : (out[i * 4 + 3] * glowB[i]) / 255;
+      }
+  return { px, lit, eye, ids: idb, box: [bx0, by0, bx1, by1] };
 }
 
 // ---------------------------------------------------------------------------
@@ -4136,15 +4196,21 @@ function cutPx(p: Px, x0: number, y0: number, w: number, h: number): Px {
 }
 
 /** Рамка рисунка по обоим слоям (кадр в кеше — без пустых полей). */
-function cropBox(a: Px, b: Px | null): [number, number, number, number] {
+function cropBox(
+  a: Px,
+  b: Px | null,
+  boxA?: [number, number, number, number],
+): [number, number, number, number] {
   let x0 = a.w;
   let y0 = a.h;
   let x1 = -1;
   let y1 = -1;
   for (const p of b ? [a, b] : [a]) {
     const d = p.data;
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++)
+    // У тела рамку уже знает `renderRig` — сканируем только её.
+    const [X0, Y0, X1, Y1] = p === a && boxA ? boxA : [0, 0, p.w - 1, p.h - 1];
+    for (let y = Y0; y <= Y1; y++)
+      for (let x = X0; x <= X1; x++)
         if (d[(y * p.w + x) * 4 + 3] > 0) {
           if (x < x0) x0 = x;
           if (x > x1) x1 = x;
@@ -4162,8 +4228,9 @@ function cropFrame(
   ax: number,
   ay: number,
   extra: Partial<MobFrame> = {},
+  boxA?: [number, number, number, number],
 ): { fr: MobFrame; x0: number; y0: number } {
-  const [x0, y0, w, h] = cropBox(px, lit);
+  const [x0, y0, w, h] = cropBox(px, lit, boxA);
   const img = cutPx(px, x0, y0, w, h);
   const lt = lit ? cutPx(lit, x0, y0, w, h) : null;
   return {
@@ -4186,8 +4253,9 @@ function rimLight(o: RigOut, lit: Px | null, c: RGBA): Px | null {
   const ids = o.ids;
   if (!ids) return lit;
   const { w, h, data } = o.px;
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
+  const [X0, Y0, X1, Y1] = o.box ?? [0, 0, w - 1, h - 1];
+  for (let y = Y0; y <= Y1; y++)
+    for (let x = X0; x <= X1; x++) {
       const i = y * w + x;
       if (ids[i] < 0 || data[i * 4 + 3] === 0) continue;
       if (x > 0 && ids[i - 1] >= 0 && y > 0 && ids[i - w] >= 0) continue;
@@ -4805,7 +4873,7 @@ function giantRender(q: GP, dir: number, flash: boolean, smear: GSmear | null): 
     }
   }
   const shY = (proj(j.shL)[1] + proj(j.shR)[1]) / 2;
-  const { fr } = cropFrame(o.px, lit, GAX, GAY, { shadow: 16 });
+  const { fr } = cropFrame(o.px, lit, GAX, GAY, { shadow: 16 }, o.box);
   return { fr, sh: GAY - shY };
 }
 
@@ -6120,7 +6188,7 @@ function lordRender(d: LordDraw): LordCached {
     lit ??= new Px(LW, LH);
     halo(lit, cx, cy, 8, P.gold[3], 0.3);
   }
-  const { fr, x0, y0 } = cropFrame(o.px, lit, LAX, LAY);
+  const { fr, x0, y0 } = cropFrame(o.px, lit, LAX, LAY, {}, o.box);
   return { fr, vx: cx - x0, vy: cy - y0 };
 }
 
