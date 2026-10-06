@@ -444,33 +444,6 @@ export function renderRig(
   return { p, lit, eye };
 }
 
-/** Цепочка шаров по кривой (хобот, бивень, хвост): точки и радиусы. */
-export function chain(
-  pts: [number, number, number][],
-  r: (k: number) => number,
-  rmp: RGBA[],
-  id: number,
-  extra: Partial<Part> = {},
-): Part[] {
-  const out: Part[] = [];
-  for (let i = 0; i < pts.length; i++) {
-    const k = pts.length > 1 ? i / (pts.length - 1) : 0;
-    const rr = r(k);
-    out.push({
-      x: pts[i][0],
-      y: pts[i][1],
-      z: pts[i][2],
-      rx: rr,
-      ry: rr,
-      rz: rr,
-      ramp: rmp,
-      id,
-      ...extra,
-    });
-  }
-  return out;
-}
-
 /** Точки кривой Безье второго порядка. */
 export function bez(a: V3, b: V3, c: V3, n: number): [number, number, number][] {
   const out: [number, number, number][] = [];
@@ -498,18 +471,6 @@ const ease = (k: number) => {
 const easeOut = (k: number) => 1 - (1 - Math.max(0, Math.min(1, k))) ** 3;
 const clamp01 = (k: number) => Math.max(0, Math.min(1, k));
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
-
-/** Кадр моба из рига. */
-function frameOf(out: RigOut, ax: number, ay: number, extra: Partial<MobFrame> = {}): MobFrame {
-  return {
-    img: out.p.canvas(),
-    ax,
-    ay,
-    eye: out.eye,
-    lit: out.lit ? out.lit.canvas() : null,
-    ...extra,
-  };
-}
 
 /** Кеш кадров: ключ — всё, что меняет картинку. */
 type Cached = {
@@ -547,15 +508,6 @@ function lookRamp(r: RGBA[], look: MobPose['look']): RGBA[] {
     return r.map((c, i) => mixc(c, i > 2 ? hx('#bfe8ff') : hx('#2a3a8a'), 0.35));
   return r;
 }
-
-void frameOf;
-void lerp;
-void easeOut;
-void ease;
-void dirAng;
-void bez;
-void chain;
-void renderRig;
 
 // ---------------------------------------------------------------------------
 // Шум по миру: заранее посчитанные периодические текстуры 256×256.
