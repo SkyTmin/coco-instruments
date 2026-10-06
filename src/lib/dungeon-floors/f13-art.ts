@@ -5389,12 +5389,12 @@ const TRANS: readonly PKey<LP>[] = [
 const NEEDLE: readonly PKey<LP>[] = [
   [0, HOLD],
   [
-    0.3,
+    0.26,
     lp({ aL: limb(2.5, 0.55, 2.1), twist: -0.15, hy: -0.15, fL: 1, nd: 1, lean: -0.05 }, HOLD),
     easeOut,
   ],
   [
-    0.38,
+    0.33,
     lp({ aL: limb(2.65, 0.6, 2.25), twist: -0.22, hy: -0.15, fL: 1, nd: 1, lean: -0.08 }, HOLD),
   ],
   [
@@ -6700,11 +6700,11 @@ function hangSpec(m: Mob, now: number, st: LState, o: LSpec): void {
     const base = o.L;
     o.L = addP(base, track(tq, NEEDLE), HOLD);
     o.key += `nd${n}`;
-    if (tq >= 0.36)
+    if (tq >= 0.35)
       o.smear = {
         at: (x) => addP(base, track(x, NEEDLE), HOLD),
         t: tq,
-        w0: 0.36,
+        w0: 0.33,
         w1: 0.45,
         part: 'handL',
       };
@@ -6712,8 +6712,18 @@ function hangSpec(m: Mob, now: number, st: LState, o: LSpec): void {
     const na = now - st.needleAt;
     if (na >= 0 && na < 0.5) {
       const n = F24(na);
-      o.L = addP(o.L, track(n / 24, NEEDLE_FT), HOLD);
+      const base = o.L;
+      o.L = addP(base, track(n / 24, NEEDLE_FT), HOLD);
       o.key += `nf${n}`;
+      // Кадр выпуска (урон в 0,45) — со следом руки от замаха.
+      if (n === 0)
+        o.smear = {
+          at: (x) => addP(base, track(x, NEEDLE), HOLD),
+          t: 0.45,
+          w0: 0.33,
+          w1: 0.45,
+          part: 'handL',
+        };
     }
   }
   // Подъём с пола — рывком: руки вверх, тело тянет, ноги догоняют.
