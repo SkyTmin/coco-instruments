@@ -1529,3 +1529,438 @@ registerMobWarm('f3_mocker', function* () {
       }
   }
 });
+
+// ---------------------------------------------------------------------------
+// Туманка: медуза без сторон (рисуется плоско, наклон по ходу — зеркалом).
+// Колокол бьётся по кругу 24 кадра с фазой от номера: сжался — подскочил,
+// расслабился — медленно оседает; щупальца отстают по суставам. Жало 0,5 с:
+// вдох (колокол шире, щупальца поджаты, ядро наливается холодом) → дрожь с
+// инеем → хлёст на кадре урона (колокол сжат, щупальца вниз и врозь, вспышка
+// холода поверх темноты) → щупальца оседают, колокол колышется.
+// ---------------------------------------------------------------------------
+
+const J_HI: RGBA = hex('#c4f7ff', 205);
+const J_BELL: RGBA = hex('#62d0ea', 165);
+const J_DARK: RGBA = hex('#2f8db6', 190);
+const J_RIM: RGBA = hex('#e2fcff', 235);
+const J_TENT: RGBA = hex('#4fbcd8', 205);
+const J_TIP: RGBA = hex('#c8f8ff', 225);
+const J_ARM: RGBA = hex('#8fe2f6', 210);
+const J_ARMD: RGBA = hex('#4aa6c8', 210);
+const J_CORE: RGBA = [255, 255, 255, 255];
+const J_CLOVER: RGBA = hex('#b8f4ff');
+const J_INK: RGBA = hex('#0b1a28');
+const J_FROST: RGBA = [232, 250, 255, 255];
+
+interface JellyO {
+  /** Сжатие колокола 0…1 (−: шире обычного, вдох). */
+  c: number;
+  /** Фаза волны щупалец (обороты) и её размах. */
+  ph: number;
+  sway: number;
+  /** Щупальца: длина (доля), разлёт врозь, поджатость (кончики к колоколу). */
+  len: number;
+  spread: number;
+  curl: number;
+  /** Отставание щупалец по суставам — та же сжатость, но раньше по времени. */
+  lagC: number[];
+  /** Наклон по ходу 0…1 (вправо; влево — зеркало). */
+  lean: number;
+  /** Свечение ядра 0…1, иней вокруг 0…1, дрожь колокола (точки). */
+  glow: number;
+  frost: number;
+  jit: number;
+  /** Колокол лопнул: 0 — цел, 0…1 — разлёт капель. */
+  pop: number;
+  /** Лежит у пола (смерть): щупальца на земле, 0…1. */
+  sag: number;
+  /** Хлёст: кольцо инея у кончиков щупалец 0…1 (0 — нет). */
+  burst: number;
+}
+
+const JW = 30;
+const JH = 34;
+const JAX = 15;
+const JAY = 29;
+const JBY = 10;
+/** Ход 2 × 24, жало 12, отход 12, оглушение 12, смерть 10, … — без сторон. */
+const JELLY_LIM = 260;
+
+/** Пульс: сжатие колокола на фазе 0…1 — быстро сжался, медленно расслабился. */
+function jPulse(p: number): number {
+  const q = ((p % 1) + 1) % 1;
+  return q < 0.22 ? easeOut(q / 0.22) : 1 - smooth((q - 0.22) / 0.62);
+}
+
+function jellyO(c: number, ph: number): JellyO {
+  return {
+    c,
+    ph,
+    sway: 1,
+    len: 1,
+    spread: 0,
+    curl: 0,
+    lagC: [c, c, c, c, c],
+    lean: 0,
+    glow: 0.45,
+    frost: 0,
+    jit: 0,
+    pop: 0,
+    sag: 0,
+    burst: 0,
+  };
+}
+
+function jellyPic(o: JellyO): Pic {
+  const p = new Px(JW, JH);
+  const lit = new Px(JW, JH);
+  const bx = JAX + o.jit;
+  const by = JBY + o.sag * 13;
+  const rx = 6.6 - 1.6 * o.c;
+  const ry = (4.6 + 1.3 * o.c) * (1 - o.sag * 0.55);
+  const cut = 1.6 - 0.4 * o.c;
+  const rim = by + cut;
+  const shear = (y: number) => o.lean * (rim - y) * 0.22;
+  const g = clamp01(o.glow);
+  if (o.pop <= 0) {
+    // Щупальца — за колоколом: пять от кромки, отставание по суставам.
+    for (let k = -2; k <= 2; k++) {
+      let x = bx + k * rx * 0.36;
+      let y = rim;
+      const pts: [number, number][] = [[x, y]];
+      for (let j = 1; j <= 5; j++) {
+        const cj = o.lagC[j - 1];
+        const seg = 2.5 * o.len * (1 - 0.14 * cj) * (1 - o.curl * 0.35 * (j / 5));
+        const wave = Math.sin((o.ph - j * 0.09) * TAU + k * 1.3) * 1.1 * o.sway * (j / 5);
+        const out = k * (0.25 * cj + o.spread) * 0.55;
+        const back = -o.lean * 0.55 * j;
+        const curl = o.curl * k * -0.35 * j;
+        x += out + wave + back + curl;
+        y += seg * (1 - o.sag * 0.7);
+        pts.push([x, y]);
+      }
+      for (let j = 0; j < pts.length - 1; j++) {
+        const [x0, y0] = pts[j];
+        const [x1, y1] = pts[j + 1];
+        p.line(Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1), j >= 4 ? J_TIP : J_TENT);
+      }
+      const [tx, ty] = pts[pts.length - 1];
+      dotA(lit, tx, ty, J_FROST, 0.25 * g);
+    }
+    // Колокол: купол, снизу срезан; свет сверху-слева, край темнее.
+    for (let y = Math.floor(by - ry - 1); y <= Math.ceil(rim); y++)
+      for (let x = Math.floor(bx - rx - 3); x <= Math.ceil(bx + rx + 3); x++) {
+        const xs = x - shear(y);
+        const dx = (xs + 0.5 - bx) / rx;
+        const dy = (y + 0.5 - by) / ry;
+        const d = dx * dx + dy * dy;
+        if (d > 1 || y > rim) continue;
+        const l = -(dx * 0.6 + dy * 0.8);
+        p.set(x, y, d > 0.72 ? J_DARK : l > 0.55 ? J_HI : J_BELL);
+      }
+    // Кромка фестоном и блик.
+    for (let x = Math.round(bx - rx); x <= Math.round(bx + rx); x++) {
+      const yy = Math.round(rim) + ((x & 1) === 0 ? 0 : 1);
+      p.set(x + Math.round(shear(rim)), yy, J_RIM);
+      if ((x & 3) === 0) dotA(lit, x + shear(rim), yy, J_RIM, 0.45 * g);
+    }
+    p.set(Math.round(bx - rx * 0.45 + shear(by - ry * 0.6)), Math.round(by - ry * 0.62), J_CORE);
+    // Ротовые ленты — посередине, перед колоколом.
+    for (const s of [-1, 1]) {
+      let x = bx + s * 0.9 + shear(rim);
+      let y = rim - 0.5;
+      for (let j = 1; j <= 3; j++) {
+        const cj = o.lagC[j];
+        const nx = x + s * (0.45 - 0.5 * cj) + Math.sin((o.ph - j * 0.12) * TAU + s) * 0.6 * o.sway - o.lean * 0.5;
+        const ny = y + 2.6 * o.len * (1 - o.curl * 0.3) * (1 - o.sag * 0.7);
+        p.line(Math.round(x), Math.round(y), Math.round(nx), Math.round(ny), j === 2 ? J_ARMD : J_ARM);
+        p.line(Math.round(x) + s, Math.round(y), Math.round(nx) + s, Math.round(ny), J_ARM);
+        x = nx;
+        y = ny;
+      }
+    }
+    // Клевер внутри: четыре дужки вокруг ядра — светятся холодом.
+    const cx = bx + shear(by);
+    const cy = by - 0.3;
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * TAU + 0.4;
+      const qx = cx + Math.cos(a) * 2.1;
+      const qy = cy + Math.sin(a) * 1.4;
+      p.set(Math.round(qx), Math.round(qy), J_CLOVER);
+      dotA(lit, qx, qy, J_CLOVER, 0.35 + 0.6 * g);
+    }
+    p.set(Math.round(cx), Math.round(cy), J_CORE);
+    dotA(lit, cx, cy, J_CORE, 0.5 + 0.5 * g);
+    if (g > 0.7)
+      for (let k = 0; k < 4; k++) dotA(lit, cx + [1, -1, 0, 0][k], cy + [0, 0, 1, -1][k], J_CLOVER, g - 0.4);
+    // Иней: кристаллики роятся вокруг колокола.
+    if (o.frost > 0)
+      for (let i = 0; i < 7; i++) {
+        const a = rnd(i, 21) * TAU + o.ph * TAU * (i % 2 ? 0.5 : -0.5);
+        const rr = rx + 1.5 + rnd(i, 22) * 2.5;
+        const qx = cx + Math.cos(a) * rr;
+        const qy = cy + Math.sin(a) * rr * 0.7;
+        dotA(lit, qx, qy, J_FROST, o.frost * (0.5 + 0.5 * rnd(i, 23)));
+      }
+    p.outline(J_INK);
+    if (o.burst > 0) {
+      // Хлёст: холод брызнул кольцом от кончиков щупалец — поверх темноты.
+      const k = o.burst;
+      const by2 = rim + 11 * o.len;
+      const r = 2.5 + 7 * easeOut(k);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * TAU + rnd(i, 41) * 0.3;
+        const rr = r * (0.8 + 0.3 * rnd(i, 42));
+        const qx = bx + Math.cos(a) * rr;
+        const qy = by2 + Math.sin(a) * rr * 0.45;
+        dotA(lit, qx, qy, J_FROST, 1 - k);
+        if (k < 0.5) dotA(lit, qx - Math.cos(a), qy - Math.sin(a) * 0.45, J_CLOVER, (1 - k) * 0.6);
+      }
+    }
+  } else {
+    // Лопнула: брызги кольцом наружу и вниз, ошмётки щупалец падают.
+    const k = o.pop;
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * TAU + rnd(i, 31) * 0.4;
+      const rr = (3 + 9 * easeOut(k)) * (0.7 + 0.4 * rnd(i, 32));
+      const qx = bx + Math.cos(a) * rr;
+      const qy = by + Math.sin(a) * rr * 0.75 + 10 * k * k;
+      const al = 1 - k;
+      dotA(p, qx, qy, i % 3 ? J_BELL : J_RIM, al);
+      dotA(lit, qx, qy, J_FROST, al * 0.7);
+    }
+    if (k < 0.25) {
+      // Вспышка лопнувшего ядра.
+      const r = 2 + k * 14;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * TAU;
+        dotA(lit, bx + Math.cos(a) * r, by + Math.sin(a) * r * 0.8, J_CORE, 1 - k * 3);
+      }
+    }
+    // Щупальца легли на пол лужицей.
+    for (let kk = -2; kk <= 2; kk++) {
+      const x0 = bx + kk * 2.2;
+      const y0 = JAY - 1 + Math.abs(kk) * 0.3;
+      p.line(Math.round(x0 - 1), Math.round(y0), Math.round(x0 + 1 + kk * 0.5), Math.round(y0 + 0.5), alpha(J_TENT, 0.9 * (1 - k * 0.6)));
+    }
+  }
+  return { p, lit, ax: JAX, ay: JAY, eye: null };
+}
+
+/** Жало, замах: кадр 0…11 (0,5 с). */
+function jWind(f: number, o: JellyO): number {
+  const t = (f + 0.5) / FPS;
+  o.c = kf(t, [
+    [0, 0.2],
+    [0.17, -0.6, 'o'],
+    [0.38, -0.7],
+    [0.5, -0.35, 'i'],
+  ]);
+  o.lagC = [0, 1, 2, 3, 4].map((j) =>
+    kf(t - j * 0.03, [
+      [0, 0.2],
+      [0.17, -0.6, 'o'],
+      [0.5, -0.4],
+    ]),
+  );
+  o.curl = kf(t, [
+    [0, 0],
+    [0.17, 0.8, 'o'],
+    [0.42, 1],
+  ]);
+  o.len = kf(t, [
+    [0, 1],
+    [0.17, 0.72, 'o'],
+    [0.42, 0.62, 'i'],
+  ]);
+  o.sway = 0.4;
+  o.glow = kf(t, [
+    [0, 0.45],
+    [0.2, 0.85],
+    [0.42, 1],
+  ]);
+  o.frost = sstep(0.12, 0.3, t);
+  // Дрожь перед ударом — через кадр.
+  o.jit = f >= 4 && f <= 10 ? (f % 2 ? 0.5 : -0.5) : 0;
+  o.ph = t * 0.6;
+  // Подъём: вдох — приподнялась, перед ударом ещё выше.
+  return kf(t, [
+    [0, 0],
+    [0.2, 1.5, 'o'],
+    [0.42, 2.5, 'i'],
+    [0.5, 2],
+  ]);
+}
+
+/** Хлёст и отход: кадр 0 — контакт (миг урона), 1…11 — оседание. */
+function jStrike(f: number, o: JellyO): number {
+  const t = (f + 0.5) / FPS;
+  o.c = kf(t, [
+    [0, 1.2],
+    [0.08, 1.0],
+    [0.2, -0.2, 's'],
+    [0.32, 0.35],
+    [0.5, 0.1],
+  ]);
+  o.lagC = [0, 1, 2, 3, 4].map((j) =>
+    kf(t - j * 0.02, [
+      [-0.1, -0.6],
+      [0, 1.2, 'o'],
+      [0.2, 0],
+      [0.5, 0.2],
+    ]),
+  );
+  o.len = kf(t, [
+    [0, 1.4],
+    [0.1, 1.3],
+    [0.3, 0.95, 's'],
+    [0.5, 1],
+  ]);
+  o.spread = kf(t, [
+    [0, 0.9],
+    [0.15, 0.5],
+    [0.4, 0],
+  ]);
+  o.sway = kf(t, [
+    [0, 0.3],
+    [0.2, 1.6],
+    [0.5, 1],
+  ]);
+  o.glow = kf(t, [
+    [0, 1],
+    [0.3, 0.55],
+    [0.5, 0.45],
+  ]);
+  o.frost = 1 - sstep(0, 0.2, t);
+  o.burst = f < 4 ? (f + 0.5) / 4 : 0;
+  o.ph = t * 1.4;
+  return kf(t, [
+    [0, -2],
+    [0.12, -1],
+    [0.35, 0.5, 's'],
+    [0.5, 0],
+  ]);
+}
+
+registerMobPainter('f3_jelly', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = Math.max(0, pose.t);
+  const now = pose.now;
+  const id = m.id ?? 0;
+  const v = visOf(m, pose, 0, 0);
+  const sp = speedOf(m);
+  const vx = m.vx ?? 0;
+  // Наклон по ходу: без сторон, влево — зеркало правого.
+  const lean = sp > 0.35 && Math.abs(vx) > sp * 0.35 ? 1 : 0;
+  const d = lean && vx < 0 ? 4 : 0;
+  const ex: Partial<MobFrame> = { shadow: 4, still: true, lift: 4 };
+  let key: string;
+  let o: JellyO;
+  let lift = 0;
+  if (md === 'dying') {
+    // Раздулась, ядро побелело → лопнула брызгами → ошмётки на полу.
+    const f = Math.min(9, Math.floor(t * 12));
+    o = jellyO(-0.9 - 0.15 * f, f * 0.1);
+    o.glow = 0.6 + f * 0.15;
+    o.spread = 0.6;
+    o.sway = 1.5;
+    o.lagC = [-0.5, -0.4, -0.2, 0, 0.2];
+    if (f >= 3) {
+      o.pop = (f - 3 + 0.5) / 7;
+      o.glow = 1;
+    }
+    key = `die${f}`;
+    lift = f < 3 ? f * 0.5 : -4;
+    ex.linger = 0.8;
+    ex.alpha = 1 - sstep(0.55, 0.8, t);
+    ex.shadow = f < 3 ? 4 : 0;
+    if (f < 3) {
+      ex.sx = 1 + 0.06 * f;
+      ex.sy = 1 + 0.04 * f;
+    }
+  } else if (md === 'windup') {
+    const f = fi(t, 11);
+    o = jellyO(0, 0);
+    lift = jWind(f, o);
+    key = `wind${f}`;
+  } else if (md === 'recover') {
+    const f = fi(t, 11);
+    o = jellyO(0, 0);
+    lift = jStrike(f, o);
+    key = `strike${f}`;
+    if (f < 3) {
+      const q = 1 - f / 3;
+      ex.sx = 1 - 0.12 * q;
+      ex.sy = 1 + 0.16 * q;
+    }
+  } else if (md === 'stun') {
+    // Удар героя: колокол смят и колышется, щупальца мечутся, свет мигает.
+    const f = fi(t, 11);
+    const k = f / 11;
+    const wob = Math.cos(f * 1.7) * Math.exp(-f * 0.28);
+    o = jellyO(0.9 * wob, f * 0.11);
+    o.lagC = [0, 1, 2, 3, 4].map((j) => 0.9 * Math.cos((f - j) * 1.7) * Math.exp(-Math.max(0, f - j) * 0.28));
+    o.sway = 2.2 * (1 - k) + 0.6;
+    o.spread = 0.4 * (1 - k);
+    o.glow = f % 2 ? 0.2 : 0.75 - 0.3 * k;
+    key = `stun${f}`;
+    lift = -1.5 * (1 - k);
+  } else if (md === 'sleep') {
+    // Спит: висит низко, тусклая, колокол бьётся медленно.
+    const f = Math.floor(now * 1.2 + id * 0.7) % 2;
+    o = jellyO(f * 0.35, 0.25 * f);
+    o.glow = 0.12;
+    o.sway = 0.3;
+    o.lagC = [f * 0.3, f * 0.25, f * 0.2, f * 0.1, 0];
+    key = `sleep${f}`;
+    lift = -2;
+  } else if (md === 'alert') {
+    // Очнулась: ядро вспыхнуло, колокол сжался — рывок вверх.
+    const f = fi(t, 8);
+    const ph = f / 9;
+    o = jellyO(jPulse(ph * 0.6), ph);
+    o.lagC = [0, 1, 2, 3, 4].map((j) => jPulse(ph * 0.6 - j * 0.05));
+    o.glow = 1 - 0.5 * (f / 8);
+    key = `alert${f}`;
+    lift = -2 + 2 * easeOut(f / 8);
+  } else if (md === 'drop') {
+    // Сорвалась со свода: щупальца тянутся вверх за ней.
+    const f = Math.floor(t * 12) % 2;
+    o = jellyO(-0.5, f * 0.5);
+    o.len = 0.7;
+    o.curl = 1;
+    o.glow = 0.8;
+    key = `drop${f}`;
+  } else {
+    // Плывёт и дрейфует: пульс 24 кадра с фазой от номера; в ходу пульс
+    // чаще и наклон по ходу (щупальца отстают назад).
+    const rate = lean ? 1.25 : 1;
+    const f = (((Math.floor(now * 24 * rate + id * 7.3) % 24) + 24) % 24) | 0;
+    const ph = f / 24;
+    o = jellyO(jPulse(ph), ph);
+    o.lagC = [0, 1, 2, 3, 4].map((j) => jPulse(ph - 0.05 - j * 0.045));
+    o.lean = lean;
+    o.glow = 0.4 + 0.2 * jPulse(ph - 0.1);
+    key = `swim${lean}${f}`;
+    // Сжалась — подскочила, расслабилась — оседает.
+    lift = ph < 0.3 ? 2.2 * easeOut(ph / 0.3) : 2.2 * (1 - smooth((ph - 0.3) / 0.7));
+  }
+  ex.lift = Math.round(4 + lift);
+  if (md !== 'dying') recoil(v, now, 2.6, ex, 0.16);
+  const oo = o;
+  return frameOf('jelly', JELLY_LIM, key, d, pose, () => jellyPic(oo), ex);
+});
+
+registerMobWarm('f3_jelly', function* () {
+  const pose = warmPose('chase');
+  for (const lean of [0, 1])
+    for (let f = 0; f < 24; f++) {
+      const ph = f / 24;
+      const o = jellyO(jPulse(ph), ph);
+      o.lagC = [0, 1, 2, 3, 4].map((j) => jPulse(ph - 0.05 - j * 0.045));
+      o.lean = lean;
+      o.glow = 0.4 + 0.2 * jPulse(ph - 0.1);
+      frameOf('jelly', JELLY_LIM, `swim${lean}${f}`, 0, pose, () => jellyPic(o));
+      yield 0;
+    }
+});
