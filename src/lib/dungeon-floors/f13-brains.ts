@@ -3523,7 +3523,9 @@ function stepFinale(sim: Sim, s: BState, m: Mob, dt: number, c: BrainCtx, api: S
         m.tele = null;
         m.danger = 0;
         s.snareCd = BOSS.snare.cd;
+        m.data.vYank = 0; // анимации 13 — только рисунок
         if (canHurt(sim) && al > 0 && al < len + h.r && ac < BOSS.snare.w + h.r) {
+          m.data.vYank = 1; // анимации 13 — только рисунок
           api.hurtHero(sim, rawShare(sim, 0.04), m.x, m.y, 0, m.kind);
           api.pullHero(sim, m.x + ux * 1.3, m.y + uy * 1.3, { speed: 11, max: 1 });
           fx(sim, api, 'f13_snareline', m.x, m.y, 0.5, 0.6, { tx: h.x, ty: h.y }, true);
