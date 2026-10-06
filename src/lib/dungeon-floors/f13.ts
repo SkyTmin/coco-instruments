@@ -1,661 +1,759 @@
-// Этаж 13 — «Город за стенами». Витрина третьего захода: город в осаде
-// исполинов. Брусчатка, черепичные крыши, дым из труб и горящие кварталы,
-// провалы улиц в стоки, Великая стена с пушками, пролом у ворот, колокольня
-// и площадь, где встаёт Колосс. Названия свои.
+// Этаж 13 — «Театр марионеток». Заброшенный подземный кукольный театр:
+// спектакль идёт сам, куклы играют без актёров, а нити уходят вверх, во тьму
+// колосников. Кто дёргает нити — не видно.
 //
-// ГЛАГОЛ ЭТАЖА — ИСПОЛИНЫ И КРЮКИ. Исполин в два-три роста героя; удар
-// спереди его почти не берёт, в затылок — втрое. Затылок светится, когда
-// исполин отвернулся. За спину выносит крюк: у столба-якоря — действие
-// «Крюк», трос тянет героя дугой, и в полёте его не достать. Крюк — это и
-// единственная дорога через провалы и на Стену. Глагол растёт по районам:
-//   • «Внешний район» (`f13`, вход) — провал прямо у лифта (первый крюк в
-//     первые секунды), островок с тайником (только крюком), Рыночная
-//     площадь со столбами по углам (крюк за спину первому исполину),
-//     развилка: Горящий квартал (событие «Пожар») или Каналы (ползуны,
-//     шахта, крюк через канал), Большой проспект (событие «Шествие»),
-//     сток в обход провала и решётка — короткий путь с проспекта к рынку;
-//   • «Ворота и стена» (`f13wall`) — Предполье (метатели бросают камни
-//     через Стену), Пролом у запертых ворот (событие: исполины лезут —
-//     закрой валуном), крюки со дна на Стену, пушки на Стене (событие
-//     «Батарея», стенолазы лезут через зубцы), калитка — короткий путь;
-//   • «Площадь колокола» (`f13bell`) — Сторожевая площадь с набатом
-//     (событие «Колокол тревоги»), развилка: Кристальный квартал или
-//     Разлом (событие: цепь крюков над трещиной), площадь Колосса.
+// ═══ ДИЗАЙН-ДОКУМЕНТ ════════════════════════════════════════════════════════
 //
-// Монстры (ИИ — `f13-brains.ts`, рисунок — `f13-art.ts`): бродячий,
-// аномальный, метатель, бронированный исполин, кристальная особь,
-// стенолаз, ползун, ухмылки, вороны, контрабандист (редкий, с мешком и
-// своим крюкомётом). Босс — Колосс (4×4): нога кольцом и рука конусом;
-// «ПАР» (затылок закрыт — крюком за спину), «ТОПОТ» (обломки Стены,
-// площадь трескается), «ИСПАРЕНИЕ». Сценарий — `f13-brains.ts`.
+// ПАЛИТРА. Бархат занавеса (тёмно-вишнёвый с бликом), золотая лепнина
+// (охра → светлое золото), тёплый луч софита и рампы на тёмной сцене (почти
+// чёрный сине-фиолетовый пол), крашеный картон декораций (выцветшая зелень
+// леса, серо-голубой замок, синее полотняное море). Сказочно, торжественно,
+// чуть тревожно — НЕ хоррор: никаких выколотых глаз, крови, слизи, трупов.
+// Смерти — рассыпается в опилки и лоскуты, гаснет, ломается, улетает вверх
+// на нити. Обводка тёмная, свет сверху-слева, как во всём подземелье.
+//
+// ГЛАГОЛ — НИТИ И СЦЕНА.
+//  * Нити. Марионетки висят на видимых нитях (от плеч и головы вверх, к
+//    балке колосников). Каждая нить — отдельная цель: удар мечом по сектору,
+//    рывок поперёк нити, мешок противовеса, нота скрипача — режут её.
+//    Перерезанная нить — кукла шатается (стан), слабеет; все нити — лёгкая
+//    кукла падает и рассыпается, тяжёлая ползёт дальше без нитей, медленно и
+//    беззащитно (урон по ней ×1,5). Пока нити целы, кукла бьёт сильнее
+//    (×1,25), а нити отдёргивают её от удара (уклон-рывок назад). Видно, куда
+//    идёт нить: золотая линия к точке крепления над куклой. Нити идут ВВЕРХ
+//    по экрану: снизу (с юга) по кукле бьёшь, но нитей не достать; режут
+//    сбоку и сверху — это и есть выбор места.
+//  * Софиты — свет на ходу (E2). Лучи ходят по сцене в такт (плавно сдвиг →
+//    стоят → сдвиг). В луче тебя видят все и бьют сильнее; в тени мобы
+//    теряют тебя (дальше ~4,5 клетки — ищут наугад), удар по потерявшему —
+//    «из тени», ×2. Тени-актёры существуют только в луче. Повернуть софит —
+//    действие этажа: луч уходит на другую дорожку.
+//  * Смена декораций «Третий звонок». Звонок, мигает свет, через 2 с едет
+//    задник и зал перестраивается `setTile` (картонный лес → замок → море).
+//    Линии-предупреждения на полу заранее показывают, где встанут декорации.
+//  * Люки. Открываются по такту (`deep`) с подсветкой за 1,2 с; мобов можно
+//    уронить в люк, героя люк роняет на край (доля здоровья, `hurtEnv`).
+//  * Действия этажа (E8): «Противовес» (мешок с песком падает на врага и
+//    режет нити), «Повернуть софит», «Занавес» (лебёдка закрывает проход),
+//    «Люки» (открыть под врагами), «Палочка» (оркестр замолкает),
+//    «Звонок» (сменить декорацию раньше), «Стопор» (заклинить пожарный
+//    занавес).
+//  * Рост по районам: Фойе — нити и куклы; Зал — софиты, свет и тень;
+//    Колосники — смена сцены, люки и всё вместе.
+//
+// РАЙОНЫ (снизу вверх; id прежние, названия новые).
+//  1. `f13` «Фойе» — вход с лифтом. Вестибюль с афишами и люстрой: первый
+//     рыцарь на нитях и противовес — учат глаголу. Развилка: на запад
+//     Гардероб (событие «Гардероб оживает»: с вешалок падают костюмы-куклы,
+//     с люстры спускается паук) или на северо-восток Курительная с шахтой
+//     `f13mine`. Обе ведут в Буфет — событие «Антракт»: первый звонок, свет
+//     вспыхивает, публика курит в боковых кулуарах; третий звонок — толпа
+//     возвращается; лебёдки занавеса у дверей отсекают её. Парадная
+//     лестница с люстрами, выход наверх. Тайник «Касса» за трещиной, ход —
+//     решётка из Лестницы вниз к вестибюлю.
+//  2. `f13wall` «Зрительный зал». Кулуары, Партер — ряды кресел дугой,
+//     проходы. Событие «Премьера»: люстры гаснут, занавес поднимается
+//     (`setTile`), три софита ходят по залу в такт, в лучах встают
+//     тени-актёры; кончается «Аплодисментами». Развилка: Боковые ложи
+//     (софиты на поворот, тени в лучах) или Оркестровая яма — событие
+//     «Увертюра»: барабанщики бьют кольца на сильную долю, скрипачи режут
+//     нотами, люки ямы открываются по очереди; «Палочка» глушит оркестр.
+//     Сцена с будкой суфлёра и люками, закулисье, выход на север. Тайник
+//     «Царская ложа», ход — решётка из закулисья вниз к кулуарам.
+//  3. `f13bell` «Колосники». Служебная лестница, Поворотный круг — событие
+//     «Третий звонок» (лес → замок → море, линии на полу заранее). Развилка:
+//     галерея «Пожарный занавес» (железные секции падают волной полосами с
+//     предупреждением и стоят стеной; «Стопор» клинит секцию) или мостки
+//     над провалом на западе. Трюм с шахтой `f13mine2`. Тайник
+//     «Реквизиторская». Предбанник с табличкой и лифтом, ход — решётка вниз.
+//     Арена — «Большая сцена», ворота с юга, печать и лестница вниз.
+//
+// МОНСТРЫ (база = 10-й этаж ×1,3, уровень 9).
+//  * Рыцарь-марионетка (2 нити) — рубит конусом, нити отдёргивают; без
+//    нитей ползёт. Учит глаголу.
+//  * Арлекин — ныряет в люк и выскакивает за спиной (круг за 0,7 с).
+//  * Суфлёр — сидит в будке (только у неё), шепчет соседям (урон ×1,3,
+//    видно ленточкой), прячется, когда герой рядом, кидает листки роли.
+//  * Барабанщик — кольцо-ударная волна на сильную долю. Сидит в яме.
+//  * Скрипач — ноты летят дугой и режут (и чужие нити тоже).
+//  * Маски Комедии и Трагедии — летают парой, одна лечит другую; «убитая»
+//    падает и встаёт через 4 с, если вторая цела. Убивать обе.
+//  * Тень-актёр — существует только в луче софита (вне луча неуязвима и
+//    почти невидима).
+//  * Паук-кукловод — сидит на колосниках (под люстрами и балками),
+//    спускается на нити (круг), вяжет куклам перерезанные нити. Срежь его
+//    нить — падает оглушённым.
+//  * Балерина-волчок — кружится 2,5 с и отражает удары, потом кружится
+//    голова — окно. Одна нить.
+//  * Элита — Щелкунчик-гвардеец: 3 нити, челюсти-конус, марш-таран.
+//  * Редкий бегун — Кассир с выручкой (`coins`), удирает.
+//
+// БОСС «Кукловод». Высокий, изящный, фрак чёрный с золотом, маска, вага в
+// руке, от неё золотые светящиеся нити. Слабое место — вага: когда она
+// светится, удары проходят в полную силу (×1,5…1,6), в остальное время —
+// треть. Сначала висит над сценой и водит кукол, потом спускается. Не ходит
+// боком: скользит лицом по ходу, поворачивается плавно, фалды отстают. Бой —
+// спектакль в актах; между актами падает занавес (камера E9), звонок, арена
+// переписывается `setTile`.
+//  I.  «Рыцарский роман» — картонный замок, рыцарь-исполин на четырёх нитях
+//      к ваге: удары копьём по линиям (зубцы замка — укрытие), щит-конус.
+//      Каждая срезанная нить — кукловод клюёт вниз; все четыре — вага
+//      светится 6 с, потом исполина собирают заново.
+//  II. «Буря» — полотняное море, волны катятся рядами (перепрыгнуть рывком
+//      или в проём), качается картонный корабль (за ним — затишье),
+//      молнии-софиты. Кукловод спускается на палубу.
+//  III.«Звёздная ночь» — звёзды-маятники на нитях качаются через сцену,
+//      ходит луна-софит: в её луче кукловод тебя видит и бьёт иглами, вне —
+//      бьёт по памяти. Срежь две нити звёзд — он теряет равновесие.
+//  IV. «Финал — Оборванные нити» — спускается сам: вага рубит и колет, нити
+//      режут арену сеткой (честное предупреждение), аркан тянет к нему; после
+//      сетки вага горит ярко — окно. Последний удар — нити лопаются, он
+//      падает, как марионетка.
+// Смерть — сцена: нити лопаются, он падает, встаёт уже без нитей, кланяется,
+// и падает занавес.
+//
+// ВИТРИНА (кадр для показа): Зрительный зал во время «Премьеры» — три луча
+// софитов по партеру, тени-актёры в луче, рыцари на золотых нитях, бархат
+// и лепнина лож по краям.
+// ════════════════════════════════════════════════════════════════════════════
 //
 // Карта — `scripts/dungeon/f13.py` → `f13-map.ts` (руками не править).
+// Правила этажа, монстры и Кукловод — `f13-brains.ts`; рисунок — `f13-art.ts`
+// (клетки, монстры, предметы, босс) и `f13-boss-fx.ts` (лучи, нити, метки).
 
 import type { MobDef } from '../dungeon';
-import { MAP_F13_BELL, MAP_F13_OUTER, MAP_F13_WALL } from './f13-map';
+import { F13_GEO, MAP_F13_FLIES, MAP_F13_FOYER, MAP_F13_HALL } from './f13-map';
 import type { FloorDef, LegendCell, SpawnSpec } from './types';
 
-/** Свои клетки этажа: номер вида для рисовальщика и правил этажа. */
+/** Свои виды клеток (марки легенды и смены на ходу). */
 export const F13_MARK = {
-  cobble: 1,
-  plaza: 2,
-  ash: 3,
-  rubble: 4,
-  blood: 5,
-  crack: 6,
-  planks: 7,
-  weeds: 8,
-  rampart: 9,
-  crater: 10,
-  drain: 11,
-  mosaic: 12,
-  vent: 13,
-  fault: 14,
-  breach: 15,
-  pad: 16,
-  // Глубина.
-  proval: 20,
-  canal: 21,
-  drop: 22,
-  // Стены.
-  house: 30,
-  burnt: 31,
-  wall: 32,
-  parapet: 33,
-  gate: 34,
-  tower: 35,
-  shop: 36,
-  window: 37,
-  // Посты исполинов (пол): кого ставит правило этажа.
-  pWalker: 41,
-  pAbnormal: 42,
-  pThrower: 43,
-  pArmored: 44,
-  pCrystal: 45,
-  pCrawler: 46,
-  // Клетки, сменённые на ходу (`setTile`).
-  sealed: 50,
-  rift: 51,
-  cracking: 52,
-  scorch: 53,
+  // пол
+  marble: 1,
+  parquet: 2,
+  carpet: 3,
+  steps: 4,
+  parterre: 5,
+  boards: 6,
+  pit: 7,
+  turn: 8,
+  catwalk: 9,
+  void: 10,
+  groove: 11,
+  trap: 12,
+  rampLit: 13,
+  ramp: 14,
+  // стены
+  seats: 15,
+  velvet: 16,
+  rail: 17,
+  backdrop: 18,
+  ropes: 19,
+  poster: 20,
+  mirror: 21,
+  fireplace: 22,
+  kassa: 23,
+  masks: 24,
+  // клетка под предметом и постом: вид — по соседям
+  auto: 25,
+  // на ходу (`api.setTile`)
+  trapOpen: 30,
+  curtainDown: 31,
+  iron: 32,
+  setWarn: 33,
+  setTree: 34,
+  setCastle: 35,
+  setSea: 36,
+  curtainUp: 37,
+  // арена: акты
+  actCastle: 40,
+  actSea: 41,
+  actShip: 42,
+  actNight: 43,
+  actGrid: 44,
+  actCloud: 45,
 } as const;
 
-/** Районы этажа. `f13` — вход: на нём могут стоять сохранения. */
-export const F13_OUTER = 'f13';
-export const F13_WALL = 'f13wall';
-export const F13_BELL = 'f13bell';
+export const F13_FOYER = 'f13';
+export const F13_HALL = 'f13wall';
+export const F13_FLIES = 'f13bell';
+
+/**
+ * Первые мировые ряды районов: мир складывается снизу вверх, поэтому верхний
+ * район (Колосники) начинается с нуля.
+ */
+export const F13_TOP = {
+  [F13_FLIES]: 0,
+  [F13_HALL]: MAP_F13_FLIES.length,
+  [F13_FOYER]: MAP_F13_FLIES.length + MAP_F13_HALL.length,
+} as Record<string, number>;
+
+/** Ряды районов — по ним правило этажа находит посты (цифры карты). */
+export const F13_ROWS: Record<string, readonly string[]> = {
+  [F13_FOYER]: MAP_F13_FOYER,
+  [F13_HALL]: MAP_F13_HALL,
+  [F13_FLIES]: MAP_F13_FLIES,
+};
+
+/** Посты: цифра карты → кто стоит на месте с начала вылазки. */
+export const F13_POSTS: Record<string, string> = {
+  '1': 'f13_knight',
+  '2': 'f13_ballerina',
+  '3': 'f13_spider',
+  '4': 'f13_prompter',
+  '5': 'f13_drummer',
+  '6': 'f13_fiddler',
+  '7': 'f13_harlequin',
+  '8': 'f13_nutcracker',
+  '9': 'f13_comedy',
+  '0': 'f13_shade',
+};
+
+export { F13_GEO };
 
 const M = F13_MARK;
 
-/** Кто стоит на посту (метка пола → вид). */
-export const F13_POSTS: Record<number, string> = {
-  [M.pWalker]: 'f13_walker',
-  [M.pAbnormal]: 'f13_abnormal',
-  [M.pThrower]: 'f13_thrower',
-  [M.pArmored]: 'f13_armored',
-  [M.pCrystal]: 'f13_crystal',
-  [M.pCrawler]: 'f13_crawler',
-};
+// ---------------------------------------------------------------------------
+// Легенда: одна на три района (буквы карты — шапка `f13.py`).
+// ---------------------------------------------------------------------------
 
-/** Исполины: у них затылок и крюк за спину. */
-export const F13_GIANTS = new Set([
-  'f13_walker',
-  'f13_abnormal',
-  'f13_thrower',
-  'f13_armored',
-  'f13_crystal',
-  'f13_climber',
-  'f13boss',
-]);
+const floorAuto = (obj?: LegendCell['obj'], light?: LegendCell['light']): LegendCell => ({
+  tile: 'floor',
+  mark: M.auto,
+  ...(obj ? { obj } : {}),
+  ...(light ? { light } : {}),
+});
 
-/** Свои буквы карты — одни на все три района. */
+const wallFace = (mark: number, ref: string, light?: LegendCell['light']): LegendCell => ({
+  tile: 'wall',
+  mark,
+  obj: { kind: 'deco', ref, solid: 0 },
+  ...(light ? { light } : {}),
+});
+
 const LEGEND: Record<string, LegendCell> = {
-  // Пол.
-  s: { tile: 'floor', mark: M.cobble },
-  q: { tile: 'floor', mark: M.plaza },
-  z: { tile: 'floor', mark: M.ash },
-  k: { tile: 'floor', mark: M.rubble },
-  x: { tile: 'floor', mark: M.blood },
-  j: { tile: 'floor', mark: M.crack },
-  h: { tile: 'floor', mark: M.planks },
-  g: { tile: 'floor', mark: M.weeds },
-  w: { tile: 'floor', mark: M.rampart },
-  e: { tile: 'floor', mark: M.crater },
-  d: { tile: 'floor', mark: M.drain },
-  m: { tile: 'floor', mark: M.mosaic },
-  y: { tile: 'floor', mark: M.vent },
-  f: { tile: 'floor', mark: M.fault },
-  r: { tile: 'floor', mark: M.breach },
-  '^': { tile: 'floor', mark: M.pad },
-  '1': { tile: 'floor', mark: M.pWalker },
-  '2': { tile: 'floor', mark: M.pAbnormal },
-  '3': { tile: 'floor', mark: M.pThrower },
-  '4': { tile: 'floor', mark: M.pArmored },
-  '5': { tile: 'floor', mark: M.pCrystal },
-  '6': { tile: 'floor', mark: M.pCrawler },
-  // Глубина: провал в сток, канал, обрыв со Стены.
-  _: { tile: 'deep', mark: M.proval },
-  ':': { tile: 'deep', mark: M.canal },
-  '-': { tile: 'deep', mark: M.drop },
-  // Стены: дома, Стена, колокольня.
-  '#': { tile: 'wall', mark: M.house },
-  Q: { tile: 'wall', mark: M.burnt },
-  W: { tile: 'wall', mark: M.wall },
-  N: { tile: 'wall', mark: M.parapet },
-  I: { tile: 'wall', mark: M.gate },
-  O: { tile: 'wall', mark: M.tower },
-  П: { tile: 'wall' },
-  '[': { tile: 'wall', mark: M.shop },
-  ']': {
-    tile: 'wall',
-    mark: M.window,
-    obj: { kind: 'deco', ref: 'f13_window', solid: 0 },
-    light: { r: 1.9, tint: 'warm' },
-  },
-  A: {
-    tile: 'wall',
-    mark: M.burnt,
-    obj: { kind: 'deco', ref: 'f13_fire', solid: 0 },
-    light: { r: 3.6, tint: 'warm' },
-  },
-  J: { tile: 'wall', mark: M.house, obj: { kind: 'deco', ref: 'f13_chimney', solid: 0 } },
-  V: { tile: 'wall', mark: M.wall, obj: { kind: 'deco', ref: 'f13_banner', solid: 0 } },
-  U: {
-    tile: 'wall',
-    mark: M.house,
-    obj: { kind: 'deco', ref: 'f13_torch', solid: 0 },
-    light: { r: 3.8, tint: 'warm' },
-  },
-  // Действия: крюк, пушка, валун, набат.
-  '0': {
-    tile: 'floor',
-    mark: M.pad,
-    obj: { kind: 'deco', ref: 'f13_hook', solid: 0.2, use: { label: 'Крюк' } },
-  },
-  '9': {
-    tile: 'floor',
-    obj: { kind: 'deco', ref: 'f13_hookc', solid: 0.2, use: { label: 'Крюк' } },
-  },
-  Z: {
-    tile: 'floor',
-    mark: M.rampart,
-    obj: { kind: 'deco', ref: 'f13_cannon', solid: 0.42, use: { label: 'Выстрел' } },
-  },
-  '(': {
-    tile: 'floor',
-    obj: { kind: 'deco', ref: 'f13_boulder', solid: 0.55, use: { label: 'Сбросить валун' } },
-  },
-  ')': {
-    tile: 'floor',
-    mark: M.planks,
-    obj: { kind: 'deco', ref: 'f13_bell', solid: 0.55, use: { label: 'Набат' } },
-    light: { r: 2.4, tint: 'warm' },
-  },
-  // Вещи на полу.
-  '8': {
-    tile: 'floor',
-    mark: M.plaza,
-    obj: { kind: 'deco', ref: 'f13_fountain', solid: 0.62 },
-  },
-  n: { tile: 'floor', obj: { kind: 'deco', ref: 'f13_corpse', solid: 0.55 } },
-  i: { tile: 'floor', obj: { kind: 'deco', ref: 'f13_well', solid: 0.46 } },
-  p: { tile: 'floor', obj: { kind: 'deco', ref: 'f13_stall', solid: 0.44 } },
-  t: { tile: 'floor', obj: { kind: 'deco', ref: 'f13_cart', solid: 0.46 } },
-  '&': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_skull', solid: 0.56 } },
-  '*': { tile: 'floor', mark: M.rubble, obj: { kind: 'deco', ref: 'f13_hand', solid: 0.5 } },
-  '+': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_statue', solid: 0.55 } },
-  '<': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_laundry', solid: 0 } },
-  '|': {
-    tile: 'floor',
-    obj: { kind: 'deco', ref: 'f13_crystal', solid: 0.34 },
-    light: { r: 2.4, tint: 'teal' },
-  },
-  '}': { tile: 'floor', mark: M.ash, obj: { kind: 'deco', ref: 'f13_tree', solid: 0.26 } },
-  '{': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_balls', solid: 0.34 } },
-  '/': { tile: 'floor', mark: M.rubble, obj: { kind: 'deco', ref: 'f13_debris', solid: 0.46 } },
-  '?': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_crane', solid: 0.4 } },
-  '7': { tile: 'floor', obj: { kind: 'deco', ref: 'f13_roost', solid: 0.32 } },
-  ';': {
-    tile: 'floor',
-    obj: { kind: 'deco', ref: 'f13_lamp', solid: 0.16 },
-    light: { r: 4.2, tint: 'warm' },
-  },
-  u: {
-    tile: 'floor',
-    obj: { kind: 'deco', ref: 'f13_candles', solid: 0.2 },
-    light: { r: 1.8, tint: 'warm' },
-  },
-  X: {
-    tile: 'floor',
-    obj: { kind: 'deco', ref: 'f13_bonfire', solid: 0.4 },
-    light: { r: 4.6, tint: 'warm' },
-  },
-  // Бьётся.
-  b: { tile: 'floor', obj: { kind: 'breakable', ref: 'f13_crates', solid: 0.4, hp: 2 } },
-  v: { tile: 'floor', obj: { kind: 'breakable', ref: 'f13_sandbags', solid: 0.42, hp: 3 } },
-  c: { tile: 'floor', obj: { kind: 'breakable', ref: 'f13_barrel', solid: 0.34, hp: 1 } },
-  l: {
-    tile: 'floor',
-    obj: { kind: 'breakable', ref: 'f13_hay', solid: 0.4, hp: 1, loot: 'f13_ration' },
-  },
+  // пол
+  m: { tile: 'floor', mark: M.marble },
+  p: { tile: 'floor', mark: M.parquet },
+  t: { tile: 'floor', mark: M.carpet },
+  e: { tile: 'floor', mark: M.steps },
+  x: { tile: 'floor', mark: M.parterre },
+  k: { tile: 'floor', mark: M.boards },
+  j: { tile: 'floor', mark: M.pit },
+  q: { tile: 'floor', mark: M.turn },
+  w: { tile: 'floor', mark: M.catwalk },
+  _: { tile: 'deep', mark: M.void },
+  y: { tile: 'floor', mark: M.groove },
+  z: { tile: 'floor', mark: M.trap },
+  f: { tile: 'floor', mark: M.rampLit, light: { r: 2.2, tint: 'warm' } },
+  r: { tile: 'floor', mark: M.ramp },
+  // стены
+  s: { tile: 'wall', mark: M.seats },
+  h: { tile: 'wall', mark: M.velvet },
+  i: { tile: 'wall', mark: M.rail },
+  d: { tile: 'wall', mark: M.backdrop },
+  '|': wallFace(M.ropes, 'f13_ropes'),
+  // на стене
+  I: wallFace(M.poster, 'f13_poster'),
+  Q: wallFace(M.mirror, 'f13_mirror'),
+  ')': wallFace(M.fireplace, 'f13_fireplace', { r: 3.4, tint: 'warm' }),
+  ';': wallFace(M.kassa, 'f13_kassa', { r: 1.8, tint: 'warm' }),
+  ':': wallFace(M.masks, 'f13_masks'),
+  // предметы на полу
+  A: floorAuto({ kind: 'deco', ref: 'f13_chandelier', solid: 0 }),
+  H: floorAuto({ kind: 'deco', ref: 'f13_rack', solid: 0.42 }),
+  J: floorAuto({ kind: 'deco', ref: 'f13_counter', solid: 0.48 }),
+  N: floorAuto({ kind: 'deco', ref: 'f13_table', solid: 0.36 }, { r: 2.4, tint: 'warm' }),
+  O: floorAuto({ kind: 'deco', ref: 'f13_bust', solid: 0.4 }),
+  '-': floorAuto({ kind: 'deco', ref: 'f13_post', solid: 0.2 }),
+  '/': floorAuto({ kind: 'deco', ref: 'f13_palm', solid: 0.36 }),
+  U: floorAuto({ kind: 'breakable', ref: 'f13_trunk', solid: 0.38, hp: 2, loot: 'f13_velvet' }),
+  V: floorAuto({ kind: 'breakable', ref: 'f13_flowers', solid: 0.3, hp: 1 }),
+  W: floorAuto({ kind: 'breakable', ref: 'f13_sandbags', solid: 0.38, hp: 2, loot: 'f13mat' }),
+  '[': floorAuto({ kind: 'deco', ref: 'f13_coil', solid: 0.3 }),
+  ']': floorAuto({ kind: 'breakable', ref: 'f13_flat', solid: 0.36, hp: 3 }),
+  '}': floorAuto({ kind: 'deco', ref: 'f13_hanger', solid: 0 }),
+  F: floorAuto({ kind: 'deco', ref: 'f13_stand', solid: 0.22 }),
+  '(': floorAuto({ kind: 'deco', ref: 'f13_timpani', solid: 0.48 }),
+  '*': floorAuto({ kind: 'deco', ref: 'f13_booth', solid: 0.6 }, { r: 1.6, tint: 'warm' }),
+  // действия этажа
+  Z: floorAuto({ kind: 'deco', ref: 'f13_spot', solid: 0.4, use: { label: 'Повернуть софит' } }),
+  '+': floorAuto({ kind: 'deco', ref: 'f13_weight', solid: 0.3, use: { label: 'Противовес' } }),
+  '<': floorAuto({ kind: 'deco', ref: 'f13_winch', solid: 0.3, use: { label: 'Занавес' } }),
+  '^': floorAuto({ kind: 'deco', ref: 'f13_lever', solid: 0.28, use: { label: 'Люки' } }),
+  '&': floorAuto({ kind: 'deco', ref: 'f13_podium', solid: 0.3, use: { label: 'Палочка' } }),
+  '?': floorAuto(
+    { kind: 'deco', ref: 'f13_bell', solid: 0.55, use: { label: 'Звонок' } },
+    { r: 2, tint: 'warm' },
+  ),
+  '{': floorAuto({ kind: 'deco', ref: 'f13_stopper', solid: 0.3, use: { label: 'Стопор' } }),
+  // посты
+  ...Object.fromEntries(
+    Object.keys(F13_POSTS).map((d): [string, LegendCell] => [d, { tile: 'floor', mark: M.auto }]),
+  ),
 };
 
-/** Брызги при смерти исполина: пар, кровь, кость. */
-const GORE_GIANT = ['#f0e6dc', '#c85a44', '#7a2a22', '#fff6ea'];
+// ---------------------------------------------------------------------------
+// Монстры. Сила — как этаж 10 ×1,3 базовыми числами (уровень районов 9).
+// ---------------------------------------------------------------------------
+
+/** Опилки, лоскуты, золото — смерть куклы рассыпается, а не кровит. */
+const DUST_WOOD = ['#5a3a1c', '#c89a5a', '#f0d8a0', '#3a2410'];
+const DUST_VELVET = ['#4a0c14', '#a0202c', '#e8b860', '#1a0608'];
+const DUST_PORCELAIN = ['#d8d0c4', '#f8f0e4', '#e8b860', '#6a6058'];
+const DUST_SHADE = ['#1a1424', '#3a2c50', '#8a7ab0', '#0a0610'];
+
+const mob = (m: Partial<MobDef> & Pick<MobDef, 'id' | 'name' | 'many' | 'hp' | 'dmg'>): MobDef => ({
+  speed: 2.6,
+  radius: 0.34,
+  windup: 0.7,
+  reach: 0.9,
+  rest: 0.9,
+  xp: 14,
+  meat: null,
+  mats: [['f13mat', 0.16]],
+  beast: true,
+  brain: m.id,
+  art: { kind: 'paint', id: m.id },
+  ...m,
+});
 
 const MOBS: MobDef[] = [
-  {
-    id: 'f13_walker',
-    name: 'Бродячий исполин',
-    many: 'бродячих исполинов',
-    hp: 110,
+  mob({
+    id: 'f13_knight',
+    name: 'Рыцарь-марионетка',
+    many: 'рыцарей-марионеток',
+    hp: 52,
     dmg: 24,
-    speed: 1.6,
-    radius: 0.8,
-    windup: 0.9,
-    reach: 1.2,
-    rest: 1.2,
-    xp: 26,
-    meat: null,
-    mats: [
-      ['f13_tooth', 0.35],
-      ['f13mat', 0.45],
-    ],
-    beast: true,
-    brain: 'f13_walker',
-    art: { kind: 'paint', id: 'f13_walker' },
-    mass: 12,
-    flinch: 0,
-    stunT: 0.4,
-    eye: '#ffe6b0',
-    gore: GORE_GIANT,
-  },
-  {
-    id: 'f13_abnormal',
-    name: 'Аномальный исполин',
-    many: 'аномальных исполинов',
-    hp: 84,
-    dmg: 22,
-    speed: 3.4,
-    radius: 0.66,
-    windup: 0.6,
-    reach: 1,
-    rest: 1,
-    xp: 28,
-    meat: null,
-    mats: [
-      ['f13_tooth', 0.3],
-      ['f13mat', 0.4],
-    ],
-    beast: true,
-    brain: 'f13_abnormal',
-    art: { kind: 'paint', id: 'f13_abnormal' },
-    mass: 9,
-    flinch: 0,
-    stunT: 0.3,
-    eye: '#fff4c0',
-    gore: GORE_GIANT,
-  },
-  {
-    id: 'f13_thrower',
-    name: 'Метатель',
-    many: 'метателей',
-    hp: 92,
-    dmg: 22,
-    speed: 1.7,
-    radius: 0.8,
-    windup: 1,
-    reach: 1.1,
-    rest: 1.4,
-    xp: 26,
-    meat: null,
-    mats: [
-      ['f13_tooth', 0.3],
-      ['f13mat', 0.45],
-    ],
-    beast: true,
-    brain: 'f13_thrower',
-    art: { kind: 'paint', id: 'f13_thrower' },
-    mass: 12,
-    flinch: 0,
-    stunT: 0.4,
-    shot: { speed: 7, r: 0.8, life: 3, dmg: 1.1, art: 'f13_rock', lob: true },
-    eye: '#ffd8a0',
-    gore: GORE_GIANT,
-  },
-  {
-    id: 'f13_armored',
-    name: 'Бронированный исполин',
-    many: 'бронированных исполинов',
-    hp: 150,
-    dmg: 28,
-    speed: 1.8,
-    radius: 0.9,
-    windup: 1,
-    reach: 1.2,
-    rest: 1.3,
-    xp: 36,
-    meat: null,
-    mats: [
-      ['f13_plate', 0.5],
-      ['f13mat', 0.35],
-    ],
-    beast: true,
-    brain: 'f13_armored',
-    art: { kind: 'paint', id: 'f13_armored' },
-    mass: 18,
-    flinch: 0,
-    stunT: 0.3,
-    noAlbino: true,
-    eye: '#ffb060',
-    gore: ['#e8dcd0', '#c8b8a0', '#8a3a2a', '#fff4e4'],
-  },
-  {
-    id: 'f13_crystal',
-    name: 'Кристальная особь',
-    many: 'кристальных особей',
-    hp: 100,
-    dmg: 24,
-    speed: 2.5,
-    radius: 0.7,
-    windup: 0.7,
-    reach: 1.1,
-    rest: 1.1,
-    xp: 34,
-    meat: null,
-    mats: [
-      ['f13_shard', 0.5],
-      ['f13mat', 0.3],
-    ],
-    beast: true,
-    brain: 'f13_crystal',
-    art: { kind: 'paint', id: 'f13_crystal' },
-    mass: 10,
-    flinch: 0,
-    stunT: 0.3,
-    noAlbino: true,
-    eye: '#bff4ff',
-    light: 1.6,
-    gore: ['#bff4ff', '#6ab8d8', '#e8f8ff', '#c85a44'],
-  },
-  {
-    id: 'f13_climber',
-    name: 'Стенолаз',
-    many: 'стенолазов',
-    hp: 72,
-    dmg: 20,
     speed: 2.6,
-    radius: 0.66,
-    windup: 0.7,
-    reach: 1.1,
-    rest: 1.1,
-    xp: 24,
-    meat: null,
+    radius: 0.36,
+    windup: 0.72,
+    reach: 1.0,
+    xp: 15,
+    meat: ['f13_candy', 0.3, 1],
     mats: [
-      ['f13_tooth', 0.25],
-      ['f13mat', 0.45],
+      ['f13_hinge', 0.28],
+      ['f13mat', 0.18],
     ],
-    beast: true,
-    brain: 'f13_climber',
-    art: { kind: 'paint', id: 'f13_climber' },
-    mass: 9,
-    flinch: 0,
+    mass: 2,
+    flinch: 0.25,
     stunT: 0.3,
-    eye: '#ffe0a0',
-    gore: GORE_GIANT,
-  },
-  {
-    id: 'f13_crawler',
-    name: 'Ползун',
-    many: 'ползунов',
-    hp: 56,
+    eye: '#ffe08a',
+    gore: DUST_WOOD,
+  }),
+  mob({
+    id: 'f13_harlequin',
+    name: 'Арлекин',
+    many: 'арлекинов',
+    hp: 34,
+    dmg: 22,
+    speed: 3.6,
+    radius: 0.32,
+    windup: 0.55,
+    reach: 0.9,
+    xp: 14,
+    meat: ['f13_candy', 0.35, 1],
+    mats: [
+      ['f13_velvet', 0.25],
+      ['f13mat', 0.14],
+    ],
+    mass: 0.9,
+    flinch: 0.5,
+    eye: '#ff7088',
+    gore: DUST_VELVET,
+  }),
+  mob({
+    id: 'f13_prompter',
+    name: 'Суфлёр',
+    many: 'суфлёров',
+    hp: 30,
+    dmg: 14,
+    speed: 2.0,
+    radius: 0.3,
+    windup: 0.6,
+    reach: 0.8,
+    xp: 16,
+    meat: ['f13_pie', 0.4, 1],
+    mats: [['f13mat', 0.3]],
+    mass: 1,
+    flinch: 1,
+    noAlbino: true,
+    shot: { speed: 6.5, r: 0.22, life: 1.6, dmg: 0.8, art: 'f13_page' },
+    eye: '#fff0b0',
+    light: 1.2,
+    gore: ['#e8e0c8', '#c8b890', '#5a4a30', '#fff8e0'],
+  }),
+  mob({
+    id: 'f13_drummer',
+    name: 'Барабанщик',
+    many: 'барабанщиков',
+    hp: 60,
+    dmg: 24,
+    speed: 1.7,
+    radius: 0.4,
+    windup: 0.75,
+    reach: 1.0,
+    xp: 18,
+    mats: [
+      ['f13_hinge', 0.3],
+      ['f13mat', 0.2],
+    ],
+    mass: 3,
+    flinch: 0.15,
+    stunT: 0.35,
+    eye: '#ffd060',
+    gore: DUST_WOOD,
+  }),
+  mob({
+    id: 'f13_fiddler',
+    name: 'Скрипач',
+    many: 'скрипачей',
+    hp: 36,
+    dmg: 20,
+    speed: 2.3,
+    radius: 0.32,
+    windup: 0.7,
+    reach: 0.8,
+    xp: 15,
+    mats: [
+      ['f13_hinge', 0.22],
+      ['f13mat', 0.16],
+    ],
+    mass: 1,
+    flinch: 0.4,
+    shot: { speed: 5.4, r: 0.26, life: 2.4, dmg: 1, art: 'f13_note' },
+    eye: '#a8e0ff',
+    gore: DUST_WOOD,
+  }),
+  mob({
+    id: 'f13_comedy',
+    name: 'Маска Комедии',
+    many: 'масок Комедии',
+    hp: 30,
     dmg: 18,
-    speed: 3.2,
-    radius: 0.6,
+    speed: 3.3,
+    radius: 0.32,
     windup: 0.55,
     reach: 0.8,
-    rest: 0.9,
-    xp: 18,
-    meat: null,
-    mats: [['f13mat', 0.35]],
-    beast: true,
-    brain: 'f13_crawler',
-    art: { kind: 'paint', id: 'f13_crawler' },
-    mass: 5,
-    flinch: 0.1,
-    stunT: 0.3,
-    eye: '#ffe0a0',
-    gore: GORE_GIANT,
-  },
-  {
-    id: 'f13_grin',
-    name: 'Ухмылка',
-    many: 'ухмылок',
-    hp: 16,
-    dmg: 12,
-    speed: 3.3,
-    radius: 0.36,
-    windup: 0.45,
-    reach: 0.45,
-    rest: 0.8,
-    xp: 8,
-    meat: ['f13_ration', 0.22, 1],
-    mats: [['f13mat', 0.12]],
-    beast: true,
-    brain: 'f13_grin',
-    art: { kind: 'paint', id: 'f13_grin' },
-    mass: 1.6,
-    flinch: 0.4,
-    zigzag: true,
-    eye: '#fff0c0',
-    gore: GORE_GIANT,
-  },
-  {
-    id: 'f13_crow',
-    name: 'Ворона',
-    many: 'ворон',
-    hp: 8,
-    dmg: 8,
-    speed: 5.2,
-    radius: 0.24,
-    windup: 0.4,
-    reach: 0.35,
-    rest: 0.7,
-    xp: 4,
-    meat: ['f13_crowmeat', 0.3, 1],
-    mats: [['f13_feather', 0.35]],
-    beast: true,
-    brain: 'f13_crow',
-    art: { kind: 'paint', id: 'f13_crow' },
-    mass: 0.4,
-    flinch: 1,
-    fly: true,
-    eye: '#ffcc40',
-    gore: ['#1a1418', '#3a3440', '#8a1c22', '#6a6070'],
-  },
-  {
-    id: 'f13_smuggler',
-    name: 'Контрабандист',
-    many: 'контрабандистов',
-    hp: 24,
-    dmg: 8,
-    speed: 5.6,
-    radius: 0.28,
-    windup: 0.4,
-    reach: 0.3,
-    rest: 1,
-    xp: 36,
-    meat: ['f13_ration', 0.6, 2],
+    xp: 15,
     mats: [
-      ['f13_rope', 0.7],
-      ['f13mat', 0.4],
+      ['f13_mask', 0.22],
+      ['f13mat', 0.14],
     ],
-    beast: true,
-    brain: 'f13_smuggler',
-    art: { kind: 'paint', id: 'f13_smuggler' },
+    mass: 0.6,
+    flinch: 0.6,
+    fly: true,
+    eye: '#ffd040',
+    light: 1,
+    gore: DUST_PORCELAIN,
+  }),
+  mob({
+    id: 'f13_tragedy',
+    name: 'Маска Трагедии',
+    many: 'масок Трагедии',
+    hp: 30,
+    dmg: 18,
+    speed: 3.0,
+    radius: 0.32,
+    windup: 0.6,
+    reach: 0.8,
+    xp: 15,
+    mats: [
+      ['f13_mask', 0.22],
+      ['f13mat', 0.14],
+    ],
+    mass: 0.6,
+    flinch: 0.6,
+    fly: true,
+    shot: { speed: 6, r: 0.22, life: 1.8, dmg: 0.9, art: 'f13_tear' },
+    eye: '#8ad8ff',
+    light: 1,
+    gore: DUST_PORCELAIN,
+  }),
+  mob({
+    id: 'f13_shade',
+    name: 'Тень-актёр',
+    many: 'теней-актёров',
+    hp: 32,
+    dmg: 24,
+    speed: 3.4,
+    radius: 0.34,
+    windup: 0.6,
+    reach: 1.0,
+    xp: 17,
+    mats: [['f13mat', 0.3]],
+    mass: 0.8,
+    flinch: 0.5,
+    noAlbino: true,
+    eye: '#d0c0ff',
+    gore: DUST_SHADE,
+  }),
+  mob({
+    id: 'f13_spider',
+    name: 'Паук-кукловод',
+    many: 'пауков-кукловодов',
+    hp: 44,
+    dmg: 20,
+    speed: 2.8,
+    radius: 0.36,
+    windup: 0.8,
+    reach: 0.9,
+    xp: 18,
+    mats: [
+      ['f13mat', 0.4],
+      ['f13_hinge', 0.2],
+    ],
+    mass: 1.2,
+    flinch: 0.3,
+    noAlbino: true,
+    eye: '#ffcf40',
+    gore: ['#2a1c2c', '#6a4a70', '#e8c860', '#100810'],
+  }),
+  mob({
+    id: 'f13_ballerina',
+    name: 'Балерина-волчок',
+    many: 'балерин-волчков',
+    hp: 40,
+    dmg: 22,
+    speed: 3.0,
+    radius: 0.32,
+    windup: 0.6,
+    reach: 0.9,
+    xp: 16,
+    meat: ['f13_candy', 0.3, 1],
+    mats: [
+      ['f13_velvet', 0.2],
+      ['f13mat', 0.16],
+    ],
     mass: 0.9,
+    flinch: 0.3,
+    eye: '#ffc8e0',
+    gore: ['#f0c8d8', '#fff0f4', '#e8b860', '#8a4a60'],
+  }),
+  mob({
+    id: 'f13_nutcracker',
+    name: 'Щелкунчик-гвардеец',
+    many: 'щелкунчиков-гвардейцев',
+    hp: 90,
+    dmg: 30,
+    speed: 2.2,
+    radius: 0.46,
+    windup: 0.85,
+    reach: 1.2,
+    rest: 1.1,
+    xp: 30,
+    meat: ['f13_pie', 0.5, 1],
+    mats: [
+      ['f13_hinge', 0.5],
+      ['f13mat', 0.35],
+    ],
+    mass: 5,
+    flinch: 0,
+    stunT: 0.4,
+    eye: '#ffe060',
+    gore: DUST_WOOD,
+  }),
+  mob({
+    id: 'f13_cashier',
+    name: 'Кассир',
+    many: 'кассиров',
+    hp: 30,
+    dmg: 0,
+    speed: 4.2,
+    radius: 0.3,
+    windup: 9,
+    reach: 0,
+    xp: 30,
+    meat: ['f13_pie', 1, 2],
+    mats: [
+      ['f13_ticket', 1],
+      ['f13mat', 0.5],
+    ],
+    mass: 0.8,
     flinch: 1,
-    coins: 2200,
+    coins: 2000,
     resume: 'flee',
     eye: '#ffd040',
-    light: 1.3,
-    gore: ['#6a4a2a', '#ffd040', '#3a2a1a', '#c84030'],
-  },
-  {
-    id: 'f13boss',
-    name: 'Колосс',
-    many: 'колоссов',
-    hp: 820,
-    dmg: 24,
-    speed: 1.15,
-    radius: 1.8,
-    windup: 1,
-    reach: 1.8,
+    light: 1.4,
+    gore: ['#2a3a24', '#ffd040', '#e8d8a0', '#1a1408'],
+  }),
+  mob({
+    id: 'f13_giant',
+    name: 'Рыцарь-исполин',
+    many: 'рыцарей-исполинов',
+    hp: 400,
+    dmg: 26,
+    speed: 2.0,
+    radius: 0.85,
+    windup: 0.9,
+    reach: 1.4,
     rest: 1,
-    xp: 1100,
-    meat: null,
+    xp: 0,
     mats: [],
-    beast: true,
-    brain: 'f13boss',
-    art: { kind: 'paint', id: 'f13boss' },
-    mass: 60,
+    beast: false,
+    mass: 30,
     boss: true,
     noAlbino: true,
-    eye: '#ffd080',
-    light: 3.4,
-    gore: ['#fff6ea', '#e0604a', '#8a2a22', '#f0e0d0'],
-  },
+    eye: '#ffe08a',
+    gore: DUST_WOOD,
+  }),
+  mob({
+    id: 'f13boss',
+    name: 'Кукловод',
+    many: 'кукловодов',
+    hp: 1150,
+    dmg: 26,
+    speed: 2.4,
+    radius: 0.7,
+    windup: 0.8,
+    reach: 1.2,
+    rest: 0.9,
+    xp: 1200,
+    mats: [],
+    mass: 14,
+    boss: true,
+    noAlbino: true,
+    eye: '#ffe9a0',
+    light: 2.4,
+    gore: ['#120c10', '#e8b84a', '#fff0c0', '#3a1018'],
+  }),
 ];
 
-/** Внешний район: ухмылки из проломов, вороны, ползуны из подвалов. */
-const spawnOuter: SpawnSpec = {
+/** Фойе: рыцари и балерины, маски, арлекины; беглец — кассир с выручкой. */
+const spawnFoyer: SpawnSpec = {
   mobs: [
-    ['f13_grin', 60],
-    ['f13_crow', 24],
-    ['f13_crawler', 16],
-  ],
-  density: 0.66,
-  pack: [2, 2],
-  filler: 'f13_grin',
-  // Спящая стая — ухмылки, пятой — ворона на страже.
-  group: (i) => (i < 4 ? 'f13_grin' : 'f13_crow'),
-  horde: null,
-  treasure: 'f13_smuggler',
-  nest: () => 'f13_grin',
-};
-
-const spawnWall: SpawnSpec = {
-  ...spawnOuter,
-  mobs: [
-    ['f13_grin', 58],
-    ['f13_crow', 26],
-    ['f13_crawler', 16],
+    ['f13_knight', 44],
+    ['f13_ballerina', 22],
+    ['f13_comedy', 12],
+    ['f13_harlequin', 12],
+    ['f13_fiddler', 10],
   ],
   density: 0.7,
-  group: (i) => (i < 3 ? 'f13_grin' : 'f13_crawler'),
+  pack: [1, 2],
+  filler: 'f13_knight',
+  group: (i) => (i < 2 ? 'f13_knight' : 'f13_ballerina'),
+  horde: null,
+  treasure: 'f13_cashier',
+  nest: () => 'f13_knight',
 };
 
-const spawnBell: SpawnSpec = {
-  ...spawnOuter,
+const spawnHall: SpawnSpec = {
+  ...spawnFoyer,
   mobs: [
-    ['f13_grin', 52],
-    ['f13_crow', 32],
-    ['f13_crawler', 16],
+    ['f13_knight', 26],
+    ['f13_fiddler', 20],
+    ['f13_harlequin', 18],
+    ['f13_ballerina', 16],
+    ['f13_comedy', 12],
+    ['f13_nutcracker', 8],
   ],
   density: 0.74,
-  group: (i) => (i < 3 ? 'f13_grin' : 'f13_crow'),
+  filler: 'f13_knight',
+  group: (i) => (i < 1 ? 'f13_nutcracker' : i < 3 ? 'f13_knight' : 'f13_fiddler'),
+};
+
+const spawnFlies: SpawnSpec = {
+  ...spawnFoyer,
+  mobs: [
+    ['f13_knight', 24],
+    ['f13_harlequin', 18],
+    ['f13_ballerina', 16],
+    ['f13_fiddler', 16],
+    ['f13_comedy', 14],
+    ['f13_nutcracker', 12],
+  ],
+  density: 0.78,
+  filler: 'f13_harlequin',
+  group: (i) => (i < 1 ? 'f13_nutcracker' : i < 3 ? 'f13_harlequin' : 'f13_knight'),
 };
 
 export const F13: FloorDef = {
   id: 13,
-  name: 'Город за стенами',
-  lead: 'Город в осаде исполинов. Бей в затылок — за спину выносит крюк.',
-  mapVer: 1,
-  // Исполины велики, а площади открыты: поле путей шире обычного.
-  flowR: 32,
+  name: 'Театр марионеток',
+  lead: 'Заброшенный кукольный театр. Спектакль идёт сам: куклы играют без актёров, а нити уходят во тьму колосников.',
+  mapVer: 2,
   areas: [
     {
-      id: F13_OUTER,
-      name: 'Внешний район',
-      lead: 'Провал у самого лифта. Столб-якорь — крюк перенесёт.',
+      id: F13_FOYER,
+      name: 'Фойе',
+      lead: 'Люстры горят сами. Куклы ждут третьего звонка.',
       tier: 8,
       level: 9,
-      ambient: 0.5,
-      rows: MAP_F13_OUTER,
+      ambient: 0.48,
+      rows: MAP_F13_FOYER,
       skin: {
         floor: 'slab',
         wall: 'brick',
-        tint: { mul: [0.94, 0.8, 0.7], mix: '#2a1206', k: 0.08 },
-        fog: '#120a07',
+        tint: { mul: [0.92, 0.66, 0.58], mix: '#2a0a0e', k: 0.18 },
+        fog: '#0a0406',
       },
       legend: LEGEND,
       paintAll: true,
       mine: 'f13mine',
-      spawn: spawnOuter,
+      spawn: spawnFoyer,
     },
     {
-      id: F13_WALL,
-      name: 'Ворота и стена',
-      lead: 'Ворота заперты. Пролом рядом — и пушки на Стене.',
+      id: F13_HALL,
+      name: 'Зрительный зал',
+      lead: 'Тёмный зал. Где луч софита — там тебя видят.',
       tier: 8,
       level: 9,
-      ambient: 0.54,
-      rows: MAP_F13_WALL,
-      skin: {
-        floor: 'ground',
-        wall: 'brick',
-        tint: { mul: [0.86, 0.8, 0.72], mix: '#1e1208', k: 0.06 },
-        fog: '#0e0b0a',
-      },
-      legend: LEGEND,
-      paintAll: true,
-      spawn: spawnWall,
-    },
-    {
-      id: F13_BELL,
-      name: 'Площадь колокола',
-      lead: 'Набат молчит. За колокольней встаёт Колосс.',
-      tier: 8,
-      level: 9,
-      ambient: 0.46,
-      rows: MAP_F13_BELL,
+      ambient: 0.3,
+      rows: MAP_F13_HALL,
       skin: {
         floor: 'slab',
         wall: 'brick',
-        tint: { mul: [0.8, 0.78, 0.86], mix: '#1a1024', k: 0.06 },
-        fog: '#0b0a10',
+        tint: { mul: [0.74, 0.5, 0.52], mix: '#1a0410', k: 0.2 },
+        fog: '#060207',
+      },
+      legend: LEGEND,
+      paintAll: true,
+      spawn: spawnHall,
+    },
+    {
+      id: F13_FLIES,
+      name: 'Колосники',
+      lead: 'Мостки, канаты и противовесы над сценой. Отсюда дёргают нити.',
+      tier: 8,
+      level: 9,
+      ambient: 0.32,
+      rows: MAP_F13_FLIES,
+      skin: {
+        floor: 'slab',
+        wall: 'brick',
+        tint: { mul: [0.6, 0.55, 0.66], mix: '#0c0814', k: 0.18 },
+        fog: '#040308',
       },
       legend: LEGEND,
       paintAll: true,
       mine: 'f13mine2',
-      spawn: spawnBell,
+      spawn: spawnFlies,
     },
   ],
   boss: {
     id: 'f13boss',
-    name: 'Колосс',
-    lead: 'Площадь колокола за Сторожевой площадью',
-    area: F13_BELL,
+    name: 'Кукловод',
+    lead: 'Большая сцена под колосниками',
+    area: F13_FLIES,
     restMs: 20 * 60_000,
     mob: 'f13boss',
     script: 'f13boss',
     parts: ['f13boss'],
     loot: (rnd) => ({
-      tokens: 80 + Math.floor(rnd() * 40),
+      tokens: 80 + Math.floor(rnd() * 50),
       keys: rnd() < 0.85 ? 1 : 0,
       coins: 70_000,
       mats: {
-        f13_heart: 1,
-        f13mat: 5 + Math.floor(rnd() * 4),
-        f13_shard: 2 + Math.floor(rnd() * 2),
+        f13_vaga: 1,
+        f13mat: 5 + Math.floor(rnd() * 5),
+        f13_mask: 2 + Math.floor(rnd() * 2),
       },
     }),
   },
   mines: [
     {
       id: 'f13mine',
-      name: 'Шахта в подвале у канала',
-      area: F13_OUTER,
+      name: 'Шахта под курительной',
+      area: F13_FOYER,
       windowMs: 60 * 60_000,
       ores: [24, 25],
       share: [0.24, 0.3, 0.38, 0.46, 0.55],
@@ -664,8 +762,8 @@ export const F13: FloorDef = {
     },
     {
       id: 'f13mine2',
-      name: 'Шахта звёздного кристалла',
-      area: F13_BELL,
+      name: 'Шахта в трюме',
+      area: F13_FLIES,
       windowMs: 3 * 60 * 60_000,
       ores: [24, 25],
       share: [0.3, 0.38, 0.46, 0.54, 0.62],
@@ -675,54 +773,49 @@ export const F13: FloorDef = {
   ],
   mobs: MOBS,
   meats: [
-    { id: 'f13_ration', name: 'Солдатский паёк', price: 90, heal: 0.36 },
-    { id: 'f13_crowmeat', name: 'Воронье крыло', price: 50, heal: 0.22 },
+    { id: 'f13_candy', name: 'Театральная конфета', price: 70, heal: 0.28 },
+    { id: 'f13_pie', name: 'Пирожное из буфета', price: 140, heal: 0.42 },
   ],
   mats: [
     {
       id: 'f13mat',
-      name: 'Жила исполина',
+      name: 'Золотая нить',
       price: 520,
-      lead: 'Тянется, как трос, остывая — твердеет. Из неё вьют тросы крюков.',
+      lead: 'Срезана с марионетки. Тянется вверх, даже когда лежит на ладони.',
     },
     {
-      id: 'f13_tooth',
-      name: 'Зуб исполина',
-      price: 640,
-      lead: 'С ладонь величиной. Улыбка у хозяина была шире.',
+      id: 'f13_hinge',
+      name: 'Шарнир марионетки',
+      price: 620,
+      lead: 'Латунный, на тонкой оси. Скрипит в такт музыке, которой нет.',
     },
     {
-      id: 'f13_plate',
-      name: 'Пластина брони',
-      price: 780,
-      lead: 'Снята со спины бронированного. Держит пушечное ядро.',
+      id: 'f13_velvet',
+      name: 'Лоскут бархата',
+      price: 580,
+      lead: 'Из занавеса или костюма. Пахнет пылью и пудрой.',
     },
     {
-      id: 'f13_shard',
-      name: 'Осколок твердыни',
-      price: 860,
-      lead: 'Кристалл, в который пряталась особь. Не бьётся даже о Стену.',
+      id: 'f13_mask',
+      name: 'Фарфоровая маска',
+      price: 760,
+      lead: 'Улыбается или плачет — смотря как повернуть к свету.',
     },
     {
-      id: 'f13_feather',
-      name: 'Воронье перо',
-      price: 280,
-      lead: 'Чёрное, пахнет дымом горящего квартала.',
+      id: 'f13_ticket',
+      name: 'Контрамарка',
+      price: 900,
+      lead: 'Бесплатный вход на любой спектакль. Дата не проставлена.',
     },
     {
-      id: 'f13_rope',
-      name: 'Трос крюкомёта',
-      price: 720,
-      lead: 'Контрабандный, с гарпуном. Второй конец ещё тёплый.',
-    },
-    {
-      id: 'f13_heart',
-      name: 'Сердце Колосса',
+      id: 'f13_vaga',
+      name: 'Вага Кукловода',
       price: 70_000,
-      lead: 'Трофей. Горячее, парит в ладонях и не остывает.',
+      lead: 'Трофей. Крестовина с оборванными золотыми нитями. Ещё тёплая.',
       stack: 1,
     },
   ],
-  music: { explore: 'depths', boss: 'boss' },
+  music: { explore: 'lobby', boss: 'boss' },
   cover: '/ui/areas/f13.png',
+  flowR: 30,
 };

@@ -606,49 +606,43 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f11_moss_land: () => softThud(),
   f11_boing: () => softThud(),
   f11_calm_call: () => softChime(),
-  // Этаж 13: исполины и крюки, пушки, набат, пар Колосса.
-  f13_rise_call: () => {
-    beastRoar();
-    steamBurst();
-  },
-  f13_hook_call: () => chainRattle(),
-  f13_zip: () => chainRattle(),
-  f13_cannon_wall: () => cannonShot(),
-  f13_kneel: () => {
-    stoneGrind();
-    beastRoar(false);
-  },
-  f13_roll_wall: () => stoneGrind(),
-  f13_seal_wall: () => stoneGrind(),
-  f13_bell_call: () => clockChime(1, true),
-  f13_alarm_trap: () => clockChime(3, true),
+  // Этаж 13 «Театр марионеток»: нити, звонки, занавес, буря на сцене.
+  f13_bell_call: () => clockChime(3),
   f13_alarm_call: () => clockChime(2, true),
-  f13_steam_call: () => steamBurst(),
-  f13_steam_off: () => steamBurst(),
-  f13_evap_call: () => steamBurst(),
-  f13_evap: () => steamBurst(),
-  f13_stomp_wall: () => stoneGrind(),
-  f13_quake_wall: () => stoneGrind(),
-  f13_crack_trap: () => stoneGrind(),
-  f13_edge_trap: () => windGust(0.5),
-  f13_armor_wall: () => stoneGrind(),
-  f13_charge: () => beastRoar(false),
-  f13_notice: () => beastRoar(false),
-  f13_crystal_stone: () => glassBreak(),
-  f13_fire_trap: () => lavaHiss(),
-  f13_fire_call: () => lavaHiss(),
-  f13_march_trap: () => beastRoar(),
-  f13_march_call: () => beastRoar(),
-  f13_breach_trap: () => {
-    stoneGrind();
-    beastRoar(false);
+  f13_alarm_trap: () => clockChime(3, true),
+  f13_hook_call: () => chainRattle(),
+  f13_snap_fall: () => {
+    stringBend();
+    stringPluck(2);
   },
-  f13_battery_trap: () => cannonShot(true),
-  f13_battery_call: () => cannonShot(true),
-  f13_wave_call: () => cannonShot(true),
-  f13_rift_trap: () => stoneGrind(),
-  f13_rift_call: () => windGust(0.4),
-  f13_smoke: () => steamBurst(),
+  f13_grid_call: () => {
+    stringPluck(0);
+    stringPluck(2);
+    stringPluck(4);
+  },
+  f13_lower_call: () => {
+    chainRattle();
+    stringPluck(1);
+  },
+  f13_bow_call: () => {
+    stringBend();
+    softChime(2);
+  },
+  f13_baton_call: () => stringPluck(3),
+  f13_wave_call: () => windGust(0.6),
+  f13_iron_wall: () => {
+    gateSlam();
+    deepRumble();
+  },
+  f13_scene_wall: () => {
+    stoneGrind();
+    gateSlam();
+  },
+  f13_crystal_stone: () => glassBreak(),
+  f13_applause_fall: () => {
+    softChime(0);
+    softChime(4);
+  },
   // Этаж 14: колокол «ЧАС», остановка времени, Повелитель часа.
   f14_bell_call: () => clockChime(3),
   f14_bell_wind: () => timeStop(2.4),

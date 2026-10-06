@@ -223,7 +223,17 @@ export const FLOOR_SOUNDS: Record<number, readonly string[]> = {
   10: ['thunder', 'chains', 'stone.grind', 'glass.break', 'wind', 'beast'],
   11: ['wind', 'laser', 'laser.hum', 'stone.grind', 'chains', 'cannon', 'steam', 'thunder'],
   12: ['train', 'train.horn', 'flesh', 'warp', 'glass.break', 'heart', 'beast', 'stone.grind'],
-  13: ['cannon', 'chains', 'steam', 'stone.grind', 'beast', 'clock.bell', 'wind', 'heart'],
+  13: [
+    'string',
+    'string.bend',
+    'chains',
+    'clock.bell',
+    'gate',
+    'clang',
+    'wind',
+    'stone.grind',
+    'glass.break',
+  ],
   14: [
     'clock.tick',
     'clock.bell',
