@@ -4359,17 +4359,36 @@ registerZonePainter(
 
 /** Звёздная искра по доле жизни: белая → золото → фиолет. */
 const starCol = (k: number) =>
-  k < 0.2 ? '#ffffff' : k < 0.45 ? C.gold[3] : k < 0.7 ? C.gold[2] : k < 0.88 ? '#c890f0' : '#6a34a4';
+  k < 0.2
+    ? '#ffffff'
+    : k < 0.45
+      ? C.gold[3]
+      : k < 0.7
+        ? C.gold[2]
+        : k < 0.88
+          ? '#c890f0'
+          : '#6a34a4';
 /** Ледяная искра: белая → голубая. */
-const iceCol = (k: number) => (k < 0.2 ? '#ffffff' : k < 0.5 ? C.ice[5] : k < 0.8 ? C.ice[4] : C.ice[3]);
+const iceCol = (k: number) =>
+  k < 0.2 ? '#ffffff' : k < 0.5 ? C.ice[5] : k < 0.8 ? C.ice[4] : C.ice[3];
 /** Фиолетовая искра плаща. */
-const vioCol = (k: number) => (k < 0.2 ? '#ffffff' : k < 0.5 ? '#ecd4ff' : k < 0.8 ? '#c890f0' : '#6a34a4');
+const vioCol = (k: number) =>
+  k < 0.2 ? '#ffffff' : k < 0.5 ? '#ecd4ff' : k < 0.8 ? '#c890f0' : '#6a34a4';
 
-const bez = (a: number, c: number, b: number, u: number) => (1 - u) * (1 - u) * a + 2 * (1 - u) * u * c + u * u * b;
+const bez = (a: number, c: number, b: number, u: number) =>
+  (1 - u) * (1 - u) * a + 2 * (1 - u) * u * c + u * u * b;
 const smooth3 = (u: number) => u * u * (3 - 2 * u);
 
 /** Звёздочка-крест на сетке мира. */
-function twinkle(p: Pen, x: number, y: number, r: number, c: string, a: number, core = '#ffffff'): void {
+function twinkle(
+  p: Pen,
+  x: number,
+  y: number,
+  r: number,
+  c: string,
+  a: number,
+  core = '#ffffff',
+): void {
   if (a <= 0.02) return;
   p.col(c, a);
   for (let i = 1; i <= r; i++) {
@@ -4428,21 +4447,59 @@ function bandMark(
   const kk = (a: number) => !keep || keep(a);
   const r0 = 8;
   const rf = r0 + (R - r0) * Math.pow(k, 1.3);
-  ring(p, cx, cy, rf, sig ? C.white : hot, (tk ? 1 : 0.75) * (0.35 + 0.6 * k), (a, i) => kk(a) && hash(i >> 2, sd, 3) > 0.25, 0.4);
+  ring(
+    p,
+    cx,
+    cy,
+    rf,
+    sig ? C.white : hot,
+    (tk ? 1 : 0.75) * (0.35 + 0.6 * k),
+    (a, i) => kk(a) && hash(i >> 2, sd, 3) > 0.25,
+    0.4,
+  );
   const run = Math.floor(time * (14 + 30 * k));
-  ring(p, cx, cy, R + w, sig ? (tk ? C.white : C.gold[3]) : hot, 0.65 + 0.35 * k, (a, i) => kk(a) && (sig || mod(i - run, 9) < 6), 0.6);
+  ring(
+    p,
+    cx,
+    cy,
+    R + w,
+    sig ? (tk ? C.white : C.gold[3]) : hot,
+    0.65 + 0.35 * k,
+    (a, i) => kk(a) && (sig || mod(i - run, 9) < 6),
+    0.6,
+  );
   ring(p, cx, cy, Math.max(1, R - w), hot, 0.45, (a, i) => kk(a) && i % 3 === 0);
 }
 
 /** Гребень волны контакта: светлое кольцо бежит наружу и гаснет. */
-function crest(p: Pen, cx: number, cy: number, R: number, age: number, T: number, grow: number, col: string, sd: number, keep?: (a: number) => boolean): void {
+function crest(
+  p: Pen,
+  cx: number,
+  cy: number,
+  R: number,
+  age: number,
+  T: number,
+  grow: number,
+  col: string,
+  sd: number,
+  keep?: (a: number) => boolean,
+): void {
   if (age >= T) return;
   const k = age / T;
   const rc = R + grow * eOut2(k);
   const kk = (a: number, i: number) => (!keep || keep(a)) && hash(i >> 2, sd, 9) > 0.12;
   ring(p, cx, cy, rc - 2, C.ink, 0.45 * (1 - k), kk);
   ring(p, cx, cy, rc, age < 0.06 ? C.white : col, 0.95 * (1 - k), kk, 0.5);
-  if (k < 0.5) ring(p, cx, cy, rc + 1, C.white, 0.6 * (1 - k * 2), (a, i) => kk(a, i) && hash(i >> 1, sd, 7) > 0.5);
+  if (k < 0.5)
+    ring(
+      p,
+      cx,
+      cy,
+      rc + 1,
+      C.white,
+      0.6 * (1 - k * 2),
+      (a, i) => kk(a, i) && hash(i >> 1, sd, 7) > 0.5,
+    );
 }
 
 // ---- Ладонь: созвездие руки ложится на пол, золотое кольцо сжимается --------
@@ -4487,7 +4544,18 @@ const PALM_LINES: [number, number][] = [
   [15, 16],
 ];
 
-function palmDraw(p: Pen, cx: number, cy: number, R: number, a: number, show: number, col: string, al: number, time: number, sd: number): void {
+function palmDraw(
+  p: Pen,
+  cx: number,
+  cy: number,
+  R: number,
+  a: number,
+  show: number,
+  col: string,
+  al: number,
+  time: number,
+  sd: number,
+): void {
   const ux = Math.cos(a);
   const uy = Math.sin(a);
   const pt = (i: number): [number, number] => {
@@ -4535,10 +4603,30 @@ registerZonePainter(
     p.col(C.night[3], 0.25 + 0.2 * k);
     fillSector(p, cx, cy, R * 0.82, R, 0, TAU);
     // Ладонь-созвездие проступает линия за линией.
-    palmDraw(p, cx, cy, R * 0.92, a, Math.min(1, k * 1.25), sig ? C.white : C.gold[2], 0.35 + 0.55 * k, time, sd);
+    palmDraw(
+      p,
+      cx,
+      cy,
+      R * 0.92,
+      a,
+      Math.min(1, k * 1.25),
+      sig ? C.white : C.gold[2],
+      0.35 + 0.55 * k,
+      time,
+      sd,
+    );
     // «Когда»: кольцо сжимается от полутора радиусов к краю метки.
     const rr = R * (1 + 0.6 * (1 - eOut2(k)));
-    ring(p, cx, cy, rr, sig ? C.white : C.gold[2], (tk ? 1 : 0.7) * (0.4 + 0.6 * k), undefined, 0.5);
+    ring(
+      p,
+      cx,
+      cy,
+      rr,
+      sig ? C.white : C.gold[2],
+      (tk ? 1 : 0.7) * (0.4 + 0.6 * k),
+      undefined,
+      0.5,
+    );
     ring(p, cx, cy, R, sig ? C.gold[3] : C.gold[1], 0.7, (_a, i) => sig || i % 3 !== 0);
   }),
 );
@@ -4546,29 +4634,50 @@ registerZonePainter(
 registerImpactPainter('f15b_palm', {
   life: 1.2,
   shake: 0.32,
-  paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number, time: number) => {
-    const cx = rec.x * S;
-    const cy = rec.y * S;
-    const p = new Pen(g, px, py, cx, cy);
-    const R = (rec.r ?? 1.7) * S;
-    const sd = rec.seed >>> 0;
-    const few = reduced();
-    const a = lordNow()?.data.ang ?? 0;
-    const fade = Math.pow(1 - k01(age / 1.2), 1.4);
-    // Вмятина и отпечаток ладони — гаснут.
-    p.occ = occOf(S);
-    p.col(C.night[0], 0.4 * fade);
-    oval(p, cx, cy, R * 0.95, R * 0.95);
-    palmDraw(p, cx, cy, R * 0.92, a, 1, age < 0.12 ? C.white : C.gold[2], fade, time, sd);
-    p.occ = null;
-    hitStar(p, cx, cy, age, 0.1, R * 0.85, sd * 0.01, C.gold[2]);
-    crest(p, cx, cy, R, age, 0.4, S * 1.2, C.gold[2], sd);
-    sparks(p, sd, age, cx, cy, few ? 6 : 16, 0, Math.PI, 70, 90, 0.6, 70, starCol);
-    dust(p, sd, age, cx, cy, few ? 4 : 9, 0, Math.PI, 40, 30, 3, 7, 6, 0.9, 0, 0.55, undefined, (i) => {
-      const t = (i / 9) * TAU;
-      return [cx + Math.cos(t) * R * 0.8, cy + Math.sin(t) * R * 0.8, t];
-    });
-  }),
+  paint: guarded(
+    (g, rec: ImpactRec, px: number, py: number, S: number, age: number, time: number) => {
+      const cx = rec.x * S;
+      const cy = rec.y * S;
+      const p = new Pen(g, px, py, cx, cy);
+      const R = (rec.r ?? 1.7) * S;
+      const sd = rec.seed >>> 0;
+      const few = reduced();
+      const a = lordNow()?.data.ang ?? 0;
+      const fade = Math.pow(1 - k01(age / 1.2), 1.4);
+      // Вмятина и отпечаток ладони — гаснут.
+      p.occ = occOf(S);
+      p.col(C.night[0], 0.4 * fade);
+      oval(p, cx, cy, R * 0.95, R * 0.95);
+      palmDraw(p, cx, cy, R * 0.92, a, 1, age < 0.12 ? C.white : C.gold[2], fade, time, sd);
+      p.occ = null;
+      hitStar(p, cx, cy, age, 0.1, R * 0.85, sd * 0.01, C.gold[2]);
+      crest(p, cx, cy, R, age, 0.4, S * 1.2, C.gold[2], sd);
+      sparks(p, sd, age, cx, cy, few ? 6 : 16, 0, Math.PI, 70, 90, 0.6, 70, starCol);
+      dust(
+        p,
+        sd,
+        age,
+        cx,
+        cy,
+        few ? 4 : 9,
+        0,
+        Math.PI,
+        40,
+        30,
+        3,
+        7,
+        6,
+        0.9,
+        0,
+        0.55,
+        undefined,
+        (i) => {
+          const t = (i / 9) * TAU;
+          return [cx + Math.cos(t) * R * 0.8, cy + Math.sin(t) * R * 0.8, t];
+        },
+      );
+    },
+  ),
 });
 
 // ---- Взмах: веер ночи, звёзды копятся у края, рука проходит дугой -----------
@@ -4591,14 +4700,32 @@ registerZonePainter(
     p.col(C.night[2], 0.3 + 0.18 * k);
     fillSector(p, cx, cy, r0, R, a - arc / 2, a + arc / 2);
     const run = Math.floor(time * (12 + 26 * k));
-    sectorRim(p, cx, cy, R, a - arc / 2, arc, r0, sig ? C.white : C.gold[1], 0.5 + 0.4 * k, sig ? undefined : (u) => mod(Math.floor(u / 3) - run, 4) < 3);
+    sectorRim(
+      p,
+      cx,
+      cy,
+      R,
+      a - arc / 2,
+      arc,
+      r0,
+      sig ? C.white : C.gold[1],
+      0.5 + 0.4 * k,
+      sig ? undefined : (u) => mod(Math.floor(u / 3) - run, 4) < 3,
+    );
     // Рука идёт от a + arc/2 к a − arc/2: у начального края копятся звёзды.
     const as = a + arc / 2;
     for (let i = 0; i < 7; i++) {
       const rr = r0 + (R - r0) * (0.15 + 0.85 * hash(sd, i, 51));
       const aa = as - 0.12 * hash(sd, i, 52);
       const on = k01(k * 1.6 - i * 0.08);
-      twinkle(p, cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr, sig ? 2 : 1, C.gold[3], on * (0.6 + 0.4 * Math.sin(time * 9 + i)));
+      twinkle(
+        p,
+        cx + Math.cos(aa) * rr,
+        cy + Math.sin(aa) * rr,
+        sig ? 2 : 1,
+        C.gold[3],
+        on * (0.6 + 0.4 * Math.sin(time * 9 + i)),
+      );
     }
     // «Когда»: тонкий серп растёт по ходу удара; последние 0,16 с — сам взмах.
     const pre = Math.min(arc * 0.18, arc * 0.18 * k);
@@ -4624,13 +4751,49 @@ registerImpactPainter('f15b_sweep', {
     const k = k01(age / 0.55);
     // След руки: серп звёздного света тоньше и тусклее.
     if (k < 1) {
-      crescent(p, cx, cy, R, a - arc / 2, arc, Math.max(1, 6 * (1 - k)), age < 0.05 ? C.white : C.gold[3], 1 - k);
-      crescent(p, cx, cy, R - 6, a - arc / 2, arc, Math.max(1, 3 * (1 - k)), '#c890f0', 0.6 * (1 - k));
+      crescent(
+        p,
+        cx,
+        cy,
+        R,
+        a - arc / 2,
+        arc,
+        Math.max(1, 6 * (1 - k)),
+        age < 0.05 ? C.white : C.gold[3],
+        1 - k,
+      );
+      crescent(
+        p,
+        cx,
+        cy,
+        R - 6,
+        a - arc / 2,
+        arc,
+        Math.max(1, 3 * (1 - k)),
+        '#c890f0',
+        0.6 * (1 - k),
+      );
     }
-    sparks(p, sd, age, cx, cy, reduced() ? 6 : 14, 0, 0.3, 50, 60, 0.5, 50, starCol, undefined, (i) => {
-      const t = a - arc / 2 + arc * hash(sd, i, 53);
-      return [cx + Math.cos(t) * R * 0.92, cy + Math.sin(t) * R * 0.92, t - Math.PI / 2];
-    });
+    sparks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      reduced() ? 6 : 14,
+      0,
+      0.3,
+      50,
+      60,
+      0.5,
+      50,
+      starCol,
+      undefined,
+      (i) => {
+        const t = a - arc / 2 + arc * hash(sd, i, 53);
+        return [cx + Math.cos(t) * R * 0.92, cy + Math.sin(t) * R * 0.92, t - Math.PI / 2];
+      },
+    );
   }),
 });
 
@@ -4651,7 +4814,16 @@ registerZonePainter(
       const sig = left < SIG;
       p.col(C.blood[1], 0.28 + 0.16 * k);
       fillSector(p, cx, cy, 0, R, 0, TAU);
-      ring(p, cx, cy, 6 + (R - 6) * Math.pow(k, 1.3), sig ? C.white : '#c890f0', 0.4 + 0.5 * k, (_a, i) => hash(i >> 2, sd, 3) > 0.25, 0.4);
+      ring(
+        p,
+        cx,
+        cy,
+        6 + (R - 6) * Math.pow(k, 1.3),
+        sig ? C.white : '#c890f0',
+        0.4 + 0.5 * k,
+        (_a, i) => hash(i >> 2, sd, 3) > 0.25,
+        0.4,
+      );
       ring(p, cx, cy, R, sig ? C.white : '#c890f0', 0.7 + 0.3 * k, undefined, 0.6);
       return;
     }
@@ -4669,10 +4841,26 @@ registerImpactPainter('f15b_repel', {
     const R = (rec.r ?? 2.2) * S;
     const sd = rec.seed >>> 0;
     crest(p, cx, cy, R, age, 0.45, S * 0.9, '#c890f0', sd);
-    sparks(p, sd, age, cx, cy, reduced() ? 8 : 18, 0, 0.4, 40, 50, 0.5, 30, vioCol, undefined, (i) => {
-      const t = TAU * hash(sd, i, 55);
-      return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-    });
+    sparks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      reduced() ? 8 : 18,
+      0,
+      0.4,
+      40,
+      50,
+      0.5,
+      30,
+      vioCol,
+      undefined,
+      (i) => {
+        const t = TAU * hash(sd, i, 55);
+        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+      },
+    );
   }),
 });
 
@@ -4698,7 +4886,15 @@ registerZonePainter(
     if (t < W) {
       // Кулак сжимается: граница тяги проступает пунктиром, звёзды стягиваются.
       const k = t / W;
-      ring(p, cx, cy, PR, '#9a5ad0', 0.2 + 0.35 * k, (_a, i) => mod(i - Math.floor(time * 12), 8) < 3);
+      ring(
+        p,
+        cx,
+        cy,
+        PR,
+        '#9a5ad0',
+        0.2 + 0.35 * k,
+        (_a, i) => mod(i - Math.floor(time * 12), 8) < 3,
+      );
       for (let i = 0; i < 12; i++) {
         const a0 = (i / 12) * TAU + hash(sd, i, 61);
         const rr = PR * (1 - 0.55 * eIn2(k)) * (0.6 + 0.4 * hash(sd, i, 62));
@@ -4742,7 +4938,16 @@ registerZonePainter(
     ring(p, cx, cy, hr + 1, sig ? C.white : C.gold[2], tk ? 1 : 0.85);
     // Где рванёт: граница схлопывания.
     const near = k01(1 - left / 0.8);
-    ring(p, cx, cy, R, sig ? C.white : near > 0 ? C.gold[3] : '#9a5ad0', 0.35 + 0.6 * near, (_a, i) => sig || mod(i - Math.floor(time * 20), 6) < 4, 0.5);
+    ring(
+      p,
+      cx,
+      cy,
+      R,
+      sig ? C.white : near > 0 ? C.gold[3] : '#9a5ad0',
+      0.35 + 0.6 * near,
+      (_a, i) => sig || mod(i - Math.floor(time * 20), 6) < 4,
+      0.5,
+    );
   }),
 );
 
@@ -4784,7 +4989,16 @@ registerZonePainter(
     fillSector(p, cx, cy, 0, R, 0, TAU);
     // Орбита: пунктир крутится, перекрестье по сторонам света.
     const run = Math.floor(time * 10);
-    ring(p, cx, cy, R, sig ? C.white : C.ice[4], (tk ? 1 : 0.7) * (0.5 + 0.5 * k), (_a, i) => sig || mod(i + run, 7) < 5, 0.5);
+    ring(
+      p,
+      cx,
+      cy,
+      R,
+      sig ? C.white : C.ice[4],
+      (tk ? 1 : 0.7) * (0.5 + 0.5 * k),
+      (_a, i) => sig || mod(i + run, 7) < 5,
+      0.5,
+    );
     p.col(sig ? C.white : C.ice[4], 0.5 + 0.4 * k);
     for (let q = 0; q < 4; q++) {
       const a = (q * TAU) / 4 + 0.25;
@@ -4866,8 +5080,25 @@ registerZonePainter(
     p.col(C.ember[0], 0.25 + 0.2 * k);
     fillSector(p, cx, cy, 0, R, 0, TAU);
     const rr = R * (1 + 0.5 * (1 - eOut2(k)));
-    ring(p, cx, cy, rr, sig ? C.white : C.ember[3], (tk ? 1 : 0.75) * (0.4 + 0.6 * k), undefined, 0.5);
-    ring(p, cx, cy, R, sig ? C.gold[3] : C.ember[2], 0.6, (_a, i) => sig || mod(i + Math.floor(time * 8), 5) < 3);
+    ring(
+      p,
+      cx,
+      cy,
+      rr,
+      sig ? C.white : C.ember[3],
+      (tk ? 1 : 0.75) * (0.4 + 0.6 * k),
+      undefined,
+      0.5,
+    );
+    ring(
+      p,
+      cx,
+      cy,
+      R,
+      sig ? C.gold[3] : C.ember[2],
+      0.6,
+      (_a, i) => sig || mod(i + Math.floor(time * 8), 5) < 3,
+    );
     // Метеор: последние 0,55 с падает с неба прямо в метку.
     const fall = 0.55;
     if (left < fall) {
@@ -4909,7 +5140,13 @@ registerImpactPainter('f15b_meteor', {
 // ---- Удары из тьмы (затмение): звёзды вспыхивают там, куда придёт удар -----
 
 /** Три когтя-созвездия веером. */
-function clawLines(cx: number, cy: number, R: number, a: number, arc: number): [number, number][][] {
+function clawLines(
+  cx: number,
+  cy: number,
+  R: number,
+  a: number,
+  arc: number,
+): [number, number][][] {
   const out: [number, number][][] = [];
   for (const o of [-0.32, 0, 0.32]) {
     const pts: [number, number][] = [];
@@ -4941,7 +5178,18 @@ registerZonePainter(
     // «Куда»: сектор чуть светлее тьмы — звёздное небо проступает.
     p.col(C.night[3], 0.22 + 0.2 * k);
     fillSector(p, cx, cy, S * 0.6, R, a - arc / 2, a + arc / 2);
-    sectorRim(p, cx, cy, R, a - arc / 2, arc, S * 0.6, sig ? C.white : '#9a5ad0', 0.4 + 0.5 * k, sig ? undefined : (u) => mod(Math.floor(u / 3) + Math.floor(time * 14), 4) < 2);
+    sectorRim(
+      p,
+      cx,
+      cy,
+      R,
+      a - arc / 2,
+      arc,
+      S * 0.6,
+      sig ? C.white : '#9a5ad0',
+      0.4 + 0.5 * k,
+      sig ? undefined : (u) => mod(Math.floor(u / 3) + Math.floor(time * 14), 4) < 2,
+    );
     // Звёзды загораются в секторе одна за другой.
     for (let i = 0; i < 28; i++) {
       const th = hash(sd, i, 81);
@@ -4949,7 +5197,14 @@ registerZonePainter(
       const rr = S * 0.7 + (R - S * 0.7) * hash(sd, i, 82);
       const aa = a + (hash(sd, i, 83) - 0.5) * arc;
       const tw = 0.55 + 0.45 * Math.sin(time * 11 + i * 2.3);
-      twinkle(p, cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr, hash(sd, i, 84) < 0.25 ? 2 : 1, sig ? C.white : '#c890f0', tw);
+      twinkle(
+        p,
+        cx + Math.cos(aa) * rr,
+        cy + Math.sin(aa) * rr,
+        hash(sd, i, 84) < 0.25 ? 2 : 1,
+        sig ? C.white : '#c890f0',
+        tw,
+      );
     }
     // Три когтя — созвездиями, к удару — сплошные.
     for (const pts of clawLines(cx, cy, R, a, arc)) {
@@ -4994,11 +5249,27 @@ registerImpactPainter('f15b_nightclaw', {
             p.line(x0 + 1, y0, x1 + 1, y1);
           }
         }
-    sparks(p, sd, age, cx, cy, reduced() ? 6 : 15, a, arc / 2, 50, 60, 0.5, 40, vioCol, undefined, (i) => {
-      const pts = lines[i % 3];
-      const [x, y] = pts[pts.length - 1 - (i % 2)];
-      return [x, y, a];
-    });
+    sparks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      reduced() ? 6 : 15,
+      a,
+      arc / 2,
+      50,
+      60,
+      0.5,
+      40,
+      vioCol,
+      undefined,
+      (i) => {
+        const pts = lines[i % 3];
+        const [x, y] = pts[pts.length - 1 - (i % 2)];
+        return [x, y, a];
+      },
+    );
   }),
 });
 
@@ -5015,11 +5286,27 @@ registerZonePainter(
     const R = st.r * S;
     p.col(C.night[3], 0.2 + 0.2 * k);
     fillSector(p, cx, cy, 0, R, 0, TAU);
-    ring(p, cx, cy, R * (1 + 0.8 * (1 - eOut2(k))), sig ? C.white : C.ice[4], (tk ? 1 : 0.7) * (0.35 + 0.6 * k), (_a, i) => sig || i % 2 === 0, 0.4);
+    ring(
+      p,
+      cx,
+      cy,
+      R * (1 + 0.8 * (1 - eOut2(k))),
+      sig ? C.white : C.ice[4],
+      (tk ? 1 : 0.7) * (0.35 + 0.6 * k),
+      (_a, i) => sig || i % 2 === 0,
+      0.4,
+    );
     ring(p, cx, cy, R, sig ? C.white : C.ice[3], 0.55 + 0.4 * k);
     // Звезда разгорается в центре — будущий удар.
     const r = Math.round(1 + 4 * k);
-    twinkle(p, cx, cy, r, sig ? '#ffffff' : C.ice[4], 0.5 + 0.5 * k * (0.75 + 0.25 * Math.sin(time * 14)));
+    twinkle(
+      p,
+      cx,
+      cy,
+      r,
+      sig ? '#ffffff' : C.ice[4],
+      0.5 + 0.5 * k * (0.75 + 0.25 * Math.sin(time * 14)),
+    );
   }),
 );
 
@@ -5065,7 +5352,15 @@ registerZonePainter(
     if (st.arc !== undefined) {
       const a0 = (st.ang ?? 0) - st.arc / 2;
       for (const ea of [a0, a0 + st.arc]) {
-        for (let d = -w; d <= w; d += 2) twinkle(p, cx + Math.cos(ea) * (R + d), cy + Math.sin(ea) * (R + d), 1, C.ice[4], 0.6 + 0.3 * Math.sin(time * 8));
+        for (let d = -w; d <= w; d += 2)
+          twinkle(
+            p,
+            cx + Math.cos(ea) * (R + d),
+            cy + Math.sin(ea) * (R + d),
+            1,
+            C.ice[4],
+            0.6 + 0.3 * Math.sin(time * 8),
+          );
       }
     }
   }),
@@ -5083,11 +5378,27 @@ registerImpactPainter('f15b_pulse', {
     const sd = rec.seed >>> 0;
     const keep = arcKeep(rec);
     crest(p, cx, cy, R, age, 0.45, S * 1.2, C.gold[3], sd, keep);
-    sparks(p, sd, age, cx, cy, reduced() ? 8 : 20, 0, 0.5, 60, 60, 0.5, 40, starCol, undefined, (i) => {
-      let t = TAU * hash(sd, i, 91);
-      if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) t += Math.PI;
-      return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-    });
+    sparks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      reduced() ? 8 : 20,
+      0,
+      0.5,
+      60,
+      60,
+      0.5,
+      40,
+      starCol,
+      undefined,
+      (i) => {
+        let t = TAU * hash(sd, i, 91);
+        if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) t += Math.PI;
+        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+      },
+    );
   }),
 });
 
@@ -5100,7 +5411,19 @@ registerZonePainter(
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
     if (!st.above) p.occ = occOf(S);
-    bandMark(p, cx, cy, st.r * S, (st.w ?? 0.55) * S, k, left, seedOf(st.id), time, C.blood[1], '#c890f0');
+    bandMark(
+      p,
+      cx,
+      cy,
+      st.r * S,
+      (st.w ?? 0.55) * S,
+      k,
+      left,
+      seedOf(st.id),
+      time,
+      C.blood[1],
+      '#c890f0',
+    );
   }),
 );
 
@@ -5115,10 +5438,26 @@ registerImpactPainter('f15b_shock', {
     const R = (rec.r ?? 2.6) * S;
     const sd = rec.seed >>> 0;
     crest(p, cx, cy, R, age, 0.5, S * 1.4, '#c890f0', sd);
-    sparks(p, sd, age, cx, cy, reduced() ? 8 : 18, 0, 0.5, 40, 50, 0.6, 30, starCol, undefined, (i) => {
-      const t = TAU * hash(sd, i, 93);
-      return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-    });
+    sparks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      reduced() ? 8 : 18,
+      0,
+      0.5,
+      40,
+      50,
+      0.6,
+      30,
+      starCol,
+      undefined,
+      (i) => {
+        const t = TAU * hash(sd, i, 93);
+        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+      },
+    );
   }),
 });
 
@@ -5143,11 +5482,37 @@ registerZonePainter(
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU + time * 0.8;
       const r1 = R * 0.72;
-      p.lineS(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, cx + Math.cos(a) * (r1 + 4), cy + Math.sin(a) * (r1 + 4), C.gold[2], 0.4 + 0.5 * k, 0.3);
+      p.lineS(
+        cx + Math.cos(a) * r1,
+        cy + Math.sin(a) * r1,
+        cx + Math.cos(a) * (r1 + 4),
+        cy + Math.sin(a) * (r1 + 4),
+        C.gold[2],
+        0.4 + 0.5 * k,
+        0.3,
+      );
     }
     ring(p, cx, cy, R * 0.72 - 2, C.gold[1], 0.35 + 0.3 * k, (_a, i) => i % 2 === 0);
-    ring(p, cx, cy, 5 + (R - 5) * Math.pow(k, 1.3), sig ? C.white : C.gold[3], (tk ? 1 : 0.7) * (0.35 + 0.6 * k), (_a, i) => hash(i >> 2, sd, 3) > 0.25, 0.4);
-    ring(p, cx, cy, R, sig ? C.white : C.gold[2], 0.7 + 0.3 * k, sig ? undefined : (_a, i) => mod(i - Math.floor(time * 18), 9) < 6, 0.6);
+    ring(
+      p,
+      cx,
+      cy,
+      5 + (R - 5) * Math.pow(k, 1.3),
+      sig ? C.white : C.gold[3],
+      (tk ? 1 : 0.7) * (0.35 + 0.6 * k),
+      (_a, i) => hash(i >> 2, sd, 3) > 0.25,
+      0.4,
+    );
+    ring(
+      p,
+      cx,
+      cy,
+      R,
+      sig ? C.white : C.gold[2],
+      0.7 + 0.3 * k,
+      sig ? undefined : (_a, i) => mod(i - Math.floor(time * 18), 9) < 6,
+      0.6,
+    );
   }),
 );
 
@@ -5164,10 +5529,29 @@ registerImpactPainter('f15b_kslam', {
     hitStar(p, cx, cy, age, 0.1, S * 0.9, 0, C.gold[2]);
     crest(p, cx, cy, R, age, 0.45, S * 1.1, C.gold[3], sd);
     chunks(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 50, 60, 70, 60, [0.55, 0.95], 0.3, 0);
-    dust(p, sd, age, cx, cy, few ? 4 : 9, 0, Math.PI, 40, 40, 3, 7, 5, 0.9, 8, 0.55, undefined, (i) => {
-      const t = (i / 9) * TAU;
-      return [cx + Math.cos(t) * R * 0.7, cy + Math.sin(t) * R * 0.7, t];
-    });
+    dust(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      few ? 4 : 9,
+      0,
+      Math.PI,
+      40,
+      40,
+      3,
+      7,
+      5,
+      0.9,
+      8,
+      0.55,
+      undefined,
+      (i) => {
+        const t = (i / 9) * TAU;
+        return [cx + Math.cos(t) * R * 0.7, cy + Math.sin(t) * R * 0.7, t];
+      },
+    );
   }),
 });
 
@@ -5226,7 +5610,21 @@ registerImpactPainter('f15b_klance', {
       p.col('#ffffff', 1 - k);
       fillLane(p, cx, cy, ux, uy, 0, L, Math.max(0.6, 1.6 * (1 - k)));
     }
-    sparks(p, sd, age, cx + ux * L, cy + uy * L, reduced() ? 4 : 10, a, 0.9, 50, 60, 0.4, 40, iceCol);
+    sparks(
+      p,
+      sd,
+      age,
+      cx + ux * L,
+      cy + uy * L,
+      reduced() ? 4 : 10,
+      a,
+      0.9,
+      50,
+      60,
+      0.4,
+      40,
+      iceCol,
+    );
   }),
 });
 
@@ -5353,7 +5751,8 @@ registerZonePainter(
         const Y = pl.y * S;
         p.alpha(1);
         p.img(img, X - 7.5, Y - 9, Y);
-        if (t > LORD.orbitStay - 0.45 && Math.floor(time * 16) % 2 === 0) ring(p, X, Y - 4, 7, '#ffffff', 0.8);
+        if (t > LORD.orbitStay - 0.45 && Math.floor(time * 16) % 2 === 0)
+          ring(p, X, Y - 4, 7, '#ffffff', 0.8);
         p.occ = null;
         return;
       }
@@ -5390,7 +5789,15 @@ registerZonePainter(
 
 // ---- Затмение: ночь на всю арену, окна у героя и у распахнутого плаща -------
 
-function veil(p: Pen, cx: number, cy: number, R: number, holes: [number, number, number][], col: string, a: number): void {
+function veil(
+  p: Pen,
+  cx: number,
+  cy: number,
+  R: number,
+  holes: [number, number, number][],
+  col: string,
+  a: number,
+): void {
   const LV = [0, 0.35, 0.7, 1];
   const RING = [0.75, 1, 1.3];
   // Только видимая часть экрана: ночь на всю арену — сотни строк за кадром.
@@ -5489,7 +5896,16 @@ registerZonePainter(
       p.dot(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr * 0.9);
     }
     // Плащ распахнут — кромка окна золотом.
-    if (open && lord) ring(p, lord.x * S, (lord.y - 2.2) * S, 3.4 * S * k01(lord.t / 0.4), C.gold[3], 0.5 * v.dark, (_a, i) => mod(i + Math.floor(time * 10), 6) < 3);
+    if (open && lord)
+      ring(
+        p,
+        lord.x * S,
+        (lord.y - 2.2) * S,
+        3.4 * S * k01(lord.t / 0.4),
+        C.gold[3],
+        0.5 * v.dark,
+        (_a, i) => mod(i + Math.floor(time * 10), 6) < 3,
+      );
   }),
 );
 
@@ -5511,7 +5927,10 @@ registerZonePainter(
     const ends: [number, number][] = [];
     for (let i = 0; i < n; i++) {
       const a = (i / n) * TAU + (zz.n ?? 0);
-      ends.push([tx + Math.cos(a) * S * (0.7 + 0.25 * hash(i, 7, 98)), ty - S * 0.6 + Math.sin(a) * S * 0.55]);
+      ends.push([
+        tx + Math.cos(a) * S * (0.7 + 0.25 * hash(i, 7, 98)),
+        ty - S * 0.6 + Math.sin(a) * S * 0.55,
+      ]);
     }
     const out = 1 - k01((t - (L - 0.35)) / 0.35);
     for (let i = 0; i < n; i++) {
@@ -5607,7 +6026,15 @@ registerZonePainter(
       for (let i = 0; i < rays; i++) {
         const a = (i / rays) * TAU + time * 0.3;
         const L = S * (0.8 + 6 * eIn2(k)) * (i % 2 ? 0.7 : 1);
-        p.lineS(cx, cy, cx + Math.cos(a) * L, cy + Math.sin(a) * L, i % 2 ? C.gold[2] : C.gold[3], 0.3 + 0.5 * k, 0);
+        p.lineS(
+          cx,
+          cy,
+          cx + Math.cos(a) * L,
+          cy + Math.sin(a) * L,
+          i % 2 ? C.gold[2] : C.gold[3],
+          0.3 + 0.5 * k,
+          0,
+        );
       }
       const r = S * (0.5 + 2.2 * eIn2(k)) * (1 + 0.05 * Math.sin(time * 20));
       p.col(C.gold[1], 0.3);
@@ -5648,7 +6075,15 @@ registerZonePainter(
     for (let j = 0; j < 3; j++) {
       const u = (t - j * 0.3) / 2;
       if (u <= 0 || u >= 1) continue;
-      ring(p, cx, cy, S + R * 1.1 * eOut2(u), j === 1 ? '#c890f0' : C.gold[3], 1 - u, (_a, i) => hash(i >> 1, j, 99) > 0.2);
+      ring(
+        p,
+        cx,
+        cy,
+        S + R * 1.1 * eOut2(u),
+        j === 1 ? '#c890f0' : C.gold[3],
+        1 - u,
+        (_a, i) => hash(i >> 1, j, 99) > 0.2,
+      );
     }
     embers(
       p,
@@ -5668,7 +6103,15 @@ registerZonePainter(
     );
     // Звезда рождается заново: золотой крест в центре.
     const k = k01((t - 0.4) / 1.2);
-    if (k > 0) twinkle(p, cx, cy - 6, Math.round(2 + 6 * eOut2(k)), C.gold[3], 0.6 + 0.4 * Math.sin(time * 6));
+    if (k > 0)
+      twinkle(
+        p,
+        cx,
+        cy - 6,
+        Math.round(2 + 6 * eOut2(k)),
+        C.gold[3],
+        0.6 + 0.4 * Math.sin(time * 6),
+      );
   }),
 );
 
@@ -5743,7 +6186,15 @@ registerZonePainter(
     ring(p, ex, ey, S * 1.5, col, env * 0.9, (_a, i) => i % 2 === 0, 0.4);
     for (let q = 0; q < 4; q++) {
       const a = (q * TAU) / 4 + time * 1.2;
-      p.lineS(ex + Math.cos(a) * S * 0.6, ey + Math.sin(a) * S * 0.6, ex + Math.cos(a) * S * 1.4, ey + Math.sin(a) * S * 1.4, col, env * 0.8, 0.3);
+      p.lineS(
+        ex + Math.cos(a) * S * 0.6,
+        ey + Math.sin(a) * S * 0.6,
+        ex + Math.cos(a) * S * 1.4,
+        ey + Math.sin(a) * S * 1.4,
+        col,
+        env * 0.8,
+        0.3,
+      );
     }
   }),
 );
@@ -5838,12 +6289,33 @@ function* warmFx(): Generator<void> {
     const imp = IMPACT_PAINTERS.get(art);
     const warn = 0.8;
     for (const k of [0.3, 0.9]) {
-      const st = { shape, x: 0, y: 0, r, w, arc, ang: 0.4, warn, dmg: 0, t: warn * k, id: 900 + n++, art } as Strike;
+      const st = {
+        shape,
+        x: 0,
+        y: 0,
+        r,
+        w,
+        arc,
+        ang: 0.4,
+        warn,
+        dmg: 0,
+        t: warn * k,
+        id: 900 + n++,
+        art,
+      } as Strike;
       zp?.(g, st, 100, 100, 16, 1);
       yield;
     }
     for (const age of [0, 0.06, 0.2, 0.5]) {
-      imp?.paint(g, { art, x: 0, y: 0, shape, r, w, arc, ang: 0.4, seed: 4242 + n, vx: 3, vy: 1 }, 100, 100, 16, age, 1);
+      imp?.paint(
+        g,
+        { art, x: 0, y: 0, shape, r, w, arc, ang: 0.4, seed: 4242 + n, vx: 3, vy: 1 },
+        100,
+        100,
+        16,
+        age,
+        1,
+      );
       yield;
     }
   }

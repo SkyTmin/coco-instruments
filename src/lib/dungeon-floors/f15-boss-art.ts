@@ -65,7 +65,9 @@ export const fade = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(
 
 /** Детерминированный шум по трём числам, 0…1. */
 export const hash = (a: number, b: number, c = 0) => {
-  let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 1274126177)) >>> 0;
+  let h =
+    (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 1274126177)) >>>
+    0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
@@ -82,7 +84,9 @@ export function vnoise(x: number, y: number, seed: number): number {
   return a * (1 - v) + b * v;
 }
 const fbm = (x: number, y: number, seed: number) =>
-  vnoise(x, y, seed) * 0.55 + vnoise(x * 2.03, y * 2.03, seed + 7) * 0.3 + vnoise(x * 4.1, y * 4.1, seed + 13) * 0.15;
+  vnoise(x, y, seed) * 0.55 +
+  vnoise(x * 2.03, y * 2.03, seed + 7) * 0.3 +
+  vnoise(x * 4.1, y * 4.1, seed + 13) * 0.15;
 
 /** Упорядоченный дизер 4×4: ступени без полос. */
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -103,16 +107,41 @@ export const smooth = (t: number) => {
 export const INK = hx('#05040f');
 export const WHITE = hx('#ffffff');
 /** Ночь: от бездны до освещённой ткани. */
-export const NIGHT = ['#05040f', '#0a0920', '#100e30', '#171442', '#201b56', '#2b246c', '#3a3088', '#4c42a4'].map((c) => hx(c));
-export const VIO = ['#2a1250', '#46207a', '#6a34a4', '#9a5ad0', '#c890f0', '#ecd4ff'].map((c) => hx(c));
+export const NIGHT = [
+  '#05040f',
+  '#0a0920',
+  '#100e30',
+  '#171442',
+  '#201b56',
+  '#2b246c',
+  '#3a3088',
+  '#4c42a4',
+].map((c) => hx(c));
+export const VIO = ['#2a1250', '#46207a', '#6a34a4', '#9a5ad0', '#c890f0', '#ecd4ff'].map((c) =>
+  hx(c),
+);
 export const MAG = ['#4a1450', '#7a2a86', '#b04ab8'].map((c) => hx(c));
 export const TEAL = ['#0c2a40', '#164e6c', '#2a7a9a', '#5ab8d0'].map((c) => hx(c));
-export const GOLD = ['#3a2408', '#6e4a14', '#a8761e', '#dcaa3c', '#ffd866', '#fff0b8'].map((c) => hx(c));
-export const ICE = ['#0a1a34', '#163a6a', '#2a64a4', '#4c9ad6', '#8cd0f4', '#d0f4ff', '#ffffff'].map((c) => hx(c));
+export const GOLD = ['#3a2408', '#6e4a14', '#a8761e', '#dcaa3c', '#ffd866', '#fff0b8'].map((c) =>
+  hx(c),
+);
+export const ICE = [
+  '#0a1a34',
+  '#163a6a',
+  '#2a64a4',
+  '#4c9ad6',
+  '#8cd0f4',
+  '#d0f4ff',
+  '#ffffff',
+].map((c) => hx(c));
 /** Цвета четвертей памяти: лава, бездна, зеркала, круги гидры. */
 export const QCOL = ['#ff7a2a', '#38d0d8', '#c8dcff', '#7af08a'].map((c) => hx(c));
-const LAVA = ['#2a0a10', '#6a1a18', '#b03a14', '#ee6a1c', '#ffa440', '#ffe08a', '#fff8d8'].map((c) => hx(c));
-const SEA = ['#020a14', '#06202e', '#0c3a4c', '#16586c', '#2a8aa0', '#7ae0f0', '#e0ffff'].map((c) => hx(c));
+const LAVA = ['#2a0a10', '#6a1a18', '#b03a14', '#ee6a1c', '#ffa440', '#ffe08a', '#fff8d8'].map(
+  (c) => hx(c),
+);
+const SEA = ['#020a14', '#06202e', '#0c3a4c', '#16586c', '#2a8aa0', '#7ae0f0', '#e0ffff'].map((c) =>
+  hx(c),
+);
 const BOG = ['#081208', '#122a14', '#1e4a22', '#3a7a3a', '#7ae08a', '#d8ffd8'].map((c) => hx(c));
 
 // ---- Где арена в мире ---------------------------------------------------------
@@ -153,32 +182,105 @@ const CONSTEL_RAW: { a: number; pts: [number, number][]; lines: [number, number]
   // Корона Короля крыс — на севере.
   {
     a: -90,
-    pts: [[-1.4, 0.6], [-1.5, -0.7], [-0.7, 0], [0, -1], [0.7, 0], [1.5, -0.7], [1.4, 0.6]],
-    lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 0]],
+    pts: [
+      [-1.4, 0.6],
+      [-1.5, -0.7],
+      [-0.7, 0],
+      [0, -1],
+      [0.7, 0],
+      [1.5, -0.7],
+      [1.4, 0.6],
+    ],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [5, 6],
+      [6, 0],
+    ],
   },
   // Секира Минотавра.
   {
     a: -18,
-    pts: [[0, 1.7], [0, -0.5], [0, -1.5], [-1.2, -1.7], [-1.4, -0.5], [1.2, -1.7], [1.4, -0.5]],
-    lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 1], [2, 5], [5, 6], [6, 1]],
+    pts: [
+      [0, 1.7],
+      [0, -0.5],
+      [0, -1.5],
+      [-1.2, -1.7],
+      [-1.4, -0.5],
+      [1.2, -1.7],
+      [1.4, -0.5],
+    ],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 1],
+      [2, 5],
+      [5, 6],
+      [6, 1],
+    ],
   },
   // Красный змей.
   {
     a: 54,
-    pts: [[-1.8, 0.9], [-1.1, 0.2], [-0.3, 0.7], [0.4, 0.1], [0.8, -0.6], [1.5, -0.9], [1.9, -0.3]],
-    lines: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6]],
+    pts: [
+      [-1.8, 0.9],
+      [-1.1, 0.2],
+      [-0.3, 0.7],
+      [0.4, 0.1],
+      [0.8, -0.6],
+      [1.5, -0.9],
+      [1.9, -0.3],
+    ],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [5, 6],
+    ],
   },
   // Гидра — три головы.
   {
     a: 126,
-    pts: [[0, 1.4], [0, 0.2], [-1.3, -0.9], [0, -1.5], [1.3, -0.9], [-0.7, 1.8], [0.7, 1.8]],
-    lines: [[0, 1], [1, 2], [1, 3], [1, 4], [0, 5], [0, 6]],
+    pts: [
+      [0, 1.4],
+      [0, 0.2],
+      [-1.3, -0.9],
+      [0, -1.5],
+      [1.3, -0.9],
+      [-0.7, 1.8],
+      [0.7, 1.8],
+    ],
+    lines: [
+      [0, 1],
+      [1, 2],
+      [1, 3],
+      [1, 4],
+      [0, 5],
+      [0, 6],
+    ],
   },
   // Меч Короля демонов.
   {
     a: 198,
-    pts: [[0, -1.9], [0, 0.8], [-0.9, 0.6], [0.9, 0.6], [0, 1.6]],
-    lines: [[0, 1], [2, 3], [1, 4]],
+    pts: [
+      [0, -1.9],
+      [0, 0.8],
+      [-0.9, 0.6],
+      [0.9, 0.6],
+      [0, 1.6],
+    ],
+    lines: [
+      [0, 1],
+      [2, 3],
+      [1, 4],
+    ],
   },
 ];
 const CONSTEL: Constel[] = CONSTEL_RAW.map((c) => {
@@ -211,7 +313,13 @@ function constelSegs(wx: number, wy: number, g: Geo): [number, number, number, n
     for (const [a, b] of c.lines) {
       const [ax, ay] = c.pts[a];
       const [bx, by] = c.pts[b];
-      if (Math.max(ax, bx) < x0 || Math.min(ax, bx) > x0 + 1.4 || Math.max(ay, by) < y0 || Math.min(ay, by) > y0 + 1.4) continue;
+      if (
+        Math.max(ax, bx) < x0 ||
+        Math.min(ax, bx) > x0 + 1.4 ||
+        Math.max(ay, by) < y0 ||
+        Math.min(ay, by) > y0 + 1.4
+      )
+        continue;
       out.push([ax, ay, bx, by]);
     }
   return out;
@@ -219,7 +327,8 @@ function constelSegs(wx: number, wy: number, g: Geo): [number, number, number, n
 function constelStars(wx: number, wy: number, g: Geo): [number, number][] {
   const out: [number, number][] = [];
   for (const c of CONSTEL)
-    for (const [x, y] of c.pts) if (Math.abs(x + g.cx - wx - 0.5) < 1 && Math.abs(y + g.cy - wy - 0.5) < 1) out.push([x, y]);
+    for (const [x, y] of c.pts)
+      if (Math.abs(x + g.cx - wx - 0.5) < 1 && Math.abs(y + g.cy - wy - 0.5) < 1) out.push([x, y]);
   return out;
 }
 
@@ -243,7 +352,7 @@ function starFloor(p: Px, c: CellCtx, g: Geo): void {
       if (d > RINGS[0] && d < RINGS[2]) {
         const k = Math.round(a / (Math.PI / 6));
         const off = Math.abs(Math.sin(a - (k * Math.PI) / 6)) * d16;
-        if (off < 0.55 && (Math.floor(d16) % 3 !== 0)) col = mixc(col, GOLD[2], 0.55);
+        if (off < 0.55 && Math.floor(d16) % 3 !== 0) col = mixc(col, GOLD[2], 0.55);
       }
       // Кольца: золотая нить с гравировкой под ней.
       for (let i = 0; i < 3; i++) {
@@ -269,7 +378,8 @@ function starFloor(p: Px, c: CellCtx, g: Geo): void {
         const t = clamp01(((dx - ax) * lx + (dy - ay) * ly) / L2);
         const ex = (ax + lx * t - dx) * 16;
         const ey = (ay + ly * t - dy) * 16;
-        if (ex * ex + ey * ey < 0.36 && (Math.floor(t * Math.sqrt(L2) * 16) & 1) === 0) col = mixc(col, ICE[4], 0.55);
+        if (ex * ex + ey * ey < 0.36 && (Math.floor(t * Math.sqrt(L2) * 16) & 1) === 0)
+          col = mixc(col, ICE[4], 0.55);
       }
       for (const [sx, sy] of stars) {
         const ex = Math.abs((sx - dx) * 16);
@@ -345,13 +455,23 @@ function sigilFloor(p: Px, c: CellCtx, g: Geo): void {
         const s = Math.floor(((a + Math.PI) / TAU) * 12);
         const h = hash(s, k, 23);
         const sa = ((a + Math.PI) / TAU) * 12 - s;
-        if ((h < 0.5 && Math.abs(sa - 0.5) < 0.09) || (h >= 0.5 && Math.abs(r - 16.7) < 0.5 && sa > 0.25 && sa < 0.75))
+        if (
+          (h < 0.5 && Math.abs(sa - 0.5) < 0.09) ||
+          (h >= 0.5 && Math.abs(r - 16.7) < 0.5 && sa > 0.25 && sa < 0.75)
+        )
           o = mixc(col, INK, 0.25);
       } else if (r < 10.5) {
         let on = false;
-        if (k === 0) on = (dx / 5) ** 2 + ((dy - 2) / 6) ** 2 < 1 || (dy < -1 && Math.abs(dx) < (dy + 10) * 0.45 && dy > -10);
-        else if (k === 1) for (const w of [-4, 0, 4]) on = on || (Math.abs(dy - w - Math.sin(dx * 0.7) * 1.4) < 0.75 && Math.abs(dx) < 8);
-        else if (k === 2) on = Math.abs(Math.abs(dx) + Math.abs(dy) - 7.5) < 0.8 || Math.abs(dx) + Math.abs(dy) < 2.6;
+        if (k === 0)
+          on =
+            (dx / 5) ** 2 + ((dy - 2) / 6) ** 2 < 1 ||
+            (dy < -1 && Math.abs(dx) < (dy + 10) * 0.45 && dy > -10);
+        else if (k === 1)
+          for (const w of [-4, 0, 4])
+            on = on || (Math.abs(dy - w - Math.sin(dx * 0.7) * 1.4) < 0.75 && Math.abs(dx) < 8);
+        else if (k === 2)
+          on =
+            Math.abs(Math.abs(dx) + Math.abs(dy) - 7.5) < 0.8 || Math.abs(dx) + Math.abs(dy) < 2.6;
         else
           on =
             Math.hypot(dx + 5, dy + 3) < 2 ||
@@ -383,7 +503,12 @@ function hallFloor(p: Px, c: CellCtx): void {
       if (inlay) {
         const du = Math.abs(u - 7.5);
         const dv = Math.abs(v - 7.5);
-        if ((du < 0.6 && dv < 5) || (dv < 0.6 && du < 5) || (du + dv < 3.2 && Math.abs(du - dv) < 0.8)) col = du + dv < 1.2 ? GOLD[5] : GOLD[3];
+        if (
+          (du < 0.6 && dv < 5) ||
+          (dv < 0.6 && du < 5) ||
+          (du + dv < 3.2 && Math.abs(du - dv) < 0.8)
+        )
+          col = du + dv < 1.2 ? GOLD[5] : GOLD[3];
         else if (du + dv < 3.6 && du < 2.6 && dv < 2.6) col = mixc(col, GOLD[1], 0.5);
       }
       p.set(u, v, col);
@@ -399,7 +524,13 @@ function runwayFloor(p: Px, c: CellCtx): void {
     for (let u = 0; u < 16; u++) {
       const X = c.wx * 16 + u;
       const Y = c.wy * 16 + v;
-      let col = mixq(NIGHT[4], NIGHT[5], 0.35 + Math.sin(Y * 0.4 + X * 0.05) * 0.25 + vnoise(X / 6, Y / 6, 33) * 0.3, X, Y);
+      let col = mixq(
+        NIGHT[4],
+        NIGHT[5],
+        0.35 + Math.sin(Y * 0.4 + X * 0.05) * 0.25 + vnoise(X / 6, Y / 6, 33) * 0.3,
+        X,
+        Y,
+      );
       if (v === 15) col = mixc(col, INK, 0.35);
       if (lEdge && u < 2) col = u === 0 ? GOLD[3] : GOLD[1];
       if (rEdge && u > 13) col = u === 15 ? GOLD[2] : GOLD[1];
@@ -478,13 +609,25 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
       const X = c.wx * 16 + u;
       const Y = c.wy * 16 + v;
       let col: RGBA;
-      const edge = (u === 0 && !same(-1, 0)) || (u === 15 && !same(1, 0)) || (v === 0 && !same(0, -1)) || (v === 15 && !same(0, 1));
+      const edge =
+        (u === 0 && !same(-1, 0)) ||
+        (u === 15 && !same(1, 0)) ||
+        (v === 0 && !same(0, -1)) ||
+        (v === 15 && !same(0, 1));
       if (mk === MK.lava) {
         // Звёздная лава: жилы ярче, корка — тёмный кристалл.
         const n = fbm(X / 7, Y / 7, 51);
         const dd = Math.abs(n - 0.5);
-        col = dd < 0.04 ? LAVA[6] : dd < 0.08 ? LAVA[5] : dd < 0.13 ? LAVA[4] : mixq(LAVA[2], LAVA[3], vnoise(X / 3, Y / 3, 52), X, Y);
-        if (vnoise(X / 5, Y / 5, 53) > 0.72) col = mixq(VIO[0], NIGHT[2], vnoise(X / 2, Y / 2, 54), X, Y);
+        col =
+          dd < 0.04
+            ? LAVA[6]
+            : dd < 0.08
+              ? LAVA[5]
+              : dd < 0.13
+                ? LAVA[4]
+                : mixq(LAVA[2], LAVA[3], vnoise(X / 3, Y / 3, 52), X, Y);
+        if (vnoise(X / 5, Y / 5, 53) > 0.72)
+          col = mixq(VIO[0], NIGHT[2], vnoise(X / 2, Y / 2, 54), X, Y);
         if (hash(X, Y, 55) < 0.006) col = WHITE;
         if (edge) col = mixc(LAVA[1], INK, 0.3);
       } else if (mk === MK.crust) {
@@ -503,7 +646,8 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         if (edge) col = SEA[5];
       } else if (mk === MK.shallow) {
         col = mixq(skyAt(X, Y), SEA[3], 0.55, X, Y);
-        if (Math.sin(X * 0.3 + Y * 0.1 + vnoise(X / 5, Y / 5, 57) * 7) > 0.8) col = mixc(col, SEA[5], 0.5);
+        if (Math.sin(X * 0.3 + Y * 0.1 + vnoise(X / 5, Y / 5, 57) * 7) > 0.8)
+          col = mixc(col, SEA[5], 0.5);
       } else if (mk === MK.mirror) {
         // Зеркало-кристалл сверху: ромб со светом сверху-слева.
         const du = u + 0.5 - 8;
@@ -522,7 +666,8 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         const an = Math.atan2(dv, du);
         col = d < 6.6 ? mixq(BOG[1], NIGHT[2], d / 7, X, Y) : skyAt(X, Y);
         if (Math.abs(d - 6.6) < 0.7) col = cc;
-        else if (Math.abs(d - 3.8) < 0.6 && Math.floor(((an + Math.PI) / TAU) * 12) % 2 === 0) col = mixc(cc, WHITE, 0.5);
+        else if (Math.abs(d - 3.8) < 0.6 && Math.floor(((an + Math.PI) / TAU) * 12) % 2 === 0)
+          col = mixc(cc, WHITE, 0.5);
         else if (d < 1.2) col = WHITE;
       } else if (mk === MK.bog) {
         const n = vnoise(X / 4, Y / 4, 59);
@@ -531,7 +676,12 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
       } else {
         // Ожог: на месте лавы остывшие жилы той же лавы тусклым золотом,
         // пепел гаснет к краю пятна — край не режется по клеткам.
-        const ex = Math.min(same(-1, 0) ? 99 : u + 0.5, same(1, 0) ? 99 : 15.5 - u, same(0, -1) ? 99 : v + 0.5, same(0, 1) ? 99 : 15.5 - v);
+        const ex = Math.min(
+          same(-1, 0) ? 99 : u + 0.5,
+          same(1, 0) ? 99 : 15.5 - u,
+          same(0, -1) ? 99 : v + 0.5,
+          same(0, 1) ? 99 : 15.5 - v,
+        );
         const fade = Math.min(1, ex / 7);
         col = mixq(skyAt(X, Y), INK, 0.45 * fade, X, Y);
         const dd = Math.abs(fbm(X / 7, Y / 7, 51) - 0.5);
@@ -588,8 +738,14 @@ function wallTop(p: Px, c: CellCtx): void {
         if (hash(bx, by, 72) < 0.6 && m < 3) col = m < 1.2 ? ICE[5] : X < cx ? ICE[3] : ICE[2];
       }
       const rimC = kind === MK.wallGold ? GOLD[2] : VIO[2];
-      if ((v === 0 && c.open(0, -1)) || (u === 0 && c.open(-1, 0)) || (u === 15 && c.open(1, 0))) col = rimC;
-      else if ((v === 1 && c.open(0, -1)) || (u === 1 && c.open(-1, 0)) || (u === 14 && c.open(1, 0))) col = mixc(col, rimC, 0.45);
+      if ((v === 0 && c.open(0, -1)) || (u === 0 && c.open(-1, 0)) || (u === 15 && c.open(1, 0)))
+        col = rimC;
+      else if (
+        (v === 1 && c.open(0, -1)) ||
+        (u === 1 && c.open(-1, 0)) ||
+        (u === 14 && c.open(1, 0))
+      )
+        col = mixc(col, rimC, 0.45);
       p.set(u, v, col);
     }
 }
@@ -614,13 +770,18 @@ function wallFace(p: Px, c: CellCtx): void {
         else if (u === 2 || v === 5) col = mixc(col, INK, 0.4);
         const du = Math.abs(u - 7.5);
         const dv = Math.abs(v - 9.5);
-        if (inner && ((du < 0.6 && dv < 3) || (dv < 0.6 && du < 3))) col = du + dv < 1 ? GOLD[5] : GOLD[3];
+        if (inner && ((du < 0.6 && dv < 3) || (dv < 0.6 && du < 3)))
+          col = du + dv < 1 ? GOLD[5] : GOLD[3];
         if (kind === MK.niche) {
           // Ниша: арка в золотой раме, внутри — тёмная глубина.
           const ax = (u + 0.5 - 8) / 5.5;
           const ay = (v + 0.5 - 8.5) / 5;
           const inArch = (v >= 8.5 && Math.abs(ax) < 1) || ax * ax + ay * ay < 1;
-          const rim = Math.abs(u + 0.5 - 8) < 6.5 && v > 2 && !inArch && (v >= 8.5 ? Math.abs(ax) < 1.2 : ax * ax + ay * ay < 1.45);
+          const rim =
+            Math.abs(u + 0.5 - 8) < 6.5 &&
+            v > 2 &&
+            !inArch &&
+            (v >= 8.5 ? Math.abs(ax) < 1.2 : ax * ax + ay * ay < 1.45);
           if (inArch) col = mixq(INK, VIO[0], 0.2 + (v - 3) / 26, X, Y);
           else if (rim) col = u + v < 15 ? GOLD[4] : GOLD[2];
         }
@@ -630,9 +791,14 @@ function wallFace(p: Px, c: CellCtx): void {
         const fx = Math.floor((X + sh) / 5);
         const t0 = 2 + Math.floor(hash(fx, c.wy, 83) * 3);
         col = NIGHT[kind === 0 ? t0 - 1 : t0];
-        if (((X + sh) % 5 + 5) % 5 === 0) col = mixc(col, VIO[2], kind === 0 ? 0.25 : 0.5);
+        if ((((X + sh) % 5) + 5) % 5 === 0) col = mixc(col, VIO[2], kind === 0 ? 0.25 : 0.5);
         if (v >= 13) col = mixc(col, INK, (v - 12) * 0.18);
-        if (kind !== 0 && Math.abs((((X * 0.7 + Y) % 29) + 29) % 29 - 14) < 0.5 && hash(fx, 2, 84) < 0.5) col = ICE[2];
+        if (
+          kind !== 0 &&
+          Math.abs(((((X * 0.7 + Y) % 29) + 29) % 29) - 14) < 0.5 &&
+          hash(fx, 2, 84) < 0.5
+        )
+          col = ICE[2];
         // Своё у каждой третьей клетки: звёздное окно, жила света, созвездие.
         const feat = hash(c.wx, c.wy, 87);
         if (kind !== MK.wallCrystal && v >= 3 && v <= 13) {
@@ -652,13 +818,20 @@ function wallFace(p: Px, c: CellCtx): void {
             else if (u === lx - 1) col = mixc(col, VIO[2], 0.6);
             else if (u === lx + 1) col = mixc(col, INK, 0.35);
           } else if (feat < 0.4) {
-            const P: [number, number][] = [0, 1, 2].map((i) => [2 + Math.floor(hash(c.wx * 3 + i, c.wy, 90) * 12), 4 + Math.floor(hash(c.wx * 3 + i, c.wy, 91) * 9)]);
+            const P: [number, number][] = [0, 1, 2].map((i) => [
+              2 + Math.floor(hash(c.wx * 3 + i, c.wy, 90) * 12),
+              4 + Math.floor(hash(c.wx * 3 + i, c.wy, 91) * 9),
+            ]);
             for (let i = 0; i < 2; i++) {
               const [ax, ay] = P[i];
               const [bx, by] = P[i + 1];
               const L = Math.max(Math.abs(bx - ax), Math.abs(by - ay), 1);
               for (let k = 1; k < L; k++)
-                if (u === Math.round(ax + ((bx - ax) * k) / L) && v === Math.round(ay + ((by - ay) * k) / L)) col = mixc(col, GOLD[2], 0.55);
+                if (
+                  u === Math.round(ax + ((bx - ax) * k) / L) &&
+                  v === Math.round(ay + ((by - ay) * k) / L)
+                )
+                  col = mixc(col, GOLD[2], 0.55);
             }
             for (const [px, py] of P) {
               if (u === px && v === py) col = GOLD[5];
@@ -689,7 +862,8 @@ function regionMark(c: CellCtx, g: Geo): number {
   const lx = c.wx;
   const ly = c.wy - g.top;
   const H = F15B_GEO.hall;
-  if (ly >= H.y0 && ly <= H.y1 && lx >= H.x0 && lx <= H.x1) return lx >= 30 && lx <= 32 ? MK.runway : MK.hall;
+  if (ly >= H.y0 && ly <= H.y1 && lx >= H.x0 && lx <= H.x1)
+    return lx >= 30 && lx <= 32 ? MK.runway : MK.hall;
   if (ly === F15B_GEO.gateY) return MK.runway;
   if (ly < F15B_GEO.gateY) return MK.star;
   return MK.ground;
@@ -703,7 +877,12 @@ function regionMark(c: CellCtx, g: Geo): number {
 const CELL_LRU = frameLRU<Px | null>(4000);
 registerCellPainter(F15_HEART, (c: CellCtx) => {
   const g = geo();
-  const ob = (c.open(0, 0) ? 1 : 0) | (c.open(-1, 0) ? 2 : 0) | (c.open(1, 0) ? 4 : 0) | (c.open(0, -1) ? 8 : 0) | (c.open(0, 1) ? 16 : 0);
+  const ob =
+    (c.open(0, 0) ? 1 : 0) |
+    (c.open(-1, 0) ? 2 : 0) |
+    (c.open(1, 0) ? 4 : 0) |
+    (c.open(0, -1) ? 8 : 0) |
+    (c.open(0, 1) ? 16 : 0);
   const key = `${c.wx},${c.wy},${g.top}|${c.tile}|${c.mark}|${ob}|${c.markAt(-1, 0)},${c.markAt(1, 0)},${c.markAt(0, -1)},${c.markAt(0, 1)}`;
   const hit = CELL_LRU.get(key);
   if (hit !== undefined) return hit;
@@ -794,11 +973,13 @@ function poly(p: Px, pts: [number, number][], c: RGBA | ((x: number, y: number) 
       const [ax, ay] = pts[i];
       const [bx, by] = pts[(i + 1) % pts.length];
       const yy = y + 0.5;
-      if ((ay <= yy && by > yy) || (by <= yy && ay > yy)) xs.push(ax + ((yy - ay) / (by - ay)) * (bx - ax));
+      if ((ay <= yy && by > yy) || (by <= yy && ay > yy))
+        xs.push(ax + ((yy - ay) / (by - ay)) * (bx - ax));
     }
     xs.sort((a, b) => a - b);
     for (let k = 0; k + 1 < xs.length; k += 2)
-      for (let x = Math.round(xs[k]); x < Math.round(xs[k + 1]); x++) p.set(x, y, typeof c === 'function' ? c(x, y) : c);
+      for (let x = Math.round(xs[k]); x < Math.round(xs[k + 1]); x++)
+        p.set(x, y, typeof c === 'function' ? c(x, y) : c);
   }
 }
 /** Шар со светом сверху-слева по четырём тонам. */
@@ -812,14 +993,29 @@ function ball(p: Px, cx: number, cy: number, r: number, t: RGBA[], bias = 0): vo
   });
 }
 /** Восьмилучевая звезда: длинные лучи — `c0`, короткие — `c1`. */
-function star8(p: Px, cx: number, cy: number, R: number, rot: number, c0: RGBA, c1: RGBA, core: RGBA): void {
+function star8(
+  p: Px,
+  cx: number,
+  cy: number,
+  R: number,
+  rot: number,
+  c0: RGBA,
+  c1: RGBA,
+  core: RGBA,
+): void {
   for (let i = 0; i < 8; i++) {
     const a = rot + (i * TAU) / 8;
     const L = i % 2 ? R * 0.55 : R;
     const w = i % 2 ? R * 0.16 : R * 0.2;
     const tip: [number, number] = [cx + Math.cos(a) * L, cy + Math.sin(a) * L];
-    const l: [number, number] = [cx + Math.cos(a + Math.PI / 2) * w, cy + Math.sin(a + Math.PI / 2) * w];
-    const r: [number, number] = [cx - Math.cos(a + Math.PI / 2) * w, cy - Math.sin(a + Math.PI / 2) * w];
+    const l: [number, number] = [
+      cx + Math.cos(a + Math.PI / 2) * w,
+      cy + Math.sin(a + Math.PI / 2) * w,
+    ];
+    const r: [number, number] = [
+      cx - Math.cos(a + Math.PI / 2) * w,
+      cy - Math.sin(a + Math.PI / 2) * w,
+    ];
     poly(p, [l, tip, r], i % 2 ? c1 : c0);
   }
   p.ell(cx, cy, R * 0.26, R * 0.26, core);
@@ -846,8 +1042,20 @@ registerPropPainter('f15b_star', (_o, time) => {
     p.ell(cx, H - 8, 13 * big, 4, fade(state === 'cold' ? ICE[2] : GOLD[4], 0.18 + pz * 0.06));
     p.ell(cx, H - 8, 7 * big, 2.2, fade(state === 'cold' ? ICE[3] : GOLD[5], 0.3));
     // Ореол.
-    p.ell(cx, cy, (15 + pz) * big, (15 + pz) * big, fade(state === 'cold' ? ICE[2] : GOLD[3], 0.12));
-    p.ell(cx, cy, (10 + pz) * big, (10 + pz) * big, fade(state === 'cold' ? ICE[3] : GOLD[4], 0.16));
+    p.ell(
+      cx,
+      cy,
+      (15 + pz) * big,
+      (15 + pz) * big,
+      fade(state === 'cold' ? ICE[2] : GOLD[3], 0.12),
+    );
+    p.ell(
+      cx,
+      cy,
+      (10 + pz) * big,
+      (10 + pz) * big,
+      fade(state === 'cold' ? ICE[3] : GOLD[4], 0.16),
+    );
     const a = (rot / 12) * (TAU / 8);
     const R = (12 + pz * 0.8) * big;
     if (state === 'cold') star8(p, cx, cy, R * 0.85, a, ICE[3], ICE[2], ICE[4]);
@@ -911,7 +1119,8 @@ registerPropPainter('f15b_armillary', (o, time) => {
     };
     for (let k = 0; k < 3; k++) for (const [x, y] of ringPts(k, false)) p.set(x, y, GOLD[1]);
     ball(p, cx, cy, 4, [ICE[1], ICE[2], ICE[4], ICE[6]]);
-    for (let k = 0; k < 3; k++) for (const [x, y] of ringPts(k, true)) p.set(x, y, k === 0 ? GOLD[4] : GOLD[3]);
+    for (let k = 0; k < 3; k++)
+      for (const [x, y] of ringPts(k, true)) p.set(x, y, k === 0 ? GOLD[4] : GOLD[3]);
     p.outline(fade(INK, 0.85));
     return { p, ax: cx, ay: H };
   });
@@ -938,7 +1147,16 @@ registerPropPainter('f15b_column', (o, time) => {
     p.rect(2, 6, 13, 6, GOLD[4]);
     p.rect(3, 9, 12, 9, GOLD[1]);
     // Кристалл.
-    poly(p, [[8, 0], [10.5, 3], [8, 6.5], [5.5, 3]], (x) => (x < 8 ? ICE[4 + (glow === 1 ? 1 : 0)] : ICE[3]));
+    poly(
+      p,
+      [
+        [8, 0],
+        [10.5, 3],
+        [8, 6.5],
+        [5.5, 3],
+      ],
+      (x) => (x < 8 ? ICE[4 + (glow === 1 ? 1 : 0)] : ICE[3]),
+    );
     p.outline(fade(INK, 0.85));
     return { p, ax: 8, ay: H };
   });
@@ -952,7 +1170,9 @@ function partnerOf(o: WorldObj): number {
   const s = paintSim();
   let d = 0;
   if (s) {
-    const q = s.world.objs.find((x) => x.ref === 'f15b_arch' && x.y === o.y && x.x > o.x && x.x - o.x <= 10);
+    const q = s.world.objs.find(
+      (x) => x.ref === 'f15b_arch' && x.y === o.y && x.x > o.x && x.x - o.x <= 10,
+    );
     if (q) d = q.x - o.x;
   }
   archPartner.set(o, d);
@@ -971,7 +1191,15 @@ registerPropPainter('f15b_arch', (o) => {
           p.set(x, y, l < 2 ? ICE[4] : l < 4 ? ICE[3] : l < 6 ? ICE[2] : ICE[1]);
         }
       p.rect(x0 - 1, H - 3, x0 + 8, H - 1, NIGHT[4]);
-      poly(p, [[x0, 14], [x0 + 4, 8], [x0 + 8, 14]], (x) => (x < x0 + 4 ? ICE[5] : ICE[3]));
+      poly(
+        p,
+        [
+          [x0, 14],
+          [x0 + 4, 8],
+          [x0 + 8, 14],
+        ],
+        (x) => (x < x0 + 4 ? ICE[5] : ICE[3]),
+      );
     };
     pillar(2);
     if (span > 0) {
@@ -1002,7 +1230,15 @@ registerPropPainter('f15b_geode', (_o, _t, alive, flash) => {
       const a = (i / 6) * TAU;
       const x = 9.5 + Math.cos(a) * 2.4;
       const y = 8 + Math.sin(a) * 1.8;
-      poly(p, [[x - 1, y + 1], [9.5 + Math.cos(a) * 0.6, 8 + Math.sin(a) * 0.5], [x + 1, y - 1]], i < 3 ? VIO[4] : VIO[2]);
+      poly(
+        p,
+        [
+          [x - 1, y + 1],
+          [9.5 + Math.cos(a) * 0.6, 8 + Math.sin(a) * 0.5],
+          [x + 1, y - 1],
+        ],
+        i < 3 ? VIO[4] : VIO[2],
+      );
     }
     p.set(8, 7, WHITE);
     p.set(11, 9, VIO[5]);
@@ -1024,9 +1260,33 @@ registerPropPainter('f15b_lamp', (o, time) => {
     p.rect(4, 15, 10, 15, GOLD[1]);
     const h = [7, 8, 9, 8, 7, 6][f];
     const sw = [0, 1, 0, -1, 0, 1][f];
-    poly(p, [[3.5, 13], [7 + sw, 13 - h - 2], [10.5, 13]], VIO[3]);
-    poly(p, [[4.5, 13], [7 + sw * 0.5, 13 - h], [9.5, 13]], GOLD[4]);
-    poly(p, [[5.5, 13], [7, 13 - h * 0.6], [8.5, 13]], WHITE);
+    poly(
+      p,
+      [
+        [3.5, 13],
+        [7 + sw, 13 - h - 2],
+        [10.5, 13],
+      ],
+      VIO[3],
+    );
+    poly(
+      p,
+      [
+        [4.5, 13],
+        [7 + sw * 0.5, 13 - h],
+        [9.5, 13],
+      ],
+      GOLD[4],
+    );
+    poly(
+      p,
+      [
+        [5.5, 13],
+        [7, 13 - h * 0.6],
+        [8.5, 13],
+      ],
+      WHITE,
+    );
     p.outline(fade(INK, 0.8));
     return { p, ax: 7, ay: 26 };
   });
@@ -1047,7 +1307,14 @@ registerPropPainter('f15b_twinkle', (o, time) => {
         p.set(5, 5 + i, c);
         p.set(5, 5 - i, c);
       }
-      if (n > 2) for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) p.set(5 + dx, 5 + dy, fade(GOLD[4], 0.7));
+      if (n > 2)
+        for (const [dx, dy] of [
+          [1, 1],
+          [-1, 1],
+          [1, -1],
+          [-1, -1],
+        ])
+          p.set(5 + dx, 5 + dy, fade(GOLD[4], 0.7));
       p.set(5, 5, WHITE);
     } else p.set(5, 5, fade(ICE[3], 0.5));
     return { p, ax: 5, ay: 13 };
@@ -1061,8 +1328,17 @@ registerPropPainter('f15b_spire', (o) => {
     const p = new Px(18, 32);
     const prism = (x: number, h: number, w: number) => {
       const top = 31 - h;
-      poly(p, [[x - w, 31], [x - w, top + w], [x, top], [x + w, top + w], [x + w, 31]], (px, py) =>
-        px < x - w * 0.35 ? ICE[4] : px < x + 0.5 ? (py < top + w + 2 ? ICE[6] : ICE[3]) : ICE[2],
+      poly(
+        p,
+        [
+          [x - w, 31],
+          [x - w, top + w],
+          [x, top],
+          [x + w, top + w],
+          [x + w, 31],
+        ],
+        (px, py) =>
+          px < x - w * 0.35 ? ICE[4] : px < x + 0.5 ? (py < top + w + 2 ? ICE[6] : ICE[3]) : ICE[2],
       );
     };
     prism(5, 14 + v * 2, 2.4);
@@ -1080,7 +1356,16 @@ const RELICS: Record<string, (p: Px) => void> = {
     p.ell(8, 13, 5, 1.6, VIO[2]);
     p.rect(4, 9, 12, 11, GOLD[3]);
     p.rect(4, 11, 12, 11, GOLD[1]);
-    for (const x of [4, 8, 12]) poly(p, [[x - 1.5, 9.5], [x, 5], [x + 1.5, 9.5]], x < 8 ? GOLD[4] : GOLD[3]);
+    for (const x of [4, 8, 12])
+      poly(
+        p,
+        [
+          [x - 1.5, 9.5],
+          [x, 5],
+          [x + 1.5, 9.5],
+        ],
+        x < 8 ? GOLD[4] : GOLD[3],
+      );
     p.set(8, 10, hx('#e0405a'));
     p.set(5, 10, ICE[4]);
     p.set(11, 10, ICE[4]);
@@ -1088,20 +1373,52 @@ const RELICS: Record<string, (p: Px) => void> = {
   // Секира Минотавра стоит торчком.
   axe: (p) => {
     stroke(p, 8, 14, 8, 2, GOLD[1]);
-    poly(p, [[8, 3], [3, 1.5], [2.5, 7.5], [8, 6]], (x) => (x < 5 ? ICE[4] : ICE[3]));
-    poly(p, [[8, 3], [13, 1.5], [13.5, 7.5], [8, 6]], (x) => (x > 11 ? ICE[2] : ICE[3]));
+    poly(
+      p,
+      [
+        [8, 3],
+        [3, 1.5],
+        [2.5, 7.5],
+        [8, 6],
+      ],
+      (x) => (x < 5 ? ICE[4] : ICE[3]),
+    );
+    poly(
+      p,
+      [
+        [8, 3],
+        [13, 1.5],
+        [13.5, 7.5],
+        [8, 6],
+      ],
+      (x) => (x > 11 ? ICE[2] : ICE[3]),
+    );
     p.set(8, 4, GOLD[4]);
   },
   // Чешуя Красного змея — щиток с гребнями.
   skull: (p) => {
-    poly(p, [[8, 2], [13, 7], [8, 14], [3, 7]], (x, y) => (x + y < 14 ? hx('#ee6a3a') : hx('#a83a2a')));
-    for (let i = 0; i < 3; i++) stroke(p, 5 + i * 1.5, 6 + i * 2, 11 - i * 1.5, 6 + i * 2, hx('#ffb070'));
+    poly(
+      p,
+      [
+        [8, 2],
+        [13, 7],
+        [8, 14],
+        [3, 7],
+      ],
+      (x, y) => (x + y < 14 ? hx('#ee6a3a') : hx('#a83a2a')),
+    );
+    for (let i = 0; i < 3; i++)
+      stroke(p, 5 + i * 1.5, 6 + i * 2, 11 - i * 1.5, 6 + i * 2, hx('#ffb070'));
     p.set(7, 4, GOLD[5]);
   },
   // Гидра: три шеи из нефрита.
   hydra: (p) => {
     p.ell(8, 13, 4, 1.6, BOG[2]);
-    for (const [x, y] of [[4, 5], [8, 3], [12, 5]] as [number, number][]) {
+    for (const [x, y] of [
+      [4, 5],
+      [8, 3],
+      [12, 5],
+    ] as [number, number][]) {
       stroke(p, 8, 12, x, y + 1, BOG[3], 2);
       p.ell(x, y, 1.6, 1.3, BOG[4]);
       p.set(x - 0.5, y - 0.5, BOG[5]);
@@ -1175,7 +1492,17 @@ type Gest = 0 | 1 | 2 | 3 | 4 | 5;
 type HK = [number, number, number, Gest];
 type Num = 'flare' | 'open' | 'lean' | 'hover' | 'eyes' | 'core' | 'gl' | 'gr' | 'ball';
 const NUMS: Num[] = ['flare', 'open', 'lean', 'hover', 'eyes', 'core', 'gl', 'gr', 'ball'];
-const NDEF: Record<Num, number> = { flare: 0, open: 0, lean: 0, hover: 0, eyes: 1, core: 1, gl: 0, gr: 0, ball: 0 };
+const NDEF: Record<Num, number> = {
+  flare: 0,
+  open: 0,
+  lean: 0,
+  hover: 0,
+  eyes: 1,
+  core: 1,
+  gl: 0,
+  gr: 0,
+  ball: 0,
+};
 type Ease = 'in' | 'out' | 'io' | 'lin';
 const EASE: Record<Ease, (t: number) => number> = { in: eIn, out: eOut, io: smooth, lin: clamp01 };
 
@@ -1213,7 +1540,12 @@ function track(list: KFi[]): KFull[] {
 }
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
-const lerpH = (a: HK, b: HK, k: number): HK => [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k), k < 0.5 ? a[3] : b[3]];
+const lerpH = (a: HK, b: HK, k: number): HK => [
+  lerp(a[0], b[0], k),
+  lerp(a[1], b[1], k),
+  lerp(a[2], b[2], k),
+  k < 0.5 ? a[3] : b[3],
+];
 
 /** Поза дорожки в момент `t` (после последнего ключа — последний). */
 function sample(tr: KFull[], t: number): KFull {
@@ -1240,12 +1572,31 @@ const L_ = LORD;
 
 const T_PALM = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 0.55, L: [10, -10, 34, 1], R: [-3, 9, 60, 2], lean: -0.06, gr: 0.6, eyes: 1.3, flare: 0.1, hover: 2, e: 'out' },
+  {
+    t: 0.55,
+    L: [10, -10, 34, 1],
+    R: [-3, 9, 60, 2],
+    lean: -0.06,
+    gr: 0.6,
+    eyes: 1.3,
+    flare: 0.1,
+    hover: 2,
+    e: 'out',
+  },
   { t: 0.78, R: [-5, 9, 63, 2], gr: 1, eyes: 1.8, lean: -0.09, hover: 3 },
   { t: L_.palmWarn, R: [15, 5, 17, 2], hover: 0, e: 'in' },
 ]);
 const T_PALM_R = track([
-  { t: 0, L: [8, -12, 30, 1], R: [15, 5, 17, 2], lean: 0.14, gr: 1, eyes: 1.6, flare: -0.35, core: 1.5 },
+  {
+    t: 0,
+    L: [8, -12, 30, 1],
+    R: [15, 5, 17, 2],
+    lean: 0.14,
+    gr: 1,
+    eyes: 1.6,
+    flare: -0.35,
+    core: 1.5,
+  },
   { t: 0.3, R: [15, 6, 19, 2], gr: 0.5, lean: 0.1, flare: -0.15, e: 'out' },
   { t: 0.75, R: [14, 8, 26, 1], gr: 0, lean: 0.03, eyes: 1.1, flare: 0, core: 1.3 },
   { t: L_.palmOpen, L: REST_L, R: REST_R, lean: 0, eyes: 1, core: 1 },
@@ -1266,9 +1617,37 @@ const RW = L_.repelWarn;
 const RS = L_.repelStep;
 const T_REPEL = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: RW - 0.35, L: [10, -3, 40, 2], R: [10, 3, 40, 2], flare: -0.45, ball: 0.7, gl: 0.6, gr: 0.6, eyes: 1.5, e: 'out' },
-  { t: RW - 0.05, L: [11, -2.5, 41, 2], R: [11, 2.5, 41, 2], ball: 1, gl: 1, gr: 1, eyes: 1.9, hover: 2 },
-  { t: RW, L: [5, -30, 42, 2], R: [5, 30, 42, 2], flare: 0.85, ball: 0, eyes: 2, hover: 0, e: 'lin' },
+  {
+    t: RW - 0.35,
+    L: [10, -3, 40, 2],
+    R: [10, 3, 40, 2],
+    flare: -0.45,
+    ball: 0.7,
+    gl: 0.6,
+    gr: 0.6,
+    eyes: 1.5,
+    e: 'out',
+  },
+  {
+    t: RW - 0.05,
+    L: [11, -2.5, 41, 2],
+    R: [11, 2.5, 41, 2],
+    ball: 1,
+    gl: 1,
+    gr: 1,
+    eyes: 1.9,
+    hover: 2,
+  },
+  {
+    t: RW,
+    L: [5, -30, 42, 2],
+    R: [5, 30, 42, 2],
+    flare: 0.85,
+    ball: 0,
+    eyes: 2,
+    hover: 0,
+    e: 'lin',
+  },
   { t: RW + RS - 0.05, L: [5, -22, 38, 2], R: [5, 22, 38, 2], flare: 0.7, e: 'out' },
   { t: RW + RS, L: [5, -24, 39, 2], R: [5, 24, 39, 2], flare: 0.95, e: 'lin' },
   { t: RW + 2 * RS - 0.05, L: [5, -22, 38, 2], R: [5, 22, 38, 2], flare: 0.75, e: 'out' },
@@ -1281,7 +1660,16 @@ const T_REPEL_R = track([
 ]);
 const T_WELL = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 0.55, L: [7, -11, 34, 1], R: [6, 7, 61, 3], gr: 0.7, eyes: 1.5, lean: -0.05, hover: 2, e: 'out' },
+  {
+    t: 0.55,
+    L: [7, -11, 34, 1],
+    R: [6, 7, 61, 3],
+    gr: 0.7,
+    eyes: 1.5,
+    lean: -0.05,
+    hover: 2,
+    e: 'out',
+  },
   { t: L_.wellWarn - 0.06, R: [7, 7, 63, 3], gr: 1, eyes: 1.9, hover: 3 },
   { t: L_.wellWarn, R: [14, 4, 16, 3], hover: 0, e: 'in' },
 ]);
@@ -1304,13 +1692,33 @@ const T_ORBIT_R = track([
 const MW = L_.meteorWarn;
 const T_METEOR = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: MW - 0.3, L: [2, -12, 78, 2], R: [2, 12, 78, 2], gl: 0.8, gr: 0.8, eyes: 2, core: 1.6, hover: 4, flare: 0.3, e: 'out' },
+  {
+    t: MW - 0.3,
+    L: [2, -12, 78, 2],
+    R: [2, 12, 78, 2],
+    gl: 0.8,
+    gr: 0.8,
+    eyes: 2,
+    core: 1.6,
+    hover: 4,
+    flare: 0.3,
+    e: 'out',
+  },
   { t: MW, L: [0, -13, 80, 2], R: [0, 13, 80, 2], gl: 1, gr: 1 },
   { t: MW + 0.1, L: [10, -17, 38, 3], R: [10, 17, 38, 3], hover: 0, flare: 0.6, e: 'in' },
   { t: MW + 0.3, L: [8, -17, 32, 2], R: [8, 17, 32, 2], gl: 0.5, gr: 0.5, flare: 0.3, e: 'out' },
 ]);
 const T_METEOR_R = track([
-  { t: 0, L: [8, -17, 32, 2], R: [8, 17, 32, 2], gl: 0.5, gr: 0.5, flare: 0.3, eyes: 1.6, core: 1.3 },
+  {
+    t: 0,
+    L: [8, -17, 32, 2],
+    R: [8, 17, 32, 2],
+    gl: 0.5,
+    gr: 0.5,
+    flare: 0.3,
+    eyes: 1.6,
+    core: 1.3,
+  },
   { t: 0.5, L: REST_L, R: REST_R, gl: 0, gr: 0, flare: 0, eyes: 1, core: 1 },
 ]);
 const T_CONDUCT = track([
@@ -1326,7 +1734,18 @@ const T_CONDUCT_R = track([
   { t: 0, L: [5, -11, 40, 1], R: [14, 8, 38, 4], gr: 0.4, eyes: 1.2 },
   { t: 0.4, L: REST_L, R: REST_R, gr: 0, eyes: 1 },
 ]);
-const HIDDEN: Omit<KFi, 't'> = { L: HID_L, R: HID_R, flare: -1, eyes: 1.7, core: 0.5, open: 0, gl: 0, gr: 0, hover: 0, lean: 0 };
+const HIDDEN: Omit<KFi, 't'> = {
+  L: HID_L,
+  R: HID_R,
+  flare: -1,
+  eyes: 1.7,
+  core: 0.5,
+  open: 0,
+  gl: 0,
+  gr: 0,
+  hover: 0,
+  lean: 0,
+};
 const T_HIDDEN = track([{ t: 0, ...HIDDEN }]);
 const DW = L_.darkWarn;
 const T_CLAW = track([
@@ -1344,12 +1763,30 @@ const T_STARFALL = track([
   { t: DW + 0.25, R: [18, 5, 30, 4], gr: 0.4, e: 'out' },
 ]);
 /** Из удара во тьме — обратно под плащ. */
-const T_CLAW_BACK = track([{ t: 0, R: [13, -14, 27, 5], L: HID_L, flare: -0.3, eyes: 1.8, core: 0.5, gr: 0.4 }, { t: 0.3, ...HIDDEN }]);
-const T_STAR_BACK = track([{ t: 0, R: [18, 5, 30, 4], L: HID_L, flare: -0.5, eyes: 1.8, core: 0.5, gr: 0.4 }, { t: 0.3, ...HIDDEN }]);
+const T_CLAW_BACK = track([
+  { t: 0, R: [13, -14, 27, 5], L: HID_L, flare: -0.3, eyes: 1.8, core: 0.5, gr: 0.4 },
+  { t: 0.3, ...HIDDEN },
+]);
+const T_STAR_BACK = track([
+  { t: 0, R: [18, 5, 30, 4], L: HID_L, flare: -0.5, eyes: 1.8, core: 0.5, gr: 0.4 },
+  { t: 0.3, ...HIDDEN },
+]);
 const CO = L_.cloakOpen;
 const T_OPEN = track([
   { t: 0, ...HIDDEN },
-  { t: 0.2, L: [2, -24, 47, 2], R: [2, 24, 47, 2], flare: 1, open: 1, core: 2, eyes: 1.3, gl: 0.8, gr: 0.8, hover: 3, e: 'out' },
+  {
+    t: 0.2,
+    L: [2, -24, 47, 2],
+    R: [2, 24, 47, 2],
+    flare: 1,
+    open: 1,
+    core: 2,
+    eyes: 1.3,
+    gl: 0.8,
+    gr: 0.8,
+    hover: 3,
+    e: 'out',
+  },
   { t: 1.2, L: [3, -23, 45, 2], R: [3, 23, 45, 2], flare: 0.9, open: 0.95, core: 1.8, hover: 2 },
   { t: CO - 0.3, L: [2, -24, 47, 2], R: [2, 24, 47, 2], flare: 1, open: 1, core: 2, hover: 3 },
   { t: CO, ...HIDDEN, e: 'in' },
@@ -1362,18 +1799,54 @@ const T_WRAP = track([
 ]);
 const T_GATHER = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 1.2, L: [13, -4.5, 42, 2], R: [13, 4.5, 42, 2], ball: 1, gl: 0.7, gr: 0.7, flare: -0.35, eyes: 1.6 },
+  {
+    t: 1.2,
+    L: [13, -4.5, 42, 2],
+    R: [13, 4.5, 42, 2],
+    ball: 1,
+    gl: 0.7,
+    gr: 0.7,
+    flare: -0.35,
+    eyes: 1.6,
+  },
   { t: 1.5, L: [12, -3.5, 42, 2], R: [12, 3.5, 42, 2], ball: 1.2, eyes: 1.9 },
-  { t: 1.6, L: [10, -3, 42, 3], R: [10, 3, 42, 3], ball: 0, flare: 0.5, eyes: 2, core: 1.8, e: 'lin' },
+  {
+    t: 1.6,
+    L: [10, -3, 42, 3],
+    R: [10, 3, 42, 3],
+    ball: 0,
+    flare: 0.5,
+    eyes: 2,
+    core: 1.8,
+    e: 'lin',
+  },
   { t: L_.gather, L: REST_L, R: REST_R, flare: 0, eyes: 1, core: 1, gl: 0, gr: 0 },
 ]);
 const T_MEMORY = track([
   { t: 0, L: REST_L, R: REST_R },
-  { t: 0.8, L: [4, -16, 66, 2], R: [4, 16, 66, 2], flare: 0.5, gl: 0.8, gr: 0.8, eyes: 1.8, core: 1.6, hover: 4 },
+  {
+    t: 0.8,
+    L: [4, -16, 66, 2],
+    R: [4, 16, 66, 2],
+    flare: 0.5,
+    gl: 0.8,
+    gr: 0.8,
+    eyes: 1.8,
+    core: 1.6,
+    hover: 4,
+  },
   { t: 2.0, L: [3, -17, 68, 2], R: [3, 17, 68, 2] },
   { t: L_.memory, L: REST_L, R: REST_R, flare: 0, gl: 0, gr: 0, eyes: 1, core: 1, hover: 0 },
 ]);
-const SLEEP: Omit<KFi, 't'> = { L: HID_L, R: HID_R, flare: -1, eyes: 0, core: 0.25, hover: -2, open: 0 };
+const SLEEP: Omit<KFi, 't'> = {
+  L: HID_L,
+  R: HID_R,
+  flare: -1,
+  eyes: 0,
+  core: 0.25,
+  hover: -2,
+  open: 0,
+};
 const T_SLEEP = track([{ t: 0, ...SLEEP }]);
 const T_STIR = track([
   { t: 0, ...SLEEP },
@@ -1386,20 +1859,78 @@ const T_WAKE = track([
   { t: 0.8, eyes: 0, core: 0.4 },
   { t: 1.0, eyes: 1.4, core: 1.2, e: 'out' },
   { t: 1.5, L: [7, -9, 30, 1], R: [7, 9, 30, 1], flare: -0.5, hover: 2 },
-  { t: 1.7, L: [3, -25, 52, 2], R: [3, 25, 52, 2], flare: 1, open: 0.6, eyes: 2, core: 2, gl: 1, gr: 1, hover: 6, e: 'in' },
+  {
+    t: 1.7,
+    L: [3, -25, 52, 2],
+    R: [3, 25, 52, 2],
+    flare: 1,
+    open: 0.6,
+    eyes: 2,
+    core: 2,
+    gl: 1,
+    gr: 1,
+    hover: 6,
+    e: 'in',
+  },
   { t: 2.0, L: [3, -26, 54, 2], R: [3, 26, 54, 2], flare: 1, hover: 7, e: 'out' },
-  { t: 2.8, L: [5, -20, 44, 2], R: [5, 20, 44, 2], flare: 0.4, open: 0.2, core: 1.4, eyes: 1.4, gl: 0.4, gr: 0.4, hover: 3 },
+  {
+    t: 2.8,
+    L: [5, -20, 44, 2],
+    R: [5, 20, 44, 2],
+    flare: 0.4,
+    open: 0.2,
+    core: 1.4,
+    eyes: 1.4,
+    gl: 0.4,
+    gr: 0.4,
+    hover: 3,
+  },
   { t: L_.wake, L: REST_L, R: REST_R, flare: 0, open: 0, core: 1, eyes: 1, gl: 0, gr: 0, hover: 0 },
 ]);
 const NV = L_.nova;
 const T_NOVA = track([
   { t: 0, L: GLIDE_L, R: GLIDE_R, lean: 0.1, flare: -0.3 },
   { t: NV - 1.4, lean: 0.06 },
-  { t: NV - 0.8, L: [6, -12, 40, 2], R: [6, 12, 40, 2], lean: 0, flare: -0.5, ball: 0.8, gl: 0.8, gr: 0.8, eyes: 1.8, core: 1.6 },
-  { t: NV - 0.6, L: [1, -27, 52, 2], R: [1, 27, 52, 2], flare: 1, open: 1, core: 2, eyes: 2, ball: 0, gl: 1, gr: 1, hover: 4, e: 'in' },
+  {
+    t: NV - 0.8,
+    L: [6, -12, 40, 2],
+    R: [6, 12, 40, 2],
+    lean: 0,
+    flare: -0.5,
+    ball: 0.8,
+    gl: 0.8,
+    gr: 0.8,
+    eyes: 1.8,
+    core: 1.6,
+  },
+  {
+    t: NV - 0.6,
+    L: [1, -27, 52, 2],
+    R: [1, 27, 52, 2],
+    flare: 1,
+    open: 1,
+    core: 2,
+    eyes: 2,
+    ball: 0,
+    gl: 1,
+    gr: 1,
+    hover: 4,
+    e: 'in',
+  },
   { t: NV, L: [1, -26, 50, 2], R: [1, 26, 50, 2], hover: 3, e: 'out' },
 ]);
-const BLAZE: Omit<KFi, 't'> = { L: [1, -26, 50, 2], R: [1, 26, 50, 2], flare: 1, open: 1, core: 2, eyes: 2, gl: 1, gr: 1, hover: 3, lean: 0 };
+const BLAZE: Omit<KFi, 't'> = {
+  L: [1, -26, 50, 2],
+  R: [1, 26, 50, 2],
+  flare: 1,
+  open: 1,
+  core: 2,
+  eyes: 2,
+  gl: 1,
+  gr: 1,
+  hover: 3,
+  lean: 0,
+};
 const T_BEAMS = track([
   { t: 0, ...BLAZE },
   { t: 1, L: [1, -25, 48, 2], R: [1, 25, 48, 2], hover: 2 },
@@ -1418,8 +1949,30 @@ const T_PULSE = track([
 ]);
 const EX = L_.exhale;
 const T_EXHALE = track([
-  { t: 0, L: [2, -28, 50, 2], R: [2, 28, 50, 2], flare: 1, open: 1, core: 2, eyes: 2, gl: 1, gr: 1, hover: 3 },
-  { t: 0.6, L: [5, -15, 26, 1], R: [5, 15, 26, 1], flare: 0.15, open: 0.35, core: 0.5, eyes: 0.8, gl: 0, gr: 0, hover: -1 },
+  {
+    t: 0,
+    L: [2, -28, 50, 2],
+    R: [2, 28, 50, 2],
+    flare: 1,
+    open: 1,
+    core: 2,
+    eyes: 2,
+    gl: 1,
+    gr: 1,
+    hover: 3,
+  },
+  {
+    t: 0.6,
+    L: [5, -15, 26, 1],
+    R: [5, 15, 26, 1],
+    flare: 0.15,
+    open: 0.35,
+    core: 0.5,
+    eyes: 0.8,
+    gl: 0,
+    gr: 0,
+    hover: -1,
+  },
   { t: EX - 0.5, L: [5, -14, 25, 1], R: [5, 14, 25, 1], core: 0.6 },
   { t: EX, ...BLAZE },
 ]);
@@ -1430,9 +1983,30 @@ const DIE = 2.6;
 // остаётся в «своих» секундах и успевает целиком.
 const DIE_K = 2.3;
 const T_DIE = track([
-  { t: 0, L: [4, -22, 50, 2], R: [4, 22, 50, 2], flare: 1, open: 0.8, core: 2, eyes: 2, gl: 1, gr: 1, hover: 4, lean: -0.08 },
+  {
+    t: 0,
+    L: [4, -22, 50, 2],
+    R: [4, 22, 50, 2],
+    flare: 1,
+    open: 0.8,
+    core: 2,
+    eyes: 2,
+    gl: 1,
+    gr: 1,
+    hover: 4,
+    lean: -0.08,
+  },
   { t: 0.35, L: [2, -24, 58, 2], R: [2, 24, 58, 2], hover: 7, lean: -0.12, e: 'out' },
-  { t: 1.4, L: [4, -18, 54, 2], R: [4, 18, 54, 2], flare: 0.6, open: 0.4, hover: 8, gl: 0.6, gr: 0.6 },
+  {
+    t: 1.4,
+    L: [4, -18, 54, 2],
+    R: [4, 18, 54, 2],
+    flare: 0.6,
+    open: 0.4,
+    hover: 8,
+    gl: 0.6,
+    gr: 0.6,
+  },
   { t: 2.0, L: [6, -10, 52, 0], R: [6, 10, 52, 0], core: 2.4, eyes: 2, gl: 0, gr: 0, hover: 9 },
   { t: DIE, core: 3, hover: 10 },
 ]);
@@ -1517,7 +2091,9 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
     k = at(T_WAKE, 'wake', T);
     alpha = 0.45 + 0.55 * smooth(T / 1.7);
   } else if (mode === 'f15l_dstrike') {
-    k = m.data.kind ? at(T_STARFALL, 'sf', T, fr24(DW + 0.25)) : at(T_CLAW, 'cl', T, fr24(DW + 0.25));
+    k = m.data.kind
+      ? at(T_STARFALL, 'sf', T, fr24(DW + 0.25))
+      : at(T_CLAW, 'cl', T, fr24(DW + 0.25));
     dim = 0.45;
   } else if (mode === 'f15l_dark') {
     const act = m.data.act ?? 0;
@@ -1549,7 +2125,12 @@ function lordPose(m: Mob, pose: MobPose, now: number): LPose {
   } else {
     // Погоня: покой дышит, на ходу — плащ тянется назад.
     const sb = spQ >= 1 ? 0 : Math.round(Math.sin((ph / 10) * TAU));
-    const idle = { ...T_IDLE[0], L: [6, -18, 31 + sb, 1] as HK, R: [6, 18, 31 - sb, 1] as HK, flare: 0.04 * sb };
+    const idle = {
+      ...T_IDLE[0],
+      L: [6, -18, 31 + sb, 1] as HK,
+      R: [6, 18, 31 - sb, 1] as HK,
+      flare: 0.04 * sb,
+    };
     k = blend(idle, T_GLIDE[0], spQ);
     key = `ch${spQ}|${sb}`;
   }
@@ -1666,7 +2247,16 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
   const fl = p.flare;
   const lean = p.lean;
   const lx = (z: number) => lean * Math.max(0, z - HEM) * 0.6;
-  const put = (X: number, Y: number, d: number, k: number, u: number, v: number, s: number, c = 0) => {
+  const put = (
+    X: number,
+    Y: number,
+    d: number,
+    k: number,
+    u: number,
+    v: number,
+    s: number,
+    c = 0,
+  ) => {
     const x = Math.round(X);
     const y = Math.round(Y);
     if (x < 0 || y < 0 || x >= LW || y >= LH) return;
@@ -1729,12 +2319,21 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
             put(X, Y, depth, 3, 0, 0, 0, pack(s > 0.75 ? GOLD[4] : s > 0.5 ? GOLD[3] : GOLD[2]));
             continue;
           }
-          put(X, Y, depth, 2, uByte(u), Math.min(255, Math.round(z * 2)), Math.round(shadeOf(cx, sy, dR) * 255));
+          put(
+            X,
+            Y,
+            depth,
+            2,
+            uByte(u),
+            Math.min(255, Math.round(z * 2)),
+            Math.round(shadeOf(cx, sy, dR) * 255),
+          );
         } else {
           // Изнанка: видна в распахе и под кромкой — бездна со светом изнутри.
-        const xi = Math.round(X);
-        const yi = Math.round(Y);
-        if (xi < 0 || yi < 0 || xi >= LW || yi >= LH || depth - 0.01 <= zb[yi * LW + xi]) continue;
+          const xi = Math.round(X);
+          const yi = Math.round(Y);
+          if (xi < 0 || yi < 0 || xi >= LW || yi >= LH || depth - 0.01 <= zb[yi * LW + xi])
+            continue;
           const k = clamp01(1 - Math.abs(cx));
           let c = mixc(NIGHT[1], VIO[1], 0.2 + 0.5 * k);
           if (p.open > 0.05) {
@@ -1766,7 +2365,15 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
           const X = LAX + wx;
           const Y = LAY - z + wy * KF;
           if (p.dissolve > 0.95) continue;
-          put(X, Y, wy * VY + z * VZ, 2, uByte(u), Math.round(z * 2), Math.round(shadeOf(Math.cos(psi) * 0.5, Math.sin(psi) * 0.5, 1) * 255));
+          put(
+            X,
+            Y,
+            wy * VY + z * VZ,
+            2,
+            uByte(u),
+            Math.round(z * 2),
+            Math.round(shadeOf(Math.cos(psi) * 0.5, Math.sin(psi) * 0.5, 1) * 255),
+          );
         }
       }
     }
@@ -1797,10 +2404,27 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
           const depth = wy * VY + z * VZ + 0.6;
           const s = shadeOf(cx, sy, 0.45);
           if (z < zc + 1.2 || Math.abs(u) < 1.05) {
-            put(X, Y, depth, 3, 0, 0, 0, pack(s > 0.72 ? GOLD[5] : s > 0.5 ? GOLD[4] : s > 0.3 ? GOLD[3] : GOLD[2]));
+            put(
+              X,
+              Y,
+              depth,
+              3,
+              0,
+              0,
+              0,
+              pack(s > 0.72 ? GOLD[5] : s > 0.5 ? GOLD[4] : s > 0.3 ? GOLD[3] : GOLD[2]),
+            );
             continue;
           }
-          put(X, Y, depth, 2, uByte(u + 1.7), Math.min(255, Math.round(z * 2 + 40)), Math.round(clamp01(s + 0.08) * 255));
+          put(
+            X,
+            Y,
+            depth,
+            2,
+            uByte(u + 1.7),
+            Math.min(255, Math.round(z * 2 + 40)),
+            Math.round(clamp01(s + 0.08) * 255),
+          );
         }
       }
     }
@@ -1823,13 +2447,29 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
           const wy = cy0 + py * q * w;
           const X = LAX + wx;
           const Y = LAY - z + wy * KF;
-          put(X, Y, wy * VY + z * VZ, 1, uByte(Math.PI + q * 0.6), Math.min(255, Math.round((z + s * Lt) * 2)), Math.round(clamp01(0.55 - q * 0.25 - s * 0.2) * 255));
+          put(
+            X,
+            Y,
+            wy * VY + z * VZ,
+            1,
+            uByte(Math.PI + q * 0.6),
+            Math.min(255, Math.round((z + s * Lt) * 2)),
+            Math.round(clamp01(0.55 - q * 0.25 - s * 0.2) * 255),
+          );
         }
       }
     }
     let n = 0;
     for (let i = 0; i < N; i++) if (kind[i]) n++;
-    const o: Cloak = { idx: new Uint16Array(n), z: new Float32Array(n), k: new Uint8Array(n), u: new Uint8Array(n), v: new Uint8Array(n), s: new Uint8Array(n), c: new Uint32Array(n) };
+    const o: Cloak = {
+      idx: new Uint16Array(n),
+      z: new Float32Array(n),
+      k: new Uint8Array(n),
+      u: new Uint8Array(n),
+      v: new Uint8Array(n),
+      s: new Uint8Array(n),
+      c: new Uint32Array(n),
+    };
     n = 0;
     for (let i = 0; i < N; i++) {
       if (!kind[i]) continue;
@@ -1880,7 +2520,11 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
     by -= dot * ay;
     bz -= dot * az;
     const bn = Math.hypot(bx, by, bz) || 1;
-    const E: [number, number, number] = [M[0] + (bx / bn) * hh, M[1] + (by / bn) * hh, M[2] + (bz / bn) * hh];
+    const E: [number, number, number] = [
+      M[0] + (bx / bn) * hh,
+      M[1] + (by / bn) * hh,
+      M[2] + (bz / bn) * hh,
+    ];
     const s2 = P(...S);
     const e2 = P(...E);
     const w2 = P(...H);
@@ -1907,7 +2551,7 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
           const depth = A[2] + (B[2] - A[2]) * t + bulge * 0.9;
           // Свет по поперечному сдвигу: левый-верхний край светлее.
           const across = (ex * -vy + ey * vx) / Ln / r;
-          const s = clamp01(0.5 - across * 0.35 - (ey / r) * 0.25 + bulge / r * 0.2);
+          const s = clamp01(0.5 - across * 0.35 - (ey / r) * 0.25 + (bulge / r) * 0.2);
           if (dd > r - 0.8) {
             put(x, y, depth - 0.3, 3, 0, 0, 0, pack(INK));
             continue;
@@ -1916,7 +2560,15 @@ function buildLord(a: number, p: LPose, cloakKey: string): LGeo {
             put(x, y, depth, 3, 0, 0, 0, pack(s > 0.6 ? GOLD[4] : s > 0.35 ? GOLD[3] : GOLD[2]));
             continue;
           }
-          put(x, y, depth, 1, (side < 0 ? 40 : 200) + Math.round(t * 30), Math.round(40 + t * 60), Math.round(clamp01(s + 0.14) * 255));
+          put(
+            x,
+            y,
+            depth,
+            1,
+            (side < 0 ? 40 : 200) + Math.round(t * 30),
+            Math.round(40 + t * 60),
+            Math.round(clamp01(s + 0.14) * 255),
+          );
         }
     };
     seg(s2, e2, 2.6, 3.0, false);
@@ -2005,7 +2657,10 @@ function nebula(): Uint8Array {
       const y = iy / NT;
       const w = pnoise(x * 4, y * 4, 4, 3);
       const w2 = pnoise(x * 4 + 9, y * 4, 4, 4);
-      const d = 0.55 * pnoise(x * 4 + w * 1.2, y * 4 + w2 * 1.2, 4, 11) + 0.3 * pnoise(x * 8, y * 8, 8, 12) + 0.15 * pnoise(x * 16, y * 16, 16, 13);
+      const d =
+        0.55 * pnoise(x * 4 + w * 1.2, y * 4 + w2 * 1.2, 4, 11) +
+        0.3 * pnoise(x * 8, y * 8, 8, 12) +
+        0.15 * pnoise(x * 16, y * 16, 16, 13);
       const dens = clamp01((d - 0.44) * 2.6);
       const hue = pnoise(x * 2, y * 2, 2, 21);
       const ds = Math.min(3, Math.floor(dens * 3.6));
@@ -2061,7 +2716,16 @@ const clothMask = new Uint8Array(LW * LH);
 const BODY_N = 12;
 const bodyKeys: string[] = [];
 const bodyAt = new Map<string, number>();
-function paintBody(geo: LGeo, gk: string, now: number, flash: boolean, fresh: boolean, p: LPose, a: number, kindled: number): HTMLCanvasElement {
+function paintBody(
+  geo: LGeo,
+  gk: string,
+  now: number,
+  flash: boolean,
+  fresh: boolean,
+  p: LPose,
+  a: number,
+  kindled: number,
+): HTMLCanvasElement {
   // Туманность течёт ступенями: полшага вниз 6,4 раза в секунду, по кругу — 2,2;
   // звёзды плаща рисуются тут же — тело обновляется ~9 раз в секунду.
   const flow = Math.floor(now * 6.4) / 2;
@@ -2098,7 +2762,7 @@ function paintBody(geo: LGeo, gk: string, now: number, flash: boolean, fresh: bo
     const sb = geo.cS[i];
     const sh = (sb & 127) / 127;
     if (sb & 128) clothMask[pi] = 1;
-    const iu = (((geo.cU[i] >> 2) + swirl) % NT + NT) % NT;
+    const iu = ((((geo.cU[i] >> 2) + swirl) % NT) + NT) % NT;
     const iv = ((Math.floor(geo.cV[i] * 0.45 + flow) % NT) + NT) % NT;
     const n = neb[iv * NT + iu];
     const zz = geo.cV[i] * 0.5;
@@ -2109,11 +2773,16 @@ function paintBody(geo: LGeo, gk: string, now: number, flash: boolean, fresh: bo
   }
   for (let i = 0; i < geo.sIdx.length; i++) {
     let c = geo.sCol[i];
-    if (flash && (c >>> 24) > 200) {
+    if (flash && c >>> 24 > 200) {
       const r = c & 255;
       const g = (c >> 8) & 255;
       const b = (c >> 16) & 255;
-      c = pack([Math.round(r + (255 - r) * 0.6), Math.round(g + (255 - g) * 0.6), Math.round(b + (255 - b) * 0.6), c >>> 24]);
+      c = pack([
+        Math.round(r + (255 - r) * 0.6),
+        Math.round(g + (255 - g) * 0.6),
+        Math.round(b + (255 - b) * 0.6),
+        c >>> 24,
+      ]);
     }
     d32[geo.sIdx[i]] = c;
   }
@@ -2129,7 +2798,13 @@ const CORE_R = [8, 6, 4, 2, 1];
 const CORE_LRU = frameLRU<HTMLCanvasElement>(220);
 
 /** Ядро-лицо: диск ночи в короне затмения, глаза — две звезды. */
-function coreSprite(dir: number, eyes: number, lvl: number, tint: number, rq: number): HTMLCanvasElement {
+function coreSprite(
+  dir: number,
+  eyes: number,
+  lvl: number,
+  tint: number,
+  rq: number,
+): HTMLCanvasElement {
   const key = `${dir}|${eyes}|${lvl}|${tint}|${rq}`;
   const hit = CORE_LRU.get(key);
   if (hit) return hit;
@@ -2150,7 +2825,11 @@ function coreSprite(dir: number, eyes: number, lvl: number, tint: number, rq: nu
       for (let d = 0; d < L; d += 0.5) {
         const r = Rc + 0.6 + d;
         const al = (1 - d / L) * (0.5 + lvl * 0.13);
-        p.set(C - 0.5 + Math.cos(an) * r, C - 0.5 + Math.sin(an) * r, fade(d < 1.5 ? glow[5] : glow[4], al));
+        p.set(
+          C - 0.5 + Math.cos(an) * r,
+          C - 0.5 + Math.sin(an) * r,
+          fade(d < 1.5 ? glow[5] : glow[4], al),
+        );
       }
     }
   }
@@ -2172,7 +2851,11 @@ function coreSprite(dir: number, eyes: number, lvl: number, tint: number, rq: nu
     for (let k = -12; k <= 12; k++) {
       const az = a + (k / 12) * 1.25;
       if (Math.sin(az) <= 0.05) continue;
-      p.set(C + Math.cos(az) * Rc * 0.78 - 0.5, C - Rc * 0.62 + Math.sin(az) * Rc * 0.22 - 0.5, fade(GOLD[4], 0.85));
+      p.set(
+        C + Math.cos(az) * Rc * 0.78 - 0.5,
+        C - Rc * 0.62 + Math.sin(az) * Rc * 0.22 - 0.5,
+        fade(GOLD[4], 0.85),
+      );
     }
     for (const o of [-0.42, 0.42]) {
       const az = a + o;
@@ -2233,11 +2916,19 @@ function collarSprites(dir: number): [HTMLCanvasElement, HTMLCanvasElement] {
     const nx = (-vy / vn) * 1.4;
     const ny = (vx / vn) * 1.4;
     const tgt = cy < 0 ? back : front;
-    poly(tgt, [[bx + nx, by + ny], [tx, ty], [bx - nx, by - ny]], (x, y) => {
-      const t = clamp01(((x - bx) * vx + (y - by) * vy) / (vn * vn));
-      const side = (x - bx) * nx + (y - by) * ny > 0;
-      return t > 0.7 ? ICE[5] : t > 0.4 ? (side ? GOLD[4] : GOLD[3]) : side ? GOLD[3] : GOLD[2];
-    });
+    poly(
+      tgt,
+      [
+        [bx + nx, by + ny],
+        [tx, ty],
+        [bx - nx, by - ny],
+      ],
+      (x, y) => {
+        const t = clamp01(((x - bx) * vx + (y - by) * vy) / (vn * vn));
+        const side = (x - bx) * nx + (y - by) * ny > 0;
+        return t > 0.7 ? ICE[5] : t > 0.4 ? (side ? GOLD[4] : GOLD[3]) : side ? GOLD[3] : GOLD[2];
+      },
+    );
   }
   back.outline(fade(INK, 0.7));
   front.outline(fade(INK, 0.7));
@@ -2261,17 +2952,21 @@ export function planetSprite(i: number): HTMLCanvasElement {
   const pl = PLANETS[i];
   const cx = 7.5;
   const cy = 5.5;
-  if (i === 4) for (let k = 0; k < 40; k++) {
-    const t = (k / 40) * TAU;
-    if (Math.sin(t) < 0) p.set(cx + Math.cos(t) * 6.4, cy + Math.sin(t) * 1.8 - Math.cos(t) * 0.8, GOLD[2]);
-  }
+  if (i === 4)
+    for (let k = 0; k < 40; k++) {
+      const t = (k / 40) * TAU;
+      if (Math.sin(t) < 0)
+        p.set(cx + Math.cos(t) * 6.4, cy + Math.sin(t) * 1.8 - Math.cos(t) * 0.8, GOLD[2]);
+    }
   ball(p, cx, cy, pl.r, pl.t);
   // Грань кристалла.
   for (let k = -2; k <= 2; k++) p.set(cx + k * 0.6, cy - pl.r * 0.2 + k * 0.5, fade(pl.t[3], 0.6));
-  if (i === 4) for (let k = 0; k < 40; k++) {
-    const t = (k / 40) * TAU;
-    if (Math.sin(t) >= 0) p.set(cx + Math.cos(t) * 6.4, cy + Math.sin(t) * 1.8 - Math.cos(t) * 0.8, GOLD[4]);
-  }
+  if (i === 4)
+    for (let k = 0; k < 40; k++) {
+      const t = (k / 40) * TAU;
+      if (Math.sin(t) >= 0)
+        p.set(cx + Math.cos(t) * 6.4, cy + Math.sin(t) * 1.8 - Math.cos(t) * 0.8, GOLD[4]);
+    }
   p.outline(fade(INK, 0.8));
   PLANET_SPR[i] = p.canvas();
   return PLANET_SPR[i];
@@ -2300,10 +2995,21 @@ function handSprite(g: Gest, a16: number, side: number): HTMLCanvasElement {
   let palmR = 2.7;
   let palmX = 2;
   if (g === 1) {
-    fingers.push([3, -1, 5, -1.4], [3.2, 0, 5.5, 0], [3, 1, 5, 1.3], [1.4, th * 1.8, 2.8, th * 2.6]);
+    fingers.push(
+      [3, -1, 5, -1.4],
+      [3.2, 0, 5.5, 0],
+      [3, 1, 5, 1.3],
+      [1.4, th * 1.8, 2.8, th * 2.6],
+    );
   } else if (g === 2) {
-    for (const o of [-0.55, -0.18, 0.18, 0.55]) fingers.push([3, o * 2, 3 + Math.cos(o) * 3.4, o * 2 + Math.sin(o) * 3.4]);
-    fingers.push([1.3, th * 1.4, 1.3 + Math.cos(th * 1.25) * 2.6, th * 1.4 + Math.sin(th * 1.25) * 2.6]);
+    for (const o of [-0.55, -0.18, 0.18, 0.55])
+      fingers.push([3, o * 2, 3 + Math.cos(o) * 3.4, o * 2 + Math.sin(o) * 3.4]);
+    fingers.push([
+      1.3,
+      th * 1.4,
+      1.3 + Math.cos(th * 1.25) * 2.6,
+      th * 1.4 + Math.sin(th * 1.25) * 2.6,
+    ]);
   } else if (g === 3) {
     palmR = 3.1;
   } else if (g === 4) {
@@ -2328,7 +3034,8 @@ function handSprite(g: Gest, a16: number, side: number): HTMLCanvasElement {
       const d = Math.min(dp, df);
       if (d > 0) continue;
       let c = d < -0.9 ? WHITE : GOLD[5];
-      for (const [tx, ty] of tips) if (Math.hypot(lx - tx, ly - ty) < 0.9) c = g === 5 ? VIO[5] : WHITE;
+      for (const [tx, ty] of tips)
+        if (Math.hypot(lx - tx, ly - ty) < 0.9) c = g === 5 ? VIO[5] : WHITE;
       if (g === 3 && Math.abs(lx - 3.4) < 0.6 && Math.abs(ly) < 1.8) c = GOLD[4];
       p.set(x, y, c);
     }
@@ -2347,7 +3054,16 @@ function corePos(a: number, p: LPose): [number, number] {
   return [LAX + Math.cos(a) * f, LAY - CORE + bow + Math.sin(a) * f * KF];
 }
 
-function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: number, s: Sim | null, dieT: number): HTMLCanvasElement {
+function paintLit(
+  m: Mob,
+  p: LPose,
+  a: number,
+  dir: number,
+  geo: LGeo,
+  now: number,
+  s: Sim | null,
+  dieT: number,
+): HTMLCanvasElement {
   const v = f15bView(s);
   const sl = slot(LIT, litI);
   litI = (litI + 1) % 4;
@@ -2367,7 +3083,12 @@ function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: numb
   // Свет между плечами и ядром: голова — пустота со светом.
   if (rq < 4) {
     g.fillStyle = css(lvl >= 2 ? GOLD[4] : ICE[3], 0.18 * Math.min(1, p.core));
-    g.fillRect(Math.round(cx0) - 1, Math.round(cy0) + 4, 3, Math.max(0, Math.round(LAY - SHO - 2 - cy0 - 4)));
+    g.fillRect(
+      Math.round(cx0) - 1,
+      Math.round(cy0) + 4,
+      3,
+      Math.max(0, Math.round(LAY - SHO - 2 - cy0 - 4)),
+    );
   }
   const [cb, cf] = collarSprites(dir);
   const collarOn = p.dissolve < 0.95;
@@ -2382,7 +3103,11 @@ function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: numb
       if (Math.sin(an) >= 0 !== front) continue;
       const img = planetSprite(i);
       g.globalAlpha = crownK;
-      g.drawImage(img, Math.round(cx0 + Math.cos(an) * orbR - 7.5), Math.round(cy0 - 1 + Math.sin(an) * 6.2 * (1 - p.shrink * 0.85) - 5.5));
+      g.drawImage(
+        img,
+        Math.round(cx0 + Math.cos(an) * orbR - 7.5),
+        Math.round(cy0 - 1 + Math.sin(an) * 6.2 * (1 - p.shrink * 0.85) - 5.5),
+      );
       g.globalAlpha = 1;
     }
   };
@@ -2391,7 +3116,12 @@ function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: numb
     g.fillStyle = css(GOLD[3], 0.22 * crownK);
     for (let k = 0; k < 48; k += 2) {
       const t = (k / 48) * TAU + crownA * 0.2;
-      g.fillRect(Math.round(cx0 + Math.cos(t) * orbR - 0.5), Math.round(cy0 - 1 + Math.sin(t) * 6.2 - 0.5), 1, 1);
+      g.fillRect(
+        Math.round(cx0 + Math.cos(t) * orbR - 0.5),
+        Math.round(cy0 - 1 + Math.sin(t) * 6.2 - 0.5),
+        1,
+        1,
+      );
     }
   }
   planet(false);
@@ -2438,7 +3168,12 @@ function paintLit(m: Mob, p: LPose, a: number, dir: number, geo: LGeo, now: numb
     g.fillStyle = css(VIO[5], 0.9);
     for (let k = 0; k < 6; k++) {
       const t = now * 6 + (k * TAU) / 6;
-      g.fillRect(Math.round(bx + Math.cos(t) * (r + 0.5) - 0.5), Math.round(by + Math.sin(t) * (r + 0.5) * 0.7 - 0.5), 1, 1);
+      g.fillRect(
+        Math.round(bx + Math.cos(t) * (r + 0.5) - 0.5),
+        Math.round(by + Math.sin(t) * (r + 0.5) * 0.7 - 0.5),
+        1,
+        1,
+      );
     }
   }
   // Смерть: плащ осыпается звёздами вверх; в конце ядро вспыхивает точкой.
@@ -2503,7 +3238,8 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
   const geo = lordGeo(dir, p);
   const gk = geoKey(dir, p);
   const sp = Math.hypot(m.vx, m.vy);
-  const ghostOn = pose.mode !== 'dying' && sp > 3.4 && (pose.mode === 'f15l_dark' || pose.mode === 'f15l_nova');
+  const ghostOn =
+    pose.mode !== 'dying' && sp > 3.4 && (pose.mode === 'f15l_dark' || pose.mode === 'f15l_nova');
   const v = f15bView(s);
   const kindled = !v ? 0 : (s?.boss?.phase ?? 0) === 0 ? v.echo : 5;
   // Шлейф держит ссылки на кадры ~0,3 с, а кольцо из 12 тел живёт дольше 1 с — копия не нужна.
@@ -2512,7 +3248,16 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
   const lk = `${m.id}|${Math.floor(now * 24)}|${gk}|${pose.mode}`;
   let lit = LIT_LAST.c;
   if (lk !== LIT_LAST.k || !lit) {
-    lit = paintLit(m, p, (dir * TAU) / DIRS, dir, geo, now, s, pose.mode === 'dying' ? pose.t * DIE_K : 0);
+    lit = paintLit(
+      m,
+      p,
+      (dir * TAU) / DIRS,
+      dir,
+      geo,
+      now,
+      s,
+      pose.mode === 'dying' ? pose.t * DIE_K : 0,
+    );
     LIT_LAST.k = lk;
     LIT_LAST.c = lit;
   }
@@ -2548,9 +3293,25 @@ registerMobWarm('f15boss', function* () {
     for (const d of order)
       for (let b = 0; b < (spQ ? 5 : 3); b++) {
         const sb = spQ ? 0 : b - 1;
-        const idle = { ...T_IDLE[0], L: [6, -18, 31 + sb, 1] as HK, R: [6, 18, 31 - sb, 1] as HK, flare: 0.04 * sb };
+        const idle = {
+          ...T_IDLE[0],
+          L: [6, -18, 31 + sb, 1] as HK,
+          R: [6, 18, 31 - sb, 1] as HK,
+          flare: 0.04 * sb,
+        };
         const k = blend(idle, T_GLIDE[0], spQ);
-        const p: LPose = { ...k, key: `ch${spQ}|${sb}`, train: spQ, sway: 0, alpha: 1, dissolve: 0, shrink: 0, dim: 1, tint: -1, ph: spQ ? b * 2 : 0 };
+        const p: LPose = {
+          ...k,
+          key: `ch${spQ}|${sb}`,
+          train: spQ,
+          sway: 0,
+          alpha: 1,
+          dissolve: 0,
+          shrink: 0,
+          dim: 1,
+          tint: -1,
+          ph: spQ ? b * 2 : 0,
+        };
         lordGeo(d, p);
         yield;
       }
@@ -2571,7 +3332,12 @@ function blendPx(d32: Uint32Array, x: number, y: number, c: RGBA, al: number): v
   const r = o & 255;
   const g = (o >> 8) & 255;
   const b = (o >> 16) & 255;
-  d32[i] = pack([Math.round(r + (c[0] - r) * k), Math.round(g + (c[1] - g) * k), Math.round(b + (c[2] - b) * k), o >>> 24]);
+  d32[i] = pack([
+    Math.round(r + (c[0] - r) * k),
+    Math.round(g + (c[1] - g) * k),
+    Math.round(b + (c[2] - b) * k),
+    o >>> 24,
+  ]);
 }
 
 /** Пять звёзд эха на плаще: (угол от лица, высота). */
@@ -2600,7 +3366,13 @@ function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: n
     const sy = Math.sin(psi);
     const X = Math.round(LAX + lx(z) * ca + cx * R - 0.5);
     const Y = Math.round(LAY - z + (lx(z) * sa + sy * R) * KF - 0.5);
-    const vis = sy * VY + dR * VZ > 0.06 && X >= 0 && Y >= 0 && X < LW && Y < LH && clothMask[Y * LW + X] === 1;
+    const vis =
+      sy * VY + dR * VZ > 0.06 &&
+      X >= 0 &&
+      Y >= 0 &&
+      X < LW &&
+      Y < LH &&
+      clothMask[Y * LW + X] === 1;
     return [X, Y, vis];
   };
   const ds = p.dissolve;
@@ -2622,7 +3394,13 @@ function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: n
       const al = k * tw * dim;
       if (al <= 0.05) continue;
       if (h1 < 0.2) {
-        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) blendPx(d32, x + dx, y + dy, ICE[5], al * 0.7);
+        for (const [dx, dy] of [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+        ])
+          blendPx(d32, x + dx, y + dy, ICE[5], al * 0.7);
         blendPx(d32, x, y, WHITE, al);
       } else blendPx(d32, x, y, h1 < 0.55 ? ICE[4] : h1 < 0.8 ? VIO[4] : GOLD[4], al * 0.9);
     }
@@ -2636,7 +3414,13 @@ function decoBody(d32: Uint32Array, p: LPose, a: number, now: number, kindled: n
     for (let dy = -2; dy <= 2; dy++)
       for (let dx = -2; dx <= 2; dx++) {
         if (dx && dy) {
-          blendPx(d32, x + dx, y + dy, GOLD[4], (Math.abs(dx) + Math.abs(dy) > 2 ? 0.12 : 0.3) * tw);
+          blendPx(
+            d32,
+            x + dx,
+            y + dy,
+            GOLD[4],
+            (Math.abs(dx) + Math.abs(dy) > 2 ? 0.12 : 0.3) * tw,
+          );
           continue;
         }
         blendPx(d32, x + dx, y + dy, Math.abs(dx + dy) === 2 ? GOLD[4] : GOLD[5], 0.9 * tw);
@@ -2684,7 +3468,13 @@ const LV = (() => {
   return [LXv / n, LYv / n, LZv / n];
 })();
 
-function shardSprite(spin: number, glow: number, scale: number, flash: boolean, crack: number): HTMLCanvasElement {
+function shardSprite(
+  spin: number,
+  glow: number,
+  scale: number,
+  flash: boolean,
+  crack: number,
+): HTMLCanvasElement {
   const key = `${spin}|${glow}|${scale}|${flash ? 1 : 0}|${crack}`;
   const hit = SHARD_LRU.get(key);
   if (hit) return hit;
@@ -2700,7 +3490,12 @@ function shardSprite(spin: number, glow: number, scale: number, flash: boolean, 
   const top: [number, number, number] = [0, 0, 11 * sc];
   const bot: [number, number, number] = [0, 0, -8 * sc];
   const P = (q: [number, number, number]): [number, number] => [SAX + q[0], SAY - q[2] + q[1] * KF];
-  const faces: [[number, number, number], [number, number, number], [number, number, number], boolean][] = [];
+  const faces: [
+    [number, number, number],
+    [number, number, number],
+    [number, number, number],
+    boolean,
+  ][] = [];
   for (let i = 0; i < 6; i++) {
     const a = v3[i];
     const b = v3[(i + 1) % 6];
@@ -2787,13 +3582,18 @@ function shardDie(f: number): HTMLCanvasElement {
     const s = 2.4 * (1 - k * 0.7);
     const rot = a + k * 5;
     const c = k > 0.7 ? fade(ICE[3], 1.5 - k * 1.5) : i % 3 ? ICE[4] : ICE[5];
-    poly(p, [
-      [x + Math.cos(rot) * s, y + Math.sin(rot) * s],
-      [x + Math.cos(rot + 2.3) * s * 0.7, y + Math.sin(rot + 2.3) * s * 0.7],
-      [x + Math.cos(rot + 4) * s * 0.8, y + Math.sin(rot + 4) * s * 0.8],
-    ], c);
+    poly(
+      p,
+      [
+        [x + Math.cos(rot) * s, y + Math.sin(rot) * s],
+        [x + Math.cos(rot + 2.3) * s * 0.7, y + Math.sin(rot + 2.3) * s * 0.7],
+        [x + Math.cos(rot + 4) * s * 0.8, y + Math.sin(rot + 4) * s * 0.8],
+      ],
+      c,
+    );
   }
-  if (f < 4) p.ell(ox + SAX - 0.5, oy + SAY - 1.5, 3 + f * 2, 3 + f * 2, fade(WHITE, 0.8 - f * 0.2));
+  if (f < 4)
+    p.ell(ox + SAX - 0.5, oy + SAY - 1.5, 3 + f * 2, 3 + f * 2, fade(WHITE, 0.8 - f * 0.2));
   return SHARD_LRU.set(key, p.canvas());
 }
 
@@ -2802,7 +3602,15 @@ registerMobPainter('f15b_shard', (m: Mob, pose: MobPose): MobFrame | null => {
   const T = pose.t;
   if (pose.mode === 'dying') {
     const f = Math.min(11, Math.floor((T / 0.5) * 12));
-    return { img: shardDie(f), ax: SAX + 7, ay: SAY + 5, eye: null, lift: 7, shadow: Math.max(0, 5 - f * 0.5), linger: 0.5 };
+    return {
+      img: shardDie(f),
+      ax: SAX + 7,
+      ay: SAY + 5,
+      eye: null,
+      lift: 7,
+      shadow: Math.max(0, 5 - f * 0.5),
+      linger: 0.5,
+    };
   }
   let spinRate = 1.4;
   let glow = 0;
@@ -2863,8 +3671,12 @@ const KW = 64;
 const KH = 68;
 const KAX = 32;
 const KAY = 62;
-const MARBLE = ['#20243a', '#3c4262', '#646c8c', '#9098b4', '#bcc4d8', '#e4e8f2', '#fbfcff'].map((c) => hx(c));
-const STONE_K = ['#1c1c22', '#34343c', '#50505a', '#6e6e78', '#8e8e98', '#b0b0b8', '#d0d0d6'].map((c) => hx(c));
+const MARBLE = ['#20243a', '#3c4262', '#646c8c', '#9098b4', '#bcc4d8', '#e4e8f2', '#fbfcff'].map(
+  (c) => hx(c),
+);
+const STONE_K = ['#1c1c22', '#34343c', '#50505a', '#6e6e78', '#8e8e98', '#b0b0b8', '#d0d0d6'].map(
+  (c) => hx(c),
+);
 const KEEP_LRU = frameLRU<[HTMLCanvasElement, HTMLCanvasElement]>(320);
 const keeperLast = new WeakMap<Mob, number>();
 const STAFF_D = hx('#3a2a4a');
@@ -2890,11 +3702,86 @@ interface KPose {
   glow: number;
 }
 
-const K_IDLE: KPose = { gx: 3, gy: 6, gz: 16, sdx: 0.05, sdy: 0, sdz: 1, lo: 16, hi: 22, hx2: 3, hy2: -4.5, hz2: 15, lean: 0, bob: 0, glow: 0.3 };
-const K_RAISE: KPose = { gx: 1, gy: 2, gz: 33, sdx: -0.15, sdy: 0, sdz: 1, lo: 10, hi: 18, hx2: 1.5, hy2: -1, hz2: 30, lean: -1, bob: 0, glow: 1 };
-const K_SLAM: KPose = { gx: 7, gy: 1.5, gz: 13, sdx: 0.35, sdy: 0, sdz: -1, lo: 13, hi: 14, hx2: 6, hy2: -1.5, hz2: 15, lean: 3, bob: 0, glow: 1 };
-const K_DRAW: KPose = { gx: -1, gy: 4, gz: 19, sdx: 1, sdy: -0.1, sdz: 0.08, lo: 8, hi: 18, hx2: 2, hy2: -3, hz2: 19, lean: -1.5, bob: 0, glow: 0.8 };
-const K_THRUST: KPose = { gx: 6, gy: 2.5, gz: 19, sdx: 1, sdy: -0.05, sdz: 0.04, lo: 8, hi: 20, hx2: 5, hy2: -2, hz2: 19, lean: 2.5, bob: 0, glow: 1 };
+const K_IDLE: KPose = {
+  gx: 3,
+  gy: 6,
+  gz: 16,
+  sdx: 0.05,
+  sdy: 0,
+  sdz: 1,
+  lo: 16,
+  hi: 22,
+  hx2: 3,
+  hy2: -4.5,
+  hz2: 15,
+  lean: 0,
+  bob: 0,
+  glow: 0.3,
+};
+const K_RAISE: KPose = {
+  gx: 1,
+  gy: 2,
+  gz: 33,
+  sdx: -0.15,
+  sdy: 0,
+  sdz: 1,
+  lo: 10,
+  hi: 18,
+  hx2: 1.5,
+  hy2: -1,
+  hz2: 30,
+  lean: -1,
+  bob: 0,
+  glow: 1,
+};
+const K_SLAM: KPose = {
+  gx: 7,
+  gy: 1.5,
+  gz: 13,
+  sdx: 0.35,
+  sdy: 0,
+  sdz: -1,
+  lo: 13,
+  hi: 14,
+  hx2: 6,
+  hy2: -1.5,
+  hz2: 15,
+  lean: 3,
+  bob: 0,
+  glow: 1,
+};
+const K_DRAW: KPose = {
+  gx: -1,
+  gy: 4,
+  gz: 19,
+  sdx: 1,
+  sdy: -0.1,
+  sdz: 0.08,
+  lo: 8,
+  hi: 18,
+  hx2: 2,
+  hy2: -3,
+  hz2: 19,
+  lean: -1.5,
+  bob: 0,
+  glow: 0.8,
+};
+const K_THRUST: KPose = {
+  gx: 6,
+  gy: 2.5,
+  gz: 19,
+  sdx: 1,
+  sdy: -0.05,
+  sdz: 0.04,
+  lo: 8,
+  hi: 20,
+  hx2: 5,
+  hy2: -2,
+  hz2: 19,
+  lean: 2.5,
+  bob: 0,
+  glow: 1,
+};
 
 function kmix(a: KPose, b: KPose, k: number): KPose {
   const o = { ...a };
@@ -2935,11 +3822,19 @@ function veins(): Uint8Array {
   if (VEIN) return VEIN;
   const v = new Uint8Array(61 * 64);
   for (let zi = 0; zi <= 60; zi++)
-    for (let k = 0; k < 64; k++) v[zi * 64 + k] = vnoise(((k / 64) * TAU) * 3 + zi * 0.075, zi * 0.175, 619) > 0.78 ? 1 : 0;
+    for (let k = 0; k < 64; k++)
+      v[zi * 64 + k] = vnoise((k / 64) * TAU * 3 + zi * 0.075, zi * 0.175, 619) > 0.78 ? 1 : 0;
   return (VEIN = v);
 }
 
-function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, flash: boolean, ph: number): [HTMLCanvasElement, HTMLCanvasElement] {
+function buildKeeper(
+  dir: number,
+  kp: KPose,
+  stone: number,
+  crumble: number,
+  flash: boolean,
+  ph: number,
+): [HTMLCanvasElement, HTMLCanvasElement] {
   const vt = veins();
   const a = (dir * TAU) / 16;
   const ca = Math.cos(a);
@@ -2967,7 +3862,8 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
   };
   const leanAt = (z: number) => kp.lean * clamp01((z - 6) / 30);
   const bob = kp.bob;
-  const shade = (nx: number, ny: number, nz: number) => clamp01(0.42 + (nx * LV[0] + ny * LV[1] + nz * LV[2]) * 0.6);
+  const shade = (nx: number, ny: number, nz: number) =>
+    clamp01(0.42 + (nx * LV[0] + ny * LV[1] + nz * LV[2]) * 0.6);
   // Балахон и накидка: стопка дисков.
   for (let zi = 0; zi <= 60; zi++) {
     const z = zi * 0.5;
@@ -2992,11 +3888,23 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         let c = mixq(rp[1], rp[5], l, Math.round(X), Math.round(Y));
         // Прожилки мрамора.
         if (!stoneAt(z) && vt[zi * 64 + k]) c = mixc(c, rp[2], 0.6);
-        const gold = !stoneAt(z) && (z < 1.5 || (z > 15.4 && z < 16.6) || (z > 28 && z < 29.2) || (Math.abs(u) < 0.16 && z < 15.4));
+        const gold =
+          !stoneAt(z) &&
+          (z < 1.5 ||
+            (z > 15.4 && z < 16.6) ||
+            (z > 28 && z < 29.2) ||
+            (Math.abs(u) < 0.16 && z < 15.4));
         if (gold) c = l > 0.55 ? GOLD[4] : GOLD[3];
         else if (stoneAt(z) && (z < 1.5 || (z > 15.4 && z < 16.6))) c = STONE_K[2];
         // Вышитые звёзды по подолу.
-        if (!stoneAt(z) && z > 3 && z < 9 && Math.abs(u) > 0.5 && hash(k, Math.floor(z), 621) < 0.05) c = GOLD[5];
+        if (
+          !stoneAt(z) &&
+          z > 3 &&
+          z < 9 &&
+          Math.abs(u) > 0.5 &&
+          hash(k, Math.floor(z), 621) < 0.05
+        )
+          c = GOLD[5];
         put(X, Y, d, c, z);
       }
     }
@@ -3023,8 +3931,15 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         let u = psi - a;
         u -= Math.round(u / TAU) * TAU;
         const rp = ramp(z);
-        let c = mixq(rp[1], rp[6], shade(cx * Math.sqrt(1 - lat * lat), cy * Math.sqrt(1 - lat * lat), lat + 0.2), Math.round(X), Math.round(Y));
-        if (Math.abs(u) < 1.05 && lat > -0.38 && lat < 0.12) c = lat > -0.1 && Math.abs(u) < 0.9 ? INK : stoneAt(z) ? STONE_K[1] : NIGHT[2];
+        let c = mixq(
+          rp[1],
+          rp[6],
+          shade(cx * Math.sqrt(1 - lat * lat), cy * Math.sqrt(1 - lat * lat), lat + 0.2),
+          Math.round(X),
+          Math.round(Y),
+        );
+        if (Math.abs(u) < 1.05 && lat > -0.38 && lat < 0.12)
+          c = lat > -0.1 && Math.abs(u) < 0.9 ? INK : stoneAt(z) ? STONE_K[1] : NIGHT[2];
         else if (!stoneAt(z) && lat > -0.5 && lat < -0.36 && Math.abs(u) < 1.4) c = GOLD[3];
         put(X, Y, d, c, z);
       }
@@ -3052,7 +3967,16 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         const z = 27.3 + lat * R * 0.8;
         const [X, Y, d] = toS(f, r, z + bob);
         const rp = ramp(z);
-        const c = lat < 0.15 && !stoneAt(z) ? GOLD[3] : mixq(rp[2], rp[6], shade(Math.cos(psi) * 0.6, Math.sin(psi) * 0.6, lat + 0.3), Math.round(X), Math.round(Y));
+        const c =
+          lat < 0.15 && !stoneAt(z)
+            ? GOLD[3]
+            : mixq(
+                rp[2],
+                rp[6],
+                shade(Math.cos(psi) * 0.6, Math.sin(psi) * 0.6, lat + 0.3),
+                Math.round(X),
+                Math.round(Y),
+              );
         put(X, Y, d, c, z);
       }
   }
@@ -3076,10 +4000,17 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         const rp = ramp(z);
         const band = Math.floor(w * 7);
         const feather = (w * 7) % 1;
-        let c = mixq(rp[0], rp[4], 0.2 + 0.5 * s + (band % 2) * 0.12 - (side > 0 ? 0.1 : 0), Math.round(X), Math.round(Y));
+        let c = mixq(
+          rp[0],
+          rp[4],
+          0.2 + 0.5 * s + (band % 2) * 0.12 - (side > 0 ? 0.1 : 0),
+          Math.round(X),
+          Math.round(Y),
+        );
         if (!stoneAt(z) && feather > 0.8 && s > 0.5) c = mixc(c, VIO[3], 0.35);
         if (feather < 0.16) c = mixc(c, INK, 0.35);
-        if (reach > 0.93 * (0.82 + 0.18 * Math.sin(w * Math.PI))) c = stoneAt(z) ? STONE_K[5] : MARBLE[6];
+        if (reach > 0.93 * (0.82 + 0.18 * Math.sin(w * Math.PI)))
+          c = stoneAt(z) ? STONE_K[5] : MARBLE[6];
         if (!stoneAt(z) && s < 0.18 && w < 0.4) c = GOLD[2];
         put(X, Y, d - 0.6, c, z);
       }
@@ -3091,14 +4022,30 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
     if (vis && !stoneAt(33)) {
       const x = Math.round(X - 0.5);
       const y = Math.round(Y - 0.5);
-      for (const [dx, dy, c] of [[0, 0, WHITE], [1, 0, ICE[5]], [-1, 0, ICE[5]], [2, 0, ICE[3]], [-2, 0, ICE[3]]] as [number, number, RGBA][])
+      for (const [dx, dy, c] of [
+        [0, 0, WHITE],
+        [1, 0, ICE[5]],
+        [-1, 0, ICE[5]],
+        [2, 0, ICE[3]],
+        [-2, 0, ICE[3]],
+      ] as [number, number, RGBA][])
         put(x + dx + 0.5, y + dy + 0.5, d + 3, c, 33);
       lit.ell(X - 0.5, Y - 0.5, 3.4, 2.2, fade(ICE[4], 0.35));
       lit.set(x, y, WHITE);
     }
   }
   // Рукава и кисти: капсулы от плеча к кисти.
-  const capsule = (f0: number, r0: number, z0: number, f1: number, r1: number, z1: number, rad0: number, rad1: number, hand: boolean) => {
+  const capsule = (
+    f0: number,
+    r0: number,
+    z0: number,
+    f1: number,
+    r1: number,
+    z1: number,
+    rad0: number,
+    rad1: number,
+    hand: boolean,
+  ) => {
     const n = Math.ceil(Math.hypot(f1 - f0, r1 - r0, z1 - z0) * 2) + 1;
     for (let i = 0; i <= n; i++) {
       const t = i / n;
@@ -3112,7 +4059,16 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         const oh = Math.cos(ang) * rad;
         const [X, Y, d] = toS(f + oh * 0.5, r + oh * 0.85, z + oz + bob);
         const rp = ramp(z);
-        const c = t > 0.82 && !stoneAt(z) ? GOLD[3] : mixq(rp[2], rp[5], shade(Math.cos(ang) * 0.5, 0.3, Math.sin(ang)), Math.round(X), Math.round(Y));
+        const c =
+          t > 0.82 && !stoneAt(z)
+            ? GOLD[3]
+            : mixq(
+                rp[2],
+                rp[5],
+                shade(Math.cos(ang) * 0.5, 0.3, Math.sin(ang)),
+                Math.round(X),
+                Math.round(Y),
+              );
         put(X, Y, d, c, z);
       }
     }
@@ -3155,7 +4111,13 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
       const ty = Y + Math.sin(an) * R * 0.9;
       for (let j = 0; j <= 6; j++) {
         const t = j / 6;
-        put(X + (tx - X) * t, Y + (ty - Y) * t, d + 2, st ? STONE_K[4] : t > 0.6 ? ICE[5] : ICE[4], 40);
+        put(
+          X + (tx - X) * t,
+          Y + (ty - Y) * t,
+          d + 2,
+          st ? STONE_K[4] : t > 0.6 ? ICE[5] : ICE[4],
+          40,
+        );
       }
     }
     put(X, Y, d + 2.5, st ? STONE_K[5] : WHITE, 40);
@@ -3205,8 +4167,11 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
   else if (mode !== 'recover') keeperLast.set(m, 0);
   // Удары и смерть — на 8 сторон (кадров у них втрое больше, чем у шага),
   // шаг и покой — на 16.
-  const atk = mode === 'f15k_slam' || mode === 'f15k_lance' || mode === 'recover' || mode === 'dying';
-  const dir = atk ? (((Math.round(m.face / (TAU / 8)) % 8) + 8) % 8) * 2 : ((Math.round(m.face / (TAU / 16)) % 16) + 16) % 16;
+  const atk =
+    mode === 'f15k_slam' || mode === 'f15k_lance' || mode === 'recover' || mode === 'dying';
+  const dir = atk
+    ? (((Math.round(m.face / (TAU / 8)) % 8) + 8) % 8) * 2
+    : ((Math.round(m.face / (TAU / 16)) % 16) + 16) % 16;
   const sp = Math.hypot(m.vx, m.vy);
   const ph = sp > 0.3 ? Math.floor(now * 8) % 8 : Math.floor(now * 3) % 8;
   let stone = 0;
@@ -3265,7 +4230,8 @@ registerMobWarm('f15b_keeper', function* () {
   for (let d = 0; d < 16; d++)
     for (let ph = 0; ph < 8; ph++) {
       const k = `${d}|c${ph}`;
-      if (!KEEP_LRU.get(k)) KEEP_LRU.set(k, buildKeeper(d, keeperPose('chase', 0, 0, ph), 0, 0, false, ph));
+      if (!KEEP_LRU.get(k))
+        KEEP_LRU.set(k, buildKeeper(d, keeperPose('chase', 0, 0, ph), 0, 0, false, ph));
       yield;
     }
 });
@@ -3303,7 +4269,8 @@ function constellate(src: HTMLCanvasElement, fq: number, tw: number): HTMLCanvas
   const g = src.getContext('2d');
   if (!g) return out;
   const d = g.getImageData(0, 0, w, h).data;
-  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 40;
+  const solid = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 40;
   const o = new ImageData(w, h);
   const od = o.data;
   for (let y = 0; y < h; y++)
@@ -3395,7 +4362,18 @@ registerZonePainter('f15b_echobody', (g, z, px, py, _S, time) => {
   ga.imageSmoothingEnabled = false;
   drawSerpentBody(
     ga,
-    { id: m.id, trail: v.trail, mode: rising ? 'chase' : m.mode, t: m.t, x: m.x, y: m.y, face: m.face, haste: 1, flash: m.flash, die: -1 },
+    {
+      id: m.id,
+      trail: v.trail,
+      mode: rising ? 'chase' : m.mode,
+      t: m.t,
+      x: m.x,
+      y: m.y,
+      face: m.face,
+      haste: 1,
+      flash: m.flash,
+      die: -1,
+    },
     ox,
     oy,
     16,
@@ -3467,12 +4445,16 @@ registerItemArt('f15b_stardust', () => {
 registerItemArt('f15b_echo', () => {
   const p = new Px(10, 10);
   // Осколок эха: индиго-кристалл с золотой гранью и звездой.
-  poly(p, [
-    [5, 0.5],
-    [8.5, 4],
-    [6, 9.5],
-    [2, 6],
-  ], (x, y) => (x + y < 7 ? VIO[2] : x + y < 11 ? NIGHT[5] : NIGHT[3]));
+  poly(
+    p,
+    [
+      [5, 0.5],
+      [8.5, 4],
+      [6, 9.5],
+      [2, 6],
+    ],
+    (x, y) => (x + y < 7 ? VIO[2] : x + y < 11 ? NIGHT[5] : NIGHT[3]),
+  );
   stroke(p, 5, 1, 2.5, 6, GOLD[4]);
   p.set(5, 4, WHITE);
   p.set(6, 6, ICE[4]);

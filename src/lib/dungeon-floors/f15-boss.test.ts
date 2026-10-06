@@ -35,7 +35,10 @@ function dungeon(tier: number, plus: number): DungeonState {
 const bossObj = world.objs.find((o) => o.kind === 'boss' && o.ref === 'f15boss')!;
 const gateObj = world.objs
   .filter((o) => o.kind === 'gate')
-  .sort((a, b) => Math.hypot(a.x - bossObj.x, a.y - bossObj.y) - Math.hypot(b.x - bossObj.x, b.y - bossObj.y))[0];
+  .sort(
+    (a, b) =>
+      Math.hypot(a.x - bossObj.x, a.y - bossObj.y) - Math.hypot(b.x - bossObj.x, b.y - bossObj.y),
+  )[0];
 const band = world.bands.find((b) => b.def.id === F15_HEART)!;
 const STAR: [number, number] = [F15B_GEO.cx, F15B_GEO.cy + band.top];
 
@@ -141,7 +144,8 @@ function bot(s: Sim, st: BotState): SimInput {
   // Упёрся (в стойку, в угол) — секунду обходит под прямым углом.
   if (st.pt === undefined || s.time - st.pt > 1) {
     const moved = Math.hypot(h.x - (st.px ?? h.x), h.y - (st.py ?? h.y));
-    if (st.pt !== undefined && moved < 0.4 && Math.hypot(inp.mx, inp.my) > 0.5) st.side = s.time + 0.7;
+    if (st.pt !== undefined && moved < 0.4 && Math.hypot(inp.mx, inp.my) > 0.5)
+      st.side = s.time + 0.7;
     st.px = h.x;
     st.py = h.y;
     st.pt = s.time;
@@ -192,12 +196,19 @@ function brain(s: Sim, st: BotState): SimInput {
   // Линии прицела (клубок, таран, осколок) — вбок.
   for (const m of s.mobs) {
     let line: { r: number; w: number; ang: number } | null = null;
-    if (m.tele && m.tele.shape === 'line') line = { r: m.tele.r, w: m.tele.w ?? 0.5, ang: m.tele.ang ?? 0 };
-    if (m.kind === 'f15b_shard' && m.mode === 'f15s_aim') line = { r: 7.5, w: m.r + 0.1, ang: m.data.ang ?? 0 };
+    if (m.tele && m.tele.shape === 'line')
+      line = { r: m.tele.r, w: m.tele.w ?? 0.5, ang: m.tele.ang ?? 0 };
+    if (m.kind === 'f15b_shard' && m.mode === 'f15s_aim')
+      line = { r: 7.5, w: m.r + 0.1, ang: m.data.ang ?? 0 };
     if (!line) continue;
     const [react, missed] = notice(st, `l${m.id}:${Math.round((s.time - m.t) * 10)}`);
     if (missed || m.t < react) continue;
-    const hit = strikeHits({ shape: 'line', x: m.x, y: m.y, r: line.r, w: line.w, ang: line.ang, warn: 1, dmg: 0 }, h.x, h.y, h.r + 0.3);
+    const hit = strikeHits(
+      { shape: 'line', x: m.x, y: m.y, r: line.r, w: line.w, ang: line.ang, warn: 1, dmg: 0 },
+      h.x,
+      h.y,
+      h.r + 0.3,
+    );
     if (!hit) continue;
     const a = line.ang + Math.PI / 2;
     const side = Math.cos(a) * (h.x - m.x) + Math.sin(a) * (h.y - m.y) >= 0 ? 1 : -1;
@@ -278,7 +289,8 @@ function brain(s: Sim, st: BotState): SimInput {
       inp.my = Math.sin(a);
       // На пути спящий (неуязвимый) — обойти сбоком.
       for (const g of s.mobs) {
-        if (g === near || g.kind !== 'f15boss' || g.mode === 'dying' || !((g.data.ghost ?? 0) > 0)) continue;
+        if (g === near || g.kind !== 'f15boss' || g.mode === 'dying' || !((g.data.ghost ?? 0) > 0))
+          continue;
         const gx = g.x - h.x;
         const gy = g.y - h.y;
         const along = gx * inp.mx + gy * inp.my;
@@ -337,7 +349,9 @@ function fight(tier: number, plus: number, seed: number, meat = 5, limit = 600):
   for (let t = 0; t < limit * 60; t++) {
     if (force && s.boss?.state === 'fight' && s.boss.phase === 0) f15bForce(s, API, force);
     const hp0 = s.hero.hp;
-    const firing = s.strikes.filter((z) => z.t + DT >= z.warn && strikeHits(z, s.hero.x, s.hero.y, s.hero.r));
+    const firing = s.strikes.filter(
+      (z) => z.t + DT >= z.warn && strikeHits(z, s.hero.x, s.hero.y, s.hero.r),
+    );
     stepSim(s, DT, bot(s, st));
     if (LOG && s.hero.hp < hp0 - 1) {
       const who =
@@ -347,11 +361,20 @@ function fight(tier: number, plus: number, seed: number, meat = 5, limit = 600):
             .filter((m) => Math.hypot(m.x - s.hero.x, m.y - s.hero.y) < 3)
             .map((m) => `${m.kind}:${m.mode}`)[0] ||
           (s.shots.length ? 'shot' : '?'));
-      src.set(`${s.boss?.phase}:${who}`, (src.get(`${s.boss?.phase}:${who}`) ?? 0) + (hp0 - s.hero.hp) / s.stats.maxHp);
+      src.set(
+        `${s.boss?.phase}:${who}`,
+        (src.get(`${s.boss?.phase}:${who}`) ?? 0) + (hp0 - s.hero.hp) / s.stats.maxHp,
+      );
     }
     low = Math.min(low, s.hero.hp / s.stats.maxHp);
-    if (process.env.F15DBG && t % 120 === 0 && (s.boss?.phase ?? 0) === 5) console.log(`  n ${s.time.toFixed(0)} ${f15bView(s)?.nova?.stage} hero r ${Math.hypot(s.hero.x - STAR[0], s.hero.y - STAR[1]).toFixed(1)} hp ${Math.round((100 * s.hero.hp) / s.stats.maxHp)} lord ${Math.round((100 * (s.mobs.find((m) => m.kind === 'f15boss')?.hp ?? 0)) / (s.mobs.find((m) => m.kind === 'f15boss')?.maxHp ?? 1))} shards ${s.mobs.filter((m) => m.kind === 'f15b_shard').length}`);
-    if (process.env.F15DBG && t % 1200 === 0) console.log(`  t=${s.time.toFixed(0)} hero ${s.hero.x.toFixed(1)},${s.hero.y.toFixed(1)} ${s.hero.mode} mobs ${s.mobs.map((m) => `${m.kind.replace('f15b_', '')}:${m.mode}:${Math.round((100 * m.hp) / m.maxHp)}%@${m.x.toFixed(1)},${m.y.toFixed(1)}`).join(' ')}`);
+    if (process.env.F15DBG && t % 120 === 0 && (s.boss?.phase ?? 0) === 5)
+      console.log(
+        `  n ${s.time.toFixed(0)} ${f15bView(s)?.nova?.stage} hero r ${Math.hypot(s.hero.x - STAR[0], s.hero.y - STAR[1]).toFixed(1)} hp ${Math.round((100 * s.hero.hp) / s.stats.maxHp)} lord ${Math.round((100 * (s.mobs.find((m) => m.kind === 'f15boss')?.hp ?? 0)) / (s.mobs.find((m) => m.kind === 'f15boss')?.maxHp ?? 1))} shards ${s.mobs.filter((m) => m.kind === 'f15b_shard').length}`,
+      );
+    if (process.env.F15DBG && t % 1200 === 0)
+      console.log(
+        `  t=${s.time.toFixed(0)} hero ${s.hero.x.toFixed(1)},${s.hero.y.toFixed(1)} ${s.hero.mode} mobs ${s.mobs.map((m) => `${m.kind.replace('f15b_', '')}:${m.mode}:${Math.round((100 * m.hp) / m.maxHp)}%@${m.x.toFixed(1)},${m.y.toFixed(1)}`).join(' ')}`,
+      );
     for (const e of s.events) {
       if (e.t === 'boss' && e.what === 'dead') won = s.time;
       if (e.t === 'boss' && e.what === 'finale') finale += 1;
@@ -385,7 +408,9 @@ function fight(tier: number, plus: number, seed: number, meat = 5, limit = 600):
 
 describe('этаж 15: Хозяин подземелья', () => {
   it('на Т8+5 с едой бот проходит все шесть фаз за 4–8 минут, не всегда без риска', () => {
-    const res = (process.env.F15SEEDS ?? '41,42,43,44').split(',').map((seed) => fight(8, 5, Number(seed)));
+    const res = (process.env.F15SEEDS ?? '41,42,43,44')
+      .split(',')
+      .map((seed) => fight(8, 5, Number(seed)));
     const wins = res.filter((r) => r.won > 0);
     expect(wins.length).toBeGreaterThanOrEqual(3);
     for (const r of wins) {
@@ -427,10 +452,18 @@ function reach(s: Sim, x: number, y: number): Set<number> {
 const starCell = () => Math.floor(STAR[1] + 2) * W + Math.floor(STAR[0]);
 const count = (s: Sim, f: (i: number) => boolean) => [...s.boss!.cells].filter(f).length;
 const lordOf = (s: Sim) => s.mobs.find((m) => m.kind === 'f15boss' && m.mode !== 'dying')!;
-const guard = (s: Sim, m: Mob) => Number(BRAINS.get('f15boss')!.onHit!(s, m, { dmg: 10, crit: false, heavy: false, ang: 0 }, API) ?? 1);
+const guard = (s: Sim, m: Mob) =>
+  Number(
+    BRAINS.get('f15boss')!.onHit!(s, m, { dmg: 10, crit: false, heavy: false, ang: 0 }, API) ?? 1,
+  );
 
 /** Шагать без вреда герою (бессмертие кадра), `f` — ввод на шаг. */
-function run(s: Sim, secs: number, f: (s: Sim) => SimInput = () => NO_INPUT, stop?: (s: Sim) => boolean): void {
+function run(
+  s: Sim,
+  secs: number,
+  f: (s: Sim) => SimInput = () => NO_INPUT,
+  stop?: (s: Sim) => boolean,
+): void {
   for (let t = 0; t < secs * 60; t++) {
     s.hero.inv = 9;
     stepSim(s, DT, f(s));
@@ -456,7 +489,11 @@ describe('этаж 15: механики боя', () => {
       expect(open).toBe(x >= F15_JOIN.x0 && x <= F15_JOIN.x1);
     }
     // Под стыком — пол района «Мира»: из него сюда можно войти.
-    expect([...Array(F15_JOIN.x1 - F15_JOIN.x0 + 1).keys()].some((k) => walkableTile(s.tiles[(bottom + 1) * W + F15_JOIN.x0 + k]))).toBe(true);
+    expect(
+      [...Array(F15_JOIN.x1 - F15_JOIN.x0 + 1).keys()].some((k) =>
+        walkableTile(s.tiles[(bottom + 1) * W + F15_JOIN.x0 + k]),
+      ),
+    ).toBe(true);
     const r = reach(s, (F15_JOIN.x0 + F15_JOIN.x1) / 2 + 0.5, band.top + 101.5);
     expect(r.has((gateObj.y + 1) * W + gateObj.x)).toBe(true);
   });
@@ -546,7 +583,13 @@ describe('этаж 15: механики боя', () => {
     const v2 = f15bView(s2)!;
     s2.hero.x = STAR[0] + 3;
     s2.hero.y = STAR[1] + 5;
-    (v2.wells as { x: number; y: number; at: number; end: number; r: number }[]).push({ x: STAR[0], y: STAR[1] + 5, at: s2.time, end: s2.time + 3, r: LORD.wellR });
+    (v2.wells as { x: number; y: number; at: number; end: number; r: number }[]).push({
+      x: STAR[0],
+      y: STAR[1] + 5,
+      at: s2.time,
+      end: s2.time + 3,
+      r: LORD.wellR,
+    });
     const d0 = Math.hypot(s2.hero.x - STAR[0], s2.hero.y - (STAR[1] + 5));
     run(s2, 1.2);
     const d1 = Math.hypot(s2.hero.x - STAR[0], s2.hero.y - (STAR[1] + 5));
@@ -557,16 +600,23 @@ describe('этаж 15: механики боя', () => {
     const s = started();
     expect(f15bForce(s, API, 3)).toBe(true);
     let stuck = 0;
-    run(s, 10, () => NO_INPUT, (x) => {
-      const hi = Math.floor(x.hero.y) * W + Math.floor(x.hero.x);
-      if (!walkableTile(x.tiles[hi])) stuck += 1;
-      return false;
-    });
+    run(
+      s,
+      10,
+      () => NO_INPUT,
+      (x) => {
+        const hi = Math.floor(x.hero.y) * W + Math.floor(x.hero.x);
+        if (!walkableTile(x.tiles[hi])) stuck += 1;
+        return false;
+      },
+    );
     expect(stuck).toBe(0);
     const mk = s.world.mark;
     expect(count(s, (i) => s.tiles[i] === Tile.Deep && mk[i] === MK.lava)).toBeGreaterThan(3);
     expect(count(s, (i) => s.tiles[i] === Tile.Deep && mk[i] === MK.abyss)).toBeGreaterThan(3);
-    expect(count(s, (i) => s.tiles[i] === Tile.Wall && mk[i] === MK.mirror)).toBeGreaterThanOrEqual(3);
+    expect(count(s, (i) => s.tiles[i] === Tile.Wall && mk[i] === MK.mirror)).toBeGreaterThanOrEqual(
+      3,
+    );
     expect(count(s, (i) => mk[i] === MK.circleA)).toBe(2);
     expect(count(s, (i) => mk[i] === MK.circleB)).toBe(2);
     expect(f15bView(s)!.quads.map((q) => q.kind)).toEqual([...QUADS]);
@@ -590,12 +640,17 @@ describe('этаж 15: механики боя', () => {
     let wrapped = 9;
     let open = 0;
     let darkMax = 0;
-    run(s, 40, () => NO_INPUT, (x) => {
-      darkMax = Math.max(darkMax, f15bView(x)!.dark);
-      if (lord.mode === 'f15l_dark') wrapped = Math.min(wrapped, guard(x, lord));
-      if (lord.mode === 'f15l_open') open = Math.max(open, guard(x, lord));
-      return open > 0 && wrapped < 9;
-    });
+    run(
+      s,
+      40,
+      () => NO_INPUT,
+      (x) => {
+        darkMax = Math.max(darkMax, f15bView(x)!.dark);
+        if (lord.mode === 'f15l_dark') wrapped = Math.min(wrapped, guard(x, lord));
+        if (lord.mode === 'f15l_open') open = Math.max(open, guard(x, lord));
+        return open > 0 && wrapped < 9;
+      },
+    );
     expect(darkMax).toBeGreaterThan(0.9);
     expect(wrapped).toBeLessThan(0.3);
     expect(open).toBeGreaterThan(1.3);
@@ -608,12 +663,17 @@ describe('этаж 15: механики боя', () => {
     expect(guard(s, lord)).toBe(0);
     let blaze = 0;
     let exhale = 0;
-    run(s, 30, () => NO_INPUT, (x) => {
-      const nv = f15bView(x)!.nova;
-      if (nv?.stage === 'beams') blaze = Math.max(blaze, guard(x, lord));
-      if (nv?.stage === 'exhale') exhale = Math.max(exhale, guard(x, lord));
-      return exhale > 0;
-    });
+    run(
+      s,
+      30,
+      () => NO_INPUT,
+      (x) => {
+        const nv = f15bView(x)!.nova;
+        if (nv?.stage === 'beams') blaze = Math.max(blaze, guard(x, lord));
+        if (nv?.stage === 'exhale') exhale = Math.max(exhale, guard(x, lord));
+        return exhale > 0;
+      },
+    );
     expect(Math.hypot(lord.x - STAR[0], lord.y - STAR[1])).toBeLessThan(0.6);
     expect(blaze).toBeLessThan(1);
     expect(exhale).toBeGreaterThan(1.3);
@@ -628,13 +688,17 @@ describe('этаж 15: механики боя', () => {
     API.hurtEnv(s, 5);
     for (let t = 0; t < 12 * 60 && s.boss?.state === 'fight'; t++) stepSim(s, DT, NO_INPUT);
     expect(s.boss?.state).not.toBe('fight');
-    expect(count(s, (i) => s.tiles[i] !== world.tiles[i] || s.world.mark[i] !== world.mark[i])).toBe(0);
+    expect(
+      count(s, (i) => s.tiles[i] !== world.tiles[i] || s.world.mark[i] !== world.mark[i]),
+    ).toBe(0);
     // Победа: арена цела, финал один, ворота выпускают.
     const r = fight(8, 5, 42);
     expect(r.won).toBeGreaterThan(0);
     expect(r.finale).toBe(1);
     const w = r.s;
-    expect(count(w, (i) => w.tiles[i] !== world.tiles[i] || w.world.mark[i] !== world.mark[i])).toBe(0);
+    expect(
+      count(w, (i) => w.tiles[i] !== world.tiles[i] || w.world.mark[i] !== world.mark[i]),
+    ).toBe(0);
     let out = false;
     for (let t = 0; t < 20 * 60 && !out; t++) {
       const h = w.hero;
@@ -653,11 +717,17 @@ describe('этаж 15: механики боя', () => {
     const sh = API.spawnMob(s, 'f15b_shard', 28.5, band.top + 47.5, { mode: 'chase' });
     let slam = 0;
     let aim = 0;
-    run(s, 12, () => NO_INPUT, (x) => {
-      if (x.strikes.some((z) => z.art === 'f15b_kslam' && z.from === k.id && z.t < z.warn)) slam += 1;
-      if (sh.mode === 'f15s_aim') aim += 1;
-      return slam > 0 && aim > 0;
-    });
+    run(
+      s,
+      12,
+      () => NO_INPUT,
+      (x) => {
+        if (x.strikes.some((z) => z.art === 'f15b_kslam' && z.from === k.id && z.t < z.warn))
+          slam += 1;
+        if (sh.mode === 'f15s_aim') aim += 1;
+        return slam > 0 && aim > 0;
+      },
+    );
     expect(slam).toBeGreaterThan(0);
     expect(aim).toBeGreaterThan(0);
   });
@@ -665,7 +735,9 @@ describe('этаж 15: механики боя', () => {
 
 describe.runIf(!!process.env.F15SWEEP)('этаж 15: подбор', () => {
   it('сетка снаряжения', () => {
-    for (const [tier, plus, meat] of (process.env.F15SWEEP ?? '').split(';').map((x) => x.split(',').map(Number)))
+    for (const [tier, plus, meat] of (process.env.F15SWEEP ?? '')
+      .split(';')
+      .map((x) => x.split(',').map(Number)))
       for (const seed of [61, 62, 63]) fight(tier, plus, seed, meat);
   });
 });
