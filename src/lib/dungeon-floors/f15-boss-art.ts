@@ -612,20 +612,50 @@ const NB8: [number, number][] = [
   [1, 1],
 ];
 
+/**
+ * Расстояние (px) от пикселя клетки до ближней чужой клетки — по восьми
+ * соседям, с шумом: берег пятна скруглён и рван, лесенки клеток нет.
+ */
+function shoreOf(
+  u: number,
+  v: number,
+  X: number,
+  Y: number,
+  same: (dx: number, dy: number) => boolean,
+  seed: number,
+  amp: number,
+): number {
+  let ex = 99;
+  for (const [dx, dy] of NB8) {
+    if (same(dx, dy)) continue;
+    const gx = Math.max(dx * 16 - (u + 0.5), u + 0.5 - (dx * 16 + 16), 0);
+    const gy = Math.max(dy * 16 - (v + 0.5), v + 0.5 - (dy * 16 + 16), 0);
+    ex = Math.min(ex, Math.hypot(gx, gy));
+  }
+  return ex + (vnoise(X / 4, Y / 4, seed) - 0.5) * amp;
+}
+
 /** Клетки памяти: прошлые этажи — в кристалле и звёздном свете. */
 function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
   const mk = c.mark;
   const same = (dx: number, dy: number) => c.markAt(dx, dy) === mk;
+  const glass = (dx: number, dy: number) => {
+    const m = c.markAt(dx, dy);
+    return m === MK.mirror || m === MK.mirrorFloor;
+  };
+  const mire = (dx: number, dy: number) => {
+    const m = c.markAt(dx, dy);
+    return m === MK.bog || m === MK.circleA || m === MK.circleB;
+  };
+  const wet = (dx: number, dy: number) => {
+    const m = c.markAt(dx, dy);
+    return m === MK.abyss || m === MK.shallow;
+  };
   for (let v = 0; v < 16; v++)
     for (let u = 0; u < 16; u++) {
       const X = c.wx * 16 + u;
       const Y = c.wy * 16 + v;
       let col: RGBA;
-      const edge =
-        (u === 0 && !same(-1, 0)) ||
-        (u === 15 && !same(1, 0)) ||
-        (v === 0 && !same(0, -1)) ||
-        (v === 15 && !same(0, 1));
       if (mk === MK.lava) {
         // Звёздная лава: жилы ярче, корка — тёмный кристалл.
         const n = fbm(X / 7, Y / 7, 51);
@@ -641,7 +671,11 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         if (vnoise(X / 5, Y / 5, 53) > 0.72)
           col = mixq(VIO[0], NIGHT[2], vnoise(X / 2, Y / 2, 54), X, Y);
         if (hash(X, Y, 55) < 0.006) col = WHITE;
-        if (edge) col = mixc(LAVA[1], INK, 0.3);
+        // Берег: корка тёмного кристалла с раскалённой кромкой, рваный.
+        const sh = shoreOf(u, v, X, Y, same, 62, 5);
+        if (sh < 1.2) col = mixq(NIGHT[1], VIO[0], vnoise(X / 2, Y / 2, 63), X, Y);
+        else if (sh < 2.2) col = LAVA[2];
+        else if (sh < 3.2) col = mixc(col, LAVA[5], 0.5);
       } else if (mk === MK.crust) {
         const n = vnoise(X / 4, Y / 4, 56);
         col = mixq(NIGHT[1], VIO[0], n, X, Y);
@@ -655,7 +689,11 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         const h = hash(X, Y, 58);
         if (h < 0.006) col = SEA[6];
         else if (h < 0.012) col = ICE[4];
-        if (edge) col = SEA[5];
+        // Берег бездны: пена по рваной кромке, у самой кромки — мель.
+        const sh = shoreOf(u, v, X, Y, wet, 64, 4);
+        if (sh < 1.5) col = mixq(skyAt(X, Y), SEA[3], 0.5, X, Y);
+        else if (sh < 2.6) col = SEA[5];
+        else if (sh < 3.4 && hash(X, Y, 65) < 0.5) col = SEA[4];
       } else if (mk === MK.shallow) {
         col = mixq(skyAt(X, Y), SEA[3], 0.55, X, Y);
         if (Math.sin(X * 0.3 + Y * 0.1 + vnoise(X / 5, Y / 5, 57) * 7) > 0.8)
@@ -668,8 +706,11 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         if (m < 7.2) col = m > 6 ? ICE[1] : du + dv < -3 ? ICE[6] : du + dv < 2 ? ICE[5] : ICE[4];
         else col = mixc(skyAt(X, Y), ICE[2], 0.4);
       } else if (mk === MK.mirrorFloor) {
-        col = mixc(skyAt(X, Y), ICE[2], 0.3);
-        if ((u + v) % 6 === 0 || (u - v + 32) % 9 === 0) col = mixc(col, ICE[5], 0.45);
+        // Стеклянный пол: к рваной кромке стекло истончается в звёздный пол.
+        const f = clamp01((shoreOf(u, v, X, Y, glass, 66, 5) - 0.5) / 5);
+        col = mixc(skyAt(X, Y), ICE[2], 0.08 + 0.24 * f);
+        if (((u + v) % 6 === 0 || (u - v + 32) % 9 === 0) && hash(X, Y, 67) < 0.35 + f)
+          col = mixc(col, ICE[5], 0.15 + 0.32 * f);
       } else if (mk === MK.circleA || mk === MK.circleB) {
         const cc = mk === MK.circleA ? BOG[4] : TEAL[3];
         const du = u + 0.5 - 8;
@@ -685,18 +726,15 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         const n = vnoise(X / 4, Y / 4, 59);
         col = mixq(BOG[0], BOG[2], n, X, Y);
         if (hash(X, Y, 60) < 0.012) col = BOG[4];
+        // Топь расползается по полу рваными языками, кромка — ряска.
+        const sh = shoreOf(u, v, X, Y, mire, 68, 6);
+        if (sh < 1.2) col = mixq(skyAt(X, Y), BOG[1], 0.35, X, Y);
+        else if (sh < 2.2) col = hash(X, Y, 69) < 0.5 ? BOG[3] : BOG[2];
       } else {
         // Ожог: на месте лавы остывшие жилы той же лавы тусклым золотом,
         // пепел гаснет к краю пятна. Край — по расстоянию до ближней чужой
         // клетки (и по диагонали тоже) с шумом: углы скруглены, лесенки клеток нет.
-        let ex = 99;
-        for (const [dx, dy] of NB8) {
-          if (same(dx, dy)) continue;
-          const gx = Math.max(dx * 16 - (u + 0.5), u + 0.5 - (dx * 16 + 16), 0);
-          const gy = Math.max(dy * 16 - (v + 0.5), v + 0.5 - (dy * 16 + 16), 0);
-          ex = Math.min(ex, Math.hypot(gx, gy));
-        }
-        const fade = clamp01((ex + (vnoise(X / 4, Y / 4, 61) - 0.5) * 6 - 1) / 8);
+        const fade = clamp01((shoreOf(u, v, X, Y, same, 61, 6) - 1) / 8);
         col = mixq(skyAt(X, Y), INK, 0.45 * fade, X, Y);
         const dd = Math.abs(fbm(X / 7, Y / 7, 51) - 0.5);
         if (dd < 0.006 + 0.03 * fade) col = fade > 0.55 ? GOLD[3] : GOLD[2];
@@ -901,7 +939,11 @@ registerCellPainter(F15_HEART, (c: CellCtx) => {
     (c.open(0, 1) ? 16 : 0);
   // Ожог скругляет углы по диагональным соседям — им они нужны в ключе.
   const diag =
-    c.mark === MK.scorch
+    c.mark === MK.scorch ||
+    c.mark === MK.lava ||
+    c.mark === MK.abyss ||
+    c.mark === MK.bog ||
+    c.mark === MK.mirrorFloor
       ? `|${c.markAt(-1, -1)},${c.markAt(1, -1)},${c.markAt(-1, 1)},${c.markAt(1, 1)}`
       : '';
   const key = `${c.wx},${c.wy},${g.top}|${c.tile}|${c.mark}|${ob}|${c.markAt(-1, 0)},${c.markAt(1, 0)},${c.markAt(0, -1)},${c.markAt(0, 1)}${diag}`;

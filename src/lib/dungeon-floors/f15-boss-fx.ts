@@ -6823,19 +6823,25 @@ registerZonePainter(
         const e = eIn2(k01(q));
         return [bez(ox, mx, tx, e), bez(oy - 8, my, ty, e)];
       };
-      for (let j = 1; j <= 5; j++) {
-        const [x, y] = pos(u - j * 0.035);
-        p.col(C.gold[2], 0.7 * (1 - j / 6));
-        p.dot(x, y);
+      // След — сплошной хвост кометы: у головы белый, к концу золото гаснет.
+      let [lx, ly] = pos(u);
+      for (let j = 1; j <= 9; j++) {
+        const [x, y] = pos(u - j * 0.03);
+        p.lineS(lx, ly, x, y, j < 3 ? C.gold[3] : C.gold[2], 0.85 * (1 - j / 10), j < 4 ? 0.5 : 0);
+        lx = x;
+        ly = y;
       }
       const [x, y] = pos(u);
-      twinkle(p, x, y, 1, C.gold[3], 1);
+      twinkle(p, x, y, 2, C.white, 1);
     }
-    // Звезда загорелась на плаще.
+    // Звезда загорелась на плаще: вспышка лучами, кольцо, искры.
     const k = k01((t - 0.7) / 0.4);
     if (k > 0 && k < 1) {
-      ring(p, tx, ty, 2 + k * 14, C.gold[3], 1 - k);
+      hitStar(p, tx, ty, t - 0.7, 0.3, S * 1.1, 0.25, C.gold[3]);
+      ring(p, tx, ty, 2 + k * 18, C.gold[3], 1 - k, undefined, 0.5);
+      ring(p, tx, ty, 1 + k * 10, C.white, 0.8 * (1 - k), (_a, i) => i % 3 !== 2);
       twinkle(p, tx, ty, Math.round(4 * (1 - k)) + 1, C.gold[3], 1 - k * 0.5);
+      sparks(p, (zz.n ?? 0) * 31 + 5, t - 0.7, tx, ty, reduced() ? 4 : 10, 0, TAU, 30, 50, 0.4, -20, starCol);
     }
   }),
 );
@@ -6931,8 +6937,41 @@ registerZonePainter(
     // Вспышка короткая: под ней рассыпается плащ — сцену не закрывать.
     if (t < 0.22) {
       const u = t / 0.22;
-      p.col('#fffaf0', 0.6 * (1 - u));
+      p.col('#fffaf0', (reduced() ? 0.18 : 0.4) * (1 - u));
       oval(p, cx, cy, S + R * eOut2(u), S + R * eOut2(u));
+    }
+    // Звёзды плаща возвращаются на небо арены: из владыки разлетаются
+    // дугами, садятся звёздами пола, мерцают и гаснут к концу сцены.
+    const lord = lordNow();
+    const ox = lord ? lord.x * S : cx;
+    const oy = lord ? (lord.y - 2.2) * S : cy - 2 * S;
+    const nStar = reduced() ? 16 : 36;
+    const gone = 1 - k01((t - 2.4) / 0.8);
+    for (let i = 0; i < nStar; i++) {
+      const u = k01((t - 0.12 - 0.5 * hash(i, 4, 103)) / 1.1);
+      if (u <= 0) continue;
+      const rr = R * (0.3 + 0.62 * Math.sqrt(hash(i, 5, 103)));
+      const aa = TAU * hash(i, 6, 103);
+      const ex = cx + Math.cos(aa) * rr;
+      const ey = cy + Math.sin(aa) * rr;
+      const mx = (ox + ex) / 2;
+      const my = Math.min(oy, ey) - S * (1.5 + 2 * hash(i, 7, 103));
+      const pos = (q: number): [number, number] => {
+        const e = eOut2(k01(q));
+        return [bez(ox, mx, ex, e), bez(oy, my, ey, e)];
+      };
+      if (u < 1) {
+        let [lx, ly] = pos(u);
+        for (let j = 1; j <= 5; j++) {
+          const [x, y] = pos(u - j * 0.035);
+          p.lineS(lx, ly, x, y, C.gold[2], 0.7 * (1 - j / 6) * gone, 0);
+          lx = x;
+          ly = y;
+        }
+      }
+      const [x, y] = pos(u);
+      const big = u >= 1 && Math.sin(time * 4 + i * 1.7) > 0.6 ? 2 : 1;
+      twinkle(p, x, y, big, u < 1 ? C.white : C.gold[3], gone);
     }
     for (let j = 0; j < 3; j++) {
       const u = (t - j * 0.3) / 2;
