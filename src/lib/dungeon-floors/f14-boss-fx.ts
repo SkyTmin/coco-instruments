@@ -2850,17 +2850,16 @@ function heroDial(
   }
 }
 
-/** Снимок кадра вокруг Повелителя до серого остановки. */
-let bubCan: HTMLCanvasElement | null = null;
-
 /**
  * Пузырь его времени. Движок в остановке красит весь кадр в серое ПОСЛЕ всех
  * слоёв — и Повелитель, единственный, кто в ней ходит, серел вместе с миром
- * (неправда: время стоит не для него). Здесь, поверх темноты, снимаем кадр
- * вокруг него, а после кадра (микрозадача: после `frame()`, до вывода на
- * экран) кладём снимок обратно режимом `color` в овал: оттенок и
- * насыщенность — снимка, яркость — кадра (цифры урона поверх не стираются).
- * Кромка овала — стекло. Просьба к движку: серое с исключением по мобу.
+ * (неправда: время стоит не для него). Серое движка — режим `saturation` с
+ * долей 0,92: оттенок пикселей остаётся (8% цвета), падает насыщенность.
+ * После кадра (микрозадача: после `frame()`, до вывода на экран) в овале
+ * вокруг него насыщенность возвращаем тем же режимом — заливкой цвета с
+ * насыщенностью ~0,32: оттенок и яркость — его собственные. Снимок кадра не
+ * нужен (копия живой канвы стоила ~9 мс). Кромка овала — стекло.
+ * Просьба к движку: серое с исключением по мобу.
  */
 function lordBubble(
   g: CanvasRenderingContext2D,
@@ -2872,30 +2871,13 @@ function lordBubble(
 ): void {
   const sim = paintSim();
   if (!sim || reduced() || !(sim.scaleT > 0 && sim.worldScale < 0.95)) return;
-  if (typeof document === 'undefined' || typeof queueMicrotask === 'undefined') return;
+  if (typeof queueMicrotask === 'undefined') return;
   const T = g.getTransform();
   if (T.b || T.c || !T.a || !T.d) return;
   const RX = 21;
   const RY = 37;
   const ux = m.x * S + p.qx;
   const uy = m.y * S - 27 + p.qy;
-  const cw = g.canvas.width;
-  const ch = g.canvas.height;
-  const x0 = Math.max(0, Math.floor(T.a * (ux - RX - 2) + T.e));
-  const y0 = Math.max(0, Math.floor(T.d * (uy - RY - 2) + T.f));
-  const x1 = Math.min(cw, Math.ceil(T.a * (ux + RX + 2) + T.e));
-  const y1 = Math.min(ch, Math.ceil(T.d * (uy + RY + 2) + T.f));
-  const w = x1 - x0;
-  const h = y1 - y0;
-  if (w < 2 || h < 2) return;
-  if (!bubCan) bubCan = document.createElement('canvas');
-  const bc = bubCan;
-  if (bc.width < w) bc.width = w;
-  if (bc.height < h) bc.height = h;
-  const bx = bc.getContext('2d');
-  if (!bx) return;
-  bx.clearRect(0, 0, w, h);
-  bx.drawImage(g.canvas, x0, y0, w, h, 0, 0, w, h);
   const ex = T.a * ux + T.e;
   const ey = T.d * uy + T.f;
   const rx = T.a * RX;
@@ -2903,19 +2885,17 @@ function lordBubble(
   queueMicrotask(() => {
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.globalCompositeOperation = 'color';
+    g.globalCompositeOperation = 'saturation';
+    g.fillStyle = 'hsl(30, 32%, 50%)';
     // Край мягкий: внешнее кольцо — вполсилы.
     for (const [kr, a] of [
       [1, 0.5],
-      [0.9, 1],
+      [0.88, 1],
     ]) {
-      g.save();
+      g.globalAlpha = a * form;
       g.beginPath();
       g.ellipse(ex, ey, rx * kr, ry * kr, 0, 0, TAU);
-      g.clip();
-      g.globalAlpha = a * form;
-      g.drawImage(bc, 0, 0, w, h, x0, y0, w, h);
-      g.restore();
+      g.fill();
     }
     g.restore();
   });
