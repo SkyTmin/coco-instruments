@@ -6918,7 +6918,7 @@ registerZonePainter(
     // Вспышка короткая: под ней рассыпается плащ — сцену не закрывать.
     if (t < 0.22) {
       const u = t / 0.22;
-      p.col('#fffaf0', (reduced() ? 0.18 : 0.4) * (1 - u));
+      p.col('#fffaf0', (reduced() ? 0.1 : 0.22) * (1 - u));
       oval(p, cx, cy, S + R * eOut2(u), S + R * eOut2(u));
     }
     // Звёзды плаща возвращаются на небо арены: из владыки разлетаются
@@ -6951,7 +6951,11 @@ registerZonePainter(
         }
       }
       const [x, y] = pos(u);
-      const big = u >= 1 && Math.sin(time * 4 + i * 1.7) > 0.6 ? 2 : 1;
+      // Села — звезда вспыхивает кольцом и дальше мерцает.
+      const land = t - 0.12 - 0.5 * hash(i, 4, 103) - 1.1;
+      if (land > 0 && land < 0.3)
+        ring(p, x, y, 1 + 9 * eOut2(land / 0.3), C.gold[3], 0.8 * (1 - land / 0.3));
+      const big = u >= 1 && (land < 0.3 || Math.sin(time * 4 + i * 1.7) > 0.3) ? 2 : 1;
       twinkle(p, x, y, big, u < 1 ? C.white : C.gold[3], gone);
     }
     for (let j = 0; j < 3; j++) {

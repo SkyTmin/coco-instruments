@@ -706,11 +706,18 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         if (m < 7.2) col = m > 6 ? ICE[1] : du + dv < -3 ? ICE[6] : du + dv < 2 ? ICE[5] : ICE[4];
         else col = mixc(skyAt(X, Y), ICE[2], 0.4);
       } else if (mk === MK.mirrorFloor) {
-        // Стеклянный пол: к рваной кромке стекло истончается в звёздный пол.
-        const f = clamp01((shoreOf(u, v, X, Y, glass, 66, 5) - 0.5) / 5);
-        col = mixc(skyAt(X, Y), ICE[2], 0.08 + 0.24 * f);
-        if (((u + v) % 6 === 0 || (u - v + 32) % 9 === 0) && hash(X, Y, 67) < 0.35 + f)
-          col = mixc(col, ICE[5], 0.15 + 0.32 * f);
+        // Зеркальный пол: тёмное стекло, в нём звёзды и длинные косые блики
+        // (по миру, а не по клетке — блик идёт через всю гладь). К рваной
+        // кромке стекло истончается, по кромке — светлый скол.
+        const sh = shoreOf(u, v, X, Y, glass, 66, 5);
+        const f = clamp01((sh - 0.5) / 4);
+        col = mixq(skyAt(X, Y), ICE[1], 0.25 + 0.3 * f, X, Y);
+        const band = (((X - Y * 0.5) % 23) + 23) % 23;
+        if (band < 1.5) col = mixc(col, ICE[4], 0.45 * f);
+        else if (band < 3) col = mixc(col, ICE[3], 0.25 * f);
+        const hs = hash(X, Y, 67);
+        if (hs < 0.008) col = hs < 0.003 ? WHITE : ICE[5];
+        if (sh > 0.4 && sh < 1.4 && hash(X, Y, 70) < 0.6) col = ICE[3];
       } else if (mk === MK.circleA || mk === MK.circleB) {
         const cc = mk === MK.circleA ? BOG[4] : TEAL[3];
         const du = u + 0.5 - 8;
