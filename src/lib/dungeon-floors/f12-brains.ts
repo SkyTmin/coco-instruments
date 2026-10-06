@@ -3550,6 +3550,7 @@ function mammothStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): vo
         sh.cd = 1.2;
         s.shaman = sh.id;
         fx(sim, api, { x: m.x, y: m.y, r: 2.5, life: 1.2, art: 'f12_auroraburst', above: true });
+        sim.events.push({ t: 'boss', what: 'f12_drop' }); // звук взлёта шаманки
       }
       if (m.t >= 1.2) api.setMode(m, 'chase');
       return;
@@ -3610,6 +3611,7 @@ function enterPhase(sim: Sim, b: BossFight, m: Mob, api: SimApi, p: number): voi
   const s = mamOf(sim);
   const st = stateOf(sim);
   api.setMode(m, 'f12b_rear');
+  sim.events.push({ t: 'boss', what: 'f12_rear' }); // звук рёва на дыбах
   m.tele = null;
   const ph = PHASES[p];
   sim.events.push({ t: 'flash', color: ph.color, k: 0.7 });

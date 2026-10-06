@@ -440,7 +440,10 @@ const FLOOR_SOUND: Record<string, () => void> = {
   f12_wall_stun: () => {
     deepRumble();
     boom(1);
+    glassBreak();
   },
+  f12_rear: () => beastRoar(),
+  f12_drop: () => dashWhoosh(),
   f12_glacier: () => stoneGrind(),
   f12_tusk: () => glassBreak(),
   f12_skid: () => stoneGrind(),
