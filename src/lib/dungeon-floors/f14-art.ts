@@ -1761,28 +1761,37 @@ registerMobPainter('f14_smith', (_m: Mob, pose: MobPose) => {
 });
 
 // ---------------------------------------------------------------------------
-// Повелитель часа (анимация тела — v2.87). Облик прежний: высокий, в длинном
-// балахоне с латунной каймой; голова — башенный циферблат в латунном безеле
-// со шпилями, за головой ходит шестерня-нимб; в груди за стеклом качается
-// маятник. В правой — минутная стрелка-клинок (кольцо-противовес), в левой —
-// часовая стрелка-лист. Фаза меняет материал: ночная синь (ДВЕ СТРЕЛКИ), иней
-// (ОСТАНОВКА), бирюза и песок (ОТМОТКА), полночь со звёздами (ПОЛНОЧЬ).
+// Повелитель часа (анимация тела — v2.87; переделано по мерке мамонта 12-го).
+// Облик прежний: высокий, в длинном балахоне с латунной каймой; голова —
+// башенный циферблат в латунном безеле со шпилями, за головой ходит
+// шестерня-нимб; в груди за стеклом качается маятник, на поясе висят малые
+// песочные часы. В правой руке — минутная стрелка-клинок (кольцо-противовес),
+// в левой — часовая стрелка-лист. Фаза меняет материал: ночная синь (ДВЕ
+// СТРЕЛКИ), иней (ОСТАНОВКА), бирюза и песок (ОТМОТКА), полночь (ПОЛНОЧЬ).
 //
-// Движение — «часовое»: покой и шаг ТИКАЮТ (стрелки на лице щёлкают по такту
-// с отскоком, нимб доворачивается на треть зуба, маятник в груди ходит
-// тик-так), а удары идут по дуге циферблата: часовая обходит круг через
-// голову и рубит со следом, минутная целится, колет и застревает в полу.
+// Тело — маленький 3D-риг из чисел (`LRig`): точки задаются в своих осях
+// (вперёд, вправо, вверх) и проецируются камерой 3/4 на одну из 16 сторон.
+// Балахон, грудь, голова и руки поворачиваются вместе, циферблат с любой
+// стороны идёт по часовой, а боком он не ходит: корпус смотрит туда, куда
+// идёт; разворот — сперва голова-циферблат и плечи, корпус догоняет,
+// переступ на месте. Шаг — по пройденному пути, каждый шаг — «тик».
+// Голова — барабан в 6 px (боком не палка) и повёрнута к зрителю до 0,75 рад
+// (сценический ракурс, гаснет к виду со спины). Сторона меняется с запасом у
+// границы — у самой границы кадр не дрожит.
 //
-// Тело — риг из чисел (`LRig`): корпус (наклон, присед, поворот), голова,
-// две руки с клинками, песочные часы, ступни. Техника — ключевые позы на оси
-// времени МОЗГА (`LORD` в `f14-brains.ts` — метроном), кадр — 24 к/с от
-// `pose.t`, между ключами — кривые разгона и торможения; полы, маятник и
-// голова отстают на 1–2 кадра сами (`LLAG`). Кадр контакта — кадр, в
-// котором мозг бьёт. След клинка — серп по выборкам рига в прошлом.
-// Кадры — в `frameLRU`. Влево — своим кадром, а не `sx < 0`: лицо — сам
-// Повелитель, и отражённый циферблат шёл бы против часовой. Прогрев первой
-// фазы в обе стороны — `registerMobWarm`. Холст 120×112, земля 86,
-// обрезается по нарисованному.
+// Техника — ключевые позы на оси времени МОЗГА (`LORD` в `f14-brains.ts` —
+// метроном), кадр — 24 к/с от `pose.t`, между ключами — кривые разгона,
+// торможения и перелёта. Кадр контакта — ровно кадр урона мозга. Вторичное
+// движение — пружины 60 Гц по той же позе (`lSecTrack`, дорожка на технику и
+// фазу — кадр от истории боя не зависит): полы и кайма,
+// рукава, маятник в груди, песочные часы на поясе, голова и нимб догоняют
+// корпус с перелётом и затуханием. След клинка — серп из выборок позы через
+// 1/48 с, только в окне удара.
+//
+// Цена кадра: кадры — в `frameLRU`; следующий кадр рисуется заранее
+// кусками (`lAhead`, как `mamAhead` у мамонта; сторона следующего кадра —
+// тоже предсказана); прогрев — `registerMobWarm`.
+// Холст 120×112, земля 86, обрезается по нарисованному.
 // ---------------------------------------------------------------------------
 
 interface LordLook {
@@ -1911,16 +1920,26 @@ const LG = 86;
 const LCX = 60;
 const LFPS = 24;
 const LF1 = 1 / LFPS;
+/** Глубина пола в кадре 3/4: шаг к зрителю — 0,6 пикселя вниз. */
+const LDEP = 0.6;
+/** Сторон у кадра (как у мамонта). */
+const LDIRS = 16;
 const INK4: Tones = [INK, INK, INK, INK];
 
 const lclamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 type LEase = (x: number) => number;
 const lLin: LEase = (x) => x;
 const lIn: LEase = (x) => x * x;
-const lIn3: LEase = (x) => x * x * x;
 const lOut: LEase = (x) => 1 - (1 - x) * (1 - x);
 const lOut3: LEase = (x) => 1 - (1 - x) * (1 - x) * (1 - x);
 const lIO: LEase = (x) => (x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x));
+/** Торможение с перелётом (~8 %): проводка за цель и возврат. */
+const lOB: LEase = (x) => {
+  const u = x - 1;
+  return 1 + 2.4 * u * u * u + 1.4 * u * u;
+};
+/** Угол к [−π, π]. */
+const lWrap = (a: number) => a - TAU * Math.round(a / TAU);
 
 /** Холст, который умеет не рисовать вне области (клинок, вошедший в пол). */
 class ClipPx extends Px {
@@ -1929,175 +1948,208 @@ class ClipPx extends Px {
     if (this.clip && !this.clip(Math.round(x), Math.round(y))) return;
     super.set(x, y, c);
   }
-  /** Контур снаружи фигуры — прямо по массиву (кадр босса большой). */
+  /** Контур снаружи фигуры — прямо по массиву словами (кадр босса большой). */
   outline(c: RGBA): void {
-    const { w, h, data: d } = this;
-    const add: number[] = [];
+    const { w, h } = this;
+    const d = new Uint32Array(this.data.buffer, this.data.byteOffset, w * h);
+    const A = 0xff000000;
+    const col = ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+    const row = new Uint8Array(h + 2);
     for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++) {
-        const i = y * w + x;
-        if (d[i * 4 + 3]) continue;
+      for (let x = 0, o = y * w; x < w; x++)
+        if (d[o + x] & A) {
+          row[y + 1] = 1;
+          break;
+        }
+    const add: number[] = [];
+    for (let y = 0; y < h; y++) {
+      if (!row[y] && !row[y + 1] && !row[y + 2]) continue;
+      for (let x = 0, i = y * w; x < w; x++, i++) {
+        if (d[i] & A) continue;
         if (
-          (x > 0 && d[i * 4 - 1]) ||
-          (x < w - 1 && d[i * 4 + 7]) ||
-          (y > 0 && d[(i - w) * 4 + 3]) ||
-          (y < h - 1 && d[(i + w) * 4 + 3])
+          (x > 0 && d[i - 1] & A) ||
+          (x < w - 1 && d[i + 1] & A) ||
+          (y > 0 && d[i - w] & A) ||
+          (y < h - 1 && d[i + w] & A)
         )
           add.push(i);
       }
-    for (const i of add) {
-      d[i * 4] = c[0];
-      d[i * 4 + 1] = c[1];
-      d[i * 4 + 2] = c[2];
-      d[i * 4 + 3] = 255;
     }
+    for (const i of add) d[i] = col;
   }
 }
 
 /**
- * Каналы рига. Точки — от середины ступней (LCX, LG), y вверх — минус.
- *   корпус: lean (наклон верха, px на 34 px роста), drop (присед), tw
- *     (доворот к цели −1…1), hem (полы — отстают сами), turn (полный оборот
- *     вокруг себя 0…1: вид спереди, сбоку, со спины), pend (маятник в груди);
- *   голова: hx, hy (сдвиг), hd (наклон шпилей), halo (поворот нимба), hs
- *     (нимб больше — удар колокола), fm, fh (стрелки лица: 0 — XII, по
- *     часовой; fdir — стрелки УКАЗЫВАЮТ на цель, а не идут, и при взгляде
- *     влево отражаются вместе с телом), glow (накал лица), white (белеет),
- *     dim (гаснет), crack;
- *   руки: f* — правая с минутной, b* — левая с часовой: кисть (x, y), угол
- *     клинка, длина, изгиб локтя (−1…1), перед телом (z), клинок в полу
- *     (pin: 1 — держит воткнутый, 2 — воткнут и брошен, 3 — выронен),
- *     точка в полу, накал клинка;
- *   песочные часы: gl (в руках), gx, gy, gr (поворот), gk (песка вверху),
- *     gc (трещины 0…3), gs (проявление 0…1);
- *   ступни: lf, rf (вперёд-назад), lfy, rfy (подняты);
- *   кадр целиком (поля движка): sx, sy, rot, dx, dy, op (прозрачность).
+ * Каналы рига. Свои оси: f — вперёд, r — вправо (его правая), u — вверх, в
+ * пикселях от середины ступней; углы — радианы.
+ *   корпус: lean / side (наклон верха вперёд / вправо, px на 34 px роста),
+ *     drop (присед), tw (плечи довёрнуты вправо относительно бёдер), yaw
+ *     (весь корпус от стороны кадра — оборот), mf / mr / mu (ход кадра
+ *     вперёд / вправо / вверх — поля движка dx, dy), sx, sy, rot, op,
+ *     flare (подол раздувается);
+ *   голова: hyw (поворот от плеч), hn (кивок), hd (наклон шпилей), hf, hu
+ *     (сдвиг), fm, fh (стрелки лица: 0 — XII, по часовой), glow (накал),
+ *     white (белеет), dim (гаснет), crack (трещины 0…3), halo (поворот
+ *     нимба), hs (нимб больше — удар колокола);
+ *   руки: a* — правая с минутной, b* — левая с часовой: кисть (f, r, u в
+ *     осях плеч), клинок — азимут (0 — вперёд, плюс — вправо), подъём, длина;
+ *     локоть (−1 — вниз, 1 — вверх-наружу); pin (1 — держит воткнутый, 2 —
+ *     воткнут и брошен, 3 — выронен) и точка в полу (f, r в осях бёдер);
+ *     накал клинка;
+ *   песочные часы: gl (в руках), gf, gr, gu, grot (поворот), gk (песка
+ *     вверху), gc (трещины), gs (проявление); belt — малые часы на поясе;
+ *   ступни: ff1 / fu1 — правая вперёд / подъём, ff2 / fu2 — левая; fw —
+ *     ширина стойки;
+ *   pend — маятник в груди; weak — слабое место (окно груди) светится;
+ *   hemf / hemr / hemt — полы нарочно (сверх пружины).
  */
 const LK = [
   'lean',
+  'side',
   'drop',
   'tw',
-  'hem',
-  'turn',
-  'pend',
-  'hx',
-  'hy',
+  'yaw',
+  'mf',
+  'mr',
+  'mu',
+  'sx',
+  'sy',
+  'rot',
+  'op',
+  'flare',
+  'hyw',
+  'hn',
   'hd',
-  'halo',
-  'hs',
+  'hf',
+  'hu',
   'fm',
   'fh',
-  'fdir',
   'glow',
   'white',
   'dim',
   'crack',
-  'fx',
-  'fy',
-  'fa',
-  'fl',
-  'fe',
-  'fz',
-  'fpin',
-  'fpx',
-  'fpy',
-  'fglow',
-  'bx',
-  'by',
+  'halo',
+  'hs',
+  'af',
+  'ar',
+  'au',
+  'aa',
+  'ap',
+  'al',
+  'ae',
+  'apin',
+  'apf',
+  'apr',
+  'aglow',
+  'bf',
+  'br',
+  'bu',
   'ba',
+  'bp',
   'bl',
   'be',
-  'bz',
   'bpin',
-  'bpx',
-  'bpy',
+  'bpf',
+  'bpr',
   'bglow',
   'gl',
-  'gx',
-  'gy',
+  'gf',
   'gr',
+  'gu',
+  'grot',
   'gk',
   'gc',
   'gs',
-  'lf',
-  'rf',
-  'lfy',
-  'rfy',
-  'sx',
-  'sy',
-  'rot',
-  'dx',
-  'dy',
-  'op',
+  'belt',
+  'ff1',
+  'fu1',
+  'ff2',
+  'fu2',
+  'fw',
+  'pend',
+  'weak',
+  'hemf',
+  'hemr',
+  'hemt',
 ] as const;
 type LKey = (typeof LK)[number];
 type LRig = Record<LKey, number>;
 
-/** Стойка: минутная вниз-вперёд, часовая вниз-назад (как было). */
+/** Стойка: минутная вниз-вперёд у правого бедра, часовая вниз-назад у левого. */
 const L0: LRig = {
   lean: 0,
+  side: 0,
   drop: 0,
   tw: 0,
-  hem: 0,
-  turn: 0,
-  pend: 0,
-  hx: 0,
-  hy: 0,
+  yaw: 0,
+  mf: 0,
+  mr: 0,
+  mu: 0,
+  sx: 1,
+  sy: 1,
+  rot: 0,
+  op: 1,
+  flare: 0,
+  hyw: 0,
+  hn: 0,
   hd: 0,
-  halo: 0,
-  hs: 0,
+  hf: 0,
+  hu: 0,
   fm: 0,
   fh: 1.9,
-  fdir: 0,
   glow: 0.5,
   white: 0,
   dim: 0,
   crack: 0,
-  fx: 8,
-  fy: -18,
-  fa: 1.05,
-  fl: 24,
-  fe: -1,
-  fz: 1,
-  fpin: 0,
-  fpx: 0,
-  fpy: 0,
-  fglow: 0,
-  bx: -9,
-  by: -18,
-  ba: 2.0,
+  halo: 0,
+  hs: 0,
+  af: 4,
+  ar: 8.5,
+  au: 17,
+  aa: 0.3,
+  ap: -0.74,
+  al: 24,
+  ae: 0,
+  apin: 0,
+  apf: 0,
+  apr: 0,
+  aglow: 0,
+  bf: -1,
+  br: -8.5,
+  bu: 17,
+  ba: -2.75,
+  bp: -0.95,
   bl: 15,
-  be: 1,
-  bz: 0,
+  be: 0,
   bpin: 0,
-  bpx: 0,
-  bpy: 0,
+  bpf: 0,
+  bpr: 0,
   bglow: 0,
   gl: 0,
-  gx: 0,
-  gy: -26,
+  gf: 7,
   gr: 0,
+  gu: 25,
+  grot: 0,
   gk: 0,
   gc: 0,
   gs: 1,
-  lf: 3,
-  rf: -4,
-  lfy: 0,
-  rfy: 0,
-  sx: 1,
-  sy: 1,
-  rot: 0,
-  dx: 0,
-  dy: 0,
-  op: 1,
+  belt: 1,
+  ff1: 1.5,
+  fu1: 0,
+  ff2: -1.5,
+  fu2: 0,
+  fw: 3.6,
+  pend: 0,
+  weak: 0,
+  hemf: 0,
+  hemr: 0,
+  hemt: 0,
 };
 
 type LKf = [number, Partial<LRig>, LEase?];
 
 /** Каналы «да/нет» и точки, которые меняются скачком. */
-const LSTEP = new Set<LKey>(['fz', 'bz', 'fpin', 'bpin', 'fpx', 'fpy', 'bpx', 'bpy', 'gl', 'fdir']);
-/** Запаздывание частей: полы, маятник, голова смотрят позу чуть в прошлом. */
-const LLAG: Partial<Record<LKey, number>> = { hem: 0.07, pend: 0.1, hx: 0.04, hy: 0.04 };
+const LSTEP = new Set<LKey>(['apin', 'bpin', 'apf', 'apr', 'bpf', 'bpr', 'gl', 'belt']);
 
 /**
  * Ключевые позы: ключ меняет только названные каналы, остальные держат
@@ -2107,19 +2159,17 @@ function ltrack(keys: LKf[], t: number, base: LRig = L0): LRig {
   const out = { ...base };
   if (!keys.length) return out;
   for (const ch of LK) {
-    const lag = LLAG[ch];
-    const tt = lag ? Math.max(0, t - lag) : t;
     let pt = keys[0][0];
     let pv = keys[0][1][ch] ?? base[ch];
     let v = pv;
-    if (tt > pt)
+    if (t > pt)
       for (let i = 1; i < keys.length; i++) {
         const [kt, kv, ke] = keys[i];
         const cv = kv[ch] ?? pv;
-        if (tt < kt) {
+        if (t < kt) {
           v = LSTEP.has(ch)
             ? pv
-            : pv + (cv - pv) * (ke ?? lIO)(lclamp((tt - pt) / (kt - pt || 1), 0, 1));
+            : pv + (cv - pv) * (ke ?? lIO)(lclamp((t - pt) / (kt - pt || 1), 0, 1));
           break;
         }
         pt = kt;
@@ -2131,7 +2181,7 @@ function ltrack(keys: LKf[], t: number, base: LRig = L0): LRig {
   return out;
 }
 
-/** Смесь двух поз (возврат к стойке). Скачковые каналы — по половине. */
+/** Смесь двух поз. Скачковые каналы — по половине. */
 function lmix(a: LRig, b: LRig, k: number): LRig {
   const o = { ...a };
   for (const ch of LK)
@@ -2139,96 +2189,260 @@ function lmix(a: LRig, b: LRig, k: number): LRig {
   return o;
 }
 
-/** Точка на полу по направлению `A` на `dist` px (кадр 3/4: глубина ×0,6). */
-const lFloor = (A: number, dist: number): [number, number] => [
-  Math.cos(A) * dist,
-  Math.sin(A) * dist * 0.6,
-];
+// ---- Вторичное движение: то, что догоняет корпус ----
 
-// ---- Геометрия кадра ----
+/** Отставание частей (px и радианы), считается пружинами по прошлому позы. */
+interface LSec {
+  /** Полы: отстают вперёд / вправо, закручены (оборот). */
+  hf: number;
+  hr: number;
+  ht: number;
+  /** Маятник в груди и часы на поясе: отклонение. */
+  pend: number;
+  belt: number;
+  /** Голова догоняет наклон и присед. */
+  hdf: number;
+  hdu: number;
+  /** Нимб догоняет свой поворот. */
+  halo: number;
+  /** Рукава: отставание кистей (вперёд, вверх) — правый и левый. */
+  sa: [number, number];
+  sb: [number, number];
+}
+const LSEC0: LSec = {
+  hf: 0,
+  hr: 0,
+  ht: 0,
+  pend: 0,
+  belt: 0,
+  hdf: 0,
+  hdu: 0,
+  halo: 0,
+  sa: [0, 0],
+  sb: [0, 0],
+};
 
-interface LGeo {
-  sh: (y: number) => number;
-  top: number;
-  /** Поворот вокруг себя: c — к зрителю лицом, s — боком. */
+// ---- Геометрия кадра: оси, проекция 3/4 ----
+
+/** Оси по углу: cos, sin. */
+interface LBas {
   c: number;
   s: number;
-  hx: number;
-  hy: number;
-  sF: [number, number];
-  sB: [number, number];
-  hF: [number, number];
-  hB: [number, number];
+}
+const lBas = (a: number): LBas => ({ c: Math.cos(a), s: Math.sin(a) });
+/** Точка кадра: x, y холста и глубина (к зрителю — плюс). */
+type LP = [number, number, number];
+
+interface LGeo {
+  /** Углы бёдер, плеч, головы (мир: 0 — восток, π/2 — к зрителю). */
+  yB: number;
+  yT: number;
+  yH: number;
+  B: LBas;
+  T: LBas;
+  H: LBas;
+  lean: number;
+  side: number;
+  drop: number;
+  /** Верх балахона (y), середина подола (x), сдвиг подола по x. */
+  top: number;
+  collar: LP;
+  hemX: number;
+  hemD: number;
+  sR: LP;
+  sL: LP;
+  head: LP;
+  /** Видно ли лицо (sin угла головы), плечи — грудь (sin угла плеч). */
+  fv: number;
+  tv: number;
 }
 
-function lGeo(r: LRig): LGeo {
-  const d = r.drop;
-  const sh = (y: number) => (r.lean * (LG - y)) / 34;
-  const top = LG - 32 + d;
-  const a = r.turn * TAU;
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  const tw = r.turn ? 0 : r.tw;
-  const hy = LG - 43 + d + r.hy;
-  return {
-    sh,
-    top,
-    c,
-    s,
-    hx: LCX + sh(hy) + r.hx - s * 1.5,
-    hy,
-    sF: [LCX + sh(top) + 7 * c - tw * 2, top + 1 + 3 * s],
-    sB: [LCX + sh(top) - 7 * c + tw * 5, top + 1 - 3 * s],
-    hF: [LCX + r.fx + sh(LG + r.fy), LG + r.fy + d],
-    hB: [LCX + r.bx + sh(LG + r.by), LG + r.by + d],
+/** Точка в осях плеч (или других) с наклоном и приседом корпуса. */
+function lPt(g: LGeo, f: number, r: number, u: number, bas: LBas = g.T): LP {
+  const k = lclamp(u / 34, 0, 1.6);
+  const lf = g.lean * k;
+  const ls = g.side * k;
+  const wx = lf * g.B.c - ls * g.B.s + f * bas.c - r * bas.s;
+  const wy = lf * g.B.s + ls * g.B.c + f * bas.s + r * bas.c;
+  return [LCX + wx, LG + LDEP * wy - u + g.drop * lclamp(u / 14, 0, 1), wy];
+}
+/** Точка на полу в осях бёдер. */
+function lFloorPt(g: LGeo, f: number, r: number): LP {
+  const wx = f * g.B.c - r * g.B.s;
+  const wy = f * g.B.s + r * g.B.c;
+  return [LCX + wx, LG + LDEP * wy, wy];
+}
+
+/** Угол стороны кадра (мир). */
+const lDirAng = (d: number) => (d / LDIRS) * TAU;
+
+function lGeo(r: LRig, d: number, sec: LSec): LGeo {
+  const yB = lDirAng(d) + r.yaw;
+  const yT = yB + r.tw;
+  // Голова «играет на камеру»: боком циферблат довёрнут к зрителю (до
+  // 0,75 рад), со спины — нет. Иначе в профиль он — латунная полоска.
+  const yH0 = yT + r.hyw;
+  const cam = lWrap(Math.PI / 2 - yH0);
+  const yH =
+    yH0 +
+    lclamp(cam, -0.75, 0.75) * lclamp((0.85 * Math.PI - Math.abs(cam)) / (0.3 * Math.PI), 0, 1);
+  const g: LGeo = {
+    yB,
+    yT,
+    yH,
+    B: lBas(yB),
+    T: lBas(yT),
+    H: lBas(yH),
+    lean: r.lean,
+    side: r.side,
+    drop: r.drop,
+    top: 0,
+    collar: [0, 0, 0],
+    hemX: 0,
+    hemD: 0,
+    sR: [0, 0, 0],
+    sL: [0, 0, 0],
+    head: [0, 0, 0],
+    fv: Math.sin(yH),
+    tv: Math.sin(yT),
   };
+  g.collar = lPt(g, 0, 0, 31.5);
+  g.top = g.collar[1];
+  // Полы: пружина и нарочный ход — в осях бёдер.
+  const hf = sec.hf + r.hemf;
+  const hr = sec.hr + r.hemr;
+  g.hemX = hf * g.B.c - hr * g.B.s;
+  g.hemD = hf * g.B.s + hr * g.B.c;
+  g.sR = lPt(g, 0, 7, 30.5);
+  g.sL = lPt(g, 0, -7, 30.5);
+  // Кивок уводит голову вперёд и вниз, взгляд вверх — чуть назад.
+  const nod = r.hn * 2.2;
+  g.head = lPt(g, 0.5 + r.hf + sec.hdf + nod, 0, 43 + r.hu + sec.hdu - Math.max(0, nod) * 1.2, g.H);
+  return g;
 }
 
 interface LBlade {
-  /** Кисть (рукоять). */
+  /** Кисть (рукоять) в кадре. */
   x: number;
   y: number;
   ux: number;
   uy: number;
-  /** Видимая длина. */
+  /** Видимая длина (в проекции). */
   len: number;
+  /** Полная длина клинка (для формы). */
+  full: number;
   /** 0 — в руке, 1 — держит воткнутый, 2 — воткнут и брошен, 3 — выронен. */
   pin: number;
-  /** Перед телом. */
-  z: boolean;
+  /** Глубина середины клинка. */
+  z: number;
 }
 
-function lBlade(r: LRig, g: LGeo, front: boolean): LBlade {
-  const h = front ? g.hF : g.hB;
-  const pin = Math.round(front ? r.fpin : r.bpin);
-  const len = front ? r.fl : r.bl;
-  const a = front ? r.fa : r.ba;
-  const z = (front ? r.fz : r.bz) >= 0.5;
+/** Направление клинка в осях плеч по азимуту и подъёму. */
+const lDir3 = (az: number, el: number): [number, number, number] => [
+  Math.cos(el) * Math.cos(az),
+  Math.cos(el) * Math.sin(az),
+  Math.sin(el),
+];
+
+function lHandLocal(r: LRig, right: boolean): [number, number, number] {
+  return right ? [r.af, r.ar, r.au] : [r.bf, r.br, r.bu];
+}
+
+function lBlade(r: LRig, g: LGeo, right: boolean): LBlade {
+  const [hf, hr, hu] = lHandLocal(r, right);
+  const pin = Math.round(right ? r.apin : r.bpin);
+  const full = right ? r.al : r.bl;
+  const az = right ? r.aa : r.ba;
+  const el = right ? r.ap : r.bp;
+  const H = lPt(g, hf, hr, hu);
   if (pin === 1 || pin === 2) {
-    const px = LCX + (front ? r.fpx : r.bpx);
-    const py = LG + (front ? r.fpy : r.bpy);
+    const F = lFloorPt(g, right ? r.apf : r.bpf, right ? r.apr : r.bpr);
     if (pin === 2) {
-      // Стоит сам: остриё в полу, рукоять над ним.
-      const vis = len - 5;
+      // Стоит сам: остриё в полу, рукоять над ним по своему наклону.
+      const [dx, dy, dz] = lDir3(az, el);
+      const vis = full - 5;
+      const wx = dx * g.T.c - dy * g.T.s;
+      const wy = dx * g.T.s + dy * g.T.c;
+      const hx0 = F[0] - wx * vis;
+      const hy0 = F[1] - LDEP * wy * vis + dz * vis;
+      const L = Math.hypot(F[0] - hx0, F[1] - hy0) || 1;
       return {
-        x: px - Math.cos(a) * vis,
-        y: py - Math.sin(a) * vis,
-        ux: Math.cos(a),
-        uy: Math.sin(a),
-        len: vis,
+        x: hx0,
+        y: hy0,
+        ux: (F[0] - hx0) / L,
+        uy: (F[1] - hy0) / L,
+        len: L,
+        full,
         pin,
-        z,
+        z: F[2],
       };
     }
-    const L = Math.hypot(px - h[0], py - h[1]) || 1;
-    return { x: h[0], y: h[1], ux: (px - h[0]) / L, uy: (py - h[1]) / L, len: L, pin, z };
+    const L = Math.hypot(F[0] - H[0], F[1] - H[1]) || 1;
+    return {
+      x: H[0],
+      y: H[1],
+      ux: (F[0] - H[0]) / L,
+      uy: (F[1] - H[1]) / L,
+      len: L,
+      full,
+      pin,
+      z: (F[2] + H[2]) / 2,
+    };
   }
-  return { x: h[0], y: h[1], ux: Math.cos(a), uy: Math.sin(a), len, pin, z };
+  // Свободный клинок — прямой, наклон корпуса его не гнёт: направление
+  // проецируется от кисти.
+  const [dx, dy, dz] = lDir3(az, el);
+  const wx = (dx * g.T.c - dy * g.T.s) * full;
+  const wy = (dx * g.T.s + dy * g.T.c) * full;
+  const sx = wx;
+  const sy = LDEP * wy - dz * full;
+  const L = Math.hypot(sx, sy);
+  return {
+    x: H[0],
+    y: H[1],
+    ux: L > 0.01 ? sx / L : 0,
+    uy: L > 0.01 ? sy / L : 1,
+    len: Math.max(2.5, L),
+    full,
+    pin,
+    z: H[2] + wy / 2,
+  };
+}
+
+/** Локоть: два звена по 8 px, сгиб — к шесту (наружу, вниз и назад). */
+function lElbow(
+  s: [number, number, number],
+  h: [number, number, number],
+  right: boolean,
+  bend: number,
+): [number, number, number] {
+  const dx = h[0] - s[0];
+  const dy = h[1] - s[1];
+  const dz = h[2] - s[2];
+  const d = Math.hypot(dx, dy, dz) || 1;
+  const half = Math.min(d / 2, 8);
+  const off = Math.sqrt(Math.max(0, 64 - half * half));
+  const sg = right ? 1 : -1;
+  // Шест: наружу и назад-вниз; bend > 0 — локоть уходит вверх-наружу.
+  let px = -0.35;
+  let py = sg * (0.7 + 0.3 * bend);
+  let pz = -0.6 + 0.7 * bend;
+  // Убрать составляющую вдоль руки.
+  const k = (px * dx + py * dy + pz * dz) / (d * d);
+  px -= dx * k;
+  py -= dy * k;
+  pz -= dz * k;
+  const pl = Math.hypot(px, py, pz) || 1;
+  return [
+    s[0] + dx / 2 + (px / pl) * off,
+    s[1] + dy / 2 + (py / pl) * off,
+    s[2] + dz / 2 + (pz / pl) * off,
+  ];
 }
 
 // ---- Рисовальщик тела ----
 
-/** Шестерня с растяжкой по x (нимб и воротник при повороте корпуса). */
+/** Шестерня с растяжкой по x (нимб и воротник при повороте). */
 function lCog(
   p: Px,
   cx: number,
@@ -2272,35 +2486,57 @@ function lCog(
     }
 }
 
-/** Рука от плеча к кисти: рукав в два звена, латунный обшлаг и перчатка. */
+interface LOpt {
+  ph: number;
+  /** Номер кадра: мерцание звёзд, песчинки, струя песка. */
+  f: number;
+  /** Песок отмотки поднимается от подола (0…1). */
+  sandUp?: number;
+  /** Дорисовать перед контуром (шестерни распада, пар, осколки). */
+  post?: (p: ClipPx, lit: Px, g: LGeo, L: LordLook) => void;
+  /** Нарисовать до тела (то, что тело закрывает). */
+  pre?: (p: ClipPx, lit: Px, g: LGeo, L: LordLook) => void;
+  /** Нарисовать нимб (смерть уносит его отдельно). */
+  noHalo?: boolean;
+}
+
+/** Рука от плеча к кисти: рукав в два звена, латунный обшлаг, перчатка, свисающий край рукава. */
 function lArm(
   p: Px,
-  s: [number, number],
-  h: [number, number],
-  bend: number,
+  r: LRig,
+  g: LGeo,
+  sec: LSec,
   L: LordLook,
-  front: boolean,
+  right: boolean,
+  ring: boolean,
 ): void {
-  const dx = h[0] - s[0];
-  const dy = h[1] - s[1];
-  const d = Math.hypot(dx, dy) || 1;
-  const seg = 7.6;
-  const half = Math.min(d / 2, seg);
-  const off = Math.sqrt(Math.max(0, seg * seg - half * half)) * lclamp(bend, -1, 1);
-  const ex = s[0] + dx / 2 - (dy / d) * off;
-  const ey = s[1] + dy / 2 + (dx / d) * off;
-  // Рука перед балахоном — с тёмной каймой, иначе рукав тонет в нём.
-  if (front) {
-    limb(p, s[0], s[1], ex, ey, 3.4, 3.0, INK4);
-    limb(p, ex, ey, h[0], h[1], 3.0, 2.5, INK4);
+  const sl: [number, number, number] = [0, right ? 7 : -7, 30.5];
+  const hl = lHandLocal(r, right);
+  const el = lElbow(sl, hl, right, right ? r.ae : r.be);
+  const S = right ? g.sR : g.sL;
+  const E = lPt(g, el[0], el[1], el[2]);
+  const H = lPt(g, hl[0], hl[1], hl[2]);
+  // Рукав свисает с предплечья и отстаёт от кисти (пружина).
+  const lag = right ? sec.sa : sec.sb;
+  const ml: [number, number, number] = [
+    (el[0] + hl[0]) / 2,
+    (el[1] + hl[1]) / 2,
+    (el[2] + hl[2]) / 2,
+  ];
+  const M = lPt(g, ml[0], ml[1], ml[2]);
+  const Dp = lPt(g, ml[0] - lag[0] * 0.6, ml[1], ml[2] - 3.4 - lag[1] * 0.5);
+  const fl = Math.hypot(H[0] - E[0], H[1] - E[1]) || 1;
+  const ux = (H[0] - E[0]) / fl;
+  const uy = (H[1] - E[1]) / fl;
+  if (ring) {
+    limb(p, S[0], S[1], E[0], E[1], 3.4, 3.0, INK4);
+    limb(p, E[0], E[1], H[0], H[1], 3.0, 2.5, INK4);
   }
-  limb(p, s[0], s[1], ex, ey, 2.6, 2.2, L.robe, 0.16);
-  limb(p, ex, ey, h[0], h[1], 2.2, 1.7, L.robe, 0.22);
-  const fl = Math.hypot(h[0] - ex, h[1] - ey) || 1;
-  const ux = (h[0] - ex) / fl;
-  const uy = (h[1] - ey) / fl;
-  shadeEll(p, h[0] - ux * 1.6, h[1] - uy * 1.6, 2.2, 2.2, L.trim, 0.05);
-  shadeEll(p, h[0], h[1], 1.7, 1.7, L.trim, 0.15);
+  limb(p, M[0], M[1], Dp[0], Dp[1], 1.8, 1.0, L.robe, -0.05);
+  limb(p, S[0], S[1], E[0], E[1], 2.6, 2.2, L.robe, 0.16);
+  limb(p, E[0], E[1], H[0], H[1], 2.2, 1.7, L.robe, 0.22);
+  shadeEll(p, H[0] - ux * 1.6, H[1] - uy * 1.6, 2.2, 2.2, L.trim, 0.05);
+  shadeEll(p, H[0], H[1], 1.7, 1.7, L.trim, 0.15);
 }
 
 /** Клинок: минутная или часовая; воткнутый — без острия (оно в полу). */
@@ -2308,7 +2544,7 @@ function lDrawBlade(
   p: ClipPx,
   lit: Px,
   b: LBlade,
-  front: boolean,
+  right: boolean,
   L: LordLook,
   heat: number,
   tipGlow: boolean,
@@ -2324,7 +2560,7 @@ function lDrawBlade(
     const uy = b.uy;
     p.clip = (x, y) => (x + 0.5 - bx) * ux + (y + 0.5 - by) * uy <= lim;
   }
-  if (front) minuteHand(p, b.x, b.y, ang, len, L.trim, tipGlow && !buried ? L.glow : null);
+  if (right) minuteHand(p, b.x, b.y, ang, len, L.trim, tipGlow && !buried ? L.glow : null);
   else hourHand(p, b.x, b.y, ang, len, L.trim);
   p.clip = null;
   if (buried) {
@@ -2351,73 +2587,50 @@ function lDrawBlade(
   }
 }
 
-function lArmBlade(
-  p: ClipPx,
-  lit: Px,
-  r: LRig,
-  g: LGeo,
-  L: LordLook,
-  front: boolean,
-  inFront: boolean,
-  dim: boolean,
-): void {
-  const b = lBlade(r, g, front);
-  const sh = front ? g.sF : g.sB;
-  const hd = front ? g.hF : g.hB;
-  const heat = front ? r.fglow : r.bglow;
-  // Клинок под кистью: кисть держит его поверх.
-  if (b.pin !== 3) lDrawBlade(p, lit, b, front, L, heat, !dim);
-  lArm(p, sh, hd, front ? r.fe : r.be, L, inFront);
-}
-
-interface LOpt {
-  ph: number;
-  /** Номер кадра: мерцание звёзд, песчинки, струя песка. */
-  f: number;
-  /** Песок отмотки поднимается от подола (0…1). */
-  sandUp?: number;
-  /** Дорисовать перед контуром (шестерни распада, пар, осколки). */
-  post?: (p: ClipPx, lit: Px, g: LGeo, L: LordLook) => void;
-  /** Нарисовать нимб (смерть уносит его отдельно). */
-  noHalo?: boolean;
-}
-
-function lRobe(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): void {
-  const { sh, top, c, s } = g;
-  const d = r.drop;
+/** Балахон: ряды по высоте; складки, разрез с кантом и засечки подола — по кругу тела. */
+function lRobe(p: Px, lit: Px, r: LRig, g: LGeo, sec: LSec, L: LordLook, o: LOpt): void {
+  const top = g.top;
+  const d = Math.max(0, r.drop);
+  const y0 = Math.floor(top);
+  const H = LG - top;
+  const flare = r.flare;
+  // Угол полов: верх — за плечами, низ — отстаёт (пружина оборота).
+  const twist = sec.ht + r.hemt;
   const rows: [number, number][] = [];
-  for (let y = Math.floor(top); y < LG; y++) {
-    const k = (y - top) / (LG - top);
-    const hw = 6.5 + k * 6 + (d > 0 ? k * k * Math.min(4, d * 0.6) : 0);
-    const off = sh(y) + (y > LG - 14 ? (r.hem * (y - (LG - 14))) / 14 : 0);
-    const mid = LCX + off;
+  for (let y = y0; y < LG + 2; y++) {
+    const k = lclamp((y + 0.5 - top) / H, 0, 1);
+    const hw = 6.5 + k * 6 + (d > 0 ? k * k * Math.min(4, d * 0.6) : 0) + flare * k * k * k;
+    const hk = Math.max(0, (k - 0.4) / 0.6);
+    const mid = g.collar[0] * (1 - k) + LCX * k + g.hemX * hk * hk;
     rows.push([mid, hw]);
+    // Нижний край — дугой (подол круглый, середина ближе к зрителю).
+    const ang = g.yB + (g.yT - g.yB) * (1 - k) * 0.7 + twist * k * k;
     for (let x = Math.floor(mid - hw); x <= Math.ceil(mid + hw - 1); x++) {
-      const u = (x + 0.5 - mid) / hw;
-      // Складки: тёмные борозды, свет слева; при повороте они едут по кругу.
-      const q = (u + 1) * 2.5 + r.hem * k * 0.09 - s * 0.7;
-      const fold = Math.abs((((q % 1) + 1) % 1) - 0.5) < 0.12 ? -0.28 : 0;
-      p.set(x, y, tone(L.robe, 0.52 - u * 0.55 + fold + (1 - k) * 0.08));
-    }
-    if (c > 0.15) {
-      // Полы: латунный кант по разрезу спереди.
-      p.set(Math.round(mid + 1 - s * hw * 0.85), y, y % 3 ? L.trim[1] : L.trim[2]);
-    } else if (c < -0.15) {
-      // Со спины — шов.
-      p.set(Math.round(mid + s * hw * 0.85), y, L.robe[0]);
+      const u = lclamp((x + 0.5 - mid) / hw, -1, 1);
+      const sn = Math.sqrt(1 - u * u);
+      const edge = LG - 1 + Math.round(1.4 * sn + g.hemD * 0.15 * hk);
+      if (y > edge) continue;
+      const psi = Math.acos(u);
+      const th = psi - ang;
+      // Складки — вертикальные борозды на своих углах тела.
+      const q = (th / TAU) * 9 + 0.5;
+      const fold = Math.abs((((q % 1) + 1) % 1) - 0.5) < 0.1 + 0.05 * k ? -0.28 : 0;
+      let c = tone(L.robe, 0.52 - u * 0.55 + fold + (1 - k) * 0.08);
+      // Разрез спереди: латунный кант; сзади — шов.
+      const tw = lWrap(th);
+      if (Math.abs(tw) < 0.11 && k > 0.12) c = (y + Math.floor(x / 2)) % 3 ? L.trim[1] : L.trim[2];
+      else if (Math.abs(lWrap(th - Math.PI)) < 0.06 && k > 0.1) c = L.robe[0];
+      // Подол: латунная кайма с засечками часов — они ходят по кругу с телом.
+      if (y >= edge - 2) {
+        const tk = (((th / TAU) * 24) % 1) + 1;
+        const tick = tk % 1 < 0.16;
+        c = tick && y === edge - 1 ? INK : y === edge - 2 ? L.trim[2] : L.trim[1];
+        if (y === edge) c = L.trim[0];
+      }
+      p.set(x, y, c);
     }
   }
-  // Подол: латунная кайма с засечками часов.
-  for (let x = LCX - 24; x <= LCX + 24; x++)
-    for (const y of [LG - 3, LG - 2]) {
-      if (!p.solid(x, y)) continue;
-      p.set(
-        x,
-        y,
-        (x + (y === LG - 2 ? 1 : 0)) % 4 === 0 ? INK : y === LG - 3 ? L.trim[2] : L.trim[1],
-      );
-    }
-  const rowAt = (y: number) => rows[lclamp(Math.round(y - Math.floor(top)), 0, rows.length - 1)];
+  const rowAt = (y: number) => rows[lclamp(Math.round(y - y0), 0, rows.length - 1)];
   // Полночь: в балахоне звёзды (мерцают медленно, места — свои).
   if (o.ph === 3)
     for (let i = 0; i < 16; i++) {
@@ -2443,16 +2656,33 @@ function lRobe(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): void {
     }
 }
 
-function lChest(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): void {
-  const { sh, top, c, s } = g;
-  if (c > 0.3) {
+/** Грудь: окно с маятником (слабое место), со спины — заводной ключ; воротник, наплечники. */
+function lChest(
+  p: Px,
+  lit: Px,
+  r: LRig,
+  g: LGeo,
+  sec: LSec,
+  L: LordLook,
+  o: LOpt,
+): [number, number] {
+  const c = g.tv;
+  const W = lPt(g, 5.2, 0, 22.5);
+  const wx = W[0] + 0.5;
+  const wy = W[1];
+  if (c > 0.28) {
     // Окно в груди: маятник за стеклом (в отмотке — песок вверх).
-    const wx = LCX + 1 + sh(top + 9) - s * 5;
-    const wy = top + 9;
     const rx = 4 * c;
+    const wk = lclamp(r.weak, 0, 1);
     p.ell(wx, wy, rx, 5.5, L.trim[1]);
-    p.ell(wx, wy, Math.max(0.6, rx - 1), 4.5, hx('#0a0a14'));
-    if (o.ph === 2) {
+    p.ell(
+      wx,
+      wy,
+      Math.max(0.6, rx - 1),
+      4.5,
+      wk > 0.05 ? mixc(hx('#0a0a14'), hx('#3a1806'), wk) : hx('#0a0a14'),
+    );
+    if (o.ph === 2 && wk < 0.05) {
       for (let i = 0; i < 7; i++)
         p.set(
           Math.round(wx - 1 + (i % 3)),
@@ -2460,41 +2690,86 @@ function lChest(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): void {
           TEAL_GLOW,
         );
     } else {
-      const a = r.pend;
+      const a = r.pend + sec.pend;
       const bx = wx + Math.sin(a) * 3 * c;
       const by = wy - 3.5 + Math.cos(a) * 5.5;
       stroke(p, wx, wy - 4, bx, by, L.trim[2]);
       shadeEll(p, bx, by, 1.4, 1.4, L.trim, 0.2);
     }
-    p.set(Math.round(wx - 2 * c), Math.round(wy - 3), alpha(WHITE, 0.7));
-    p.set(Math.round(wx - 2 * c), Math.round(wy - 2), alpha(WHITE, 0.45));
-  } else if (c < -0.25) {
+    if (wk > 0.05) {
+      // Слабое место открыто: стекло треснуло, ход часов горит изнутри.
+      lCog(p, wx - 1 * c, wy + 1.5, 2.2, 8, o.f * 0.4, L.trim, c, 0.6);
+      stroke(p, wx - 2.5 * c, wy - 4, wx + 0.5 * c, wy - 0.5, alpha(WHITE, 0.9));
+      stroke(p, wx + 0.5 * c, wy - 0.5, wx + 2.5 * c, wy + 1.5, alpha(WHITE, 0.8));
+      lit.ell(wx, wy, rx + 1.5, 6.5, alpha(mixc(AMBER, WHITE, 0.25), 0.4 * wk));
+      lit.ell(wx, wy, Math.max(1, rx - 1), 4, alpha(WHITE, 0.45 * wk));
+    } else {
+      p.set(Math.round(wx - 2 * c), Math.round(wy - 3), alpha(WHITE, 0.7));
+      p.set(Math.round(wx - 2 * c), Math.round(wy - 2), alpha(WHITE, 0.45));
+    }
+  } else if (c < -0.22) {
     // Со спины — заводной ключ между лопатками.
-    const kx = LCX + sh(top + 6) + s * 2;
-    const ky = top + 6;
-    stroke(p, kx, ky, kx, ky - 4, L.trim[1], 2);
+    const K = lPt(g, -4.8, 0, 26);
+    stroke(p, K[0], K[1], K[0], K[1] - 4, L.trim[1], 2);
     const w = 3.5 * Math.abs(Math.cos(r.halo * 3));
-    shadeEll(p, kx - w * 0.6, ky - 5, Math.max(0.8, w * 0.6), 1.6, L.trim, 0.1);
-    shadeEll(p, kx + w * 0.6, ky - 5, Math.max(0.8, w * 0.6), 1.6, L.trim, 0.1);
+    shadeEll(p, K[0] - w * 0.6, K[1] - 5, Math.max(0.8, w * 0.6), 1.6, L.trim, 0.1);
+    shadeEll(p, K[0] + w * 0.6, K[1] - 5, Math.max(0.8, w * 0.6), 1.6, L.trim, 0.1);
   }
-  // Воротник-шестерня и наплечники-колокола.
-  lCog(p, LCX + sh(top), top + 0.5, 5.5, 12, r.halo * 0.5, L.trim, Math.max(0.5, Math.abs(c)), 0.1);
-  const sh2 = [g.sB, g.sF].sort((a, b) => a[1] - b[1]);
+  // Воротник-шестерня и наплечники-колокола (дальний — первым).
+  lCog(
+    p,
+    g.collar[0],
+    g.collar[1] + 0.5,
+    5.5,
+    12,
+    -r.halo * 1.5,
+    L.trim,
+    Math.max(0.5, Math.abs(c)),
+    0.1,
+  );
+  const sh2 = [g.sR, g.sL].sort((a, b) => a[2] - b[2]);
   for (const [sx, sy] of sh2) {
     shadeEll(p, sx, sy - 0.5, 3.6, 3, L.trim, 0.1);
     for (let x = Math.round(sx - 3); x <= Math.round(sx + 3); x++)
       p.set(x, Math.round(sy + 2), L.trim[0]);
   }
+  return [wx, wy];
 }
 
 /** Голова — циферблат в безеле со шпилями; со спины — латунная крышка. */
 function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number, number] | null {
-  const { hx: x0, hy: y0, c } = g;
-  const ac = Math.max(0.16, Math.abs(c));
+  const [x0, y0] = g.head;
+  const c = g.fv;
+  const ac = Math.max(0.26, Math.abs(c));
+  // Кивок: циферблат наклоняется — круг сплющен по высоте.
+  const ny = 1 - 0.22 * Math.min(1, Math.abs(r.hn));
+  // Корпус часов — барабан в 6 px: в профиль голова не становится палкой.
+  // Лицо — на шее (x0), крышка — позади; ближняя к зрителю плоскость — сверху.
+  const D = 6 * g.H.c;
+  const xn = c >= 0 ? x0 : x0 - D;
+  if (Math.abs(D) > 0.8) {
+    const xf = c >= 0 ? x0 - D : x0;
+    const ry = 8.6 * ny;
+    shadeEll(p, xf, y0, 8.6 * ac, ry, L.trim, -0.15);
+    p.rect(
+      Math.round(Math.min(xn, xf)),
+      Math.round(y0 - ry),
+      Math.round(Math.max(xn, xf)),
+      Math.round(y0 + ry),
+      L.trim[1],
+    );
+    p.rect(
+      Math.round(Math.min(xn, xf)),
+      Math.round(y0 - ry),
+      Math.round(Math.max(xn, xf)),
+      Math.round(y0 - ry),
+      L.trim[2],
+    );
+  }
   for (const a0 of [-Math.PI / 2, -Math.PI / 2 - 0.62, -Math.PI / 2 + 0.62]) {
     const a = a0 + r.hd;
-    const bx = x0 + Math.cos(a) * 8.5 * ac;
-    const by = y0 + Math.sin(a) * 8.5;
+    const bx = xn + Math.cos(a) * 8.5 * ac;
+    const by = y0 + Math.sin(a) * 8.5 * ny;
     const tall = a0 === -Math.PI / 2 ? 5 : 3.2;
     poly(
       p,
@@ -2507,29 +2782,44 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
     );
     p.set(Math.round(bx + Math.cos(a) * tall * ac), Math.round(by + Math.sin(a) * tall), L.trim[3]);
   }
-  shadeEll(p, x0, y0, 8.6 * ac, 8.6, L.trim, 0.05);
+  shadeEll(p, xn, y0, 8.6 * ac, 8.6 * ny, L.trim, 0.05);
   if (c < -0.12) {
     // Крышка часов: заклёпки и ось механизма.
-    shadeEll(p, x0, y0, 7 * ac, 7, L.trim, -0.18);
+    shadeEll(p, xn, y0, 7 * ac, 7 * ny, L.trim, -0.18);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * TAU + 0.78;
-      p.set(Math.round(x0 + Math.cos(a) * 5 * ac), Math.round(y0 + Math.sin(a) * 5), L.trim[3]);
+      p.set(
+        Math.round(xn + Math.cos(a) * 5 * ac),
+        Math.round(y0 + Math.sin(a) * 5 * ny),
+        L.trim[3],
+      );
     }
-    lCog(p, x0, y0, 3, 8, -r.halo, L.trim, ac, 0.6);
+    lCog(p, xn, y0, 3, 8, -r.halo * 2.25, L.trim, ac, 0.6);
     return null;
   }
-  if (c < 0.12) return null;
+  if (c < 0.12) {
+    // Ребро циферблата: латунная полоса с заклёпкой.
+    for (let y = Math.round(y0 - 6 * ny); y <= Math.round(y0 + 6 * ny); y += 3)
+      p.set(Math.round(xn), y, L.trim[3]);
+    return null;
+  }
   const w = lclamp(r.white, 0, 1);
   const dm = lclamp(r.dim, 0, 1);
-  const dimT: Tones = [L.face[0], L.face[0], L.face[1], L.face[1]];
+  const dark = hx('#0c0d16');
+  const dimT: Tones = [
+    dark,
+    mixc(dark, L.face[0], 0.3),
+    mixc(dark, L.face[0], 0.5),
+    mixc(dark, L.face[1], 0.5),
+  ];
   const faceT = L.face.map((c0, i) => mixc(mixc(c0, WHITE, w), dimT[i], dm)) as Tones;
-  shadeEll(p, x0, y0, 7 * ac, 7, faceT, 0.25);
+  shadeEll(p, x0, y0, 7 * ac, 7 * ny, faceT, 0.25);
   const gk = lclamp(r.glow, 0, 1.4) * (1 - dm);
-  if (gk > 0.02) p.ell(x0, y0, 6 * ac, 6, alpha(L.glow, Math.min(0.6, gk * 0.5)));
+  if (gk > 0.02) p.ell(x0, y0, 6 * ac, 6 * ny, alpha(L.glow, Math.min(0.6, gk * 0.5)));
   // Накал лица — поверх темноты: видно, куда смотрит.
   const lk = Math.max(0, gk - 0.55) * 0.9 + w * 0.7;
   if (lk > 0.04)
-    lit.ell(x0, y0, 6.4 * ac, 6.4, alpha(mixc(L.glow, WHITE, w), Math.min(0.75, lk * 0.6)));
+    lit.ell(x0, y0, 6.4 * ac, 6.4 * ny, alpha(mixc(L.glow, WHITE, w), Math.min(0.75, lk * 0.6)));
   // Риски часов: у III, VI, IX, XII — длинные.
   const tick = o.ph === 3 ? L.hand : INK;
   for (let i = 0; i < 12; i++) {
@@ -2538,7 +2828,7 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
     for (let rr = r0; rr <= 6.2; rr += 0.8)
       p.set(
         Math.floor(x0 + Math.sin(a) * rr * ac),
-        Math.floor(y0 - Math.cos(a) * rr),
+        Math.floor(y0 - Math.cos(a) * rr * ny),
         dm > 0.6 ? mixc(tick, faceT[1], 0.5) : tick,
       );
   }
@@ -2548,7 +2838,7 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
     x0 - 0.5,
     y0 - 0.5,
     x0 - 0.5 + Math.sin(r.fh) * 3.4 * ac,
-    y0 - 0.5 - Math.cos(r.fh) * 3.4,
+    y0 - 0.5 - Math.cos(r.fh) * 3.4 * ny,
     L.hand,
     2,
   );
@@ -2557,7 +2847,7 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
     x0 - 0.5,
     y0 - 0.5,
     x0 - 0.5 + Math.sin(r.fm) * 5.4 * ac,
-    y0 - 0.5 - Math.cos(r.fm) * 5.4,
+    y0 - 0.5 - Math.cos(r.fm) * 5.4 * ny,
     L.hand,
   );
   // Трещины по стеклу — растут стадиями; сквозь них сочится свет фазы.
@@ -2570,19 +2860,18 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
     ];
     if (cr >= 2) seg.push([2, -1, 5, -3], [1, 5, 4, 4], [-1, 1, -5, 3], [2, -1, 1, -5]);
     for (const [a, b, e, f] of seg) {
-      stroke(p, x0 + a * ac, y0 + b, x0 + e * ac, y0 + f, INK);
-      if (dm < 0.8) {
+      stroke(p, x0 + a * ac, y0 + b * ny, x0 + e * ac, y0 + f * ny, INK);
+      if (dm < 0.8)
         lit.set(
           Math.round(x0 + ((a + e) / 2) * ac),
-          Math.round(y0 + (b + f) / 2),
+          Math.round(y0 + ((b + f) / 2) * ny),
           alpha(L.glow, 0.7),
         );
-      }
     }
     if (cr >= 3) {
       // Стекло выбито: тёмная дыра в левом верхнем секторе.
-      p.ell(x0 - 2.5 * ac, y0 - 2.5, 2.4 * ac, 2.2, hx('#0a0a14'));
-      p.set(Math.round(x0 - 4 * ac), Math.round(y0 - 4), WHITE);
+      p.ell(x0 - 2.5 * ac, y0 - 2.5 * ny, 2.4 * ac, 2.2 * ny, hx('#0a0a14'));
+      p.set(Math.round(x0 - 4 * ac), Math.round(y0 - 4 * ny), WHITE);
     }
   }
   const on = dm < 0.5 && c > 0.3;
@@ -2592,34 +2881,50 @@ function lHead(p: Px, lit: Px, r: LRig, g: LGeo, L: LordLook, o: LOpt): [number,
   return on ? [ex, ey] : null;
 }
 
-function lFeet(p: Px, r: LRig, g: LGeo): void {
-  for (const [fx, fy] of [
-    [r.rf, r.rfy],
-    [r.lf, r.lfy],
-  ]) {
-    const x = LCX + fx + g.sh(LG);
-    const y = LG - 1.6 - fy;
-    shadeEll(p, x, y, 2.4, 1.4, IRON, 0.15);
-    p.set(Math.round(x + 1.6), Math.round(y), BRASS[2]);
-  }
+/** Нимб за головой: шестерня, обращена туда же, куда лицо. */
+function lHalo(p: Px, r: LRig, g: LGeo, sec: LSec, L: LordLook): void {
+  const bx = g.head[0] - g.H.c * 1.6;
+  const by = g.head[1] - g.H.s * 1.6 * LDEP;
+  lCog(p, bx, by, 13 + r.hs, 18, r.halo + sec.halo, L.halo, Math.max(0.14, Math.abs(g.fv)), 4, 6);
 }
 
-/** Песочные часы в руках: поворот, проявление, трещины. */
-function lGlass(p: Px, lit: Px, r: LRig, g: LGeo, o: LOpt): void {
-  const sc = lclamp(r.gs, 0, 1);
+/** Ступни: под подолом, носок — по ходу. */
+function lFoot(p: Px, r: LRig, g: LGeo, right: boolean): void {
+  const ff = right ? r.ff1 : r.ff2;
+  const fu = right ? r.fu1 : r.fu2;
+  const F = lFloorPt(g, ff, right ? r.fw : -r.fw);
+  const x = F[0];
+  const y = F[1] - 1.6 - fu;
+  shadeEll(p, x, y, 2.4, 1.4, IRON, 0.15);
+  p.set(Math.round(x + g.B.c * 1.8), Math.round(y + g.B.s * 0.8), BRASS[2]);
+}
+
+/** Песочные часы: в руках (большие) или на поясе (малые). */
+function lGlassAt(
+  p: Px,
+  lit: Px,
+  cx: number,
+  cy: number,
+  rot: number,
+  sc: number,
+  k: number,
+  cracks: number,
+  f: number,
+  small: boolean,
+): void {
   if (sc < 0.06) return;
-  const w = Math.max(3, Math.round(13 * sc));
-  const h = Math.max(4, Math.round(19 * sc));
-  const S = 28;
+  const w = Math.max(3, Math.round((small ? 6 : 13) * sc));
+  const h = Math.max(4, Math.round((small ? 8 : 19) * sc));
+  const S = small ? 12 : 28;
   const tmp = new Px(S, S);
   const top = Math.round(S / 2 - h / 2);
-  const flow = sc > 0.95 && Math.abs(r.gr) < 0.02 && r.gk > 0.02 && r.gc < 3;
-  hourglass(tmp, S / 2, top, w, h, lclamp(r.gk, 0, 1), flow, o.f, {
+  const flow = !small && sc > 0.95 && Math.abs(rot) < 0.02 && k > 0.02 && cracks < 3;
+  hourglass(tmp, S / 2, top, w, h, lclamp(k, 0, 1), flow, f, {
     sand: TEAL,
-    glow: sc > 0.95 ? TEAL_GLOW : null,
-    broken: r.gc >= 3,
+    glow: !small && sc > 0.95 ? TEAL_GLOW : null,
+    broken: cracks >= 3,
   });
-  const gc = Math.floor(r.gc + 1e-6);
+  const gc = Math.floor(cracks + 1e-6);
   if (gc >= 1 && gc < 3) {
     stroke(tmp, S / 2 - 3, top + 4, S / 2 - 1, top + 7, alpha(WHITE, 0.95));
     if (gc >= 2) {
@@ -2627,10 +2932,8 @@ function lGlass(p: Px, lit: Px, r: LRig, g: LGeo, o: LOpt): void {
       stroke(tmp, S / 2 - 1, top + 7, S / 2 + 2, top + 9, alpha(WHITE, 0.8));
     }
   }
-  const cx = LCX + r.gx + g.sh(LG + r.gy);
-  const cy = LG + r.gy + r.drop;
-  const ca = Math.cos(r.gr);
-  const sa = Math.sin(r.gr);
+  const ca = Math.cos(rot);
+  const sa = Math.sin(rot);
   const R = S / 2 + 1;
   for (let y = -R; y <= R; y++)
     for (let x = -R; x <= R; x++) {
@@ -2648,6 +2951,10 @@ function lGlass(p: Px, lit: Px, r: LRig, g: LGeo, o: LOpt): void {
         tmp.data[i + 3],
       ]);
     }
+  if (small) {
+    lit.set(Math.floor(cx), Math.floor(cy), alpha(TEAL_GLOW, 0.5));
+    return;
+  }
   // Песок светится — поверх темноты.
   if (sc > 0.5) {
     lit.ell(cx, cy, 3.5 * sc, 6 * sc, alpha(TEAL_GLOW, 0.22 * sc));
@@ -2656,44 +2963,1519 @@ function lGlass(p: Px, lit: Px, r: LRig, g: LGeo, o: LOpt): void {
   }
 }
 
+/** Где висят малые часы на поясе (угол по кругу тела, слева-спереди). */
+const BELT_TH = -1.15;
+function lBeltPivot(g: LGeo): LP {
+  return lPt(g, Math.cos(BELT_TH) * 10, Math.sin(BELT_TH) * 10, 17, g.B);
+}
+
+/** Малые часы на поясе: висят на цепочке, качаются (пружина). */
+function lBelt(p: Px, lit: Px, r: LRig, g: LGeo, sec: LSec, L: LordLook, o: LOpt): LP | null {
+  if (r.belt < 0.5 || r.gl >= 0.5) return null;
+  // С обратной стороны тела не видно.
+  if (Math.sin(g.yB + BELT_TH) < -0.3) return null;
+  const P = lBeltPivot(g);
+  const a = sec.belt;
+  const cx = P[0] + Math.sin(a) * 4.5;
+  const cy = P[1] + Math.cos(a) * 4.5;
+  stroke(p, P[0], P[1], cx, cy - 3, L.trim[1]);
+  lGlassAt(p, lit, cx, cy, -a * 0.8, 1, 0.6, 0, o.f, true);
+  return [cx, cy, P[2]];
+}
+
 /** Полный кадр рига: тело, руки, клинки, часы; контур; свет поверх темноты. */
-function paintLord(
+function* paintLord(
   r: LRig,
+  sec: LSec,
+  d: number,
   o: LOpt,
-): { p: ClipPx; lit: Px; eye: [number, number] | null; g: LGeo } {
+): Generator<
+  void,
+  { p: ClipPx; lit: Px; eye: [number, number] | null; g: LGeo; chest: [number, number] },
+  void
+> {
   const p = new ClipPx(LW, LH);
   const lit = new Px(LW, LH);
   const L = LORD_LOOK[o.ph] ?? LORD_LOOK[0];
-  const g = lGeo(r);
-  const back = g.c < 0;
+  const g = lGeo(r, d, sec);
+  const back = g.fv < 0;
   const dim = r.dim > 0.6;
+  // Порядок по глубине: что за корпусом — до балахона, что перед — после.
+  const bodyZ = g.collar[2];
+  const items: { z: number; draw: () => void }[] = [];
+  for (const right of [true, false]) {
+    const b = lBlade(r, g, right);
+    const pin = b.pin;
+    const hl = lHandLocal(r, right);
+    const H = lPt(g, hl[0], hl[1], hl[2]);
+    const heat = right ? r.aglow : r.bglow;
+    if (pin !== 3) items.push({ z: b.z, draw: () => lDrawBlade(p, lit, b, right, L, heat, !dim) });
+    items.push({ z: H[2] + 0.3, draw: () => lArm(p, r, g, sec, L, right, H[2] > bodyZ - 1.5) });
+  }
+  const behind = items.filter((it) => it.z < bodyZ - 1.5).sort((a, b) => a.z - b.z);
+  const front = items.filter((it) => it.z >= bodyZ - 1.5).sort((a, b) => a.z - b.z);
+  if (o.pre) o.pre(p, lit, g, L);
   // 1. Нимб за головой (со спины — перед ней).
-  if (!back && !o.noHalo)
-    lCog(p, g.hx, g.hy, 13 + r.hs, 18, r.halo, L.halo, Math.max(0.14, Math.abs(g.c)), 4, 6);
-  // 2. Руки за телом.
-  if (r.bz < 0.5) lArmBlade(p, lit, r, g, L, false, false, dim);
-  if (r.fz < 0.5) lArmBlade(p, lit, r, g, L, true, false, dim);
-  // 3. Балахон, ступни, грудь, плечи, голова.
-  lRobe(p, lit, r, g, L, o);
-  lFeet(p, r, g);
-  lChest(p, lit, r, g, L, o);
+  if (!back && !o.noHalo) lHalo(p, r, g, sec, L);
+  // 2. Руки и клинки за телом; дальняя ступня.
+  for (const it of behind) it.draw();
+  const feet = [true, false]
+    .map((right) => ({ right, z: lFloorPt(g, right ? r.ff1 : r.ff2, right ? r.fw : -r.fw)[2] }))
+    .sort((a, b) => a.z - b.z);
+  for (const ft of feet) if (ft.z < 0) lFoot(p, r, g, ft.right);
+  // 3. Балахон, ближняя ступня, грудь, плечи, голова, часы на поясе.
+  yield;
+  lRobe(p, lit, r, g, sec, L, o);
+  yield;
+  for (const ft of feet) if (ft.z >= 0) lFoot(p, r, g, ft.right);
+  const chest = lChest(p, lit, r, g, sec, L, o);
+  lBelt(p, lit, r, g, sec, L, o);
   const eye = lHead(p, lit, r, g, L, o);
-  if (back && !o.noHalo)
-    lCog(p, g.hx, g.hy, 13 + r.hs, 18, r.halo, L.halo, Math.max(0.14, Math.abs(g.c)), 4, 6);
-  // 4. Руки перед телом; песочные часы — в руках.
-  if (r.gl >= 0.5) lGlass(p, lit, r, g, o);
-  if (r.fz >= 0.5) lArmBlade(p, lit, r, g, L, true, true, dim);
-  if (r.bz >= 0.5) lArmBlade(p, lit, r, g, L, false, true, dim);
+  if (back && !o.noHalo) lHalo(p, r, g, sec, L);
+  // 4. Песочные часы в руках; руки и клинки перед телом.
+  yield;
+  if (r.gl >= 0.5) {
+    const G = lPt(g, r.gf, r.gr, r.gu);
+    lGlassAt(p, lit, G[0], G[1], r.grot, lclamp(r.gs, 0, 1), r.gk, r.gc, o.f, false);
+  }
+  for (const it of front) it.draw();
   if (o.post) o.post(p, lit, g, L);
+  yield;
   p.outline(INK);
   // Глаз — ось стрелок: светится поверх контура.
   if (eye) p.set(eye[0], eye[1], L.glow);
-  return { p, lit, eye, g };
+  return { p, lit, eye, g, chest };
 }
 
-// ---- Следы и частицы тела (в кадре: своё — у тела, мир — у «Техник») ----
+// ---- Техники: ключевые позы на оси времени мозга ----
 
-/** Пиксели внутри многоугольника — каждому свой цвет (или пропуск). */
+const lHaste = (ph: number) => (ph >= 3 ? 1.25 : ph >= 2 ? 1.12 : 1);
+/** Начало кадра, в котором мозг бьёт: поза контакта стоит ровно в нём. */
+const lHitT = (T: number) => Math.floor(T * LFPS + 1e-6) * LF1;
+const lStopDur = (ph: number) => (ph >= 3 ? 1.6 : LORD.stopDur);
+const REST: Partial<LRig> = { ...L0 };
+
+/** Покой: 2 с, маятник ходит от края до края, на каждом краю — «тик». */
+const IDLE_T = 2;
+function lIdle(t: number): LRig {
+  const tk = t % 1;
+  const k = Math.max(0, 1 - tk / 0.22);
+  const b = Math.sin((t / IDLE_T) * TAU);
+  return {
+    ...L0,
+    pend: 0.42 * Math.cos(Math.PI * t),
+    // Шестерня-нимб щёлкает на ползуба за тик: за круг покоя — ровно зуб.
+    halo: Math.floor(t) * (TAU / 36) + (TAU / 36) * 0.35 * k * Math.sin(tk * 40),
+    mu: 0.4 * k * k,
+    sy: 1 - 0.012 * k,
+    drop: 0.35 + 0.35 * b,
+    lean: 0.3 * b,
+    au: L0.au + 0.5 * Math.sin((t / IDLE_T) * TAU + 0.8),
+    bu: L0.bu + 0.5 * Math.sin((t / IDLE_T) * TAU + 1.6),
+    ap: L0.ap + 0.03 * b,
+    glow: 0.5 + 0.1 * k,
+    hn: -0.04 * b,
+  };
+}
+
+/**
+ * Шаг: кадр — от пройденного пути (ступня под весом стоит на полу, пока
+ * корпус проходит над ней: 13 px за полшага), каждый шаг — «тик». `run` —
+ * бег к середине (ОТМОТКА): ниже, наклон вперёд, клинки откинуты назад.
+ */
+const WALK_N = 12;
+const WALK_STRIDE = 26;
+const RUN_STRIDE = 34;
+function lFootCycle(u: number, S: number, lift: number): [number, number] {
+  // u 0…0,5 — опора: ступня едет назад ровно со скоростью тела.
+  if (u < 0.5) return [S - 4 * S * u, 0];
+  const w = (u - 0.5) * 2;
+  return [-S + 2 * S * lIO(w), lift * Math.sin(Math.PI * w)];
+}
+function lWalk(f: number, run: boolean): LRig {
+  const u = (((f % WALK_N) + WALK_N) % WALK_N) / WALK_N;
+  const S = (run ? RUN_STRIDE : WALK_STRIDE) / 4;
+  const [f1, u1] = lFootCycle(u, S, run ? 3.4 : 2.2);
+  const [f2, u2] = lFootCycle((u + 0.5) % 1, S, run ? 3.4 : 2.2);
+  const c = Math.cos(u * TAU);
+  const pass = Math.abs(Math.sin(u * TAU));
+  // Опора — ниже и чуть сжат, проход ступни — выше.
+  const contact = Math.pow(Math.abs(c), 6);
+  const r: LRig = {
+    ...L0,
+    ff1: f1,
+    fu1: u1,
+    ff2: f2,
+    fu2: u2,
+    mu: (run ? 1.6 : 0.9) * pass - 0.3,
+    sy: 1 - (run ? 0.035 : 0.02) * contact,
+    sx: 1 + (run ? 0.03 : 0.015) * contact,
+    lean: run ? 4.5 : 1.4,
+    yaw: -0.06 * c,
+    tw: 0.13 * c,
+    // Руки — навстречу ногам.
+    af: L0.af - (run ? 1 : 3.5) * c,
+    bf: L0.bf + (run ? 1 : 3.5) * c,
+    au: L0.au + 0.8 * Math.max(0, -c),
+    bu: L0.bu + 0.8 * Math.max(0, c),
+    pend: 0.3 * Math.sin(u * TAU * 2 - 0.9),
+    hn: 0.05 * Math.cos(u * TAU * 2 - 0.6),
+    // Тик на каждом шаге: нимб на ползуба.
+    halo: Math.floor(u * 2) * (TAU / 36),
+    glow: 0.55,
+  };
+  if (run) {
+    // Клинки откинуты назад, полы летят следом.
+    r.drop = 1.5;
+    r.af = -2 - 2 * c;
+    r.ar = 9;
+    r.au = 19;
+    r.aa = 2.75;
+    r.ap = -0.35;
+    r.bf = -3 + 2 * c;
+    r.br = -9;
+    r.bu = 19;
+    r.ba = -2.8;
+    r.bp = -0.45;
+    r.hemf = -2.5;
+    r.flare = 1.5;
+    r.hn = 0.15;
+  }
+  return r;
+}
+/** Вторичное у шага — по фазе (тот же цикл, сдвиг по времени). */
+function lWalkSec(f: number, run: boolean): LSec {
+  const u = (((f % WALK_N) + WALK_N) % WALK_N) / WALK_N;
+  const a = u * TAU;
+  const k = run ? 1.6 : 1;
+  return {
+    hf: (-1 - 0.6 * Math.cos(2 * a - 1.1)) * k,
+    hr: 0.9 * Math.sin(a - 1) * k,
+    ht: 0.06 * Math.sin(a - 1.2) * k,
+    pend: 0,
+    belt: 0.32 * Math.sin(2 * a - 1.4) * k - 0.12 * k,
+    hdf: -0.3 * k,
+    hdu: -0.35 * Math.cos(2 * a - 0.9) * k,
+    halo: 0,
+    sa: [0.9 * Math.sin(a - 0.9) * k, 0.4 * k],
+    sb: [-0.9 * Math.sin(a - 0.9) * k, 0.4 * k],
+  };
+}
+/** Переступ на месте при развороте: ступни по очереди, корпус чуть ныряет. */
+function lShuffle(f: number): LRig {
+  const u = (((f % WALK_N) + WALK_N) % WALK_N) / WALK_N;
+  const w1 = u < 0.5 ? Math.sin(u * 2 * Math.PI) : 0;
+  const w2 = u >= 0.5 ? Math.sin((u - 0.5) * 2 * Math.PI) : 0;
+  return {
+    ...L0,
+    fu1: 1.8 * w1,
+    ff1: L0.ff1 + 1.2 * w1,
+    fu2: 1.8 * w2,
+    ff2: L0.ff2 - 1.2 * w2,
+    mu: 0.5 * (w1 + w2),
+    side: 0.8 * (w2 - w1),
+    drop: 0.6,
+    halo: Math.floor(u * 2) * (TAU / 36),
+  };
+}
+
+/** Пробуждение (мозг: 1,6 с): спит → маятник пошёл → встаёт, руки в стороны → «бом». */
+const ROAR_T = 1.6;
+function lRoar(t: number): LRig {
+  const SLEEP: Partial<LRig> = {
+    dim: 1,
+    glow: 0,
+    hn: 0.8,
+    drop: 3,
+    lean: 2,
+    af: 3,
+    ar: 8,
+    au: 15,
+    ap: -1.1,
+    aa: 0.2,
+    bf: 1,
+    br: -8,
+    bu: 15,
+    bp: -1.2,
+    ba: -2.4,
+    fm: -0.3,
+    fh: 2.4,
+  };
+  const OUT: Partial<LRig> = {
+    af: 2,
+    ar: 14,
+    au: 31,
+    aa: 1.45,
+    ap: 0.55,
+    ae: 0.8,
+    bf: 2,
+    br: -14,
+    bu: 31,
+    ba: -1.45,
+    bp: 0.55,
+    be: 0.8,
+  };
+  const keys: LKf[] = [
+    [0, SLEEP],
+    [0.25, { pend: 0.5, dim: 0.85 }, lOut],
+    [0.38, { pend: -0.45, dim: 0.6, glow: 0.2, halo: TAU / 36 }, lIO],
+    [0.52, { pend: 0.4, dim: 0.3, halo: TAU / 18, hn: 0.5, drop: 3.5, sy: 0.97, sx: 1.02 }, lIO],
+    [
+      0.85,
+      {
+        ...OUT,
+        dim: 0,
+        glow: 1.1,
+        hn: -0.35,
+        lean: -2.2,
+        drop: -0.8,
+        mu: 1.5,
+        sy: 1.05,
+        sx: 0.97,
+        pend: -0.3,
+        halo: (TAU / 18) * 3,
+        fm: 0,
+        fh: 0,
+        hs: 1,
+      },
+      lOut,
+    ],
+    [
+      0.95,
+      { white: 1, glow: 1.4, hs: 2.5, ar: 15, br: -15, sy: 0.96, sx: 1.04, mu: 0, flare: 2 },
+      lIn,
+    ],
+    [1.1, { white: 0.2, hs: 1.5, sy: 1.01, sx: 0.99, halo: (TAU / 18) * 5, flare: 0 }, lOut],
+    [1.25, { ...OUT, lean: -1, hn: -0.1, sy: 1, sx: 1, white: 0, hs: 1 }, lIO],
+    [ROAR_T, { ...REST, halo: (TAU / 18) * 6, fm: 0, fh: 0, glow: 0.7 }, lOB],
+  ];
+  return ltrack(keys, t);
+}
+
+/**
+ * ЧАСОВАЯ (конус): клинок VII → XI с подготовкой всего тела (виток назад,
+ * вес на заднюю), миг дрожи на пике → удар за 2 кадра (серп следа) →
+ * проводка за край сектора с перелётом → возврат. Кадр контакта —
+ * `floor(T·24)`; мир-угол клинка: −2,9 → −1,2 → 0,1 (контакт) → 1,5 → 1,8.
+ */
+function lHour(t: number, h: number): LRig {
+  const T = LORD.hourWarn / h;
+  const C = lHitT(T);
+  const F = LF1;
+  const R = 0.55 / h;
+  const keys: LKf[] = [
+    [0, {}],
+    [
+      0.22 / h,
+      {
+        drop: 1.5,
+        lean: -1,
+        tw: -0.2,
+        bf: -3,
+        br: -10,
+        bu: 21,
+        ba: -2.4,
+        bp: -0.35,
+        be: 0.5,
+        af: 6,
+        ar: 9.5,
+        au: 19,
+        aa: 0.45,
+        ap: -0.5,
+        ff1: 2,
+        ff2: -3,
+        glow: 0.8,
+        hn: 0.15,
+      },
+    ],
+    [
+      C - 4 * F,
+      {
+        drop: -0.5,
+        lean: -2.5,
+        side: -1,
+        tw: -0.55,
+        yaw: -0.12,
+        mu: 1,
+        sx: 0.98,
+        sy: 1.03,
+        bf: -4,
+        br: -10,
+        bu: 40,
+        ba: -2.2,
+        bp: 1.05,
+        be: 1,
+        af: 8,
+        ar: 10,
+        au: 22,
+        aa: 0.6,
+        ap: -0.3,
+        ff1: 2.5,
+        ff2: -4,
+        glow: 1.1,
+        hn: -0.2,
+        hyw: 0.2,
+        bglow: 0.5,
+      },
+      lOut,
+    ],
+    [C - 2 * F, { bu: 41, ba: -2.3, tw: -0.6, lean: -2.8, sy: 1.035, bglow: 0.8 }, lIO],
+    [
+      C - F,
+      {
+        bf: 8,
+        br: -8,
+        bu: 31,
+        ba: -1.1,
+        bp: 0.35,
+        be: 0.4,
+        tw: -0.1,
+        yaw: -0.04,
+        lean: 0.5,
+        side: 0,
+        drop: 0.5,
+        mu: 0,
+        sx: 1,
+        sy: 1,
+        ff2: 1.5,
+        hyw: 0.05,
+        hn: 0,
+      },
+      lIn,
+    ],
+    [
+      C,
+      {
+        bf: 13,
+        br: -3,
+        bu: 22,
+        ba: -0.3,
+        bp: -0.16,
+        be: -0.2,
+        tw: 0.35,
+        yaw: 0.08,
+        lean: 4,
+        side: 0.6,
+        drop: 2,
+        mu: -1,
+        sx: 1.05,
+        sy: 0.95,
+        ff1: -2,
+        ff2: 5,
+        bglow: 1,
+        glow: 1.2,
+        hn: 0.2,
+        hyw: 0,
+      },
+      lLin,
+    ],
+    [
+      C + F,
+      {
+        bf: 11,
+        br: 1,
+        bu: 19,
+        ba: 0.75,
+        bp: -0.42,
+        tw: 0.62,
+        yaw: 0.12,
+        lean: 4.6,
+        drop: 2.6,
+        mu: -0.6,
+        sx: 1.03,
+        sy: 0.97,
+        bglow: 0.6,
+      },
+      lOut,
+    ],
+    [
+      C + 2.5 * F,
+      {
+        bf: 9.5,
+        br: 3,
+        bu: 18,
+        ba: 0.95,
+        bp: -0.55,
+        tw: 0.72,
+        lean: 4.2,
+        sx: 1.01,
+        sy: 0.99,
+        mu: 0,
+      },
+      lOut,
+    ],
+    [
+      C + 5 * F,
+      {
+        ba: 0.75,
+        bp: -0.5,
+        bf: 10,
+        br: 1.5,
+        bu: 18,
+        tw: 0.6,
+        yaw: 0.1,
+        lean: 3.6,
+        drop: 2.2,
+        sx: 1,
+        sy: 1,
+        bglow: 0,
+      },
+      lIO,
+    ],
+    [T + 0.12 / h, { tw: 0.55, lean: 3.2, glow: 0.8 }],
+    [T + R, REST, lIO],
+  ];
+  return ltrack(keys, t);
+}
+
+/**
+ * МИНУТНАЯ: прицел (стойка фехтовальщика, клинок на цель) → отвод с
+ * накалом → укол за кадр (контакт = урон мозга) → выпад: тело несёт за
+ * клинком (мозг двигает точку), полы летят следом → клинок входит в пол:
+ * сжатие приземления → застрял (окно груди светится — урон ×1,5) → три
+ * рывка → вырывает с отдачей назад → стойка.
+ */
+/** Куда входит минутная: точка пола в осях бёдер. */
+const MIN_PIN = { apf: 24, apr: 4 };
+function lMinute(t: number, h: number): LRig {
+  const T = LORD.minWarn / h;
+  const C = lHitT(T);
+  const F = LF1;
+  const TL = T + LORD.lunge;
+  const TS = TL + LORD.stuck;
+  const R = 0.55 / h;
+  const AIM: Partial<LRig> = {
+    tw: -0.5,
+    lean: -0.5,
+    drop: 2,
+    ff1: 4,
+    ff2: -4,
+    fw: 3,
+    af: -1,
+    ar: 7,
+    au: 23,
+    aa: 0.5,
+    ap: -0.04,
+    ae: -0.3,
+    aglow: 0.3,
+    bf: -6,
+    br: -9,
+    bu: 30,
+    ba: -2.6,
+    bp: 0.5,
+    be: 1,
+    hyw: 0.4,
+    glow: 0.8,
+  };
+  const STUCK: Partial<LRig> = {
+    af: 11,
+    ar: 4,
+    au: 17,
+    lean: 6,
+    drop: 6,
+    tw: -0.2,
+    hyw: 0.15,
+    ff1: 8,
+    ff2: -7,
+    sx: 1.02,
+    sy: 0.98,
+  };
+  const keys: LKf[] = [
+    [0, {}],
+    [Math.min(0.25 / h, C - 5 * F), AIM, lOut],
+    [
+      C - 3 * F,
+      {
+        af: -7,
+        ar: 6,
+        aa: 0.55,
+        ap: 0.03,
+        tw: -0.65,
+        lean: -2.5,
+        drop: 3,
+        sx: 1.03,
+        sy: 0.97,
+        aglow: 1,
+        glow: 1.1,
+        hyw: 0.55,
+        ff1: 3,
+        ff2: -5,
+      },
+      lOut,
+    ],
+    [C - F, { af: -7.5, aglow: 1.2, sx: 1.035, sy: 0.965 }, lLin],
+    [
+      C,
+      {
+        af: 13,
+        ar: 3,
+        au: 22,
+        aa: 0.25,
+        ap: -0.06,
+        ae: -0.6,
+        tw: -0.25,
+        lean: 5,
+        drop: 3,
+        sx: 1.04,
+        sy: 0.98,
+        ff1: 8,
+        ff2: -6,
+        aglow: 1.2,
+        hyw: 0.25,
+        bf: -8,
+        bu: 26,
+        bp: 0.2,
+      },
+      lIn,
+    ],
+    [
+      TL - F,
+      {
+        lean: 7,
+        drop: 5,
+        af: 12,
+        au: 18,
+        ap: -0.45,
+        ff1: 10,
+        ff2: -8,
+        hemf: -3,
+        flare: 2,
+        aglow: 0.7,
+        sx: 1,
+        sy: 1,
+      },
+      lOut,
+    ],
+    // Вошёл в пол: сжатие приземления, полы догоняют вперёд.
+    [
+      TL,
+      {
+        ...STUCK,
+        ...MIN_PIN,
+        apin: 1,
+        lean: 7,
+        drop: 7,
+        sx: 1.07,
+        sy: 0.93,
+        mu: -1,
+        hemf: 1.5,
+        flare: 0,
+        aglow: 0,
+      },
+      lIn,
+    ],
+    [TL + 0.1, { ...STUCK, mu: 0, hemf: 0 }, lOut],
+  ];
+  // Три рывка: тянет назад → дёрнулся → валится обратно к клинку.
+  for (let i = 0; i < 3; i++) {
+    const tk = TL + 0.22 + i * 0.25;
+    keys.push(
+      [tk, { af: 8, au: 18, lean: 2.5, drop: 4.5, tw: -0.3, sx: 0.98, sy: 1.02, ff2: -9 }, lIn],
+      [tk + 0.06, { af: 7.5, lean: 1.2, drop: 4, tw: -0.36, sy: 1.025 }, lOut],
+      [tk + 0.16, { ...STUCK, lean: 5 - i, drop: 5.5 }, lIO],
+    );
+  }
+  keys.push(
+    [TS, { af: 7, au: 18, lean: 0, drop: 4, sx: 0.98, sy: 1.02, tw: -0.35 }, lIn],
+    // Вырвал: клинок взлетает вверх-назад, тело отдачей откидывает назад.
+    [
+      TS + F,
+      {
+        apin: 0,
+        af: 2,
+        ar: 8,
+        au: 23,
+        aa: 0.3,
+        ap: 0.75,
+        ae: 0.5,
+        lean: -4,
+        drop: 1,
+        sx: 0.96,
+        sy: 1.04,
+        mu: 1,
+        tw: -0.15,
+        ff1: 5,
+        ff2: -6,
+      },
+      lOut,
+    ],
+    [TS + 3 * F, { ap: 0.9, lean: -4.5, mu: 0.6 }, lOut],
+    [
+      TS + 0.2 / h,
+      {
+        lean: -1.5,
+        af: 4,
+        au: 19,
+        aa: 0.3,
+        ap: -0.2,
+        drop: 0.5,
+        mu: 0,
+        sx: 1,
+        sy: 1,
+        tw: 0,
+        hyw: 0,
+      },
+      lIO,
+    ],
+    [TS + R, REST, lIO],
+  );
+  const r = ltrack(keys, t);
+  // Окно груди горит ровно в «застрял» (урон ×1,5).
+  r.weak = t >= TL && t < TS ? 1 : 0;
+  return r;
+}
+
+/**
+ * ВРАЩЕНИЕ (кольцо): виток назад, руки в стороны, присел → оборот маятником
+ * с разгоном, контакт на самой большой скорости → перелёт за круг и качок
+ * назад → стойка.
+ */
+function lSpin(t: number, h: number): LRig {
+  const T = LORD.spinWarn / h;
+  const C = lHitT(T);
+  const F = LF1;
+  const R = 0.55 / h;
+  const OUT: Partial<LRig> = {
+    af: 0,
+    ar: 14,
+    au: 31,
+    aa: 1.5,
+    ap: 0.08,
+    ae: 0.6,
+    bf: 0,
+    br: -14,
+    bu: 31,
+    ba: -1.5,
+    bp: 0.08,
+    be: 0.6,
+  };
+  const W = Math.max(0.2, C - 10 * F);
+  const keys: LKf[] = [
+    [0, {}],
+    [
+      W,
+      {
+        ...OUT,
+        yaw: -0.55,
+        tw: -0.3,
+        lean: -1,
+        drop: 3.5,
+        sx: 1.04,
+        sy: 0.96,
+        hyw: 0.7,
+        ff1: -2,
+        ff2: 2,
+        glow: 1,
+        aglow: 0.5,
+        bglow: 0.5,
+        ap: 0.2,
+        bp: 0.2,
+      },
+      lIO,
+    ],
+    [C - 6 * F, { yaw: -0.4, tw: -0.15, hyw: 0.3, drop: 3 }, lIn],
+    [
+      C,
+      {
+        yaw: Math.PI * 1.45,
+        tw: 0.15,
+        hyw: 0,
+        lean: 0.5,
+        drop: 1.5,
+        sx: 1.03,
+        sy: 0.97,
+        flare: 5,
+        aglow: 1,
+        bglow: 1,
+        ap: 0.12,
+        bp: 0.12,
+        glow: 1.2,
+      },
+      lIn,
+    ],
+    [C + 3 * F, { yaw: TAU + 0.5, tw: 0.3, flare: 4, ap: 0.05, bp: 0.05, sx: 1, sy: 1 }, lOut],
+    [C + 6 * F, { yaw: TAU - 0.14, tw: -0.12, flare: 2, aglow: 0.3, bglow: 0.3, drop: 2 }, lIO],
+    [C + 9 * F, { yaw: TAU + 0.04, tw: 0.04, flare: 0.5, aglow: 0, bglow: 0 }, lIO],
+    [T + R, { ...REST, yaw: TAU }, lIO],
+  ];
+  return ltrack(keys, t);
+}
+
+/**
+ * ХЛОПОК (2 с «вдоха»): присел и сложил клинки → вдох: встаёт на носки,
+ * руки раскрываются в стороны, нимб разгоняется, лицо наливается → миг
+ * дрожи → ладони сходятся у груди (1,917 с), клинки встают на XII поверх
+ * циферблата — 12:00 → сжатие хлопка (1,958 с), лицо белое.
+ */
+const CLAP_END: Partial<LRig> = {
+  af: 8,
+  ar: 1.2,
+  au: 32,
+  aa: 0,
+  ap: 1.5,
+  ae: 0.8,
+  bf: 8,
+  br: -1.2,
+  bu: 32,
+  ba: 0,
+  bp: 1.5,
+  be: 0.8,
+  white: 1,
+  glow: 1.2,
+  hs: 2,
+  sx: 1.05,
+  sy: 0.95,
+  fm: 0,
+  fh: 0,
+  lean: 0.5,
+  drop: 1,
+  mu: 0,
+  hn: 0,
+  aglow: 0.6,
+  bglow: 0.6,
+};
+function lClap(t: number): LRig {
+  const UP: Partial<LRig> = {
+    af: 2,
+    ar: 13,
+    au: 38,
+    aa: 1.1,
+    ap: 0.95,
+    ae: 1,
+    bf: 2,
+    br: -13,
+    bu: 38,
+    ba: -1.1,
+    bp: 0.95,
+    be: 1,
+  };
+  const keys: LKf[] = [
+    [0, {}],
+    [
+      0.3,
+      {
+        drop: 2,
+        lean: 1,
+        hn: 0.3,
+        af: 7,
+        ar: 3,
+        au: 19,
+        aa: -0.5,
+        ap: -0.9,
+        bf: 7,
+        br: -3,
+        bu: 19,
+        ba: 0.5,
+        bp: -0.9,
+        glow: 0.6,
+      },
+      lIO,
+    ],
+    [
+      1.6,
+      {
+        ...UP,
+        lean: -2.5,
+        drop: -1,
+        mu: 2,
+        sx: 0.97,
+        sy: 1.05,
+        hn: -0.4,
+        glow: 1.2,
+        halo: (TAU / 18) * 9,
+        hs: 1,
+        fm: -0.2,
+        fh: -0.05,
+        aglow: 0.3,
+        bglow: 0.3,
+        flare: 1,
+      },
+      lIO,
+    ],
+    [
+      1.875,
+      { ar: 14.5, br: -14.5, au: 39, bu: 39, lean: -3, sy: 1.06, halo: (TAU / 18) * 11 },
+      lOut,
+    ],
+    [1.917, { ...CLAP_END, white: 0, sx: 1, sy: 1, hs: 1.5, halo: (TAU / 18) * 12 }, lIn],
+    [1.958, CLAP_END, lOut],
+    [LORD.clap, { ...CLAP_END, white: 0.9, sx: 1.03, sy: 0.97 }],
+  ];
+  return ltrack(keys, t);
+}
+
+/**
+ * ОСТАНОВКА: мир стоит, движется только он. `e` — настоящие секунды
+ * остановки, `D` — её длина (2,2 с, в полночь 1,6). Присел → рывок к
+ * герою (на месте появления доезжает от прежнего места сдвигом кадра,
+ * тормозит юзом, полы вперёд) → два веера рук ставят ножи → второй рывок
+ * в сторону → стоит, минутная на XII → перед концом роняет её вперёд:
+ * «время пошло».
+ */
+const PLACE_DASH: Partial<LRig> = {
+  af: -6,
+  ar: 9,
+  au: 20,
+  aa: 2.9,
+  ap: -0.4,
+  bf: -6,
+  br: -9,
+  bu: 20,
+  ba: -2.9,
+  bp: -0.4,
+};
+function lPlace(e: number, D: number): LRig {
+  const dash = (t0: number): LKf[] => [
+    [
+      t0 - 0.12,
+      { ...PLACE_DASH, lean: 5, drop: 4, sx: 1.06, sy: 0.94, white: 0, hn: 0.1, ff1: 3, ff2: -3 },
+      lIO,
+    ],
+    [t0, { lean: 7, drop: 2, sx: 0.96, sy: 1.05, ff1: 6, ff2: -7, flare: 1 }, lIn],
+    [t0 + 0.06, { hemf: -4, flare: 2.5, lean: 7.5 }, lLin],
+    [
+      t0 + 0.12,
+      { lean: -3, drop: 3, ff1: 5, ff2: -2, hemf: 3, flare: 1, sx: 1.05, sy: 0.95 },
+      lOut,
+    ],
+    [t0 + 0.2, { lean: 0, drop: 1, hemf: 0, flare: 0, sx: 1, sy: 1, ff1: 1.5, ff2: -1.5 }, lIO],
+  ];
+  const keys: LKf[] = [
+    [0, CLAP_END],
+    [0.1, { white: 0.3, sy: 1, sx: 1, hs: 0, aglow: 0, bglow: 0 }, lOut],
+    ...dash(0.3),
+    // Два веера: правая с минутной метёт дугу, левая ладонью вперёд.
+    [
+      0.52,
+      { af: 6, ar: -2, au: 23, aa: -0.9, ap: -0.1, bf: 6, br: -10, bu: 27, ba: -1.3, bp: 0.3 },
+      lIO,
+    ],
+    [0.66, { af: 7, ar: 13, aa: 1.0, tw: 0.25, halo: TAU / 36 }, lOut],
+    [0.72, { af: 6, ar: 11, aa: 0.8 }, lIO],
+    [0.86, { af: 7, ar: -1, aa: -0.95, tw: -0.25, halo: TAU / 18 }, lOut],
+    [0.94, { af: 5, ar: 5, aa: -0.2, tw: 0 }, lIO],
+    ...dash(1.1),
+    // Минутная — на XII.
+    [
+      1.45,
+      {
+        af: 4,
+        ar: 7,
+        au: 34,
+        aa: 0.2,
+        ap: 1.5,
+        ae: 0.8,
+        bf: -1,
+        br: -8.5,
+        bu: 17,
+        ba: -2.75,
+        bp: -0.95,
+        glow: 1.2,
+        fm: 0,
+        fh: 0,
+      },
+      lOut,
+    ],
+    [Math.max(1.5, D - 0.12), { sy: 1.02, mu: 0.5, aglow: 0.5 }, lIO],
+    [
+      D - 0.04,
+      {
+        au: 25,
+        af: 11,
+        ap: -0.3,
+        aa: 0.1,
+        lean: 3,
+        drop: 1.5,
+        sx: 1.03,
+        sy: 0.97,
+        mu: 0,
+        aglow: 0,
+      },
+      lIn,
+    ],
+    [D, { lean: 2.5, drop: 1.2 }],
+  ];
+  return ltrack(keys, e);
+}
+/** После остановки (мозг: восстановление 0,55 с): из «уронил минутную» в стойку. */
+function lAfterPlace(t: number, h: number, D: number): LRig {
+  return lmix(lPlace(D, D), L0, lIO(lclamp(t / (0.55 / h), 0, 1)));
+}
+
+/**
+ * ОТМОТКА (5,5 с): втыкает оба клинка в пол по бокам → снимает с пояса
+ * малые часы, они растут из песка в руках → смотрит в них → с усилием
+ * переворачивает → поднимает над головой и держит: стрелки лица бегут
+ * назад, песок с подола идёт вверх. Трещины на часах — по снятому
+ * порогу (`vRit` → x 0…2). Окно груди тлеет — урон ×1,2.
+ */
+const RIT_A = { apf: 7, apr: 14, aa: 0.3, ap: -1.25 };
+const RIT_B = { bpf: 5, bpr: -13, ba: -0.3, bp: -1.42 };
+const RIT_PLANT = 0.3;
+const RIT_TAKE = 0.42;
+const RIT_FLIP = 1.45;
+const RIT_UP = 1.95;
+const RIT_LOOP = 4;
+const RIT_HOLD: Partial<LRig> = {
+  af: 2,
+  ar: 7.5,
+  au: 47,
+  ae: 1,
+  bf: 2,
+  br: -7.5,
+  bu: 47,
+  be: 1,
+  gf: 3,
+  gr: 0,
+  gu: 60,
+  grot: Math.PI,
+  gs: 1,
+  hn: -0.45,
+  lean: -1.5,
+  drop: 0.5,
+  glow: 1.2,
+  halo: 0,
+};
+function lRitual(t: number, x: number): LRig {
+  const keys: LKf[] = [
+    [0, {}],
+    // Поднял клинки остриями вниз.
+    [
+      0.18,
+      {
+        af: 3,
+        ar: 10,
+        au: 27,
+        aa: RIT_A.aa,
+        ap: RIT_A.ap,
+        bf: 3,
+        br: -10,
+        bu: 27,
+        ba: RIT_B.ba,
+        bp: RIT_B.bp,
+        hn: 0.2,
+        mu: 0.6,
+      },
+      lOut,
+    ],
+    // Вонзил: присел, кисти на рукоятях.
+    [
+      RIT_PLANT,
+      {
+        ...RIT_A,
+        ...RIT_B,
+        apin: 1,
+        bpin: 1,
+        af: 1.3,
+        ar: 12.2,
+        au: 24,
+        bf: 1.5,
+        br: -11.9,
+        bu: 16,
+        drop: 6,
+        lean: 0,
+        sx: 1.05,
+        sy: 0.95,
+        mu: -0.5,
+      },
+      lIn,
+    ],
+    [RIT_PLANT + 0.05, { apin: 2, bpin: 2, sx: 1, sy: 1, mu: 0, drop: 5 }, lOut],
+    // Снял часы с пояса: они в руках и растут.
+    [
+      RIT_TAKE,
+      {
+        belt: 0,
+        gl: 1,
+        gs: 0.35,
+        gf: 6,
+        gr: -6,
+        gu: 19,
+        af: 6,
+        ar: 1,
+        au: 19,
+        bf: 6,
+        br: -9,
+        bu: 18,
+        drop: 2,
+        hn: 0.35,
+      },
+      lIO,
+    ],
+    [
+      0.78,
+      {
+        gs: 1,
+        gf: 9,
+        gr: 0,
+        gu: 26,
+        af: 7,
+        ar: 4,
+        au: 25,
+        bf: 7,
+        br: -4,
+        bu: 25,
+        drop: 1,
+        hn: 0.25,
+      },
+      lOut,
+    ],
+    [1.2, { hn: 0.3, glow: 1, gu: 27 }, lIO],
+    // Переворот с усилием: присел, часы дрожат, полный оборот вперёд.
+    [RIT_FLIP - 0.12, { drop: 2.5, sy: 0.98, gu: 25, glow: 1.1 }, lIO],
+    [
+      RIT_FLIP + 0.3,
+      { grot: Math.PI, gu: 30, drop: 1.5, sy: 1, af: 6, bf: 6, au: 28, bu: 28 },
+      lIO,
+    ],
+    [RIT_UP, RIT_HOLD, lOut],
+  ];
+  const r = ltrack(keys, Math.min(t, RIT_UP));
+  r.gc = x;
+  if (t >= RIT_PLANT + 0.05) {
+    r.apf = RIT_A.apf;
+    r.apr = RIT_A.apr;
+    r.bpf = RIT_B.bpf;
+    r.bpr = RIT_B.bpr;
+  }
+  if (t >= RIT_UP) {
+    // Держит над головой: стрелки лица бегут назад, тело дрожит от усилия.
+    const u = (t - RIT_UP) % RIT_LOOP;
+    const w = (u / RIT_LOOP) * TAU;
+    r.fm = -2 * w;
+    r.fh = -w;
+    r.halo = -(TAU / 18) * 3 * (u / RIT_LOOP);
+    r.side = 0.6 * Math.sin(w * 2);
+    r.drop = 0.5 + 0.5 * Math.sin(w * 4);
+    r.au = r.bu = 47 + 0.6 * Math.sin(w * 4 + 1);
+    r.gu = 60 + 0.6 * Math.sin(w * 4 + 1);
+    r.grot = Math.PI + 0.05 * Math.sin(w * 3);
+    r.pend = 0.3 * Math.sin(w * 2);
+    r.hd = 0.05 * Math.sin(w * 2 + 1);
+  } else if (t >= 0.78) {
+    // Стрелки лица уходят назад и к подъёму встают на XII.
+    const k = (t - 0.78) / (RIT_UP - 0.78);
+    r.fm = -TAU * k;
+    r.fh = L0.fh * (1 - k);
+  }
+  r.gk = t >= RIT_FLIP + 0.3 ? 0.9 - 0.35 * x : 0.25;
+  r.weak = 0.45;
+  return r;
+}
+/** Отмотал (мозг: восстановление 0,55 с): часы — на пояс, клинки — из пола. */
+function lRegain(t: number, h: number): LRig {
+  const R = 0.55 / h;
+  const keys: LKf[] = [
+    [0, { ...RIT_HOLD, ...RIT_A, ...RIT_B, apin: 2, bpin: 2, belt: 0, gl: 1, gk: 0.9 }],
+    [
+      R * 0.28,
+      {
+        gs: 0.35,
+        gf: 6,
+        gr: -6,
+        gu: 19,
+        af: 1.3,
+        ar: 12.2,
+        au: 26,
+        bf: 6,
+        br: -9,
+        bu: 18,
+        grot: 0,
+        drop: 3,
+        hn: 0.2,
+        lean: 0,
+      },
+      lIO,
+    ],
+    [R * 0.36, { gl: 0, belt: 1, apin: 1, af: 1.3, ar: 12.2, au: 24, drop: 6 }, lIn],
+    [R * 0.5, { bpin: 1, bf: 1.5, br: -11.9, bu: 16 }, lIO],
+    [
+      R * 0.62,
+      {
+        apin: 0,
+        bpin: 0,
+        af: 3,
+        ar: 9,
+        au: 25,
+        aa: 0.4,
+        ap: 0.6,
+        bf: 1,
+        br: -9,
+        bu: 24,
+        ba: -2.4,
+        bp: 0.4,
+        drop: 1,
+        lean: -2.5,
+        sx: 0.97,
+        sy: 1.03,
+        mu: 0.8,
+      },
+      lOut,
+    ],
+    [R, REST, lIO],
+  ];
+  return ltrack(keys, t);
+}
+
+/**
+ * ОТМОТКА СОРВАНА (2,4 с, урон ×1,6): часы лопаются в руках → отброшен
+ * назад, шатается → падает на колено (удар) → оглушён: голова качается,
+ * над ней кружат шестерёнки-звёзды, окно груди горит → встаёт, выдёргивает
+ * клинки. Клинки всё это время стоят в полу, поэтому корпус не сдвигается
+ * кадром — шатание в наклоне и ногах.
+ */
+const BROKEN_DAZE = 0.75;
+const BROKEN_LOOP = 0.6;
+const BROKEN_UP = 1.95;
+function lBroken(t: number): LRig {
+  const base: Partial<LRig> = { ...RIT_A, ...RIT_B, apin: 2, bpin: 2, belt: 0, gl: 0 };
+  const KNEE: Partial<LRig> = {
+    drop: 8,
+    lean: 3,
+    side: -1,
+    af: 4,
+    ar: 9,
+    au: 16,
+    bf: 3,
+    br: -9,
+    bu: 16,
+    hn: 0.5,
+    ff1: 5,
+    ff2: -5,
+    dim: 0.4,
+    glow: 0.3,
+  };
+  const keys: LKf[] = [
+    [0, { ...RIT_HOLD, ...base, white: 0.7, sx: 1.08, sy: 0.92 }],
+    [
+      0.08,
+      {
+        af: -2,
+        ar: 12,
+        au: 40,
+        bf: -2,
+        br: -12,
+        bu: 40,
+        lean: -5,
+        hn: -0.6,
+        drop: -1,
+        sx: 0.97,
+        sy: 1.04,
+        ff1: -3,
+        ff2: -5,
+        white: 0.2,
+        glow: 1.3,
+      },
+      lOut,
+    ],
+    [
+      0.25,
+      {
+        lean: -3,
+        side: 2.5,
+        drop: 2,
+        ff1: -4,
+        fu1: 2,
+        af: 2,
+        ar: 13,
+        au: 26,
+        bf: 0,
+        br: -12,
+        bu: 30,
+        white: 0,
+        hn: -0.2,
+        glow: 0.9,
+      },
+      lIO,
+    ],
+    [0.36, { fu1: 0, side: -1.5, lean: -1 }, lIO],
+    [0.45, { ...KNEE, drop: 9.5, sx: 1.07, sy: 0.93, mu: -1 }, lIn],
+    [0.6, { ...KNEE, sx: 1, sy: 1, mu: 0 }, lOut],
+    [BROKEN_DAZE, KNEE, lIO],
+    [BROKEN_UP, KNEE],
+    [
+      2.12,
+      {
+        drop: 5,
+        lean: 1.5,
+        hn: 0.1,
+        af: 1.3,
+        ar: 12.2,
+        au: 26,
+        bf: 1.5,
+        br: -11.9,
+        bu: 21,
+        dim: 0,
+        glow: 0.7,
+      },
+      lIO,
+    ],
+    [2.16, { apin: 1, bpin: 1, drop: 6, au: 24, bu: 16 }, lIn],
+    [
+      2.26,
+      {
+        apin: 0,
+        bpin: 0,
+        drop: 1,
+        lean: -2,
+        af: 3,
+        ar: 9,
+        au: 25,
+        aa: 0.4,
+        ap: 0.5,
+        bf: 1,
+        br: -9,
+        bu: 24,
+        ba: -2.4,
+        bp: 0.3,
+        sx: 0.97,
+        sy: 1.03,
+        mu: 0.6,
+        hn: 0,
+      },
+      lOut,
+    ],
+    [LORD.broken, { ...REST, belt: 0 }, lIO],
+  ];
+  const r = ltrack(keys, t);
+  if (t >= BROKEN_DAZE && t < BROKEN_UP) {
+    // Оглушён: голова и плечи ходят кругом.
+    const w = (((t - BROKEN_DAZE) % BROKEN_LOOP) / BROKEN_LOOP) * TAU;
+    r.hyw = 0.28 * Math.sin(w);
+    r.hd = 0.16 * (Math.cos(w) - 1);
+    r.side = -1 + 1.4 * Math.sin(w);
+    r.hn = 0.5 + 0.1 * (1 - Math.cos(w));
+    r.pend = 0.5 * Math.sin(w);
+  }
+  // Малые часы на поясе собираются заново из песка к концу.
+  r.belt = t >= 2.2 ? 1 : 0;
+  r.weak = 1;
+  return r;
+}
+
+/**
+ * ПОЛНОЧЬ отбита (3 с, урон ×1,6): оседает на колено, опираясь на
+ * минутную, как на трость → тяжело дышит, на выдохе из-под воротника
+ * пар → встаёт, выдёргивает клинок.
+ */
+const TIRED_DOWN = 0.44;
+const TIRED_LOOP = 0.8;
+/** Дыхание — две петли от `TIRED_B` до `TIRED_UP`. */
+const TIRED_B = TIRED_DOWN + 0.2;
+const TIRED_UP = TIRED_B + 2 * TIRED_LOOP;
+const TIRED_PIN = { apf: 11, apr: 7 };
+function lTired(t: number): LRig {
+  const SAG: Partial<LRig> = {
+    ...TIRED_PIN,
+    drop: 7,
+    lean: 3.5,
+    af: 6,
+    ar: 7,
+    au: 25,
+    aa: 0.3,
+    ap: -1.2,
+    bf: 2,
+    br: -9,
+    bu: 16,
+    hn: 0.4,
+    dim: 0.3,
+    glow: 0.35,
+    ff1: 5,
+    ff2: -4,
+  };
+  const keys: LKf[] = [
+    [0, {}],
+    [0.2, { ...TIRED_PIN, af: 7, ar: 7, au: 24, aa: 0.3, ap: -1.1, drop: 2, hn: 0.2 }, lIO],
+    [0.3, { apin: 1 }, lIO],
+    [TIRED_DOWN, { ...SAG, apin: 1, sx: 1.04, sy: 0.96 }, lIn],
+    [TIRED_DOWN + 0.1, { sx: 1, sy: 1 }, lOut],
+    [TIRED_UP, SAG],
+    [2.6, { drop: 2, lean: 1, hn: 0.15, dim: 0, glow: 0.6, au: 22 }, lIO],
+    [2.66, { apin: 0, au: 24, ap: 0.4, lean: -1.5, sy: 1.02 }, lOut],
+    [LORD.tired, REST, lIO],
+  ];
+  const r = ltrack(keys, t);
+  if (t >= TIRED_B && t < TIRED_UP) {
+    // Вдох — плечи вверх, выдох — оседает и выпускает пар.
+    const w = (((t - TIRED_B) % TIRED_LOOP) / TIRED_LOOP) * TAU;
+    r.drop = 7 - 0.9 * Math.sin(w);
+    r.mu = 0.5 * Math.max(0, Math.sin(w));
+    r.hn = 0.4 - 0.08 * Math.sin(w);
+    r.pend = 0.25 * Math.sin(w + 1);
+  }
+  r.weak = 1;
+  return r;
+}
+
+/** Отдача от удара героя: голова откинута, плечи вздрогнули, нимб звякнул. */
+function lHurt(f: number): LRig {
+  const k = [1, 0.55, 0.2][lclamp(f, 0, 2)];
+  return {
+    ...L0,
+    hn: -0.4 * k,
+    lean: -2.2 * k,
+    sx: 1 - 0.04 * k,
+    sy: 1 + 0.04 * k,
+    glow: 0.5 + 0.7 * k,
+    au: L0.au + 2 * k,
+    bu: L0.bu + 2 * k,
+    ap: L0.ap + 0.25 * k,
+    bp: L0.bp + 0.25 * k,
+    hs: 0.8 * k,
+  };
+}
+
+/**
+ * Смерть (2,6 с, `linger`): удар — циферблат трескается в три стадии,
+ * стрелки лица бегут назад и встают на 11:59 → клинки выпадают из рук →
+ * колени подгибаются, удар о пол → малые часы падают с пояса и бьются →
+ * нимб соскальзывает и ложится → корпус сверху вниз рассыпается шестернями
+ * → гаснет.
+ */
+const DEATH_T = 2.6;
+const DEATH_DROP = 0.55;
+const DEATH_KNEE = 1.0;
+const DEATH_BELT = 1.0;
+const DEATH_HALO = 1.15;
+/** Распад сверху вниз: начало и длительность. */
+const DEATH_SWEEP = [1.4, 0.8];
+const DEATH_FADE = [2.25, 2.6];
+function lDeath(t: number): LRig {
+  const LIMP: Partial<LRig> = { af: 1, ar: 9, au: 15, bf: 0, br: -9, bu: 15 };
+  const keys: LKf[] = [
+    [0, { white: 1, hn: -0.5, lean: -3, sx: 0.95, sy: 1.05, crack: 1, glow: 1.4, hs: 1 }],
+    [0.1, { white: 0.3, lean: -2, sx: 1, sy: 1, glow: 1.1 }, lOut],
+    [0.2, { crack: 2, side: 2, white: 0, hs: 0 }, lIO],
+    [0.35, { side: -1.5, hn: -0.2 }, lIO],
+    [0.5, { crack: 3, dim: 0.5, side: 0.5, glow: 0.6 }, lIO],
+    [DEATH_DROP, { apin: 3, bpin: 3, ...LIMP, sy: 1.02 }, lIn],
+    [0.75, { drop: 3, lean: 1, hn: 0.2, sy: 1, side: 0 }, lIO],
+    [DEATH_KNEE, { drop: 10, lean: 3, sx: 1.06, sy: 0.92, mu: -1, hn: 0.4, belt: 0 }, lIn],
+    [1.1, { drop: 9, sx: 1, sy: 0.98, mu: 0 }, lOut],
+    [1.3, { dim: 1, hn: 0.55, lean: 4, sy: 1 }, lIO],
+    [DEATH_T, {}],
+  ];
+  const r = ltrack(keys, t);
+  // Стрелки лица: бегут назад и встают на 11:59 с отскоком.
+  const stop = 0.55;
+  const fmEnd = -TAU / 60;
+  const fhEnd = -TAU / 720;
+  if (t < stop) {
+    r.fm = -t * 22;
+    r.fh = -t * 3;
+  } else {
+    const b = lclamp((t - stop) / 0.1, 0, 1);
+    const k = Math.sin(b * Math.PI) * 0.12 * (1 - b);
+    r.fm = fmEnd + k;
+    r.fh = fhEnd + k * 0.3;
+  }
+  r.halo = t < 0.5 ? -t * 2 : -1;
+  if (t >= DEATH_FADE[0])
+    r.op = 1 - lclamp((t - DEATH_FADE[0]) / (DEATH_FADE[1] - DEATH_FADE[0]), 0, 1);
+  return r;
+}
+
+/** Смена фазы (0,9 с): присел → «бом»: распрямился, клинки в стороны, нимб больше → стойка. */
+const PHASE_T = 0.9;
+function lPhase(t: number): LRig {
+  const keys: LKf[] = [
+    [0, {}],
+    [0.14, { drop: 3, lean: 1, hn: 0.3, sx: 1.04, sy: 0.96, au: 15, bu: 15 }, lIO],
+    [
+      0.26,
+      {
+        drop: -1,
+        lean: -2,
+        hn: -0.3,
+        mu: 1.5,
+        sx: 0.97,
+        sy: 1.05,
+        af: 2,
+        ar: 14,
+        au: 29,
+        aa: 1.4,
+        ap: 0.4,
+        bf: 2,
+        br: -14,
+        bu: 29,
+        ba: -1.4,
+        bp: 0.4,
+        white: 0.7,
+        hs: 2.5,
+        glow: 1.3,
+        flare: 2.5,
+        halo: TAU / 18,
+      },
+      lOut,
+    ],
+    [0.42, { white: 0, hs: 1, mu: 0, sx: 1, sy: 1, flare: 0 }, lIO],
+    [PHASE_T, { ...REST, halo: TAU / 18 }, lOB],
+  ];
+  return ltrack(keys, t);
+}
+
+/** Удар полночи (0,55 с): обе стрелки вскинуты на XII → удар вниз с кивком → стойка. */
+const TOLL_T = 0.55;
+function lToll(t: number): LRig {
+  const keys: LKf[] = [
+    [0, {}],
+    [
+      0.12,
+      {
+        af: 5,
+        ar: 5,
+        au: 33,
+        aa: 0.1,
+        ap: 1.45,
+        bf: 5,
+        br: -5,
+        bu: 33,
+        ba: -0.1,
+        bp: 1.45,
+        lean: -1.5,
+        mu: 1,
+        sy: 1.03,
+        sx: 0.98,
+        hn: -0.25,
+        glow: 1.2,
+        fm: 0,
+        fh: 0,
+      },
+      lOut,
+    ],
+    [
+      0.2,
+      {
+        af: 10,
+        ar: 5,
+        au: 22,
+        ap: -0.6,
+        bf: 10,
+        br: -5,
+        bu: 22,
+        bp: -0.6,
+        ba: 0.1,
+        lean: 3,
+        drop: 2,
+        mu: -0.5,
+        sy: 0.95,
+        sx: 1.05,
+        hn: 0.35,
+        hs: 2,
+        white: 0.5,
+        aglow: 0.8,
+        bglow: 0.8,
+      },
+      lIn,
+    ],
+    [0.3, { sy: 0.99, sx: 1.01, mu: 0, white: 0, hs: 0.5, aglow: 0, bglow: 0 }, lOut],
+    [TOLL_T, REST, lIO],
+  ];
+  return ltrack(keys, t);
+}
+
+// ---- След, рывки, осколки, пар, звёзды оглушения ----
+
 function lPolyEach(pts: [number, number][], fn: (x: number, y: number) => void): void {
   let minX = 1e9;
   let maxX = -1e9;
@@ -2722,6 +4504,8 @@ function lPolyEach(pts: [number, number][], fn: (x: number, y: number) => void):
 /**
  * След клинка — серп по выборкам в прошлом (`sm[0]` — сейчас). У свежего
  * края полоса шире и светлее, к хвосту — у самого острия и через точку.
+ * Рисуется только там, где остриё за выборку прошло больше 2,4 px. Кусок
+ * за спиной (глубина) не ложится поверх тела.
  */
 function lSmear(p: Px, lit: Px, sm: LBlade[], L: LordLook, inner: number): void {
   const n = sm.length - 1;
@@ -2734,13 +4518,12 @@ function lSmear(p: Px, lit: Px, sm: LBlade[], L: LordLook, inner: number): void 
   for (let i = n - 1; i >= 0; i--) {
     const A = sm[i];
     const B = sm[i + 1];
-    if (!A.z && !B.z) continue;
     const [ax, ay] = pt(A, 1);
     const [bx, by] = pt(B, 1);
     if (Math.hypot(ax - bx, ay - by) < 2.4) continue;
+    const behind = A.z < -3 && B.z < -3;
     const ka = i / n;
     const kb = (i + 1) / n;
-    // Серп: у свежего края — во всю длину от `inner`, к хвосту — только остриё.
     const fa = inner + (1 - inner) * 0.9 * ka * ka;
     const fb = inner + (1 - inner) * 0.9 * kb * kb;
     const [iax, iay] = pt(A, fa);
@@ -2755,9 +4538,9 @@ function lSmear(p: Px, lit: Px, sm: LBlade[], L: LordLook, inner: number): void 
         [ibx, iby],
       ],
       (x, y) => {
-        // Хвост тает через точку, а не обрывается.
         if (age > 0.5 && (x + y) % 2) return;
         if (age > 0.8 && (x + 2 * y) % 3) return;
+        if (behind && p.solid(x, y)) return;
         const u = (Math.hypot(x + 0.5 - A.x, y + 0.5 - A.y) / L0x - fa) / (1 - fa || 1);
         let c: RGBA;
         if (u > 0.78) c = age < 0.3 ? BRASS_HI : L.trim[3];
@@ -2771,7 +4554,7 @@ function lSmear(p: Px, lit: Px, sm: LBlade[], L: LordLook, inner: number): void 
   }
 }
 
-/** Выпад: линии скорости тянутся от острия назад вдоль клинка. */
+/** Укол: линии скорости тянутся от острия назад вдоль клинка. */
 function lThrust(lit: Px, p: Px, b: LBlade, k: number, L: LordLook): void {
   if (k <= 0.02) return;
   const tx = b.x + b.ux * b.len;
@@ -2799,26 +4582,24 @@ function lThrust(lit: Px, p: Px, b: LBlade, k: number, L: LordLook): void {
   }
 }
 
-/** Рывок в остановке: полосы позади тела (k — сила, up — вверх). */
-function lStreak(lit: Px, p: Px, g: LGeo, k: number, up: boolean, L: LordLook): void {
+/** Рывок в остановке: полосы позади тела, против хода (k — сила). */
+function lStreak(lit: Px, p: Px, g: LGeo, k: number, L: LordLook): void {
   if (k <= 0.02) return;
   const hot = mixc(L.glow, WHITE, 0.7);
+  // Назад от хода — в кадре.
+  const bx = -g.B.c;
+  const by = -g.B.s * LDEP;
+  const bl = Math.hypot(bx, by) || 1;
+  const ux = bx / bl;
+  const uy = by / bl;
   for (let i = 0; i < 7; i++) {
     const n = (10 + hash(i, 5) * 22) * k;
-    if (up) {
-      const x = Math.round(LCX - 9 + i * 3 + g.sh(LG - 30));
-      const y0 = Math.round(LG - 6 - hash(i, 2) * 8);
-      for (let j = 0; j < n; j++) {
-        lit.set(x, y0 + j, alpha(hot, 0.75 * (1 - j / n)));
-        if (j < n * 0.4) p.set(x, y0 + j, alpha(L.trim[3], 0.5));
-      }
-    } else {
-      const y = Math.round(LG - 6 - i * 6);
-      const x0 = Math.round(LCX - 8 + g.sh(y) - hash(i, 3) * 3);
-      for (let j = 0; j < n; j++) {
-        lit.set(x0 - j, y, alpha(hot, 0.75 * (1 - j / n)));
-        if (j < n * 0.4) p.set(x0 - j, y, alpha(L.trim[3], 0.5));
-      }
+    const P = lPt(g, -3, (i - 3) * 2.6, 6 + i * 5.5);
+    for (let j = 0; j < n; j++) {
+      const x = Math.round(P[0] + ux * j);
+      const y = Math.round(P[1] + uy * j);
+      lit.set(x, y, alpha(hot, 0.75 * (1 - j / n)));
+      if (j < n * 0.4) p.set(x, y, alpha(L.trim[3], 0.5));
     }
   }
 }
@@ -2856,8 +4637,8 @@ function lShards(
       lit.set(Math.round(x), Math.round(y), alpha(TEAL_GLOW, 0.6));
     }
   }
-  // Песок высыпается горкой у ног.
   if (!pile) return;
+  // Песок высыпается горкой у ног.
   const heap = Math.min(1, t * 2.5);
   for (let x = -6; x <= 6; x++) {
     const hgt = Math.round(heap * 2.2 * (1 - (x * x) / 40));
@@ -2866,13 +4647,13 @@ function lShards(
   }
 }
 
-/** Над головой оглушённого кружат шестерёнки-звёзды. */
-function lOrbit(p: Px, lit: Px, g: LGeo, f: number, L: LordLook): void {
+/** Над головой оглушённого кружат шестерёнки-звёзды (`a` — угол круга). */
+function lOrbit(p: Px, lit: Px, g: LGeo, a0: number, L: LordLook): void {
   for (let i = 0; i < 3; i++) {
-    const a = (f / 12) * TAU + (i / 3) * TAU;
-    const x = g.hx + Math.cos(a) * 10;
-    const y = g.hy - 13 + Math.sin(a) * 3;
-    lCog(p, x, y, 2.2, 6, a * 2, L.trim, 1, 0.5);
+    const a = a0 + (i / 3) * TAU;
+    const x = g.head[0] + Math.cos(a) * 11;
+    const y = g.head[1] - 14 + Math.sin(a) * 3.2;
+    lCog(p, x, y, 2.3, 6, a * 2, L.trim, 1, 0.5);
     lit.set(Math.round(x), Math.round(y - 2), alpha(WHITE, 0.8));
   }
 }
@@ -2880,11 +4661,23 @@ function lOrbit(p: Px, lit: Px, g: LGeo, f: number, L: LordLook): void {
 /** Пар из-под воротника: клубы на выдохе (k — возраст 0…1). */
 function lSteam(p: Px, lit: Px, g: LGeo, k: number, side: number): void {
   if (k < 0 || k >= 1) return;
-  const x = LCX + g.sh(g.top) + side * (9 + k * 9);
-  const y = g.top - k * 9;
+  const x = g.collar[0] + side * (6 + k * 9);
+  const y = g.collar[1] - 1 - k * 9;
   const rr = 1.2 + k * 2.6;
   p.ell(x, y, rr, rr * 0.8, alpha(hx('#d8dce4'), 0.55 * (1 - k)));
   lit.ell(x, y, rr * 0.7, rr * 0.5, alpha(WHITE, 0.25 * (1 - k)));
+}
+
+/** Песчинки сходятся по спирали к точке (часы собираются из песка). */
+function lSandIn(p: Px, lit: Px, cx: number, cy: number, k: number, n: number, R: number): void {
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU + k * 5;
+    const rr = (1 - k) * (R * 0.5 + hash(i, 13) * R) + 1;
+    const x = Math.round(cx + Math.cos(a) * rr);
+    const y = Math.round(cy + Math.sin(a) * rr * 0.8);
+    p.set(x, y, i % 2 ? SAND[3] : TEAL[2]);
+    lit.set(x, y, alpha(TEAL_GLOW, 0.7));
+  }
 }
 
 // ---- Смерть: циферблат трескается, стрелки встают, корпус сыплется шестернями ----
@@ -2910,20 +4703,15 @@ function lGearAt(q: LGear, a: number): [number, number, number] {
   const a2 = a - t1;
   const t2 = (-2 * v1) / G2;
   const y = a2 < t2 ? floor + v1 * a2 + 0.5 * G2 * a2 * a2 : floor;
-  // По полу — катится и тормозит.
   const roll = Math.min(a2, 0.35);
   const x = q.ox + q.vx * t1 + q.vx * 0.5 * (roll - (roll * roll) / 0.7);
   return [x, y, q.spin * (t1 + roll)];
 }
 
-const DEATH_T = 1.6;
-/** Распад сверху вниз: начало и длительность. */
-const DEATH_SWEEP = [0.72, 0.5];
-
 function lDeathGears(body: Px): LGear[] {
   const out: LGear[] = [];
-  for (let y = 20; y < LG - 2 && out.length < 30; y += 5)
-    for (let x = 8; x < LW - 8 && out.length < 30; x += 5) {
+  for (let y = 16; y < LG - 2 && out.length < 34; y += 5)
+    for (let x = 8; x < LW - 8 && out.length < 34; x += 5) {
       const jx = Math.round(x + (hash(x, y, 41) - 0.5) * 3);
       if (!body.solid(jx, y)) continue;
       const h1 = hash(jx, y, 43);
@@ -2940,1242 +4728,111 @@ function lDeathGears(body: Px): LGear[] {
   return out;
 }
 
-// ---- Техники: ключевые позы на оси времени мозга ----
-
-const lHaste = (ph: number) => (ph >= 3 ? 1.25 : ph >= 2 ? 1.12 : 1);
-/** Начало кадра, в котором мозг бьёт: поза контакта стоит ровно в нём. */
-const lHitT = (T: number) => Math.floor(T * LFPS + 1e-6) * LF1;
-/** Стойка: руки и корпус — как в покое (для возврата из техник). */
-const LREST: Partial<LRig> = {
-  lean: 0,
-  drop: 0,
-  tw: 0,
-  hem: 0,
-  hx: 0,
-  hy: 0,
-  fx: L0.fx,
-  fy: L0.fy,
-  fa: L0.fa,
-  fl: L0.fl,
-  fe: L0.fe,
-  bx: L0.bx,
-  by: L0.by,
-  ba: L0.ba,
-  bl: L0.bl,
-  be: L0.be,
-  glow: 0.5,
-  white: 0,
-  sx: 1,
-  sy: 1,
-  pend: 0,
-  fglow: 0,
-  bglow: 0,
-};
-/** Щелчок: величина идёт ступеньками, как стрелка часов. */
-const lTickQ = (v: number, step: number) => Math.floor(v / step) * step;
-
-/** Покой: 3 с по 10 к/с, шесть тиков. Дыхание — целыми пикселями. */
-const IDLE_N = 30;
-function lIdle(f: number): LRig {
-  const k = Math.floor(f / 5);
-  const sub = f % 5;
-  const r = { ...L0 };
-  const br = 0.5 - 0.5 * Math.cos((f / IDLE_N) * TAU);
-  r.drop = -Math.round(br);
-  r.hem = 0.9 * Math.sin((f / IDLE_N) * TAU + 1.2);
-  // Маятник в груди: тик — у края, так — у другого.
-  r.pend = 0.55 * Math.cos(Math.PI * (f / 5));
-  // Стрелка лица щёлкает на шестую круга с отскоком, нимб — на треть зуба.
-  r.fm = k * (TAU / 6) + (sub === 0 ? 0.16 : sub === 1 ? -0.06 : 0);
-  r.halo = k * (TAU / 36) + (sub === 0 ? 0.035 : 0);
-  r.glow = sub === 0 ? 0.66 : sub === 1 ? 0.56 : 0.5;
-  // На щелчке минутная в руке вздрагивает на пиксель.
-  if (sub === 0) r.fy -= 1;
-  return r;
-}
-
-/** Шаг: 8 кадров на два шага; каждый шаг — «тик» стрелки лица. */
-const WALK_N = 8;
-const WALK_STRIDE = 26;
-function lWalk(f: number, fast: boolean): LRig {
-  const ff = ((f % WALK_N) + WALK_N) % WALK_N;
-  const a = (ff / WALK_N) * TAU;
-  const r = { ...L0 };
-  r.drop = Math.round(0.5 + 0.5 * Math.cos(2 * a));
-  r.lean = fast ? 2.8 : 1.6;
-  r.hem = (fast ? -2.6 : -1.6) + 0.9 * Math.sin(2 * a + 0.8);
-  r.lf = 3 + 4.5 * Math.sin(a);
-  r.rf = -4 - 4.5 * Math.sin(a);
-  r.lfy = Math.max(0, Math.cos(a)) * 1.6;
-  r.rfy = Math.max(0, -Math.cos(a)) * 1.6;
-  r.fx = L0.fx - 2.4 * Math.sin(a);
-  r.bx = L0.bx + 2.4 * Math.sin(a);
-  r.fy = L0.fy - Math.round(Math.max(0, -Math.sin(a)));
-  r.by = L0.by - Math.round(Math.max(0, Math.sin(a)));
-  r.fa = (fast ? 1.45 : 1.2) - 0.14 * Math.sin(a);
-  r.ba = (fast ? 2.3 : 2.05) + 0.12 * Math.sin(a);
-  r.pend = 0.45 * Math.sin(a + 1);
-  r.halo = (ff / WALK_N) * (TAU / 6);
-  // Тик-так на каждый шаг: стрелка лица качается метрономом.
-  r.fm = ff < 4 ? -0.45 : 0.45;
-  if (ff === 0 || ff === 4) r.fm *= 1.25;
-  return r;
-}
-
-/** Пробуждение: лицо загорается, стрелки сбегаются на XII, удар колокола. */
-const ROAR_T = 1.6;
-function lRoar(t: number): LRig {
-  const keys: LKf[] = [
-    [
-      0,
-      {
-        drop: 2,
-        hy: 2,
-        dim: 1,
-        glow: 0,
-        fx: 6,
-        fy: -13,
-        fa: 1.45,
-        bx: -7,
-        by: -13,
-        ba: 1.7,
-        hem: 0.5,
-        fm: 3.4,
-        fh: 3.0,
-        pend: 0,
-      },
-    ],
-    [0.3, { dim: 1, hy: 2 }],
-    [0.42, { dim: 0, glow: 0.8, hy: 1 }, lIn],
-    [0.5, { glow: 1.1, pend: 0.5 }, lOut],
-    [
-      0.95,
-      {
-        drop: -1,
-        hy: -1,
-        fx: 12,
-        fy: -35,
-        fa: -1.0,
-        fe: 1,
-        bx: -12,
-        by: -35,
-        ba: 4.14,
-        be: -1,
-        bz: 1,
-        glow: 1,
-        halo: TAU / 3,
-        fm: TAU,
-        fh: TAU,
-        lean: -1,
-        pend: -0.6,
-        hem: -0.6,
-      },
-      lIO,
-    ],
-    [
-      1.0,
-      {
-        fx: 12,
-        fy: -39,
-        fa: -1.25,
-        bx: -12,
-        by: -39,
-        ba: 4.39,
-        white: 1,
-        hs: 2,
-        sy: 1.06,
-        sx: 0.96,
-        hy: -2,
-      },
-      lOut,
-    ],
-    [1.08, { sy: 0.97, sx: 1.03, hs: 1, white: 0.6, drop: 1, pend: 0.7 }, lOut],
-    [1.2, { sy: 1, sx: 1, hs: 0, white: 0.2, drop: 0 }, lIO],
-    [ROAR_T, { ...LREST, bz: 0, glow: 0.6 }, lIO],
-  ];
-  const r = ltrack(keys, t);
-  // Стрелки лица бегут к XII щелчками (24 к/с — каждый кадр щелчок).
-  if (t > 0.5 && t < 0.95) {
-    r.fm = lTickQ(r.fm, TAU / 12);
-    r.fh = lTickQ(r.fh, TAU / 24);
-  }
-  return r;
-}
-
-/**
- * Часовая (тяжёлая): стрелка обходит круг через голову, как по циферблату.
- * Перехват → занос назад-вверх → НАТЯГ (корпус скручен, клинок за спиной,
- * лицо накаляется, стрелки лица отщёлкивают назад, как храповик) → рубка
- * через голову по дуге за два кадра со следом → контакт в кадре урона
- * (сжатие от удара) → проводка с перелётом → возврат.
- */
-function lHour(t: number, A: number, h: number): LRig {
-  const T = LORD.hourWarn / h;
-  const R = 0.55 / h;
-  const tC = lHitT(T);
-  const tA = Math.min(0.22, tC - 6 * LF1);
-  const arm = (a: number, tw: number, rr = 13): Partial<LRig> => ({
-    bx: -7 + tw * 5 + Math.cos(a) * rr,
-    by: -31 + Math.sin(a) * rr,
-  });
-  // Клинок ходит как часовая стрелка: VII → XI, натяг назад на X, удар
-  // X → XII → II → IV (для прицела вправо; иначе — повёрнуто на прицел).
-  const keys: LKf[] = [
-    [0, {}],
-    [0.08, { drop: 1, lean: -0.5, glow: 0.6, fy: L0.fy + 1 }, lOut],
-    [
-      tA,
-      {
-        ...arm(A + 3.9, -0.5),
-        ba: A + 4.0,
-        bl: 16,
-        be: -1,
-        tw: -0.5,
-        lean: -1.5,
-        drop: -1,
-        glow: 0.8,
-        hem: -0.5,
-        fx: 10,
-        fy: -21,
-        fa: 1.55,
-        pend: 0.5,
-      },
-      lIO,
-    ],
-    [
-      tC - 3 * LF1,
-      {
-        ...arm(A + 4.1, -0.9),
-        ba: A + 3.72,
-        bl: 18,
-        tw: -0.9,
-        lean: -2.6,
-        drop: 1,
-        glow: 1,
-        bglow: 1,
-        fx: 11,
-        fy: -23,
-        fa: 1.75,
-        hem: -1.2,
-        pend: 0.8,
-        hy: -1,
-      },
-      lIO,
-    ],
-    [
-      tC - 2 * LF1,
-      { ...arm(A + 4.65, -0.2), ba: A + 4.75, bl: 21, tw: -0.2, lean: 0, drop: -1, bz: 1 },
-      lIn,
-    ],
-    [
-      tC - LF1,
-      { ...arm(A + 5.45, 0.6), ba: A + 5.65, bl: 23, tw: 0.6, lean: 2, drop: 0, hy: 0 },
-      lLin,
-    ],
-    [
-      tC,
-      {
-        ...arm(A + 6.4, 1),
-        ba: A + 6.9,
-        bl: 25,
-        tw: 1,
-        lean: 3,
-        drop: 2,
-        sx: 1.05,
-        sy: 0.95,
-        white: 0.5,
-        fx: 5,
-        fy: -15,
-        fa: 1.35,
-        hem: 1.5,
-        pend: -0.8,
-        hy: 1,
-      },
-      lLin,
-    ],
-    [tC + LF1, { sx: 1.04, sy: 0.96 }, lLin],
-    [
-      tC + 4 * LF1,
-      {
-        ...arm(A + 6.7, 0.8),
-        ba: A + 7.4,
-        bl: 21,
-        lean: 2.4,
-        drop: 2.5,
-        sx: 1,
-        sy: 1,
-        white: 0,
-        glow: 0.8,
-        bglow: 0.5,
-        hy: 0,
-      },
-      lOut,
-    ],
-    [
-      tC + 9 * LF1,
-      { ...arm(A + 7.0, 0.5), ba: A + 7.7, bl: 17, lean: 1.2, drop: 1, bglow: 0 },
-      lIO,
-    ],
-    [T + R, { ...LREST, ba: L0.ba + TAU, be: 1, bz: 0 }, lIO],
-  ];
-  const r = ltrack(keys, t);
-  // Натяг: последние кадры заноса — кисть дрожит на полпикселя.
-  if (t > tC - 8 * LF1 && t < tC - 3 * LF1) r.by += Math.floor(t * LFPS) % 2 ? 0.6 : -0.6;
-  // Стрелки лица: храповик назад на заносе, на ударе — к цели.
-  const fA = A + Math.PI / 2;
-  if (t < tC - 2 * LF1) {
-    r.fm = -lTickQ(t, 0.083) * 6.3;
-    r.fh = 1.9 - lTickQ(t, 0.166) * 1.2;
-    r.halo = -lTickQ(t, 0.083) * 0.35;
-  } else if (t < T + R - 3 * LF1) {
-    r.fm = fA;
-    r.fh = fA - 0.35;
-    r.fdir = 1;
-    r.halo = 0.52;
-  } else {
-    r.fm = 0;
-    r.fh = 1.9;
-    r.halo = TAU / 6;
-  }
-  return r;
-}
-
-/**
- * Минутная (быстрая): прицел — рука вытягивается к цели, стрелки лица
- * щелчками наводятся на неё; взвод — рука назад; укол в кадре урона с
- * линиями скорости; выпад (тело летит, шлейф); стрелка входит в пол —
- * три рывка вытащить, лицо мигает; вырвал — отшатнулся; возврат.
- */
-function lMinute(t: number, A: number, h: number): LRig {
-  const T = LORD.minWarn / h;
-  const tC = lHitT(T);
-  const L1 = T + LORD.lunge;
-  const S1 = L1 + LORD.stuck;
-  const R1 = S1 + 0.55 / h;
-  const sx0 = 5.4;
-  const sy0 = -31;
-  const [tx, ty] = lFloor(A, 96);
-  const beta = Math.atan2(ty - sy0, tx - sx0);
-  const aim = (k: number, extra = 0): Partial<LRig> => ({
-    fx: sx0 + Math.cos(beta) * k,
-    fy: sy0 + Math.sin(beta) * k,
-    fa: beta + extra,
-  });
-  const [px, py] = lFloor(A, 22);
-  const pd = Math.atan2(py - sy0, px - sx0);
-  const toPin = (k: number): Partial<LRig> => ({
-    fx: sx0 + Math.cos(pd) * k,
-    fy: sy0 + Math.sin(pd) * k,
-  });
-  const up = Math.sin(A) < -0.5;
-  const keys: LKf[] = [
-    [0, {}],
-    [
-      0.1,
-      {
-        ...aim(8, 0.5),
-        fe: 1,
-        tw: 0.5,
-        bx: -14,
-        by: -27,
-        ba: 3.5,
-        be: -1,
-        drop: 1,
-        lean: -1,
-        glow: 0.7,
-      },
-      lOut,
-    ],
-    [
-      0.25,
-      { ...aim(13), fl: 27, tw: 0.9, lean: -1.5, drop: 1.5, glow: 0.85, bx: -16, by: -29, ba: 3.7 },
-      lIO,
-    ],
-    [tC - 4 * LF1, { ...aim(8), lean: -2.6, drop: 2.5, fglow: 1, glow: 1, hem: 1 }, lIO],
-    [tC - 2 * LF1, { ...aim(7.5), lean: -2.8, drop: 2.6 }, lLin],
-    [tC - LF1, { ...aim(12), lean: 0.5, drop: 1 }, lIn],
-    [
-      tC,
-      {
-        ...aim(16.5),
-        fl: 31,
-        lean: 4.5,
-        drop: 0,
-        sx: 1.07,
-        sy: 0.96,
-        white: 0.6,
-        hem: -2.5,
-        bx: -17,
-        by: -31,
-      },
-      lLin,
-    ],
-    [T + 0.08, { sx: 1.04, sy: 0.97, white: 0.2, lean: 5 }, lOut],
-    [L1 - LF1, { ...aim(16), fl: 30 }, lLin],
-    [
-      L1,
-      {
-        ...toPin(11),
-        fpin: 1,
-        fpx: px,
-        fpy: py,
-        fz: up ? 0 : 1,
-        fl: 24,
-        lean: 6,
-        drop: 4,
-        sx: 1.08,
-        sy: 0.9,
-        fglow: 0,
-        glow: 0.6,
-        white: 0,
-        hem: 3,
-      },
-      lOut,
-    ],
-    [L1 + 2 * LF1, { sx: 1.02, sy: 0.97 }, lOut],
-    [L1 + 0.16, { ...toPin(8), lean: 1.5, drop: 3, sx: 1, sy: 1, hem: 0 }, lIO],
-    [L1 + 0.3, { ...toPin(10), lean: 4, drop: 3.5 }, lIn],
-    [L1 + 0.45, { ...toPin(7), lean: 0.5, drop: 2.5 }, lIO],
-    [L1 + 0.58, { ...toPin(10), lean: 3.5, drop: 3 }, lIn],
-    [L1 + 0.74, { ...toPin(6), lean: -1, drop: 2, hem: -1 }, lIO],
-    [S1 - 0.12, { ...toPin(6.5), lean: -1.5 }, lLin],
-    [
-      S1 - 0.08,
-      {
-        fpin: 0,
-        fx: sx0 + 3,
-        fy: sy0 - 6,
-        fa: -1.0,
-        fl: 24,
-        lean: -3.5,
-        drop: -1,
-        hem: 2,
-        fz: 1,
-        sx: 0.97,
-        sy: 1.04,
-      },
-      lOut,
-    ],
-    [S1 + 0.04, { lean: -2, drop: 0, sx: 1, sy: 1 }, lOut],
-    [R1, { ...LREST, tw: 0, be: 1 }, lIO],
-  ];
-  const r = ltrack(keys, t);
-  const fA = A + Math.PI / 2;
-  const n = Math.floor(t * LFPS);
-  r.fdir = t < S1 - 0.08 ? 1 : 0;
-  if (t < 0.3) {
-    // Наводка: щелчками каждые два кадра — к цели.
-    r.fm = fA - lTickQ(Math.max(0, 0.3 - t), 0.083) * 9;
-    r.fh = fA - 0.4 - lTickQ(Math.max(0, 0.3 - t), 0.083) * 4;
-  } else if (t < L1 + 0.05) {
-    // Навёлся: стрелки на цели, щёлкают «дальномером».
-    r.fm = fA + (n % 3 === 0 ? 0.12 : 0);
-    r.fh = fA - 0.4;
-  } else if (t < S1 - 0.08) {
-    // Застрял: лицо мигает, стрелки мечутся.
-    r.dim = Math.floor(t * 12) % 2 ? 0.85 : 0.1;
-    r.fm = fA + (hash(Math.floor(t * 8), 7) - 0.5) * 3;
-    r.fh = fA - 0.4 + (hash(Math.floor(t * 6), 9) - 0.5) * 1.5;
-  } else {
-    r.fm = lTickQ(fA * (1 - lclamp((t - S1) / 0.3, 0, 1)), 0.52);
-    r.fh = 1.9;
-  }
-  return r;
-}
-
-/** Руки при обороте: ψ — поворот рук вокруг тела, τ — клинки вниз. */
-function lSpinArms(r: LRig, psi: number, tau: number, reach: number): void {
-  for (const front of [true, false]) {
-    const a = psi + (front ? 0 : Math.PI);
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
-    const n = Math.hypot(1, tau);
-    const vx = ca / n;
-    const vy = (0.5 * sa + tau) / n;
-    const ang = Math.atan2(vy, vx);
-    const k = Math.hypot(vx, vy);
-    const hx0 = ca * reach;
-    const hy0 = -26 + sa * reach * 0.5;
-    if (front) {
-      r.fx = hx0;
-      r.fy = hy0;
-      r.fa = ang;
-      r.fl = 27 * k;
-      r.fz = sa > -0.08 ? 1 : 0;
-      r.fe = sa > 0 ? -1 : 1;
-    } else {
-      r.bx = hx0;
-      r.by = hy0;
-      r.ba = ang;
-      r.bl = 19 * k;
-      r.bz = sa > -0.08 ? 1 : 0;
-      r.be = sa > 0 ? 1 : -1;
-    }
-  }
-}
-
-/**
- * Вращение: руки в стороны, клинки качаются маятником всё шире (тик-так с
- * щелчком на краю), на последнем махе переваливают через верх — и корпус
- * делает полный оборот (вид сбоку, со спины), клинки по кругу со следом;
- * контакт — в кадре урона, клинки во всю длину; дальше юла тормозит.
- */
-function lSpin(t: number, h: number): LRig {
-  const T = LORD.spinWarn / h;
-  const tC = lHitT(T);
-  const R = 0.55 / h;
-  const tA = tC - 7 * LF1;
-  const r = { ...L0 };
-  r.glow = 0.85;
-  if (t < tA) {
-    const u = lclamp(t / tA, 0, 1);
-    const sp = lOut(lclamp(t / 0.18, 0, 1));
-    const amp = 0.25 + 1.35 * u * u;
-    const th = amp * Math.sin(Math.PI * 3 * u);
-    r.fx = L0.fx + (17 - L0.fx) * sp;
-    r.fy = L0.fy + (-26 - L0.fy) * sp;
-    r.bx = L0.bx + (-17 - L0.bx) * sp;
-    r.by = L0.by + (-26 - L0.by) * sp;
-    r.fa = L0.fa + (Math.PI / 2 + th - L0.fa) * sp;
-    r.ba = L0.ba + (Math.PI / 2 + th - L0.ba) * sp;
-    r.fl = 24 + 2 * u;
-    r.bl = 15 + 3 * u;
-    r.fe = 1;
-    r.be = -1;
-    r.bz = sp > 0.5 ? 1 : 0;
-    r.lean = -th * 1.3 * sp;
-    r.drop = Math.round(sp);
-    r.hem = th * 1.5;
-    r.pend = -th * 0.6;
-    // Щелчок на каждом краю маха: нимб и стрелка лица.
-    const tick = Math.floor(3 * u + 0.5);
-    r.halo = tick * (TAU / 18);
-    r.fm = tick * (TAU / 4);
-    r.glow = 0.7 + 0.3 * u;
-  } else if (t < tC + 1e-6) {
-    const u = lclamp((t - tA) / (tC - tA), 0, 1);
-    const turn = lIn(u);
-    lSpinArms(r, turn * TAU, 0.35 + 1.4 * Math.pow(1 - u, 3), 18);
-    r.turn = turn;
-    r.halo = TAU / 6 + turn * TAU * 0.5;
-    r.fm = turn * TAU * 2;
-    r.glow = 1.05;
-    r.sy = 1 + 0.04 * u;
-    r.sx = 1 - 0.03 * u;
-    r.hem = 2.5 * Math.sin(turn * TAU);
-    r.drop = 1 - Math.round(u);
-  } else {
-    const u = lclamp((t - tC) / R, 0, 1);
-    const turn = 1 + lOut(u);
-    lSpinArms(r, turn * TAU, 0.35 + 1.2 * u, 18 - 5 * u);
-    r.turn = turn;
-    r.halo = TAU / 6 + turn * TAU * 0.5;
-    r.fm = turn * TAU * 2;
-    r.glow = 1 - 0.45 * u;
-    r.hem = 2.5 * Math.sin(turn * TAU) * (1 - u);
-    r.lean = Math.sin(u * 9) * 2 * (1 - u);
-    r.sy = 1.04 - 0.04 * u;
-    r.sx = 0.97 + 0.03 * u;
-    if (u > 0.6) return lmix(r, { ...L0, turn: 2, halo: r.halo, fm: r.fm }, lIO((u - 0.6) / 0.4));
-  }
-  return r;
-}
-
-/**
- * Хлопок (2 с — «вдох» мира): руки поднимаются, лицо белеет, стрелки лица
- * бегут всё быстрее, нимб разгоняется; руки расходятся — и сходятся перед
- * лицом: обе стрелки встают на XII, как на циферблате. В кадре хлопка —
- * удар (сжатие, вспышка лица).
- */
-const CLAP_END: Partial<LRig> = {
-  fx: 1.5,
-  fy: -34,
-  fa: -Math.PI / 2,
-  fe: 1,
-  bx: -1.5,
-  by: -34,
-  ba: 1.5 * Math.PI,
-  be: -1,
-  bz: 1,
-  fl: 28,
-  bl: 20,
-  white: 1,
-  glow: 1,
-  sy: 0.96,
-  sx: 1.04,
-  hs: 1.5,
-  fm: 0,
-  fh: 0,
-};
-function lClap(t: number): LRig {
-  const keys: LKf[] = [
-    [0, {}],
-    [
-      0.32,
-      {
-        fx: 14,
-        fy: -30,
-        fa: -0.55,
-        fe: 1,
-        bx: -14,
-        by: -30,
-        ba: 3.69,
-        be: -1,
-        bz: 1,
-        glow: 0.8,
-        lean: -0.5,
-        drop: -1,
-        pend: 0.6,
-      },
-      lIO,
-    ],
-    [
-      1.2,
-      {
-        fx: 11,
-        fy: -40,
-        fa: -1.15,
-        bx: -11,
-        by: -40,
-        ba: 4.29,
-        hy: -1,
-        sy: 1.04,
-        white: 0.35,
-        glow: 1,
-        drop: -2,
-        hem: -0.6,
-      },
-      lIO,
-    ],
-    [1.66, { fx: 16, fy: -36, fa: -0.7, bx: -16, by: -36, ba: 3.84, sy: 1.05, white: 0.5 }, lIO],
-    [1.875, { fx: 8, fy: -38, fa: -1.25, bx: -8, by: -38, ba: 4.39, fl: 27, bl: 19 }, lIn],
-    [1.917, { ...CLAP_END, sy: 1.02, sx: 1, white: 0.85, hs: 0.5 }, lLin],
-    [1.958, { ...CLAP_END, drop: 0, hy: 0 }, lOut],
-  ];
-  const r = ltrack(keys, t);
-  // Стрелки лица и нимб: идут, потом бегут — всё быстрее; на хлопке — XII.
-  if (t < 1.88) {
-    const spin = 0.5 * t + 1.6 * t * t * t;
-    r.fm = lTickQ(spin, 1 / 12) * TAU;
-    r.fh = 1.9 + lTickQ(spin, 1 / 12) * (TAU / 12);
-    r.halo = lTickQ(spin * 0.25, 1 / 36) * TAU;
-    r.pend = Math.sin(t * (6 + t * 8)) * (0.4 + 0.3 * t);
-  } else {
-    r.fm = 0;
-    r.fh = 0;
-  }
-  return r;
-}
-
-/**
- * ОСТАНОВКА: мир стоит, движется только он. `e` — настоящие секунды
- * остановки, `D` — её длина (мозг: 2,2 с, в полночь 1,6). Рывок к герою
- * (присел → вытянулся и растаял, на месте — остаточный образ; появился
- * сдвигом от прежнего места, затормозил); ставит ножи веером рук;
- * растаял вверх → появился в стороне; стоит, минутная поднята на XII;
- * перед концом — роняет её вперёд: «время пошло».
- */
-function lPlace(e: number, D: number): LRig {
-  const keys: LKf[] = [
-    [0, CLAP_END],
-    [0.1, { white: 0.85, sy: 1, sx: 1, hs: 0 }, lOut],
-    [
-      0.17,
-      {
-        fx: -3,
-        fy: -17,
-        fa: 2.7,
-        fe: -1,
-        bx: -12,
-        by: -19,
-        ba: 2.9,
-        be: 1,
-        bz: 0,
-        fl: 24,
-        bl: 15,
-        lean: 3,
-        drop: 3,
-        sx: 1.06,
-        sy: 0.94,
-        hem: 1.5,
-        white: 0.7,
-      },
-      lIO,
-    ],
-    [0.22, { lean: 6, drop: 1, sx: 1.22, sy: 0.86, hem: -3, op: 1 }, lIn],
-    [0.29, { sx: 1.35, sy: 0.82, op: 0.08 }, lLin],
-    [0.3, { op: 0.45, lean: -2.5, sx: 1.18, sy: 0.9, drop: 2 }, lLin],
-    [0.37, { op: 1, sx: 1.1, sy: 0.9, drop: 3, lean: -1, hem: 2.5 }, lOut],
-    [
-      0.44,
-      {
-        fx: -2,
-        fy: -20,
-        fa: 2.5,
-        fe: -1,
-        bx: 5,
-        by: -20,
-        ba: 0.65,
-        be: 1,
-        bz: 1,
-        sx: 1,
-        sy: 1,
-        drop: 1,
-        lean: 0.5,
-        white: 0.75,
-      },
-      lIO,
-    ],
-    [
-      0.53,
-      {
-        fx: 16,
-        fy: -28,
-        fa: -0.35,
-        fe: 1,
-        bx: -16,
-        by: -28,
-        ba: 3.49,
-        be: -1,
-        drop: -1,
-        lean: -0.5,
-      },
-      lOut,
-    ],
-    [
-      0.62,
-      { fx: 15, fy: -23, fa: 0.3, bx: -15, by: -23, ba: 2.84, drop: 0, lean: 0, white: 0.65 },
-      lIO,
-    ],
-    [0.92, { fx: 15, fy: -22, fa: 0.36, bx: -15, by: -22, ba: 2.78, hy: -1 }, lIO],
-    [
-      1.0,
-      {
-        sx: 0.9,
-        sy: 1.12,
-        drop: -2,
-        op: 1,
-        fx: 10,
-        fy: -30,
-        fa: -1.0,
-        bx: -10,
-        by: -30,
-        ba: 4.14,
-        hy: 0,
-      },
-      lIn,
-    ],
-    [1.09, { sx: 0.72, sy: 1.32, op: 0.06 }, lLin],
-    [1.1, { op: 0.45, sx: 0.88, sy: 1.14 }, lLin],
-    [1.18, { op: 1, sx: 1.08, sy: 0.92, drop: 2 }, lOut],
-    [
-      1.27,
-      {
-        sx: 1,
-        sy: 1,
-        drop: 0,
-        fx: 8,
-        fy: -40,
-        fa: -Math.PI / 2,
-        fe: 1,
-        bx: -10,
-        by: -19,
-        ba: 2.2,
-        be: 1,
-        bz: 0,
-        white: 0.5,
-        lean: -0.8,
-      },
-      lIO,
-    ],
-    [D - 0.12, { fx: 9, fy: -41, fa: -1.6, white: 0.45 }, lIO],
-    [D - 0.04, { fx: 13, fy: -26, fa: 0.3, fe: -1, lean: 1, white: 0.3 }, lIn],
-    [D, { fx: 13, fy: -25, fa: 0.35, lean: 1.2, white: 0.2, glow: 0.9 }, lOut],
-  ];
-  const r = ltrack(keys, e);
-  // Только его часы идут: стрелки лица тикают восемь раз в секунду.
-  if (e > 0.06) {
-    r.fm = lTickQ(e - 0.06, 0.125) * (TAU / 12) * 8;
-    r.fh = lTickQ(e - 0.06, 0.5) * (TAU / 12);
-    r.halo = lTickQ(e, 0.125) * (TAU / 36);
-  }
-  return r;
-}
-
-/** Время пошло (отдых после остановки): с последней позы — в стойку. */
-function lAfterPlace(t: number, h: number, D: number): LRig {
-  const a = lPlace(D, D);
-  const k = lIO(lclamp(t / (0.55 / h), 0, 1));
-  return lmix(a, { ...L0, halo: a.halo, fm: a.fm }, k);
-}
-
-/** Хват клинков, воткнутых в ритуале: рукояти — там, где стоят. */
-const RIT_PIN = { f: [14, 2, 1.72, 24], b: [-14, 2, 1.42, 17] } as const;
-const ritHilt = (front: boolean): [number, number] => {
-  const [x, y, a, l] = front ? RIT_PIN.f : RIT_PIN.b;
-  const vis = l - 5;
-  return [x - Math.cos(a) * vis, y - Math.sin(a) * vis];
-};
-
-/**
- * ОТМОТКА: втыкает обе стрелки в пол по бокам, из песка собирает песочные
- * часы, переворачивает их С УСИЛИЕМ (натяг → рывок → перевалило с
- * перелётом → стук), поднимает над головой; песок течёт, стрелки лица и
- * нимб идут назад, с подола поднимается песок. Трещины на стекле — сколько
- * порога снято (`m.data.vRit`).
- */
-const RIT_FLIP = 1.45;
-const RIT_UP = 1.95;
-function lRitual(t: number, crack: number): LRig {
-  const [fhx, fhy] = ritHilt(true);
-  const [bhx, bhy] = ritHilt(false);
-  const keys: LKf[] = [
-    [0, {}],
-    [
-      0.12,
-      {
-        fx: 10,
-        fy: -36,
-        fa: -1.3,
-        fe: 1,
-        bx: -10,
-        by: -36,
-        ba: 4.44,
-        be: -1,
-        bz: 1,
-        drop: -1,
-        glow: 0.9,
-        lean: -0.5,
-      },
-      lOut,
-    ],
-    [
-      0.24,
-      {
-        fpin: 1,
-        fpx: RIT_PIN.f[0],
-        fpy: RIT_PIN.f[1],
-        bpin: 1,
-        bpx: RIT_PIN.b[0],
-        bpy: RIT_PIN.b[1],
-        fx: fhx,
-        fy: fhy,
-        bx: bhx,
-        by: bhy,
-        fe: -1,
-        be: 1,
-        drop: 3,
-        sy: 0.94,
-        sx: 1.04,
-        lean: 1,
-      },
-      lIn,
-    ],
-    [0.32, { sy: 1, sx: 1, drop: 2 }, lOut],
-    [
-      0.38,
-      {
-        fpin: 2,
-        bpin: 2,
-        fa: RIT_PIN.f[2],
-        ba: RIT_PIN.b[2],
-        fl: RIT_PIN.f[3],
-        bl: RIT_PIN.b[3],
-        fx: 7,
-        fy: -22,
-        bx: -7,
-        by: -22,
-        drop: 0,
-        lean: 0,
-      },
-      lIO,
-    ],
-    [0.45, { gl: 1, gs: 0, gx: 0, gy: -24, fx: 8, fy: -24, bx: -8, by: -24, fe: 1, be: -1 }, lIO],
-    [0.72, { gs: 1, glow: 1 }, lOut],
-    [1.0, { gr: 0.28, lean: -1.5, drop: 2, glow: 1.1, fy: -23, by: -25 }, lIn],
-    [1.22, { gr: Math.PI + 0.3, lean: 0.5, drop: 1, fy: -24, by: -24 }, lOut],
-    [1.32, { gr: Math.PI - 0.06, sy: 0.95, sx: 1.04, drop: 2 }, lIO],
-    [RIT_FLIP, { gr: Math.PI, sy: 1, sx: 1, drop: 1 }, lIO],
-    [RIT_UP, { gy: -29, fy: -29, by: -29, drop: -1, hy: -1, lean: -0.6, hem: -0.5 }, lIO],
-  ];
-  const r = ltrack(keys, t);
-  // Натяг перед переворотом — руки дрожат.
-  if (t > 0.78 && t < 1.0) r.fy += Math.floor(t * LFPS) % 2 ? 0.5 : -0.5;
-  if (t >= RIT_FLIP) {
-    r.gr = 0;
-    r.gk = lclamp(1 - (t - RIT_FLIP) / (LORD.ritual - RIT_FLIP), 0, 1);
-  } else r.gk = 0;
-  r.gc = crack;
-  if (t >= RIT_UP) {
-    // Держит над головой: дышит тяжело, раз в секунду.
-    const b = Math.round(0.5 - 0.5 * Math.cos((t - RIT_UP) * TAU));
-    r.drop -= b;
-  }
-  if (t > 0.6) {
-    // Отмотка: стрелки лица и нимб идут НАЗАД.
-    const back = t - 0.6;
-    r.fm = -lTickQ(back, 1 / 12) * 7;
-    r.fh = 1.9 - lTickQ(back, 1 / 6) * 1.2;
-    r.halo = -lTickQ(back, 1 / 12) * 1.1;
-    r.glow = 1.05;
-  }
-  return r;
-}
-
-/** Отмотал (отдых после ритуала): часы рассыпаются светом, клинки — из пола. */
-function lRegain(t: number, h: number): LRig {
-  const R = 0.55 / h;
-  const base = lRitual(LORD.ritual - 0.01, 0);
-  const [fhx, fhy] = ritHilt(true);
-  const [bhx, bhy] = ritHilt(false);
-  const keys: LKf[] = [
-    [0, {}],
-    [0.1, { gs: 0, white: 0.9, glow: 1.25, sy: 1.05, sx: 0.97, hs: 1.5 }, lOut],
-    [
-      0.18,
-      {
-        gl: 0,
-        white: 0.5,
-        fx: fhx,
-        fy: fhy,
-        bx: bhx,
-        by: bhy,
-        fe: -1,
-        be: 1,
-        sy: 1,
-        sx: 1,
-        hs: 0,
-        drop: 1,
-        hy: 0,
-        lean: 0,
-      },
-      lIO,
-    ],
-    [
-      0.27,
-      {
-        fpin: 0,
-        bpin: 0,
-        fa: 1.2,
-        ba: 1.9,
-        fl: 24,
-        bl: 15,
-        fx: 10,
-        fy: -20,
-        bx: -10,
-        by: -20,
-        white: 0.2,
-      },
-      lOut,
-    ],
-    [R, { ...LREST, be: 1, bz: 0 }, lIO],
-  ];
-  return ltrack(keys, t, base);
-}
-
-/** Порог сорван: часы лопаются в руках, отшатнулся, рухнул на колено, оглушён. */
-function lBroken(t: number): LRig {
-  const base = lRitual(2.6, 2);
-  const [fhx, fhy] = ritHilt(true);
-  const [bhx, bhy] = ritHilt(false);
-  const keys: LKf[] = [
-    [0, { gc: 3 }],
-    [
-      0.07,
-      {
-        fx: 15,
-        fy: -42,
-        fe: 1,
-        bx: -15,
-        by: -44,
-        be: -1,
-        lean: -3,
-        white: 0.6,
-        gl: 0,
-        hy: -2,
-        hs: 1,
-        crack: 1,
-      },
-      lOut,
-    ],
-    [0.25, { fx: 11, fy: -22, bx: -11, by: -24, lean: -4, drop: 2, hy: 0, white: 0.2, hs: 0 }, lIO],
-    [
-      0.5,
-      {
-        fx: 9,
-        fy: -5,
-        bx: -9,
-        by: -5,
-        fe: -1,
-        be: 1,
-        drop: 7,
-        lean: 2.5,
-        crack: 2,
-        dim: 1,
-        glow: 0,
-        white: 0,
-        hem: 1.5,
-      },
-      lIn,
-    ],
-    [0.58, { drop: 6, sy: 0.96 }, lOut],
-    [0.66, { sy: 1 }, lIO],
-    [1.9, { drop: 6, dim: 1 }],
-    [2.1, { fx: fhx, fy: fhy, bx: bhx, by: bhy, drop: 5, lean: 1, dim: 0.4, glow: 0.4 }, lIO],
-    [
-      2.22,
-      {
-        fpin: 0,
-        bpin: 0,
-        fa: 1.2,
-        ba: 2.0,
-        fl: 24,
-        bl: 15,
-        fx: 10,
-        fy: -20,
-        bx: -10,
-        by: -19,
-        drop: 2,
-        crack: 1,
-      },
-      lOut,
-    ],
-    [LORD.broken, { ...LREST, crack: 0, dim: 0, be: 1, bz: 0 }, lIO],
-  ];
-  const r = ltrack(keys, t, base);
-  r.gk = 0.4;
-  if (t > 0.5 && t < 2.0) {
-    // Оглушён: голова кивает, стрелки лица повисли и качаются.
-    r.hy = Math.round(Math.sin((t - 0.5) * 7));
-    r.fm = Math.PI + Math.sin(t * 5) * 0.3;
-    r.fh = Math.PI + 0.4;
-  } else if (t <= 0.5) {
-    // Сорвалось: стрелки лица бешено крутятся.
-    r.fm = t * 40;
-    r.fh = t * 9;
-  }
-  return r;
-}
-
-/** Выдохся после полуночи: на колено, клинки — в пол, тяжело дышит, пар. */
-const TIRED_DOWN = 0.44;
-const TIRED_UP = 2.3;
-function lTired(t: number): LRig {
-  const keys: LKf[] = [
-    [0, {}],
-    [
-      0.28,
-      {
-        drop: 7,
-        lean: 3,
-        fpin: 1,
-        fpx: 17,
-        fpy: 1,
-        bpin: 1,
-        bpx: -16,
-        bpy: 1,
-        fx: 11,
-        fy: -9,
-        bx: -11,
-        by: -9,
-        dim: 0.85,
-        glow: 0.2,
-        hy: 1,
-        hem: 1,
-      },
-      lIn,
-    ],
-    [0.36, { drop: 6, sy: 0.96 }, lOut],
-    [TIRED_DOWN, { sy: 1 }],
-    [TIRED_UP, { drop: 6 }],
-    [
-      2.55,
-      { drop: 4, lean: 1.5, fx: 12, fy: -13, bx: -12, by: -13, dim: 0.5, glow: 0.4, hy: 0 },
-      lIO,
-    ],
-    [
-      2.66,
-      { fpin: 0, bpin: 0, fa: 1.3, ba: 1.9, drop: 2, lean: 0.5, fx: 10, fy: -18, bx: -10, by: -18 },
-      lOut,
-    ],
-    [LORD.tired, { ...LREST, dim: 0, be: 1 }, lIO],
-  ];
-  const r = ltrack(keys, t);
-  if (t > TIRED_DOWN && t < TIRED_UP) {
-    const b = Math.round(0.5 - 0.5 * Math.cos(((t - TIRED_DOWN) / 0.8) * TAU));
-    r.drop += b;
-    r.fy += b;
-    r.by += b;
-    r.dim = Math.floor(t * 3) % 4 === 0 ? 0.55 : 0.85;
-  }
-  if (t > 0.2 && t < 2.5) {
-    r.fm = Math.PI - 0.25;
-    r.fh = Math.PI + 0.35;
-    r.pend = 0;
-  }
-  return r;
-}
-
-/** Удар героя по стоящему: голова и корпус отдают назад, нимб вздрагивает. */
-function lHurt(f: number): LRig {
-  const k = [1, 0.6, 0.25][f] ?? 0;
+/** Выроненный клинок: падает из кисти, вращаясь, звякает и ложится. */
+function lDeathBlade(g: LGeo, right: boolean, t: number): LBlade | null {
+  if (t < DEATH_DROP) return null;
+  const r0 = lDeath(DEATH_DROP - 1e-3);
+  const b0 = lBlade(r0, g, right);
+  const hl = lHandLocal(r0, right);
+  const F = lFloorPt(g, hl[0] + (right ? 3 : 1), hl[1] + (right ? 4 : -4));
+  const k = lclamp((t - DEATH_DROP) / 0.17, 0, 1);
+  const hop =
+    t > DEATH_DROP + 0.17 && t < DEATH_DROP + 0.27
+      ? Math.sin(((t - DEATH_DROP - 0.17) / 0.1) * Math.PI) * 1.6
+      : 0;
+  // Ложится на пол под углом к телу: в кадре — с ракурсом пола (глубина ×LDEP).
+  const gf = right ? 0.55 : 0.75;
+  const gr = right ? 0.85 : -0.65;
+  const vx = gf * g.B.c - gr * g.B.s;
+  const vy = (gf * g.B.s + gr * g.B.c) * LDEP;
+  const a0 = Math.atan2(b0.uy, b0.ux);
+  const aE = Math.atan2(vy, vx);
+  const a = a0 + lWrap(aE - a0) * lIn(k);
+  const len = right ? 20 : 13;
+  const fl = Math.max(0.5, Math.hypot(vx, vy) / Math.hypot(gf, gr));
+  const x = b0.x + (F[0] - b0.x) * k;
+  const y = b0.y + (F[1] - 1.5 - b0.y) * k * k - hop;
   return {
-    ...L0,
-    lean: -2.6 * k,
-    hx: -Math.round(k),
-    hy: -Math.round(k),
-    glow: 0.5 + 0.6 * k,
-    white: 0.25 * k,
-    halo: 0.09 * k,
-    fa: L0.fa - 0.25 * k,
-    ba: L0.ba + 0.2 * k,
-    fy: L0.fy - 2 * k,
-    by: L0.by - k,
-    hem: 1.5 * k,
-    pend: 0.7 * k,
+    x,
+    y,
+    ux: Math.cos(a),
+    uy: Math.sin(a),
+    len: len * (1 + (fl - 1) * k),
+    full: b0.full,
+    pin: 3,
+    // Глубина середины лежащего клинка: за телом — рисуется до тела.
+    z: F[2] + (len * 0.5 * (gf * g.B.s + gr * g.B.c)) / Math.hypot(gf, gr),
   };
 }
 
-/**
- * Смерть (1,6 с): удар — белая вспышка, руки разлетаются; трещины бегут по
- * стеклу, стрелки лица крутятся назад и ВСТАЮТ за минуту до полуночи; клинки
- * падают из рук и звякают об пол; оседает на колени; стекло выбито, лицо
- * гаснет; нимб соскальзывает и ложится; корпус сверху вниз рассыпается
- * шестернями, они падают, подпрыгивают и катятся.
- */
-function lDeath(t: number): LRig {
-  const keys: LKf[] = [
-    [
-      0,
-      {
-        lean: -3,
-        hx: -1,
-        hy: -1,
-        white: 1,
-        glow: 1.2,
-        fx: 15,
-        fy: -36,
-        fa: -0.85,
-        fe: 1,
-        bx: -14,
-        by: -34,
-        ba: 3.99,
-        be: -1,
-        bz: 1,
-        hem: 2,
-      },
-    ],
-    [0.12, { white: 0.3, crack: 1, lean: -2 }, lOut],
-    [
-      0.3,
-      {
-        crack: 2,
-        drop: 3,
-        lean: -0.5,
-        fpin: 3,
-        bpin: 3,
-        fx: 9,
-        fy: -20,
-        bx: -9,
-        by: -20,
-        fe: -1,
-        be: 1,
-      },
-      lIO,
-    ],
-    [0.5, { drop: 9, lean: 3, fx: 6, fy: -9, bx: -6, by: -9, hy: 1, dim: 0.4, hem: 1 }, lIn],
-    [0.56, { drop: 8, sy: 0.96 }, lOut],
-    [0.62, { crack: 3, dim: 1, glow: 0, sy: 1, white: 0 }, lLin],
-    [DEATH_T - 0.18, { op: 1 }],
-    [DEATH_T, { op: 0 }, lIn],
-  ];
-  const r = ltrack(keys, t);
-  if (t < 0.5) {
-    r.fm = -lTickQ(t, LF1) * 30;
-    r.fh = -lTickQ(t, LF1) * 6;
-  } else {
-    // Встали: без минуты полночь.
-    r.fm = -0.105;
-    r.fh = -0.03;
+/** Смерть поверх тела: клинки падают, часы с пояса бьются, распад, шестерни. */
+function lDeathPost(p: ClipPx, lit: Px, g: LGeo, L: LordLook, t: number): void {
+  // Распад: сверху вниз, клетки — в шестерни.
+  const [s0, s1] = DEATH_SWEEP;
+  if (t > s0) {
+    const top = 12;
+    const k = lclamp((t - s0) / s1, 0, 1);
+    const line = top + (LG + 2 - top) * k;
+    const gears = lDeathGears(p);
+    for (let y = 0; y < Math.min(LH, Math.ceil(line) + 2); y++)
+      for (let x = 0; x < LW; x++) {
+        const i = (y * LW + x) * 4;
+        if (!p.data[i + 3]) continue;
+        if (y < line - 1 || (y < line + 2 && hash(x, y, 67) < 0.5)) p.data[i + 3] = 0;
+      }
+    const tones: Tones[] = [L.trim, L.halo, IRON, STEEL];
+    for (const q of gears) {
+      const rel = s0 + s1 * ((q.oy - top) / (LG + 2 - top));
+      if (t < rel) continue;
+      const [x, y, a] = lGearAt(q, t - rel);
+      lCog(p, x, y, q.r, 6, a, tones[q.tone], 1, Math.max(0.5, q.r * 0.3));
+      if (t - rel < 0.12) lit.set(Math.round(x), Math.round(y), alpha(L.glow, 0.8));
+    }
   }
-  r.halo = t > 0.3 && t < 0.62 ? (Math.floor(t * LFPS) % 2 ? 0.06 : -0.06) : 0;
-  r.pend = t < 0.4 ? Math.sin(t * 20) * 0.6 * (1 - t / 0.4) : 0.15;
-  return r;
+  lDeathBlades(p, g, L, t, true);
+  // Стекло лица осыпается.
+  if (t > 0.5 && t < 1) lShards(p, lit, g.head[0] - 2, g.head[1] - 2, t - 0.5, 7, 71, false);
+  // Малые часы падают с пояса и бьются.
+  if (t >= DEATH_BELT) {
+    const P = lBeltPivot(g);
+    const k = lclamp((t - DEATH_BELT) / 0.12, 0, 1);
+    const y = P[1] + 4 + (LG - 4 - P[1] - 4) * k * k;
+    if (k < 1) lGlassAt(p, lit, P[0], y, k * 1.5, 1, 0.6, 0, 0, true);
+    else lShards(p, lit, P[0], LG - 3, t - DEATH_BELT - 0.12, 8, 77, false);
+  }
 }
 
-/** Смена фазы (на ходу): руки вверх, лицо вспыхивает, нимб — полный оборот. */
-const PHASE_T = 0.9;
-function lPhase(t: number): LRig {
-  const keys: LKf[] = [
-    [0, {}],
-    [
-      0.1,
-      {
-        fx: 14,
-        fy: -37,
-        fa: -0.9,
-        fe: 1,
-        bx: -14,
-        by: -37,
-        ba: 4.04,
-        be: -1,
-        bz: 1,
-        white: 1,
-        hs: 2,
-        sy: 1.05,
-        sx: 0.97,
-        drop: -1,
-        glow: 1.2,
-        hy: -1,
-      },
-      lOut,
-    ],
-    [0.2, { white: 0.6, hs: 1, sy: 1, sx: 1 }, lIO],
-    [0.55, { white: 0.3, hs: 0, hy: 0 }, lIO],
-    [PHASE_T, { ...LREST, be: 1, bz: 0 }, lIO],
-  ];
-  const r = ltrack(keys, t);
-  r.halo = lTickQ(lIO(lclamp((t - 0.08) / 0.6, 0, 1)), 1 / 24) * TAU;
-  r.fm = lTickQ(lclamp(t / 0.7, 0, 1), 1 / 24) * TAU * 2;
-  return r;
+/** Выроненные клинки: перед телом (front) — поверх, за ним — до тела. */
+function lDeathBlades(p: Px, g: LGeo, L: LordLook, t: number, front: boolean): void {
+  for (const right of [true, false]) {
+    const b = lDeathBlade(g, right, t);
+    if (!b || b.z >= 0 !== front) continue;
+    const ang = Math.atan2(b.uy, b.ux);
+    if (right) minuteHand(p, b.x, b.y, ang, b.len, L.trim, null);
+    else hourHand(p, b.x, b.y, ang, b.len, L.trim);
+  }
 }
 
-/** Полночь: на удар часов — минутная вверх и вниз, «дирижирует» боем. */
-const TOLL_T = 0.55;
-function lToll(t: number): LRig {
-  const keys: LKf[] = [
-    [0, {}],
-    [0.12, { fx: 9, fy: -39, fa: -1.45, fe: 1, glow: 0.9, lean: -1, drop: -1 }, lOut],
-    [0.17, { fx: 14, fy: -30, fa: -0.3 }, lIn],
-    [
-      0.21,
-      {
-        fx: 14,
-        fy: -21,
-        fa: 0.85,
-        fe: -1,
-        glow: 1.2,
-        white: 0.6,
-        hs: 1.5,
-        sy: 0.96,
-        sx: 1.04,
-        drop: 1,
-        lean: 1.5,
-      },
-      lLin,
-    ],
-    [0.3, { white: 0.2, hs: 0.5, sy: 1, sx: 1 }, lOut],
-    [TOLL_T, { ...LREST }, lIO],
-  ];
-  return ltrack(keys, t);
+/** Нимб соскальзывает за спину и ложится плашмя (до тела — оно его закрывает). */
+function lDeathHalo(p: Px, g: LGeo, L: LordLook, t: number): void {
+  const bx = g.head[0] - g.H.c * 1.6;
+  const by = g.head[1] - g.H.s * 1.6 * LDEP;
+  const k = lclamp((t - DEATH_HALO) / 0.25, 0, 1);
+  const bounce = t > DEATH_HALO + 0.25 && t < DEATH_HALO + 0.35 ? 0.06 : 0;
+  // Катится назад и к левому плечу: из-за коленопреклонённого тела виден край.
+  const cx = bx - g.B.c * 6 * k + g.B.s * 10 * k;
+  const cy = by + (LG - 6 - g.B.s * 4 - g.B.c * 6 - by) * k * k;
+  const sx = Math.max(0.14, Math.abs(g.fv)) + (1 - Math.max(0.14, Math.abs(g.fv))) * k;
+  lCog(p, cx, cy, 13, 18, -1 + 0.5 * k, L.halo, sx, 4, 6, 1 - (0.72 - bounce) * k);
 }
 
-// ---- Кадр: запрос → риг → холст; кеш `frameLRU`, влево — свой кадр ----
+// ---- Кадр: техника, время, сторона ----
 
 type LTech =
   | 'idle'
   | 'walk'
   | 'run'
+  | 'shuffle'
   | 'roar'
   | 'hour'
   | 'minute'
@@ -4192,91 +4849,139 @@ type LTech =
   | 'phase'
   | 'toll';
 
+/**
+ * Запрос кадра: техника, номер кадра, сторона (0…15, 0 — восток, 4 — к
+ * зрителю), фаза (облик и темп), `x` — стадия трещин часов отмотки, `ex` —
+ * у шага и покоя поворот головы (−2…2 по 0,45 рад), у техник — кадр шага,
+ * из которого она началась (+1), в первые три кадра.
+ */
 interface LReq {
   tech: LTech;
-  /** Номер кадра техники. */
   f: number;
-  /** Прицел: −2…2 — восьмые круга от «вперёд», вниз — плюс. */
-  q: number;
+  d: number;
   ph: number;
-  /** Своё у техники: трещины часов в ритуале. */
   x: number;
-  /** Смотрит влево: кадр отражён целиком, но циферблат идёт по часовой. */
-  left: boolean;
+  ex: number;
 }
 
-/** Медленные техники идут на 12 к/с: [начало, к/с] по участкам. */
-const LSEG: Partial<Record<LTech, [number, number][]>> = {
+/** Куски оси времени: [начало, к/с, период петли]. */
+type LPiece = [number, number, number?];
+const L24: LPiece[] = [[0, LFPS]];
+const LTIME: Partial<Record<LTech, LPiece[]>> = {
+  idle: [[0, 12, IDLE_T]],
   ritual: [
-    [0, 24],
-    [RIT_UP, 12],
+    [0, LFPS],
+    [RIT_UP, 12, RIT_LOOP],
   ],
   broken: [
-    [0, 24],
-    [0.66, 12],
-    [1.9, 24],
+    [0, LFPS],
+    [BROKEN_DAZE, 15, BROKEN_LOOP],
+    [BROKEN_UP, LFPS],
   ],
   tired: [
-    [0, 24],
-    [TIRED_DOWN, 12],
-    [TIRED_UP, 24],
+    [0, LFPS],
+    [TIRED_B, 15, TIRED_LOOP],
+    [TIRED_UP, LFPS],
   ],
 };
-
+const lPieceN = (P: LPiece[], i: number) => {
+  const [t0, fps, loop] = P[i];
+  if (loop) return Math.round(loop * fps);
+  return i + 1 < P.length ? Math.ceil((P[i + 1][0] - t0) * fps - 1e-6) : Infinity;
+};
 function lFrameOf(tech: LTech, t: number): number {
-  const seg = LSEG[tech];
-  if (!seg) return Math.floor(t * LFPS + 1e-6);
-  let n = 0;
-  for (let i = 0; i < seg.length; i++) {
-    const [s0, fps] = seg[i];
-    const s1 = i + 1 < seg.length ? seg[i + 1][0] : Infinity;
-    if (t < s1) return n + Math.floor((t - s0) * fps + 1e-6);
-    n += Math.ceil((s1 - s0) * fps - 1e-9);
-  }
-  return n;
-}
-
-function lTimeOf(tech: LTech, f: number): number {
-  const seg = LSEG[tech];
-  if (!seg) return f * LF1;
-  let n = 0;
-  for (let i = 0; i < seg.length; i++) {
-    const [s0, fps] = seg[i];
-    const s1 = i + 1 < seg.length ? seg[i + 1][0] : Infinity;
-    const cnt = s1 === Infinity ? Infinity : Math.ceil((s1 - s0) * fps - 1e-9);
-    if (f < n + cnt) return s0 + (f - n) / fps;
-    n += cnt;
+  const P = LTIME[tech] ?? L24;
+  let base = 0;
+  for (let i = 0; i < P.length; i++) {
+    const [t0, fps, loop] = P[i];
+    const n = lPieceN(P, i);
+    if (i === P.length - 1 || t < P[i + 1][0]) {
+      const u = Math.max(0, t - t0);
+      if (loop) return base + (Math.floor((u % loop) * fps + 1e-6) % n);
+      return base + Math.min(n - 1, Math.floor(u * fps + 1e-6));
+    }
+    base += n;
   }
   return 0;
 }
+function lTimeOf(tech: LTech, f: number): number {
+  const P = LTIME[tech] ?? L24;
+  let base = 0;
+  for (let i = 0; i < P.length; i++) {
+    const n = lPieceN(P, i);
+    if (f < base + n || i === P.length - 1) return P[i][0] + (f - base) / P[i][1];
+    base += n;
+  }
+  return 0;
+}
+/** Конец техники (с. восстановлением): дальше кадр не растёт. */
+function lEndOf(tech: LTech, ph: number): number {
+  const h = lHaste(ph);
+  const R = 0.55 / h;
+  switch (tech) {
+    case 'roar':
+      return ROAR_T;
+    case 'hour':
+      return LORD.hourWarn / h + R;
+    case 'minute':
+      return LORD.minWarn / h + LORD.lunge + LORD.stuck + R;
+    case 'spin':
+      return LORD.spinWarn / h + R;
+    case 'clap':
+      return LORD.clap;
+    case 'place':
+      return lStopDur(ph);
+    case 'after':
+    case 'regain':
+      return R;
+    case 'ritual':
+      return RIT_UP + RIT_LOOP;
+    case 'broken':
+      return LORD.broken;
+    case 'tired':
+      return LORD.tired;
+    case 'death':
+      return DEATH_T;
+    case 'phase':
+      return PHASE_T;
+    case 'toll':
+      return TOLL_T;
+    default:
+      return Infinity;
+  }
+}
 
-const lStopDur = (ph: number) => (ph >= 3 ? 1.6 : LORD.stopDur);
+const lStepTech = (tech: LTech) =>
+  tech === 'walk' || tech === 'run' || tech === 'shuffle' || tech === 'hurt';
 
-function lRig(q: LReq, t: number): LRig {
-  const h = lHaste(q.ph);
-  const A = q.q * (Math.PI / 4);
-  switch (q.tech) {
+/** Поза техники без вторичного (по ней же считаются пружины). */
+function lRigBase(tech: LTech, t: number, f: number, ph: number, x: number): LRig {
+  const h = lHaste(ph);
+  switch (tech) {
     case 'idle':
-      return lIdle(q.f);
+      return lIdle(t);
     case 'walk':
+      return lWalk(f, false);
     case 'run':
-      return lWalk(q.f, q.tech === 'run');
+      return lWalk(f, true);
+    case 'shuffle':
+      return lShuffle(f);
     case 'roar':
       return lRoar(t);
     case 'hour':
-      return lHour(t, A, h);
+      return lHour(t, h);
     case 'minute':
-      return lMinute(t, A, h);
+      return lMinute(t, h);
     case 'spin':
       return lSpin(t, h);
     case 'clap':
       return lClap(t);
     case 'place':
-      return lPlace(t, lStopDur(q.ph));
+      return lPlace(t, lStopDur(ph));
     case 'after':
-      return lAfterPlace(t, h, lStopDur(q.ph));
+      return lAfterPlace(t, h, lStopDur(ph));
     case 'ritual':
-      return lRitual(t, q.x);
+      return lRitual(t, x);
     case 'regain':
       return lRegain(t, h);
     case 'broken':
@@ -4284,7 +4989,7 @@ function lRig(q: LReq, t: number): LRig {
     case 'tired':
       return lTired(t);
     case 'hurt':
-      return lHurt(q.f);
+      return lHurt(f);
     case 'death':
       return lDeath(t);
     case 'phase':
@@ -4294,19 +4999,171 @@ function lRig(q: LReq, t: number): LRig {
   }
 }
 
-/** След: сколько выборок и на какой отрезок назад (в кадрах). */
-const LSMEAR: Partial<Record<LTech, [number, number, number]>> = {
-  hour: [7, 1.2, 0.42],
-  minute: [3, 1, 0.5],
-  spin: [6, 1.7, 0.42],
-  clap: [3, 1, 0.5],
-  place: [3, 1, 0.5],
-  toll: [3, 1, 0.45],
-  regain: [3, 1, 0.5],
-  broken: [3, 1, 0.5],
-  roar: [3, 1, 0.5],
-  phase: [3, 1, 0.5],
-};
+/** Поза кадра: техника + поворот головы у шага + переход из шага в начале техники. */
+function lRig(q: LReq, t: number): LRig {
+  const r = lRigBase(q.tech, t, q.f, q.ph, q.x);
+  if (lStepTech(q.tech) || q.tech === 'idle') {
+    if (q.ex) {
+      r.hyw += q.ex * 0.45;
+      r.tw += q.ex * 0.1;
+    }
+    return r;
+  }
+  if (q.ex > 0) return lmix(lWalk(q.ex - 1, false), r, (q.f + 1) / 4);
+  return r;
+}
+
+// ---- Пружины вторичного: дорожка на технику (60 Гц), детерминированная ----
+
+const LSEC_HZ = 60;
+interface LSecTrack {
+  s: LSec[];
+  /** Состояние пружин на конце дорожки (продолжить без пересчёта). */
+  st: Float64Array;
+  prev: Float64Array;
+}
+const LSECS = new Map<string, LSecTrack>();
+/** Пружины: [ω, ζ] — полы (вперёд, вбок), оборот полов, маятник, часы на поясе (2), голова (2), нимб, рукава (4). */
+const LSPR: [number, number][] = [
+  [11, 0.35],
+  [11, 0.35],
+  [9, 0.3],
+  [9, 0.12],
+  [10, 0.18],
+  [10, 0.18],
+  [16, 0.4],
+  [16, 0.4],
+  [14, 0.3],
+  [13, 0.35],
+  [13, 0.35],
+  [13, 0.35],
+  [13, 0.35],
+];
+/** Цели пружин — точки позы, за которыми тянутся части. */
+function lSecTarget(r: LRig, out: Float64Array): void {
+  out[0] = r.mf + 0.35 * r.lean;
+  out[1] = r.mr + 0.35 * r.side;
+  out[2] = r.yaw + 0.5 * r.tw;
+  out[3] = r.mr + 0.7 * r.side + 5 * (r.yaw + r.tw);
+  out[4] = r.mf + 0.4 * r.lean;
+  out[5] = r.mr + 0.4 * r.side + 8 * r.yaw;
+  out[6] = r.lean;
+  out[7] = r.drop - r.mu;
+  out[8] = r.halo;
+  out[9] = r.af;
+  out[10] = r.au;
+  out[11] = r.bf;
+  out[12] = r.bu;
+}
+function lSecFrom(y: Float64Array, X: Float64Array): LSec {
+  const c = (v: number, m: number) => lclamp(v, -m, m);
+  return {
+    hf: c((y[0] - X[0]) * 1.2, 7),
+    hr: c((y[1] - X[1]) * 1.2, 7),
+    ht: c(y[2] - X[2], 1.2),
+    pend: c((y[3] - X[3]) * 0.12, 0.9),
+    belt: c((y[4] - X[4]) * 0.1 + (y[5] - X[5]) * 0.1, 1),
+    hdf: c((y[6] - X[6]) * 0.5, 3),
+    hdu: c((X[7] - y[7]) * 0.5, 3),
+    halo: c(y[8] - X[8], 0.6),
+    sa: [c((X[9] - y[9]) * 0.8, 6), c((X[10] - y[10]) * 0.8, 6)],
+    sb: [c((X[11] - y[11]) * 0.8, 6), c((X[12] - y[12]) * 0.8, 6)],
+  };
+}
+const LSN = LSPR.length;
+/** Дорожка пружин техники до момента `t` (кусками — между ними можно уступить кадр). */
+function* lSecTrack(tech: LTech, ph: number, t: number): Generator<void, LSecTrack, void> {
+  const key = `${tech}|${ph}`;
+  let tr = LSECS.get(key);
+  const X = new Float64Array(LSN);
+  if (!tr) {
+    lSecTarget(lRigBase(tech, 0, 0, ph, 0), X);
+    tr = { s: [LSEC0], st: new Float64Array(LSN * 2), prev: X.slice() };
+    for (let i = 0; i < LSN; i++) tr.st[i * 2] = X[i];
+    LSECS.set(key, tr);
+  }
+  const need = Math.ceil(t * LSEC_HZ) + 1;
+  const dt = 1 / LSEC_HZ / 2;
+  let chunk = 0;
+  while (tr.s.length <= need) {
+    const ti = tr.s.length / LSEC_HZ;
+    lSecTarget(lRigBase(tech, ti, 0, ph, 0), X);
+    // Две полушаговые ступени: цель линейно от прошлой выборки.
+    for (let sub = 1; sub <= 2; sub++) {
+      const k = sub / 2;
+      for (let i = 0; i < LSN; i++) {
+        const [w, z] = LSPR[i];
+        const tgt = tr.prev[i] + (X[i] - tr.prev[i]) * k;
+        const y = tr.st[i * 2];
+        let v = tr.st[i * 2 + 1];
+        v += (w * w * (tgt - y) - 2 * z * w * v) * dt;
+        tr.st[i * 2] = y + v * dt;
+        tr.st[i * 2 + 1] = v;
+      }
+    }
+    const ys = new Float64Array(LSN);
+    for (let i = 0; i < LSN; i++) ys[i] = tr.st[i * 2];
+    tr.s.push(lSecFrom(ys, X));
+    tr.prev = X.slice();
+    if (++chunk % 24 === 0) yield;
+  }
+  return tr;
+}
+function lSecLerp(a: LSec, b: LSec, k: number): LSec {
+  const m = (x: number, y: number) => x + (y - x) * k;
+  return {
+    hf: m(a.hf, b.hf),
+    hr: m(a.hr, b.hr),
+    ht: m(a.ht, b.ht),
+    pend: m(a.pend, b.pend),
+    belt: m(a.belt, b.belt),
+    hdf: m(a.hdf, b.hdf),
+    hdu: m(a.hdu, b.hdu),
+    halo: m(a.halo, b.halo),
+    sa: [m(a.sa[0], b.sa[0]), m(a.sa[1], b.sa[1])],
+    sb: [m(a.sb[0], b.sb[0]), m(a.sb[1], b.sb[1])],
+  };
+}
+/** Вторичное кадра: у шага — по фазе, у техник — по дорожке пружин. */
+function* lSecOf(q: LReq, t: number): Generator<void, LSec, void> {
+  if (q.tech === 'walk' || q.tech === 'run') return lWalkSec(q.f, q.tech === 'run');
+  if (q.tech === 'shuffle' || q.tech === 'hurt' || q.tech === 'idle') return LSEC0;
+  const tr = yield* lSecTrack(q.tech, q.ph, t);
+  const u = t * LSEC_HZ;
+  const i = Math.floor(u);
+  const s = lSecLerp(tr.s[i], tr.s[Math.min(tr.s.length - 1, i + 1)], u - i);
+  if (q.ex > 0) return lSecLerp(lWalkSec(q.ex - 1, false), s, (q.f + 1) / 4);
+  return s;
+}
+
+/** След клинков: [выборок, кадров назад, внутренний край серпа]. */
+function lSmearOf(q: LReq, t: number): [number, number, number] | null {
+  const h = lHaste(q.ph);
+  switch (q.tech) {
+    case 'hour': {
+      const C = lHitT(LORD.hourWarn / h);
+      return t >= C - 2.01 * LF1 && t < C + 4 * LF1 ? [7, 1.4, 0.42] : null;
+    }
+    case 'spin': {
+      const C = lHitT(LORD.spinWarn / h);
+      return t >= C - 7 * LF1 && t < C + 6 * LF1 ? [6, 1.7, 0.4] : null;
+    }
+    case 'minute': {
+      const TS = LORD.minWarn / h + LORD.lunge + LORD.stuck;
+      return t >= TS && t < TS + 4 * LF1 ? [3, 1, 0.5] : null;
+    }
+    case 'clap':
+    case 'place':
+    case 'toll':
+    case 'regain':
+    case 'broken':
+    case 'roar':
+    case 'phase':
+      return [3, 1, 0.5];
+    default:
+      return null;
+  }
+}
 
 /** Холст из растра по рамке. */
 function lCut(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanvasElement {
@@ -4326,104 +5183,157 @@ function lCut(p: Px, x0: number, y0: number, w: number, h: number): HTMLCanvasEl
 }
 
 function lBox(p: Px, box: number[]): boolean {
+  const { w, h } = p;
+  const d = new Uint32Array(p.data.buffer, p.data.byteOffset, w * h);
+  const A = 0xff000000;
   let any = false;
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++)
-      if (p.data[(y * p.w + x) * 4 + 3]) {
-        any = true;
-        if (x < box[0]) box[0] = x;
-        if (y < box[1]) box[1] = y;
-        if (x > box[2]) box[2] = x;
-        if (y > box[3]) box[3] = y;
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    let x0 = -1;
+    for (let x = 0; x < w; x++)
+      if (d[o + x] & A) {
+        x0 = x;
+        break;
       }
+    if (x0 < 0) continue;
+    let x1 = x0;
+    for (let x = w - 1; x > x0; x--)
+      if (d[o + x] & A) {
+        x1 = x;
+        break;
+      }
+    any = true;
+    if (x0 < box[0]) box[0] = x0;
+    if (y < box[1]) box[1] = y;
+    if (x1 > box[2]) box[2] = x1;
+    if (y > box[3]) box[3] = y;
+  }
   return any;
 }
 
-/** Кадры босса (обе стороны — отдельно): ~700 холстов с вытеснением давно не нужных. */
-const LFR = frameLRU<MobFrame>(700);
+// ---- Кадры, кеш, «кадр на потом» ----
+
+/** Кадры босса: 16 сторон, ~900 холстов с вытеснением давно не нужных. */
+const LFR = frameLRU<MobFrame>(900);
 /** Белые копии для вспышки удара: живут 0,12 с и делаются дёшево — свой кеш. */
 const LFL = frameLRU<MobFrame>(80);
 
-/** Сколько кадров нарисовано заново (замер стенда). */
+/**
+ * Замер стенда: `drawn` — сколько кадров нарисовано, `ms` / `max` — полная
+ * цена кадра (вместе с кусками, нарисованными заранее), `paid` / `paidMax`
+ * — сколько из неё пришлось на вызов рисовальщика, `ahead` — кадров,
+ * готовых заранее целиком.
+ */
 export const F14_LORD_STAT = {
   drawn: 0,
   ms: 0,
   max: 0,
+  paid: 0,
+  paidMax: 0,
+  ahead: 0,
   get cached() {
     return LFR.size;
   },
 };
+/** Для стенда: `pipe = false` — без кадра «на потом» (листы обязаны совпасть). */
+export const F14_LORD_DEV = { pipe: true };
 
-function lordBase(q: LReq): MobFrame {
-  const key = `b|${q.tech}|${q.f}|${q.q}|${q.ph}|${q.x}|${q.left ? 1 : 0}`;
-  const got = LFR.get(key);
-  if (got) return got;
-  const t0 = performance.now();
+export type LordPoint = 'face' | 'minTip' | 'hourTip' | 'glass' | 'minHand' | 'hourHand' | 'chest';
+const LORD_POINTS: LordPoint[] = [
+  'face',
+  'minTip',
+  'hourTip',
+  'glass',
+  'minHand',
+  'hourHand',
+  'chest',
+];
+/** Точки тела в готовом кадре (от якоря, до хода кадра). */
+const LPTS = new WeakMap<MobFrame, Record<LordPoint, [number, number]>>();
+/** Точки тела в последнем нарисованном кадре, с ходом кадра — по `m.id`. */
+const LPT_LAST = new Map<number, Record<LordPoint, [number, number]>>();
+
+/**
+ * Точка тела Повелителя в последнем нарисованном кадре — px от точки моба
+ * на полу (как рисует движок: сжатие, наклон и сдвиг кадра учтены):
+ * `face` — середина циферблата, `minTip` / `hourTip` — острия минутной и
+ * часовой стрелок-клинков (воткнутый — точка входа в пол), `glass` —
+ * песочные часы (в руках, иначе малые на поясе), `minHand` / `hourHand` —
+ * кисти с клинками, `chest` — окно груди (слабое место). `null`, если
+ * кадра ещё не было. Эффекты рук и клинков берут точку только отсюда.
+ */
+export function lordPointPx(m: Mob, which: LordPoint): [number, number] | null {
+  return LPT_LAST.get(m.id)?.[which] ?? null;
+}
+
+const lKey = (q: LReq) => `b|${q.tech}|${q.f}|${q.d}|${q.ph}|${q.x}|${q.ex}`;
+
+/** Рисунок кадра по кускам: между кусками можно уступить (кадр «на потом»). */
+function* lBuild(q: LReq): Generator<void, MobFrame, void> {
   const t = lTimeOf(q.tech, q.f);
+  const sec = yield* lSecOf(q, t);
   const r = lRig(q, t);
   const L = LORD_LOOK[q.ph] ?? LORD_LOOK[0];
-  const o: LOpt = { ph: q.ph, f: q.f };
   const h = lHaste(q.ph);
+  const o: LOpt = { ph: q.ph, f: q.f };
   if (q.tech === 'ritual') o.sandUp = t > 0.6 ? 1 : 0.35;
-  if (q.tech === 'ritual' && t > 0.42 && t < 0.78) {
-    // Часы собираются из песка: песчинки сходятся к рукам по спирали.
-    const k = (t - 0.42) / 0.36;
+  if (q.tech === 'ritual' && t > RIT_TAKE && t < 0.78) {
+    const k = (t - RIT_TAKE) / (0.78 - RIT_TAKE);
     o.post = (p, lit, g) => {
-      const cx = LCX + r.gx + g.sh(LG + r.gy);
-      const cy = LG + r.gy + r.drop;
-      for (let i = 0; i < 16; i++) {
-        const a = (i / 16) * TAU + k * 5;
-        const rr = (1 - k) * (8 + hash(i, 13) * 10) + 1;
-        const x = Math.round(cx + Math.cos(a) * rr);
-        const y = Math.round(cy + Math.sin(a) * rr * 0.8);
-        p.set(x, y, i % 2 ? SAND[3] : TEAL[2]);
-        lit.set(x, y, alpha(TEAL_GLOW, 0.7));
-      }
+      const G = lPt(g, r.gf, r.gr, r.gu);
+      lSandIn(p, lit, G[0], G[1], k, 16, 12);
     };
   }
   if (q.tech === 'broken') {
-    const gx = LCX + 0;
-    const gy = LG - 29 - 1;
     o.post = (p, lit, g, LL) => {
-      if (t < 1.1) lShards(p, lit, gx + g.sh(gy), gy, t, 16, 61, true);
-      if (t > 0.6 && t < 1.95) lOrbit(p, lit, g, q.f, LL);
+      if (t < 1.1) {
+        const G = lPt(g, RIT_HOLD.gf ?? 3, 0, RIT_HOLD.gu ?? 60);
+        lShards(p, lit, G[0], G[1], t, 16, 61, true);
+      }
+      if (t >= BROKEN_DAZE && t < BROKEN_UP) {
+        const u = ((t - BROKEN_DAZE) % BROKEN_LOOP) / BROKEN_LOOP;
+        lOrbit(p, lit, g, u * (TAU / 3), LL);
+      }
+      if (t >= 1.98 && t < 2.2) {
+        const P = lBeltPivot(g);
+        lSandIn(p, lit, P[0], P[1] + 4.5, (t - 1.98) / 0.22, 8, 6);
+      }
     };
   }
-  if (q.tech === 'tired' && t > TIRED_DOWN && t < TIRED_UP) {
-    const ph = ((t - TIRED_DOWN) % 0.8) / 0.8;
+  if (q.tech === 'tired' && t >= TIRED_B && t < TIRED_UP) {
+    const u = ((t - TIRED_B) % TIRED_LOOP) / TIRED_LOOP;
     o.post = (p, lit, g) => {
-      lSteam(p, lit, g, (ph - 0.45) / 0.5, 1);
-      lSteam(p, lit, g, (ph - 0.5) / 0.45, -1);
+      lSteam(p, lit, g, (u - 0.45) / 0.5, 1);
+      lSteam(p, lit, g, (u - 0.5) / 0.45, -1);
     };
   }
   if (q.tech === 'death') {
-    o.noHalo = t > 0.6;
+    o.noHalo = t >= DEATH_HALO;
+    o.pre = (p, _lit, g, LL) => {
+      if (o.noHalo) lDeathHalo(p, g, LL, t);
+      lDeathBlades(p, g, LL, t, false);
+    };
     o.post = (p, lit, g, LL) => lDeathPost(p, lit, g, LL, t);
   }
-  // Влево — кадр отражается целиком, а циферблат нет: лицо, нимб и
-  // воротник рисуются с отражёнными углами, и после отражения кадра их
-  // стрелки снова идут по часовой (движковое `sx < 0` отразило бы и их).
-  const own = r.fdir >= 0.5;
-  const rd = q.left ? { ...r, fm: own ? r.fm : -r.fm, fh: own ? r.fh : -r.fh, halo: -r.halo } : r;
-  const pl = paintLord(rd, o);
-  let p: Px = pl.p;
-  let lit: Px = pl.lit;
-  let eye = pl.eye;
+  yield;
+  const pl = yield* paintLord(r, sec, q.d, o);
+  const { p, lit, g } = pl;
+  yield;
   // След клинков (после контура: у следа нет тёмной каймы).
-  const sm = LSMEAR[q.tech];
+  const sm = lSmearOf(q, t);
   if (sm) {
     const [n, span, inner] = sm;
-    const F: LBlade[] = [];
+    const A: LBlade[] = [];
     const B: LBlade[] = [];
     for (let i = 0; i <= n; i++) {
       const ti = t - (i * span * LF1) / n;
       if (ti < 0) break;
       const ri = i ? lRig(q, ti) : r;
-      const gi = lGeo(ri);
-      F.push(lBlade(ri, gi, true));
+      const gi = lGeo(ri, q.d, LSEC0);
+      A.push(lBlade(ri, gi, true));
       B.push(lBlade(ri, gi, false));
     }
-    if (F.every((b) => b.pin === 0)) lSmear(p, lit, F, L, inner);
+    if (A.every((b) => b.pin === 0)) lSmear(p, lit, A, L, inner);
     if (B.every((b) => b.pin === 0)) lSmear(p, lit, B, L, inner * 0.8);
   }
   if (q.tech === 'minute') {
@@ -4432,20 +5342,19 @@ function lordBase(q: LReq): MobFrame {
     const L1 = T + LORD.lunge;
     if (t >= tC - 1e-6 && t < L1) {
       const k = t < T + 0.05 ? 1 : lclamp(1 - (t - T - 0.05) / (L1 - T), 0.25, 1);
-      lThrust(lit, p, lBlade(r, lGeo(r), true), k, L);
+      lThrust(lit, p, lBlade(r, g, true), k, L);
     }
   }
   if (q.tech === 'place') {
-    const g = lGeo(r);
-    if (t >= 0.19 && t < 0.3) lStreak(lit, p, g, (t - 0.19) / 0.11, false, L);
-    else if (t >= 0.3 && t < 0.4) lStreak(lit, p, g, 1 - (t - 0.3) / 0.1, false, L);
-    else if (t >= 0.98 && t < 1.1) lStreak(lit, p, g, (t - 0.98) / 0.12, true, L);
-    else if (t >= 1.1 && t < 1.2) lStreak(lit, p, g, 1 - (t - 1.1) / 0.1, true, L);
+    for (const t0 of [0.3, 1.1]) {
+      if (t >= t0 - 0.11 && t < t0) lStreak(lit, p, g, (t - t0 + 0.11) / 0.11, L);
+      else if (t >= t0 && t < t0 + 0.1) lStreak(lit, p, g, 1 - (t - t0) / 0.1, L);
+    }
   }
   if (q.tech === 'phase' && t < 0.45) {
     // Смена материала: сверху вниз проходит светлая полоса; ниже неё —
     // ещё прошлое (блёклое), выше — новое.
-    const sy = Math.round(18 + (LG - 18) * (t / 0.45));
+    const sy = Math.round(14 + (LG - 14) * (t / 0.45));
     for (let y = sy + 1; y < LH; y++)
       for (let x = 0; x < LW; x++) {
         const i = (y * LW + x) * 4;
@@ -4460,12 +5369,7 @@ function lordBase(q: LReq): MobFrame {
         if (p.solid(x, sy + dy))
           lit.set(x, sy + dy, alpha(mixc(L.glow, WHITE, 0.6), dy ? 0.5 : 0.95));
   }
-  if (q.left) {
-    // Холст симметричен относительно точки ног (LW = 2·LCX): якорь на месте.
-    p = p.flipX();
-    lit = lit.flipX();
-    if (eye) eye = [LW - 1 - eye[0], eye[1]];
-  }
+  yield;
   // Холст — по рамке нарисованного.
   const box = [LW, LH, -1, -1];
   lBox(p, box);
@@ -4475,107 +5379,119 @@ function lordBase(q: LReq): MobFrame {
   const y0 = Math.max(0, box[1] - 1);
   const w = Math.min(LW, box[2] + 2) - x0;
   const hh = Math.min(LH, box[3] + 2) - y0;
+  const img = lCut(p, x0, y0, w, hh);
+  yield;
+  const eye = pl.eye;
   const out: MobFrame = {
-    img: lCut(p, x0, y0, w, hh),
+    img,
     lit: hasLit ? lCut(lit, x0, y0, w, hh) : null,
     ax: LCX - x0,
     ay: LG - y0,
     eye: eye ? [eye[0] - x0, eye[1] - y0] : null,
-    dx: q.left ? -r.dx : r.dx,
-    dy: r.dy,
+    dx: r.mf * g.B.c - r.mr * g.B.s,
+    dy: (r.mf * g.B.s + r.mr * g.B.c) * LDEP - r.mu,
     sx: r.sx,
     sy: r.sy,
-    rot: q.left ? -r.rot : r.rot,
+    rot: r.rot,
     still: true,
     shadow: 13 * lclamp(r.op, 0.25, 1),
   };
   if (r.op < 0.999) out.alpha = lclamp(r.op, 0, 1);
   if (q.tech === 'death')
     out.shadow = 13 * (1 - 0.8 * lclamp((t - DEATH_SWEEP[0]) / DEATH_SWEEP[1], 0, 1));
-  // Точки тела для «Техник» (`lordPointPx`): от якоря кадра, влево — отражены.
-  const gq = lGeo(r);
-  const tipOf = (b: LBlade): [number, number] => [b.x + b.ux * b.len, b.y + b.uy * b.len];
+  // Точки тела для «Техник» (`lordPointPx`): от якоря кадра.
+  const tipOf = (right: boolean): [number, number] => {
+    const b = (q.tech === 'death' && lDeathBlade(g, right, t)) || lBlade(r, g, right);
+    return [b.x + b.ux * b.len, b.y + b.uy * b.len];
+  };
+  const hand = (right: boolean): [number, number] => {
+    const [a, b, c] = lHandLocal(r, right);
+    const P = lPt(g, a, b, c);
+    return [P[0], P[1]];
+  };
+  let glass: [number, number];
+  if (r.gl >= 0.5) {
+    const G = lPt(g, r.gf, r.gr, r.gu);
+    glass = [G[0], G[1]];
+  } else {
+    const P = lBeltPivot(g);
+    glass = [P[0] + Math.sin(sec.belt) * 4.5, P[1] + Math.cos(sec.belt) * 4.5];
+  }
   const raw: Record<LordPoint, [number, number]> = {
-    face: [gq.hx, gq.hy],
-    minTip: tipOf(lBlade(r, gq, true)),
-    hourTip: tipOf(lBlade(r, gq, false)),
-    glass: [LCX + r.gx + gq.sh(LG + r.gy), LG + r.gy + r.drop],
+    face: [g.head[0], g.head[1]],
+    minTip: tipOf(true),
+    hourTip: tipOf(false),
+    glass,
+    minHand: hand(true),
+    hourHand: hand(false),
+    chest: pl.chest,
   };
   const rel = {} as Record<LordPoint, [number, number]>;
-  for (const k of LORD_POINTS) {
-    const [x, y] = raw[k];
-    rel[k] = [(q.left ? LW - 1 - x : x) - LCX, y - LG];
-  }
+  for (const k of LORD_POINTS) rel[k] = [raw[k][0] - LCX, raw[k][1] - LG];
   LPTS.set(out, rel);
-  const ms = performance.now() - t0;
+  return out;
+}
+
+interface LJob {
+  key: string;
+  it: Generator<void, MobFrame, void>;
+  ms: number;
+}
+/** Кадр, который рисуется заранее (один на всех: босс один). */
+let LJOB: LJob | null = null;
+/** Сторона, на которую корпус встанет к следующему кадру (её считает `lordReq`). */
+let lNextD = 0;
+/** Сколько рисовать заранее за вызов рисовальщика, мс (как у мамонта). */
+const PIPE_MS = 0.45;
+
+function lRun(job: LJob, budget: number): MobFrame | null {
+  const t0 = performance.now();
+  for (;;) {
+    const s = job.it.next();
+    const now = performance.now();
+    if (s.done) {
+      job.ms += now - t0;
+      return s.value;
+    }
+    if (now - t0 >= budget) {
+      job.ms += now - t0;
+      return null;
+    }
+  }
+}
+function lDone(key: string, fr: MobFrame, ms: number): MobFrame {
   F14_LORD_STAT.drawn++;
   F14_LORD_STAT.ms += ms;
   F14_LORD_STAT.max = Math.max(F14_LORD_STAT.max, ms);
-  return LFR.set(key, out);
+  return LFR.set(key, fr);
 }
 
-export type LordPoint = 'face' | 'minTip' | 'hourTip' | 'glass';
-const LORD_POINTS: LordPoint[] = ['face', 'minTip', 'hourTip', 'glass'];
-/** Точки тела в готовом кадре (от якоря, до хода кадра). */
-const LPTS = new WeakMap<MobFrame, Record<LordPoint, [number, number]>>();
-/** Точки тела в последнем нарисованном кадре, с ходом кадра — по `m.id`. */
-const LPT_LAST = new Map<number, Record<LordPoint, [number, number]>>();
-
-/**
- * Точка тела Повелителя в последнем нарисованном кадре — px от точки моба
- * на полу (как рисует движок: сжатие, наклон и сдвиг кадра учтены):
- * `face` — середина циферблата, `minTip` / `hourTip` — острия минутной и
- * часовой стрелок-клинков, `glass` — песочные часы в руках. `null`, если
- * кадра ещё не было. Эффекты рук и клинков берут точку только отсюда.
- */
-export function lordPointPx(m: Mob, which: LordPoint): [number, number] | null {
-  return LPT_LAST.get(m.id)?.[which] ?? null;
+function lordBase(q: LReq): MobFrame {
+  const key = lKey(q);
+  const got = LFR.get(key);
+  if (got) return got;
+  const t0 = performance.now();
+  // Начатый заранее — дорисовать; иначе — целиком сейчас.
+  const job: LJob = LJOB && LJOB.key === key ? LJOB : { key, it: lBuild(q), ms: 0 };
+  if (LJOB === job) LJOB = null;
+  const fr = lRun(job, Infinity) as MobFrame;
+  const paid = performance.now() - t0;
+  F14_LORD_STAT.paid += paid;
+  F14_LORD_STAT.paidMax = Math.max(F14_LORD_STAT.paidMax, paid);
+  return lDone(key, fr, job.ms);
 }
 
-/** Смерть: клинки падают, нимб ложится, корпус рассыпается шестернями. */
-function lDeathPost(p: ClipPx, lit: Px, g: LGeo, L: LordLook, t: number): void {
-  // Выроненные клинки: падают, вращаясь, звякают и ложатся.
-  if (t >= 0.3) {
-    const k = lclamp((t - 0.3) / 0.22, 0, 1);
-    const hop = t > 0.52 && t < 0.62 ? Math.sin(((t - 0.52) / 0.1) * Math.PI) * 1.6 : 0;
-    const fx = LCX + 9 + (LCX + 5 - (LCX + 9)) * k;
-    const fy = LG - 17 + (LG - 2 - (LG - 17)) * k * k - hop;
-    minuteHand(p, fx, fy, -0.6 + (0.1 + 0.6) * lIn(k) + k * TAU * 0.5, 22, L.trim, null);
-    const bx0 = LCX - 9 + (LCX - 6 - (LCX - 9)) * k;
-    const by0 = LG - 15 + (LG - 2 - (LG - 15)) * k * k - hop * 0.7;
-    hourHand(p, bx0, by0, 3.9 - (3.9 - (Math.PI - 0.08)) * lIn(k), 15, L.trim);
-  }
-  // Нимб соскальзывает за спину и ложится плашмя.
-  if (t > 0.62) {
-    const k = lclamp((t - 0.6) / 0.12, 0, 1);
-    const cx = g.hx - 7 * k;
-    const cy = g.hy + (LG - 4 - g.hy) * k * k;
-    lCog(p, cx, cy, 13, 18, 0.5 * k, L.halo, 1, 4, 6, 1 - 0.74 * k);
-  }
-  // Осколки стекла лица.
-  if (t > 0.62 && t < 1.1) lShards(p, lit, g.hx - 2, g.hy - 2, t - 0.62, 7, 71, false);
-  // Распад: сверху вниз, клетки — в шестерни.
-  const [s0, s1] = DEATH_SWEEP;
-  if (t <= s0) return;
-  const top = 18;
-  const k = lclamp((t - s0) / s1, 0, 1);
-  const line = top + (LG + 2 - top) * k;
-  const gears = lDeathGears(p);
-  for (let y = 0; y < Math.min(LH, Math.ceil(line) + 2); y++)
-    for (let x = 0; x < LW; x++) {
-      const i = (y * LW + x) * 4;
-      if (!p.data[i + 3]) continue;
-      // У кромки распада — рвано, через одну.
-      if (y < line - 1 || (y < line + 2 && hash(x, y, 67) < 0.5)) p.data[i + 3] = 0;
-    }
-  const tones: Tones[] = [L.trim, L.halo, IRON, STEEL];
-  for (const q of gears) {
-    const rel = s0 + s1 * ((q.oy - top) / (LG + 2 - top));
-    if (t < rel) continue;
-    const [x, y, a] = lGearAt(q, t - rel);
-    lCog(p, x, y, q.r, 6, a, tones[q.tone], 1, Math.max(0.5, q.r * 0.3));
-    if (t - rel < 0.12) lit.set(Math.round(x), Math.round(y), alpha(L.glow, 0.8));
-  }
+/** Кадр «на потом»: следующий по времени рисуется кусками, пока игра ждёт. */
+function lAhead(q: LReq): void {
+  if (!F14_LORD_DEV.pipe) return;
+  const key = lKey(q);
+  if (LFR.get(key)) return;
+  if (!LJOB || LJOB.key !== key) LJOB = { key, it: lBuild(q), ms: 0 };
+  const fr = lRun(LJOB, PIPE_MS);
+  if (!fr) return;
+  F14_LORD_STAT.ahead++;
+  lDone(key, fr, LJOB.ms);
+  LJOB = null;
 }
 
 function lFlashImg(src: HTMLCanvasElement): HTMLCanvasElement {
@@ -4595,30 +5511,40 @@ function lFlashImg(src: HTMLCanvasElement): HTMLCanvasElement {
 function lordFrame(q: LReq, flash: boolean): MobFrame {
   const b = lordBase(q);
   if (!flash) return b;
-  const key = `f|${q.tech}|${q.f}|${q.q}|${q.ph}|${q.x}|${q.left ? 1 : 0}`;
+  const key = 'f' + lKey(q);
   const got = LFL.get(key);
   if (got) return got;
-  return LFL.set(key, { ...b, img: lFlashImg(b.img) });
+  const fr = LFL.set(key, { ...b, img: lFlashImg(b.img) });
+  const pts = LPTS.get(b);
+  if (pts) LPTS.set(fr, pts);
+  return fr;
 }
 
-// ---- Рисовальщик: режим мозга → техника и кадр ----
+// ---- Рисовальщик: режим мозга → техника, кадр и сторона ----
 
 interface LMem {
   now: number;
+  /** Пройденный путь, px (шаг), и угол, повёрнутый на месте (переступ). */
   walk: number;
+  turn: number;
   ph: number;
   phAt: number;
   toll: number;
   tollAt: number;
+  /** Куда смотрит корпус и голова (мир, рад) — поворачиваются с пределом скорости. */
+  yaw: number;
+  head: number;
+  /** Режим мозга прошлого кадра и кадр шага, из которого началась техника. */
+  mode: string;
+  /** Сторона прошлого кадра (−1 — ещё не было). */
+  d: number;
+  tech: LTech;
+  wf: number;
+  from: number;
 }
 const lMem = new WeakMap<Mob, LMem>();
-
-/** Прицел в кадре (смотрит вправо): восьмые круга, вниз — плюс. */
-function lAim(m: Mob, left: boolean): number {
-  const d = m.dir ?? 0;
-  const a = left ? Math.PI - d : d;
-  return lclamp(Math.round(Math.atan2(Math.sin(a), Math.cos(a)) / (Math.PI / 4)), -2, 2);
-}
+const LDIR = TAU / LDIRS;
+const lToDir = (a: number) => ((Math.round(a / LDIR) % LDIRS) + LDIRS) % LDIRS;
 
 function lordReq(m: Mob, pose: MobPose): LReq {
   const sim = paintSim();
@@ -4627,127 +5553,250 @@ function lordReq(m: Mob, pose: MobPose): LReq {
   let s = lMem.get(m);
   const fresh = !s;
   if (!s) {
-    s = { now: pose.now, walk: 0, ph, phAt: -9, toll: F14_FX.midnight, tollAt: -9 };
+    s = {
+      now: pose.now,
+      walk: 0,
+      turn: 0,
+      ph,
+      phAt: -9,
+      toll: F14_FX.midnight,
+      tollAt: -9,
+      yaw: NaN,
+      head: NaN,
+      mode: pose.mode,
+      d: -1,
+      tech: 'idle',
+      wf: 0,
+      from: -1,
+    };
     lMem.set(m, s);
   }
   const dt = lclamp(pose.now - s.now, 0, 0.1);
   s.now = pose.now;
-  s.walk += Math.hypot(m.vx ?? 0, m.vy ?? 0) * 16 * dt;
+  const sp = Math.hypot(m.vx ?? 0, m.vy ?? 0);
+  s.walk += sp * 16 * dt;
   if (ph > s.ph && pose.mode !== 'dying') s.phAt = pose.now;
   s.ph = ph;
   if (F14_FX.midnight > s.toll && ph >= 3) s.tollAt = pose.now;
   s.toll = F14_FX.midnight;
-  const q: LReq = { tech: 'idle', f: 0, q: 0, ph, x: 0, left: pose.left };
+  if (pose.mode !== s.mode) {
+    // Техника началась из шага — первые кадры переходят из его позы.
+    s.from = s.tech === 'walk' ? s.wf : -1;
+    s.mode = pose.mode;
+  }
+  const q: LReq = { tech: 'idle', f: 0, d: 0, ph, x: 0, ex: 0 };
   const t = Math.max(0, pose.t);
-  const at = (tech: LTech, tt: number, end = Infinity) => {
+  const at = (tech: LTech, tt: number) => {
     q.tech = tech;
-    q.f = lFrameOf(tech, Math.min(tt, end - 1e-4));
+    q.f = lFrameOf(tech, Math.min(tt, lEndOf(tech, ph) - 1e-4));
   };
+  const hero = sim?.hero;
+  const toHero = hero ? Math.atan2(hero.y - m.y, hero.x - m.x) : m.face;
+  const aim = m.dir ?? m.face;
+  // Куда повернуться и как быстро (рад/с); Infinity — сразу.
+  let tgt = m.face;
+  let rate = 7;
   const Th = LORD.hourWarn / h;
   const Tm = LORD.minWarn / h;
   const Ts = LORD.spinWarn / h;
-  const R = 0.55 / h;
+  const blendable = () => {
+    if (s.from >= 0 && !fresh && q.f < 3) q.ex = s.from + 1;
+  };
+  let done = true;
   switch (pose.mode) {
     case 'roar':
-      at('roar', t, ROAR_T);
-      return q;
+      at('roar', t);
+      rate = 3;
+      break;
     case 'f14_hour':
-      q.q = lAim(m, pose.left);
-      at('hour', t, Th + R);
-      return q;
+      at('hour', t);
+      tgt = aim;
+      rate = 12;
+      blendable();
+      break;
     case 'f14_minute':
-      q.q = lAim(m, pose.left);
       at('minute', t);
-      return q;
+      tgt = aim;
+      rate = 12;
+      blendable();
+      break;
     case 'f14_lunge':
-      q.q = lAim(m, pose.left);
-      at('minute', Tm + t, Tm + LORD.lunge + LORD.stuck + R);
-      return q;
+      at('minute', Tm + t);
+      tgt = aim;
+      rate = 12;
+      break;
     case 'f14_stuck':
-      q.q = lAim(m, pose.left);
-      at('minute', Tm + LORD.lunge + t, Tm + LORD.lunge + LORD.stuck + R);
-      return q;
+      at('minute', Tm + LORD.lunge + t);
+      tgt = aim;
+      rate = 0;
+      break;
     case 'f14_spin':
-      at('spin', t, Ts + R);
-      return q;
+      at('spin', t);
+      rate = 8;
+      blendable();
+      break;
     case 'f14_clap':
-      at('clap', t, LORD.clap);
-      return q;
+      at('clap', t);
+      tgt = toHero;
+      rate = 6;
+      blendable();
+      break;
     case 'f14_place': {
       // Мир стоит, а его часы идут: настоящие секунды остановки.
       const D = lStopDur(ph);
       const e = sim ? (worldStopped(sim) ? D - sim.scaleT : D) : t;
-      at('place', e, D);
-      return q;
+      at('place', e);
+      const from = (fx?: number, fy?: number) =>
+        fx !== undefined && fy !== undefined && Number.isFinite(fx) && (fx !== m.x || fy !== m.y)
+          ? Math.atan2(m.y - fy, m.x - fx)
+          : toHero;
+      if (e < 0.3) tgt = toHero;
+      else if (e < 0.42) {
+        tgt = from(m.data?.vAx, m.data?.vAy);
+        rate = Infinity;
+      } else if (e >= 1.1 && e < 1.22) {
+        tgt = from(m.data?.vBx, m.data?.vBy);
+        rate = Infinity;
+      } else {
+        tgt = toHero;
+        rate = 10;
+      }
+      break;
     }
     case 'recover': {
       const from = m.data?.vFrom ?? 0;
+      const R = 0.55 / h;
       if (from === 1) {
-        q.q = lAim(m, pose.left);
-        at('hour', Th + t, Th + R);
-      } else if (from === 2) at('spin', Ts + t, Ts + R);
+        at('hour', Th + t);
+        tgt = aim;
+        rate = 4;
+      } else if (from === 2) at('spin', Ts + t);
       else if (from === 3) {
-        q.q = lAim(m, pose.left);
-        const S = Tm + LORD.lunge + LORD.stuck;
-        at('minute', S + t, S + R);
-      } else if (from === 4) at('after', t, R);
-      else if (from === 5) at('regain', t, R);
-      else break;
-      return q;
+        at('minute', Tm + LORD.lunge + LORD.stuck + t);
+        tgt = aim;
+        rate = 4;
+      } else if (from === 4) {
+        at('after', Math.min(t, R));
+        tgt = toHero;
+      } else if (from === 5) {
+        at('regain', Math.min(t, R));
+        tgt = s.yaw;
+        rate = 0;
+      } else done = false;
+      break;
     }
     case 'f14_toHub':
       q.tech = 'run';
-      q.f = Math.floor((((fresh ? pose.now * 66 : s.walk) / WALK_STRIDE) % 1) * WALK_N) % WALK_N;
-      return q;
+      q.f =
+        Math.floor((((fresh ? pose.now * sp * 16 : s.walk) / RUN_STRIDE) % 1) * WALK_N) % WALK_N;
+      tgt = sp > 0.3 ? Math.atan2(m.vy ?? 0, m.vx ?? 0) : m.face;
+      rate = 9;
+      break;
     case 'f14_ritual': {
       const v = m.data?.vRit ?? 0;
       q.x = v >= 0.67 ? 2 : v >= 0.34 ? 1 : 0;
-      at('ritual', t, LORD.ritual);
-      return q;
+      at('ritual', t);
+      // К зрителю: часы над головой видны целиком.
+      tgt = Math.PI / 2;
+      rate = 8;
+      break;
     }
     case 'f14_broken':
-      at('broken', t, LORD.broken);
-      return q;
+      at('broken', t);
+      tgt = s.yaw;
+      rate = 0;
+      break;
     case 'f14_tired':
-      at('tired', t, LORD.tired);
-      return q;
+      at('tired', t);
+      tgt = s.yaw;
+      rate = 0;
+      break;
     case 'dying':
-      at('death', t, DEATH_T);
-      return q;
+      at('death', t);
+      tgt = s.yaw;
+      rate = 0;
+      break;
+    default:
+      done = false;
   }
-  // Погоня и отдых: смена фазы, удар полночи, отдача, шаг, покой.
-  // (`vPhT`, `vTollT` — только для листа кадров: там моб новый на каждый
-  // кадр, и сцена считается от начала режима.)
-  const vPhT = m.data?.vPhT;
-  const phT = vPhT !== undefined ? t - vPhT : pose.now - s.phAt;
-  if (phT < PHASE_T) {
-    at('phase', phT, PHASE_T);
-    return q;
+  if (!done) {
+    // Погоня и отдых: смена фазы, удар полночи, отдача, шаг, покой.
+    // (`vPhT`, `vTollT` — только для листа кадров: там моб новый на каждый
+    // кадр, и сцена считается от начала режима.)
+    const vPhT = m.data?.vPhT;
+    const phT = vPhT !== undefined ? t - vPhT : pose.now - s.phAt;
+    const vTollT = m.data?.vTollT;
+    const tollT = vTollT !== undefined ? t - vTollT : pose.now - s.tollAt;
+    const fl = m.flash ?? 0;
+    const moving = pose.anim === 'run' || sp > 0.4;
+    tgt = moving && sp > 0.3 ? Math.atan2(m.vy ?? 0, m.vx ?? 0) : m.face;
+    if (phT < PHASE_T) at('phase', phT);
+    else if (ph >= 3 && tollT < TOLL_T) at('toll', tollT);
+    else if (fl > 0.01) {
+      q.tech = 'hurt';
+      q.f = fl > 0.08 ? 0 : fl > 0.04 ? 1 : 2;
+    } else if (moving) {
+      q.tech = 'walk';
+      const dd = fresh ? pose.now * sp * 16 : s.walk;
+      q.f = Math.floor(((dd / WALK_STRIDE) % 1) * WALK_N) % WALK_N;
+    } else {
+      // Покой — по часам этажа: в «ЧАС» он стоит вместе с миром.
+      const ck = sim ? F14_FX.clock : pose.now;
+      at('idle', ck + (m.id ?? 0) * 0.37);
+    }
   }
-  const vTollT = m.data?.vTollT;
-  const tollT = vTollT !== undefined ? t - vTollT : pose.now - s.tollAt;
-  if (ph >= 3 && tollT < TOLL_T) {
-    at('toll', tollT, TOLL_T);
-    return q;
+  if (!Number.isFinite(tgt)) tgt = Number.isFinite(m.face) ? m.face : Math.PI / 2;
+  // Поворот: корпус догоняет цель с пределом скорости, голова — впереди.
+  if (fresh || !Number.isFinite(s.yaw)) {
+    s.yaw = tgt;
+    s.head = tgt;
+  } else {
+    const dy = lWrap(tgt - s.yaw);
+    const st = rate * dt;
+    const turn = rate === Infinity ? dy : lclamp(dy, -st, st);
+    s.yaw = lWrap(s.yaw + turn);
+    s.turn += Math.abs(turn);
+    const hd = lWrap(tgt - s.head);
+    s.head = lWrap(s.head + lclamp(hd, -16 * dt, 16 * dt));
+    const off = lWrap(s.head - s.yaw);
+    if (Math.abs(off) > 0.9) s.head = lWrap(s.yaw + Math.sign(off) * 0.9);
+    // Разворот на месте или крутой на ходу — переступ, а не шаг боком.
+    const left = Math.abs(lWrap(tgt - s.yaw));
+    if ((q.tech === 'idle' && left > 0.25) || (q.tech === 'walk' && left > 1.4)) {
+      q.tech = 'shuffle';
+      q.f = Math.floor((s.turn / 0.9) * WALK_N) % WALK_N;
+    }
   }
-  const fl = m.flash ?? 0;
-  if (fl > 0.01) {
-    q.tech = 'hurt';
-    q.f = fl > 0.08 ? 0 : fl > 0.04 ? 1 : 2;
-    return q;
+  // Сторона с запасом: у границы двух сторон кадр не дёргается туда-сюда.
+  q.d = lToDir(s.yaw);
+  if (s.d >= 0 && q.d !== s.d && Math.abs(lWrap(s.yaw - s.d * LDIR)) < LDIR * 0.62) q.d = s.d;
+  s.d = q.d;
+  // Куда корпус довернётся к следующему кадру анимации (для «на потом»).
+  const lead = lWrap(tgt - s.yaw);
+  const st1 = rate === Infinity ? lead : lclamp(lead, -rate * LF1, rate * LF1);
+  const y1 = s.yaw + st1;
+  lNextD = lToDir(y1);
+  if (lNextD !== q.d && Math.abs(lWrap(y1 - q.d * LDIR)) < LDIR * 0.62) lNextD = q.d;
+  if (lStepTech(q.tech) || q.tech === 'idle') {
+    if (q.tech !== 'hurt') {
+      const off = lWrap(s.head - q.d * LDIR);
+      q.ex = lclamp(Math.round(off / 0.45), -2, 2);
+    }
   }
-  const sp = Math.hypot(m.vx ?? 0, m.vy ?? 0);
-  if (pose.anim === 'run' || sp > 0.4) {
-    q.tech = 'walk';
-    const d = fresh ? pose.now * sp * 16 : s.walk;
-    q.f = Math.floor(((d / WALK_STRIDE) % 1) * WALK_N) % WALK_N;
-    return q;
-  }
-  // Покой — по часам этажа: в «ЧАС» он стоит вместе с миром.
-  const ck = sim ? F14_FX.clock : pose.now;
-  q.tech = 'idle';
-  q.f = ((Math.floor(ck * 10 + (m.id ?? 0) * 3.7) % IDLE_N) + IDLE_N) % IDLE_N;
+  s.tech = q.tech;
+  if (q.tech === 'walk') s.wf = q.f;
   return q;
+}
+
+/** Следующий кадр той же техники (для «на потом»). */
+function lNext(q: LReq): LReq | null {
+  if (q.tech === 'hurt') return null;
+  if (q.tech === 'walk' || q.tech === 'run' || q.tech === 'shuffle')
+    return { ...q, f: (q.f + 1) % WALK_N };
+  if (q.tech === 'idle') return { ...q, f: (q.f + 1) % Math.round(IDLE_T * 12) };
+  const f = q.f + 1;
+  if (lTimeOf(q.tech, f) >= lEndOf(q.tech, q.ph)) return null;
+  return { ...q, f, ex: q.ex && f < 3 ? q.ex : 0 };
 }
 
 registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
@@ -4755,8 +5804,8 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
   const t = Math.max(0, pose.t);
   // Смерть белым не мигает: копия убранного моба держит последнюю вспышку.
   const flash = pose.flash && (pose.mode !== 'dying' || t < 0.08);
+  const base = lordBase(q);
   const out: MobFrame = { ...lordFrame(q, flash) };
-  const left = pose.left;
   const sim = paintSim();
   // Отдача от удара героя — от героя, с возвратом.
   const fl = m.flash ?? 0;
@@ -4764,8 +5813,8 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
   let ry = 0;
   if (fl > 0 && pose.mode !== 'dying') {
     const age = lclamp(0.12 - fl, 0, 0.12);
-    let ux = left ? 1 : -1;
-    let uy = 0;
+    let ux = -Math.cos(m.face);
+    let uy = -Math.sin(m.face);
     if (sim) {
       const dx = m.x - sim.hero.x;
       const dy = m.y - sim.hero.y;
@@ -4792,8 +5841,6 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
     if (e >= 0.3 && e < 0.4) slide(0.3, m.data?.vAx, m.data?.vAy);
     if (e >= 1.1 && e < 1.2) slide(1.1, m.data?.vBx, m.data?.vBy);
   }
-  // Влево кадр уже отражён в пикселях (циферблат — нет), сдвиг и наклон —
-  // уже в сторону взгляда: добавить только отдачу и доезд.
   out.dx = (out.dx ?? 0) + rx;
   out.dy = (out.dy ?? 0) + ry;
   // Шлейф — на быстром: выпад, рывки остановки, оборот, рубка часовой.
@@ -4816,7 +5863,7 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
       out.ghost = { every: 0.025, life: 0.13, tint: '#ffe0a0', alpha: 0.24 };
   }
   if (q.tech === 'death') out.linger = DEATH_T;
-  const pts = LPTS.get(lordBase(q));
+  const pts = LPTS.get(base);
   if (pts) {
     const sx = out.sx ?? 1;
     const sy = out.sy ?? 1;
@@ -4832,29 +5879,42 @@ registerMobPainter('f14boss', (m: Mob, pose: MobPose) => {
     LPT_LAST.set(m.id, put);
     if (LPT_LAST.size > 8) LPT_LAST.delete(LPT_LAST.keys().next().value as number);
   }
+  // Следующий кадр — заранее, кусками.
+  const nq = lNext(q);
+  if (nq) lAhead({ ...nq, d: lNextD });
   return out;
 });
 
-// Прогрев: первая фаза в обе стороны — покой, шаг, пробуждение, обе
-// стрелки (прицел вперёд), вращение, отдача, часовая вверх и вниз.
+// Прогрев: первая фаза — пробуждение к зрителю, шаг во все 16 сторон,
+// покой, обе стрелки, вращение и отдача к зрителю.
 registerMobWarm('f14boss', function* () {
-  const q: LReq = { tech: 'idle', f: 0, q: 0, ph: 0, x: 0, left: false };
-  const run = function* (tech: LTech, n: number, aim = 0) {
-    for (let f = 0; f < n; f++)
-      for (const left of [false, true]) {
-        lordBase({ ...q, tech, f, q: aim, left });
-        yield f;
+  const q: LReq = { tech: 'idle', f: 0, d: 4, ph: 0, x: 0, ex: 0 };
+  const one = function* (r: LReq) {
+    const key = lKey(r);
+    if (LFR.get(key)) return;
+    const job: LJob = { key, it: lBuild(r), ms: 0 };
+    for (;;) {
+      const t0 = performance.now();
+      const s = job.it.next();
+      job.ms += performance.now() - t0;
+      if (s.done) {
+        lDone(key, s.value, job.ms);
+        return;
       }
+      yield 0;
+    }
   };
-  yield* run('idle', IDLE_N);
-  yield* run('walk', WALK_N);
+  const run = function* (tech: LTech, n: number, d = 4) {
+    for (let f = 0; f < n; f++) yield* one({ ...q, tech, f, d });
+  };
   yield* run('roar', lFrameOf('roar', ROAR_T) + 1);
-  yield* run('hour', lFrameOf('hour', LORD.hourWarn + 0.55) + 1);
-  yield* run('minute', lFrameOf('minute', LORD.minWarn + LORD.lunge + LORD.stuck + 0.55) + 1);
-  yield* run('spin', lFrameOf('spin', LORD.spinWarn + 0.55) + 1);
+  for (let d = 0; d < LDIRS; d++) yield* run('walk', WALK_N, d);
+  yield* run('idle', Math.round(IDLE_T * 12));
+  yield* run('hour', lFrameOf('hour', lEndOf('hour', 0)) + 1);
+  yield* run('minute', lFrameOf('minute', lEndOf('minute', 0)) + 1);
+  yield* run('spin', lFrameOf('spin', lEndOf('spin', 0)) + 1);
   yield* run('hurt', 3);
-  yield* run('hour', lFrameOf('hour', LORD.hourWarn + 0.55) + 1, 1);
-  yield* run('hour', lFrameOf('hour', LORD.hourWarn + 0.55) + 1, -1);
+  for (let d = 0; d < LDIRS; d++) yield* run('shuffle', WALK_N, d);
 });
 
 // ---------------------------------------------------------------------------
