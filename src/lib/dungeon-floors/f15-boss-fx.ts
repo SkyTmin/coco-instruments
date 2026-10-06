@@ -4484,7 +4484,7 @@ function astroMark(
   p.col(C.night[1], 0.32 + 0.28 * k);
   fillSector(p, cx, cy, 0, R, 0, TAU);
   const rf = R * (0.12 + 0.88 * Math.pow(k, 1.25));
-  p.col(sig ? hot : fill, sig ? (tk ? 0.26 : 0.14) : 0.16 + 0.24 * k);
+  p.col(tk ? hot : fill, sig ? (tk ? 0.3 : 0.5) : 0.16 + 0.26 * k);
   fillSector(p, cx, cy, 0, rf, 0, TAU);
   ring(
     p,
@@ -4541,7 +4541,7 @@ function bandAstro(
   const kk = (a: number) => !keep || keep(a);
   p.col(C.night[1], 0.3 + 0.2 * k);
   band();
-  p.col(sig ? hot : fill, sig ? (tk ? 0.26 : 0.14) : 0.16 + 0.26 * k);
+  p.col(tk ? hot : fill, sig ? (tk ? 0.3 : 0.5) : 0.16 + 0.28 * k);
   band();
   const ec = sig ? (tk ? C.white : hot) : edge;
   ring(p, cx, cy, r1, ec, 0.7 + 0.3 * k, (a) => kk(a), 0.6);
@@ -4703,7 +4703,7 @@ function inPalm(u: number, v: number): boolean {
   if (pu * pu + pv * pv <= 1) return true;
   for (const [v0, tip] of FINGERS)
     if (inSeg(u, v, 0.05, v0 * 0.9, tip, v0 * 1.35, FING_W)) return true;
-  return inSeg(u, v, -0.36, 0.34, 0.02, 0.76, 0.088);
+  return inSeg(u, v, -0.34, 0.32, 0.1, 0.62, 0.088);
 }
 
 /** Кромка фигуры: точка внутри, а сосед на пиксель — снаружи. */
@@ -5409,7 +5409,7 @@ const PL_PAL = [
 
 /** Планета: шар с гранями кристалла, грани бегут по кругу (кадр f из 8). */
 function planetImg(i: number, r: number, f: number): HTMLCanvasElement {
-  const R = Math.max(2, Math.round(r * 2) / 2);
+  const R = Math.max(2, Math.round(r));
   const fr = f & 7;
   const key = `pl|${i}|${R}|${fr}`;
   const hit = LFX.get(key);
@@ -5487,16 +5487,19 @@ function dashArc(
   a: number,
 ): void {
   const len = (Math.hypot(qx - sx, qy - sy) + Math.hypot(tx - qx, ty - qy)) * S;
-  const n = Math.max(12, Math.min(110, Math.floor(len / 2)));
-  for (let j = 0; j <= n; j++) {
+  const n = Math.max(12, Math.min(90, Math.floor(len / 3)));
+  for (let j = 0; j < n; j++) {
     const e = j / n;
-    if (e < e0 || e > e1 || mod(j - run, 5) >= 3) continue;
-    const x = bez(sx, qx, tx, e) * S;
-    const y = bez(sy, qy, ty, e) * S;
-    p.col(C.ink, a * 0.45);
-    p.dot(x + 1, y + 1);
-    p.col(col, a * (0.55 + 0.45 * e));
-    p.dot(x, y);
+    const e2 = (j + 1) / n;
+    if (e2 < e0 || e > e1 || mod(j - run, 4) >= 2) continue;
+    const x0 = bez(sx, qx, tx, e) * S;
+    const y0 = bez(sy, qy, ty, e) * S;
+    const x1 = bez(sx, qx, tx, e2) * S;
+    const y1 = bez(sy, qy, ty, e2) * S;
+    const al = a * (0.6 + 0.4 * e);
+    p.lineS(x0, y0, x1, y1, col, al, 0.6);
+    p.col(col, al * 0.7);
+    p.line(x0 + 1, y0, x1 + 1, y1);
   }
 }
 
@@ -5541,7 +5544,7 @@ registerZonePainter(
     p.occ = null;
     const lord = mobOf(st.from);
     const run = Math.floor(time * 18);
-    const ca = (sig ? 1 : 0.35 + 0.6 * k) * (tick(left) ? 1 : 0.9);
+    const ca = sig ? 1 : 0.55 + 0.45 * k;
     const col = sig ? C.white : C.gold[2];
     if (pl.stage === 1) {
       const u = k01((s.time - pl.at) / LORD.orbitFly);
@@ -5665,7 +5668,7 @@ function meteorFly(
   const [ux, uy] = METEOR_IN;
   const nx = -uy;
   const ny = ux;
-  const L = (16 + 34 * u) * (big ? 1.3 : 1);
+  const L = (26 + 40 * u) * (big ? 1.25 : 1);
   for (let i = Math.floor(L); i > 0; i--) {
     const f = i / L;
     const c =
@@ -5678,7 +5681,7 @@ function meteorFly(
             : f < 0.8
               ? '#9a5ad0'
               : '#46207a';
-    const w = f < 0.2 ? 3 : f < 0.45 ? 2 : 1;
+    const w = f < 0.25 ? 5 : f < 0.5 ? 3 : 2;
     p.col(c, (1 - f) * 0.95);
     for (let o = 0; o < w; o++) {
       const d = o - (w - 1) / 2;
@@ -5693,7 +5696,7 @@ function meteorFly(
     p.col(f < 0.5 ? C.gold[3] : '#c890f0', 0.8 * (1 - f));
     p.dot(x + ux * i + nx * off, y + uy * i + ny * off);
   }
-  const sz = big ? 4 : 3;
+  const sz = big ? 6 : 5;
   ring(p, x, y, sz + 2, C.gold[2], 0.45);
   const im = rockImg(sz, Math.floor(time * 16) + sd);
   p.alpha(1);
@@ -5713,7 +5716,7 @@ registerZonePainter(
     const R = st.r * S;
     const sd = seedOf(st.id);
     const big = st.r > 1.1;
-    astroMark(p, cx, cy, R, k, left, time, sd, C.gold[1], C.gold[3], C.gold[0], big ? 16 : 12);
+    astroMark(p, cx, cy, R, k, left, time, sd, C.gold[1], C.gold[3], C.night[5], big ? 16 : 12);
     // Перекрестье: четыре риски к центру.
     for (let q = 0; q < 4; q++) {
       const aa = (q * TAU) / 4;
@@ -5734,7 +5737,7 @@ registerZonePainter(
       p.col(C.ink, 0.2 + 0.45 * u);
       oval(p, cx, cy, R * (0.25 + 0.5 * u), R * (0.25 + 0.5 * u) * 0.6);
       p.occ = null;
-      const D = (big ? 15 : 12) * S * (1 - u * u);
+      const D = (big ? 10 : 8) * S * (1 - u * u);
       meteorFly(p, cx + METEOR_IN[0] * D, cy + METEOR_IN[1] * D, u, sd, big, time);
     }
   }),
@@ -5758,8 +5761,8 @@ registerImpactPainter('f15b_meteor', {
     oval(p, cx, cy, R * 0.8, R * 0.55);
     const hk = k01(age / 0.9);
     ring(p, cx, cy, R * 0.62, heatCol(hk), 0.9 * (1 - hk), (_a, i) => hash(i, sd, 74) > 0.25);
-    dust(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 25, 30, 3, 7, 6, 0.9, 8, 0.55);
-    chunks(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 40, 55, 70, 60, [0.5, 0.95], 0.35, 5);
+    dust(p, sd, age, cx, cy, few ? 2 : 4, 0, Math.PI, 25, 30, 3, 6, 6, 0.8, 7, 0.45);
+    chunks(p, sd, age, cx, cy, few ? 2 : 5, 0, Math.PI, 40, 55, 70, 60, [0.5, 0.95], 0.3, 5);
     p.occ = null;
     hitStar(p, cx, cy - 2, age, 0.1, R * 1.2, sd * 0.01, C.gold[2]);
     crest(p, cx, cy, R, age, 0.38, S, C.gold[3], sd);
@@ -6445,21 +6448,33 @@ registerZonePainter(
     const lord = lordNow();
     v.planets.forEach((pl, i) => {
       if (pl.stage === 0) return;
-      const img = planetSprite(i);
       const t = now - pl.at;
+      const pal = PL_PAL[i % 5];
       if (pl.stage === 2) {
-        // Лежит: кристалл в полу, мерцает перед возвратом.
+        // Лежит в кратере: медленно поворачивается, светится; перед возвратом
+        // мигает, и пунктир показывает дорогу назад, к короне.
         p.occ = occOf(S);
         const X = pl.x * S;
         const Y = pl.y * S;
+        const r = PL_R[i] * 1.6;
+        const glow = 0.5 + 0.2 * Math.sin(time * 5 + i);
+        ring(p, X, Y - r * 0.4, r + 3, pal[2], glow * 0.55, (_a, q) => q % 2 === 0);
+        const im = planetImg(i, r, Math.floor(time * 4) + i);
         p.alpha(1);
-        p.img(img, X - 7.5, Y - 9, Y);
-        if (t > LORD.orbitStay - 0.45 && Math.floor(time * 16) % 2 === 0)
-          ring(p, X, Y - 4, 7, '#ffffff', 0.8);
+        p.img(im, X - im.width / 2, Y - r * 0.4 - im.height / 2, Y);
         p.occ = null;
+        const back = k01((t - (LORD.orbitStay - 0.45)) / 0.45);
+        if (back > 0 && lord) {
+          const [hx2, hy2] = crownSpot(lord, i, now + (LORD.orbitStay - t));
+          const mx = (pl.x + hx2) / 2;
+          const my = Math.min(pl.y, hy2) - 1.8;
+          dashArc(p, S, pl.x, pl.y, mx, my, hx2, hy2, 0, back, Math.floor(time * 18), pal[2], 0.7);
+          if (!reduced() && Math.floor(time * 12) % 2 === 0)
+            ring(p, X, Y - r * 0.4, r + 1, C.white, 0.8);
+        }
         return;
       }
-      // Летит: след из точек по той же дуге, что у мозга.
+      // Летит по той же дуге, что у мозга, и кувыркается; за ним — хвост.
       const at = (u: number): [number, number] => {
         const uu = k01(u);
         if (pl.stage === 1) {
@@ -6473,19 +6488,27 @@ registerZonePainter(
         return [bez(pl.sx, mx, hx2, e), bez(pl.sy, my, hy2, e)];
       };
       const T = pl.stage === 1 ? LORD.orbitFly : LORD.orbitBack;
-      const u = t / T;
-      for (let j = 8; j >= 1; j--) {
-        const [x, y] = at(u - j * 0.03);
-        const f = j / 8;
-        p.col(pl.stage === 1 ? (f < 0.4 ? C.gold[3] : '#c890f0') : C.ice[4], 0.75 * (1 - f));
-        p.rect(Math.floor(x * S) - (f < 0.3 ? 1 : 0), Math.floor(y * S), f < 0.3 ? 2 : 1, 1);
+      const u = k01(t / T);
+      const grow = pl.stage === 1 ? u : 1 - u;
+      const r = PL_R[i] * (1 + 0.8 * grow);
+      const n = reduced() ? 6 : 12;
+      for (let j = n; j >= 1; j--) {
+        const [x0, y0] = at(u - j * 0.028);
+        const [x1, y1] = at(u - (j - 1) * 0.028);
+        const f = j / n;
+        const c = f < 0.25 ? C.white : f < 0.55 ? pal[2] : pl.stage === 1 ? '#c890f0' : pal[1];
+        p.col(c, 0.85 * (1 - f));
+        p.line(x0 * S, y0 * S, x1 * S, y1 * S);
+        if (f < 0.6) p.line(x0 * S + 1, y0 * S, x1 * S + 1, y1 * S);
+        if (f < 0.3) p.line(x0 * S, y0 * S + 1, x1 * S, y1 * S + 1);
       }
-      const X = pl.x * S;
-      const Y = pl.y * S;
+      const [X0, Y0] = at(u);
+      const X = X0 * S;
+      const Y = Y0 * S;
+      ring(p, X, Y, r + 2, C.gold[3], 0.35, (_a, q) => q % 2 === 0);
+      const im = planetImg(i, r, Math.floor(time * 16) + i * 3);
       p.alpha(1);
-      p.img(img, X - 7.5, Y - 5.5);
-      p.col(C.gold[3], 0.3);
-      ring(p, X, Y, 8, C.gold[3], 0.3, (_a, k) => k % 2 === 0);
+      p.img(im, X - im.width / 2, Y - im.height / 2);
     });
   }),
 );
