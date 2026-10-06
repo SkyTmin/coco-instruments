@@ -2679,8 +2679,17 @@ const rigYaw = (a: number) => Math.atan2(Math.sin(a), SE * Math.cos(a));
 /** Курс рига → угол на экране. */
 const scrAng = (yaw: number) => Math.atan2(SE * Math.sin(yaw), Math.cos(yaw));
 /** Сторона 0…15 и её курс рига. */
-function side16(gameA: number): { d: number; yaw: number } {
-  const d = dirBucket(rigYaw(gameA), NDIR);
+/**
+ * Ход и покой — 16 сторон; приёмы, оглушение и смерть — 8 (через одну).
+ * Кадры приёмов идут по 24 к/с, и в толпе 16 сторон переполняли кеш: 30
+ * монстров вокруг героя строили новые кадры каждый кадр (12 мс на кадр
+ * против 5,5 у прежних спрайтов). Курс снимается с той же стороны, что и
+ * ключ кадра, — кадр из кеша всегда совпадает со своей стороной.
+ */
+const LOCO_MODES = new Set(['chase', 'idle', 'wander', 'flee', 'return', 'sleep', 'patrol', 'roam']);
+function side16(gameA: number, pose?: MobPose): { d: number; yaw: number } {
+  const coarse = !!pose && !LOCO_MODES.has(pose.mode);
+  const d = coarse ? (dirBucket(rigYaw(gameA), 8) * 2) % NDIR : dirBucket(rigYaw(gameA), NDIR);
   return { d, yaw: (d / NDIR) * TAU };
 }
 /** Идёт ли моб (по скорости мозга). */
@@ -3005,7 +3014,7 @@ registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
   const roll = md === 'f15_roll';
   const tech = md !== 'chase' && md !== 'idle' && md !== 'wander' && md !== 'flee';
   const v = visOf(m, pose, roll ? Math.atan2(m.vy, m.vx) : tech ? m.face : headOf(m), roll ? 40 : 11);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const sa = scrAng(yaw);
   const o: UPose = { ...U0 };
   const extra: Partial<MobFrame> = { shadow: 6 };
@@ -3354,7 +3363,7 @@ registerMobPainter('f15_meteor', (m: Mob, pose: MobPose) => {
   const charge = md === 'f15_charge';
   const tech = md !== 'chase' && md !== 'idle' && md !== 'wander';
   const v = visOf(m, pose, charge ? m.dir : tech ? m.face : headOf(m), charge ? 30 : 8);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const sa = scrAng(yaw);
   const o: MPose = { ...M0 };
   const extra: Partial<MobFrame> = { shadow: 9 };
@@ -3669,7 +3678,7 @@ registerMobPainter('f15_comet', (m: Mob, pose: MobPose) => {
   const dash = md === 'f15_dash';
   const tech = md !== 'chase' && md !== 'idle' && md !== 'wander';
   const v = visOf(m, pose, dash ? headOf(m) : tech ? m.face : headOf(m), dash ? 40 : 12);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const sa = scrAng(yaw);
   const o: CPose = { ...C0 };
   const extra: Partial<MobFrame> = { shadow: 7 };
@@ -3968,7 +3977,7 @@ registerMobPainter('f15_graviton', (m: Mob, pose: MobPose) => {
   const t = pose.t;
   const md = pose.mode;
   const v = visOf(m, pose, m.face, 60);
-  const { d, yaw } = side16(m.face);
+  const { d, yaw } = side16(m.face, pose);
   const o: GPose = { ...G0 };
   const extra: Partial<MobFrame> = { shadow: 13 };
   let anim = 'idle';
@@ -4270,14 +4279,15 @@ function stoneImg(i: number, rot: number, lit: boolean): HTMLCanvasElement {
 }
 
 /** Кадр тела с камнями: дальние за телом, ближние перед ним. */
-const WITH_STONES = new WeakMap<MobFrame, Map<string, MobFrame>>();
+/** Кадр с камнями — по холсту кадра (сам кадр из кеша приходит копией с полями хода). */
+const WITH_STONES = new WeakMap<HTMLCanvasElement, Map<string, { img: HTMLCanvasElement; lit: HTMLCanvasElement }>>();
 function withStones(fr: MobFrame, n: number, phase: number, lift: number): MobFrame {
   if (n <= 0) return fr;
   const key = `${n}|${phase}|${lift}`;
-  let mp = WITH_STONES.get(fr);
-  if (!mp) WITH_STONES.set(fr, (mp = new Map()));
-  let out = mp.get(key);
-  if (out) return out;
+  let mp = WITH_STONES.get(fr.img);
+  if (!mp) WITH_STONES.set(fr.img, (mp = new Map()));
+  const hit = mp.get(key);
+  if (hit) return { ...fr, img: hit.img, lit: hit.lit };
   if (mp.size > 96) mp.clear();
   const w = fr.img.width;
   const h = fr.img.height;
@@ -4314,9 +4324,8 @@ function withStones(fr: MobFrame, n: number, phase: number, lift: number): MobFr
   g.drawImage(fr.img, 0, 0);
   if (fr.lit) gl.drawImage(fr.lit, 0, 0);
   put(true);
-  out = { ...fr, img, lit };
-  mp.set(key, out);
-  return out;
+  mp.set(key, { img, lit });
+  return { ...fr, img, lit };
 }
 
 registerMobPainter('f15_astro', (m: Mob, pose: MobPose) => {
@@ -4324,7 +4333,7 @@ registerMobPainter('f15_astro', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const cast = md === 'f15_cast_well' || md === 'f15_cast_bolt';
   const v = visOf(m, pose, cast || md === 'recover' ? m.face : headOf(m), 9);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const o: APose = { ...A0 };
   const extra: Partial<MobFrame> = { shadow: 8 };
   let anim = 'idle';
@@ -4535,7 +4544,7 @@ registerMobPainter('f15_constel', (m: Mob, pose: MobPose) => {
   const t = pose.t;
   const md = pose.mode;
   const v = visOf(m, pose, headOf(m), 7);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const o: SPose = { ...S0 };
   const extra: Partial<MobFrame> = { shadow: 5 };
   let anim = 'idle';
@@ -4719,7 +4728,7 @@ registerMobPainter('f15_moon', (m: Mob, pose: MobPose) => {
   const dive = md === 'f15_dive';
   const tech = md === 'aim' || dive;
   const v = visOf(m, pose, tech ? m.dir : headOf(m), dive ? 40 : 10);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const o: OPose = { ...O0 };
   const extra: Partial<MobFrame> = { shadow: 4 };
   let anim = 'idle';
@@ -4895,7 +4904,7 @@ registerMobPainter('f15_devourer', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const tech = md === 'f15_snuff' || md === 'windup' || md === 'recover';
   const v = visOf(m, pose, tech ? m.face : headOf(m), 6);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const sa = scrAng(yaw);
   const sim = paintSim();
   const dark = sim ? inDark(sim, m.x, m.y) : false;
@@ -5118,7 +5127,7 @@ registerMobPainter('f15_nova', (m: Mob, pose: MobPose) => {
   const t = pose.t;
   const md = pose.mode;
   const v = visOf(m, pose, md === 'chase' ? headOf(m) : m.face, 5);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const o: NPose = { ...N0 };
   const extra: Partial<MobFrame> = { shadow: 12 };
   let anim = 'idle';
@@ -5294,7 +5303,7 @@ registerMobPainter('f15_goldbug', (m: Mob, pose: MobPose) => {
   const t = pose.t;
   const md = pose.mode;
   const v = visOf(m, pose, headOf(m), 16);
-  const { d, yaw } = side16(v.yaw);
+  const { d, yaw } = side16(v.yaw, pose);
   const o: BPose = { ...B0 };
   const extra: Partial<MobFrame> = { shadow: 6 };
   let anim = 'run';
