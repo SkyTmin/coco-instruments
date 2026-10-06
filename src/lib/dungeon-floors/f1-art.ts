@@ -926,13 +926,7 @@ function mobFrame(
     const pic = make(yaw8(d));
     const p = pic.p;
     if (look === 'elite') p.outline(GOLD_EDGE);
-    fr = {
-      img: p.canvas(),
-      lit: pic.lit ? pic.lit.canvas() : null,
-      ax: pic.ax,
-      ay: pic.ay,
-      eye: pic.eye,
-    };
+    fr = cropPic(p, pic.lit, pic.ax, pic.ay, pic.eye);
     spend(key, performance.now() - t0);
   }
   return vl.set(key, fr);
@@ -1013,22 +1007,36 @@ function mobFlash(src: MobFrame): MobFrame {
 
 /**
  * Чары шамана — ореол поверх темноты, а не новый кадр: кольцо цвета чары у
- * ног и три искры, что поднимаются вдоль тела (фаза — номер кадра). Ореол
- * общий для всех кадров вида одного размера; новый холст нужен, только если
- * у кадра свой слой света (огонь посоха, искры удара).
+ * ног и три искры, что поднимаются вдоль тела (фаза — номер кадра). Под чарами
+ * в толпе стоит почти каждый моб, а новый холст на каждый кадр (`getContext`)
+ * в профиле толпы съедал больше, чем весь рисунок мобов. Поэтому ореол — общий
+ * холст на размер кадра: обрезка кадров квантуется (`CROP_Q`), и разных
+ * размеров у вида немного. Новый холст нужен, только если у кадра свой слой
+ * света (огонь посоха, искры удара). Радиус кольца — от полного холста вида
+ * (`AURA_RX`), а не от обрезанного кадра, иначе кольцо дышало бы с замахом.
  */
 const AURA = new Map<string, HTMLCanvasElement>();
-function auraOf(w: number, h: number, ax: number, ay: number, buff: number, ph: number) {
-  const key = `${w}|${h}|${ax}|${ay}|${buff}|${ph}`;
+const AURA_RX = new WeakMap<HTMLCanvasElement, number>();
+const auraRx = (w: number) => Math.max(5, Math.min(9, Math.round(w * 0.17)));
+function auraOf(
+  w: number,
+  h: number,
+  ax: number,
+  ay: number,
+  rx: number,
+  buff: number,
+  ph: number,
+): HTMLCanvasElement {
+  const key = `${w}|${h}|${ax}|${ay}|${rx}|${buff}|${ph}`;
   let c = AURA.get(key);
   if (c) return c;
+  if (AURA.size > 4000) AURA.clear();
   c = document.createElement('canvas');
   c.width = w;
   c.height = h;
   const g = c.getContext('2d')!;
   const col = BUFF_C[buff];
   const rgb = `${col[0]},${col[1]},${col[2]}`;
-  const rx = Math.max(5, Math.min(9, Math.round(w * 0.17)));
   const ry = Math.max(2, Math.round(rx * 0.38));
   g.fillStyle = `rgba(${rgb},0.07)`;
   g.beginPath();
@@ -1039,7 +1047,7 @@ function auraOf(w: number, h: number, ax: number, ay: number, buff: number, ph: 
   g.beginPath();
   g.ellipse(ax, ay + 1, rx - 0.5, ry - 0.5, 0, 0, Math.PI * 2);
   g.stroke();
-  // Искры: каждая поднимается от кольца на 0,6 высоты кадра и гаснет.
+  // Искры: каждая поднимается от кольца на 0,75 высоты до ног и гаснет.
   const top = Math.max(4, ay - 4);
   for (let i = 0; i < 3; i++) {
     const k = ((((ph + i * 2.7) % 8) + 8) % 8) / 8;
@@ -1052,10 +1060,12 @@ function auraOf(w: number, h: number, ax: number, ay: number, buff: number, ph: 
   return c;
 }
 function buffedOf(src: MobFrame, buff: number, base: string): MobFrame {
-  const w = src.img.width;
-  const h = src.img.height;
-  const ph = Number(base.split('|')[2]) || 0;
-  const aura = auraOf(w, h, Math.round(src.ax), Math.round(src.ay), buff, ph % 8);
+  const s = src.img;
+  const w = s.width;
+  const h = s.height;
+  const ph = (Number(base.split('|')[2]) || 0) % 8;
+  const rx = AURA_RX.get(s) ?? auraRx(w);
+  const aura = auraOf(w, h, Math.round(src.ax), Math.round(src.ay), rx, buff, ph);
   let lit = aura;
   if (src.lit) {
     lit = document.createElement('canvas');
@@ -1066,6 +1076,65 @@ function buffedOf(src: MobFrame, buff: number, base: string): MobFrame {
     g.drawImage(src.lit, 0, 0);
   }
   return { ...src, lit };
+}
+
+/** Шаг обрезки кадра, пиксели: меньше разных размеров — меньше холстов ореола. */
+const CROP_Q = 6;
+
+/**
+ * Холст кадра без пустых полей слева, справа и снизу: меньше холст — дешевле
+ * блит (особенно с отражением и сжатием) и отражённый холст. Верх не трогаем —
+ * от верха кадра движок ставит полоску здоровья, она не должна прыгать с
+ * замахом. Поле под кольцо чар у ног остаётся всегда.
+ */
+function cropPic(
+  p: Px,
+  lit: Px | null,
+  ax: number,
+  ay: number,
+  eye: [number, number] | null,
+): MobFrame {
+  const { w, h } = p;
+  const rx = auraRx(w);
+  let x0 = Math.max(0, Math.floor(ax) - rx - 1);
+  let x1 = Math.min(w - 1, Math.ceil(ax) + rx + 1);
+  let y1 = Math.min(h - 1, Math.ceil(ay) + 6);
+  for (const q of lit ? [p.data, lit.data] : [p.data])
+    for (let y = 0, i = 3; y < h; y++)
+      for (let x = 0; x < w; x++, i += 4)
+        if (q[i]) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y > y1) y1 = y;
+        }
+  x0 = Math.floor(x0 / CROP_Q) * CROP_Q;
+  x1 = Math.min(w - 1, x1 + CROP_Q - 1 - (x1 % CROP_Q));
+  y1 = Math.min(h - 1, y1 + CROP_Q - 1 - (y1 % CROP_Q));
+  const cw = x1 - x0 + 1;
+  const ch = y1 + 1;
+  const sub = (q: Px) => {
+    if (cw === w && ch === h) return q.canvas();
+    const c = document.createElement('canvas');
+    c.width = cw;
+    c.height = ch;
+    const g = c.getContext('2d');
+    if (g) {
+      const im = g.createImageData(cw, ch);
+      for (let y = 0; y < ch; y++)
+        im.data.set(q.data.subarray((y * w + x0) * 4, (y * w + x0 + cw) * 4), y * cw * 4);
+      g.putImageData(im, 0, 0);
+    }
+    return c;
+  };
+  const img = sub(p);
+  AURA_RX.set(img, rx);
+  return {
+    img,
+    lit: lit ? sub(lit) : null,
+    ax: ax - x0,
+    ay,
+    eye: eye ? [eye[0] - x0, eye[1]] : null,
+  };
 }
 
 /** Слой поверх темноты: создать, если риг его не дал. */
