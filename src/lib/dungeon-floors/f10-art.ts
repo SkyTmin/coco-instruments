@@ -34,6 +34,7 @@ import { F10_FX, KING } from './f10-brains';
 import './f10-mob-hound';
 import './f10-mob-guard';
 import './f10-mob-succubus';
+import './f10-mob-mage';
 
 type RGBA = [number, number, number, number];
 
@@ -443,7 +444,6 @@ const deathK = (pose: MobPose) =>
 const ARMOR = tn('#141118', '#28222e', '#443a4c', '#6e6278');
 export const GOLD = tn('#5e3a10', '#9a6a1c', '#d8a23a', '#ffe28a');
 const RED = tn('#34070b', '#641015', '#9e1e26', '#d8424a');
-const SKIN_D = tn('#2e0c12', '#5a1820', '#8a2a2e', '#b84a44');
 const HORN = tn('#2a221c', '#5e5040', '#a09076', '#e2d6bc');
 export const FIRE = [hx('#8a1a06'), hx('#e05010'), hx('#ffa030'), hx('#fff0a0')];
 const EYE = hx('#ff3a20');
@@ -728,190 +728,6 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
       const q = copyAt(b.p, b.p.w, b.p.h + 16, 0, fr * 4);
       b.p = fr > 1 ? q.tint(hx('#000000'), fr * 0.18) : q;
     }
-    return b;
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Архидемон-маг: рогатый капюшон, лица нет — только глаза, длинная ряса
-// с золотой вязью, посох с фиолетовой сферой. Кадр 30×40, земля — ряд 37.
-// ---------------------------------------------------------------------------
-
-const MAGE_T = {
-  robe: tn('#0e0814', '#1e1228', '#34204a', '#523672'),
-  trim: GOLD,
-  orb: [hx('#5a2aa0'), hx('#9a5aff'), hx('#d4b0ff'), hx('#ffffff')],
-  eye: hx('#c890ff'),
-  staff: tn('#0e0a0e', '#221a24', '#3a2e3e', '#5a4a60'),
-};
-
-interface MagePose {
-  /** Посох: угол. */
-  staff: number;
-  /** Высота рук (подъём посоха). */
-  lift: number;
-  orb: number;
-  hem: number;
-  squash?: number;
-  runes?: number;
-  dead?: boolean;
-}
-
-function drawMage(mp: MagePose): Built {
-  const p = new Px(32, 42);
-  const G = 38;
-  const cx = 14;
-  if (mp.dead) {
-    polyShade(
-      p,
-      [
-        [4, G - 4],
-        [22, G - 6],
-        [24, G],
-        [3, G],
-      ],
-      MAGE_T.robe,
-    );
-    limb(p, 10, G - 2, 28, G - 7, 0.7, 0.6, MAGE_T.staff);
-    shadeEll(p, 28, G - 7, 1.6, 1.6, tn('#2a1448', '#4a2a7a', '#6a4aa0', '#9a7ac8'));
-    p.outline(INK);
-    return { p, ax: 14, ay: G, eye: null };
-  }
-  const sh = G - 22;
-  // Ряса: расширяется книзу, подол колышется.
-  const hem = mp.hem;
-  poly(
-    p,
-    [
-      [cx - 4, sh],
-      [cx + 4, sh],
-      [cx + 7 + hem, G],
-      [cx - 7 + hem * 0.5, G],
-    ],
-    (x, y) => {
-      const k = (x - cx) / 7;
-      const fold = (x + Math.floor(y / 3)) % 5 === 0 ? -0.2 : 0;
-      return tone(MAGE_T.robe, 0.5 - k * 0.35 - (y - sh) * 0.008 + fold);
-    },
-  );
-  // Золотая кайма подола и вертикальная вязь.
-  for (let x = Math.round(cx - 7 + hem * 0.5); x <= Math.round(cx + 7 + hem); x++)
-    p.set(x, G - 1, MAGE_T.trim[2]);
-  for (let y = sh + 3; y < G - 1; y++) {
-    p.set(cx + 1, y, (y + mp.orb) % 4 === 0 ? MAGE_T.trim[3] : MAGE_T.trim[1]);
-    if ((y + 1) % 5 === 0) p.set(cx + 2, y, hx('#b080ff'));
-  }
-  // Рукав и рука, держащая посох.
-  const lift = mp.lift;
-  const hx1 = cx + 5;
-  const hy1 = sh + 6 - lift;
-  limb(p, cx + 2, sh + 2, hx1, hy1, 2.2, 1.6, MAGE_T.robe);
-  // Посох.
-  const a = mp.staff;
-  const ux = Math.cos(a);
-  const uy = Math.sin(a);
-  const sx0 = hx1 - ux * 12;
-  const sy0 = hy1 - uy * 12;
-  const sx1 = hx1 + ux * 10;
-  const sy1 = hy1 + uy * 10;
-  stroke(p, sx0, sy0, sx1, sy1, MAGE_T.staff[1]);
-  stroke(p, sx0 + 0.4, sy0, sx1 + 0.4, sy1, MAGE_T.staff[2]);
-  // Когти оправы и сфера.
-  const ox = sx1 + ux * 2;
-  const oy = sy1 + uy * 2;
-  limb(p, sx1, sy1, ox - uy * 1.6, oy + ux * 1.6, 0.6, 0.4, MAGE_T.staff);
-  limb(p, sx1, sy1, ox + uy * 1.6, oy - ux * 1.6, 0.6, 0.4, MAGE_T.staff);
-  // Капюшон с рогами.
-  const hdx = cx + 1;
-  const hdy = sh - 3;
-  shadeEll(p, hdx, hdy, 3.4, 3.8, MAGE_T.robe, 0.08);
-  limb(p, hdx - 1.5, hdy - 2.5, hdx - 5, hdy - 6, 1.3, 0.5, HORN);
-  limb(p, hdx + 1.5, hdy - 3, hdx + 3.5, hdy - 7, 1.1, 0.4, HORN);
-  // Кисть на посохе.
-  shadeEll(p, hx1, hy1, 1.3, 1.2, SKIN_D);
-  p.outline(INK);
-  // Сфера поверх контура: светится, пульсирует.
-  const O = MAGE_T.orb;
-  const r = 1.8 + (mp.orb % 2) * 0.4 + (mp.runes ? 0.5 : 0);
-  p.ell(ox, oy, r + 0.8, r + 0.8, alpha(O[1], 0.35));
-  p.ell(ox, oy, r, r, O[1]);
-  p.ell(ox - 0.4, oy - 0.4, r * 0.6, r * 0.6, O[2]);
-  p.set(Math.round(ox - 0.8), Math.round(oy - 0.8), O[3]);
-  // Лицо — тьма капюшона и два глаза.
-  p.ell(hdx + 1.3, hdy + 0.6, 1.8, 2, hx('#050308'));
-  p.set(Math.round(hdx + 1), Math.round(hdy + 0.4), MAGE_T.eye);
-  p.set(Math.round(hdx + 2.6), Math.round(hdy + 0.4), MAGE_T.eye);
-  if (mp.runes) {
-    // Руна над головой: кольцо точек крутится.
-    for (let i = 0; i < 8; i++) {
-      const ra = (i / 8) * TAU + mp.runes * 0.4;
-      p.set(
-        Math.round(hdx + Math.cos(ra) * 5.5),
-        Math.round(hdy - 9 + Math.sin(ra) * 1.8),
-        i % 2 ? O[2] : O[3],
-      );
-    }
-  }
-  let out = p;
-  if (mp.squash) {
-    // Уходит вспышкой: сжимается к оси.
-    out = new Px(p.w, p.h);
-    const k = 1 - mp.squash;
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        const sxp = Math.round(cx + (x - cx) / Math.max(0.15, k));
-        if (sxp < 0 || sxp >= p.w) continue;
-        const i = (y * p.w + sxp) * 4;
-        if (!p.data[i + 3]) continue;
-        out.set(x, y, [p.data[i], p.data[i + 1], p.data[i + 2], 255]);
-      }
-    for (let i = 0; i < 6; i++)
-      out.set(
-        cx + Math.round((hash(i, mp.squash * 10) - 0.5) * 12),
-        6 + Math.round(hash(i, 4) * 30),
-        O[2],
-      );
-  }
-  return { p: out, ax: 14, ay: G, eye: [Math.round(hdx + 2), Math.round(hdy)] };
-}
-
-registerMobPainter('f10_mage', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame;
-  let anim = 'idle';
-  let fr = 0;
-  let mp: MagePose = { staff: -1.4, lift: 0, orb: 0, hem: 0 };
-  if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-    mp = { ...mp, dead: true };
-  } else if (mode === 'cast') {
-    anim = 'cast';
-    fr = Math.min(5, Math.floor(pose.t / 0.18));
-    mp = { staff: -1.57, lift: Math.min(7, fr * 2 + 1), orb: fr, hem: 0, runes: fr + 1 };
-  } else if (mode === 'blink') {
-    anim = 'blink';
-    fr = Math.min(4, Math.floor(pose.t / 0.12));
-    mp = { staff: -1.4, lift: 2, orb: fr, hem: 0, squash: fr / 5 };
-  } else if (mode === 'recover' && pose.t < 0.35) {
-    anim = 'after';
-    fr = pose.t < 0.18 ? 0 : 1;
-    mp = { staff: -0.9, lift: 3, orb: 2, hem: 1 };
-  } else if (pose.anim === 'run') {
-    anim = 'run';
-    fr = f % 4;
-    mp = { staff: -1.2, lift: 0, orb: fr, hem: [1, 0, -1, 0][fr] };
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    mp = { staff: -1.9, lift: 1, orb: 1, hem: -1 };
-  } else {
-    anim = 'idle';
-    fr = f % 4;
-    mp = { staff: -1.4, lift: fr === 2 ? 1 : 0, orb: fr, hem: fr === 1 ? 1 : 0 };
-  }
-  return frameOf('f10_mage', pose, anim, fr, () => {
-    const b = drawMage(mp);
-    if (anim === 'dead') b.p = ashen(b.p, fr, m.id % 5);
     return b;
   });
 });
