@@ -29,9 +29,10 @@ import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
 import { x72 } from '../dungeon-tiles';
 import { F10_GALLERY, F10_GATES, F10_MARK, F10_THRONE } from './f10';
-import { F10_FX, GUARD, KING } from './f10-brains';
+import { F10_FX, KING } from './f10-brains';
 // Мобы этажа — на риге, по эталону боссов 12–14 (анимации мобов 10).
 import './f10-mob-hound';
+import './f10-mob-guard';
 
 type RGBA = [number, number, number, number];
 
@@ -439,240 +440,12 @@ const deathK = (pose: MobPose) =>
 // ---------------------------------------------------------------------------
 
 const ARMOR = tn('#141118', '#28222e', '#443a4c', '#6e6278');
-const ARMOR_HI = hx('#9a8ca4');
 export const GOLD = tn('#5e3a10', '#9a6a1c', '#d8a23a', '#ffe28a');
 const RED = tn('#34070b', '#641015', '#9e1e26', '#d8424a');
 const SKIN_D = tn('#2e0c12', '#5a1820', '#8a2a2e', '#b84a44');
 const HORN = tn('#2a221c', '#5e5040', '#a09076', '#e2d6bc');
 export const FIRE = [hx('#8a1a06'), hx('#e05010'), hx('#ffa030'), hx('#fff0a0')];
 const EYE = hx('#ff3a20');
-const EYE_HI = hx('#ffd0a0');
-
-// ---------------------------------------------------------------------------
-// Демон-страж: чёрные латы с золотой каймой, рогатый шлем, красный
-// табар, алебарда. Кадр 40×40, смотрит вправо, земля — ряд 36.
-// ---------------------------------------------------------------------------
-
-interface GuardPose {
-  /** Угол древка (0 — вправо, −π/2 — вверх). */
-  pole: number;
-  /** Где рука держит древко (от плеча). */
-  grip: [number, number];
-  /** На сколько древко выдвинуто вперёд от хвата (выпад). */
-  push: number;
-  bob: number;
-  step: number;
-  lean: number;
-  swing?: boolean;
-  dead?: boolean;
-}
-
-/** Алебарда: древко, секира и пика на конце. */
-function halberd(p: Px, x: number, y: number, a: number, push: number, glow: boolean): void {
-  const ux = Math.cos(a);
-  const uy = Math.sin(a);
-  const bx = x - ux * (10 - push);
-  const by = y - uy * (10 - push);
-  const tx = x + ux * (12 + push);
-  const ty = y + uy * (12 + push);
-  stroke(p, bx, by, tx, ty, hx('#3a2418'));
-  stroke(p, bx + 0.4, by - 0.3, tx + 0.4, ty - 0.3, hx('#6a4a30'));
-  // Окованный подток.
-  p.set(Math.round(bx), Math.round(by), GOLD[2]);
-  // Пика.
-  const px0 = tx + ux * 3.5;
-  const py0 = ty + uy * 3.5;
-  stroke(p, tx, ty, px0, py0, hx('#b8b0c0'));
-  p.set(Math.round(px0), Math.round(py0), WHITE);
-  // Лезвие секиры — полумесяц по одну сторону древка.
-  const nx = -uy;
-  const ny = ux;
-  const ax = tx - ux * 1.5;
-  const ay = ty - uy * 1.5;
-  const blade: [number, number][] = [
-    [ax + nx * 0.5, ay + ny * 0.5],
-    [ax + nx * 4 - ux * 1.5, ay + ny * 4 - uy * 1.5],
-    [ax + nx * 4.5 + ux * 1.5, ay + ny * 4.5 + uy * 1.5],
-    [ax + nx * 3 + ux * 3, ay + ny * 3 + uy * 3],
-    [ax + nx * 0.5 + ux * 2, ay + ny * 0.5 + uy * 2],
-  ];
-  poly(p, blade, (px, py) => {
-    const e = (px - ax) * nx + (py - ay) * ny;
-    return e > 3.4 ? (glow ? hx('#ffd0a0') : hx('#e8e0f0')) : e > 2 ? hx('#a098ac') : hx('#5a5264');
-  });
-  // Шип обуха.
-  p.set(Math.round(ax - nx * 1.5), Math.round(ay - ny * 1.5), hx('#8a8296'));
-  p.set(Math.round(ax - nx * 2.5 + ux * 0.5), Math.round(ay - ny * 2.5 + uy * 0.5), hx('#5a5264'));
-}
-
-function drawGuard(gp: GuardPose): Built {
-  const p = new Px(40, 40);
-  const G = 36;
-  const cx = 18 + gp.lean;
-  const hip = G - 11 + gp.bob;
-  const sh = hip - 9;
-  if (gp.dead) {
-    // Рухнул навзничь: латы, шлем, алебарда рядом.
-    halberd(p, 20, G - 2, 0.06, 0, false);
-    limb(p, 8, G - 3, 26, G - 3, 3.6, 3.4, ARMOR);
-    shadeEll(p, 28, G - 4, 3.2, 2.8, ARMOR);
-    limb(p, 27, G - 7, 24, G - 11, 1, 0.5, HORN);
-    limb(p, 12, G - 1, 20, G - 1, 1.2, 1.2, RED);
-    p.outline(INK);
-    return { p, ax: 18, ay: G, eye: null };
-  }
-  // Древко за спиной, если поднято назад (замах).
-  const behind = gp.pole < -Math.PI * 0.6 || gp.pole > Math.PI * 0.8;
-  const gx = cx + gp.grip[0];
-  const gy = sh + gp.grip[1];
-  if (behind) halberd(p, gx, gy, gp.pole, gp.push, !!gp.swing);
-  // Ноги: поножи, шаг.
-  const legT = tn('#100d12', '#221c26', '#3a3242', '#5a5064');
-  const lf = gp.step;
-  limb(p, cx - 1, hip, cx - 2 - lf, G - 4, 2, 1.7, legT);
-  limb(p, cx - 2 - lf, G - 4, cx - 2 - lf * 1.3, G - 1, 1.6, 1.8, legT);
-  limb(p, cx + 2, hip, cx + 3 + lf, G - 4, 2.1, 1.8, ARMOR);
-  limb(p, cx + 3 + lf, G - 4, cx + 3 + lf * 1.3, G - 1, 1.7, 1.9, ARMOR);
-  p.rect(Math.round(cx + 2 + lf * 1.3), G - 1, Math.round(cx + 5 + lf * 1.3), G - 1, ARMOR[2]);
-  // Табар: красное полотнище с золотой каймой между ног.
-  poly(
-    p,
-    [
-      [cx - 2, hip - 1],
-      [cx + 4, hip - 1],
-      [cx + 3.5 + gp.step * 0.5, G - 4],
-      [cx - 1.5 + gp.step * 0.5, G - 4],
-    ],
-    (x, y) => tone(RED, 0.55 - (y - hip) * 0.05 + (x < cx ? -0.2 : 0.1)),
-  );
-  for (let y = hip; y < G - 4; y++)
-    p.set(Math.round(cx + 3.5 + (gp.step * 0.5 * (y - hip)) / 10), y, GOLD[1]);
-  p.rect(
-    Math.round(cx - 1 + gp.step * 0.5),
-    G - 5,
-    Math.round(cx + 3 + gp.step * 0.5),
-    G - 5,
-    GOLD[2],
-  );
-  // Корпус: кираса, расширенная к плечам.
-  polyShade(
-    p,
-    [
-      [cx - 4, sh - 1],
-      [cx + 5, sh - 1],
-      [cx + 4, hip],
-      [cx - 3, hip],
-    ],
-    ARMOR,
-  );
-  // Золотая кайма по вороту и поясу, рёбра кирасы.
-  p.rect(Math.round(cx - 3), hip - 1, Math.round(cx + 4), hip - 1, GOLD[1]);
-  p.set(Math.round(cx + 1), hip - 1, GOLD[3]);
-  for (let y = sh + 1; y < hip - 2; y += 2) p.set(Math.round(cx + 1), y, ARMOR[3]);
-  // Наплечник: шипастый, с каймой.
-  shadeEll(p, cx + 3, sh, 3.2, 2.4, ARMOR, 0.1);
-  p.set(Math.round(cx + 3), sh - 3, ARMOR_HI);
-  p.set(Math.round(cx + 5), sh - 2, ARMOR_HI);
-  for (let x = -2; x <= 3; x++) p.set(Math.round(cx + 3 + x), sh + 2, GOLD[1]);
-  // Голова в шлеме, рога вперёд-вверх, красная щель забрала.
-  const hdx = cx + 1;
-  const hdy = sh - 4;
-  shadeEll(p, hdx, hdy, 3.2, 3.4, ARMOR, 0.05);
-  limb(p, hdx - 1, hdy - 2, hdx - 4, hdy - 6, 1.2, 0.5, HORN);
-  limb(p, hdx + 1.5, hdy - 2.5, hdx + 3, hdy - 7, 1.1, 0.4, HORN);
-  // Рука и кулак на древке.
-  limb(p, cx + 3, sh + 1, gx, gy, 1.6, 1.3, ARMOR);
-  shadeEll(p, gx, gy, 1.5, 1.4, ARMOR, 0.2);
-  if (!behind) halberd(p, gx, gy, gp.pole, gp.push, !!gp.swing);
-  p.outline(INK);
-  // Щель забрала и глаз — поверх контура.
-  for (let x = 0; x < 3; x++) p.set(Math.round(hdx + x), Math.round(hdy), hx('#2a0806'));
-  p.set(Math.round(hdx + 2), Math.round(hdy), EYE);
-  p.set(Math.round(hdx + 1), Math.round(hdy), EYE_HI);
-  return { p, ax: 18, ay: G, eye: [Math.round(hdx + 2), Math.round(hdy)] };
-}
-
-registerMobPainter('f10_guard', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame;
-  let anim = 'idle';
-  let fr = 0;
-  let gp: GuardPose = { pole: -1.35, grip: [4, 4], push: 0, bob: 0, step: 0, lean: 0 };
-  if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-    gp = { ...gp, dead: true };
-  } else if (mode === 'sweep') {
-    // Замах: лезвие уходит за плечо, потом — полукругом вперёд.
-    const k = Math.min(1, pose.t / (GUARD.sweepWarn - 0.05));
-    anim = 'sweep';
-    fr = Math.min(3, Math.floor(k * 4));
-    const a = [-1.6, -2.1, -2.5, -2.7][fr];
-    gp = {
-      pole: a,
-      grip: [1, 1],
-      push: -2,
-      bob: fr > 1 ? 1 : 0,
-      step: -1,
-      lean: -1,
-      swing: fr === 3,
-    };
-  } else if (mode === 'thrust') {
-    const k = Math.min(1, pose.t / (GUARD.thrustWarn - 0.05));
-    anim = 'thrust';
-    fr = Math.min(2, Math.floor(k * 3));
-    gp = {
-      pole: -0.05,
-      grip: [0, 5],
-      push: -3 - fr,
-      bob: 0,
-      step: -1,
-      lean: -1 - (fr > 0 ? 1 : 0),
-      swing: fr === 2,
-    };
-  } else if (mode === 'recover' && pose.t < 0.3) {
-    // Следом за ударом: лезвие внизу впереди или древко выброшено.
-    anim = 'strike';
-    fr = pose.t < 0.14 ? 0 : 1;
-    gp = {
-      pole: fr ? 0.55 : 0.2,
-      grip: [6, 5],
-      push: fr ? 2 : 5,
-      bob: 1,
-      step: 2,
-      lean: 2,
-      swing: true,
-    };
-  } else if (mode === 'f10_stand' || mode === 'alertpost') {
-    anim = mode === 'alertpost' ? 'alert' : 'stand';
-    fr = f % 4;
-    gp = {
-      pole: -Math.PI / 2 + 0.08,
-      grip: [5, 5],
-      push: 3,
-      bob: fr === 2 ? 1 : 0,
-      step: 0,
-      lean: 0,
-    };
-  } else if (pose.anim === 'run') {
-    anim = 'run';
-    fr = f % 4;
-    const s = [2, 0, -2, 0][fr];
-    gp = { pole: -0.95, grip: [5, 4], push: 1, bob: fr % 2 ? 0 : 1, step: s, lean: 1 };
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    gp = { pole: -1.9, grip: [3, 3], push: 0, bob: 1, step: -1, lean: -2 };
-  } else {
-    anim = 'idle';
-    fr = f % 4;
-    gp = { pole: -1.3, grip: [5, 4], push: 1, bob: fr === 1 || fr === 2 ? 1 : 0, step: 0, lean: 0 };
-  }
-  return frameOf('f10_guard', pose, anim, fr, () => {
-    const b = drawGuard(gp);
-    if (anim === 'dead') b.p = ashen(b.p, fr, m.id % 5);
-    return b;
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Рыцарь ада на коне: вороной конь с огненной гривой и копытами, всадник
@@ -6713,7 +6486,8 @@ registerZonePainter('f10_sweep', (g, z, px, py, S) => {
   g.strokeStyle = rgba(STEEL, 0.35 + 0.6 * k);
   g.lineWidth = 1;
   g.beginPath();
-  g.arc(px, py, R, a - arc / 2, a - arc / 2 + arc * k);
+  // Справа налево — куда идёт алебарда (анимации мобов 10).
+  g.arc(px, py, R, a + arc / 2 - arc * k, a + arc / 2);
   g.stroke();
   g.strokeStyle = rgba(BLOOD_RED, 0.6 + 0.4 * k);
   g.beginPath();

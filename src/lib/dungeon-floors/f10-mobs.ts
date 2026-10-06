@@ -687,3 +687,57 @@ export function spray(
     p.set(px, py, cs[i % cs.length]);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Двуногие: шаг по фазе, нога и рука по IK.
+// ---------------------------------------------------------------------------
+
+type CapMat = Parameters<Rig['cap']>[4];
+
+/**
+ * Шаг ноги по фазе `ps` (0…1, опора — первая половина): вынос `off` от
+ * +0,5 до −0,5 шага на опоре и обратно в переносе, подъём `rise` 0…1.
+ */
+export function gait(ps: number): [number, number] {
+  const p = ((ps % 1) + 1) % 1;
+  if (p < 0.5) return [0.5 - p * 2, 0];
+  const k = (p - 0.5) / 0.5;
+  return [-0.5 + smooth(k), Math.sin(PI * k)];
+}
+
+/** Нога: бедро → колено (IK, сгиб к `pole`) → ступня (+ носок). */
+export function leg(
+  r: Rig,
+  hip: V3,
+  foot: V3,
+  l1: number,
+  l2: number,
+  pole: V3,
+  rad: [number, number, number],
+  m: CapMat,
+  toe?: V3,
+): V3 {
+  const knee = ik(hip, foot, l1, l2, pole);
+  r.cap(hip, knee, rad[0], rad[1], m);
+  r.cap(knee, foot, rad[1], rad[2], m);
+  if (toe) r.cap(foot, toe, rad[2], rad[2] * 0.8, m);
+  return knee;
+}
+
+/** Рука: плечо → локоть (IK, сгиб к `pole`) → кисть. */
+export function arm(
+  r: Rig,
+  sh: V3,
+  hand: V3,
+  l1: number,
+  l2: number,
+  pole: V3,
+  rad: [number, number, number],
+  m1: CapMat,
+  m2: CapMat = m1,
+): V3 {
+  const el = ik(sh, hand, l1, l2, pole);
+  r.cap(sh, el, rad[0], rad[1], m1);
+  r.cap(el, hand, rad[1], rad[2], m2);
+  return el;
+}
