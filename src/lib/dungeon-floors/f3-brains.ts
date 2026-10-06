@@ -458,6 +458,7 @@ registerBrain('f3_grasp', {
           m.data.ty = t[1];
         }
         swimTo(sim, m, m.data.tx, m.data.ty, m.speed, dt, api);
+        vTrail(sim, m, dt, api, 'wake'); // анимации мобов 3 — только рисунок: кильватер
         if (
           !heroDown(sim) &&
           m.cd <= 0 &&
@@ -479,6 +480,9 @@ registerBrain('f3_grasp', {
           m.data.gy = h.y;
         }
         m.data.ghost = m.t < 0.35 ? 1 : 0;
+        if (!m.data.vRise) vfx(sim, api, 'f3_fx_boil', m.x, m.y, 0.8, 0.36); // анимации мобов 3 — только рисунок: вода вспухает
+        if (m.data.vRise !== 2 && m.t > 0.34) vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1, 0.9, 1); // анимации мобов 3 — только рисунок
+        m.data.vRise = m.t > 0.34 ? 2 : 1; // анимации мобов 3 — только рисунок
         m.face = Math.atan2(m.data.gy - m.y, m.data.gx - m.x);
         const k = clamp(m.t / def.windup, 0, 1);
         m.tele = { shape: 'circle', r: GRASP_R, k, x: m.data.gx, y: m.data.gy };
@@ -493,6 +497,8 @@ registerBrain('f3_grasp', {
             api.hurtHero(sim, m.dmg, fx, fy, 5, m.kind, { kind: 'slow', dur: 1.6 });
           }
           sim.events.push({ t: 'strike', x: m.data.gx, y: m.data.gy, art: 'f3_grab' });
+          m.data.vAng = Math.atan2(m.y - m.data.gy, m.x - m.data.gx); // анимации мобов 3 — только рисунок
+          vfx(sim, api, 'f3_grab', m.data.gx, m.data.gy, 1, 1.4, 0, m.data.vAng); // анимации мобов 3 — только рисунок: следы ладоней
           api.setMode(m, 'hold');
         }
         return;
@@ -509,6 +515,8 @@ registerBrain('f3_grasp', {
         m.vx *= 0.7;
         m.vy *= 0.7;
         m.data.ghost = m.t > 0.3 ? 1 : 0;
+        if (m.data.vRise && m.t > 0.25) vfx(sim, api, 'f3_fx_splash', m.x, m.y, 1, 0.9, 0); // анимации мобов 3 — только рисунок: нырок
+        if (m.t > 0.25) m.data.vRise = 0; // анимации мобов 3 — только рисунок
         if (m.t > 0.45) {
           api.setMode(m, 'lurk');
           m.cd = def.rest * (0.8 + sim.rng() * 0.4);
