@@ -13,10 +13,16 @@
 // `WeakMap` по мобу: в `m.data` рисунок не пишет.
 
 import { Px } from '../dungeon-art';
-import { frameLRU, registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import {
+  frameLRU,
+  registerImpactPainter,
+  registerMobPainter,
+  registerMobWarm,
+  registerZonePainter,
+} from '../dungeon-paint';
 import type { FrameLRU, MobFrame, MobPose } from '../dungeon-paint';
-import type { Mob } from '../dungeon-sim';
-import { F3, Rig, SE, proj, renderRig } from './f15-rig';
+import type { Mob, Strike, Zone } from '../dungeon-sim';
+import { CE, F3, Rig, SE, proj, renderRig } from './f15-rig';
 import type { Mat, RGBA, RigOut, Tones, V3 } from './f15-rig';
 
 const TAU = Math.PI * 2;
@@ -235,17 +241,36 @@ interface Kind {
   frames: FrameLRU<MobFrame>;
 }
 
-const kindOf = (w: number, h: number, ax: number, ay: number, limit: number): Kind => ({
-  w,
-  h,
-  ax,
-  ay,
-  pics: frameLRU<Pic>(Math.round(limit * 0.7)),
-  frames: frameLRU<MobFrame>(limit),
-});
+const KINDS: Kind[] = [];
+const kindOf = (w: number, h: number, ax: number, ay: number, limit: number): Kind => {
+  const K: Kind = {
+    w,
+    h,
+    ax,
+    ay,
+    pics: frameLRU<Pic>(Math.round(limit * 0.7)),
+    frames: frameLRU<MobFrame>(limit),
+  };
+  KINDS.push(K);
+  return K;
+};
 
-/** Замер для стенда: цена нового кадра (мс) — последние 4000. */
-export const F5_MOB_STAT = { n: 0, ms: [] as number[], max: 0, maxKey: '' };
+/**
+ * Замер для стенда: цена нового кадра (мс) — последние 4000; `clear` —
+ * сбросить кеши всех видов (замер после прогрева JIT).
+ */
+export const F5_MOB_STAT = {
+  n: 0,
+  ms: [] as number[],
+  max: 0,
+  maxKey: '',
+  clear: () => {
+    for (const K of KINDS) {
+      K.pics.clear();
+      K.frames.clear();
+    }
+  },
+};
 function stat(ms: number, key: string): void {
   F5_MOB_STAT.n++;
   if (F5_MOB_STAT.ms.length < 4000) F5_MOB_STAT.ms.push(ms);
@@ -863,4 +888,801 @@ registerMobWarm('f5_ant', function* () {
     ],
     antPic,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Адская гончая: угольная, по бокам тлеющие трещины (светятся в темноте),
+// глаза и пасть горят, гребень шипов, хвост с огоньком. Галоп — по пути
+// (8 кадров на цикл). Пламя (0,8 с): голову к цели, вдох — грудь
+// раздувается, трещины разгораются, голова назад; бросок головы — пасть
+// настежь в кадр удара, выдох держит всю струю. Укус (0,38 с): присела на
+// задние, бросок, хватка с трёпкой головой. Смерть: подломились лапы, легла
+// на бок, угли гаснут.
+// ---------------------------------------------------------------------------
+
+const HD_BODY = tn('#141012', '#2e2426', '#4e3e3e', '#7a625a');
+const HD_EMB: RGBA[] = [hx('#a8300c'), hx('#ff7a1a'), hx('#ffd24a'), hx('#fff0a0')];
+const HD_EYE = hx('#ffb030');
+const HD_TOOTH = hx('#f0e6d0');
+const HD_MAW = tn('#3a0806', '#8a1c08', '#e0601a', '#ffc050');
+
+interface HoundO {
+  fwd: number;
+  lift: number;
+  pitch: number;
+  roll: number;
+  /** Голова носом вниз; вбок (трёпка); шея вытянута вперёд. */
+  head: number;
+  hturn: number;
+  neck: number;
+  jaw: number;
+  /** Грудь раздута (вдох) 0…1, накал трещин 0…1. */
+  chest: number;
+  heat: number;
+  /** Уши прижаты 0…1; хвост вверх (+) / поджат (−), вбок. */
+  ears: number;
+  tail: number;
+  tsw: number;
+  /** Галоп: фаза и доля. */
+  ph: number;
+  step: number;
+  /** Присела на задние; передние в упор; лёжа (сон); лапы подломились (смерть). */
+  crouch: number;
+  brace: number;
+  tuck: number;
+  fall: number;
+  /** Огонь из пасти — кадр 0…2, −1 нет. */
+  flame: number;
+  snap: number;
+  /** Угли гаснут (смерть) 0…1; глаза закрыты. */
+  dim: number;
+  shut: number;
+  /** Огонёк хвоста — кадр. */
+  flick: number;
+}
+const H0: HoundO = {
+  fwd: 0,
+  lift: 0,
+  pitch: 0,
+  roll: 0,
+  head: 0,
+  hturn: 0,
+  neck: 0,
+  jaw: 0.1,
+  chest: 0,
+  heat: 0.4,
+  ears: 0.2,
+  tail: 0,
+  tsw: 0,
+  ph: 0,
+  step: 0,
+  crouch: 0,
+  brace: 0,
+  tuck: 0,
+  fall: 0,
+  flame: -1,
+  snap: 0,
+  dim: 0,
+  shut: 0,
+  flick: 0,
+};
+
+/** Трещина по боку (координаты тела на единичной сфере). */
+const houndCrack = (q: V3) => {
+  if (Math.abs(q[1]) < 0.32 || q[2] < -0.55) return false;
+  const v = q[0] * 2.3 + q[2] * 1.4 + 0.3 * Math.sin(q[2] * 7 + q[1] * 3);
+  return v - Math.floor(v) < 0.15;
+};
+
+function houndRig(o: HoundO, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const cs = camSide(yaw);
+  const zc = 8.4 + o.lift - o.tuck * 5.0 - o.crouch * 1.2;
+  const C = B.at(o.fwd, 0, zc).pitch(o.pitch).roll(o.roll);
+  const heat = clamp01(o.heat) * (1 - o.dim);
+  const emb = heat > 0.8 ? HD_EMB[3] : heat > 0.5 ? HD_EMB[2] : heat > 0.15 ? HD_EMB[1] : HD_EMB[0];
+  const plain: Mat = { T: HD_BODY };
+  const body: Mat = {
+    T: HD_BODY,
+    pat: (q) => (houndCrack(q) ? (o.dim > 0.7 ? HD_BODY[1] : emb) : null),
+    gpat: (q) => (houndCrack(q) ? (0.3 + 0.7 * heat) * (1 - o.dim) : 0),
+  };
+  // Зад, поджарая талия, глубокая грудь (на вдохе раздувается).
+  r.ell(C, [-4.5, 0, 0.2], [3.7, 3.8, 2.9], body);
+  r.cap(C.p(-2.2, 0, 0.5), C.p(1.6, 0, 0.6), 2.6, 3.1, plain);
+  const ch = 1 + 0.17 * o.chest;
+  r.ell(C, [3.0, 0, 0.4 + o.chest * 0.3], [4.0, 4.2 * ch, 3.5 * ch], body);
+  // Шея и голова: череп, длинная морда, нижняя челюсть.
+  const Hd = C.at(7.0 + o.neck * 1.6, 0, 3.7 - o.neck * 0.8 - o.tuck * 1.4)
+    .turn(o.hturn)
+    .pitch(o.head);
+  r.cap(C.p(4.6, 0, 1.6), Hd.p(-0.9, 0, -0.3), 2.8, 2.2, plain);
+  r.ell(Hd, [0.6, 0, 0.3], [2.8, 2.8, 2.2], plain);
+  r.cap(Hd.p(2.2, 0, 0), Hd.p(5.7, 0, -0.5), 1.65, 1.05, plain);
+  r.dot(Hd.p(6.2, 0, -0.3), HD_BODY[0], 0, 1, 0.4);
+  const J = Hd.at(1.9, 0, -1.2).pitch(o.jaw * 0.8);
+  r.cap(J.p(0, 0, 0), J.p(3.6, 0, -0.2), 1.1, 0.75, plain);
+  // Пасть горит изнутри: видна, когда челюсть открыта; на выдохе — добела
+  // (саму струю рисует зона `f5_flame` от этой пасти).
+  if (o.jaw > 0.15)
+    r.ell(Hd, [3.4, 0, -1.25 - o.jaw * 0.5], [1.8, 0.9, 0.4 + o.jaw * 0.6], {
+      T: o.flame >= 0 ? [HD_MAW[2], HD_MAW[3], HD_EMB[3], WHITE] : HD_MAW,
+      glow: o.flame >= 0 ? 1 : 0.5 + 0.5 * heat,
+      soft: true,
+    });
+  for (const sd of [-1, 1]) {
+    r.dot(Hd.p(5.0, sd * 0.65, -1.25), HD_TOOTH, 0, 1, 0.5);
+    if (o.jaw > 0.3) r.dot(J.p(3.1, sd * 0.6, 0.7), HD_TOOTH, 0, 1, 0.5);
+    // Глаза — угли.
+    if (!o.shut && o.dim < 0.6) r.dot(Hd.p(1.9, sd * 1.6, 1.0), HD_EYE, 1, 2, 0.6);
+    // Уши — назад, острые; прижимаются.
+    r.spike(
+      Hd.p(-0.4, sd * 1.5, 1.6),
+      Hd.v(-0.7 - o.ears * 1.2, sd * 0.7, 1.4 - o.ears * 1.0),
+      3.4,
+      1.5,
+      { T: HD_BODY, bias: 0.15 },
+      3,
+    );
+  }
+  r.eye = Hd.p(1.9, cs * 1.6, 1.0);
+  // Гребень шипов по хребту.
+  for (let i = 0; i < 5; i++) {
+    const k = i / 4;
+    const P = vlerp(C.p(-5.4, 0, 2.6), C.p(3.6, 0, 3.6 + o.chest * 0.5), k);
+    r.spike(P, C.v(-0.7, 0, 1), 1.6 + (i === 2 ? 0.6 : 0), 1.1, { T: HD_BODY, bias: 0.2 }, 3);
+  }
+  // Хвост-плеть: низко назад, кончик книзу, огонёк на конце.
+  const a1 = 0.3 + o.tail * 0.6;
+  const a2 = a1 - 0.45 + o.tail * 0.2;
+  const T0 = C.p(-7.6, 0, 1.0);
+  const T1 = vadd(T0, C.v(-2.8 * Math.cos(a1), Math.sin(o.tsw) * 2.0, 2.8 * Math.sin(a1)));
+  const T2 = vadd(T1, C.v(-2.6 * Math.cos(a2), Math.sin(o.tsw * 1.7) * 2.2, 2.6 * Math.sin(a2)));
+  r.cap(T0, T1, 1.1, 0.75, plain);
+  r.cap(T1, T2, 0.75, 0.45, plain);
+  if (o.dim < 0.8) {
+    const fl = o.flick % 3;
+    r.dot(T2, HD_EMB[3], 1, 1, 0.6);
+    r.dot(vadd(T2, [fl === 1 ? 0.5 : -0.3, 0, 1.0]), HD_EMB[2], 1, 1, 0.6);
+    if (fl !== 2) r.dot(vadd(T2, [fl ? 0.2 : -0.6, 0, 1.9]), HD_EMB[1], 0.9, 1, 0.6);
+  }
+  // Лапы: галоп (передние и задние парами со сдвигом), упор, сон, падение.
+  const legs: [number, number, number, number, boolean][] = [
+    // бедро по оси, опора по оси, вбок, фаза, передняя
+    [3.4, 3.9, 3.4, 0, true],
+    [-4.6, -5.0, 3.6, 0.55, false],
+  ];
+  for (const [hipF, footF, footS, phase, front] of legs)
+    for (const sd of [-1, 1]) {
+      const legM: Mat = { T: HD_BODY, bias: sd === cs ? 0 : -0.18 };
+      const hip = C.p(hipF, sd * 2.7, -1.1);
+      const ps = (((o.ph + phase + (sd > 0 ? 0.12 : 0)) % 1) + 1) % 1;
+      const R = (front ? 3.6 : 3.9) * o.step;
+      let off = 0;
+      let rise = 0;
+      if (ps < 0.42) off = R - 2 * R * (ps / 0.42);
+      else {
+        off = -R + 2 * R * ((ps - 0.42) / 0.58);
+        rise = Math.sin(PI * ((ps - 0.42) / 0.58)) * 3.0 * o.step;
+      }
+      let foot = B.p(
+        footF + o.fwd * 0.3 + off + (front ? 1.3 * o.brace : 1.6 * o.crouch),
+        sd * (footS + (front ? 0.7 * o.brace : 0)),
+        rise,
+      );
+      if (o.tuck > 0)
+        foot = vlerp(foot, B.p(front ? footF + 3.4 : footF + 1.2, sd * 2.8, 0), o.tuck);
+      if (o.fall > 0) foot = vlerp(foot, C.p(footF * 0.9, sd * 4.2, -6.0), o.fall);
+      const mid = vlerp(hip, foot, 0.5);
+      if (front) {
+        const elbow = vadd(mid, C.v(-0.9, 0, 0.2));
+        r.cap(hip, elbow, 1.45, 0.95, legM);
+        r.cap(elbow, foot, 0.9, 0.65, legM);
+      } else {
+        const knee = vadd(mid, C.v(1.6, 0, 0.3));
+        const hock = vadd(vlerp(knee, foot, 0.6), C.v(-1.1, 0, 0.3));
+        r.cap(hip, knee, 1.85, 1.15, legM);
+        r.cap(knee, hock, 1.0, 0.7, legM);
+        r.cap(hock, foot, 0.68, 0.6, legM);
+      }
+    }
+  // Искра хватки.
+  if (o.snap > 0) r.dot(Hd.p(5.8, 0, -1.3), alpha(WHITE, o.snap), 1, 2, 1);
+  return r;
+}
+
+function houndPose(anim: string, f: number): HoundO {
+  const o: HoundO = { ...H0, flick: f };
+  switch (anim) {
+    case 'idle': {
+      // 8 кадров по 6 к/с: дышит грудью, хвост ходит, голова оглядывается.
+      const a = (f / 8) * TAU;
+      o.chest = 0.12 + 0.1 * Math.sin(a);
+      o.tsw = Math.sin(a) * 0.5;
+      o.tail = 0.1 * Math.sin(a + 1);
+      o.hturn = 0.18 * Math.sin(a * 0.5 + 0.5) * (f > 3 ? 1 : 0.4);
+      o.jaw = f % 4 < 2 ? 0.28 : 0.12;
+      o.heat = 0.35 + 0.15 * Math.sin(a);
+      o.ears = 0.15 + (f === 5 ? 0.35 : 0);
+      o.lift = 0.15 * Math.sin(a);
+      break;
+    }
+    case 'run': {
+      // Галоп: 8 кадров на цикл (1,1 клетки пути); корпус качается, хвост
+      // тянется назад, уши прижаты.
+      o.ph = f / 8;
+      o.step = 1;
+      const a = o.ph * TAU;
+      o.pitch = 0.11 * Math.sin(a + 0.6);
+      o.lift = 0.9 * Math.max(0, Math.sin(a + 2.2));
+      o.head = -0.08 * Math.sin(a + 0.6);
+      o.neck = 0.4;
+      o.tail = -0.25 + 0.15 * Math.sin(a + 1.5);
+      o.tsw = 0.15 * Math.sin(a);
+      o.ears = 0.7;
+      o.jaw = 0.25;
+      o.heat = 0.55;
+      break;
+    }
+    case 'breath': {
+      // Пламя, 0,8 с (19 кадров): голову к цели (до 0,18), вдох — грудь
+      // раздувается, голова назад-вверх, трещины разгораются (до 0,62),
+      // бросок головы вперёд — пасть раскрывается к удару (0,8).
+      const k = kf(f, 0.8);
+      o.chest = trk(k, [
+        [0.2, 0],
+        [0.75, 1, easeIn],
+        [1, 0.85],
+      ]);
+      o.heat = trk(k, [
+        [0, 0.45],
+        [0.75, 1],
+      ]);
+      o.head = trk(k, [
+        [0, 0],
+        [0.22, 0.12],
+        [0.75, -0.5, easeOut],
+        [1, 0.18, easeIn],
+      ]);
+      o.neck = trk(k, [
+        [0.22, 0.3],
+        [0.75, -0.6],
+        [1, 1, easeIn],
+      ]);
+      o.fwd = trk(k, [
+        [0.22, 0],
+        [0.75, -1.0],
+        [1, 0.6, easeIn],
+      ]);
+      o.lift = trk(k, [
+        [0.22, 0],
+        [0.75, 0.6],
+        [1, 0.1],
+      ]);
+      o.jaw = trk(k, [
+        [0.22, 0.2],
+        [0.4, 0],
+        [0.82, 0],
+        [1, 0.75, easeIn],
+      ]);
+      o.brace = trk(k, [
+        [0, 0],
+        [0.4, 1],
+      ]);
+      o.ears = trk(k, [
+        [0, 0.3],
+        [0.5, 1],
+      ]);
+      o.tail = trk(k, [
+        [0, 0],
+        [0.7, 0.7],
+        [1, 0.5],
+      ]);
+      if (k > 0.55 && k < 0.8) o.lift += f % 2 ? 0.15 : -0.1;
+      break;
+    }
+    case 'breathf': {
+      // Выдох (отдых после пламени, 0,55 с): пасть настежь всю струю
+      // (0,45 с), грудь опадает, корпус откатывает отдачей; потом закрыла.
+      const t = f / FPS;
+      o.jaw = trk(t, [
+        [0, 1],
+        [0.4, 0.9],
+        [0.52, 0.15],
+      ]);
+      o.neck = trk(t, [
+        [0, 1],
+        [0.42, 0.8],
+        [0.55, 0],
+      ]);
+      o.head = trk(t, [
+        [0, 0.18],
+        [0.45, 0.1],
+        [0.55, 0],
+      ]);
+      o.chest = trk(t, [
+        [0, 0.85],
+        [0.45, 0.05],
+      ]);
+      o.fwd = trk(t, [
+        [0, 0.6],
+        [0.12, -0.6, easeOut],
+        [0.55, 0],
+      ]);
+      o.heat = trk(t, [
+        [0, 1],
+        [0.55, 0.5],
+      ]);
+      o.brace = trk(t, [
+        [0.3, 1],
+        [0.55, 0],
+      ]);
+      o.ears = 0.8;
+      o.tail = trk(t - 0.08, [
+        [0, 0.5],
+        [0.4, 0],
+      ]);
+      o.flame = t < 0.43 ? f % 3 : -1;
+      break;
+    }
+    case 'bite': {
+      // Укус, 0,38 с (9 кадров): присела на задние, голова низко, уши
+      // прижаты (до 0,5), дрожит (до 0,78), бросок — пасть настежь.
+      const k = kf(f, 0.38);
+      o.crouch = trk(k, [
+        [0, 0],
+        [0.5, 1, easeOut],
+        [0.78, 1],
+        [1, 0, easeIn],
+      ]);
+      o.fwd = trk(k, [
+        [0, 0],
+        [0.5, -2.0, easeOut],
+        [0.78, -2.2],
+        [1, 2.8, easeIn],
+      ]);
+      o.pitch = trk(k, [
+        [0, 0],
+        [0.5, -0.14],
+        [0.78, -0.16],
+        [1, 0.1, easeIn],
+      ]);
+      o.head = trk(k, [
+        [0, 0],
+        [0.5, 0.28],
+        [1, 0.05],
+      ]);
+      o.jaw = trk(k, [
+        [0, 0.1],
+        [0.5, 0.35],
+        [0.78, 0.4],
+        [1, 1, easeIn],
+      ]);
+      o.ears = 1;
+      o.tail = -0.1;
+      o.heat = 0.6;
+      if (k > 0.5 && k < 0.8) o.fwd += f % 2 ? 0.2 : -0.2;
+      break;
+    }
+    case 'bitef': {
+      // Хватка (0,55 с): сомкнула пасть, трёпка головой, отдача, возврат.
+      const t = f / FPS;
+      o.fwd = trk(t, [
+        [0, 3.2],
+        [0.06, 3.5],
+        [0.3, -1.0],
+        [0.55, 0],
+      ]);
+      o.jaw = trk(t, [
+        [0, 0],
+        [0.25, 0],
+        [0.35, 0.4],
+        [0.55, 0.1],
+      ]);
+      o.head = trk(t, [
+        [0, 0.15],
+        [0.3, 0.1],
+        [0.55, 0],
+      ]);
+      o.hturn = t < 0.28 ? 0.38 * Math.sin(f * 2.4) * (1 - t / 0.28) : 0;
+      o.pitch = trk(t, [
+        [0, 0.1],
+        [0.3, -0.04],
+        [0.55, 0],
+      ]);
+      o.ears = trk(t, [
+        [0, 1],
+        [0.55, 0.3],
+      ]);
+      o.tail = trk(t - 0.06, [
+        [0, 0.3],
+        [0.3, -0.1],
+        [0.5, 0],
+      ]);
+      o.heat = 0.6;
+      o.snap = f === 0 ? 1 : f === 1 ? 0.5 : 0;
+      break;
+    }
+    case 'flinch': {
+      // Ушиб: взвизгнула — голова вверх, пасть приоткрыта, хвост поджат.
+      const k = f / 4;
+      const b = Math.sin(PI * Math.min(1, k * 1.25)) * (1 - k * 0.5);
+      o.fwd = -1.6 * b;
+      o.lift = -0.5 * b;
+      o.head = -0.45 * b;
+      o.jaw = 0.1 + 0.55 * b;
+      o.ears = 0.3 + 0.7 * b;
+      o.tail = -0.7 * b;
+      o.heat = 0.4 + 0.4 * b;
+      break;
+    }
+    case 'sleep': {
+      // Спит клубком: лапы под собой, голова на лапах, угли едва тлеют.
+      o.tuck = 1;
+      o.head = 0.55;
+      o.neck = -0.4;
+      o.ears = 0.9;
+      o.tail = -0.5;
+      o.tsw = 1.1;
+      o.heat = 0.15 + f * 0.12;
+      o.chest = f * 0.12;
+      o.shut = 1;
+      o.jaw = 0;
+      break;
+    }
+    case 'die': {
+      // 16 кадров: отшатнулась (0–2), лапы подломились — легла на бок
+      // (3–10), угли гаснут, голова падает (11–15).
+      const t = f / FPS;
+      o.fwd = trk(t, [
+        [0, -1.6, easeOut],
+        [0.12, -1.8],
+        [0.66, -1.2],
+      ]);
+      o.head = trk(t, [
+        [0, -0.5],
+        [0.12, -0.55],
+        [0.5, 0.5],
+        [0.66, 0.65],
+      ]);
+      o.jaw = trk(t, [
+        [0, 0.8],
+        [0.4, 0.5],
+        [0.66, 0.3],
+      ]);
+      o.roll = trk(t, [
+        [0.12, 0],
+        [0.42, 1.35, easeIn],
+        [0.5, 1.25],
+        [0.58, 1.32],
+      ]);
+      o.lift = trk(t, [
+        [0, 0],
+        [0.12, 0.2],
+        [0.42, -3.2, easeIn],
+        [0.66, -3.4],
+      ]);
+      o.fall = trk(t, [
+        [0.1, 0],
+        [0.45, 1],
+      ]);
+      o.tail = trk(t, [
+        [0, 0.4],
+        [0.5, -0.4],
+      ]);
+      o.ears = 1;
+      o.heat = 0.8;
+      o.dim = sstep(0.3, 0.66, t);
+      o.shut = t > 0.45 ? 1 : 0;
+      break;
+    }
+  }
+  return o;
+}
+
+const HOUND = kindOf(44, 34, 22, 25, 1000);
+const houndPic = (anim: string, f: number, d: number): Pic =>
+  draw(HOUND, houndRig(houndPose(anim, f), yawN(d)));
+
+registerMobPainter('f5_hound', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = pose.t;
+  const now = pose.now || 0;
+  const tech = md === 'windup' || md === 'recover' || md === 'breath' || md === 'alert';
+  const v = visOf(m, pose, tech ? (m.face ?? 0) : headOf(m), 12);
+  const d = dirN(v.yaw);
+  const ex: Partial<MobFrame> = { shadow: 8 };
+  let anim = 'idle';
+  let f = 0;
+  let dark = 0;
+  const id = m.id ?? 0;
+  if (md === 'dying') {
+    f = fi(t, 15);
+    anim = 'die';
+    ex.linger = 1.0;
+    ex.alpha = 1 - sstep(0.75, 1.0, t);
+    ex.shadow = 8 * (1 - sstep(0.66, 1.0, t));
+    ex.still = true;
+  } else if (md === 'breath') {
+    f = fi(t, 18);
+    anim = 'breath';
+    ex.still = true;
+  } else if (md === 'windup') {
+    f = fi(t, 8);
+    anim = 'bite';
+    ex.still = true;
+  } else if (md === 'recover') {
+    if (v.prev === 'breath') {
+      f = fi(t, 13);
+      anim = 'breathf';
+    } else {
+      f = fi(t, 12);
+      anim = 'bitef';
+      if (f <= 1) {
+        ex.sx = 1.08;
+        ex.sy = 0.93;
+      }
+    }
+    ex.still = true;
+  } else if (md === 'f5_born') {
+    const k = clamp01(t / 0.8);
+    f = Math.floor(t * 16) % 8;
+    anim = 'run';
+    dark = 3 - Math.min(3, Math.floor(k * 4));
+    const [wx, wy] = wallDir(m);
+    const off = (1 - easeOut(k)) * 10;
+    ex.dx = wx * off;
+    ex.dy = wy * off;
+    ex.alpha = 0.35 + 0.65 * k;
+  } else if (md === 'sleep') {
+    f = Math.floor(now * 1.1 + hash(id, 3)) % 2;
+    anim = 'sleep';
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(md === 'stun' ? t : now - v.hit, 4);
+    anim = 'flinch';
+  } else if (moving(m)) {
+    f = Math.floor((v.dist / 1.1) * 8) % 8;
+    anim = 'run';
+  } else {
+    f = Math.floor((now + hash(id, 7) * 4) * 6) % 8;
+    anim = 'idle';
+    if (md === 'alert') ex.dy = -Math.sin(PI * clamp01(t / 0.35)) * 2.6;
+  }
+  if (md !== 'dying') hurtFx(v, now, 1.8, ex);
+  return { ...frameOf(HOUND, anim, f, d, pose, () => houndPic(anim, f, d), dark), ...ex };
+});
+
+registerMobWarm('f5_hound', function* () {
+  yield* warmAll(
+    HOUND,
+    [
+      ['run', 8],
+      ['idle', 8],
+      ['bite', 9],
+      ['bitef', 13],
+      ['breath', 19],
+      ['breathf', 14],
+      ['flinch', 5],
+      ['die', 16],
+      ['sleep', 2],
+    ],
+    houndPic,
+  );
+});
+
+// ---- Пламя гончей в два слоя: метка на полу наливается от пасти к краю
+// (последние 0,2 с — белая кромка), струя (`f5_flame`, `above`) бьёт из
+// пасти кадра поверх темноты, копоть с углями (`f5_fire`, контакт) остаётся
+// на полу. Случай — только `hash` от времени рендера и номера зоны.
+
+type ZoneArt = (Zone | Strike) & { ang?: number; arc?: number; len?: number; life?: number };
+const css = (c: RGBA, a: number) => `rgba(${c[0]},${c[1]},${c[2]},${clamp01(a).toFixed(3)})`;
+const FIRE_C: RGBA[] = [hx('#7a1c06'), hx('#d8400e'), hx('#ff8a1e'), hx('#ffd24a'), hx('#fff4c0')];
+const SOOT = hx('#140c0a');
+
+/** Точка пасти гончей на экране от середины моба (кадр выдоха, сторона по углу). */
+function houndMouth(a: number): [number, number] {
+  const ya = yawN(dirN(a));
+  const L = 15;
+  return [Math.cos(ya) * L, Math.sin(ya) * L * SE - 9.4 * CE];
+}
+
+function fan(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r0: number,
+  r1: number,
+  a: number,
+  arc: number,
+): void {
+  g.beginPath();
+  g.arc(x, y, r1, a - arc / 2, a + arc / 2);
+  g.arc(x, y, Math.max(0, r0), a + arc / 2, a - arc / 2, true);
+  g.closePath();
+}
+
+registerZonePainter('f5_fire', (g, z, px, py, S, time) => {
+  const s = z as Strike & ZoneArt;
+  const k = s.warn > 0 ? clamp01(s.t / s.warn) : 1;
+  const left = s.warn > 0 ? s.warn - s.t : 0;
+  const R = s.r * S;
+  const a = s.ang ?? 0;
+  const arc = s.arc ?? 1;
+  const hot = left < 0.2;
+  // Жар под конусом: слабая заливка, налив идёт от пасти к краю.
+  fan(g, px, py, 0, R, a, arc);
+  g.fillStyle = css(FIRE_C[0], 0.1 + 0.12 * k);
+  g.fill();
+  const front = R * (0.18 + 0.82 * easeOut(k));
+  fan(g, px, py, 0, front, a, arc * (0.55 + 0.45 * k));
+  g.fillStyle = css(FIRE_C[1], 0.12 + 0.22 * k);
+  g.fill();
+  // Кромка налива — бегущая дуга; к удару замыкается на внешнем краю.
+  g.lineWidth = hot ? 2 : 1;
+  g.strokeStyle = css(hot ? FIRE_C[4] : FIRE_C[2], 0.45 + 0.5 * k);
+  g.beginPath();
+  g.arc(px, py, front, a - (arc / 2) * (0.55 + 0.45 * k), a + (arc / 2) * (0.55 + 0.45 * k));
+  g.stroke();
+  // Внешний край и бока — пунктиром, пока не налилось.
+  g.lineWidth = 1;
+  g.strokeStyle = css(hot ? FIRE_C[4] : FIRE_C[1], hot ? 0.9 : 0.35 + 0.3 * k);
+  g.setLineDash(hot ? [] : [2, 2]);
+  fan(g, px, py, 0, R, a, arc);
+  g.stroke();
+  g.setLineDash([]);
+  // Мерцание жара: угольки ползут от пасти по конусу.
+  const n = 6 + Math.round(k * 8);
+  for (let i = 0; i < n; i++) {
+    const u = (time * 1.4 + hash(i, s.id, 1)) % 1;
+    const aa = a + (hash(i, s.id, 2) - 0.5) * arc * 0.9;
+    const d = R * u * (0.25 + 0.75 * k);
+    g.fillStyle = css(u < 0.4 ? FIRE_C[3] : FIRE_C[2], (0.5 + 0.5 * k) * (1 - u * 0.6));
+    g.fillRect(Math.round(px + Math.cos(aa) * d), Math.round(py + Math.sin(aa) * d), 1, 1);
+  }
+  return true;
+});
+
+registerZonePainter('f5_flame', (g, z, px, py, S, time) => {
+  const zz = z as Zone & ZoneArt;
+  const life = zz.life || 0.45;
+  const t = clamp01(zz.t / life);
+  const R = zz.r * S;
+  const a = zz.ang ?? 0;
+  const arc = 0.95;
+  const [mx, my] = houndMouth(a);
+  const ox = px + mx;
+  const oy = py + my;
+  // Точка струи: доля `u` от пасти до края конуса под углом `a + sp`; к краю
+  // струя опускается к полу и чуть горбится вверх.
+  const at = (u: number, sp: number): [number, number] => [
+    ox + (px + Math.cos(a + sp) * R - ox) * u,
+    oy + (py + Math.sin(a + sp) * R - oy) * u - Math.sin(PI * u) * 3,
+  ];
+  // Струя летит 0,1 с, держится, потом отрывается от пасти и гаснет.
+  const reach = easeOut(t * 4.5);
+  const tail = sstep(0.62, 1, t);
+  const fade = 1 - sstep(0.75, 1, t);
+  const seed = Math.floor(time * FPS);
+  g.save();
+  // Свет струи на полу и в воздухе — мягкое свечение.
+  g.globalCompositeOperation = 'lighter';
+  const gl = g.createRadialGradient(
+    px + Math.cos(a) * R * 0.5,
+    py + Math.sin(a) * R * 0.5,
+    0,
+    px + Math.cos(a) * R * 0.5,
+    py + Math.sin(a) * R * 0.5,
+    R * 0.75,
+  );
+  gl.addColorStop(0, css(FIRE_C[2], 0.28 * fade));
+  gl.addColorStop(1, css(FIRE_C[0], 0));
+  g.fillStyle = gl;
+  g.fillRect(px - R * 1.5, py - R * 1.5, R * 3, R * 3);
+  g.globalCompositeOperation = 'source-over';
+  // Комья пламени: от пасти по конусу, у пасти белые, к краю красные и
+  // ниже — струя опускается к полу; каждый кадр пляшут.
+  const N = 30;
+  for (let pass = 0; pass < 2; pass++)
+    for (let i = 0; i < N; i++) {
+      const u = (i + 0.5) / N;
+      if (u > reach || u < tail) continue;
+      const sp = (hash(i, seed, 3) - 0.5) * arc;
+      const [x, y] = at(u, sp);
+      const rr = (1.4 + u * 4.2 + hash(i, seed, 4) * 1.8) * (pass ? 0.55 : 1);
+      const ci = pass
+        ? u < 0.35
+          ? 4
+          : u < 0.7
+            ? 3
+            : 2
+        : u < 0.25
+          ? 3
+          : u < 0.55
+            ? 2
+            : u < 0.8
+              ? 1
+              : 0;
+      g.fillStyle = css(FIRE_C[ci], (pass ? 0.95 : 0.85) * fade * (1 - Math.max(0, u - 0.85) * 3));
+      g.beginPath();
+      g.arc(Math.round(x), Math.round(y), rr, 0, TAU);
+      g.fill();
+    }
+  // Язычок у самой пасти — белый, пока струя не оторвалась.
+  if (tail < 0.05) {
+    g.fillStyle = css(FIRE_C[4], fade);
+    g.beginPath();
+    g.arc(Math.round(ox), Math.round(oy), 2.2, 0, TAU);
+    g.fill();
+  }
+  // Искры с края и дым над струёй.
+  for (let i = 0; i < 10; i++) {
+    const u = 0.55 + hash(i, seed, 5) * 0.5;
+    if (u > reach + 0.1) continue;
+    const [x, y0] = at(u, (hash(i, seed, 6) - 0.5) * arc * 1.1);
+    const y = y0 - 3 - hash(i, seed, 7) * 5;
+    g.fillStyle = css(i % 3 ? FIRE_C[3] : FIRE_C[4], fade);
+    g.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  for (let i = 0; i < 4; i++) {
+    const u = 0.5 + i * 0.15;
+    if (u > reach) continue;
+    const [x, y0] = at(u, 0);
+    const y = y0 - 6 - t * 8;
+    g.fillStyle = css(SOOT, 0.3 * fade * t);
+    g.beginPath();
+    g.arc(Math.round(x), Math.round(y), 3 + u * 3, 0, TAU);
+    g.fill();
+  }
+  g.restore();
+  return true;
+});
+
+// Копоть на полу после струи: конус сажи, угли гаснут, язычки огня в первые
+// полсекунды. Слой пола (под мобами), 1,6 с.
+registerImpactPainter('f5_fire', {
+  life: 1.6,
+  shake: 0.1,
+  paint: (g, rec, px, py, S, age) => {
+    const R = (rec.r ?? 3.4) * S;
+    const a = rec.ang ?? 0;
+    const arc = rec.arc ?? 0.95;
+    const k = clamp01(age / 1.6);
+    const fade = 1 - sstep(0.55, 1, k);
+    fan(g, px, py, R * 0.12, R * 0.96, a, arc * 0.92);
+    g.fillStyle = css(SOOT, 0.45 * fade);
+    g.fill();
+    // Угли: тлеют и остывают от жёлтого к тёмно-красному.
+    for (let i = 0; i < 22; i++) {
+      const u = 0.18 + hash(i, rec.seed, 1) * 0.78;
+      const aa = a + (hash(i, rec.seed, 2) - 0.5) * arc * 0.85;
+      const cool = clamp01(k * 1.6 + hash(i, rec.seed, 3) * 0.4);
+      const c = cool < 0.35 ? FIRE_C[3] : cool < 0.7 ? FIRE_C[2] : FIRE_C[1];
+      const blink = (Math.floor(age * 12 + i) % 4 === 0 ? 0.6 : 1) * fade;
+      g.fillStyle = css(c, blink * (1 - cool * 0.5));
+      g.fillRect(
+        Math.round(px + Math.cos(aa) * R * u),
+        Math.round(py + Math.sin(aa) * R * u),
+        1,
+        1,
+      );
+    }
+    // Язычки огня на копоти первые 0,5 с.
+    if (age < 0.5) {
+      const f = Math.floor(age * FPS);
+      for (let i = 0; i < 5; i++) {
+        const u = 0.35 + hash(i, rec.seed, 4) * 0.55;
+        const aa = a + (hash(i, rec.seed, 5) - 0.5) * arc * 0.7;
+        const x = Math.round(px + Math.cos(aa) * R * u);
+        const y = Math.round(py + Math.sin(aa) * R * u);
+        const h = Math.round((1 - age / 0.5) * (3 + hash(i, rec.seed, 6) * 3)) + ((f + i) % 2);
+        for (let j = 0; j < h; j++) {
+          g.fillStyle = css(j === h - 1 ? FIRE_C[3] : j > h / 2 ? FIRE_C[2] : FIRE_C[1], 0.9);
+          g.fillRect(x + (j === h - 1 ? ((f + i) % 3) - 1 : 0), y - j, 1, 1);
+        }
+      }
+    }
+    return true;
+  },
 });

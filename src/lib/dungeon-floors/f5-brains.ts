@@ -621,6 +621,7 @@ registerBrain('f5_hound', {
             life: 0.45,
             art: 'f5_flame',
             ang: m.dir,
+            above: true, // анимации мобов 5 — только рисунок
           };
           api.zone(sim, z);
           api.setMode(m, 'recover');
