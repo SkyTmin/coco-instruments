@@ -1795,6 +1795,13 @@ export const vmix = (a: V3, b: V3, k: number): V3 => ({
 });
 const vlen = (a: V3) => Math.hypot(a.x, a.y, a.z);
 export const vnorm = (a: V3): V3 => vsc(a, 1 / (vlen(a) || 1));
+const vsub = (a: V3, b: V3): V3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const vcross = (a: V3, b: V3): V3 => ({
+  x: a.y * b.z - a.z * b.y,
+  y: a.z * b.x - a.x * b.z,
+  z: a.x * b.y - a.y * b.x,
+});
+const vdot = (a: V3, b: V3) => a.x * b.x + a.y * b.y + a.z * b.z;
 
 /** Вокруг оси X: +a наклоняет «вверх» к «вперёд». */
 const rotX = (v: V3, a: number): V3 => {
@@ -1815,8 +1822,14 @@ const rotZ = (v: V3, a: number): V3 => {
   return { x: v.x * c + v.y * s, y: -v.x * s + v.y * c, z: v.z };
 };
 
-/** Узор поверхности: t — вдоль оси, nx/ny — нормаль на экране. */
-export type Pat = (t: number, nx: number, ny: number) => Tone | RGBA | null;
+/**
+ * Узор поверхности: t — вдоль оси, nx/ny — нормаль на экране, nm — нормаль
+ * в осях модели (для узора, привязанного к телу: манишка только спереди).
+ */
+export type Pat = (t: number, nx: number, ny: number, nm: V3) => Tone | RGBA | null;
+
+/** Свечение: true — целиком в слой поверх темноты, число — долей (0…1). */
+type Glow = boolean | number;
 
 interface Cap {
   k: 0;
@@ -1826,7 +1839,7 @@ interface Cap {
   r1: number;
   T: Tone;
   pat?: Pat;
-  glow?: boolean;
+  glow?: Glow;
 }
 interface Disc {
   k: 1;
@@ -1835,37 +1848,95 @@ interface Disc {
   h: number;
   T: Tone;
   pat?: (u: number, v: number, side: boolean) => Tone | RGBA | null;
-  glow?: boolean;
+  glow?: Glow;
 }
 interface Dot {
   k: 2;
   a: V3;
   c: RGBA;
   s: number;
-  glow?: boolean;
+  glow?: Glow;
 }
-type Prim = Cap | Disc | Dot;
+/** Цилиндр с плоскими торцами (тулья и поля цилиндра): точки поверхности. */
+interface Cyl {
+  k: 3;
+  a: V3;
+  b: V3;
+  r: number;
+  T: Tone;
+  /** Тон по доле высоты (лента): null — основной. Торцы — t 0 и 1. */
+  band?: (t: number) => Tone | null;
+  glow?: Glow;
+  bias: number;
+}
+/** Плоский лоскут (фалды фрака): четыре угла по кругу, виден с двух сторон. */
+interface Quad {
+  k: 4;
+  p: [V3, V3, V3, V3];
+  T: Tone;
+  pat?: (u: number, v: number) => Tone | RGBA | null;
+  glow?: Glow;
+  bias: number;
+}
+type Prim = Cap | Disc | Dot | Cyl | Quad;
 
 /** Сжатие глубины пола (вид в три четверти) и вес высоты в глубине. */
 const DEPTH = 0.56;
 
 export class Rig {
   prims: Prim[] = [];
-  cap(a: V3, b: V3, r0: number, r1: number, T: Tone, pat?: Pat, glow = false): this {
+  cap(a: V3, b: V3, r0: number, r1: number, T: Tone, pat?: Pat, glow: Glow = false): this {
     this.prims.push({ k: 0, a, b, r0, r1, T, pat, glow });
     return this;
   }
-  ball(c: V3, r: number, T: Tone, pat?: Pat, glow = false): this {
+  ball(c: V3, r: number, T: Tone, pat?: Pat, glow: Glow = false): this {
     return this.cap(c, c, r, r, T, pat, glow);
   }
-  disc(c: V3, r: number, h: number, T: Tone, pat?: Disc['pat'], glow = false): this {
+  disc(c: V3, r: number, h: number, T: Tone, pat?: Disc['pat'], glow: Glow = false): this {
     this.prims.push({ k: 1, c, r, h, T, pat, glow });
     return this;
   }
-  dot(a: V3, c: RGBA, s = 1, glow = false): this {
+  dot(a: V3, c: RGBA, s = 1, glow: Glow = false): this {
     this.prims.push({ k: 2, a, c, s, glow });
     return this;
   }
+  /** Цилиндр от `a` до `b` с плоскими торцами; `bias` — на сколько ближе к глазу. */
+  cyl(a: V3, b: V3, r: number, T: Tone, band?: Cyl['band'], glow: Glow = false, bias = 0.4): this {
+    this.prims.push({ k: 3, a, b, r, T, band, glow, bias });
+    return this;
+  }
+  /** Лоскут по четырём углам (p00, p10, p11, p01). */
+  quad(
+    p00: V3,
+    p10: V3,
+    p11: V3,
+    p01: V3,
+    T: Tone,
+    pat?: Quad['pat'],
+    glow: Glow = false,
+    bias = 0.6,
+  ): this {
+    this.prims.push({ k: 4, p: [p00, p10, p11, p01], T, pat, glow, bias });
+    return this;
+  }
+}
+
+/** Проекция рига (та же, что в `renderRig`): точка модели → [x, y, глубина]. */
+export function rigProj(
+  yaw: number,
+  S: number,
+  ax: number,
+  ay: number,
+): (p: V3) => [number, number, number] {
+  const fx = Math.cos(yaw);
+  const fy = Math.sin(yaw);
+  const rx = -fy;
+  const ry = fx;
+  return (p) => {
+    const gx = (p.x * rx + p.z * fx) * S;
+    const gy = (p.x * ry + p.z * fy) * S;
+    return [ax + gx, ay + gy * DEPTH - p.y * S, gy * 0.77 + p.y * S * 0.64];
+  };
 }
 
 export interface RigOut {
@@ -1874,6 +1945,8 @@ export interface RigOut {
   lit: Px | null;
   /** Первая видимая светящаяся точка — «глаз» для движка. */
   eye: [number, number] | null;
+  /** Номер примитива в каждом пикселе (−1 — пусто): контровой свет, обрезка. */
+  ids?: Int16Array;
 }
 
 export interface RenderOpt {
@@ -1913,17 +1986,35 @@ export function renderRig(
   const col = new Uint8ClampedArray(N * 4);
   const glowB = new Uint8Array(N);
   let eye: [number, number] | null = null;
-  const put = (i: number, c: RGBA, z: number, id: number, glow: boolean) => {
+  const put = (i: number, c: RGBA, z: number, id: number, glow: Glow | undefined) => {
     zb[i] = z;
     idb[i] = id;
     col[i * 4] = c[0];
     col[i * 4 + 1] = c[1];
     col[i * 4 + 2] = c[2];
     col[i * 4 + 3] = c[3];
-    glowB[i] = glow ? 1 : 0;
+    glowB[i] = glow === true ? 255 : glow ? Math.round(clamp01(glow) * 255) : 0;
   };
   const band = (T: Tone, l: number): RGBA =>
     l > 0.8 ? T[3] : l > 0.36 ? T[2] : l > -0.08 ? T[1] : T[0];
+  // Орты экрана в осях модели: вправо, вниз по экрану, к глазу.
+  const scrR = v3(rx, 0, fx);
+  const scrD = v3(0.64 * ry, -0.77, 0.64 * fy);
+  const scrV = v3(0.77 * ry, 0.64, 0.77 * fy);
+  const lightOf = (n: V3) => -0.5 * vdot(n, scrR) - 0.62 * vdot(n, scrD) + 0.6 * vdot(n, scrV);
+  const isRGBA = (v: Tone | RGBA): v is RGBA => typeof v[0] === 'number';
+  /** Точка поверхности (цилиндр, лоскут) — в свой пиксель, если ближе. */
+  const splat = (p: V3, c: RGBA, bias: number, id: number, glow: Glow | undefined) => {
+    const [x, y, d] = proj(p);
+    const xi = Math.floor(x);
+    const yi = Math.floor(y);
+    if (xi < 0 || yi < 0 || xi >= w || yi >= h) return;
+    const i = yi * w + xi;
+    const z = d + bias;
+    if (z <= zb[i]) return;
+    put(i, c, z, id, glow);
+  };
+  const STEP = 0.42 / S;
   rig.prims.forEach((q, id) => {
     if (q.k === 0) {
       const [x0, y0, d0] = proj(q.a);
@@ -1956,7 +2047,16 @@ export function renderRig(
           const i = py * w + px;
           if (z <= zb[i]) continue;
           const l = -0.5 * nx - 0.62 * ny + 0.6 * nz;
-          const pv = q.pat ? q.pat(t, nx, ny) : null;
+          // Нормаль модели считаем только узорам, которые её просят.
+          const pv = q.pat
+            ? q.pat.length >= 4
+              ? q.pat(t, nx, ny, {
+                  x: scrR.x * nx + scrD.x * ny + scrV.x * nz,
+                  y: scrD.y * ny + scrV.y * nz,
+                  z: scrR.z * nx + scrD.z * ny + scrV.z * nz,
+                })
+              : q.pat(t, nx, ny, scrV)
+            : null;
           const c = pv
             ? pv.length === 4 && typeof pv[0] === 'number'
               ? (pv as RGBA)
@@ -2015,6 +2115,73 @@ export function renderRig(
                   : T[0];
           put(i, c, z, id, !!q.glow);
         }
+    } else if (q.k === 3) {
+      // Цилиндр: бок и торцы точками чаще пикселя — края резкие, торец плоский.
+      const W = vsub(q.b, q.a);
+      const L = vlen(W) || 1e-6;
+      const wv = vsc(W, 1 / L);
+      const u0 = vnorm(Math.abs(wv.y) < 0.9 ? vcross(wv, v3(0, 1, 0)) : vcross(wv, v3(1, 0, 0)));
+      const v0 = vcross(wv, u0);
+      const bias = q.bias * S;
+      const nt = Math.max(2, Math.ceil(L / STEP) + 1);
+      const na = Math.max(10, Math.ceil((TAU * q.r) / STEP));
+      for (let ia = 0; ia < na; ia++) {
+        const th = (ia / na) * TAU;
+        const n = vadd(vsc(u0, Math.cos(th)), vsc(v0, Math.sin(th)));
+        if (vdot(n, scrV) < -0.2) continue;
+        const l = lightOf(n);
+        const side = vsc(n, q.r);
+        for (let it = 0; it < nt; it++) {
+          const tt = it / (nt - 1);
+          const T = q.band?.(tt) ?? q.T;
+          splat(vadd(vadd(q.a, vsc(W, tt)), side), band(T, l), bias, id, q.glow);
+        }
+      }
+      for (const top of [true, false]) {
+        const n = top ? wv : vsc(wv, -1);
+        if (vdot(n, scrV) < -0.05) continue;
+        const c0 = top ? q.b : q.a;
+        const T = q.band?.(top ? 1 : 0) ?? q.T;
+        const l = lightOf(n);
+        for (let rr = 0; rr <= q.r + 1e-6; rr += STEP) {
+          const nr = Math.max(1, Math.ceil((TAU * rr) / STEP));
+          // Кромка торца на тон светлее — цилиндр читается плоским верхом.
+          const c = band(T, rr > q.r - STEP * 1.5 && top ? l + 0.35 : l);
+          for (let k = 0; k < nr; k++) {
+            const th = (k / nr) * TAU;
+            splat(
+              vadd(c0, vadd(vsc(u0, Math.cos(th) * rr), vsc(v0, Math.sin(th) * rr))),
+              c,
+              bias,
+              id,
+              q.glow,
+            );
+          }
+        }
+      }
+    } else if (q.k === 4) {
+      const [p00, p10, p11, p01] = q.p;
+      const du = vadd(vsub(p10, p00), vsub(p11, p01));
+      const dv = vadd(vsub(p01, p00), vsub(p11, p10));
+      let n = vnorm(vcross(du, dv));
+      if (vdot(n, scrV) < 0) n = vsc(n, -1);
+      const l = lightOf(n);
+      const lu = Math.max(vlen(vsub(p10, p00)), vlen(vsub(p11, p01)));
+      const lv = Math.max(vlen(vsub(p01, p00)), vlen(vsub(p11, p10)));
+      const nu = Math.max(2, Math.ceil(lu / STEP) + 1);
+      const nv = Math.max(2, Math.ceil(lv / STEP) + 1);
+      const bias = q.bias * S;
+      for (let iu = 0; iu < nu; iu++) {
+        const u = iu / (nu - 1);
+        const a = vmix(p00, p10, u);
+        const b = vmix(p01, p11, u);
+        for (let iv = 0; iv < nv; iv++) {
+          const v = iv / (nv - 1);
+          const pv = q.pat ? q.pat(u, v) : null;
+          const c = pv ? (isRGBA(pv) ? pv : band(pv, l)) : band(q.T, l);
+          splat(vmix(a, b, v), c, bias, id, q.glow);
+        }
+      }
     } else {
       const [x, y, d] = proj(q.a);
       const s = Math.max(1, Math.round(q.s * S));
@@ -2073,9 +2240,9 @@ export function renderRig(
       lit.data[i * 4] = out[i * 4];
       lit.data[i * 4 + 1] = out[i * 4 + 1];
       lit.data[i * 4 + 2] = out[i * 4 + 2];
-      lit.data[i * 4 + 3] = out[i * 4 + 3];
+      lit.data[i * 4 + 3] = glowB[i] === 255 ? out[i * 4 + 3] : (out[i * 4 + 3] * glowB[i]) / 255;
     }
-  return { px, lit, eye };
+  return { px, lit, eye, ids: idb };
 }
 
 // ---------------------------------------------------------------------------
@@ -2104,6 +2271,8 @@ export interface Pose {
   lR: Limb;
   /** Опустить таз (присед, падение), пиксели. */
   sink: number;
+  /** Носок вниз, радианы (висит на нитях — ступни свисают). Нет — 0. */
+  toe?: number;
 }
 export const limb = (sw = 0, out = 0, bend = 0): Limb => ({ sw, out, bend });
 export const pose0 = (): Pose => ({
@@ -2238,6 +2407,9 @@ export function humanoid(
   const anR = vadd(knR, vsc(sR, b.shin));
   const T = b.T;
   if (!skip.legs) {
+    const toe = q.toe ?? 0;
+    const fc = Math.cos(toe);
+    const fs = Math.sin(toe);
     for (const [hp, kn, an] of [
       [hpL, knL, anL],
       [hpR, knR, anR],
@@ -2247,7 +2419,7 @@ export function humanoid(
       if (b.joints) rig.ball(kn, b.legR * 1.05, T.joint);
       rig.cap(
         an,
-        vadd(vadd(an, vsc(pF, b.foot)), v3(0, -0.6, 0)),
+        vadd(vadd(an, vsc(pF, b.foot * fc)), v3(0, -0.6 - b.foot * fs, 0)),
         b.legR * 1.05,
         b.legR * 0.9,
         T.foot,
