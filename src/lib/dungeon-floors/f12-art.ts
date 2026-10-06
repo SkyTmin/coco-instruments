@@ -249,6 +249,39 @@ function toWorld(x: number, y: number, z: number, face: number): V3 {
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /**
+ * Рабочие буферы рига: глубина, номер части, свечение и холст до обрезки —
+ * одни на все кадры (кадр обрезается в свой холст, рабочий — не уходит
+ * наружу). Новые массивы на каждый кадр — это сборщик мусора в бою.
+ */
+const RIG_BUF = { n: 0, zb: new Float32Array(0), idb: new Int16Array(0), glow: new Uint8Array(0) };
+const RIG_PX = new Map<string, Px>();
+function rigBuf(n: number) {
+  if (RIG_BUF.n < n) {
+    RIG_BUF.n = n;
+    RIG_BUF.zb = new Float32Array(n);
+    RIG_BUF.idb = new Int16Array(n);
+    RIG_BUF.glow = new Uint8Array(n);
+  }
+  const zb = RIG_BUF.zb.subarray(0, n);
+  const idb = RIG_BUF.idb.subarray(0, n);
+  const glow = RIG_BUF.glow.subarray(0, n);
+  zb.fill(-1e9);
+  idb.fill(-1);
+  glow.fill(0);
+  return { zb, idb, glow };
+}
+function rigPx(w: number, h: number): Px {
+  const k = `${w}x${h}`;
+  let p = RIG_PX.get(k);
+  if (!p) {
+    p = new Px(w, h);
+    if (RIG_PX.size > 8) RIG_PX.clear();
+    RIG_PX.set(k, p);
+  } else p.data.fill(0);
+  return p;
+}
+
+/**
  * Нарисовать риг в кадр `w×h`, начало модели (земля под серединой) — в
  * точке (ox, oy) кадра.
  */
@@ -266,15 +299,13 @@ export function renderRig(
   /** Точки кадра, которые обрезка обязана сохранить (след бивней и т. п.). */
   keep: [number, number][] = [],
 ): RigOut {
-  const p = new Px(w, h);
+  const p = crop ? rigPx(w, h) : new Px(w, h);
   // Рамка нарисованного: швы, контур и холст — только в ней.
   let bx0 = w;
   let by0 = h;
   let bx1 = -1;
   let by1 = -1;
-  const zb = new Float32Array(w * h).fill(-1e9);
-  const idb = new Int16Array(w * h).fill(-1);
-  const glowAt = new Uint8Array(w * h);
+  const { zb, idb, glow: glowAt } = rigBuf(w * h);
   let anyGlow = false;
   // Сперва плотные части — от ближних к дальним (дальний пиксель за ближним
   // отсекает буфер глубины без расчёта цвета; итог тот же: в пикселе всегда
@@ -308,6 +339,7 @@ export function renderRig(
     const y0 = Math.max(0, Math.floor(oy + scy - RY));
     const y1 = Math.min(h - 1, Math.ceil(oy + scy + RY));
     if (x0 > x1 || y0 > y1) return;
+    const PC = ((globalThis as any).__pc ??= { px: 0, sh: 0, f: 0 }); PC.px += (x1 - x0 + 1) * (y1 - y0 + 1); // PROF
     // Всё по скалярам: массив на пиксель — это сборщик мусора в кадре.
     const qdx = dot(VIEW, e1) / r1;
     const qdy = dot(VIEW, e2) / r2;
@@ -317,6 +349,9 @@ export function renderRig(
     const id = pt.id ?? k;
     const fur = pt.fur ?? 0;
     const alphaP = pt.alpha ?? 1;
+    // Ближе этой глубины у части точек нет: пиксель, где уже лежит что-то
+    // ближе, луч не проверяет (части идут от ближних к дальним).
+    const tMax = (globalThis as any).__noEO ? 1e9 : dot(VIEW, A.c) + Math.max(r1, r2, r3) + 1e-3; // PROF
     for (let py = y0; py <= y1; py++) {
       const sy = py + 0.5 - oy;
       // Точка луча при t = 0: (sx, sy·C, −sy·S).
@@ -324,6 +359,9 @@ export function renderRig(
       const dz0 = -sy * CAM_S - ccz;
       const zTop = -sy * CAM_S;
       for (let px = x0; px <= x1; px++) {
+        const i = py * w + px;
+        if (zb[i] >= tMax) continue;
+        PC.rt = (PC.rt ?? 0) + 1; // PROF
         const dx0 = px + 0.5 - ox - ccx;
         const q0x = (dx0 * e1x + dy0 * e1y + dz0 * e1z) / r1;
         const q0y = (dx0 * e2x + dy0 * e2y + dz0 * e2z) / r2;
@@ -333,7 +371,6 @@ export function renderRig(
         const disc = b * b - 4 * a * cc;
         if (disc < 0) continue;
         const t = (-b + Math.sqrt(disc)) / (2 * a);
-        const i = py * w + px;
         if (t <= zb[i]) continue;
         if (zTop + t * CAM_C < clipZ) continue;
         if (px < bx0) bx0 = px;
@@ -344,6 +381,7 @@ export function renderRig(
           zb[i] = t;
           idb[i] = id;
         }
+        PC.sh++; // PROF
         const qx = q0x + t * qdx;
         const qy = q0y + t * qdy;
         const qz = q0z + t * qdz;
@@ -5062,7 +5100,8 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     });
     tips.push([at[0] - n3[0] * half * 2, at[1] - n3[1] * half * 2, at[2] - n3[2] * half * 2]);
   };
-  for (const e of [-1, 1])
+  const MX = (globalThis as any).__mx ?? {}; // PROF
+  for (const e of MX.noStrands ? [] : [-1, 1]) // PROF
     for (let k = 0; k < 9; k++) {
       const x = -21 + k * 4.5;
       const hw = 11.6 * Math.sqrt(Math.max(0.15, 1 - ((x + 2) / 21) ** 2));
@@ -5112,6 +5151,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   ];
   const rolled = clamp01((Math.abs(R) - 0.2) / 0.7);
   LEGS.forEach(([lx, ly, offW, offG, front], k) => {
+    if (MX.noLegs) return; // PROF
     const hip = S.B([lx, ly * 0.92, z0 - 5]);
     let foot: V3 = [lx + (front ? o.reachF + (k === 0 ? o.reachL : o.reachR) : o.reachB), ly, 0];
     let lifted = 0;
@@ -5168,7 +5208,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
         const c = S.H(8.8, e * 5.5, 3.4);
         return { x: c[0], y: c[1], z: c[2], c: M_EYE };
       });
-  if (o.rider) {
+  if (o.rider && !MX.noRider) { // PROF
     const rp = riderPlace(o, S);
     const r = shamanParts(parts, riderSh(o), look, rp.place, rp.onBody ? P : 0, rp.onBody ? R : 0);
     eyes.push(...r.eyes);
@@ -5453,7 +5493,7 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       o.stride = GALLOP_S;
       o.lift = 6;
       const a = o.ph * TAU;
-      const st = clamp01(1 - t / 0.25);
+      const st = clamp01(1 - Math.floor(t * 12) / 12 / 0.25);
       o.pitch = -0.08 + 0.07 * Math.sin(a + 0.6) - 0.08 * st;
       o.bob = 1.4 * Math.max(0, Math.sin(a + 1.2)) + 0.4;
       o.crouch = 0.8 + 1.2 * st;
@@ -5641,7 +5681,6 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
     }
   }
   // Ходьба (погоня, к жаровне) и стоянка.
-  const rot = Math.abs(c.turn) > 0.02 ? 1.5 * 1.6 : 0;
   const moving = c.speed > 0.25 || Math.abs(c.turn) > 0.05;
   if (!moving) {
     const fI = Math.floor(now / 0.3) % 8;
@@ -5658,20 +5697,18 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
     o.rRib = u * TAU;
     return o;
   }
-  const fwd = c.speed / (c.speed + rot + 1e-6);
-  const fq = fwd > 0.75 ? 2 : fwd > 0.35 ? 1 : 0;
-  const lq = Math.abs(c.turn) < 0.12 ? 0 : Math.sign(c.turn) * (Math.abs(c.turn) < 0.5 ? 1 : 2);
-  const lead = lq * 0.18;
+  const { fq, lq } = walkQ(c);
+  const lead = lq * 0.24;
   const ph = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12) / 12;
   const a = ph * TAU;
-  const ramp0 = mode === 'chase' || mode === 'f12b_douse' ? clamp01(t / 0.25) : 1;
+  const ramp0 = mode === 'chase' || mode === 'f12b_douse' ? clamp01(Math.floor(t * 12) / 12 / 0.25) : 1;
   o.gait = 1;
   o.ph = ph;
   o.stride = [0.15, 0.55, 1][fq] * WALK_S * ease(ramp0);
   o.side = (1 - [0.15, 0.55, 1][fq]) * 6 * Math.sign(c.turn);
-  o.lift = 4.5;
-  o.bob = 0.7 * Math.cos(a * 2);
-  o.roll = 0.03 * Math.sin(a);
+  o.lift = 6.5;
+  o.bob = 1.1 * Math.cos(a * 2);
+  o.roll = 0.045 * Math.sin(a);
   o.pitch = 0.012 * Math.sin(a * 2 + 1);
   o.hp = 0.08 + 0.035 * Math.sin(a * 2 - 1.2);
   o.hy = lead + 0.05 * Math.sin(a - 0.8);
@@ -5679,7 +5716,7 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
   o.ta = 1.28 + 0.1 * Math.sin(a * 2 - 2);
   o.ear = 0.25 + 0.1 * Math.sin(a * 2 - 2.2);
   o.furPh = ph - 0.15;
-  o.furAmp = 0.1;
+  o.furAmp = 0.14;
   o.furRoll = -lead * 0.3 + 0.06 * Math.sin(a - 1.9);
   o.rUp = 0.8 * Math.cos(a * 2 - 0.9);
   o.rLean = 0.06 * Math.sin(a * 2 - 1.4);
@@ -5688,19 +5725,31 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
 }
 
 /** Ключ кадра ходьбы/стоянки (всё, что меняет картинку). */
+/**
+ * Ход и разворот: доля пути вперёд в шаге (`fq`: 0 — почти на месте,
+ * 1 — вполоборота, 2 — прямо) и куда ведёт голова (`lq`). Мозг доворачивает
+ * не быстрее 1,5 рад/с, малый угол закрывает за пару тиков — переступ
+ * по углу, а не «есть поворот — значит, весь шаг на месте».
+ */
+function walkQ(c: MamCtx): { fq: number; lq: number } {
+  const rot = 1.5 * 1.6 * clamp01((Math.abs(c.turn) - 0.03) / 0.25);
+  const fwd = c.speed / (c.speed + rot + 1e-6);
+  return {
+    fq: fwd > 0.75 ? 2 : fwd > 0.33 ? 1 : 0,
+    lq: Math.abs(c.turn) < 0.2 ? 0 : Math.sign(c.turn),
+  };
+}
+
 function mamWalkKey(t: number, now: number, c: MamCtx, mode: string): string {
   const moving = c.speed > 0.25 || Math.abs(c.turn) > 0.05;
   if (!moving) return `i${Math.floor(now / 0.3) % 8}`;
-  const rot = Math.abs(c.turn) > 0.02 ? 2.4 : 0;
-  const fwd = c.speed / (c.speed + rot + 1e-6);
-  const fq = fwd > 0.75 ? 2 : fwd > 0.35 ? 1 : 0;
-  const lq = Math.abs(c.turn) < 0.12 ? 0 : Math.sign(c.turn) * (Math.abs(c.turn) < 0.5 ? 1 : 2);
+  const { fq, lq } = walkQ(c);
   const wf = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12);
-  const r = (mode === 'chase' || mode === 'f12b_douse') && t < 0.25 ? `r${f24(t)}` : '';
+  const r = (mode === 'chase' || mode === 'f12b_douse') && t < 0.25 ? `r${Math.floor(t * 12)}` : '';
   return `w${wf}${fq}${lq}${fq < 2 ? Math.sign(c.turn) : ''}${r}`;
 }
 
-/** Техники мамонта: в первые 0,18 с ноги ставятся из шага (без скачка позы). */
+/** Техники мамонта: в первые 0,125 с ноги ставятся из шага (без скачка позы). */
 const MAM_TECH = new Set([
   'f12b_tusk',
   'f12b_stomp',
@@ -5729,6 +5778,36 @@ const MAM_TRAIL: Record<string, [number, number]> = {
   f12b_tusk: [0.72, 1.06],
 };
 
+/**
+ * Где техника идёт по 24 кадра в секунду: удар и контакт. Медленная
+ * подготовка и отдача — «по двойкам» (12 к/с): глаз их не различит, а
+ * каждый новый кадр огромного зверя — 1,5–2 мс, и в бою он поворачивается
+ * к герою, так что кадры техники в каждой стороне — новые.
+ */
+const MAM_DENSE: Record<string, [number, number][]> = {
+  roar: [[0.72, 0.96]],
+  f12b_tusk: [[0.62, 1.02]],
+  f12b_stomp: [[0.86, 1.18]],
+  f12b_rear: [[0.78, 1.06]],
+  f12b_spikes: [[0.8, 1.04]],
+  f12b_blow: [[0.78, 0.96]],
+  f12b_drum: [
+    [0.27, 0.42],
+    [0.62, 0.77],
+    [0.97, 1.12],
+  ],
+  f12b_drop: [[0.6, 0.8]],
+  f12b_skid: [[0.62, 0.86]],
+  f12b_paw: [],
+  dying: [[1.78, 2.0]],
+};
+/** Номер кадра (24 к/с) с учётом «двоек» вне плотных окон. */
+function mamFi(mode: string, t: number): number {
+  const w = MAM_DENSE[mode];
+  if (!w || w.some(([a, b]) => t >= a && t < b)) return f24(t);
+  return 2 * Math.max(0, Math.floor(t * 12));
+}
+
 /** Кадр мамонта: поза на квантованное время, ключ и поля движка. */
 function mamFrame(
   mode: string,
@@ -5738,13 +5817,14 @@ function mamFrame(
   face: number,
 ): { o: MamO; key: string; ex: Partial<MobFrame> } {
   const len = MAM_LEN[mode];
-  const t = len !== undefined ? Math.min(len, f24(tRaw) / 24) : f24(tRaw) / 24;
+  const fi = mamFi(mode, tRaw);
+  const t = len !== undefined ? Math.min(len, fi / 24) : fi / 24;
   const ex: Partial<MobFrame> = { shadow: 30, still: true };
   let key: string;
   let o: MamO;
   if (mode === 'f12b_charge') {
     o = mamAt(mode, t, now, c);
-    key = `ch${Math.round(o.ph * 12)}${t < 0.25 ? `s${f24(t)}` : ''}`;
+    key = `ch${Math.round(o.ph * 12)}${t < 0.25 ? `s${Math.floor(t * 12)}` : ''}`;
     ex.ghost = { every: 0.05, life: 0.26, tint: '#9ac8ff', alpha: 0.26 };
   } else if (mode === 'f12b_stunned') {
     o = mamAt(mode, t, now, c);
@@ -5773,23 +5853,24 @@ function mamFrame(
     ex.dy = Math.sin(face) * rec;
   } else if (mode === 'f12b_paw') {
     const tt = clamp01(c.k) * MAMMOTH.paw;
-    o = mamAt(mode, t, now, { ...c, k: f24(tt) / 24 / MAMMOTH.paw });
-    key = `paw${f24(tt)}`;
+    const pi = mamFi(mode, tt);
+    o = mamAt(mode, t, now, { ...c, k: pi / 24 / MAMMOTH.paw });
+    key = `paw${pi}`;
   } else if (len !== undefined) {
     o = mamAt(mode, t, now, c);
-    key = `${mode.replace('f12b_', '')}${f24(t)}`;
+    key = `${mode.replace('f12b_', '')}${Math.min(fi, Math.round(len * 24))}`;
   } else {
     o = mamAt(mode, t, now, c);
     key = mamWalkKey(tRaw, now, c, mode);
   }
-  // Начало техники: ноги из шага встают на лёд за 0,18 с.
-  if (MAM_TECH.has(mode) && t < 0.18) {
-    const wf = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 12);
-    const k = 1 - ease(t / 0.18);
+  // Начало техники: ноги из шага встают на лёд за 0,125 с.
+  if (MAM_TECH.has(mode) && t < 0.125) {
+    const wf = Math.floor((((c.walk / WALK_C) % 1) + 1) % 1 * 6) * 2;
+    const k = 1 - ease(t / 0.125);
     o.gait = 1;
     o.ph = wf / 12;
     o.stride = WALK_S * k;
-    o.lift = 4.5 * k;
+    o.lift = 6.5 * k;
     key += `b${wf}`;
   }
   // След бивней: те же ключи на 1–3 кадра раньше.
@@ -5879,7 +5960,7 @@ lruOf('f12_shaman', 320);
 regMob('f12boss', (m, pose) => {
   const { o, key, ex } = mamPose(m, pose);
   const PF = ((globalThis as any).__mp ??= { b: 0, r: 0, p: 0, n: 0, parts: 0 }); // PROF
-  const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => { const t0 = performance.now(); const bb = mammothBuild(pose.look, o); PF.b += performance.now() - t0; PF.n++; PF.parts += bb.parts.length; const pp = bb.post; if (pp) bb.post = (q, sc, fx) => { const t1 = performance.now(); pp(q, sc, fx); PF.p += performance.now() - t1; }; return bb; }); // PROF
+  const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => { const t0 = performance.now(); const kk = (PF.keys ??= {}); const kp = key.split('|').slice(0, 2).join('|') + '|' + key.split('|')[2].replace(/[0-9].*$/, '') + `|${pose.mode}`; kk[kp] = (kk[kp] ?? 0) + 1; const bb = mammothBuild(pose.look, o); PF.b += performance.now() - t0; PF.n++; PF.parts += bb.parts.length; const pp = bb.post; if (pp) bb.post = (q, sc, fx) => { const t1 = performance.now(); pp(q, sc, fx); PF.p += performance.now() - t1; }; return bb; }); // PROF
   MAM_PTS.set(m.id, mamPts(o, m.face, ex));
   if (MAM_PTS.size > 8) MAM_PTS.delete(MAM_PTS.keys().next().value as number);
   return mobFrame(c, CV_MAM, ex);
