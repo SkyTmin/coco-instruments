@@ -654,19 +654,26 @@ registerZonePainter('f12_snowwall', (g, st, px, py, _s, time) => {
   const ux = Math.cos(s.ang ?? 0);
   const uy = Math.sin(s.ang ?? 0);
   const sd = s.id >>> 0;
-  // Горбы снега растут и курятся.
-  for (let x = 4; x < L; x += 7) {
-    const h = (2 + 5 * hash(sd, x, 1)) * eOut(k);
-    const cx = px + ux * x;
-    const cy = py + uy * x + 2;
-    g.fillStyle = rgba(P.snowS, 0.85);
-    g.fillRect(Math.round(cx - 4), Math.round(cy - h * 0.4), 8, Math.max(1, Math.round(h * 0.6)));
+  // Сплошной вал: гребень по шуму, светлый верх, голубая тень снизу.
+  const grow = eOut(k);
+  const hAt = (x: number) =>
+    (3 + 3.5 * Math.sin(x * 0.11 + hash(sd, 1, 1) * 6) + 2.5 * Math.sin(x * 0.29 + sd)) * grow + 1;
+  for (let x = 0; x < L; x++) {
+    const h = Math.max(1, hAt(x));
+    const cx = Math.round(px + ux * x);
+    const cy = Math.round(py + uy * x + 3);
+    const top = Math.round(cy - h);
+    g.fillStyle = rgba(P.snowS, 0.9);
+    g.fillRect(cx, Math.round(cy - h * 0.45), 1, Math.max(1, Math.round(h * 0.45) + 1));
     g.fillStyle = rgba(P.snow, 0.95);
-    g.fillRect(Math.round(cx - 3), Math.round(cy - h), 6, Math.max(1, Math.round(h * 0.6)));
-    dot(g, cx - 2, cy - h, 3, 1, P.white, 0.9);
-    // Позёмка срывается с гребня.
+    g.fillRect(cx, top, 1, Math.max(1, Math.round(h * 0.55)));
+    if (hAt(x - 1) < h) dot(g, cx, top, 1, 1, P.white, 0.95);
+  }
+  // Позёмка срывается с гребня.
+  for (let x = 6; x < L; x += 9) {
     const ph = (time * 2 + hash(sd, x, 2)) % 1;
-    dot(g, cx + ph * 10, cy - h - ph * 3, 2, 1, P.white, 0.6 * k * (1 - ph));
+    const h = hAt(x);
+    dot(g, px + ux * x + ph * 10, py + uy * x + 3 - h - ph * 4, 2, 1, P.white, 0.6 * k * (1 - ph));
   }
   return true;
 });
@@ -1430,19 +1437,37 @@ zoneFx('f12_mamdeath', (g, z, X, Y, k, age) => {
       0.85,
     );
   }
-  // Огни духа.
+  // Дух уходит в сияние: столп зелёного света над телом и огни вверх.
   g.save();
   g.globalCompositeOperation = 'lighter';
-  for (let i = 0; i < 9; i++) {
-    const t = age - 1.3 - i * 0.12;
-    if (t < 0 || t > 1.5) continue;
-    const x = X + (hash(sd, i, 5) - 0.5) * 40 + Math.sin(t * 4 + i) * 5;
-    const y = Y - 10 - t * 60;
-    const a = 0.8 * (1 - t / 1.5);
-    g.fillStyle = rgba(i % 3 ? P.aur : P.aurL, a);
-    g.fillRect(Math.round(x), Math.round(y), 2, 3);
-    g.fillStyle = rgba(P.aurD, a * 0.6);
-    g.fillRect(Math.round(x), Math.round(y + 3), 2, 4);
+  const pil = k01((age - 1.1) / 0.5) * (1 - k01((age - 2.3) / 0.7));
+  if (pil > 0) {
+    const lg = g.createLinearGradient(0, Y - 150, 0, Y);
+    lg.addColorStop(0, rgba(P.aur, 0));
+    lg.addColorStop(0.6, rgba(P.aur, 0.22 * pil));
+    lg.addColorStop(1, rgba(P.aurL, 0.4 * pil));
+    g.fillStyle = lg;
+    for (let s = -3; s <= 3; s++) {
+      const wv = Math.sin(age * 3 + s) * 2;
+      g.fillRect(Math.round(X + s * 5 + wv - 2), Math.round(Y - 150), 4, 150);
+    }
+  }
+  for (let i = 0; i < 16; i++) {
+    const t = age - 1.2 - i * 0.08;
+    if (t < 0 || t > 1.6) continue;
+    const x = X + (hash(sd, i, 5) - 0.5) * 44 + Math.sin(t * 4 + i) * 6;
+    const y = Y - 8 - t * (50 + 30 * hash(sd, i, 6));
+    const a = 1 - t / 1.6;
+    // Хвост огня — пять точек назад по пути.
+    for (let q = 4; q >= 0; q--) {
+      const tq = Math.max(0, t - q * 0.05);
+      const yq = Y - 8 - tq * (50 + 30 * hash(sd, i, 6));
+      const xq = X + (hash(sd, i, 5) - 0.5) * 44 + Math.sin(tq * 4 + i) * 6;
+      g.fillStyle = rgba(q ? P.aurD : P.aurL, a * (q ? 0.5 - q * 0.08 : 1));
+      g.fillRect(Math.round(xq), Math.round(yq), q ? 2 : 3, q ? 2 : 3);
+    }
+    g.fillStyle = rgba(P.white, a * 0.9);
+    g.fillRect(Math.round(x) + 1, Math.round(y) + 1, 1, 1);
   }
   g.restore();
 });
