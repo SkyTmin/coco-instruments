@@ -1298,14 +1298,19 @@ function drumWaves(
     if (bt < 0.22) {
       const q = bt / 0.22;
       const r = 3 + 13 * eOut(q);
-      if (ink(g, C.white, 0.85 * (1 - q))) {
-        arcPx(g, DX, DY, r, -0.9, 0.9);
-        arcPx(g, DX, DY, r, Math.PI - 0.9, Math.PI + 0.9);
-      }
-      if (ink(g, C.frost, 0.6 * (1 - q))) arcPx(g, DX, DY, r * 0.6, -0.7, 0.7);
+      for (const [c, rr, a] of [
+        [C.shade, r + 1, 0.6],
+        [C.white, r, 0.95],
+      ] as const)
+        if (ink(g, c, a * (1 - q))) {
+          arcPx(g, DX, DY, rr, -0.9, 0.9);
+          arcPx(g, DX, DY, rr, Math.PI - 0.9, Math.PI + 0.9);
+        }
+      if (ink(g, C.frost, 0.7 * (1 - q))) arcPx(g, DX, DY, r * 0.6, -0.7, 0.7);
     }
   }
-  // Волна к валу: один раз на пару отрезков (одна строка, один возраст).
+  // Волна к валу: снежный фронт от бубна во всю ширину арены — один раз на
+  // пару отрезков (одна строка, один возраст).
   const seen: number[] = [];
   for (const st of sim.strikes) {
     if (st.art !== 'f12_snowwall' || st.from !== m.id || st.t > 0.45) continue;
@@ -1313,27 +1318,33 @@ function drumWaves(
     if (seen.includes(key)) continue;
     seen.push(key);
     const wy = st.y * TS - top;
-    const D = Math.max(16, Math.abs(wy - Y));
+    const dir = wy >= Y ? 1 : -1;
+    const D = Math.max(16, Math.abs(wy - DY));
     const q = st.t / 0.32;
     const e = eOut(q);
-    const rr = 6 + (D - 6) * e;
-    const cy = DY + (Y - DY) * e;
+    const ry = 4 + (D - 4) * e;
+    const rx = 6 + 200 * e;
     const a = (1 - eIn(st.t / 0.45)) * 0.95;
-    const n = Math.max(12, Math.round((TAU * rr) / 7));
     const sd = Math.round(st.y * 31);
+    // Передняя половина эллипса — к валу; задняя — бледнее.
+    const n = Math.round(60 + 100 * e);
     for (let i = 0; i < n; i++) {
-      const ang = (i / n) * TAU + hash(sd, i, 1) * 0.2;
-      const jit = (hash(sd, i, 2) - 0.5) * 4;
-      const x = X + Math.cos(ang) * (rr + jit);
-      const y = cy + Math.sin(ang) * (rr + jit) * 0.85;
-      if (ink(g, i % 3 ? C.snow : C.white, a)) clump(g, x, y, i % 4 === 0 ? 3 : 2);
+      const ang = (i / n) * TAU + hash(sd, i, 1) * 0.05;
+      const front = Math.sin(ang) * dir > 0;
+      const jit = (hash(sd, i, 2) - 0.5) * 3;
+      const x = DX + Math.cos(ang) * (rx + jit);
+      const y = DY + Math.sin(ang) * (ry + jit);
+      const aa = a * (front ? 1 : 0.35);
+      const sz = i % 4 === 0 ? 3 : 2;
+      if (ink(g, C.snowD, aa * 0.7)) pp(g, x, y + sz, sz, 1);
+      if (ink(g, i % 3 ? C.snow : C.white, aa)) clump(g, x, y, sz);
     }
-    // Хвост позёмки за волной.
-    if (ink(g, C.snowM, a * 0.5))
-      for (let i = 0; i < 10; i++) {
-        const ang = hash(sd, i, 5) * TAU;
-        const r = rr * (0.55 + 0.35 * hash(sd, i, 6));
-        pp(g, X + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.85, 2, 1);
+    // Хвост позёмки за фронтом.
+    if (ink(g, C.snowM, a * 0.6))
+      for (let i = 0; i < 24; i++) {
+        const ang = (hash(sd, i, 5) * 0.8 + 0.1) * Math.PI * dir;
+        const k2 = 0.5 + 0.4 * hash(sd, i, 6);
+        pp(g, DX + Math.cos(ang) * rx * k2, DY + Math.sin(ang) * ry * k2, 2, 1);
       }
   }
   void left;
@@ -2307,10 +2318,10 @@ registerZonePainter('f12_curtain', (g, st, px, py, _s, time) => {
         linePx(g, px + ex, py + ey, px + ux * uf + ex, py + uy * uf + ey);
       if (sig <= 0) sparkPx(g, px + ux * uf + ex, py + uy * uf + ey, 0.9);
     }
-    if (sig > 0 && ink(g, C.aurW, (reduced() ? 0.15 : 0.3) * sig))
+    if (sig > 0 && ink(g, C.aurW, (reduced() ? 0.1 : 0.18) * sig))
       fLane(g, px, py, ang, 0, L, -hw, hw);
   }
-  ribbons(g, px, py, ang, L, 0.15 + 0.5 * eIn(k), k, time, sd, sig * 0.3);
+  ribbons(g, px, py, ang, L, 0.3 + 0.55 * k, k, time, sd, sig * 0.3);
   // Искры поднимаются от основания ленты.
   const ux = Math.cos(ang);
   const uy = Math.sin(ang);
@@ -3402,7 +3413,7 @@ zoneFx('f12_phase', (g, z, X, Y, k, age, time) => {
       if (ink(g, i % 3 ? C.snow : C.white, 0.8 * env)) pp(g, X + Math.cos(a) * r, y, 2, 1);
     }
   } else if (p === 1) {
-    blizzard(g, 0.9 * env, time, sd, reduced() ? 40 : 90);
+    blizzard(g, env, time, sd, reduced() ? 60 : 150);
   } else if (p === 2) {
     frostEdges(g, 10 + 34 * eOut(k01(age / 0.9)), 0.95 * (1 - eIn(k01((age - 1.1) / 0.5))), time);
     // Кристаллы вырастают по кругу у ног.
@@ -3421,8 +3432,8 @@ zoneFx('f12_phase', (g, z, X, Y, k, age, time) => {
     // Столп сияния над мамонтом — шаманка взлетает.
     const op = g.globalCompositeOperation;
     g.globalCompositeOperation = 'lighter';
-    for (let s = -3; s <= 3; s++) {
-      g.globalAlpha = 0.7 * env * (1 - Math.abs(s) / 4);
+    for (let s = -2; s <= 2; s++) {
+      g.globalAlpha = 0.45 * env * (1 - Math.abs(s) / 3);
       for (let yy = 0; yy < 140; yy += 32)
         blitPx(
           g,
@@ -3678,12 +3689,12 @@ zoneFx('f12_mamdeath', (g, z, X, Y, k, age, time) => {
 zoneFx('f12_mamsoul', (g, z, X, Y, _k, age, time) => {
   pinZ(g, z, X, Y);
   const sd = seedOf(z);
-  const pil = k01((age - 1.6) / 0.5) * (1 - k01((age - 2.5) / 0.5));
+  const pil = k01((age - 1.3) / 0.5) * (1 - k01((age - 2.5) / 0.5));
   if (pil > 0) ribbons(g, X - 24, Y - 4, 0, 48, 0.8 * pil, 1.6, time, sd % 97, 0.1 * pil);
   const op = g.globalCompositeOperation;
   g.globalCompositeOperation = 'lighter';
   for (let i = 0; i < 16; i++) {
-    const t = age - 1.65 - i * 0.07;
+    const t = age - 1.4 - i * 0.07;
     if (t < 0 || t > 1.3) continue;
     const sp = 50 + 30 * hash(sd, i, 6);
     const xo = (hash(sd, i, 5) - 0.5) * 44;
