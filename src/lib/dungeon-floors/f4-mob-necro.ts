@@ -41,6 +41,7 @@ import {
   ik,
   lerp,
   litOf,
+  offOf,
   mod,
   seg,
   v3,
@@ -519,7 +520,9 @@ type NcFr = MobFrame & {
   /** Слой огня по фазе и силе — у кадра тела, чтобы не собирать точки на каждый вызов. */
   lits: Map<string, HTMLCanvasElement | null>;
 };
-const ncFrames = frameLRU<NcFr>(700);
+const ncFrames = frameLRU<NcFr>(1100);
+/** Сторона скольжения относительно взгляда → класс кадра (вперёд, вбок, назад). */
+const MV3 = [0, 0, 2, 4, 4, 4, 2, 0];
 F4_MOB_STAT.size.f4_necro = () => ncFrames.size;
 
 /** Кадр тела без огня (огонь и глаза — в `lit`, по фазе огня). */
@@ -549,6 +552,8 @@ function ncBody(
       eye: null,
       shadow: 6,
       top: [fx(out.top[0]), out.top[1]],
+      // Огонь навершия — слой позже (`ncFrame`): обрезка оставляет место над ним.
+      keep: [fx(out.top[0]) - 7, out.top[1] - 13],
       glow: glow.map(([x, y, c]): [number, number, RGBA] => [fx(x), y, c]),
       lits: new Map(),
     };
@@ -574,7 +579,13 @@ function ncFrame(
   if (lit === undefined) {
     const pts: [number, number, RGBA][] = fireMul < 0.3 ? [] : [...b.glow];
     flamePts(b.top[0], b.top[1], P.fire * fireMul, ph, pts);
-    lit = litOf(NC_W, NC_H, pts);
+    // Кадр в кеше обрезан до рисунка: точки огня — в его начало.
+    const [ox, oy] = offOf(b.img);
+    lit = litOf(
+      NC_W,
+      NC_H,
+      pts.map(([x, y, c]): [number, number, RGBA] => [x - ox, y - oy, c]),
+    );
     b.lits.set(lk, lit);
   }
   return { img: b.img, ax: b.ax, ay: b.ay, eye: null, shadow: b.shadow, lit };
@@ -673,7 +684,7 @@ registerMobPainter('f4_necro', (m, pose) => {
     const sp = Math.hypot(m.vx ?? 0, m.vy ?? 0);
     const f = mod(now * 4 + hash01(m.id ?? 0) * 8, 8);
     if (sp > 0.4) {
-      const mv = dir8(Math.atan2(m.vy ?? 0, m.vx ?? 0) - (m.face ?? 0));
+      const mv = MV3[dir8(Math.atan2(m.vy ?? 0, m.vx ?? 0) - (m.face ?? 0))];
       const g = mod((v.dist / NC_GLIDE) * 8, 8);
       fr = ncFrame(`move|${g}|${mv}`, d8, look, flash, ncMove(g, mv), now);
     } else fr = ncFrame(`idle|${f}`, d8, look, flash, ncIdle(f), now);
@@ -744,16 +755,33 @@ registerMobWarm('f4_necro', function* () {
       ncBody(`idle|${f}`, d, 'normal', false, ncIdle(f));
       yield 0;
     }
-    for (let f = 0; f < 8; f++) {
-      ncBody(`move|${f}|4`, d, 'normal', false, ncMove(f, 4));
-      yield 0;
-    }
+    for (const mv of [0, 2, 4])
+      for (let f = 0; f < 8; f++) {
+        ncBody(`move|${f}|${mv}`, d, 'normal', false, ncMove(f, mv));
+        yield 0;
+      }
   }
   for (let d = 0; d < 8; d++)
     for (let i = 0; i <= 20; i++) {
       ncBody(`aim|${i}`, d, 'normal', false, ncAim(i / 24));
       yield 0;
     }
+  for (let d = 0; d < 8; d++) {
+    for (let i = 0; i <= 10; i++) {
+      ncBody(`srec|${i}`, d, 'normal', false, ncShotRecover(i / 24));
+      yield 0;
+    }
+    for (let i = 0; i <= 26; i++) {
+      ncBody(`raise|${i}`, d, 'normal', false, ncRaise(i / 24), (p, mir) =>
+        ncMotes(p, i / 24, mir),
+      );
+      yield 0;
+    }
+    for (let i = 0; i <= 10; i++) {
+      ncBody(`rrec|${i}`, d, 'normal', false, ncRaiseRecover(i / 24), (p) => ncRing(p, i / 24));
+      yield 0;
+    }
+  }
 });
 
 // ---- Снаряд: могильный огонь — череп в зелёном пламени со следом ----------------------

@@ -264,6 +264,8 @@ export function flashImg(img: HTMLCanvasElement): HTMLCanvasElement {
     g.fillStyle = '#ffffff';
     g.fillRect(0, 0, c.width, c.height);
     FLASHED.set(img, c);
+    const o = OFF.get(img);
+    if (o) OFF.set(c, o);
   }
   return c;
 }
@@ -281,7 +283,95 @@ export function finish(px: Px, mir: boolean, flash: boolean, look: Look): HTMLCa
   } else if (look === 'albino') p = p.tint(hex('#f4ece4'), 0.45);
   if (mir) p = p.flipX();
   if (flash) p = p.tint(WHITE, 0.9);
-  return p.canvas();
+  const c = p.canvas();
+  const b = boxOf(p);
+  if (b) BOX.set(c, b);
+  return c;
+}
+
+// ---- Обрезка кадра по рисунку ------------------------------------------------------------
+//
+// Холст кадра — с запасом под замах и падение, а движок кладёт его на экран
+// целиком (`drawImage` в экранном масштабе): пустые поля стоили толпе этажа
+// больше, чем само рисование. Кеш хранит кадр, обрезанный до рисунка: начало
+// холста сдвигается — на столько же сдвигаются якорь и слой `lit` (движок кладёт
+// `lit` тем же якорем). Рисунок на экране тот же до пикселя.
+
+/** Рамка непрозрачного рисунка [x0, y0, x1, y1] — из `finish`. */
+const BOX = new WeakMap<HTMLCanvasElement, [number, number, number, number]>();
+/** Левый верхний угол светящихся точек слоя `lit` — из `litOf`. */
+const LBOX = new WeakMap<HTMLCanvasElement, [number, number]>();
+/** Сдвиг начала обрезанного кадра относительно полного холста. */
+const OFF = new WeakMap<HTMLCanvasElement, [number, number]>();
+/** На сколько обрезан кадр слева и сверху: точки в координатах полного холста минус это. */
+export const offOf = (img: HTMLCanvasElement): [number, number] => OFF.get(img) ?? [0, 0];
+
+function boxOf(p: Px): [number, number, number, number] | null {
+  const { w, h, data } = p;
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < h; y++)
+    for (let x = 0, i = y * w * 4 + 3; x < w; x++, i += 4)
+      if (data[i]) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        y1 = y;
+      }
+  return x1 < 0 ? null : [x0, y0, x1, y1];
+}
+
+function cropCanvas(
+  src: HTMLCanvasElement,
+  ox: number,
+  oy: number,
+  w: number,
+  h: number,
+): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, w);
+  c.height = Math.max(1, h);
+  c.getContext('2d')?.drawImage(src, -ox, -oy);
+  return c;
+}
+
+/**
+ * Кадр, обрезанный до рисунка. `keep` — точка, которую обрезка не отрезает
+ * (огонь некроманта рисуется слоем позже, по точкам полного холста).
+ */
+function trimFrame(fr: MobFrame): MobFrame {
+  const b = BOX.get(fr.img);
+  if (!b) return fr;
+  const l = fr.lit ? LBOX.get(fr.lit) : undefined;
+  const keep = (fr as { keep?: [number, number] }).keep;
+  let ox = b[0];
+  let oy = b[1];
+  if (l) {
+    ox = Math.min(ox, l[0]);
+    oy = Math.min(oy, l[1]);
+  }
+  if (keep) {
+    ox = Math.min(ox, keep[0]);
+    oy = Math.min(oy, keep[1]);
+  }
+  ox = Math.max(0, ox);
+  oy = Math.max(0, oy);
+  const w = b[2] + 1 - ox;
+  const h = b[3] + 1 - oy;
+  if (!ox && !oy && w === fr.img.width && h === fr.img.height) return fr;
+  const img = cropCanvas(fr.img, ox, oy, w, h);
+  OFF.set(img, [ox, oy]);
+  const lit = fr.lit ? cropCanvas(fr.lit, ox, oy, fr.lit.width - ox, fr.lit.height - oy) : fr.lit;
+  return {
+    ...fr,
+    img,
+    ax: fr.ax - ox,
+    ay: fr.ay - oy,
+    lit,
+    eye: fr.eye ? [fr.eye[0] - ox, fr.eye[1] - oy] : fr.eye,
+  };
 }
 
 /** Замер для стенда: сколько кадров мобов построено и за сколько (мс). */
@@ -290,10 +380,16 @@ export const F4_MOB_STAT = {
   ms: [] as number[],
   by: {} as Record<string, number>,
   size: {} as Record<string, () => number>,
+  /** Последние промахи кеша (вид|ключ) — для стенда: что рисуется заново в бою. */
+  miss: [] as string[],
+  /** Стенд: не обрезать кадры (сверка «до пикселя» с обрезкой). */
+  noTrim: false,
 };
-export function stat(kind: string, ms: number): void {
+export function stat(kind: string, ms: number, key = ''): void {
   F4_MOB_STAT.n++;
   if (F4_MOB_STAT.ms.length < 4000) F4_MOB_STAT.ms.push(ms);
+  F4_MOB_STAT.miss.push(`${kind}|${key}`);
+  if (F4_MOB_STAT.miss.length > 400) F4_MOB_STAT.miss.splice(0, 200);
   F4_MOB_STAT.by[kind] = (F4_MOB_STAT.by[kind] ?? 0) + 1;
 }
 
@@ -307,8 +403,9 @@ export function cached(
   let fr = lru.get(key);
   if (!fr) {
     const t0 = performance.now();
-    fr = lru.set(key, build());
-    stat(kind, performance.now() - t0);
+    const full = build();
+    fr = lru.set(key, F4_MOB_STAT.noTrim ? full : trimFrame(full));
+    stat(kind, performance.now() - t0, key);
   }
   return fr;
 }
@@ -324,9 +421,21 @@ export function litOf(
   const key = `${w}x${h}|${pts.map(([x, y, c]) => `${x},${y},${c.join('.')}`).join(';')}`;
   let c = LITS.get(key);
   if (!c) {
-    const p = new Px(w, h);
+    // Холст слоя — только до самой правой и нижней светящейся точки: движок
+    // кладёт `lit` тем же якорем, что и кадр (начало холста то же), а рисует
+    // его в экранном масштабе — пустые поля полного кадра стоили толпе
+    // ~1 мс на кадр (17 больших прозрачных холстов поверх темноты).
+    let mx = 0;
+    let my = 0;
+    for (const [x, y] of pts) {
+      mx = Math.max(mx, Math.round(x));
+      my = Math.max(my, Math.round(y));
+    }
+    const p = new Px(Math.min(w, mx + 1), Math.min(h, my + 1));
     for (const [x, y, col] of pts) p.set(x, y, col);
     c = LITS.set(key, p.canvas());
+    const b = boxOf(p);
+    if (b) LBOX.set(c, [b[0], b[1]]);
   }
   return c;
 }

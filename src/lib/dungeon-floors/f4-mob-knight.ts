@@ -707,7 +707,9 @@ function knDeath(t: number): { P: KnP; soul: number } {
 
 // ---- Кадр -------------------------------------------------------------------------
 
-const knFrames = frameLRU<MobFrame>(900);
+const knFrames = frameLRU<MobFrame>(1300);
+/** Сторона хода относительно взгляда → класс кадра (вперёд, вбок, назад, вбок). */
+const MV4 = [0, 0, 2, 4, 4, 4, 6, 0];
 F4_MOB_STAT.size.f4_knight = () => knFrames.size;
 
 function knFrame(
@@ -789,7 +791,7 @@ registerMobPainter('f4_knight', (m, pose) => {
     // Выход из окна — латник поднимает щит и копьё.
     const back = (v.prev === 'open' || v.prev === 'stagger') && t < 0.25;
     if (sp > 0.35) {
-      const mv = dir8(Math.atan2(m.vy ?? 0, m.vx ?? 0) - (m.face ?? 0));
+      const mv = MV4[dir8(Math.atan2(m.vy ?? 0, m.vx ?? 0) - (m.face ?? 0))];
       const f = mod((v.dist / KN_WALK) * 8, 8);
       fr = knFrame(`walk|${f}|${mv}`, d8, look, flash, rim, knWalk(f, mv));
     } else if (back) {
@@ -835,6 +837,14 @@ registerMobWarm('f4_knight', function* () {
     }
     for (let i = 0; i <= 6; i++) {
       knFrame(`lunge|${i}`, d, 'normal', false, 0, knLunge(i / 24));
+      yield 0;
+    }
+    for (let i = 0; i <= 27; i++) {
+      knFrame(`open|${i}`, d, 'normal', false, 0, knOpen(i / 24));
+      yield 0;
+    }
+    for (let i = 0; i <= 5; i++) {
+      knFrame(`up|${i}`, d, 'normal', false, 0, mixKn(mixKn(KN_OPEN, KG, 0.45), KG, eOut(i / 5)));
       yield 0;
     }
   }

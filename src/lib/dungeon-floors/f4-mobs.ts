@@ -872,6 +872,10 @@ registerMobWarm('f4_skel', function* () {
       skelPose(`rec|${i}`, d, 'normal', false, skRecover(i / 24));
       yield 0;
     }
+    for (let i = 0; i <= 13; i++) {
+      skelRise(i, d, 'normal', false);
+      yield 0;
+    }
   }
 });
 

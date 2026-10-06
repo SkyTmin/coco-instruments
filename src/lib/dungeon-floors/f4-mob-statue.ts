@@ -606,7 +606,7 @@ const ST_BOW: StP = {
 
 // ---- Кадр -------------------------------------------------------------------------
 
-const stFrames = frameLRU<MobFrame>(900);
+const stFrames = frameLRU<MobFrame>(1200);
 F4_MOB_STAT.size.f4_statue = () => stFrames.size;
 
 function stFrame(
@@ -718,8 +718,8 @@ export function statueFrame(m: Mob, pose: MobPose, gold: boolean, cracks: number
     // Замах идёт, только пока на статую не смотрят, — кадр от накопленного замаха.
     const k = Math.min(1, (m.data?.wk ?? t) / 0.55);
     const i = Math.min(13, Math.floor(k * 13 + 1e-6));
-    P = { ...stWind(i / 13, ST_FROZEN[n]), eyes: m.data?.eyes ?? 1 };
-    key = `wind|${i}|${n}|${P.eyes > 0.5 ? 1 : 0}`;
+    P = { ...stWind(i / 13, ST_FROZEN[0]), eyes: m.data?.eyes ?? 1 };
+    key = `wind|${i}|${P.eyes > 0.5 ? 1 : 0}`;
     if (i >= 11) ex.ghost = ghost;
   } else if (md === 'recover') {
     const i = fi(t, 12);
@@ -770,6 +770,17 @@ registerMobWarm('f4_statue', function* () {
       }
       for (let n = 0; n < 4; n++) {
         stFrame(`still|${n}|0`, d, 'normal', false, gold, 0, { ...ST_FROZEN[n], eyes: 0 });
+        yield 0;
+      }
+      for (let i = 0; i <= 13; i++) {
+        stFrame(`wind|${i}|1`, d, 'normal', false, gold, 0, {
+          ...stWind(i / 13, ST_FROZEN[0]),
+          eyes: 1,
+        });
+        yield 0;
+      }
+      for (let i = 0; i <= 12; i++) {
+        stFrame(`rec|${i}`, d, 'normal', false, gold, 0, stRecover(i / 24));
         yield 0;
       }
     }
