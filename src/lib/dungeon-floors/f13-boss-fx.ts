@@ -2253,18 +2253,20 @@ function seaGlints(g: G, z: { x: number; y: number }, px: number, py: number, ti
     const Ys = strip * 8;
     const ph = hash(strip, 0, 71) * TAU;
     const dir = strip % 2 ? 1 : -1;
-    for (let j = 0; j < 3; j++) {
-      // Блик скользит вдоль полотнища; у каждого свой ход и период.
-      const span = 56;
+    for (let j = 0; j < 2; j++) {
+      // Блик скользит вдоль полотнища; у каждого свой ход и период. Яркость —
+      // общая на полотнище: тусклое пропускаем целиком, до проверки клеток.
+      const a = 0.55 * Math.sin(mod(time * 0.7 + hash(strip, j, 5), 1) * Math.PI);
+      if (a < 0.05) continue;
+      const span = 64;
       const base = Math.floor((x0 * TS) / span) * span;
       for (let X0 = base; X0 < x1 * TS; X0 += span) {
         const X = X0 + mod(hash(strip, j, X0) * span + time * (10 + 6 * j) * dir, span);
         const wx = X / TS;
         const wy = Ys / TS;
-        if (sim && solidTile(sim, Math.floor(wx), Math.floor(wy))) continue;
         if (wx > SHIP_BOX[0] && wx < SHIP_BOX[1] && wy > SHIP_BOX[2] && wy < SHIP_BOX[3]) continue;
+        if (sim && solidTile(sim, Math.floor(wx), Math.floor(wy))) continue;
         const crest = 2.6 + Math.sin(X * 0.17 + ph) * 1.5 + Math.sin(X * 0.06 + ph * 2) * 0.7;
-        const a = 0.55 * Math.sin(mod(time * 0.7 + hash(strip, j, 5), 1) * Math.PI);
         if (!ink(g, j ? C.sea3 : C.foam, a)) continue;
         pp(g, ox + X, oy + Ys + Math.round(crest), j ? 3 : 2, 1);
       }
