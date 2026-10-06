@@ -31,6 +31,7 @@ import './f6-mob-wisp';
 import './f6-mob-bat';
 import './f6-mob-golem';
 import './f6-mob-ore';
+import './f6-mob-worm';
 
 type RGBA = [number, number, number, number];
 
@@ -358,116 +359,7 @@ const ORE_ROCK: Tones = [hx('#2e282e'), hx('#4a424a'), hx('#6a5e66'), hx('#8e808
 const QUARTZ: Tones = [hx('#9a8aa0'), hx('#d4c8dc'), hx('#f0e8f6'), hx('#ffffff')];
 const SILVER: Tones = [hx('#5a6068'), hx('#98a2ac'), hx('#d0d8e0'), hx('#ffffff')];
 
-// ---------------------------------------------------------------------------
-// Магмовый червь: кольца корки с лавой между ними, пасть — венец клыков.
-// Под лавой — только горб и круги. 26×34, «земля» — поверхность лавы.
-// ---------------------------------------------------------------------------
-
-const WORM_C: Tones = [hx('#1a1010'), hx('#3a2622'), hx('#5e4238'), hx('#86604c')];
-
-function paintWorm(rise: number, lean: number, open: number, sway: number, f: number): Built {
-  const W = 26;
-  const H = 34;
-  const p = new Px(W, H);
-  const S = 30;
-  const cx = 12;
-  if (rise <= 0) {
-    // Горб под поверхностью и круги.
-    shadeEll(p, cx, S - 0.5, 3.4, 1.4, WORM_C, 0.1);
-    p.outline(INK);
-    p.set(cx - 1, S - 1, LAVA.hot);
-    p.set(cx + 1, S - 1, LAVA.bright);
-    ripple(p, cx, S, 5.5, 1.8, f);
-    return { p, ax: cx, ay: S + 1 - FLY, eye: null };
-  }
-  // Хребет: от поверхности вверх, наклон назад/вперёд и покачивание.
-  const len = 20 * rise;
-  const pts: [number, number][] = [];
-  for (let i = 0; i <= 4; i++) {
-    const k = i / 4;
-    const bend = lean * k * k * 7 + Math.sin(k * 3 + sway) * 1.2 * k;
-    pts.push([cx + bend, S - len * k]);
-  }
-  const spine = spline(pts, 4);
-  // Кольца снизу вверх: корка, между ними светится лава.
-  const n = spine.length;
-  for (let i = 0; i < n - 1; i++) {
-    const k = i / (n - 1);
-    const [x, y] = spine[i];
-    const r = 3.3 - k * 0.8;
-    shadeEll(p, x, y, r, r * 0.8, WORM_C);
-  }
-  const head = spine[n - 1];
-  const hr = 3.2;
-  shadeEll(p, head[0], head[1], hr, hr * 0.9, WORM_C, 0.1);
-  p.outline(INK);
-  // Швы колец — лава.
-  for (let i = 2; i < n - 2; i += 3) {
-    const [x, y] = spine[i];
-    const r = 3.1 - (i / n) * 0.8;
-    for (let dx = -Math.floor(r); dx <= Math.floor(r); dx++) {
-      if (p.solid(Math.round(x + dx), Math.round(y)))
-        p.set(Math.round(x + dx), Math.round(y), Math.abs(dx) < r * 0.5 ? LAVA.bright : LAVA.hot);
-    }
-  }
-  // Пасть: венец клыков, раскрыт на плевке.
-  const mx = Math.round(head[0] + 1.4 + open);
-  const my = Math.round(head[1] - 0.2);
-  if (open > 0) {
-    p.ell(mx, my, 1.4 + open * 0.8, 1.2 + open * 0.8, hx('#2a0806'));
-    p.ell(mx, my, 0.7 + open * 0.5, 0.6 + open * 0.4, LAVA.bright);
-    for (let a = 0; a < 6; a++) {
-      const aa = (a / 6) * TAU;
-      p.set(
-        Math.round(mx + Math.cos(aa) * (1.8 + open * 0.8)),
-        Math.round(my + Math.sin(aa) * (1.6 + open * 0.8)),
-        BONE[3],
-      );
-    }
-  } else {
-    p.set(mx, my, LAVA.hot);
-    p.set(mx, my - 1, BONE[2]);
-    p.set(mx, my + 1, BONE[2]);
-  }
-  // Капли лавы стекают с колец.
-  for (let i = 0; i < 3; i++) {
-    const j = Math.floor(hash(i, f, 3) * (n - 2)) + 1;
-    const [x, y] = spine[j];
-    p.set(Math.round(x + 3), Math.round(y + 1 + (f % 2)), LAVA.hot);
-  }
-  ripple(p, cx, S, 5 + rise, 1.6, f);
-  return { p, ax: cx, ay: S + 1 - FLY, eye: [mx - 1, my - 1] };
-}
-
-registerMobPainter('f6_worm', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const t = pose.t;
-  const f = ((Math.floor(t * 7) % 4) + 4) % 4;
-  if (mode === 'f6_under' || mode === 'chase')
-    return frameOf('f6_worm', pose, 'under', f, () => paintWorm(0, 0, 0, 0, f));
-  if (mode === 'f6_surface' || mode === 'f6_sink') {
-    const k0 = mode === 'f6_surface' ? t / 0.45 : 1 - t / 0.4;
-    const k = Math.max(1, Math.min(4, Math.round(k0 * 4)));
-    return frameOf('f6_worm', pose, `rise${k}`, f, () => paintWorm(k / 4, 0, 0, f * 0.8, f));
-  }
-  if (mode === 'aim') {
-    // Откидывается назад, пасть наливается.
-    const k = Math.min(2, Math.floor(t * 3));
-    return frameOf('f6_worm', pose, `aim${k}`, f, () => paintWorm(1, -0.4 - k * 0.15, 0.4, 0, f));
-  }
-  if (mode === 'windup' || pose.anim === 'bite') {
-    const k = Math.min(1, pose.frame);
-    return frameOf('f6_worm', pose, `bite${k}`, 0, () => paintWorm(1, 0.5 + k * 0.3, 1.2, 0, 0));
-  }
-  if (pose.anim === 'dead')
-    return frameOf('f6_worm', pose, 'dead', 0, () => paintWorm(0.4, 0.8, 0, 1, 0));
-  // Висит над лавой, качается; только что плюнул — пасть открыта.
-  const spat = mode === 'f6_linger' && t < 0.3;
-  const k = spat ? 1 : 0;
-  return frameOf('f6_worm', pose, `linger${k}`, f, () =>
-    paintWorm(1, spat ? 0.6 : 0.1, spat ? 1.2 : 0, (f / 4) * TAU, f),
-  );
-});
+// Магмовый червь — `f6-mob-worm.ts` (анимации мобов 6).
 
 // ---------------------------------------------------------------------------
 // Бесёнок-старьёвщик: бес из атласа 0x72 с мешком добычи за спиной.
