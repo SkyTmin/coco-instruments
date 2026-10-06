@@ -14,6 +14,7 @@ import { Px, TS } from '../dungeon-art';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { bandOf } from '../dungeon-world';
 import type { WorldObj } from '../dungeon-world';
+import { F15_HEART_MAP } from './f15-boss-map';
 import {
   frameLRU,
   MOB_PAINTERS,
@@ -1218,6 +1219,51 @@ function asteroidWall(p: Px, c: CellCtx): void {
   capRim(p, c, METEOR[2], capH);
 }
 
+// --- Шов с «Сердцем» -------------------------------------------------------------
+//
+// Верхние ряды «Пояса орбит» сходятся к ночному грунту «Сердца»: реголит
+// темнеет и синеет к стыку, в нём проступают звёзды, стены тонут в ночи.
+// «Сердце» рисуют агенты босса — его клетки не трогаем, переход целиком
+// на нашей стороне (столбцы прохода F15_JOIN и стены рядом).
+
+const SEAM_ROWS = 7;
+/** Ночь «Сердца» (как в его грунте): бездна → освещённая ткань. */
+const SEAM_NIGHT = ['#0a0920', '#100e30', '#171442', '#201b56'].map((c) => hx(c));
+const SEAM_STAR = [hx('#c8d0ff'), hx('#ffe6a8'), hx('#9ae8ff')];
+
+/** Первый ряд «Пояса орбит» в мире. */
+function orbitTop(): number {
+  const s = paintSim();
+  const b = s ? bandOf(s.world, F15_ORBIT) : null;
+  return b ? b.top : F15_HEART_MAP.length;
+}
+
+/** Слить верх клетки пояса с ночью «Сердца»: k 1 у стыка, 0 через SEAM_ROWS рядов. */
+function seamBlend(p: Px, c: CellCtx, wall: boolean): void {
+  const ly = c.wy - orbitTop();
+  if (ly < 0 || ly >= SEAM_ROWS) return;
+  for (let y = 0; y < TS; y++) {
+    const k = smooth(clamp01(1 - (ly * TS + y + 0.5) / (SEAM_ROWS * TS)));
+    if (k <= 0.01) continue;
+    for (let x = 0; x < TS; x++) {
+      const X = c.wx * TS + x;
+      const Y = c.wy * TS + y;
+      const cur = p.get(x, y);
+      if (!cur[3]) continue;
+      const l = (cur[0] * 0.3 + cur[1] * 0.55 + cur[2] * 0.15) / 255;
+      const night = ramp(SEAM_NIGHT, clamp01(l * 1.6 - 0.1 + dith(X, Y) * 0.12));
+      // Дизеринг: по краю перехода ночь ложится крапом, ближе к стыку — сплошь.
+      const kk = clamp01(k * (wall ? 0.85 : 0.95) + (hash(X, Y, 1550) - 0.5) * 0.25);
+      let col = mixc(cur, night, kk);
+      if (!wall && k > 0.25) {
+        const h = hash(X >> 1, Y >> 1, 1551);
+        if (h > 0.992 - k * 0.006 && ((X ^ Y) & 1) === 0) col = SEAM_STAR[Math.floor(h * 997) % 3];
+      }
+      p.set(x, y, col);
+    }
+  }
+}
+
 function cellOf(area: string) {
   const rootish = (q: Px, cc: CellCtx) => rootFloor(q, cc, false);
   const baseOf = area === F15_OBS ? slabFloor : area === F15_ORBIT ? regolith : rootish;
@@ -1249,6 +1295,7 @@ function cellOf(area: string) {
         obsWall(p, c, mk === MK.window);
       else if (area === F15_ORBIT) asteroidWall(p, c);
       else rockWall(p, c, false);
+      if (area === F15_ORBIT) seamBlend(p, c, true);
       return p;
     }
     switch (mk) {
@@ -1306,6 +1353,7 @@ function cellOf(area: string) {
         baseOf(p, c);
     }
     wallShade(p, c);
+    if (area === F15_ORBIT) seamBlend(p, c, false);
     return p;
   };
 }
