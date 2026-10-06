@@ -5195,6 +5195,19 @@ regMob('f12boss', (m, pose) => {
   return mobFrame(c, CV_MAM, ex);
 });
 
+/**
+ * Точки тела мамонта для эффектов «Техник» — px кадра от точки моба на
+ * полу: `drum` — бубен шаманки на спине, `tusk` — кончик бивня (середина
+ * пары). Сейчас — точки модели в покое, повёрнутые по `m.face`; «Тело»
+ * держит их в согласии с кадром (поза, дыбы, подъём головы).
+ */
+export function mamPointPx(m: Mob, which: 'drum' | 'tusk'): [number, number] {
+  const p: V3 = which === 'drum' ? [2, 0, 48] : [38, 0, 14];
+  const [wx, wy, wz] = toWorld(p[0], p[1], p[2], m.face);
+  const [sx, sy] = project(wx, wy, wz);
+  return [sx, sy];
+}
+
 // Прогрев: ходьба во все 16 сторон (с наездницей и без), рёв, оглушение.
 registerMobWarm('f12boss', function* () {
   for (const rider of [true, false])

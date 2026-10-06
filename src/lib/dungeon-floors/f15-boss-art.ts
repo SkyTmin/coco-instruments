@@ -3230,6 +3230,19 @@ function lordGeo(dir: number, p: LPose): LGeo {
 }
 
 const LIT_LAST: { k: string; c: HTMLCanvasElement | null } = { k: '', c: null };
+/** Ладони владыки в последнем кадре: px от точки моба на полу и сторона. */
+const HANDS = new Map<number, { px: [number, number]; side: number }[]>();
+/**
+ * Где ладонь владыки (`side` — как у `HandOut`, −1 или 1) — px кадра от
+ * точки моба на полу, по последнему нарисованному кадру; `null` — кадра ещё
+ * не было или руки скрыты. Эффекты рук («Техники») берут ладонь только
+ * отсюда, «Тело» держит её в согласии с кадром.
+ */
+export function lordHandPx(m: Mob, side: number): [number, number] | null {
+  const hs = HANDS.get(m.id);
+  if (!hs || !hs.length) return null;
+  return (hs.find((x) => x.side === side) ?? hs[0]).px;
+}
 registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
   const s = paintSim();
   const now = pose.now;
@@ -3266,6 +3279,12 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
   // Герой за владыкой — тело просвечивает, иначе героя не видно.
   const h = s?.hero;
   const behind = !!h && h.y < m.y - 0.2 && m.y - h.y < 5.2 && Math.abs(h.x - m.x) < 2.2;
+  const rise = -(HOVER + p.hover) - bob;
+  HANDS.set(
+    m.id,
+    geo.hands.map((x) => ({ px: [x.x - LAX, x.y - LAY + rise] as [number, number], side: x.side })),
+  );
+  if (HANDS.size > 8) HANDS.delete(HANDS.keys().next().value as number);
   return {
     img,
     ax: LAX,
