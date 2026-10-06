@@ -1174,7 +1174,8 @@ function crystal(
 /** Доля «снега» вида клетки; null — не поверхность (камень, вода, стена). */
 function snowness(mk: number): number | null {
   if (mk === MK.snow || mk === MK.drift || mk === MK.foxDrift) return 1;
-  if (mk === MK.ice || mk === MK.grit || mk === MK.postIce || mk === MK.postWar) return 0;
+  if (mk === MK.ice || mk === MK.grit || mk === MK.polish || mk === MK.postIce || mk === MK.postWar)
+    return 0;
   return null;
 }
 const driftness = (mk: number): number | null =>
@@ -1203,12 +1204,30 @@ function surfacePx(p: Px, c: CellCtx, look: Look): void {
   const own = c.mark;
   const ownIce = snowness(own) === 0;
   const iceKind =
-    own === MK.grit ? 'grit' : own === MK.postIce || own === MK.postWar ? 'post' : 'ice';
+    own === MK.grit
+      ? 'grit'
+      : own === MK.polish
+        ? 'polish'
+        : own === MK.postIce || own === MK.postWar
+          ? 'post'
+          : 'ice';
+  // Снег у плит чертога: под рыхлым краем — те же плиты, а не простой лёд.
+  let nearPolish = false;
+  for (const [dx, dy] of [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ])
+    if (c.open(dx, dy) && c.markAt(dx, dy) === MK.polish) nearPolish = true;
   // Сначала оба слоя целиком, потом выбор по пикселю.
   const ice = new Px(TS, TS);
-  icePx(ice, c, look, ownIce ? iceKind : 'ice');
+  icePx(ice, c, look, ownIce ? iceKind : nearPolish ? 'polish' : 'ice');
   const snow = new Px(TS, TS);
-  const drifty = own === MK.drift || own === MK.foxDrift;
   snowPx(snow, c, look, false);
   const drift = new Px(TS, TS);
   snowPx(drift, c, look, true);
@@ -1231,7 +1250,6 @@ function surfacePx(p: Px, c: CellCtx, look: Look): void {
       }
       p.set(x, y, col);
     }
-  void drifty;
 }
 
 function cellPainter(area: string) {
