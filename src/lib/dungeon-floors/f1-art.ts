@@ -837,7 +837,6 @@ function stat(key: string, ms: number): void {
     S.maxKey = key;
   }
   S.list.push(ms);
-  (S as unknown as { kl?: string[] }).kl?.push(key); // DBGT
   if (S.list.length > 4000) S.list.splice(0, 1000);
 }
 
@@ -916,9 +915,6 @@ function mobFrame(
   } else {
     const t0 = performance.now();
     const pic = make(yaw8(d));
-    const tA = performance.now(); // DBGT
-    (F1_MOB_STAT as unknown as Record<string, number>).tm =
-      ((F1_MOB_STAT as unknown as Record<string, number>).tm ?? 0) + tA - t0; // DBGT
     let p = pic.p;
     if (look === 'elite') p.outline(GOLD_EDGE);
     if (buff) buffKant(p, pic.ax, buff);
@@ -8549,6 +8545,30 @@ function castPainter(rgb: string): Parameters<typeof registerZonePainter>[1] {
         2,
       );
     }
+    // Анимации мобов 1: искры тянутся от кольца к шаману и поднимаются, к
+    // концу чары круг вспыхивает (кадр, когда чара ложится на своих).
+    const seed = zz.id >>> 0;
+    for (let i = 0; i < 6; i++) {
+      const ph = (time * 0.9 + ((seed * 7 + i * 37) % 100) / 100) % 1;
+      const a = ((seed % 13) + i * 1.05) % (Math.PI * 2);
+      const d = R * (1 - ph) * 0.95;
+      g.fillStyle = `rgba(${rgb},${(0.9 * Math.sin(ph * Math.PI)).toFixed(3)})`;
+      g.fillRect(
+        Math.round(px + Math.cos(a) * d),
+        Math.round(py + Math.sin(a) * d * 0.9 - ph * 10),
+        1,
+        2,
+      );
+    }
+    if (k > 0.85) {
+      const f = (k - 0.85) / 0.15;
+      g.strokeStyle = `rgba(${rgb},${(0.8 * (1 - f)).toFixed(3)})`;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(px, py, R * (0.2 + 0.8 * f), 0, Math.PI * 2);
+      g.stroke();
+      g.lineWidth = 1;
+    }
     return true;
   };
 }
@@ -9158,5 +9178,3 @@ registerItemArt('f1_scrap', () => {
   p.outline(INK);
   return p;
 });
-
-export const F1_BIP_DEBUG = { bipSkel, bipPose, BIP_K, yaw8 };
