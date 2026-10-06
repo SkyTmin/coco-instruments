@@ -1076,6 +1076,512 @@ registerMobWarm('f2_shroom', function* () {
 });
 
 // ---------------------------------------------------------------------------
+// Грибёнок. Кругленький, светится пятнами шляпки, бежит вприпрыжку стайкой.
+// Укус-боднуть (0,3 с): присел и откинулся (0–0,17) → дрожит на пружине
+// (0,17–0,25) → бросок вперёд (0,25–0,3); кадр контакта — первый кадр
+// `recover` (мозг бьёт в конце замаха и толкает вперёд): шляпка бьёт
+// вниз-вперёд, искра света; дальше отскок и шаг назад по пути.
+// Из грибницы вылезает сценой: шляпка пробивает землю, комья, прыжок.
+// Смерть — гаснет и сдувается, споры уходят светом вверх.
+// ---------------------------------------------------------------------------
+
+const SP_W = 24;
+const SP_H = 26;
+const SP_GY = 21;
+const SP_CX = 12;
+/** Замах и отдых — из мозга `melee` (`def.windup` 0,3, recover 0,35). */
+const BITE_T = 0.3;
+const BITE_F = 7;
+const BITE_REC = 0.35;
+const SP_EMERGE = 0.45;
+const SP_DIE = 0.6;
+const SP_DIE_F = 14;
+
+type SpEyes = 'open' | 'shut' | 'wince' | 'wide' | 'x' | 'angry';
+
+interface SpO {
+  d: number;
+  /** Тело: + приплюснуто, − вытянуто (px). */
+  bob: number;
+  /** Верх тела вперёд по ходу, px. */
+  lean: number;
+  /** Шляпка: + ниже своего места, px. */
+  capY: number;
+  /** Шляпка вперёд по ходу (инерция), px. */
+  capF: number;
+  capW: number;
+  capH: number;
+  /** Ступни [вперёд, вверх]: правая, левая. */
+  fR: [number, number];
+  fL: [number, number];
+  eyes: SpEyes;
+  /** Свечение пятен 0…1. */
+  glow: number;
+  /** Сколько пикселей ещё под землёй (вылезает из грибницы). */
+  sink: number;
+}
+
+const SP0: SpO = {
+  d: 0,
+  bob: 0,
+  lean: 0,
+  capY: 0,
+  capF: 0,
+  capW: 1,
+  capH: 1,
+  fR: [0.6, 0],
+  fL: [-0.6, 0],
+  eyes: 'open',
+  glow: 0.6,
+  sink: 0,
+};
+
+/** Пятна шляпки: [азимут от морды, доля радиуса, крупное]. */
+const SP_SPOTS: [number, number, boolean][] = [
+  [-2.5, 0.58, true],
+  [0.45, 0.62, true],
+  [2.1, 0.5, false],
+  [3.05, 0.22, false],
+  [-1.1, 0.25, false],
+];
+
+function sproutPic(o: SpO, lit: Px | null = null): Pic {
+  const p = new Px(SP_W, SP_H);
+  const yaw = SIDE_YAW[o.d];
+  const c = Math.cos(yaw);
+  const n = Math.sin(yaw);
+  const GY = SP_GY + o.sink;
+  const CX = SP_CX;
+  const feet = (
+    [
+      [1, o.fR],
+      [-1, o.fL],
+    ] as [number, [number, number]][]
+  )
+    .map(([s, [f, z]]) => {
+      const [x, y, dp] = prj(yaw, f, s * 1.6, z);
+      return { x: CX + 0.5 + x, y: GY - 0.5 + y, dp };
+    })
+    .sort((a, b) => a.dp - b.dp);
+  const foot = (ft: { x: number; y: number }, far: boolean) =>
+    p.rect(
+      Math.round(ft.x - 1),
+      Math.round(ft.y),
+      Math.round(ft.x),
+      Math.round(ft.y),
+      far ? SPR.stalk[0] : SPR.stalk[1],
+    );
+  foot(feet[0], true);
+  // Тельце: низ стоит на земле, высота — от `bob`.
+  const h = 5.4 - o.bob;
+  const ry = h / 2;
+  const rx = 2.8 * Math.sqrt(5.4 / Math.max(2.6, h));
+  const lean = Math.round(o.lean * 0.5);
+  const scx = CX + 0.5 + Math.round(c * lean);
+  const scy = GY - 0.8 - ry + Math.round(n * lean * SE);
+  ball(p, { x: scx, y: scy, rx, ry }, SPR.stalk);
+  foot(feet[1], false);
+  // Глаза-бусинки: точки тельца на азимуте морда ± 0,5, видны, если смотрят к нам.
+  let eye: [number, number] | null = null;
+  const ey = Math.round(scy - 0.7);
+  for (const da of [-0.5, 0.5]) {
+    const a = yaw + da;
+    if (Math.sin(a) < -0.3) continue;
+    const x = Math.round(scx - 0.5 + Math.cos(a) * (rx - 0.6));
+    const e = o.eyes;
+    const col = SPR.eye;
+    if (e === 'open' || e === 'angry') p.rect(x, ey, x, ey + 1, col);
+    else if (e === 'wide') p.rect(x, ey - 1, x, ey + 1, col);
+    else if (e === 'shut') p.set(x, ey + 1, col);
+    else if (e === 'wince') {
+      p.set(x, ey, col);
+      p.set(x + (da < 0 ? -1 : 1), ey + 1, col);
+    } else if (e === 'x') {
+      p.set(x - 1, ey, col);
+      p.set(x, ey + 1, col);
+      p.set(x - 1, ey + 2, col);
+      p.set(x + 1, ey, col);
+      p.set(x + 1, ey + 2, col);
+    }
+    if (e === 'angry') p.set(x + (da < 0 ? -1 : 1), ey - 1, col);
+    if (e === 'open' || e === 'angry' || e === 'wide') eye = [x, ey];
+  }
+  // Шляпка: купол со срезанным низом, под ним — тёмная кайма.
+  const cf = o.lean + o.capF;
+  const ccx = CX + 0.5 + Math.round(c * cf);
+  const ccy = Math.round(scy - ry - 0.6 + o.capY + n * cf * SE);
+  const crx = 5.2 * o.capW;
+  const cry = 4 * o.capH;
+  p.ell(ccx, ccy + 1, crx - 0.9, 1.3, SPR.cap[0]);
+  const cap: Ell = { x: ccx, y: ccy, rx: crx, ry: cry };
+  ball(p, cap, SPR.cap, (_x, y) => y <= ccy + 1);
+  // Пятна в координатах шляпки — поворачиваются вместе с ней.
+  const g = mix(SPR.cap[3], SPR.glow, clamp01(o.glow));
+  for (const [az, r, big] of SP_SPOTS) {
+    const a = yaw + az;
+    const x = Math.round(ccx - 0.5 + Math.cos(a) * r * crx * 0.85);
+    const y = Math.round(ccy - cry * 0.42 + Math.sin(a) * r * cry * 0.5);
+    if (!inE(cap, x, y) || y > ccy) continue;
+    p.set(x, y, g);
+    if (big) p.set(x + 1, y, g);
+    if (lit && o.glow > 0.7) lit.set(x, y, alpha(SPR.glow, (o.glow - 0.6) * 1.6));
+  }
+  p.outline(INK);
+  if (o.sink > 0) {
+    // Ниже земли — пусто: тело ещё в грибнице.
+    for (let y = SP_GY + 1; y < SP_H; y++)
+      for (let x = 0; x < SP_W; x++) p.data[(y * SP_W + x) * 4 + 3] = 0;
+    if (eye && eye[1] > SP_GY) eye = null;
+  }
+  return { p, ax: SP_CX, ay: SP_GY, eye, lit };
+}
+
+/** Покой: тельце дышит, шляпка отстаёт, пятна мерцают. */
+function spIdle(d: number, i: number, blink: boolean): SpO {
+  const b = Math.round(Math.sin((i / 8) * TAU) * 0.6);
+  const cy = Math.round(Math.sin(((i - 1.4) / 8) * TAU) * 0.8) - b;
+  return {
+    ...SP0,
+    d,
+    bob: b,
+    capY: cy,
+    glow: 0.5 + 0.3 * Math.sin((i / 8) * TAU + 1),
+    eyes: blink && (i === 4 || i === 5) ? 'shut' : 'open',
+  };
+}
+
+/** Бег вприпрыжку: 6 кадров на два скока (1 клетка пути). */
+function spWalk(d: number, i: number, back = false): SpO {
+  const ph = i / 6;
+  const up = Math.abs(Math.sin(ph * TAU));
+  const lag = Math.abs(Math.sin((ph - 0.17) * TAU));
+  const leg = (q: number): [number, number] => [
+    -Math.cos(q * TAU) * 1.4 * (back ? -1 : 1),
+    Math.round(Math.max(0, Math.sin(q * TAU)) * 1.6),
+  ];
+  return {
+    ...SP0,
+    d,
+    bob: -Math.round(up * 1.4),
+    capY: Math.round(-lag * 1.6 + up * 1.4),
+    lean: back ? -0.8 : 1.4,
+    capF: back ? 0.4 : -0.5,
+    fR: leg(ph),
+    fL: leg(ph + 0.5),
+    glow: 0.65,
+  };
+}
+
+/** Замах (0,3 с): присел-откинулся → дрожь на пружине → бросок вперёд. */
+function spBite(d: number, f: number): SpO {
+  const t = (f + 0.5) / FPS;
+  const crouch = eOut(seg(t, 0, 0.17));
+  const go = eIn(seg(t, 0.25, BITE_T));
+  const quiver = t > 0.17 && t < 0.25 ? (f % 2 ? 0.5 : -0.5) : 0;
+  return {
+    ...SP0,
+    d,
+    bob: 1.6 * crouch * (1 - go) - 1.4 * go,
+    lean: -1.6 * crouch * (1 - go) + 2.6 * go,
+    capY: Math.round(0.6 * crouch * (1 - go) - 0.8 * go) + quiver,
+    capF: -0.8 * crouch * (1 - go) + quiver - 0.6 * go,
+    capW: 1 + 0.06 * crouch * (1 - go),
+    capH: 1 - 0.06 * crouch * (1 - go) + 0.05 * go,
+    fR: [lerp(0.6, -0.4, crouch) - 1.4 * go, 0],
+    fL: [lerp(-0.6, -1.2, crouch) - 1.2 * go, 0],
+    eyes: 'angry',
+    glow: 0.6 + 0.4 * crouch,
+  };
+}
+
+/** После укуса: контакт (шляпка бьёт вниз-вперёд) → отскок → назад. */
+function spRecover(d: number, f: number): SpO {
+  const t = f / FPS;
+  const back = eIO(seg(t, 0.06, 0.3));
+  const cap = wob(t / 0.3, 1.4);
+  return {
+    ...SP0,
+    d,
+    bob: lerp(1, 0, eOut(seg(t, 0, 0.12))),
+    lean: lerp(2.6, -0.5, back),
+    capY: Math.round(1.6 * cap),
+    capF: lerp(0.8, 0, back),
+    capW: 1 + 0.12 * Math.max(0, cap),
+    capH: 1 - 0.1 * Math.max(0, cap),
+    fR: [lerp(1.4, 0.6, back), 0],
+    fL: [lerp(-0.4, -0.6, back), 0],
+    eyes: t < 0.15 ? 'angry' : 'open',
+    glow: lerp(1, 0.6, seg(t, 0, 0.2)),
+  };
+}
+
+/** Искра контакта: свет у края шляпки по ходу. */
+function spSpark(pic: Pic, d: number, f: number): Pic {
+  const lit = pic.lit ?? new Px(SP_W, SP_H);
+  const yaw = SIDE_YAW[d];
+  const k = f / 3;
+  const x = SP_CX + 0.5 + Math.cos(yaw) * 6.5;
+  const y = SP_GY - 6 + Math.sin(yaw) * 6.5 * SE;
+  glowAt(lit, x, y, 3 + k * 3, SPR.glow, 0.9 * (1 - k));
+  for (let i = 0; i < 5; i++) {
+    const a = yaw + (i - 2) * 0.55;
+    const r = 2.5 + k * 4;
+    lit.set(
+      Math.round(x + Math.cos(a) * r),
+      Math.round(y + Math.sin(a) * r * 0.7),
+      alpha(WHITE, 1 - k),
+    );
+  }
+  pic.lit = lit;
+  return pic;
+}
+
+/** Вылезает из грибницы (0,45 с): шляпка пробивает землю → прыжок → встряхнулся. */
+function spEmerge(d: number, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  const out = eOut(seg(t, 0.04, 0.26));
+  const hop = Math.sin(seg(t, 0.2, 0.34) * PI);
+  const land = seg(t, 0.32, 0.45);
+  const shake = land > 0 ? wob(land, 1.5) : 0;
+  const o: SpO = {
+    ...SP0,
+    d,
+    sink: Math.round(lerp(11, 0, out)),
+    bob: -1.4 * hop + (land > 0 && land < 0.4 ? 1.2 : 0),
+    capY: Math.round(1.6 * hop - shake * 1.2),
+    capF: shake * 2,
+    eyes: t < 0.2 ? 'shut' : 'wide',
+    glow: 1,
+    fR: [0.6, Math.round(hop * 1.5)],
+    fL: [-0.6, Math.round(hop * 1.5)],
+  };
+  const lit = new Px(SP_W, SP_H);
+  const pic = sproutPic(o, lit);
+  const p = pic.p;
+  // Холмик и комья земли грибницы.
+  const k = seg(t, 0, 0.4);
+  const mound = Math.round(lerp(3, 1, k));
+  for (let x = -6; x <= 6; x++) {
+    const hh = Math.round(mound * (1 - (x / 6.5) ** 2));
+    for (let y = 0; y < hh; y++) p.set(SP_CX + x, SP_GY - y, y === hh - 1 ? MDR.soilL : MDR.soil);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = PI + (i / 5) * PI + hash(i, 3) * 0.3;
+    const v = 16 + hash(i, 5) * 10;
+    const tt = clamp(t - 0.03, 0, 0.42);
+    const x = SP_CX + 0.5 + Math.cos(a) * v * tt * 1.4;
+    const y = SP_GY - 2 + Math.sin(a) * v * tt + 90 * tt * tt;
+    if (y <= SP_GY + 1)
+      p.set(Math.round(x), Math.round(Math.min(y, SP_GY)), i % 2 ? MDR.soilL : MDR.soil);
+  }
+  // Свет грибницы: тает к концу.
+  glowAt(lit, SP_CX + 0.5, SP_GY - 1, 7, SPR.glow, 0.55 * (1 - k));
+  return pic;
+}
+
+/** Смерть 0,6 с: дёрнулся → гаснет и сдувается → лежит шляпкой, споры уходят светом. */
+function sproutDeathPic(d: number, f: number): Pic {
+  const t = (f + 0.5) / FPS;
+  const jerk = seg(t, 0, 0.12);
+  const sag = eIO(seg(t, 0.1, 0.4));
+  const o: SpO = {
+    ...SP0,
+    d,
+    bob: -1.2 * Math.sin(jerk * PI) + 3.2 * sag,
+    capY: Math.round(-1.4 * Math.sin(jerk * PI) + 2.2 * sag),
+    capW: 1 + 0.28 * sag,
+    capH: 1 - 0.42 * sag,
+    capF: -0.6 * sag,
+    eyes: 'x',
+    glow: 1 - seg(t, 0.08, 0.4),
+    fR: [0.6 + sag * 0.8, 0],
+    fL: [-0.6 - sag * 0.8, 0],
+  };
+  const lit = new Px(SP_W, SP_H);
+  const pic = sproutPic(o, lit);
+  pic.eye = null;
+  // Споры уходят вверх, свет тает.
+  const k = seg(t, 0.12, SP_DIE);
+  if (k > 0 && k < 1)
+    for (let i = 0; i < 7; i++) {
+      const x = SP_CX + 0.5 + (hash(i, 21) - 0.5) * 9 + Math.sin(k * 5 + i) * 1.2;
+      const y = SP_GY - 7 - k * (8 + hash(i, 23) * 6);
+      const al = (1 - k) * (0.6 + 0.4 * hash(i, 25));
+      pic.p.set(Math.round(x), Math.round(y), alpha(SPR.cap[3], al));
+      lit.set(Math.round(x), Math.round(y), alpha(SPR.glow, al));
+    }
+  return pic;
+}
+
+/** Режим грибёнка → кадр. */
+function sproutFrame(m: Mob, pose: MobPose): MobFrame {
+  const md = pose.mode;
+  const t = pose.t;
+  const prev = VIS.get(m);
+  const want =
+    md === 'windup'
+      ? (m.face ?? 0)
+      : md === 'recover'
+        ? (heroAng(m) ?? prev?.yaw ?? m.face ?? 0)
+        : headOf(m);
+  const v = visOf(m, pose, want, 14);
+  const { d, flip } = side8(v.yaw);
+  const sh = { shadow: 4 };
+  if (md === 'dying') {
+    const f = fi(t, SP_DIE_F - 1);
+    return frame('spr', `die${f}d${d}`, pose, () => sproutDeathPic(d, f), {
+      ...merge(flip, squash(t, -0.14, 0.1)),
+      alpha: 1 - seg(t, 0.45, SP_DIE),
+      shadow: f < 8 ? 4 : 0,
+      still: true,
+    });
+  }
+  if (md === 'emerge') {
+    const f = fi(t, Math.round(SP_EMERGE * FPS) - 1);
+    return frame('spr', `em${f}d${d}`, pose, () => spEmerge(d, f), {
+      ...merge(flip),
+      shadow: f < 4 ? 0 : 4,
+      still: true,
+    });
+  }
+  const hurt = hurtOf(m, pose, v, 1.3);
+  if (md === 'windup') {
+    const f = fi(t, BITE_F);
+    return frame('spr', `wu${f}d${d}`, pose, () => sproutPic(spBite(d, f)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+      still: true,
+      ghost: f >= BITE_F - 1 ? { every: 0.03, life: 0.12, tint: '230,210,255', alpha: 0.3 } : null,
+    });
+  }
+  if (md === 'recover') {
+    const f = fi(t, Math.round(BITE_REC * FPS));
+    if (f >= 4 && spd(m) > 0.4) {
+      // Пятится: шаги назад по пути, лицом к герою.
+      const i = Math.floor(mod((-v.dist / 1) * 6, 6));
+      return frame('spr', `rb${i}d${d}`, pose, () => sproutPic(spWalk(d, i, true)), {
+        ...merge(flip, hurt?.ex),
+        ...sh,
+      });
+    }
+    const build = () => {
+      const pic = sproutPic(spRecover(d, f));
+      return f < 3 ? spSpark(pic, d, f) : pic;
+    };
+    return frame('spr', `rc${f}d${d}`, pose, build, {
+      ...merge(flip, squash(t, 0.14, 0.14), hurt?.ex),
+      ...sh,
+      still: t < 0.12,
+    });
+  }
+  if (md === 'sleep') {
+    const i = Math.floor(idlePh(m, pose.now, 3) * 4);
+    const b = [1, 2, 2, 1][i];
+    const o: SpO = { ...SP0, d, bob: b, capY: b - 1, eyes: 'shut', glow: [0.3, 0.5, 0.7, 0.5][i] };
+    return frame('spr', `sl${i}d${d}`, pose, () => sproutPic(o), { ...merge(flip), ...sh });
+  }
+  if (md === 'alert') {
+    const f = fi(t, 8);
+    const k = f / 8;
+    const o: SpO = {
+      ...SP0,
+      d,
+      bob: Math.round(-1.8 * Math.sin(seg(k, 0, 0.6) * PI)),
+      capY: Math.round(-2 * wob(k * 1.2, 1)),
+      eyes: 'wide',
+      glow: 1 - k * 0.4,
+      fR: [0.6, Math.round(Math.sin(seg(k, 0, 0.6) * PI))],
+      fL: [-0.6, Math.round(Math.sin(seg(k, 0, 0.6) * PI))],
+    };
+    return frame('spr', `al${f}d${d}`, pose, () => sproutPic(o), { ...merge(flip), ...sh });
+  }
+  if (md === 'drop') {
+    const o: SpO = {
+      ...SP0,
+      d,
+      bob: -1,
+      capY: -1.6,
+      capH: 1.1,
+      fR: [0.8, 1],
+      fL: [-0.8, 2],
+      eyes: 'wide',
+      glow: 0.9,
+    };
+    return frame('spr', `dr${d}`, pose, () => sproutPic(o), { ...merge(flip), shadow: 0 });
+  }
+  if (md === 'stun') {
+    const f = fi(t, 4);
+    const o: SpO = {
+      ...SP0,
+      d,
+      bob: 1,
+      lean: -1,
+      capY: Math.round(1.4 * wob((f + 1) / 5, 1)),
+      capF: -1,
+      eyes: 'wince',
+      glow: 0.4,
+    };
+    const land = v.prev === 'drop' ? squash(t, 0.22, 0.18) : null;
+    return frame('spr', `sn${f}d${d}`, pose, () => sproutPic(o), {
+      ...merge(flip, land, hurt?.ex),
+      ...sh,
+    });
+  }
+  if (hurt?.wince) {
+    const o: SpO = { ...SP0, d, bob: 1, lean: -1, capY: 1, capF: -1, eyes: 'wince', glow: 0.9 };
+    return frame('spr', `hu${d}`, pose, () => sproutPic(o), { ...merge(flip, hurt.ex), ...sh });
+  }
+  if (spd(m) > 0.4) {
+    const i = Math.floor(mod(v.dist * 6, 6));
+    return frame('spr', `w${i}d${d}`, pose, () => sproutPic(spWalk(d, i)), {
+      ...merge(flip, hurt?.ex),
+      ...sh,
+    });
+  }
+  const ph = idlePh(m, pose.now, 1.5);
+  const i = Math.floor(ph * 8);
+  const blink = hash(m.id ?? 0, Math.floor(pose.now / 1.5 + hash(m.id ?? 0, 9))) < 0.3;
+  return frame('spr', `i${i}${blink ? 'b' : ''}d${d}`, pose, () => sproutPic(spIdle(d, i, blink)), {
+    ...merge(flip, hurt?.ex),
+    ...sh,
+  });
+}
+
+registerMobPainter('f2_sprout', sproutFrame);
+
+registerMobWarm('f2_sprout', function* () {
+  const P = { flash: false, look: 'normal' as Look };
+  for (let d = 0; d < 5; d++) {
+    for (let i = 0; i < 8; i++) {
+      frame('spr', `i${i}d${d}`, P, () => sproutPic(spIdle(d, i, false)));
+      yield 0;
+    }
+    for (let i = 0; i < 6; i++) {
+      frame('spr', `w${i}d${d}`, P, () => sproutPic(spWalk(d, i)));
+      yield 0;
+    }
+  }
+  for (let d = 0; d < 5; d++) {
+    for (let f = 0; f <= BITE_F; f++) {
+      frame('spr', `wu${f}d${d}`, P, () => sproutPic(spBite(d, f)));
+      yield 0;
+    }
+    for (let f = 0; f <= Math.round(BITE_REC * FPS); f++) {
+      frame('spr', `rc${f}d${d}`, P, () => {
+        const pic = sproutPic(spRecover(d, f));
+        return f < 3 ? spSpark(pic, d, f) : pic;
+      });
+      yield 0;
+    }
+  }
+  for (let d = 0; d < 5; d++)
+    for (let f = 0; f < SP_DIE_F; f++) {
+      frame('spr', `die${f}d${d}`, P, () => sproutDeathPic(d, f));
+      yield 0;
+    }
+});
+
+// ---------------------------------------------------------------------------
 // ВРЕМЕННО: прежние рисовальщики — заменяются по одному.
 // ---------------------------------------------------------------------------
 
@@ -1126,90 +1632,6 @@ function finish(
 }
 
 const lookKey = (pose: MobPose) => `${pose.left ? 1 : 0}${pose.flash ? 1 : 0}${pose.look[0]}`;
-
-// ---------------------------------------------------------------------------
-// Грибёнок.
-// ---------------------------------------------------------------------------
-
-function sproutPx(bob: number, lean: number, squat: number, legs: number, shut: boolean): Px {
-  const px = new Px(16, 16);
-  const GY = 14;
-  const cx = 7.5;
-  // Ножки.
-  px.rect(Math.round(cx - 1.5 - legs), GY - 1, Math.round(cx - 1.5 - legs), GY, SPR.stalk[0]);
-  px.rect(Math.round(cx + 1.5 + legs), GY - 1, Math.round(cx + 1.5 + legs), GY, SPR.stalk[1]);
-  const by = GY - 3.4 + bob + squat * 0.5;
-  ball(px, { x: cx + lean * 0.4, y: by, rx: 2.8, ry: 2.6 - squat * 0.4 }, SPR.stalk);
-  // Шляпка — круглая, светится пятнами.
-  const capY = by - 3.4 + squat * 0.8;
-  const cap: Ell = { x: cx + lean, y: capY, rx: 5.2 + squat * 0.6, ry: 4 - squat * 0.6 };
-  ball(px, cap, SPR.cap, (_x, y) => y <= capY + 1.4);
-  for (const [dx, dy] of [
-    [-2.5, -1.5],
-    [1, -2.8],
-    [3, -0.4],
-  ]) {
-    const x = Math.round(cap.x + dx);
-    const y = Math.round(capY + dy);
-    if (inE(cap, x, y)) px.set(x, y, SPR.glow);
-  }
-  // Глаза-бусинки.
-  const ex = Math.round(cx + lean * 0.4 + 0.5);
-  const ey = Math.round(by - 0.5);
-  if (shut) {
-    px.set(ex, ey + 1, SPR.eye);
-    px.set(ex + 2, ey + 1, SPR.eye);
-  } else {
-    px.rect(ex, ey, ex, ey + 1, SPR.eye);
-    px.rect(ex + 2, ey, ex + 2, ey + 1, SPR.eye);
-  }
-  px.outline(INK);
-  return px;
-}
-
-registerMobPainter('f2_sprout', (m, pose) => {
-  let bob = 0;
-  let lean = 0;
-  let squat = 0;
-  let legs = 0;
-  let shut = false;
-  const f = pose.frame;
-  switch (pose.anim) {
-    case 'run': {
-      const i = mod(f, 6);
-      bob = -[0, 1, 2, 2, 1, 0][i];
-      legs = [0, 1, 1, 1, 1, 0][i];
-      break;
-    }
-    case 'wind':
-      squat = 1;
-      lean = -0.5;
-      break;
-    case 'bite':
-      lean = 1.5;
-      bob = -1;
-      break;
-    case 'hurt':
-      lean = -1;
-      shut = true;
-      break;
-    case 'sleep':
-      squat = 0.6;
-      shut = true;
-      break;
-    case 'dead':
-      squat = 1.4;
-      shut = true;
-      break;
-    default:
-      bob = [0, 0, 1, 0][mod(f, 4)];
-  }
-  const key = `spr|${bob}|${lean}|${squat}|${legs}|${shut ? 1 : 0}|${lookKey(pose)}`;
-  return cachedFrame(key, () => {
-    const px = sproutPx(bob, lean, squat, legs, shut);
-    return finish(px, 7.5, 14, shut ? null : [Math.round(7.5 + lean * 0.4 + 2.5), 11], pose);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Сводовая слизь.
