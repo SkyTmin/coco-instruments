@@ -29,14 +29,13 @@ import {
   eyeCol,
   fi,
   fillPoly,
-  finish,
+  bake,
   hash01,
   headView,
   hull2,
   hurtFields,
   ik,
   lerp,
-  litOf,
   mod,
   seg,
   v3,
@@ -632,15 +631,7 @@ function stFrame(
     for (const f of post) f(p);
     if (fall >= 0) stDust(p, fall);
     const pts = glow.map(([x, y, c]): [number, number, RGBA] => [vw.mir ? S3_W - 1 - x : x, y, c]);
-    return {
-      img: finish(p, vw.mir, false, look),
-      lit: litOf(S3_W, S3_H, pts),
-      ax: S3_AX,
-      ay: S3_AY,
-      eye: null,
-      shadow: 8,
-      still: true,
-    };
+    return bake(p, vw.mir, look, S3_AX, S3_AY, pts, { shadow: 8, still: true });
   });
   return withFlash(fr, flash);
 }

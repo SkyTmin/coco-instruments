@@ -545,16 +545,19 @@ function ncBody(
     p.outline(INK);
     extra?.(p, vw.mir);
     const fx = (x: number) => (vw.mir ? NC_W - 1 - x : x);
+    const top: [number, number] = [fx(out.top[0]), out.top[1]];
+    const pts = glow.map(([x, y, c]): [number, number, RGBA] => [fx(x), y, c]);
+    // Огонь навершия — слоем позже (`ncFrame`): обрезка оставляет место над ним.
+    const img = finish(p, vw.mir, false, look, [...pts, [top[0] - 7, top[1] - 13]]);
+    const [ox, oy] = offOf(img);
     return {
-      img: finish(p, vw.mir, false, look),
-      ax: NC_AX,
-      ay: NC_AY,
+      img,
+      ax: NC_AX - ox,
+      ay: NC_AY - oy,
       eye: null,
       shadow: 6,
-      top: [fx(out.top[0]), out.top[1]],
-      // Огонь навершия — слой позже (`ncFrame`): обрезка оставляет место над ним.
-      keep: [fx(out.top[0]) - 7, out.top[1] - 13],
-      glow: glow.map(([x, y, c]): [number, number, RGBA] => [fx(x), y, c]),
+      top: [top[0] - ox, top[1] - oy],
+      glow: pts.map(([x, y, c]): [number, number, RGBA] => [x - ox, y - oy, c]),
       lits: new Map(),
     };
   }) as NcFr;
@@ -579,13 +582,7 @@ function ncFrame(
   if (lit === undefined) {
     const pts: [number, number, RGBA][] = fireMul < 0.3 ? [] : [...b.glow];
     flamePts(b.top[0], b.top[1], P.fire * fireMul, ph, pts);
-    // Кадр в кеше обрезан до рисунка: точки огня — в его начало.
-    const [ox, oy] = offOf(b.img);
-    lit = litOf(
-      NC_W,
-      NC_H,
-      pts.map(([x, y, c]): [number, number, RGBA] => [x - ox, y - oy, c]),
-    );
+    lit = litOf(NC_W, NC_H, pts);
     b.lits.set(lk, lit);
   }
   return { img: b.img, ax: b.ax, ay: b.ay, eye: null, shadow: b.shadow, lit };

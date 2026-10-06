@@ -48,9 +48,8 @@ import {
   Scene,
   fillPoly,
   hull2,
-  finish,
+  bake,
   cached,
-  litOf,
   eyeCol,
   visOf,
   hurtFields,
@@ -685,14 +684,7 @@ function skelFrame(
     sc.paint(p);
     p.outline(INK);
     const pts = glow.map(([x, y, c]): [number, number, RGBA] => [vw.mir ? SK_W - 1 - x : x, y, c]);
-    return {
-      img: finish(p, vw.mir, false, look),
-      lit: litOf(SK_W, SK_H, pts),
-      ax: SK_AX,
-      ay: SK_AY,
-      eye: null,
-      shadow: 5,
-    };
+    return bake(p, vw.mir, look, SK_AX, SK_AY, pts, { shadow: 5 });
   });
   return withFlash(fr, flash);
 }
@@ -816,7 +808,7 @@ registerMobPainter('f4_skel', (m, pose) => {
       const p = new Px(SK_W, SK_H);
       paintHeap(p, 0.55, tw, 0, false);
       p.outline(INK);
-      return { img: finish(p, false, false, look), ax: SK_AX, ay: SK_AY, eye: null, shadow: 5 };
+      return bake(p, false, look, SK_AX, SK_AY, [], { shadow: 5 });
     });
     ex = { still: true };
   } else if (md === 'rise' || md === 'alert') {
@@ -897,15 +889,7 @@ function pileFrame(
       const glow: [number, number, RGBA][] = [];
       draw(p, glow, eyeCol(look, SK_EYE));
       p.outline(INK);
-      return {
-        img: finish(p, false, false, look),
-        lit: litOf(SK_W, SK_H, glow),
-        ax: SK_AX,
-        ay: SK_AY,
-        eye: null,
-        shadow: 6,
-        still: true,
-      };
+      return bake(p, false, look, SK_AX, SK_AY, glow, { shadow: 6, still: true });
     }),
     ...ex,
   };

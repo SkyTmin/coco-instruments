@@ -28,14 +28,13 @@ import {
   eyeCol,
   fi,
   fillPoly,
-  finish,
+  bake,
   hash01,
   headView,
   hull2,
   hurtFields,
   ik,
   lerp,
-  litOf,
   mod,
   seg,
   v3,
@@ -731,14 +730,7 @@ function knFrame(
     sc.paint(p);
     p.outline(INK);
     const pts = glow.map(([x, y, c]): [number, number, RGBA] => [vw.mir ? KN_W - 1 - x : x, y, c]);
-    return {
-      img: finish(p, vw.mir, false, look),
-      lit: litOf(KN_W, KN_H, pts),
-      ax: KN_AX,
-      ay: KN_AY,
-      eye: null,
-      shadow: 7,
-    };
+    return bake(p, vw.mir, look, KN_AX, KN_AY, pts, { shadow: 7 });
   });
   return withFlash(fr, flash);
 }

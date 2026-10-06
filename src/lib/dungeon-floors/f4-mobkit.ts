@@ -264,16 +264,24 @@ export function flashImg(img: HTMLCanvasElement): HTMLCanvasElement {
     g.fillStyle = '#ffffff';
     g.fillRect(0, 0, c.width, c.height);
     FLASHED.set(img, c);
-    const o = OFF.get(img);
-    if (o) OFF.set(c, o);
   }
   return c;
 }
 export const withFlash = <T extends MobFrame>(fr: T, flash: boolean): T =>
   flash ? { ...fr, img: flashImg(fr.img) } : fr;
 
-/** Готовый рисунок → холст: облик (элита — золотой кант, альбинос — бледный), зеркало, вспышка. */
-export function finish(px: Px, mir: boolean, flash: boolean, look: Look): HTMLCanvasElement {
+/**
+ * Готовый рисунок → холст: облик (элита — золотой кант, альбинос — бледный),
+ * зеркало, вспышка. Холст обрезан до рисунка и точек `keep` — сдвиг начала
+ * отдаёт `offOf` (кадр собирает `bake`).
+ */
+export function finish(
+  px: Px,
+  mir: boolean,
+  flash: boolean,
+  look: Look,
+  keep: readonly (readonly [number, number, ...unknown[]])[] = [],
+): HTMLCanvasElement {
   let p = px;
   if (look === 'elite') {
     const q = new Px(p.w, p.h);
@@ -283,30 +291,27 @@ export function finish(px: Px, mir: boolean, flash: boolean, look: Look): HTMLCa
   } else if (look === 'albino') p = p.tint(hex('#f4ece4'), 0.45);
   if (mir) p = p.flipX();
   if (flash) p = p.tint(WHITE, 0.9);
-  const c = p.canvas();
-  const b = boxOf(p);
-  if (b) BOX.set(c, b);
-  return c;
+  return cropPx(p, keep);
 }
 
 // ---- Обрезка кадра по рисунку ------------------------------------------------------------
 //
 // Холст кадра — с запасом под замах и падение, а движок кладёт его на экран
 // целиком (`drawImage` в экранном масштабе): пустые поля стоили толпе этажа
-// больше, чем само рисование. Кеш хранит кадр, обрезанный до рисунка: начало
-// холста сдвигается — на столько же сдвигаются якорь и слой `lit` (движок кладёт
-// `lit` тем же якорем). Рисунок на экране тот же до пикселя.
+// больше, чем само рисование (средняя площадь кадра латника 2352 точки против
+// 720 у базы). Холст обрезается до рисунка ещё в буфере пикселей; на столько же
+// сдвигаются якорь и слой `lit` (движок кладёт `lit` тем же якорем). Рисунок на
+// экране тот же до пикселя (листы с обрезкой и без совпали).
 
-/** Рамка непрозрачного рисунка [x0, y0, x1, y1] — из `finish`. */
-const BOX = new WeakMap<HTMLCanvasElement, [number, number, number, number]>();
-/** Левый верхний угол светящихся точек слоя `lit` — из `litOf`. */
-const LBOX = new WeakMap<HTMLCanvasElement, [number, number]>();
-/** Сдвиг начала обрезанного кадра относительно полного холста. */
+/** Сдвиг начала обрезанного холста относительно полного. */
 const OFF = new WeakMap<HTMLCanvasElement, [number, number]>();
-/** На сколько обрезан кадр слева и сверху: точки в координатах полного холста минус это. */
+/** На сколько обрезан холст слева и сверху: точки полного холста минус это. */
 export const offOf = (img: HTMLCanvasElement): [number, number] => OFF.get(img) ?? [0, 0];
 
-function boxOf(p: Px): [number, number, number, number] | null {
+function cropPx(
+  p: Px,
+  keep: readonly (readonly [number, number, ...unknown[]])[],
+): HTMLCanvasElement {
   const { w, h, data } = p;
   let x0 = w;
   let y0 = h;
@@ -320,58 +325,49 @@ function boxOf(p: Px): [number, number, number, number] | null {
         if (y < y0) y0 = y;
         y1 = y;
       }
-  return x1 < 0 ? null : [x0, y0, x1, y1];
-}
-
-function cropCanvas(
-  src: HTMLCanvasElement,
-  ox: number,
-  oy: number,
-  w: number,
-  h: number,
-): HTMLCanvasElement {
+  if (x1 < 0 || F4_MOB_STAT.noTrim) return p.canvas();
+  for (const [x, y] of keep) {
+    x0 = Math.min(x0, Math.round(x));
+    y0 = Math.min(y0, Math.round(y));
+  }
+  x0 = Math.max(0, x0);
+  y0 = Math.max(0, y0);
+  const cw = x1 + 1 - x0;
+  const ch = y1 + 1 - y0;
+  if (!x0 && !y0 && cw === w && ch === h) return p.canvas();
   const c = document.createElement('canvas');
-  c.width = Math.max(1, w);
-  c.height = Math.max(1, h);
-  c.getContext('2d')?.drawImage(src, -ox, -oy);
+  c.width = cw;
+  c.height = ch;
+  const g = c.getContext('2d');
+  if (g) {
+    const img = g.createImageData(cw, ch);
+    for (let y = 0; y < ch; y++) {
+      const s = ((y + y0) * w + x0) * 4;
+      img.data.set(data.subarray(s, s + cw * 4), y * cw * 4);
+    }
+    g.putImageData(img, 0, 0);
+  }
+  OFF.set(c, [x0, y0]);
   return c;
 }
 
 /**
- * Кадр, обрезанный до рисунка. `keep` — точка, которую обрезка не отрезает
- * (огонь некроманта рисуется слоем позже, по точкам полного холста).
+ * Кадр из готового рисунка: холст обрезан (`finish`, светящиеся точки не
+ * отрезаются), якорь и слой `lit` — в начало обрезанного холста.
  */
-function trimFrame(fr: MobFrame): MobFrame {
-  const b = BOX.get(fr.img);
-  if (!b) return fr;
-  const l = fr.lit ? LBOX.get(fr.lit) : undefined;
-  const keep = (fr as { keep?: [number, number] }).keep;
-  let ox = b[0];
-  let oy = b[1];
-  if (l) {
-    ox = Math.min(ox, l[0]);
-    oy = Math.min(oy, l[1]);
-  }
-  if (keep) {
-    ox = Math.min(ox, keep[0]);
-    oy = Math.min(oy, keep[1]);
-  }
-  ox = Math.max(0, ox);
-  oy = Math.max(0, oy);
-  const w = b[2] + 1 - ox;
-  const h = b[3] + 1 - oy;
-  if (!ox && !oy && w === fr.img.width && h === fr.img.height) return fr;
-  const img = cropCanvas(fr.img, ox, oy, w, h);
-  OFF.set(img, [ox, oy]);
-  const lit = fr.lit ? cropCanvas(fr.lit, ox, oy, fr.lit.width - ox, fr.lit.height - oy) : fr.lit;
-  return {
-    ...fr,
-    img,
-    ax: fr.ax - ox,
-    ay: fr.ay - oy,
-    lit,
-    eye: fr.eye ? [fr.eye[0] - ox, fr.eye[1] - oy] : fr.eye,
-  };
+export function bake(
+  p: Px,
+  mir: boolean,
+  look: Look,
+  ax: number,
+  ay: number,
+  pts: [number, number, RGBA][],
+  rest: Partial<MobFrame> = {},
+): MobFrame {
+  const img = finish(p, mir, false, look, pts);
+  const [ox, oy] = offOf(img);
+  const at = ox || oy ? pts.map(([x, y, c]): [number, number, RGBA] => [x - ox, y - oy, c]) : pts;
+  return { eye: null, ...rest, img, ax: ax - ox, ay: ay - oy, lit: litOf(p.w, p.h, at) };
 }
 
 /** Замер для стенда: сколько кадров мобов построено и за сколько (мс). */
@@ -403,8 +399,7 @@ export function cached(
   let fr = lru.get(key);
   if (!fr) {
     const t0 = performance.now();
-    const full = build();
-    fr = lru.set(key, F4_MOB_STAT.noTrim ? full : trimFrame(full));
+    fr = lru.set(key, build());
     stat(kind, performance.now() - t0, key);
   }
   return fr;
@@ -434,8 +429,6 @@ export function litOf(
     const p = new Px(Math.min(w, mx + 1), Math.min(h, my + 1));
     for (const [x, y, col] of pts) p.set(x, y, col);
     c = LITS.set(key, p.canvas());
-    const b = boxOf(p);
-    if (b) LBOX.set(c, [b[0], b[1]]);
   }
   return c;
 }
