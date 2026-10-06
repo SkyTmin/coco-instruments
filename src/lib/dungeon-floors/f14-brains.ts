@@ -3482,6 +3482,8 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       const warn = LORD.hourWarn / haste;
       if (!m.data.lit && m.t >= 0.22) {
         m.data.lit = 1;
+        m.data.vHx = m.x; // анимации 14 — только рисунок
+        m.data.vHy = m.y; // анимации 14 — только рисунок
         api.strike(sim, {
           shape: 'cone',
           x: m.x,
@@ -3500,6 +3502,7 @@ function lordStep(sim: Sim, m: Mob, dt: number, c: BrainCtx, api: SimApi): void 
       if (m.t >= warn) {
         m.data.lit = 0;
         m.data.vFrom = 1; // v2.87 — только рисунок
+        api.vfx(sim, { x: m.data.vHx ?? m.x, y: m.data.vHy ?? m.y, r: LORD.hourR, ang: m.dir, arc: LORD.hourArc, life: 1.2, art: 'f14b_hourfx', above: true, mob: m.id } as ZoneIn); // анимации 14 — только рисунок
         api.setMode(m, 'recover');
         m.cd = 0.8 / haste + sim.rng() * 0.4;
       }
