@@ -899,17 +899,40 @@ function rimClose(
 ): void {
   const s = sigOf(left);
   const kk = k01(k);
-  if (ink(g, C.shade, 0.55)) arcPx(g, X, Y + 1, R, 0, TAU, 6, time * 16, 4);
-  if (ink(g, col, 0.5 + 0.2 * kk)) arcPx(g, X, Y, R, 0, TAU, 6, time * 16, 4);
+  // Тёмный обвод снаружи — кромка читается на любом льду.
+  if (ink(g, C.shade, 0.5)) arcPx(g, X, Y, R + 1, 0, TAU);
+  if (ink(g, col, 0.6 + 0.25 * kk)) arcPx(g, X, Y, R, 0, TAU, 6, time * 16, 4);
   const a0 = -Math.PI / 2;
   const a1 = a0 + TAU * kk;
-  if (ink(g, C.shade, 0.6)) arcPx(g, X, Y + 1, R, a0, a1);
-  if (ink(g, s > 0 ? C.white : col, 1)) arcPx(g, X, Y, R, a0, a1);
+  if (ink(g, s > 0 ? C.white : col, 1)) {
+    arcPx(g, X, Y, R, a0, a1);
+    arcPx(g, X, Y, R - 1, a0, a1);
+  }
   if (s > 0) {
     if (ink(g, C.white, 0.9)) arcPx(g, X, Y, R - 1, 0, TAU);
     const rr = R + 2 + 12 * (1 - eOut(s));
     if (s < 1 && ink(g, C.white, 0.3 + 0.6 * s)) arcPx(g, X, Y, rr, 0, TAU, 3, 0, 2);
   } else sparkPx(g, X + Math.cos(a1) * R, Y + Math.sin(a1) * R, 0.95, kk > 0.6);
+}
+
+/** Волны холода бегут от тела к кромке — быстрее к удару. */
+function ripples(
+  g: G,
+  X: number,
+  Y: number,
+  r0: number,
+  r1: number,
+  a0: number,
+  a1: number,
+  k: number,
+  time: number,
+): void {
+  if (r1 <= r0 + 2) return;
+  for (let q = 0; q < 2; q++) {
+    const ph = mod(time * (0.9 + 1.6 * k) + q * 0.5, 1);
+    if (ink(g, C.frost, (0.18 + 0.4 * k) * (1 - ph)))
+      arcPx(g, X, Y, r0 + (r1 - r0) * ph, a0, a1, 4, 0, 3);
+  }
 }
 
 /** Круг топота вокруг тела: иней с кромки к ногам, трещины из-под ног. */
@@ -924,9 +947,10 @@ function markStomp(
   seed: number,
 ): void {
   const s = sigOf(left);
-  if (ink(g, C.shade, 0.14 + 0.16 * k + 0.1 * s)) fDisc(g, X, Y, R);
+  if (ink(g, C.tealD, 0.16 + 0.18 * k + 0.12 * s)) fDisc(g, X, Y, R);
+  ripples(g, X, Y, R * 0.25, R - 2, 0, TAU, k, time);
   const depth = R * (0.12 + 0.8 * eIn(k));
-  frostGrid(g, X - R, Y - R, X + R, Y + R, 4, 1201, time, 0.9, (x, y, h) => {
+  frostGrid(g, X - R, Y - R, X + R, Y + R, 3, 1201, time, 0.9, (x, y, h) => {
     const d = Math.hypot(x - X, y - Y);
     return d < R - 1.5 && d > R - depth * (0.5 + 0.5 * h) ? 0.45 + 0.55 * h : 0;
   });
@@ -968,9 +992,10 @@ function markTusk(
   const h = arc / 2;
   const a0 = ang - h;
   const a1 = ang + h;
-  if (ink(g, C.shade, 0.14 + 0.16 * k + 0.1 * s)) fSector(g, X, Y, 0, R, a0, a1);
+  if (ink(g, C.tealD, 0.16 + 0.18 * k + 0.12 * s)) fSector(g, X, Y, 0, R, a0, a1);
+  ripples(g, X, Y, r0, R - 2, a0 + 0.04, a1 - 0.04, k, time);
   const rf = r0 + (R - r0) * k01(k);
-  frostGrid(g, X - R, Y - R, X + R, Y + R, 4, 1202, time, 0.9, (x, y, hh) => {
+  frostGrid(g, X - R, Y - R, X + R, Y + R, 3, 1202, time, 0.9, (x, y, hh) => {
     const d = Math.hypot(x - X, y - Y);
     if (d > rf || d > R - 1.5) return 0;
     const off = Math.abs(mod(Math.atan2(y - Y, x - X) - ang + Math.PI, TAU) - Math.PI);
@@ -1036,7 +1061,7 @@ function markLane(
   const s = sigOf(left);
   const ux = Math.cos(ang);
   const uy = Math.sin(ang);
-  if (ink(g, C.shade, (0.14 + 0.16 * k + 0.1 * s) * aK)) fLane(g, X, Y, ang, r0, L, -hw, hw);
+  if (ink(g, C.tealD, (0.16 + 0.18 * k + 0.12 * s) * aK)) fLane(g, X, Y, ang, r0, L, -hw, hw);
   const uf = r0 + (L - r0) * k01(k);
   const bx0 = Math.min(X + ux * r0, X + ux * L) - hw - 2;
   const bx1 = Math.max(X + ux * r0, X + ux * L) + hw + 2;
@@ -1542,7 +1567,7 @@ zoneFx('f12_icdrop', (g, z, X, Y, k, age, time) => {
   pin(g, X - z.x * TS, Y - z.y * TS);
   const sd = seedOf(z);
   const v = sd & 1;
-  const H0 = 190;
+  const H0 = 150;
   const hang = Math.min(0.32, life * 0.3);
   const tf = k01((age - hang) / (life - hang));
   const hgt = H0 * (1 - tf * tf);
@@ -2820,17 +2845,17 @@ zoneFx('f12_kick', (g, z, X, Y, _k, age) => {
   const sd = seedOf(z);
   const R = z.r * TS;
   spray(g, X, Y, age, {
-    n: reduced() ? 3 : 6,
+    n: reduced() ? 4 : 8,
     seed: sd,
     ang: back,
     spread: 1.3,
-    r0: R * 0.6,
+    r0: R * 1.4,
     v: [30, 80],
     up: [40, 90],
     grav: 300,
     drag: 1.5,
     life: [0.35, 0.6],
-    size: [2, 3],
+    size: [2, 4],
     cols: [C.snow, C.white, C.snowM],
   });
   shards(g, X, Y, age, {
@@ -2912,36 +2937,32 @@ zoneFx('f12_skid', (g, z, X, Y, _k, age) => {
   const sd = seedOf(z);
   const fade = 1 - k01((age - 1.1) / 1.1);
   const off = TS * 0.45;
-  for (const sg of [-1, 1]) {
-    const ox = -uy * off * sg;
-    const oy = ux * off * sg;
-    const x0 = X + ox;
-    const y0 = Y + oy;
-    const x1 = X + ux * d + ox;
-    const y1 = Y + uy * d + oy;
-    if (d < 1) continue;
-    // Борозда: тёмный жёлоб, белый вал снега по краю, сколы.
-    if (ink(g, C.shade, 0.55 * fade)) linePx(g, x0, y0, x1, y1);
-    if (ink(g, C.iceD, 0.6 * fade)) linePx(g, x0, y0 + 1, x1, y1 + 1);
-    if (ink(g, C.snow, 0.8 * fade))
-      linePx(g, x0 - uy * 2 * sg, y0 + ux * 2 * sg, x1 - uy * 2 * sg, y1 + ux * 2 * sg, 5, sd, 4);
-    if (ink(g, C.white, 0.7 * fade))
-      linePx(
-        g,
-        x0 - uy * 3 * sg,
-        y0 + ux * 3 * sg - 1,
-        x1 - uy * 3 * sg,
-        y1 + ux * 3 * sg - 1,
-        7,
-        sd + 3,
-        2,
-      );
-  }
+  if (d >= 1)
+    for (const sg of [-1, 1]) {
+      const ox = -uy * off * sg;
+      const oy = ux * off * sg;
+      // Жёлоб: тёмная полоса в 3 точки, на дне — синий лёд.
+      if (ink(g, C.shade, 0.6 * fade)) fLane(g, X + ox, Y + oy, ang, 0, d, -1.5, 1.5);
+      if (ink(g, C.iceDD, 0.7 * fade)) fLane(g, X + ox, Y + oy, ang, 0, d, -0.5, 0.5);
+      // Валы снега по обе стороны жёлоба — комьями.
+      for (let u = 2; u < d; u += 3) {
+        const i = Math.round(u);
+        for (const side of [-1, 1]) {
+          const h = hash(sd + (sg > 0 ? 7 : 0), i, side > 0 ? 1 : 2);
+          if (h < 0.25) continue;
+          const v = (2.5 + h * 1.5) * side;
+          const x = X + ox + ux * u - uy * v;
+          const y = Y + oy + uy * u + ux * v;
+          if (ink(g, h > 0.7 ? C.white : C.snow, 0.9 * fade))
+            clump(g, x - 1, y - 1, h > 0.6 ? 3 : 2);
+        }
+      }
+    }
   // Из-под ног — веер снега вперёд и вбок, пока едет.
-  if (age < S + 0.5) {
+  if (age < S + 0.6) {
     const v0 = (2 * D) / S;
-    for (let i = 0; i < 6; i++) {
-      const te = i * (S / 6);
+    for (let i = 0; i < 8; i++) {
+      const te = i * (S / 8);
       if (te > age) break;
       const qe = te / S;
       const de = D * (1 - (1 - qe) * (1 - qe));
@@ -2953,19 +2974,19 @@ zoneFx('f12_skid', (g, z, X, Y, _k, age) => {
           Y + uy * de + ux * off * sg,
           age - te,
           {
-            n: reduced() ? 2 : 4,
+            n: reduced() ? 3 : 6,
             seed: sd + i * 7 + (sg > 0 ? 1 : 0),
-            ang: ang + sg * 0.9,
-            spread: 0.8,
-            v: [v0 * 0.25 * strength, v0 * 0.55 * strength + 10],
-            up: [30, 70],
+            ang: ang + sg * 1.0,
+            spread: 0.9,
+            v: [v0 * 0.3 * strength + 10, v0 * 0.6 * strength + 20],
+            up: [40, 90],
             grav: 260,
             drag: 2,
-            life: [0.35, 0.55],
-            size: [2, 3],
+            life: [0.4, 0.6],
+            size: [2, 4],
             cols: [C.snow, C.white, C.snowM],
           },
-          strength + 0.2,
+          strength * 0.8 + 0.2,
         );
     }
   }
@@ -2975,18 +2996,22 @@ zoneFx('f12_skid', (g, z, X, Y, _k, age) => {
 
 /**
  * Мамонт врезался в стену: белая вспышка, ледяной взрыв (глыбы по физике,
- * щепа, снежное облако), звезда трещин, со свода падают сосульки.
+ * щепа, снежное облако), звезда трещин, со свода падают сосульки. Два слоя
+ * одного взрыва: на полу (`f12_wallhit` — трещины, легшие обломки, тени
+ * сосулек) и над темнотой и телом (`f12_wallburst` — вспышка, летящее).
+ * Зерно — от места удара: оба слоя рисуют одни и те же осколки.
  */
-zoneFx('f12_wallhit', (g, z, X, Y, k, age) => {
+function wallFx(g: G, z: Zone, X: number, Y: number, k: number, age: number, air: boolean): void {
   pinZ(g, z, X, Y);
   const sim = paintSim();
   const m = sim ? f12Mammoth(sim) : null;
   const into = m ? m.face : -Math.PI / 2;
   const back = into + Math.PI;
   const R = z.r * TS;
-  const sd = seedOf(z);
+  const sd = (Math.round(z.x * 16) * 7 + Math.round(z.y * 16) * 13) >>> 0;
   const fade = 1 - eIn(k);
-  if (age < 0.1) {
+  const part = air ? 'air' : 'ground';
+  if (air && age < 0.1) {
     const q = 1 - age / 0.1;
     glowC(g, X, Y - 8, R * 1.1, P.white, 0.85 * q, 0.9);
     if (ink(g, C.white, q)) {
@@ -2996,14 +3021,16 @@ zoneFx('f12_wallhit', (g, z, X, Y, k, age) => {
       linePx(g, X + 8, Y - 16, X - 8, Y);
     }
   }
-  // Трещины звездой — больше по полу назад от стены.
-  for (let i = 0; i < 12; i++) {
-    const a = back + ((i - 5.5) / 5.5) * 1.7 + hash(sd, i, 1) * 0.2;
-    const len = R * (0.6 + 0.6 * hash(sd, i, 2)) * (i % 3 ? 1 : 1.4);
-    crack(g, X, Y, crackOf(sd + i, a, len, 0.6), eOut(age / 0.1), C.white, C.shade, 0.85 * fade);
+  if (!air) {
+    // Трещины звездой — больше по полу назад от стены.
+    for (let i = 0; i < 12; i++) {
+      const a = back + ((i - 5.5) / 5.5) * 1.7 + hash(sd, i, 1) * 0.2;
+      const len = R * (0.6 + 0.6 * hash(sd, i, 2)) * (i % 3 ? 1 : 1.4);
+      crack(g, X, Y, crackOf(sd + i, a, len, 0.6), eOut(age / 0.1), C.white, C.shade, 0.85 * fade);
+    }
+    if (age < 0.35 && ink(g, C.white, 0.9 * (1 - age / 0.35)))
+      arcPx(g, X, Y, 6 + R * eOut(age / 0.35), back - 1.6, back + 1.6, 3, 0, 2);
   }
-  if (age < 0.35 && ink(g, C.white, 0.9 * (1 - age / 0.35)))
-    arcPx(g, X, Y, 6 + R * eOut(age / 0.35), back - 1.6, back + 1.6, 3, 0, 2);
   // Глыбы льда — тяжёлые, крутятся, отскакивают, едут по льду.
   shards(g, X, Y - 4, age, {
     n: reduced() ? 4 : 7,
@@ -3019,6 +3046,7 @@ zoneFx('f12_wallhit', (g, z, X, Y, k, age) => {
     slide: 2,
     life: [1.0, 1.2],
     cols: [C.iceL, C.ice, C.frost],
+    part,
   });
   shards(g, X, Y - 4, age, {
     n: reduced() ? 10 : 22,
@@ -3034,27 +3062,29 @@ zoneFx('f12_wallhit', (g, z, X, Y, k, age) => {
     slide: 3,
     life: [0.6, 1.0],
     cols: [C.white, C.frost, C.iceL, C.iceM, C.rockL],
+    part,
   });
   // Снежное облако клубится и оседает.
-  spray(
-    g,
-    X,
-    Y - 6,
-    age,
-    {
-      n: reduced() ? 10 : 22,
-      seed: sd + 3,
-      ang: back,
-      spread: 3.4,
-      v: [20, 60],
-      drag: 2.6,
-      rise: 8,
-      life: [0.6, 1.15],
-      size: [3, 5],
-      cols: [C.snow, C.white, C.snowM],
-    },
-    0.7,
-  );
+  if (air)
+    spray(
+      g,
+      X,
+      Y - 6,
+      age,
+      {
+        n: reduced() ? 10 : 22,
+        seed: sd + 3,
+        ang: back,
+        spread: 3.4,
+        v: [20, 60],
+        drag: 2.6,
+        rise: 8,
+        life: [0.6, 1.15],
+        size: [3, 5],
+        cols: [C.snow, C.white, C.snowM],
+      },
+      0.7,
+    );
   // Сосульки со свода: срываются от удара и бьются у стены.
   const nI = reduced() ? 3 : 5;
   for (let i = 0; i < nI; i++) {
@@ -3068,24 +3098,28 @@ zoneFx('f12_wallhit', (g, z, X, Y, k, age) => {
     const TF = 0.34;
     if (t < TF) {
       const q = t / TF;
-      const H = 170 * (1 - q * q);
-      if (ink(g, C.shade, 0.25 + 0.4 * q)) fEll(g, fx, fy, 2 + 3 * q, 1 + 1.5 * q);
+      const H = 150 * (1 - q * q);
+      if (!air) {
+        if (ink(g, C.shade, 0.25 + 0.4 * q)) fEll(g, fx, fy, 2 + 3 * q, 1 + 1.5 * q);
+        continue;
+      }
       const cv = icicleRot(i & 1, (hash(sd, i, 10) - 0.5) * 0.5 + q * q * (hash(sd, i, 11) - 0.5));
       if (ink(g, C.frost, 0.35 * q)) pp(g, fx - 1, fy - H - 30, 1, 18);
       g.globalAlpha = 1;
       blitPx(g, cv, fx - cv.width / 2, fy - H - cv.height + 4);
     } else {
       const tb = t - TF;
-      crack(
-        g,
-        fx,
-        fy,
-        crackOf(sd + 40 + i, hash(sd, i, 12) * TAU, 7, 0.7),
-        eOut(tb / 0.06),
-        C.frost,
-        C.shade,
-        0.7 * fade,
-      );
+      if (!air)
+        crack(
+          g,
+          fx,
+          fy,
+          crackOf(sd + 40 + i, hash(sd, i, 12) * TAU, 7, 0.7),
+          eOut(tb / 0.06),
+          C.frost,
+          C.shade,
+          0.7 * fade,
+        );
       shards(g, fx, fy, tb, {
         n: 7,
         seed: sd + 50 + i,
@@ -3096,10 +3130,13 @@ zoneFx('f12_wallhit', (g, z, X, Y, k, age) => {
         len: [1, 3],
         life: [0.4, 0.7],
         cols: [C.white, C.frost, C.iceL],
+        part,
       });
     }
   }
-});
+}
+zoneFx('f12_wallhit', (g, z, X, Y, k, age) => wallFx(g, z, X, Y, k, age, false));
+zoneFx('f12_wallburst', (g, z, X, Y, k, age) => wallFx(g, z, X, Y, k, age, true));
 
 // ---- Жаровня гаснет / морозный выдох -----------------------------------
 

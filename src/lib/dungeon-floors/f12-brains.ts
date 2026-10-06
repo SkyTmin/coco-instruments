@@ -3574,6 +3574,8 @@ registerBrain('f12boss', {
     });
     sim.events.push({ t: 'shake', k: 0.8 });
     sim.events.push({ t: 'flash', color: '#d6f2ff', k: 0.35 }); // анимации 12 — только рисунок
+    const vw = { x: m.x + Math.cos(m.face) * m.r, y: m.y + Math.sin(m.face) * m.r }; // анимации 12 — только рисунок
+    fx(sim, api, { ...vw, r: 2.4, life: 1.2, art: 'f12_wallburst', above: true }); // анимации 12 — только рисунок
     sim.events.push({
       t: 'boss',
       what: 'f12_wall_stun',
