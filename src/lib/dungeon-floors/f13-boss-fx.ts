@@ -273,6 +273,8 @@ interface Pull {
 }
 
 const STRIKING = new Set(['windup', 'f13_lance', 'f13_shield', 'f13_charge_aim', 'f13_charge']);
+/** Обмякла: нити висят петлёй. */
+const SLACK = new Set(['f13_slump', 'f13_fallen', 'f13_broken', 'f13_lost', 'stun']);
 
 function pullOf(m: Mob, lastCut: number): Pull {
   const p: Pull = { sag: 1, buzz: 0, lit: 0, jerk: 0 };
@@ -289,7 +291,9 @@ function pullOf(m: Mob, lastCut: number): Pull {
     p.sag = 0.06 + 0.94 * ease(u) + 0.4 * Math.sin(u * TAU) * (1 - u);
     p.lit = 1 - u;
     p.jerk = 3 * (1 - easeOut(u));
-  } else if (m.mode === 'f13_reel' || m.data.crawl) p.sag = 2.4;
+  } else if (m.mode === 'f13_reel' || m.data.crawl || SLACK.has(m.mode)) p.sag = 2.4;
+  // Часть нитей срезана — оставшиеся провисают: кукла висит криво.
+  else if (m.data.cut) p.sag = 1.6;
   const age = F13_FX.time - lastCut;
   if (age >= 0 && age < 0.9) p.buzz = Math.max(p.buzz, 2.6 * Math.exp(-age * 4.5));
   return p;
@@ -2489,6 +2493,16 @@ registerZonePainter('f13_v_dust', (g, z, px, py) => {
   const t = z.t;
   const k = life(z);
   const a = zf(z, 'ang');
+  // Клубы пыли сцены — мягкие, расползаются и оседают.
+  for (let i = 0; i < 4; i++) {
+    const da = a + Math.PI + (i - 1.5) * 0.9;
+    const r = 2 + 7 * easeOut(k) * (0.7 + 0.5 * hash(i, z.id >>> 0, 5));
+    const s = 2.5 + 3 * easeOut(k);
+    g.fillStyle = rgba(P.cream[1], 0.32 * (1 - k));
+    g.beginPath();
+    g.ellipse(px + Math.cos(da) * r, py + Math.sin(da) * r * 0.5 - 2 * k, s, s * 0.6, 0, 0, TAU);
+    g.fill();
+  }
   for (let i = 0; i < 6; i++) {
     const side = i % 2 ? 1 : -1;
     const da = a + (Math.PI / 2) * side + (hash(z.id >>> 0, i) - 0.5) * 0.8;
