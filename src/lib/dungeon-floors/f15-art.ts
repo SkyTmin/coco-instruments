@@ -289,7 +289,7 @@ const OBS_FACE = tn('#181c38', '#242a4e', '#323a68', '#444e88');
 const REG = tn('#2a2638', '#3a354c', '#4e4864', '#6a6484');
 
 /** Космос: туманность (две краски), звёзды трёх величин, редкие далёкие планеты. */
-function spacePx(p: Px, wx: number, wy: number, k = 1, lane = false): void {
+function spacePx(p: Px, wx: number, wy: number, k = 1, lane: boolean | Ring = false): void {
   const X0 = wx * TS;
   const Y0 = wy * TS;
   for (let y = 0; y < TS; y++)
@@ -302,9 +302,17 @@ function spacePx(p: Px, wx: number, wy: number, k = 1, lane = false): void {
       const neb = clamp01((m - 0.52) * 3.2);
       if (neb > 0) c = mixc(c, n > 0.5 ? hx('#2a1660') : hx('#0c3040'), neb * 0.55 * k);
       if (lane) {
-        // Дорожка орбиты: светлая пыль по кругу.
-        const d = vnoise(X, Y, 6, 1503);
-        c = mixc(c, hx('#2a2460'), 0.3 + d * 0.2);
+        // Дорожка орбиты: пыльное кольцо с мягкими краями и пунктир середины.
+        const dn = vnoise(X, Y, 6, 1503);
+        if (lane === true) c = mixc(c, hx('#2a2460'), 0.25 + dn * 0.15);
+        else {
+          const d = Math.hypot(X + 0.5 - lane.cx * TS, Y + 0.5 - lane.cy * TS) / TS;
+          const k = clamp01(Math.min(d - lane.r0 + 0.4, lane.r1 + 0.4 - d) / 0.8);
+          if (k > 0) c = mixc(c, hx('#2c2666'), smooth(k) * (0.3 + dn * 0.2));
+          const mid = (lane.r0 + lane.r1) / 2;
+          const ang = Math.atan2(Y + 0.5 - lane.cy * TS, X + 0.5 - lane.cx * TS);
+          if (Math.abs(d - mid) < 0.05 && ((Math.floor(ang * mid * TS) % 6) + 6) % 6 < 2) c = mixc(c, TEAL_GLOW, 0.45);
+        }
       }
       p.set(x, y, c);
     }
@@ -426,6 +434,17 @@ function veinFloor(p: Px, c: CellCtx): void {
       if (r < 0.018) p.set(x, y, hash(X0 + x, Y0 + y, 1541) < 0.2 ? hx('#d8ffff') : TEAL[2]);
       else if (r < 0.05) p.set(x, y, mixc(p.get(x, y), TEAL[1], 0.45));
     }
+}
+
+/** Кольцо орбиты, по которому идёт клетка дорожки. */
+function ringFor(c: CellCtx): Ring | null {
+  const st = stNow();
+  if (!st) return null;
+  for (const r of st.rings) {
+    const d = Math.hypot(c.wx + 0.5 - r.cx, c.wy + 0.5 - r.cy);
+    if (d > r.r0 - 1 && d < r.r1 + 1) return r;
+  }
+  return null;
 }
 
 /** Ближний колодец к клетке (кайма рисуется кругом от его ядра). */
@@ -616,7 +635,17 @@ function slabFloor(p: Px, c: CellCtx): void {
       const v = ((Y % 16) + 16) % 16;
       const id = hash(Math.floor((X + off) / 16), row, 1600);
       const n = fbm(X, Y, 12, 1601);
-      let col = tone(OBS_FLOOR, 0.3 + (n - 0.5) * 0.5 + id * 0.22 + dith(X, Y) * 0.12 - (u + v) * 0.006);
+      let col = tone(OBS_FLOOR, 0.3 + (n - 0.5) * 0.5 + id * 0.22 + dith(X, Y) * 0.12 - (u + v) * 0.006 - (id > 0.9 ? 0.2 : 0));
+      if (id < 0.07) {
+        // Редкая плита со звездой-инкрустацией: латунь и слоновая кость.
+        const dx = u - 7.5;
+        const dy = v - 7.5;
+        const r = Math.hypot(dx, dy);
+        const a = Math.atan2(dy, dx);
+        if (r < 1.6) col = IVORY[3];
+        else if (r < 2.2 + 3.6 * Math.pow(Math.abs(Math.cos(a * 2)), 6)) col = tone(BRASS, 0.75 - (dx + dy) * 0.06);
+        else if (Math.abs(r - 6) < 0.5) col = mixc(col, BRASS[1], 0.6);
+      }
       if (u === 0 || v === 0) col = BRASS[0];
       else if (u === 1 || v === 1) col = mixc(col, OBS_FLOOR[3], 0.35);
       p.set(x, y, col);
@@ -692,8 +721,11 @@ function runnerFloor(p: Px, c: CellCtx): void {
 
 /** Мозаика купола: лазурь, слоновая кость, золото — круги и лучи. */
 function mosaicFloor(p: Px, c: CellCtx): void {
+  // Купольная мозаика: лазурь, круги серебра и слоновой кости — без золота,
+  // чтобы золотые метки звездопада читались на ней с первого взгляда.
   const X0 = c.wx * TS;
   const Y0 = c.wy * TS;
+  const SILVER = tn('#3a4466', '#56628a', '#7c88ac', '#a8b2cc');
   for (let y = 0; y < TS; y++)
     for (let x = 0; x < TS; x++) {
       const X = X0 + x;
@@ -704,11 +736,11 @@ function mosaicFloor(p: Px, c: CellCtx): void {
       const r = Math.hypot(cx, cy);
       const h = hash(Math.floor(X / 3), Math.floor(Y / 3), 1640);
       let col: RGBA;
-      if (r > 26 && r < 30) col = tone(GOLD, 0.3 + h * 0.4);
-      else if (r < 7) col = tone(IVORY, 0.4 + h * 0.4);
-      else if (Math.abs(Math.sin(Math.atan2(cy, cx) * 6)) < 0.18 && r < 26) col = tone(IVORY, 0.25 + h * 0.3);
-      else col = tone(LAPIS, 0.35 + h * 0.5);
-      if (grout) col = mixc(col, INK, 0.45);
+      if (r > 27 && r < 29.5) col = tone(SILVER, 0.2 + h * 0.4);
+      else if (r < 5) col = tone(IVORY, 0.2 + h * 0.4);
+      else if (Math.abs(Math.sin(Math.atan2(cy, cx) * 4)) < 0.1 && r < 27 && r > 7) col = tone(SILVER, 0.1 + h * 0.3);
+      else col = tone(LAPIS, 0.3 + h * 0.45 + dith(X, Y) * 0.1);
+      if (grout) col = mixc(col, INK, 0.4);
       p.set(x, y, col);
     }
 }
@@ -890,7 +922,7 @@ function cellOf(area: string) {
     if (c.tile === T_DEEP) {
       if (mk === MK.core) corePx(p);
       else if (mk === MK.pit) chasmPx(p, c);
-      else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, true);
+      else if (mk === MK.lane || mk === MK.island) spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
       else if (mk === MK.vortex) spacePx(p, c.wx, c.wy, 1.3);
       else if (area === F15_ROOTS && mk !== MK.void) chasmPx(p, c);
       else spacePx(p, c.wx, c.wy);
@@ -950,7 +982,7 @@ function cellOf(area: string) {
         return p;
       case MK.island:
         // Остров рисует кольцо целиком (плавно едет); клетка — пустота.
-        spacePx(p, c.wx, c.wy, 1, true);
+        spacePx(p, c.wx, c.wy, 1, ringFor(c) ?? true);
         return p;
       default:
         baseOf(p, c);
@@ -1144,28 +1176,30 @@ registerPropPainter('f15_memory', (o, time) => {
   const g = mem ? Math.min(3, Math.floor(mem.glow * 4)) : 0;
   const f = Math.floor(time * 4 + o.x) % 6;
   return sprite(`mem|${motif}|${used}|${g}|${used ? 0 : f}`, () => {
-    const p = new Px(16, 16);
-    const cx = 8;
+    // Кристалл в лице стены: большая призма в оправе породы, внутри —
+    // знак этажа, который он помнит. Перед выпуском эха разгорается.
+    const p = new Px(26, 32);
+    const cx = 13;
+    const by = 30;
     const shimmer = 0.5 + 0.5 * Math.sin((f / 6) * TAU);
     const t = used ? tn('#1a1430', '#2a2048', '#3a3060', '#5a5080') : VIOLET;
-    // Оправа породы и сам камень — восьмигранник.
-    poly(p, [[3, 4], [6, 1], [10, 1], [13, 4], [13, 12], [10, 15], [6, 15], [3, 12]], STONE[0]);
-    poly(p, [[4, 5], [6.5, 2], [9.5, 2], [12, 5], [12, 11.5], [9.5, 14], [6.5, 14], [4, 11.5]], (x, y) => {
-      const k = (x - 4 + (y - 2)) / 18;
-      return mixc(t[2], t[0], k);
-    });
+    if (!used) glow(p, cx, by - 13, 12 + g * 1.5, VIOLET_GLOW, 0.22 + g * 0.12 + shimmer * 0.06);
+    // Оправа: обломки породы у основания.
+    p.ell(cx, by - 1, 10, 3, STONE[0]);
+    p.ell(cx - 1, by - 2, 8.5, 2.2, STONE[1]);
+    crystal(p, cx - 6, by - 1, 5, 11, -3, t, used ? 0 : 0.2);
+    crystal(p, cx + 6, by - 1, 5, 13, 3, t, used ? 0 : 0.2);
+    crystal(p, cx, by, 10, 26, 0.5, t, used ? 0 : 0.35 + g * 0.1);
     if (!used) {
-      glow(p, cx, 8, 5 + g, VIOLET_GLOW, 0.35 + g * 0.18 + shimmer * 0.1);
-      motifGlyph(p, cx, 8, motif, alpha(hx('#f4eaff'), 0.55 + g * 0.15));
-      p.set(5, 4, WHITE);
-      p.set(6, 3, alpha(WHITE, 0.7));
-      if (g >= 2) for (let i = 0; i < 4; i++) sparkle(p, cx + Math.cos(i * 1.57 + f) * 6, 8 + Math.sin(i * 1.57 + f) * 6, WHITE, 0);
+      motifGlyph(p, cx, by - 13, motif, alpha(hx('#fff4ff'), 0.6 + g * 0.13));
+      if (g >= 2) for (let i = 0; i < 4; i++) sparkle(p, cx + Math.cos(i * 1.57 + f) * 9, by - 13 + Math.sin(i * 1.57 + f) * 9, WHITE, 1);
     } else {
-      stroke(p, 6, 3, 9, 8, INK);
-      stroke(p, 9, 8, 7, 13, INK);
-      motifGlyph(p, cx, 8, motif, alpha(hx('#6a5a90'), 0.4));
+      stroke(p, cx - 2, by - 22, cx + 2, by - 14, INK);
+      stroke(p, cx + 2, by - 14, cx - 1, by - 6, INK);
+      motifGlyph(p, cx, by - 13, motif, alpha(hx('#6a5a90'), 0.4));
     }
-    return { p, ax: cx, ay: 15 };
+    edge(p, alpha(INK, 0.85));
+    return { p, ax: cx, ay: by + 1 };
   });
 });
 
@@ -3053,16 +3087,22 @@ registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
       g.lineTo(x, y);
       g.lineTo(x - ux * 2 + uy * 2, y - uy * 2 - ux * 2);
       g.stroke();
+    } else if (s === 2) {
+      // Штрих по спирали: от точки назад по ходу — видно, куда течёт.
+      const fadeIn = Math.min(1, u * 5) * (1 - Math.max(0, u - 0.85) / 0.15);
+      const back = 0.05 + 0.04 * h0;
+      const ub = Math.min(1, Math.max(0, u - back * dir));
+      const rb = R * (1 - ub) + w.burn * TS * ub;
+      const ab = h0 * TAU + (1 - ub) * 2.6 * dir;
+      g.strokeStyle = `rgba(${u > 0.7 ? hot : c},${(0.45 + u * 0.5) * fadeIn})`;
+      g.lineWidth = h0 > 0.75 ? 2 : 1;
+      g.beginPath();
+      g.moveTo(px + Math.cos(ab) * rb, py + Math.sin(ab) * rb);
+      g.lineTo(x, y);
+      g.stroke();
     } else {
-      g.fillStyle = `rgba(${s === 2 && u > 0.7 ? hot : c},${(s === 2 ? 0.35 + u * 0.6 : 0.25) * (1 - Math.abs(u - 0.5) * 0.6)})`;
-      const sz = s === 2 && h0 > 0.7 ? 2 : 1;
-      g.fillRect(Math.round(x), Math.round(y), sz, sz);
-      if (s === 2 && h0 < 0.3) {
-        // Хвостик частицы — по ходу спирали.
-        const a2 = a - 0.18 * dir;
-        const r2 = rr + 3 * dir;
-        g.fillRect(Math.round(px + Math.cos(a2) * r2), Math.round(py + Math.sin(a2) * r2), 1, 1);
-      }
+      g.fillStyle = `rgba(${c},${0.25 * (1 - Math.abs(u - 0.5) * 0.6)})`;
+      g.fillRect(Math.round(x), Math.round(y), 1, 1);
     }
   }
   // Ядро ожога: белое пламя, красная кайма (здесь жжёт).
@@ -3089,21 +3129,39 @@ registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
 
 interface IslandArt {
   top: HTMLCanvasElement;
-  sil: HTMLCanvasElement;
+  /** Толща: верхний (освещённый) и нижний (тёмный) слои силуэта. */
+  silHi: HTMLCanvasElement;
+  silLo: HTMLCanvasElement;
   glowC: HTMLCanvasElement;
   C: number;
 }
 
 const ISLANDS = new Map<string, IslandArt>();
+const ISLE = tn('#2e2840', '#463e5e', '#625a84', '#8a82ae');
 
-/** Остров кольца: сектор-кольцо вокруг угла 0, холст с центром кольца в середине. */
+function tintCanvas(p: Px, col: string): HTMLCanvasElement {
+  const c = p.canvas();
+  const g2 = c.getContext('2d');
+  if (g2) {
+    g2.globalCompositeOperation = 'source-in';
+    g2.fillStyle = col;
+    g2.fillRect(0, 0, c.width, c.height);
+  }
+  return c;
+}
+
+/**
+ * Остров кольца: сектор-кольцо вокруг угла 0, холст с центром кольца в
+ * середине. Верх — реголит в кратерах с бирюзовой каймой левитации и
+ * кристаллами, по оси — латунные маячки причала.
+ */
 function islandArt(r: Ring): IslandArt {
   const key = `${r.name}|${r.r0}|${r.r1}|${r.half}`;
   const hit = ISLANDS.get(key);
   if (hit) return hit;
   const R1 = r.r1 * TS;
   const R0 = r.r0 * TS;
-  const C = Math.ceil(R1) + 2;
+  const C = Math.ceil(R1) + 3;
   const top = new Px(C * 2, C * 2);
   const sil = new Px(C * 2, C * 2);
   const glowP = new Px(C * 2, C * 2);
@@ -3114,45 +3172,49 @@ function islandArt(r: Ring): IslandArt {
       const dy = y + 0.5 - C;
       const d = Math.hypot(dx, dy);
       const a = Math.atan2(dy, dx);
-      // Края острова неровные — шум по углу и радиусу.
       const wob = (vnoise(a * 60, d, 4, 2010) - 0.5) * 3;
       const inR = d >= R0 + 0.5 + wob * 0.6 && d < R1 - 0.5 + wob;
       const inA = Math.abs(a) * d <= half * d - 1 + wob;
       if (!inR || !inA) {
-        // Ореол левитации — чуть шире острова.
-        if (d >= R0 - 3 && d < R1 + 3 && Math.abs(a) * d <= half * d + 3) glowP.set(x, y, alpha(TEAL_GLOW, 0.22));
+        if (d >= R0 - 4 && d < R1 + 4 && Math.abs(a) * d <= half * d + 4) glowP.set(x, y, alpha(TEAL_GLOW, 0.2));
         continue;
       }
-      glowP.set(x, y, alpha(TEAL_GLOW, 0.3));
-      sil.set(x, y, hx('#ffffff'));
-      // Край — светлая кромка, внутри — реголит с кратерами.
-      const edge = Math.min(d - R0, R1 - d, (half - Math.abs(a)) * d);
+      glowP.set(x, y, alpha(TEAL_GLOW, 0.32));
+      sil.set(x, y, WHITE);
+      const edge = Math.min(d - R0 - wob * 0.6, R1 - d + wob, (half - Math.abs(a)) * d + wob);
       const n = fbm(x, y, 9, 2011);
       const v = voronoi(x, y, 7, 2012);
-      let l = (n - 0.5) * 0.8 + 0.42;
-      if (v.id < 0.3 && v.d1 < 0.32) l += v.d1 > 0.24 ? 0.18 : -0.3;
-      let col = tone(tn('#241e34', '#363048', '#4c4562', '#6c6488'), l);
-      if (edge < 1.5) col = hx('#8a84a8');
-      else if (edge < 2.5) col = mixc(col, hx('#6a6488'), 0.5);
-      if (hash(x, y, 2013) < 0.006) col = CRYST[3];
+      let l = (n - 0.5) * 0.7 + 0.45 + dith(x, y) * 0.12;
+      if (v.id < 0.3 && v.d1 < 0.32) l += v.d1 > 0.24 ? 0.2 : -0.3;
+      let col = tone(ISLE, l);
+      if (edge < 1.2) col = hx('#c8f8ff');
+      else if (edge < 2.6) col = mixc(col, TEAL[2], 0.55);
+      else if (edge < 4) col = mixc(col, TEAL[1], 0.2);
+      if (hash(x, y, 2013) < 0.005) col = CRYST[3];
       top.set(x, y, col);
     }
-  // Маячки: латунные кольца на оси острова, по два.
+  // Кристаллы на острове: гнёзда по сторонам от оси (не на пути причала).
+  const nest = (rr: number, side: number) => {
+    const x = C + rr;
+    const y = C + side;
+    for (const [ox, oy, h] of [[0, 0, 4], [2, 1, 3], [-1, 2, 2]] as [number, number, number][]) {
+      for (let i = 0; i < h; i++) {
+        top.set(x + ox, y + oy - i, CRYST[2]);
+        top.set(x + ox + 1, y + oy - i, CRYST[1]);
+      }
+      top.set(x + ox, y + oy - h, WHITE);
+    }
+  };
+  const span = Math.max(4, half * (R0 + R1) * 0.5 - 6);
+  nest(R0 + (R1 - R0) * 0.5, -span * 0.7);
+  nest(R0 + (R1 - R0) * 0.35, span * 0.75);
+  // Маячки: латунные кольца на оси острова.
   for (const k of [0.3, 0.7]) {
     const rr = R0 + (R1 - R0) * k;
-    const x = C + rr;
-    const y = C;
-    top.ell(x, y, 1.6, 1.6, BRASS[2]);
-    top.set(x, y, BRASS[3]);
+    top.ell(C + rr, C, 1.8, 1.8, BRASS[1]);
+    top.ell(C + rr - 0.3, C - 0.3, 1, 1, BRASS[3]);
   }
-  const out: IslandArt = { top: top.canvas(), sil: sil.canvas(), glowC: glowP.canvas(), C };
-  // Тёмный силуэт для толщи острова.
-  const g2 = out.sil.getContext('2d');
-  if (g2) {
-    g2.globalCompositeOperation = 'source-in';
-    g2.fillStyle = '#17121f';
-    g2.fillRect(0, 0, out.sil.width, out.sil.height);
-  }
+  const out: IslandArt = { top: top.canvas(), silHi: tintCanvas(sil, '#3c3254'), silLo: tintCanvas(sil, '#140f1c'), glowC: glowP.canvas(), C };
   ISLANDS.set(key, out);
   return out;
 }
@@ -3169,7 +3231,6 @@ registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
   for (let k = 0; k < r.n; k++) {
     const ang = PI / 2 + (k * TAU) / r.n + r.vis;
     const bob = Math.sin(time * 1.3 + k * 2) * 0.6;
-    // Ореол снизу, толща (камень уходит вниз), затем верх.
     const draw = (img: HTMLCanvasElement, dy: number, a = 1) => {
       g.save();
       g.globalAlpha = a;
@@ -3178,16 +3239,20 @@ registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
       g.drawImage(img, -C, -C);
       g.restore();
     };
-    draw(art.glowC, 7, 0.6 + 0.2 * Math.sin(time * 2 + k));
-    for (let dy = 5; dy >= 1; dy--) draw(art.sil, dy, 1);
+    // Ореол левитации, толща (камень уходит вниз), верх.
+    draw(art.glowC, 9, 0.55 + 0.25 * Math.sin(time * 2 + k));
+    for (let dy = 7; dy >= 3; dy--) draw(art.silLo, dy);
+    draw(art.silHi, 2);
+    draw(art.silHi, 1);
     draw(art.top, 0);
     if (r.parade) {
       g.save();
       g.translate(px, py + bob);
       g.rotate(ang);
       g.strokeStyle = `rgba(255,214,110,${0.5 + 0.3 * Math.sin(time * 6)})`;
+      g.lineWidth = 2;
       g.beginPath();
-      g.arc(0, 0, r.r1 * TS - 1, -r.half, r.half);
+      g.arc(0, 0, r.r1 * TS - 1.5, -r.half, r.half);
       g.stroke();
       g.restore();
     }
@@ -3436,7 +3501,11 @@ registerZonePainter('f15_stormwarn', (g, z, px, py) => {
 registerZonePainter('f15_dark', (g, z, px, py) => {
   const st = stNow();
   const sim = paintSim();
-  if (!st || !sim || st.dark <= 0.01) return true;
+  if (!st || !sim || st.dark <= 0.01 || sim.area !== F15_OBS) return true;
+  // Тьма — только в зале затмения (из запечатанного зала не выйти).
+  const hall = st.halls.find((q) => q.name === 'eclipse');
+  const h = sim.hero;
+  if (hall && (h.x < hall.x0 - 1 || h.x > hall.x1 + 2 || h.y < hall.y0 - 1 || h.y > hall.y1 + 2)) return true;
   const at = viewOf(z, px, py);
   const holes: [number, number, number][] = [];
   for (const l of st.lamps) if (l.lit) holes.push([...at(l.x, l.y), 3.6 * TS]);
