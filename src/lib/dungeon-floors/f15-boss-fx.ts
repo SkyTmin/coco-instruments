@@ -278,8 +278,18 @@ class Pen {
       return;
     }
     cuts.sort((p, q) => p[0] - q[0]);
+    // Заслонённое не вырезается дочиста, а ложится на треть: прямоугольник
+    // тела шире рисунка, и пустая рамка вокруг героя читалась чёрной дырой.
+    const ga = this.g.globalAlpha;
     for (const [c0, c1] of cuts) {
       if (c0 > lo) this.g.fillRect(lo + this.qx, Y + this.qy, Math.min(xb, c0 - 1) - lo + 1, 1);
+      const h0 = Math.max(lo, c0);
+      const h1 = Math.min(xb, c1);
+      if (h1 >= h0) {
+        this.g.globalAlpha = ga * 0.3;
+        this.g.fillRect(h0 + this.qx, Y + this.qy, h1 - h0 + 1, 1);
+        this.g.globalAlpha = ga;
+      }
       lo = Math.max(lo, c1 + 1);
       if (lo > xb) return;
     }
