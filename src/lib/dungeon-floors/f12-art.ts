@@ -5551,6 +5551,45 @@ registerZonePainter('f12_floor', (g, z, px, py, _s, time) => {
     }
   }
 
+  // Блики сияния на глади озера: широкие бирюзовые полосы медленно ползут
+  // по льду — свет сияния сквозь свод. Полосы привязаны к миру, а не к
+  // камере; только на озере (в гроте и чертоге своё освещение).
+  if (w.rowArea[Math.floor(sim.hero.y)] === F12_LAKE) {
+    const ax = Math.cos(0.5);
+    const ay = Math.sin(0.5);
+    const P = 260;
+    const proj = (x: number, y: number) => x * ax + y * ay;
+    const c0 = [
+      proj(left, top),
+      proj(left + gw, top),
+      proj(left, top + gh),
+      proj(left + gw, top + gh),
+    ];
+    const s0 = Math.min(...c0);
+    const s1 = Math.max(...c0);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const [ph, sp, wd, a] of [
+      [0, 5, 46, 0.15],
+      [131, -3.2, 28, 0.1],
+    ] as const) {
+      const off = ph + time * sp;
+      for (let k = Math.floor((s0 - off - wd) / P); k * P + off - wd < s1; k++) {
+        const s = k * P + off;
+        const x0 = (s - wd) * ax - left;
+        const y0 = (s - wd) * ay - top;
+        const gr = g.createLinearGradient(x0, y0, x0 + ax * wd * 2, y0 + ay * wd * 2);
+        const tw = 0.75 + 0.25 * Math.sin(time * 0.7 + k * 1.7 + ph);
+        gr.addColorStop(0, 'rgba(62,240,200,0)');
+        gr.addColorStop(0.5, `rgba(62,240,200,${(a * tw).toFixed(3)})`);
+        gr.addColorStop(1, 'rgba(62,240,200,0)');
+        g.fillStyle = gr;
+        g.fillRect(0, 0, gw, gh);
+      }
+    }
+    g.restore();
+  }
+
   // След скольжения.
   const ice = f12Ice(sim);
   let tr = TRAIL.get(sim);
