@@ -4630,6 +4630,10 @@ const STONE_K = ['#1c1c22', '#34343c', '#50505a', '#6e6e78', '#8e8e98', '#b0b0b8
 );
 const KEEP_LRU = frameLRU<[HTMLCanvasElement, HTMLCanvasElement]>(320);
 const keeperLast = new WeakMap<Mob, number>();
+/** Когда статуя начала просыпаться (время рендера): пробуждение длится дольше `alert`. */
+const keeperWake = new WeakMap<Mob, number>();
+/** Пробуждение статуи, с: трещины 0…0,35 (это `alert` движка), скорлупа сходит до 0,9. */
+const K_WAKE = 0.9;
 const STAFF_D = hx('#3a2a4a');
 const STAFF_S = hx('#22182e');
 
@@ -4734,6 +4738,11 @@ const K_THRUST: KPose = {
   glow: 1,
 };
 
+/** Присед перед замахом посохом: колени (подол) ниже, корпус назад. */
+const K_CROUCH: KPose = { ...K_IDLE, gz: 13, gy: 5, hz2: 12.5, lean: -1.2, bob: -1.6, glow: 0.6 };
+/** Статуя: голова склонена, посох у ног — так спит и так застывает. */
+const K_STATUE: KPose = { ...K_IDLE, lean: 1.4, bob: -0.6, gz: 14.5, hz2: 13.5, glow: 0 };
+
 function kmix(a: KPose, b: KPose, k: number): KPose {
   const o = { ...a };
   for (const n of Object.keys(a) as (keyof KPose)[]) o[n] = a[n] + (b[n] - a[n]) * k;
@@ -4742,17 +4751,26 @@ function kmix(a: KPose, b: KPose, k: number): KPose {
 
 /** Поза хранителя по режиму и времени (кадр 24 к/с). */
 function keeperPose(mode: string, T: number, last: number, ph: number): KPose {
+  // Удар посохом (урон мозга в 1,0): присед 0,2 → замах над головой к 0,75 →
+  // удар с ускорением, посох касается пола ровно в 1,0 (первый кадр отдыха).
   if (mode === 'f15k_slam') {
-    if (T < 0.75) return kmix(K_IDLE, K_RAISE, smooth(T / 0.75));
-    return kmix(K_RAISE, K_SLAM, eIn((T - 0.75) / 0.22));
+    if (T < 0.2) return kmix(K_IDLE, K_CROUCH, smooth(T / 0.2));
+    if (T < 0.75) return kmix(K_CROUCH, K_RAISE, smooth((T - 0.2) / 0.55));
+    return kmix(K_RAISE, K_SLAM, eIn((T - 0.75) / 0.25));
   }
+  // Выпад (урон в 0,9): отвод 0,6 с, пауза, укол к 0,9 ровно.
   if (mode === 'f15k_lance') {
     if (T < 0.72) return kmix(K_IDLE, K_DRAW, smooth(T / 0.6));
-    return kmix(K_DRAW, K_THRUST, eOut((T - 0.72) / 0.16));
+    return kmix(K_DRAW, K_THRUST, eOut((T - 0.72) / 0.18));
   }
+  // Доводка: держит удар 0,35 с (после удара в пол — ещё и перехлёст корпуса).
   if (mode === 'recover') {
     const from = last === 2 ? K_THRUST : last === 1 ? K_SLAM : K_IDLE;
-    if (T < 0.35) return from;
+    if (T < 0.35) {
+      if (last !== 1) return from;
+      const o = Math.sin(clamp01(T / 0.3) * Math.PI);
+      return { ...from, lean: from.lean + o * 1.2, bob: from.bob - o * 1.2 };
+    }
     return kmix(from, K_IDLE, smooth((T - 0.35) / 0.6));
   }
   const b = Math.sin((ph / 8) * TAU);
@@ -4778,6 +4796,11 @@ function veins(): Uint8Array {
   return (VEIN = v);
 }
 
+/**
+ * Кадр хранителя. `crack` 0…1 — трещины света расходятся от груди (статуя
+ * просыпается, умирающий раскалывается); `chips` 0…1 — осколки падают к ногам
+ * (каменная скорлупа при пробуждении, кристаллы при смерти).
+ */
 function buildKeeper(
   dir: number,
   kp: KPose,
@@ -4785,6 +4808,9 @@ function buildKeeper(
   crumble: number,
   flash: boolean,
   ph: number,
+  crack = 0,
+  chips = 0,
+  chipStone = false,
 ): [HTMLCanvasElement, HTMLCanvasElement] {
   const vt = veins();
   const a = (dir * TAU) / 16;
@@ -5079,8 +5105,42 @@ function buildKeeper(
     }
   }
   p.outline(hx('#0a0a1c'));
-  if (flash) p.tint(WHITE, 0.6);
-  return [p.canvas(), lit.canvas()];
+  // Трещины: изолинии шума по самой фигуре, раскрываются от груди наружу;
+  // в трещине — свет изнутри (и в слое поверх темноты).
+  if (crack > 0) {
+    const cy0 = KAY - 20;
+    for (let y = 0; y < KH; y++)
+      for (let x = 0; x < KW; x++) {
+        const i = (y * KW + x) * 4;
+        if (p.data[i + 3] < 200) continue;
+        if (Math.hypot(x - KAX, (y - cy0) * 0.8) > crack * 30) continue;
+        const n = vnoise(x * 0.21, y * 0.21, 631);
+        const e = Math.abs(n - 0.5);
+        if (e > 0.028) continue;
+        p.set(x, y, e < 0.012 ? WHITE : GOLD[5]);
+        lit.set(x, y, fade(e < 0.012 ? WHITE : GOLD[4], 0.85));
+      }
+  }
+  // Осколки к ногам: камень скорлупы или кристаллы, ложатся горкой у подола.
+  if (chips > 0) {
+    for (let k = 0; k < 16; k++) {
+      const x0 = KAX + (hash(k, 1, 633) - 0.5) * 16;
+      const y0 = KAY - 6 - hash(k, 2, 633) * 28;
+      const land = KAY - 1 - hash(k, 3, 633) * 3;
+      const t = clamp01((chips - hash(k, 4, 633) * 0.35) / 0.65);
+      if (t <= 0) continue;
+      const x = Math.round(x0 + (hash(k, 5, 633) - 0.5) * 8 * t);
+      const y = Math.round(Math.min(land, y0 + t * t * 40));
+      const c1 = chipStone ? STONE_K[4] : ICE[4];
+      const c2 = chipStone ? STONE_K[2] : ICE[2];
+      p.set(x, y, c1);
+      p.set(x + 1, y, c2);
+      p.set(x, y + 1, c2);
+      if (k % 3 === 0) p.set(x, y - 1, chipStone ? STONE_K[5] : WHITE);
+      if (!chipStone) lit.set(x, y, fade(ICE[5], 0.6));
+    }
+  }
+  return [(flash ? p.tint(WHITE, 0.6) : p).canvas(), lit.canvas()];
 }
 
 // Толпа хранителей: новых сборок (~5–7 мс каждая) не больше двух за кадр,
@@ -5127,25 +5187,70 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
   const ph = sp > 0.3 ? Math.floor(now * 8) % 8 : Math.floor(now * 3) % 8;
   let stone = 0;
   let crumble = 0;
+  let crack = 0;
+  let chips = 0;
+  let chipStone = false;
   let f = fr24(T);
   let kp: KPose;
   let key: string;
+  let sx = 1;
+  let sy = 1;
+  let dx = 0;
+  let dy = 0;
+  if (mode === 'alert' && !keeperWake.has(m)) keeperWake.set(m, now - T);
+  const w0 = keeperWake.get(m);
+  const wake = w0 === undefined ? -1 : now - w0;
+  const waking = wake >= 0 && wake < K_WAKE && (mode === 'alert' || mode === 'chase');
+  if (!waking) keeperWake.delete(m);
   if (mode === 'sleep') {
     stone = 1;
-    kp = K_IDLE;
+    kp = K_STATUE;
     key = 'sl';
+  } else if (waking) {
+    // Статуя оживает: свет трещинами от груди, потом каменная скорлупа
+    // сходит сверху вниз и осыпается к ногам; голова поднимается.
+    const q = fr24(wake);
+    const tq = q / 24;
+    crack = Math.round(clamp01(tq / 0.35) * 8) / 8;
+    stone = Math.round((1 - clamp01((tq - 0.35) / 0.5)) * 12) / 12;
+    chips = Math.round(clamp01((tq - 0.35) / 0.55) * 12) / 12;
+    chipStone = true;
+    kp = kmix(K_STATUE, K_IDLE, smooth((tq - 0.3) / 0.5));
+    if (tq < 0.35) {
+      // Дрожь проснувшегося камня.
+      dx = (q & 1 ? 0.5 : -0.5) * (tq / 0.35);
+    }
+    key = `w${q}`;
   } else if (mode === 'dying') {
-    stone = clamp01(T / 0.45);
-    crumble = clamp01((T - 0.5) / 0.6);
+    // Раскол: трещины света 0…0,35, камень от ног 0,15…0,5, рассыпается
+    // кристаллами 0,55…1,05 — они падают к подолу.
     f = Math.min(fr24(1.1), f);
-    kp = keeperPose('recover', 0.4, 0, 0);
+    const tq = f / 24;
+    crack = Math.round(clamp01(tq / 0.35) * 8) / 8;
+    stone = Math.round(clamp01((tq - 0.15) / 0.35) * 10) / 10;
+    crumble = Math.round(clamp01((tq - 0.55) / 0.5) * 12) / 12;
+    chips = crumble;
+    kp = kmix(keeperPose('recover', 0.4, 0, 0), K_STATUE, smooth(tq / 0.5));
     key = `d${f}`;
-    stone = Math.round(stone * 10) / 10;
-    crumble = Math.round(crumble * 12) / 12;
   } else if (mode === 'f15k_slam' || mode === 'f15k_lance' || mode === 'recover') {
     const last = keeperLast.get(m) ?? 0;
     kp = keeperPose(mode, f / 24, last, 0);
     key = `${mode}${last}|${f}`;
+    // Вес: посох в пол — кадр сплющен, укол — корпус следом за посохом.
+    if (mode === 'recover' && last === 1 && T < 0.12) {
+      sx = 1.06;
+      sy = 0.93;
+    }
+    const lunge =
+      mode === 'f15k_lance' && T > 0.72
+        ? eOut((T - 0.72) / 0.18)
+        : mode === 'recover' && last === 2
+          ? 1 - smooth((T - 0.3) / 0.5)
+          : 0;
+    if (lunge > 0) {
+      dx = Math.cos(m.face) * 2.5 * lunge;
+      dy = Math.sin(m.face) * 2.5 * lunge;
+    }
   } else {
     kp = keeperPose('chase', 0, 0, ph);
     key = `c${ph}`;
@@ -5161,7 +5266,10 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
     if (prev && keepBudget.n >= KEEP_BUILDS) fr = prev;
     else {
       keepBudget.n++;
-      fr = KEEP_LRU.set(k, buildKeeper(dir, kp, stone, crumble, false, ph));
+      fr = KEEP_LRU.set(
+        k,
+        buildKeeper(dir, kp, stone, crumble, false, ph, crack, chips, chipStone),
+      );
     }
   }
   KEEP_PREV.set(m, fr);
@@ -5171,6 +5279,10 @@ registerMobPainter('f15b_keeper', (m: Mob, pose: MobPose): MobFrame | null => {
     ay: KAY,
     eye: null,
     still: true,
+    sx,
+    sy,
+    dx,
+    dy,
     shadow: 8,
     lit: mode === 'sleep' ? undefined : fr[1],
     linger: 1.1,
