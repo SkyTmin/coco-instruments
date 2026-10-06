@@ -29,6 +29,8 @@ import { Tile } from '../dungeon-world';
 import type { WorldObj } from '../dungeon-world';
 import { F3_MARK } from './f3';
 import type { F3Zone } from './f3-brains';
+// Мобы этажа (анимации мобов 3): риг, ход в 8 сторон, дорожки 24 к/с.
+import './f3-mobs';
 
 type RGBA = [number, number, number, number];
 
@@ -831,149 +833,6 @@ function crystal(p: Px, x: number, y: number, h: number, lean: number, r: Ramp):
   }
   p.set(x + lean, y - h, r[3]);
 }
-
-type CrabKind = 'walk' | 'guard' | 'raise' | 'slam' | 'dead' | 'sleep';
-
-function paintCrab(kind: CrabKind, f: number): Raw {
-  const W = 30;
-  const H = 22;
-  const p = new Px(W, H);
-  const g = 18;
-  const cx = 14;
-  if (kind === 'dead') {
-    blob(p, cx, g - 3, 7, 3, CRAB.shell);
-    for (let i = 0; i < 3; i++) {
-      p.line(cx - 5 + i * 3, g - 5, cx - 6 + i * 3, g - 8, CRAB.leg);
-      p.line(cx + 1 + i * 2, g - 5, cx + 2 + i * 2, g - 8, CRAB.leg);
-    }
-    crystal(p, cx + 3, g, 3, 1, ramp('#3a2a58', '#5a4a80', '#7a6aa0', '#9a8ac0'));
-    p.outline(INK);
-    return { p, ax: cx, ay: g, eye: null };
-  }
-  const bob = kind === 'walk' ? f % 2 : 0;
-  const lean = kind === 'raise' ? -1 : kind === 'slam' ? 1 : 0;
-  const cy = g - 6 - bob + (kind === 'sleep' ? 2 : 0);
-  // Ноги: по три с каждой стороны, суставом вверх, шаг по кадру.
-  if (kind !== 'sleep')
-    for (let i = 0; i < 3; i++) {
-      const s = kind === 'walk' ? [1, -1, 1, -1][(f + i) % 4] : 0;
-      const bx = cx - 5 + i * 2;
-      p.line(bx, cy + 2, bx - 3, cy + 1, CRAB.leg);
-      p.line(bx - 3, cy + 1, bx - 4 + s, g - 1, CRAB.leg);
-      const fx = cx + 3 + i * 2;
-      p.line(fx, cy + 2, fx + 3, cy + 1, CRAB.shell[1]);
-      p.line(fx + 3, cy + 1, fx + 4 - s, g - 1, CRAB.shell[1]);
-    }
-  // Панцирь.
-  blob(p, cx + lean, cy, 7.4, 4, CRAB.shell);
-  for (let x = cx - 6; x <= cx + 6; x += 2) p.set(x + lean, cy + 3, CRAB.shell[0]);
-  // Друза на спине: четыре призмы.
-  const dx = cx - 1 + lean;
-  crystal(p, dx - 3, cy - 2, 4, -1, CRAB.xtal);
-  crystal(p, dx, cy - 3, 7, 0.5, CRAB.xtal);
-  crystal(p, dx + 2, cy - 2, 5, 1.5, CRAB.xtal);
-  crystal(p, dx + 4, cy - 1, 3, 1, CRAB.xtal);
-  // Глаза на стебельках.
-  const ex = cx + 5 + lean;
-  p.line(ex, cy - 2, ex, cy - 4, CRAB.stalk);
-  p.line(ex + 2, cy - 2, ex + 2, cy - 4, CRAB.stalk);
-  // Клешни: ладонь и два пальца с щелью — пинцет читается и в шестнадцати
-  // точках. `up` — клешня стоит торчком (щит перед мордой).
-  const clawAt = (x: number, y: number, big: boolean, open: boolean, up = false) => {
-    blob(p, x, y, big ? 2.8 : 2, big ? 2.2 : 1.6, CRAB.claw);
-    const l = big ? 4.2 : 2.6;
-    const gap = open ? 2.4 : 0.7;
-    if (up) {
-      tube(
-        p,
-        [
-          [x - 0.8, y - 1],
-          [x - 1 - gap * 0.5, y - l * 0.6],
-          [x - gap * 0.4, y - l],
-        ],
-        2,
-        1,
-        CRAB.claw[3],
-      );
-      tube(
-        p,
-        [
-          [x + 0.8, y - 1],
-          [x + 1 + gap * 0.3, y - l * 0.6],
-          [x + gap * 0.3, y - l],
-        ],
-        2,
-        1,
-        CRAB.claw[2],
-      );
-    } else {
-      tube(
-        p,
-        [
-          [x + 1, y - 0.8],
-          [x + l * 0.6, y - 1 - gap * 0.6],
-          [x + l, y - gap * 0.4],
-        ],
-        2,
-        1,
-        CRAB.claw[3],
-      );
-      tube(
-        p,
-        [
-          [x + 1, y + 0.8],
-          [x + l * 0.6, y + 1 + gap * 0.3],
-          [x + l, y + gap * 0.3],
-        ],
-        2,
-        1,
-        CRAB.claw[2],
-      );
-    }
-  };
-  if (kind === 'raise') {
-    // Замах: большая клешня высоко над панцирем, раскрыта.
-    p.line(cx + 5, cy, cx + 7, cy - 6, CRAB.claw[1]);
-    clawAt(cx + 8, cy - 8, true, true);
-    clawAt(cx + 8, cy + 1, false, false);
-  } else if (kind === 'slam') {
-    // Удар: клешня в земле перед мордой.
-    p.line(cx + 6, cy + 1, cx + 10, g - 2, CRAB.claw[1]);
-    clawAt(cx + 11, g - 2, true, false);
-    clawAt(cx + 8, cy + 1, false, false);
-  } else if (kind === 'guard') {
-    // Щит: клешни торчком перед мордой.
-    clawAt(cx + 9, cy + 1, true, false, true);
-    clawAt(cx + 11, cy + 3, false, false, true);
-  } else {
-    clawAt(cx + 8, cy + 1 + (f % 2), true, false);
-    clawAt(cx + 7, cy + 3, false, false);
-  }
-  p.outline(INK);
-  if (kind === 'sleep') return { p, ax: cx, ay: g, eye: null };
-  const eye: [number, number] = [ex + 2, cy - 5];
-  p.set(ex, cy - 5, CRAB.eye);
-  p.set(eye[0], eye[1], CRAB.eye);
-  return { p, ax: cx, ay: g, eye };
-}
-
-registerMobPainter('f3_crab', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  let kind: CrabKind;
-  let f = 0;
-  if (pose.anim === 'dead') kind = 'dead';
-  else if (pose.anim === 'sleep') kind = 'sleep';
-  else if (mode === 'windup') kind = 'raise';
-  else if (mode === 'recover') kind = 'slam';
-  else if (m.data.ghost) {
-    kind = 'guard';
-    f = cyc(pose.frame, 2);
-  } else {
-    kind = 'walk';
-    f = pose.anim === 'run' ? cyc(pose.frame, 4) : 0;
-  }
-  return mobFrame(`crab|${kind}${f}`, pose, () => paintCrab(kind, f));
-});
 
 // ---------------------------------------------------------------------------
 // Туманка: прозрачный колокол с клевером внутри, светится; пять щупалец и
