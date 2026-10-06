@@ -27,6 +27,7 @@ import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { F8_HALLS, F8_LOWER, F8_MARK, F8_MOON } from './f8';
 import { doorOpen, F8_CLOCK } from './f8-brains';
+import './f8-mob-imp';
 
 type RGBA = [number, number, number, number];
 type V = [number, number];
@@ -2915,116 +2916,6 @@ function poseIn(pose: MobPose, runFrames = 6): PoseIn {
   f = mod(f, n);
   return { anim: pose.anim, f, mode: pose.mode, t: pose.t };
 }
-
-// ---------------------------------------------------------------------------
-// Бес-прислужник: мелкий, рогатый, прыгает.
-// ---------------------------------------------------------------------------
-
-const IMP_ST: Style = {
-  skin: tones('#5a1a14', '#8a2a1c', '#b8442a', '#e07048'),
-  top: tones('#2a1a14', '#3e281c', '#5a3a26', '#7a5234'),
-  pants: tones('#2a1a14', '#3e281c', '#5a3a26', '#7a5234'),
-  under: hx('#c8b898'),
-  sash: hx('#3a2a1a'),
-  hair: null,
-  hairKind: 'bald',
-  horns: 1,
-  horn: tones('#8a7a58', '#c8b888', '#ece0b0', '#fff8d8'),
-  eye: hx('#ffd040'),
-  bulk: 1.1,
-  sleeve: 0,
-  hakama: false,
-};
-
-registerMobPainter('f8_imp', (m: Mob, pose: MobPose) => {
-  const pi = poseIn(pose, 6);
-  let anim = pi.anim;
-  let f = pi.f;
-  if (pose.mode === 'aim') {
-    anim = 'wind';
-    f = pose.t < 0.2 ? 0 : 1;
-  } else if (pose.mode === 'leap') {
-    anim = 'leap';
-    f = 0;
-  } else if (pose.mode === 'f8_out') {
-    anim = 'run';
-    f = mod(pose.t * 10, 6);
-  }
-  return frameOf('f8_imp', pose, anim, f, () => {
-    const W = 26;
-    const H = 24;
-    const s = 0.72;
-    const r = bipedRig({
-      s,
-      W,
-      H,
-      legLen: 5.2,
-      torso: 4.2,
-      headR: 3.9,
-      arms: 2,
-      pose: { ...pi, anim: anim === 'leap' ? 'bite' : anim, f },
-    });
-    if (anim === 'leap') {
-      // В прыжке: вытянулся вперёд, ноги назад, когти перед собой.
-      r.hip = add(r.hip, [0, -3]);
-      r.lean = 1.1;
-      const neck = neckOf(r);
-      r.head = add(neck, [2.6, -1]);
-      r.legF[2] = add(r.hip, [-4, 1]);
-      r.legN[2] = add(r.hip, [-3, 2.4]);
-      r.legF[1] = lerp(r.legF[0], r.legF[2], 0.5);
-      r.legN[1] = lerp(r.legN[0], r.legN[2], 0.5);
-      for (const a of r.arms) {
-        a.sh = add(neck, [0, 1]);
-        a.el = add(a.sh, [2.2, 0.4]);
-        a.ha = add(a.sh, [4.2, a.far ? -0.6 : 0.8]);
-      }
-      r.mouth = 1;
-    }
-    if (anim === 'dead') deadRig(r, H);
-    // Хвост с наконечником-лопаткой — силуэт беса.
-    r.items.push({
-      layer: 'back',
-      draw: (p) => {
-        const wag =
-          anim === 'run' ? Math.sin(f) * 1.2 : anim === 'idle' ? [0, 0.5, 1, 0.5][f % 4] : 0;
-        const a: V = add(r.hip, [-1, 0.6]);
-        const b: V = add(r.hip, [-4.5, -0.5 + wag]);
-        const c: V = add(r.hip, [-6.2, -3.6 + wag]);
-        const t = IMP_ST.skin;
-        limb(p, a[0], a[1], b[0], b[1], 0.7, 0.55, t);
-        limb(p, b[0], b[1], c[0], c[1], 0.55, 0.45, t);
-        poly(
-          p,
-          [
-            [c[0] - 1.6, c[1] + 0.4],
-            [c[0] + 0.2, c[1] - 2.2],
-            [c[0] + 1.4, c[1] + 0.6],
-            [c[0], c[1] + 0.2],
-          ],
-          t[1],
-        );
-      },
-    });
-    // Набедренная повязка вместо хакама.
-    r.items.push({
-      layer: 'mid',
-      draw: (p) => {
-        p.rect(
-          Math.round(r.hip[0] - 1.6),
-          Math.round(r.hip[1] - 0.5),
-          Math.round(r.hip[0] + 1.6),
-          Math.round(r.hip[1] + 1),
-          hx('#e8dcc0'),
-        );
-        p.set(Math.round(r.hip[0] + 0.5), Math.round(r.hip[1] + 2), hx('#c8b898'));
-      },
-    });
-    const { p, eye } = drawRig(r, IMP_ST, W, H, anim === 'dead');
-    if (pose.mode === 'stun') stars(p, r.head[0], r.head[1] - 4, 3, mod(pose.t * 8, 4));
-    return { p, ax: Math.round(W / 2), ay: H - 2, eye: anim === 'dead' ? null : eye };
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Демон-мечник: хаори, хакама, два рожка, катана. Выпады сериями.
