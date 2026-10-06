@@ -2313,12 +2313,30 @@ interface LPose extends KFull {
 
 const fr24 = (t: number) => Math.max(0, Math.floor(t * 24));
 
+/** Сглаженная скорость владыки: разгон ~0,12 с, остановка ~0,3 с. */
+const SPD = new Map<number, { now: number; v: number }>();
+function smoothSp(id: number, now: number, sp: number): number {
+  let st = SPD.get(id);
+  if (!st || now < st.now || now - st.now > 0.25) {
+    st = { now, v: sp };
+    SPD.set(id, st);
+    if (SPD.size > 8) SPD.delete(SPD.keys().next().value as number);
+    return sp;
+  }
+  const dt = now - st.now;
+  st.now = now;
+  st.v += (sp - st.v) * (1 - Math.exp(-dt / (sp > st.v ? 0.12 : 0.3)));
+  return st.v;
+}
+
 function lordPose(m: Mob, pose: MobPose, now: number): LPose {
   const s = paintSim();
   const v = f15bView(s);
   const T = pose.mode === 'dying' ? pose.t * DIE_K : m.t;
   const ph = Math.floor(now * 5) % 10;
-  const sp = Math.hypot(m.vx, m.vy);
+  // Шлейф и поза полёта — по сглаженной скорости: плащ догоняет разгон и
+  // доплывает после остановки, а не щёлкает за кадр.
+  const sp = smoothSp(m.id, now, Math.hypot(m.vx, m.vy));
   const spQ = Math.round(clamp01(sp / 3.1) * 2) / 2;
   let k: KFull;
   let alpha = 1;
