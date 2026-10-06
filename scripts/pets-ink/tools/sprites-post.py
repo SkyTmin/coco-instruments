@@ -17,9 +17,6 @@ For every pet:
     --px pixels tall (<anim>.webp). The animations listed in LARGE are cut again at --pxl for the
     pet's card and the hatching scene (<anim>-l.webp);
   * thumb.webp is the first idle drawing in the body box, for lists of many pets.
-Pets listed in scripts/pets-pixel/pets.json are PIXEL pets (their own pipeline, scripts/pets-pixel):
-they are skipped here — their folder is not touched and they are dropped from this manifest — so
-re-running the ink pipeline never brings an ink drawing back over a pixel one.
 The manifest src/lib/pet-sprites.ts gives each strip its frame count and its rectangle in body-box
 units (0..1 from the box's top-left), so a strip can overflow the box exactly where its drawing does.
 """
@@ -51,8 +48,6 @@ PXL = int(arg('--pxl', '360'))
 OUT = os.path.abspath(arg('--out', os.path.join(ROOT, '..', '..', 'public', 'ui', 'pets')))
 MANIFEST = os.path.abspath(os.path.join(ROOT, '..', '..', 'src', 'lib', 'pet-sprites.ts'))
 ONLY = arg('--pet', None)
-PIXEL_LIST = os.path.abspath(os.path.join(ROOT, '..', 'pets-pixel', 'pets.json'))
-PIXEL = set(json.load(open(PIXEL_LIST))) if os.path.exists(PIXEL_LIST) else set()
 QUALITY = int(arg('--q', '82'))
 QL = int(arg('--ql', '74'))
 # halo: its width in pixels of the small strip, colour and opacity
@@ -145,10 +140,6 @@ def main():
     pets = sorted(p for p in os.listdir(SRC) if os.path.isdir(os.path.join(SRC, p)))
     if ONLY:
         pets = [ONLY]
-    skip = [p for p in pets if p in PIXEL]
-    if skip:
-        print('pixel pets, skipped (scripts/pets-pixel):', ', '.join(skip))
-    pets = [p for p in pets if p not in PIXEL]
     old = {}
     if os.path.exists(MANIFEST):
         txt = open(MANIFEST, encoding='utf-8').read()
@@ -158,8 +149,6 @@ def main():
                 old = json.loads(txt[start + 2: txt.rindex('}') + 1])
             except ValueError:
                 old = {}
-    for p in PIXEL:
-        old.pop(p, None)
     grand = {'s': 0, 'l': 0}
     for p in pets:
         old[p], t = cut(p)
@@ -170,8 +159,6 @@ def main():
     # served from the service worker's cache
     h = hashlib.sha1()
     for dp, _, fs in sorted(os.walk(OUT)):
-        if os.path.basename(dp) in PIXEL:
-            continue  # pixel pets carry their own revision
         for f in sorted(fs):
             h.update(f.encode())
             h.update(open(os.path.join(dp, f), 'rb').read())

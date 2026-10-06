@@ -10,20 +10,12 @@
 //
 // Рамка тела у всех кадров вида одна (размер `size`), полоса может вылезать
 // за неё ровно там, где вылезает рисунок: прыжок, брызги, паутина.
-//
-// Пиксельные питомцы (`lib/pet-pixel-sprites.ts`, конвейер
-// `scripts/pets-pixel`) играют так же, но их полосы — в родном размере
-// рисунка: рамка подгоняется к ЦЕЛОМУ числу точек экрана на пиксель рисунка
-// (`pxFit`) и растягивается без сглаживания, иначе пиксели размываются или
-// выходят разной ширины. У них свой `rev` в адресе и нет крупных полос.
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { rarityVars } from '@/components/PickArt';
 import { eggOf, petOf } from '@/lib/pets';
 import type { EggId, PetId } from '@/lib/pets';
-import { PET_PX } from '@/lib/pet-pixel-sprites';
-import type { PetPx } from '@/lib/pet-pixel-sprites';
 import { PET_LARGE, PET_REV, PET_SPRITES } from '@/lib/pet-sprites';
 
 export type PetAnim = 'idle' | 'walk' | 'happy' | 'work' | 'attack' | 'sleep';
@@ -31,26 +23,8 @@ export type PetAnim = 'idle' | 'walk' | 'happy' | 'work' | 'attack' | 'sleep';
 /** С какого размера рамки берём крупные полосы (там, где они есть). */
 const LARGE_FROM = 110;
 
-const stripSrc = (id: PetId, anim: PetAnim, large: boolean): string => {
-  const px = PET_PX[id];
-  if (px) return `/ui/pets/${id}/${anim}.webp?v=${px.rev}`;
-  return `/ui/pets/${id}/${anim}${large && (PET_LARGE as readonly string[]).includes(anim) ? '-l' : ''}.webp?v=${PET_REV}`;
-};
-
-/**
- * Размер рамки пиксельного питомца: целое число точек экрана на пиксель
- * рисунка. Мельче полутора точек — как есть и со сглаживанием (пиксели всё
- * равно не различить); если до целого дальше 15% — размер прежний, без
- * сглаживания (мелочь неровной ширины лучше мыла).
- */
-function pxFit(size: number, px: PetPx): { s: number; crisp: boolean } {
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const k = (size * dpr) / px.box;
-  if (k < 1.5) return { s: size, crisp: false };
-  const kr = Math.round(k);
-  if (Math.abs(kr / k - 1) > 0.15) return { s: size, crisp: true };
-  return { s: (kr * px.box) / dpr, crisp: true };
-}
+const stripSrc = (id: PetId, anim: PetAnim, large: boolean): string =>
+  `/ui/pets/${id}/${anim}${large && (PET_LARGE as readonly string[]).includes(anim) ? '-l' : ''}.webp?v=${PET_REV}`;
 
 /** Разовые анимации подгружаем заранее: иначе на первой ласке — пустая рамка. */
 const preloaded = new Set<string>();
@@ -109,21 +83,12 @@ export function PetArt({
   onClick?: () => void;
 }) {
   const def = petOf(id);
-  const px = PET_PX[id];
-  const sprites = px ? px.anims : PET_SPRITES[id]?.anims;
-  const fit = px ? pxFit(size, px) : null;
+  const sprites = PET_SPRITES[id]?.anims;
   const large = size >= LARGE_FROM;
   const [once, setOnce] = useState<{ anim: PetAnim; k: number } | null>(
     intro && !still && !ghost && !reduce() ? { anim: intro, k: 0 } : null,
   );
   const [hearts, setHearts] = useState(0);
-  // Пиксельный после разовой анимации продолжает покой с первого кадра:
-  // последний кадр разовой стыкуется именно с ним, а не со сдвигом фазы.
-  const [resume, setResume] = useState(false);
-  const done = () => {
-    setOnce(null);
-    if (px) setResume(true);
-  };
   const seen = useRef({ joy, trick });
 
   const play = (a: PetAnim) => {
@@ -159,9 +124,8 @@ export function PetArt({
   const st = sprites?.[cur] ?? sprites?.idle;
   useEffect(() => {
     if (!once || !st) return undefined;
-    const t = setTimeout(done, (st.n / st.fps) * 1000 + 120);
+    const t = setTimeout(() => setOnce(null), (st.n / st.fps) * 1000 + 120);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [once, st]);
   useEffect(() => {
     if (!hearts) return undefined;
@@ -175,7 +139,6 @@ export function PetArt({
     v ? `v${v}` : '',
     ghost ? 'is-ghost' : '',
     still || ghost ? 'is-still' : '',
-    fit?.crisp ? 'is-px' : '',
     className ?? '',
   ]
     .filter(Boolean)
@@ -199,42 +162,10 @@ export function PetArt({
       {still || ghost || !st ? (
         <img
           className="pet__thumb"
-          src={`/ui/pets/${id}/thumb.webp?v=${px ? px.rev : PET_REV}`}
+          src={`/ui/pets/${id}/thumb.webp?v=${PET_REV}`}
           alt=""
           draggable={false}
         />
-      ) : px && fit ? (
-        <span
-          className="pet__px"
-          style={{ width: fit.s, height: fit.s, left: (size - fit.s) / 2, top: size - fit.s }}
-        >
-          <span
-            className="pet__frame"
-            style={{
-              left: (st.x * fit.s) / px.box,
-              top: (st.y * fit.s) / px.box,
-              width: (st.w * fit.s) / px.box,
-              height: (st.h * fit.s) / px.box,
-            }}
-          >
-            <img
-              key={`${cur}:${once?.k ?? 'loop'}`}
-              className={`pet__strip${once ? ' is-once' : ''}`}
-              src={stripSrc(id, cur, false)}
-              style={
-                {
-                  width: `${st.n * 100}%`,
-                  '--n': st.n,
-                  '--pt': `${st.n / st.fps}s`,
-                  ...(resume && !once ? { animationDelay: '0s' } : null),
-                } as CSSProperties
-              }
-              alt=""
-              draggable={false}
-              onAnimationEnd={done}
-            />
-          </span>
-        </span>
       ) : (
         <span
           className="pet__frame"

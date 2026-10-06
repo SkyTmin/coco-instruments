@@ -7792,16 +7792,6 @@ button.fg-slot {
 .pet.is-ghost .pet__thumb {
   filter: brightness(0) opacity(0.45);
 }
-/* Пиксельные питомцы (`scripts/pets-pixel`): рамка подогнана к целому числу точек экрана на
-   пиксель рисунка (`pxFit` в PetArt), растяжка — без сглаживания. Ореола-
-   «наклейки» у них нет: читаемость на тёмном дают контур и кант света. */
-.pet__px {
-  position: absolute;
-  pointer-events: none;
-}
-.pet.is-px :is(.pet__strip, .pet__thumb) {
-  image-rendering: pixelated;
-}
 /* Ореол редкости: статичный градиент, у легендарных и радужных — лучи,
    нарисованные один раз и крутящиеся трансформом. */
 .pet__aura {
