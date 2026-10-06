@@ -404,7 +404,6 @@ const C_CLAW = tn('#3a3264', '#5c5498', '#8c84c8', '#c4bcf0');
 const C_XTAL = tn('#6a34c0', '#a070f4', '#d4b4ff', '#fbf2ff');
 const C_XDEAD = tn('#2a2438', '#3e3650', '#5a5070', '#7a7090');
 const C_LEG = tn('#1a1428', '#2a2240', '#3e3260', '#55487a');
-const C_EYE = hex('#e2ccff');
 const C_STALK = tn('#211a33', '#3a2e58', '#50427a', '#6a5a96');
 const C_DUST: RGBA = hex('#8a7c9a');
 const C_SPARK: RGBA = hex('#e8d8ff');
@@ -777,7 +776,13 @@ registerMobPainter('f3_crab', (m: Mob, pose: MobPose) => {
         for (let i = 0; i < 6; i++) {
           const a = -PI / 2 + (rnd(i, 7) - 0.5) * 2.4;
           const rr = 2 + ff * 2.2 * (0.6 + rnd(i, 9));
-          dotA(lit, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr + ff * ff * 0.4, C_SPARK, 1 - ff / 4);
+          dotA(
+            lit,
+            cx + Math.cos(a) * rr,
+            cy + Math.sin(a) * rr + ff * ff * 0.4,
+            C_SPARK,
+            1 - ff / 4,
+          );
         }
       };
     }
@@ -1649,7 +1654,13 @@ function jellyPic(o: JellyO): Pic {
       for (let j = 0; j < pts.length - 1; j++) {
         const [x0, y0] = pts[j];
         const [x1, y1] = pts[j + 1];
-        p.line(Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1), j >= 4 ? J_TIP : J_TENT);
+        p.line(
+          Math.round(x0),
+          Math.round(y0),
+          Math.round(x1),
+          Math.round(y1),
+          j >= 4 ? J_TIP : J_TENT,
+        );
       }
       const [tx, ty] = pts[pts.length - 1];
       dotA(lit, tx, ty, J_FROST, 0.25 * g);
@@ -1678,9 +1689,19 @@ function jellyPic(o: JellyO): Pic {
       let y = rim - 0.5;
       for (let j = 1; j <= 3; j++) {
         const cj = o.lagC[j];
-        const nx = x + s * (0.45 - 0.5 * cj) + Math.sin((o.ph - j * 0.12) * TAU + s) * 0.6 * o.sway - o.lean * 0.5;
+        const nx =
+          x +
+          s * (0.45 - 0.5 * cj) +
+          Math.sin((o.ph - j * 0.12) * TAU + s) * 0.6 * o.sway -
+          o.lean * 0.5;
         const ny = y + 2.6 * o.len * (1 - o.curl * 0.3) * (1 - o.sag * 0.7);
-        p.line(Math.round(x), Math.round(y), Math.round(nx), Math.round(ny), j === 2 ? J_ARMD : J_ARM);
+        p.line(
+          Math.round(x),
+          Math.round(y),
+          Math.round(nx),
+          Math.round(ny),
+          j === 2 ? J_ARMD : J_ARM,
+        );
         p.line(Math.round(x) + s, Math.round(y), Math.round(nx) + s, Math.round(ny), J_ARM);
         x = nx;
         y = ny;
@@ -1699,7 +1720,8 @@ function jellyPic(o: JellyO): Pic {
     p.set(Math.round(cx), Math.round(cy), J_CORE);
     dotA(lit, cx, cy, J_CORE, 0.5 + 0.5 * g);
     if (g > 0.7)
-      for (let k = 0; k < 4; k++) dotA(lit, cx + [1, -1, 0, 0][k], cy + [0, 0, 1, -1][k], J_CLOVER, g - 0.4);
+      for (let k = 0; k < 4; k++)
+        dotA(lit, cx + [1, -1, 0, 0][k], cy + [0, 0, 1, -1][k], J_CLOVER, g - 0.4);
     // Иней: кристаллики роятся вокруг колокола.
     if (o.frost > 0)
       for (let i = 0; i < 7; i++) {
@@ -1748,7 +1770,13 @@ function jellyPic(o: JellyO): Pic {
     for (let kk = -2; kk <= 2; kk++) {
       const x0 = bx + kk * 2.2;
       const y0 = JAY - 1 + Math.abs(kk) * 0.3;
-      p.line(Math.round(x0 - 1), Math.round(y0), Math.round(x0 + 1 + kk * 0.5), Math.round(y0 + 0.5), alpha(J_TENT, 0.9 * (1 - k * 0.6)));
+      p.line(
+        Math.round(x0 - 1),
+        Math.round(y0),
+        Math.round(x0 + 1 + kk * 0.5),
+        Math.round(y0 + 0.5),
+        alpha(J_TENT, 0.9 * (1 - k * 0.6)),
+      );
     }
   }
   return { p, lit, ax: JAX, ay: JAY, eye: null };
@@ -1906,7 +1934,9 @@ registerMobPainter('f3_jelly', (m: Mob, pose: MobPose) => {
     const k = f / 11;
     const wob = Math.cos(f * 1.7) * Math.exp(-f * 0.28);
     o = jellyO(0.9 * wob, f * 0.11);
-    o.lagC = [0, 1, 2, 3, 4].map((j) => 0.9 * Math.cos((f - j) * 1.7) * Math.exp(-Math.max(0, f - j) * 0.28));
+    o.lagC = [0, 1, 2, 3, 4].map(
+      (j) => 0.9 * Math.cos((f - j) * 1.7) * Math.exp(-Math.max(0, f - j) * 0.28),
+    );
     o.sway = 2.2 * (1 - k) + 0.6;
     o.spread = 0.4 * (1 - k);
     o.glow = f % 2 ? 0.2 : 0.75 - 0.3 * k;
@@ -2057,7 +2087,7 @@ function spearRig(o: SpearO, yaw: number): Rig {
     pat: (q, l) => {
       if (o.blur > 0.5) {
         // Смаз: пояса слились в полосы по ходу.
-        const b = Math.abs((((q[1] * 3 + 10) % 1) + 1) % 1 - 0.5);
+        const b = Math.abs(((((q[1] * 3 + 10) % 1) + 1) % 1) - 0.5);
         return b < 0.1 ? S_SHELL[l > 0.3 ? 2 : 1] : null;
       }
       if (c < 0.5 && q[2] < -0.5) return S_BELLY;
@@ -2087,7 +2117,15 @@ function spearRig(o: SpearO, yaw: number): Rig {
   // Игла: от морды вперёд и чуть вверх; у шара торчит из него по ходу.
   const base = vlerp(hd.p(2.2, 0, -0.2), body.p(R * 0.85, 0, 0.2), sstep(0.3, 0.8, c));
   const dir = vnorm(body.v(Math.cos(o.up), 0, Math.sin(o.up)));
-  r.spike(base, dir, 8.2, 0.95, { T: S_BONE, spec: true, bias: 0.15, glow: o.glow * 0.8 }, 4, PI / 4);
+  r.spike(
+    base,
+    dir,
+    8.2,
+    0.95,
+    { T: S_BONE, spec: true, bias: 0.15, glow: o.glow * 0.8 },
+    4,
+    PI / 4,
+  );
   // Хвост — короткий, в пластинах; у шара спрятан.
   if (c < 0.8) {
     const t0 = body.p(-4.0, 0, -0.4);
@@ -2580,7 +2618,8 @@ function graspRig(o: GraspO, yaw: number, wl: V3[], hands: V3[]): Rig {
   // Гребень по спине.
   for (let i = 0; i < 3; i++) {
     const bp = tor.p(-0.5 - i * 1.4, 0, 3.5 - i * 0.4);
-    if (bp[2] > G_WL) r.spike(bp, tor.v(-0.5, 0, 1), 2.2 - i * 0.4, 0.7, { T: G_SKIN, bias: -0.1 }, 3);
+    if (bp[2] > G_WL)
+      r.spike(bp, tor.v(-0.5, 0, 1), 2.2 - i * 0.4, 0.7, { T: G_SKIN, bias: -0.1 }, 3);
   }
   // Руки: длинные, бледные, с крючьями; ниже воды срезаны.
   const am: Mat = { T: G_ARM };
@@ -2631,7 +2670,8 @@ function graspPic(o: GraspO, yaw: number, post?: ((o: RigOut, P: Proj2) => void)
           const a = (x * ux + y * uy) / 7.5;
           const b = (-x * uy + y * ux) / 4.6;
           if (a * a + b * b > 1) continue;
-          if (empty(GAX + x, GAY + y)) dotA(p, GAX + x, GAY + y, G_DARK, o.under * (a * a + b * b > 0.6 ? 0.35 : 0.55));
+          if (empty(GAX + x, GAY + y))
+            dotA(p, GAX + x, GAY + y, G_DARK, o.under * (a * a + b * b > 0.6 ? 0.35 : 0.55));
         }
       if (o.eyes > 0.05 && o.under > 0.4)
         for (const s of [-1, 1]) {
@@ -2642,7 +2682,7 @@ function graspPic(o: GraspO, yaw: number, post?: ((o: RigOut, P: Proj2) => void)
         }
     }
     // Рябь: кольцо расходится от тела (только по пустому).
-    const rr = 6 + ((o.rip % 1) + 1) % 1 * 7;
+    const rr = 6 + (((o.rip % 1) + 1) % 1) * 7;
     const ra = 0.55 * (1 - (((o.rip % 1) + 1) % 1));
     for (let i = 0; i < 28; i++) {
       const a = (i / 28) * TAU;
@@ -2673,14 +2713,17 @@ function graspPic(o: GraspO, yaw: number, post?: ((o: RigOut, P: Proj2) => void)
         const x = GAX + Math.cos(a) * rad;
         const y = GAY + Math.sin(a) * rad * 0.55;
         if (q < 0.7) dotA(p, x, y, G_FOAM, 0.9);
-        else for (let k = 0; k < 4; k++) dotA(p, x + [1, -1, 0, 0][k], y + [0, 0, 1, -1][k], G_RIP, 0.7);
+        else
+          for (let k = 0; k < 4; k++)
+            dotA(p, x + [1, -1, 0, 0][k], y + [0, 0, 1, -1][k], G_RIP, 0.7);
       }
     // Вода стекает с головы и рук.
     if (o.wet > 0.05) {
       const pts = hands.map((h) => P(h));
       pts.push(P([Math.cos(yaw) * 3.5, Math.sin(yaw) * 3.5, o.z + 1.2]));
       pts.forEach(([x, y], i) => {
-        for (let k = 0; k < 3; k++) dotA(p, x + ((i + k) % 3) - 1, y + 2 + k * 2, G_FOAM, o.wet * (1 - k * 0.25));
+        for (let k = 0; k < 3; k++)
+          dotA(p, x + ((i + k) % 3) - 1, y + 2 + k * 2, G_FOAM, o.wet * (1 - k * 0.25));
       });
     }
     if (post) post(out, P);
@@ -2788,11 +2831,13 @@ function graspHold(q: number, o: GraspO): void {
     [1.2, 0.2],
     [1.5, 0.7],
   ]);
-  o.pitch = kf(q, [
-    [0, 0.14],
-    [0.25, 0.08],
-    [1.6, 0],
-  ]) - pull * 0.22;
+  o.pitch =
+    kf(q, [
+      [0, 0.14],
+      [0.25, 0.08],
+      [1.6, 0],
+    ]) -
+    pull * 0.22;
   o.hp = -pull * 0.12;
   o.mouth = q > 0.3 ? 0.35 + 0.35 * Math.sin((q - 0.3) * TAU * 2.2) : 0.15;
   o.roll = Math.sin(q * 4.2) * 0.06;
@@ -2965,7 +3010,10 @@ registerImpactPainter('f3_grab', {
       const a = rnd(seed % 997, i, 1) * TAU;
       const sp = 14 + rnd(seed % 997, i, 2) * 22;
       const x = px + Math.cos(a) * sp * age * 1.4;
-      const y = py + Math.sin(a) * sp * age * 0.7 - (40 * age - 70 * age * age) * (0.6 + rnd(seed % 997, i, 3));
+      const y =
+        py +
+        Math.sin(a) * sp * age * 0.7 -
+        (40 * age - 70 * age * age) * (0.6 + rnd(seed % 997, i, 3));
       g.fillStyle = i % 3 ? 'rgba(191,244,234,1)' : 'rgba(255,255,255,1)';
       g.globalAlpha = Math.max(0, 1 - k);
       g.fillRect(Math.round(x), Math.round(y), 1, 1);
@@ -2999,7 +3047,12 @@ registerZonePainter('f3_grab', (g, z, px, py) => {
   g.globalAlpha = 0.35 * fade;
   for (let s = 0; s <= drag; s += 1)
     for (const side of [-1, 1])
-      g.fillRect(Math.round(px + ca * s - sa * side * 3), Math.round(py + sa * s * 0.6 + ca * side * 2), 1, 1);
+      g.fillRect(
+        Math.round(px + ca * s - sa * side * 3),
+        Math.round(py + sa * s * 0.6 + ca * side * 2),
+        1,
+        1,
+      );
   // Мокрое пятно.
   g.globalAlpha = 0.3 * fade;
   for (let i = -5; i <= 5; i++)

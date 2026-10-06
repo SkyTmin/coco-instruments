@@ -36,7 +36,6 @@ type RGBA = [number, number, number, number];
 
 export const INK = hex('#150f0b');
 export const WHITE: RGBA = [255, 255, 255, 255];
-const GOLD = hex('#ffcc40');
 
 // ---------------------------------------------------------------------------
 // Кисти.
@@ -148,72 +147,11 @@ function tube(
   });
 }
 
-function clonePx(src: Px): Px {
-  const o = new Px(src.w, src.h);
-  o.data.set(src.data);
-  return o;
-}
-
-/** Альбинос: белёсый, как у крыс. */
-function pale(src: Px): Px {
-  const o = clonePx(src);
-  const d = o.data;
-  for (let i = 0; i < d.length; i += 4) {
-    if (!d[i + 3]) continue;
-    const l = (d[i] + d[i + 1] + d[i + 2]) / 3;
-    d[i] = l * 0.5 + 244 * 0.5;
-    d[i + 1] = l * 0.5 + 236 * 0.5;
-    d[i + 2] = l * 0.5 + 228 * 0.5;
-  }
-  return o;
-}
-
 const hash = (a: number, b: number, c = 0) => {
   let h = (a * 374761393 + b * 668265263 + c * 1274126177) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return (h ^ (h >>> 16)) >>> 0;
 };
-
-// ---------------------------------------------------------------------------
-// Кадры монстров: сырой рисунок → облик, сторона, вспышка → холст (кеш).
-// ---------------------------------------------------------------------------
-
-interface Raw {
-  p: Px;
-  /** Середина тела от левого края, земля от верха, глаз. */
-  ax: number;
-  ay: number;
-  eye?: [number, number] | null;
-}
-
-const raws = new Map<string, Raw>();
-const frames = new Map<string, MobFrame>();
-
-function mobFrame(key: string, pose: MobPose, make: () => Raw): MobFrame {
-  const fk = `${key}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = frames.get(fk);
-  if (hit) return hit;
-  let raw = raws.get(key);
-  if (!raw) {
-    raw = make();
-    raws.set(key, raw);
-  }
-  let p = raw.p;
-  if (pose.look === 'albino') p = pale(p);
-  if (pose.look === 'elite') {
-    p = clonePx(p);
-    p.outline(GOLD);
-  }
-  if (pose.left) p = p.flipX();
-  if (pose.flash) p = p.tint(WHITE, 0.85);
-  const ax = pose.left ? p.w - raw.ax : raw.ax;
-  const eye = raw.eye
-    ? ([pose.left ? p.w - 1 - raw.eye[0] : raw.eye[0], raw.eye[1]] as [number, number])
-    : null;
-  const out: MobFrame = { img: p.canvas(), ax, ay: raw.ay, eye };
-  frames.set(fk, out);
-  return out;
-}
 
 export const cyc = (n: number, k: number) => ((Math.floor(n) % k) + k) % k;
 
