@@ -6654,24 +6654,42 @@ registerZonePainter('f15_beam', (g, z, px, py, _s, time) => {
   return true;
 });
 
-/** Сверхновая вспыхнула: огненное кольцо по метке и белая вспышка. */
+/**
+ * Вспышка сверхновой — кольцом по честной полосе удара (ringR ± ringW):
+ * полоса вспыхивает, фронт бежит от внутренней кромки к внешней, искры
+ * летят наружу. Середина остаётся тёмной — там безопасно.
+ */
 registerZonePainter('f15_novaburst', (g, z, px, py) => {
   const k = lifeK(z);
-  const R = z.r * TS;
+  const R1 = z.r * TS;
+  const R0 = Math.max(0, NOVA.ringR - NOVA.ringW) * TS;
+  const e = easeOut(Math.min(1, k / 0.35));
+  const fade = 1 - smooth(clamp01(k));
+  const seed = ((z.id % 97) + 97) % 97;
   g.save();
-  const gr = g.createRadialGradient(px, py, R * 0.2, px, py, R * (0.6 + k * 0.5));
-  gr.addColorStop(0, `rgba(255,255,240,${(1 - k) * 0.8})`);
-  gr.addColorStop(0.6, `rgba(255,190,80,${(1 - k) * 0.5})`);
-  gr.addColorStop(1, 'rgba(255,120,40,0)');
-  g.fillStyle = gr;
+  g.fillStyle = `rgba(255,200,110,${0.45 * fade})`;
   g.beginPath();
-  g.arc(px, py, R * (0.6 + k * 0.5), 0, TAU);
-  g.fill();
-  g.strokeStyle = `rgba(255,230,160,${1 - k})`;
+  g.arc(px, py, R1, 0, TAU);
+  g.moveTo(px + R0, py);
+  g.arc(px, py, R0, 0, TAU, true);
+  g.fill('evenodd');
+  const rf = R0 + (R1 - R0) * e + k * 4;
+  g.strokeStyle = `rgba(255,248,220,${0.95 * fade})`;
   g.lineWidth = 3 * (1 - k) + 1;
   g.beginPath();
-  g.ellipse(px, py, R * (0.7 + k * 0.4), R * (0.6 + k * 0.35), 0, 0, TAU);
+  g.arc(px, py, rf, 0, TAU);
   g.stroke();
+  g.strokeStyle = `rgba(255,170,70,${0.6 * fade})`;
+  g.lineWidth = 1;
+  g.beginPath();
+  g.arc(px, py, Math.max(1, R0), 0, TAU);
+  g.stroke();
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * TAU + hash(i, seed, 2080) * 0.3;
+    const d = R0 + (R1 - R0) * (0.3 + 0.7 * hash(i, seed, 2081)) + k * 10;
+    g.fillStyle = `rgba(255,${220 + (i % 3) * 15},${150 + (i % 2) * 60},${fade})`;
+    g.fillRect(Math.round(px + Math.cos(a) * d) - 1, Math.round(py + Math.sin(a) * d) - 1, 2, 2);
+  }
   g.restore();
   return true;
 });
