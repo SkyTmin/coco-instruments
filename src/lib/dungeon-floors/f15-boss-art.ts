@@ -2655,7 +2655,7 @@ function shardSprite(spin: number, glow: number, scale: number, flash: boolean, 
   const hit = SHARD_LRU.get(key);
   if (hit) return hit;
   const p = new Px(SW, SH);
-  const sc = 0.45 + scale * 0.11;
+  const sc = 0.5 + scale * 0.18;
   const th = (spin / 8) * (TAU / 6);
   const v3: [number, number, number][] = [];
   for (let i = 0; i < 6; i++) {
@@ -2888,14 +2888,10 @@ function keeperPose(mode: string, T: number, last: number, ph: number): KPose {
 }
 
 function robeR(z: number): number {
-  if (z < 27) return 8.6 - 3.6 * Math.pow(z / 27, 0.85);
-  if (z < 30) return 5 - (z - 27) * 0.5;
+  if (z < 16) return 8.4 - 3.4 * Math.pow(z / 16, 0.9);
+  if (z < 25) return 5 + (z - 16) * 0.16;
+  if (z < 29.5) return 6.44 - (z - 25) * 0.75;
   return 0;
-}
-function hoodR(z: number): number {
-  if (z < 28.5 || z > 45) return 0;
-  if (z < 33) return 4.9 * Math.sqrt(clamp01((z - 28.5) / 4.5));
-  return 4.9 * Math.pow(clamp01((45 - z) / 12), 0.7);
 }
 
 function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, flash: boolean, ph: number): [HTMLCanvasElement, HTMLCanvasElement] {
@@ -2949,27 +2945,30 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         let c = mixq(rp[1], rp[5], l, Math.round(X), Math.round(Y));
         // Прожилки мрамора.
         if (!stoneAt(z) && vnoise(psi * 3 + z * 0.15, z * 0.35, 619) > 0.78) c = mixc(c, rp[2], 0.6);
-        const gold = !stoneAt(z) && (z < 1.5 || (z > 26 && z < 27.5) || (Math.abs(u) < 0.16 && z < 26));
+        const gold = !stoneAt(z) && (z < 1.5 || (z > 15.4 && z < 16.6) || (z > 28 && z < 29.2) || (Math.abs(u) < 0.16 && z < 15.4));
         if (gold) c = l > 0.55 ? GOLD[4] : GOLD[3];
-        else if (stoneAt(z) && (z < 1.5 || (z > 26 && z < 27.5))) c = STONE_K[2];
+        else if (stoneAt(z) && (z < 1.5 || (z > 15.4 && z < 16.6))) c = STONE_K[2];
         // Вышитые звёзды по подолу.
         if (!stoneAt(z) && z > 3 && z < 9 && Math.abs(u) > 0.5 && hash(k, Math.floor(z), 621) < 0.05) c = GOLD[5];
         put(X, Y, d, c, z);
       }
     }
   }
-  // Капюшон: диски, на лицевой стороне — тёмный проём со звездой.
-  for (let z = 28.5; z <= 45; z += 0.5) {
-    const R = hoodR(z);
-    const back = Math.max(0, z - 37) * 0.35;
-    const cf = leanAt(z) - back;
-    for (let k = 0; k < 48; k++) {
-      const psi = (k / 48) * TAU;
-      const cx = Math.cos(psi);
-      const cy = Math.sin(psi);
-      for (const rr of [R, R * 0.55, 0]) {
-        const wx = cf * ca + cx * rr;
-        const wy = cf * sa + cy * rr;
+  // Шлем: шар, гребень золотом спереди назад, забрало-щель со звездой.
+  {
+    const HZ = 33.2;
+    const HR = 3.9;
+    const cf = leanAt(HZ);
+    for (let lat = -1; lat <= 1.001; lat += 0.08) {
+      const zr = Math.sqrt(Math.max(0, 1 - lat * lat)) * HR;
+      const z = HZ + lat * HR;
+      const n = Math.max(6, Math.ceil(zr * TAU * 1.6));
+      for (let k = 0; k < n; k++) {
+        const psi = (k / n) * TAU;
+        const cx = Math.cos(psi);
+        const cy = Math.sin(psi);
+        const wx = cf * ca + cx * zr;
+        const wy = cf * sa + cy * zr;
         const zz = z + bob;
         const X = KAX + wx;
         const Y = KAY - zz + wy * KF;
@@ -2977,23 +2976,77 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
         let u = psi - a;
         u -= Math.round(u / TAU) * TAU;
         const rp = ramp(z);
-        let c = mixq(rp[1], rp[5], shade(cx * 0.8, cy * 0.8, 0.5 + (z - 34) / 20), Math.round(X), Math.round(Y));
-        if (rr > 0 && Math.abs(u) < 0.95 - Math.abs(z - 33.5) * 0.12 && z > 30 && z < 38) c = rr === R ? NIGHT[1] : INK;
-        else if (!stoneAt(z) && rr === R && Math.abs(u) < 1.15 && Math.abs(u) > 0.85 && z > 30 && z < 38) c = GOLD[3];
+        let c = mixq(rp[1], rp[6], shade(cx * Math.sqrt(1 - lat * lat), cy * Math.sqrt(1 - lat * lat), lat + 0.2), Math.round(X), Math.round(Y));
+        if (Math.abs(u) < 1.05 && lat > -0.38 && lat < 0.12) c = lat > -0.1 && Math.abs(u) < 0.9 ? INK : stoneAt(z) ? STONE_K[1] : NIGHT[2];
+        else if (!stoneAt(z) && lat > -0.5 && lat < -0.36 && Math.abs(u) < 1.4) c = GOLD[3];
         put(X, Y, d, c, z);
       }
     }
+    // Гребень: дуга над шлемом, вперёд-назад.
+    for (let t = -1; t <= 1.001; t += 0.06) {
+      const f = cf + t * (HR + 0.4);
+      const zt = HZ + Math.sqrt(Math.max(0, 1 - t * t)) * (HR + 1.6);
+      for (let h = 0; h < 1.6; h += 0.5) {
+        const [X, Y, d] = toS(f, 0, zt - h + bob);
+        put(X, Y, d + 0.2, stoneAt(zt) ? STONE_K[4] : h < 0.5 ? GOLD[5] : GOLD[3], zt);
+      }
+    }
   }
-  // Звезда в проёме капюшона (лицо) — и свет её.
+  // Наплечники: полусферы с золотой кромкой.
+  for (const side of [-1, 1]) {
+    const R = 3;
+    const f0 = leanAt(27);
+    for (let lat = 0; lat <= 1.001; lat += 0.12)
+      for (let k = 0; k < 22; k++) {
+        const psi = (k / 22) * TAU;
+        const rr = Math.sqrt(1 - lat * lat) * R;
+        const f = f0 + Math.cos(psi) * rr;
+        const r = side * 5.6 + Math.sin(psi) * rr;
+        const z = 27.3 + lat * R * 0.8;
+        const [X, Y, d] = toS(f, r, z + bob);
+        const rp = ramp(z);
+        const c = lat < 0.15 && !stoneAt(z) ? GOLD[3] : mixq(rp[2], rp[6], shade(Math.cos(psi) * 0.6, Math.sin(psi) * 0.6, lat + 0.3), Math.round(X), Math.round(Y));
+        put(X, Y, d, c, z);
+      }
+  }
+  // Сложенные каменные крылья за плечами: перья полосами, светлый край.
+  for (const side of [-1, 1]) {
+    const root: [number, number, number] = [leanAt(28) - 2.2, side * 3.6, 28.5];
+    const top: [number, number, number] = [leanAt(40) - 3.5, side * 11.5, 43];
+    const low: [number, number, number] = [-2.5, side * 9, 7];
+    for (let s = 0; s <= 1.001; s += 0.035)
+      for (let w = 0; w <= 1.001; w += 0.05) {
+        // Точка на крыле: от корня к кромке (s), от верха к низу (w).
+        const ex = top[0] + (low[0] - top[0]) * w;
+        const ey = top[1] + (low[1] - top[1]) * w;
+        const ez = top[2] + (low[2] - top[2]) * w;
+        // Кромка крыла выпуклая — перья длиннее посередине.
+        const reach = s * (0.82 + 0.18 * Math.sin(w * Math.PI));
+        const f = root[0] + (ex - root[0]) * reach;
+        const r = root[1] + (ey - root[1]) * reach;
+        const z = root[2] + (ez - root[2]) * reach;
+        const [X, Y, d] = toS(f, r, z + bob);
+        const rp = ramp(z);
+        const band = Math.floor(w * 7);
+        const feather = (w * 7) % 1;
+        let c = mixq(rp[0], rp[4], 0.2 + 0.5 * s + (band % 2) * 0.12 - (side > 0 ? 0.1 : 0), Math.round(X), Math.round(Y));
+        if (!stoneAt(z) && feather > 0.8 && s > 0.5) c = mixc(c, VIO[3], 0.35);
+        if (feather < 0.16) c = mixc(c, INK, 0.35);
+        if (reach > 0.93 * (0.82 + 0.18 * Math.sin(w * Math.PI))) c = stoneAt(z) ? STONE_K[5] : MARBLE[6];
+        if (!stoneAt(z) && s < 0.18 && w < 0.4) c = GOLD[2];
+        put(X, Y, d - 0.6, c, z);
+      }
+  }
+  // Звезда в забрале (лицо) — и свет её.
   {
-    const [X, Y, d] = toS(leanAt(34) + 1.8, 0, 34 + bob);
+    const [X, Y, d] = toS(leanAt(33) + 3.9, 0, 33.3 + bob);
     const vis = sa > -0.35;
-    if (vis && !stoneAt(34)) {
+    if (vis && !stoneAt(33)) {
       const x = Math.round(X - 0.5);
       const y = Math.round(Y - 0.5);
-      for (const [dx, dy, c] of [[0, 0, WHITE], [1, 0, ICE[5]], [-1, 0, ICE[5]], [0, 1, ICE[4]], [0, -1, ICE[4]]] as [number, number, RGBA][])
-        put(x + dx + 0.5, y + dy + 0.5, d + 3, c, 34);
-      lit.ell(X - 0.5, Y - 0.5, 3.2, 2.6, fade(ICE[4], 0.35));
+      for (const [dx, dy, c] of [[0, 0, WHITE], [1, 0, ICE[5]], [-1, 0, ICE[5]], [2, 0, ICE[3]], [-2, 0, ICE[3]]] as [number, number, RGBA][])
+        put(x + dx + 0.5, y + dy + 0.5, d + 3, c, 33);
+      lit.ell(X - 0.5, Y - 0.5, 3.4, 2.2, fade(ICE[4], 0.35));
       lit.set(x, y, WHITE);
     }
   }
@@ -3024,7 +3077,7 @@ function buildKeeper(dir: number, kp: KPose, stone: number, crumble: number, fla
       put(X, Y + 1, d + 1, stoneAt(z1) ? STONE_K[3] : ICE[3], z1);
     }
   };
-  const sh = 4.6;
+  const sh = 5.4;
   capsule(leanAt(26), sh, 26, kp.gx, kp.gy, kp.gz, 1.9, 1.4, true);
   capsule(leanAt(26), -sh, 26, kp.hx2, kp.hy2, kp.hz2, 1.9, 1.4, true);
   // Посох: тёмное дерево с золотыми кольцами, на конце — кристалл-звезда.
