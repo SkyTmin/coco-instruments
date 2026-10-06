@@ -198,6 +198,8 @@ export interface RigOut {
   /** Обрезка (`crop`): левый верхний угол кадра в полном холсте. */
   cx?: number;
   cy?: number;
+  /** Глубина ближней поверхности по кадру (к зрителю больше), −1e9 — пусто. */
+  zb?: Float32Array;
 }
 
 interface Axes {
@@ -261,6 +263,8 @@ export function renderRig(
   flash = 0,
   clipZ = -1e9,
   crop = false,
+  /** Точки кадра, которые обрезка обязана сохранить (след бивней и т. п.). */
+  keep: [number, number][] = [],
 ): RigOut {
   const p = new Px(w, h);
   // Рамка нарисованного: швы, контур и холст — только в ней.
@@ -281,18 +285,26 @@ export function renderRig(
     const A = axesOf(pt, face);
     const [e1, e2, e3] = A.e;
     const [r1, r2, r3] = A.r;
-    // Рамка на экране: центр ± наибольший радиус.
+    // Рамка на экране — точная тень эллипсоида (опорная функция по осям
+    // экрана): у длинных тонких частей она в разы меньше квадрата по
+    // наибольшему радиусу, а пиксели те же — за рамкой луч всё равно мимо.
     const [scx, scy] = project(A.c[0], A.c[1], A.c[2]);
-    const R = Math.max(r1, r2, r3) + 1;
-    const x0 = Math.max(0, Math.floor(ox + scx - R));
-    const x1 = Math.min(w - 1, Math.ceil(ox + scx + R));
-    const y0 = Math.max(0, Math.floor(oy + scy - R));
-    const y1 = Math.min(h - 1, Math.ceil(oy + scy + R));
-    if (x0 > x1 || y0 > y1) return;
-    // Всё по скалярам: массив на пиксель — это сборщик мусора в кадре.
     const [e1x, e1y, e1z] = e1;
     const [e2x, e2y, e2z] = e2;
     const [e3x, e3y, e3z] = e3;
+    const RX = Math.sqrt((r1 * e1x) ** 2 + (r2 * e2x) ** 2 + (r3 * e3x) ** 2) + 1;
+    const RY =
+      Math.sqrt(
+        (r1 * (e1y * CAM_C - e1z * CAM_S)) ** 2 +
+          (r2 * (e2y * CAM_C - e2z * CAM_S)) ** 2 +
+          (r3 * (e3y * CAM_C - e3z * CAM_S)) ** 2,
+      ) + 1;
+    const x0 = Math.max(0, Math.floor(ox + scx - RX));
+    const x1 = Math.min(w - 1, Math.ceil(ox + scx + RX));
+    const y0 = Math.max(0, Math.floor(oy + scy - RY));
+    const y1 = Math.min(h - 1, Math.ceil(oy + scy + RY));
+    if (x0 > x1 || y0 > y1) return;
+    // Всё по скалярам: массив на пиксель — это сборщик мусора в кадре.
     const qdx = dot(VIEW, e1) / r1;
     const qdy = dot(VIEW, e2) / r2;
     const qdz = dot(VIEW, e3) / r3;
@@ -424,6 +436,12 @@ export function renderRig(
       bx0 = by0 = 0;
       bx1 = by1 = 0;
     }
+    for (const [kx, ky] of keep) {
+      bx0 = Math.min(bx0, Math.floor(kx));
+      bx1 = Math.max(bx1, Math.ceil(kx));
+      by0 = Math.min(by0, Math.floor(ky));
+      by1 = Math.max(by1, Math.ceil(ky));
+    }
     const cx = Math.max(0, bx0 - 6);
     const cy = Math.max(0, by0 - 6);
     const cw = Math.min(w, bx1 + 7) - cx;
@@ -441,7 +459,9 @@ export function renderRig(
         for (let x = 0; x < cw; x++) if (glowAt[(y + cy) * w + x + cx]) lit.set(x, y, q.get(x, y));
     }
     const e2: [number, number] | null = eye ? [eye[0] - cx, eye[1] - cy] : null;
-    return { p: flash > 0 ? q.tint(WHITE, flash) : q, lit, eye: e2, cx, cy };
+    const zc = new Float32Array(cw * ch);
+    for (let y = 0; y < ch; y++) zc.set(zb.subarray((y + cy) * w + cx, (y + cy) * w + cx + cw), y * cw);
+    return { p: flash > 0 ? q.tint(WHITE, flash) : q, lit, eye: e2, cx, cy, zb: zc };
   }
   p.outline(INK);
   let lit: Px | null = null;
@@ -2014,14 +2034,22 @@ registerPropPainter('f12_fishhole', (o, time) => {
 // ---------------------------------------------------------------------------
 
 type Eye = { x: number; y: number; z: number; c: RGBA; r?: number };
-/** Экранная точка модели в кадре. */
-type Scr = (x: number, y: number, z: number) => [number, number];
+/** Экранная точка модели в кадре: x, y и глубина (к зрителю больше). */
+type Scr = (x: number, y: number, z: number) => [number, number, number];
+/** Для рисунка поверх: слой свечения (создаётся по требованию) и глубина тела. */
+interface PostFx {
+  lit: () => Px;
+  /** Глубина ближней поверхности тела в пикселе кадра, −1e9 — пусто. */
+  z: (x: number, y: number) => number;
+}
 interface Build {
   parts: Part[];
   eyes?: Eye[];
   clip?: number;
   /** Рисунок поверх (звёзды, брызги, линии хода) в координатах кадра. */
-  post?: (p: Px, scr: Scr) => void;
+  post?: (p: Px, scr: Scr, fx: PostFx) => void;
+  /** Точки модели, которые кадр обязан вместить (след удара). */
+  extent?: V3[];
 }
 interface Canvas {
   w: number;
@@ -2054,6 +2082,11 @@ function rigCached(
   const f = dirAng(d, dirs);
   return cachedRig(lruOf(id), `${key}|${d}|${flash ? 1 : 0}`, () => {
     const b = make(f);
+    const full = (x: number, y: number, z: number): [number, number, number] => {
+      const [wx, wy, wz] = toWorld(x, y, z, f);
+      const [sx, sy, sd] = project(wx, wy, wz);
+      return [cv.ox + sx, cv.oy + sy, sd];
+    };
     const out = renderRig(
       b.parts,
       f,
@@ -2065,19 +2098,66 @@ function rigCached(
       flash ? 0.8 : 0,
       b.clip,
       true,
+      (b.extent ?? []).map((e) => {
+        const [x, y] = full(e[0], e[1], e[2]);
+        return [x, y];
+      }),
     );
     if (b.post) {
       const cx = out.cx ?? 0;
       const cy = out.cy ?? 0;
       const scr: Scr = (x, y, z) => {
-        const [wx, wy, wz] = toWorld(x, y, z, f);
-        const [sx, sy] = project(wx, wy, wz);
-        return [cv.ox + sx - cx, cv.oy + sy - cy];
+        const [sx, sy, sd] = full(x, y, z);
+        return [sx - cx, sy - cy, sd];
       };
-      b.post(out.p, scr);
+      const zb = out.zb;
+      const W = out.p.w;
+      const H = out.p.h;
+      b.post(out.p, scr, {
+        lit: () => (out.lit ??= new Px(W, H)),
+        z: (x, y) => {
+          const X = Math.round(x);
+          const Y = Math.round(y);
+          if (!zb || X < 0 || Y < 0 || X >= W || Y >= H) return -1e9;
+          return zb[Y * W + X];
+        },
+      });
     }
     return out;
   });
+}
+
+/**
+ * Кадр рига без вспышки — из кеша (или нарисован), вспышка удара — тот же
+ * кадр, перекрашенный холстом (без нового рисунка рига: босса бьют часто,
+ * и каждая белая поза была бы ещё одним полным кадром).
+ */
+function rigFrame(
+  id: string,
+  key: string,
+  face: number,
+  cv: Canvas,
+  flash: boolean,
+  make: (face: number) => Build,
+  dirs = 16,
+): Cached {
+  const c = rigCached(id, key, face, cv, false, make, dirs);
+  if (!flash) return c;
+  const fk = `${key}|${dirN(face, dirs)}`;
+  const lru = lruOf(`${id}#flash`, 40);
+  const hit = lru.get(fk);
+  if (hit && hit.dx === c.dx && hit.dy === c.dy) return hit;
+  const img = document.createElement('canvas');
+  img.width = c.img.width;
+  img.height = c.img.height;
+  const g = img.getContext('2d');
+  if (g) {
+    g.drawImage(c.img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    g.fillRect(0, 0, img.width, img.height);
+  }
+  return lru.set(fk, { ...c, img });
 }
 
 function mobFrame(c: Cached, cv: Canvas, extra: Partial<MobFrame> = {}): MobFrame {
@@ -3432,6 +3512,8 @@ interface Body {
   twist: number;
   /** На коленях (0…1). */
   kneel: number;
+  /** Ступни явно (левая, правая) — летит, сидит верхом. Иначе — шаг. */
+  feet?: [V3, V3];
 }
 
 const BODY0: Body = {
@@ -3469,13 +3551,20 @@ function humanoid(parts: Part[], b: Body, d: Dress): { head: V3; handL: V3; hand
       const fx = Math.sin(ph) * b.stride * s;
       const fz = Math.max(0, Math.cos(ph)) * b.stride * 0.5 * s + b.up * 0.6;
       const hy = e * (1.7 + b.wide * 0.6) * s;
-      const foot: V3 = [
-        b.kneel > 0.5 ? -3 * s : fx,
-        hy * (1 + b.wide * 0.4),
-        b.kneel > 0.5 ? 0.8 : fz + 0.8,
+      const fe = b.feet?.[e < 0 ? 0 : 1];
+      const foot: V3 = fe
+        ? [fe[0] * s, fe[1] * s, fe[2] * s + b.up]
+        : [b.kneel > 0.5 ? -3 * s : fx, hy * (1 + b.wide * 0.4), b.kneel > 0.5 ? 0.8 : fz + 0.8];
+      const kneeX = fe
+        ? (foot[0] + 0) / 2 + 2.2 * s
+        : b.kneel > 0.5
+          ? 2.5 * s
+          : (fx + 0) / 2 + 1.2 * s + b.crouch * 0.6;
+      const knee: V3 = [
+        kneeX,
+        fe ? (hy + foot[1]) / 2 : hy,
+        b.kneel > 0.5 && !fe ? 1.2 : (hipZ + foot[2]) / 2,
       ];
-      const kneeX = b.kneel > 0.5 ? 2.5 * s : (fx + 0) / 2 + 1.2 * s + b.crouch * 0.6;
-      const knee: V3 = [kneeX, hy, b.kneel > 0.5 ? 1.2 : (hipZ + foot[2]) / 2];
       const pts = bez([0, hy, hipZ], knee, foot, 4);
       pts.forEach((pt, i) => {
         const r = (1.7 - i * 0.12) * s;
@@ -3484,7 +3573,7 @@ function humanoid(parts: Part[], b: Body, d: Dress): { head: V3; handL: V3; hand
       parts.push({
         x: foot[0] + 0.8 * s,
         y: foot[1],
-        z: 0.9 * s,
+        z: fe ? foot[2] : 0.9 * s,
         rx: 1.8 * s,
         ry: 1.1 * s,
         rz: 0.9 * s,
