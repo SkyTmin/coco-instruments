@@ -6050,6 +6050,14 @@ function islandArt(r: Ring): IslandArt {
   return out;
 }
 
+/** Сколько ещё держится мост парада (с; 99 — не держится). */
+function paradeLeft(): number {
+  const st = stNow();
+  const sim = paintSim();
+  const d = st?.halls.find((q) => q.name === 'parade')?.data;
+  return sim && d && d.state === 2 && d.until != null ? d.until - sim.time : 99;
+}
+
 /** Кольцо орбиты: острова плавно едут по кругу; парад — золото по краю. */
 registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
   const r = zoneOf<Ring>(z);
@@ -6104,14 +6112,29 @@ registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
       }
     }
     if (r.parade) {
+      // Парад: в сборке по краю бегут огни по ходу; мост собран — край
+      // горит ровно, за 1,5 с до распада мигает жёлтым, как причал.
+      const left = r.parade === 2 ? paradeLeft() : 99;
+      const soon = left < 1.5;
+      const on = !soon || Math.sin(time * 14) > 0;
       g.save();
       g.translate(px, py + bob);
       g.rotate(ang);
-      g.strokeStyle = `rgba(255,214,110,${0.5 + 0.3 * Math.sin(time * 6)})`;
+      const R = r.r1 * TS - 1.5;
+      g.strokeStyle = soon
+        ? `rgba(255,190,80,${on ? 0.85 : 0.3})`
+        : `rgba(255,214,110,${r.parade === 2 ? 0.75 : 0.45 + 0.2 * Math.sin(time * 6)})`;
       g.lineWidth = 2;
       g.beginPath();
-      g.arc(0, 0, r.r1 * TS - 1.5, -r.half, r.half);
+      g.arc(0, 0, R, -r.half, r.half);
       g.stroke();
+      if (r.parade === 1)
+        for (let i = 0; i < 3; i++) {
+          const u = (time * 1.6 + i / 3) % 1;
+          const a = -r.half + 2 * r.half * (dir > 0 ? u : 1 - u);
+          g.fillStyle = `rgba(255,244,200,${0.9 * Math.sin(PI * u)})`;
+          g.fillRect(Math.round(Math.cos(a) * R) - 1, Math.round(Math.sin(a) * R) - 1, 2, 2);
+        }
       g.restore();
     }
   }
@@ -6438,7 +6461,7 @@ registerZonePainter('f15_stormwarn', (g, z, px, py) => {
 });
 
 /** Тень затмения: темнота поверх всего, дыры — у зажжённых ламп и малая у героя. */
-registerZonePainter('f15_dark', (g, z, px, py) => {
+registerZonePainter('f15_dark', (g, z, px, py, _s, time) => {
   const st = stNow();
   const sim = paintSim();
   if (!st || !sim || st.dark <= 0.01 || sim.area !== F15_OBS) return true;
@@ -6449,7 +6472,12 @@ registerZonePainter('f15_dark', (g, z, px, py) => {
     return true;
   const at = viewOf(z, px, py);
   const holes: [number, number, number][] = [];
-  for (const l of st.lamps) if (l.lit) holes.push([...at(l.x, l.y), 3.6 * TS]);
+  // Пламя ламп дышит: край света дрожит на 1–2 px.
+  for (const l of st.lamps)
+    if (l.lit) {
+      const fl = 1 + 0.03 * Math.sin(time * 9 + l.x * 3.1) + 0.02 * Math.sin(time * 23 + l.y * 1.7);
+      holes.push([...at(l.x, l.y), 3.6 * TS * fl]);
+    }
   holes.push([...at(sim.hero.x, sim.hero.y - 0.3), 1.7 * TS]);
   const W = g.canvas.width;
   const H = g.canvas.height;
