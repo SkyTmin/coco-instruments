@@ -354,13 +354,39 @@ export function renderRig(
     // Ближе этой глубины у части точек нет: пиксель, где уже лежит что-то
     // ближе, луч не проверяет (части идут от ближних к дальним).
     const tMax = dot(VIEW, A.c) + Math.max(r1, r2, r3) + 1e-3;
+    // Пролёт строки: дискриминант по x — парабола ветвями вниз, луч попадает
+    // только между её корнями. Пиксели вне пролёта (+1 запаса на округление)
+    // не проверяем вовсе; внутри — та же проверка, что и раньше.
+    const ux = e1x / r1;
+    const uy = e2x / r2;
+    const uz = e3x / r3;
+    const al = ux * qdx + uy * qdy + uz * qdz;
+    const A2 = al * al - a * (ux * ux + uy * uy + uz * uz);
     for (let py = y0; py <= y1; py++) {
       const sy = py + 0.5 - oy;
       // Точка луча при t = 0: (sx, sy·C, −sy·S).
       const dy0 = sy * CAM_C - ccy;
       const dz0 = -sy * CAM_S - ccz;
       const zTop = -sy * CAM_S;
-      for (let px = x0; px <= x1; px++) {
+      let xa = x0;
+      let xb = x1;
+      if (A2 < -1e-9) {
+        const vx = (dy0 * e1y + dz0 * e1z) / r1;
+        const vy = (dy0 * e2y + dz0 * e2z) / r2;
+        const vz = (dy0 * e3y + dz0 * e3z) / r3;
+        const be = vx * qdx + vy * qdy + vz * qdz;
+        const B2 = al * be - a * (ux * vx + uy * vy + uz * vz);
+        const C2 = be * be - a * (vx * vx + vy * vy + vz * vz - 1);
+        const D2 = B2 * B2 - A2 * C2;
+        if (D2 < 0) continue;
+        const sq = Math.sqrt(D2);
+        const s1 = (-B2 - sq) / A2;
+        const s2 = (-B2 + sq) / A2;
+        const base = ox + ccx - 0.5;
+        xa = Math.max(x0, Math.floor(Math.min(s1, s2) + base) - 1);
+        xb = Math.min(x1, Math.ceil(Math.max(s1, s2) + base) + 1);
+      }
+      for (let px = xa; px <= xb; px++) {
         const i = py * w + px;
         if (zb[i] >= tMax) continue;
         const dx0 = px + 0.5 - ox - ccx;
@@ -497,8 +523,18 @@ export function renderRig(
     let lit: Px | null = null;
     if (anyGlow) {
       lit = new Px(cw, ch);
+      const qd = q.data;
+      const c4: RGBA = [0, 0, 0, 0];
       for (let y = 0; y < ch; y++)
-        for (let x = 0; x < cw; x++) if (glowAt[(y + cy) * w + x + cx]) lit.set(x, y, q.get(x, y));
+        for (let x = 0; x < cw; x++)
+          if (glowAt[(y + cy) * w + x + cx]) {
+            const j = (y * cw + x) * 4;
+            c4[0] = qd[j];
+            c4[1] = qd[j + 1];
+            c4[2] = qd[j + 2];
+            c4[3] = qd[j + 3];
+            lit.set(x, y, c4);
+          }
     }
     const e2: [number, number] | null = eye ? [eye[0] - cx, eye[1] - cy] : null;
     const zc = new Float32Array(cw * ch);
