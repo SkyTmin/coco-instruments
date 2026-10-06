@@ -4485,7 +4485,8 @@ function astroMark(
   p.col(C.night[1], 0.32 + 0.28 * k);
   fillSector(p, cx, cy, 0, R, 0, TAU);
   const rf = R * (0.12 + 0.88 * Math.pow(k, 1.25));
-  p.col(tk ? hot : fill, sig ? (tk ? 0.3 : 0.5) : 0.16 + 0.26 * k);
+  // Вспышка сигнала — белым светом: золото полупрозрачно над ночью давало бежевый.
+  p.col(tk ? C.white : fill, sig ? (tk ? 0.24 : 0.5) : 0.16 + 0.26 * k);
   fillSector(p, cx, cy, 0, rf, 0, TAU);
   ring(
     p,
@@ -6996,7 +6997,13 @@ registerZonePainter(
       const land = t - 0.12 - 0.5 * hash(i, 4, 103) - 1.1;
       if (land > 0 && land < 0.3)
         ring(p, x, y, 1 + 9 * eOut2(land / 0.3), C.gold[3], 0.8 * (1 - land / 0.3));
-      const big = u >= 1 && (land < 0.3 || Math.sin(time * 4 + i * 1.7) > 0.3) ? 2 : 1;
+      // Севшая звезда крупнее звёзд неба и с ореолом — иначе тонет в россыпи.
+      const flick = land < 0.3 || Math.sin(time * 4 + i * 1.7) > 0.3;
+      const big = u >= 1 ? (flick ? 3 : 2) : 1;
+      if (u >= 1) {
+        p.col(C.gold[2], 0.2 * gone);
+        oval(p, x, y, 3.5, 3.5);
+      }
       twinkle(p, x, y, big, u < 1 ? C.white : C.gold[3], gone);
     }
     for (let j = 0; j < 3; j++) {
