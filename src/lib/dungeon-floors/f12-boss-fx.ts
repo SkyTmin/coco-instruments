@@ -2075,20 +2075,23 @@ registerImpactPainter('f12_snowwall', {
     const hw = (rec.w ?? 1) * TS;
     // Вал рушится: снег выстреливает столбиками с рваным верхом, по полу —
     // белая полоса удара; потом низкий сугроб тает.
-    if (age < 0.24) {
-      const q = age / 0.24;
-      const up = eOut(Math.min(1, q * 2.2));
+    if (age < 0.3) {
+      const q = age / 0.3;
+      const up = eOut(Math.min(1, q * 2));
       const fadeW = 1 - eIn(q);
-      if (ink(g, C.snowM, 0.6 * fadeW))
-        for (let x = 0; x < L; x += 3) {
-          const h = (6 + 12 * hash(sd, x, 21)) * up;
-          pp(g, px + x + 1, py - h + 1, 3, h);
+      // Султаны снега: комья столбиком, крупные внизу, мелкие наверху; гребень
+      // волной (синус + шум), чтобы не читался зубцами.
+      for (const pass of [0, 1]) {
+        if (!ink(g, pass ? C.snow : C.snowS, (pass ? 0.9 : 0.45) * fadeW)) continue;
+        for (let x = 2; x < L - 2; x += 4) {
+          const h = (9 + 6 * Math.sin(x * 0.19 + (sd % 7)) + 6 * hash(sd, x, 21)) * up;
+          for (let u = 0; u < 3; u++) {
+            const jx = (hash(sd, x, 22 + u) - 0.5) * 3;
+            const yy = py - (h * (u + 1)) / 3 - q * 4 + (pass ? 0 : 1);
+            clump(g, px + x + jx, yy, 4 - u);
+          }
         }
-      if (ink(g, C.white, 0.85 * fadeW))
-        for (let x = 0; x < L; x += 3) {
-          const h = (6 + 12 * hash(sd, x, 21)) * up;
-          pp(g, px + x, py - h, 3, Math.max(1, h - 2));
-        }
+      }
       if (ink(g, C.white, 0.7 * (1 - q))) pp(g, px - 2, py + hw * 0.5 * (1 - q), L + 4, 2);
     }
     // Вал оседает: уходит в пол и тает.
