@@ -418,7 +418,11 @@ function oniHead(
   // Волосы.
   if (!M.hair || st.hairKind === 'bald') return;
   const hairM = M.hair;
-  const drag = vadd(vsub(L.H.o, H.o), windW);
+  // Снос волос — не дальше радиуса головы: на резком рывке позы (смерть, выпад)
+  // хвост иначе вытягивался палкой на полкадра.
+  const drag0 = vadd(vsub(L.H.o, H.o), windW);
+  const dl = Math.hypot(drag0[0], drag0[1], drag0[2]);
+  const drag = dl > R * 1.1 ? vmul(drag0, (R * 1.1) / dl) : drag0;
   if (st.hairKind === 'tail' || st.hairKind === 'knot') {
     // Макушка: шапка волос сверху и сзади, лицо открыто.
     r.ell(H, [-R * 0.22, 0, R * 0.18], [R * 0.85, R * 0.96, R * 0.92], hairM, (q) => q[0] > 0.55 && q[2] < 0.45);
