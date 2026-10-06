@@ -173,6 +173,18 @@ interface Box {
   y0: number;
   y1: number;
   fy: number;
+  /** Полуширина у макушки: тело колоколом (уже вверху), а не прямоугольником. */
+  ht?: number;
+}
+
+/** Заслонённый кусок строки `Y` у тела `b` — с колоколом, если он задан. */
+function spanOf(b: Box, Y: number): [number, number] {
+  if (b.ht === undefined) return [Math.floor(b.x0), Math.ceil(b.x1)];
+  const cx = (b.x0 + b.x1) / 2;
+  const hw = (b.x1 - b.x0) / 2;
+  const f = Math.min(1, Math.max(0, (Y - b.y0) / (b.y1 - b.y0)));
+  const half = b.ht + (hw - b.ht) * f;
+  return [Math.floor(cx - half), Math.ceil(cx + half)];
 }
 
 /**
@@ -190,6 +202,7 @@ function occOf(S: number): Box[] {
     const lift = Math.round((m.data.z ?? 0) * 3) * 5;
     let hw: number;
     let h: number;
+    let ht: number | undefined;
     if (m.kind === 'f15boss') {
       // Герой за владыкой — рисовальщик тела делает его полупрозрачным:
       // тогда он ничего не заслоняет, иначе вырезанный прямоугольник
@@ -199,6 +212,7 @@ function occOf(S: number): Box[] {
       if (m.mode === 'f15l_sleep') continue;
       hw = 1.25 * S;
       h = 5 * S;
+      ht = 0.55 * S;
     } else if (m.kind === 'f15b_keeper') {
       hw = 0.5 * S;
       h = 3.4 * S;
@@ -212,10 +226,19 @@ function occOf(S: number): Box[] {
       h = m.r * S * 3.2;
     }
     const fy = m.y * S + 2;
-    out.push({ x0: m.x * S - hw, x1: m.x * S + hw, y0: fy - lift - h, y1: fy - lift, fy });
+    out.push({ x0: m.x * S - hw, x1: m.x * S + hw, y0: fy - lift - h, y1: fy - lift, fy, ht });
   }
   const fy = hero.y * S + 2;
-  out.push({ x0: hero.x * S - 0.42 * S, x1: hero.x * S + 0.42 * S, y0: fy - 1.25 * S, y1: fy, fy });
+  // Герой — колоколом по шлему и плечам: прямоугольник 1,25 клетки торчал
+  // над шлемом тёмной рамкой на светлом сигнале.
+  out.push({
+    x0: hero.x * S - 0.42 * S,
+    x1: hero.x * S + 0.42 * S,
+    y0: fy - 1.05 * S,
+    y1: fy,
+    fy,
+    ht: 0.28 * S,
+  });
   return out;
 }
 
@@ -275,7 +298,7 @@ class Pen {
     const cuts: [number, number][] = [];
     for (const b of this.occ!) {
       if (Y < b.y0 || Y > b.y1 || Y >= b.fy - 1 || b.x1 < xa || b.x0 > xb) continue;
-      cuts.push([Math.floor(b.x0), Math.ceil(b.x1)]);
+      cuts.push(spanOf(b, Y));
     }
     if (!cuts.length) {
       this.g.fillRect(xa + this.qx, Y + this.qy, xb - xa + 1, 1);
@@ -324,8 +347,9 @@ class Pen {
           const cuts: [number, number][] = [];
           for (const b of occ) {
             if (Yr < b.y0 || Yr > b.y1 || d >= b.fy - 1) continue;
-            const c0 = Math.floor(b.x0) - X;
-            const c1 = Math.ceil(b.x1) - X;
+            const [s0, s1] = spanOf(b, Yr);
+            const c0 = s0 - X;
+            const c1 = s1 - X;
             if (c1 < 0 || c0 >= c.width) continue;
             cuts.push([c0, c1]);
           }
