@@ -4079,18 +4079,34 @@ registerZonePainter('f15_tether', (g, z, px, py, _s, time) => {
   const [bx, by] = at(t.x1, t.y1);
   const k = Math.min(1, t.t / t.T);
   g.save();
+  const mx = (ax + bx) / 2;
+  const my = (ay + by) / 2 + 6 * (1 - k);
   g.strokeStyle = 'rgba(30,20,50,0.6)';
-  g.lineWidth = 2;
+  g.lineWidth = 3;
   g.beginPath();
   g.moveTo(ax, ay + 1);
-  g.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 6 * (1 - k), bx, by + 1);
+  g.quadraticCurveTo(mx, my + 1, bx, by + 1);
   g.stroke();
-  g.strokeStyle = `rgba(150,240,255,${0.75 + 0.2 * Math.sin(time * 20)})`;
-  g.lineWidth = 1;
+  g.strokeStyle = 'rgba(108,240,255,0.35)';
+  g.lineWidth = 4;
   g.beginPath();
   g.moveTo(ax, ay);
-  g.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 6 * (1 - k), bx, by);
+  g.quadraticCurveTo(mx, my, bx, by);
   g.stroke();
+  g.strokeStyle = `rgba(190,250,255,${0.8 + 0.2 * Math.sin(time * 20)})`;
+  g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(ax, ay);
+  g.quadraticCurveTo(mx, my, bx, by);
+  g.stroke();
+  // Бусины света бегут по тросу к крюку.
+  g.fillStyle = 'rgba(255,255,255,0.9)';
+  for (let i = 0; i < 3; i++) {
+    const u = (time * 2.2 + i / 3) % 1;
+    const qx = (1 - u) * (1 - u) * ax + 2 * (1 - u) * u * mx + u * u * bx;
+    const qy = (1 - u) * (1 - u) * ay + 2 * (1 - u) * u * my + u * u * by;
+    g.fillRect(Math.round(qx) - 1, Math.round(qy) - 1, 2, 2);
+  }
   // Крюк-кристалл на конце.
   g.fillStyle = 'rgba(230,255,255,0.95)';
   g.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 3, 3);
