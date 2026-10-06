@@ -1730,19 +1730,28 @@ function drawHeat(
   const ox = Math.floor(cx);
   const oy = Math.floor(cy);
   const bands = 5;
+  // Полоса каждой точки — один раз (не пять раз на каждую полосу).
+  const n = gs.x.length;
+  if (heatBand.length < n) heatBand = new Int8Array(n * 2);
+  const used = [0, 0, 0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    const u = gs.u[i];
+    let b = -1;
+    if (u <= reveal) {
+      const h = k01((age - passT(u)) / cool);
+      if (h < 1) b = Math.min(bands - 1, Math.floor(h * bands));
+    }
+    heatBand[i] = b;
+    if (b >= 0) used[b]++;
+  }
   for (let b = 0; b < bands; b++) {
+    if (!used[b]) continue;
     const hk = (b + 0.5) / bands;
     p.col(col(hk * 0.85), 1 - hk * 0.6);
-    for (let i = 0; i < gs.x.length; i++) {
-      const u = gs.u[i];
-      if (u > reveal) continue;
-      const h = k01((age - passT(u)) / cool);
-      if (h >= 1) continue;
-      if (Math.min(bands - 1, Math.floor(h * bands)) !== b) continue;
-      p.dot(ox + gs.x[i], oy + gs.y[i]);
-    }
+    for (let i = 0; i < n; i++) if (heatBand[i] === b) p.dot(ox + gs.x[i], oy + gs.y[i]);
   }
 }
+let heatBand = new Int8Array(256);
 
 const HOUR_SWEEP = 0.12;
 const HOUR_OVER = 0.42;
