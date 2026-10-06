@@ -4898,14 +4898,14 @@ export function giantShoulderPx(m: Mob, _now: number): number {
 // ---------------------------------------------------------------------------
 
 /** Масштаб модели и холст до обрезки (точка ног — LAX, LAY). */
-const LS = 1.25;
-const LW = 104;
-const LH = 132;
-const LAX = 52;
-const LAY = 116;
+const LS = 1.5;
+const LW = 124;
+const LH = 150;
+const LAX = 62;
+const LAY = 134;
 const LIFT_PX = 30;
 /** Точка подвеса (поля шляпы), пиксели над ногами: вокруг неё качается. */
-const PIVOT = 39;
+const PIVOT = 47;
 
 const COAT: Tone = [hx('#09060e'), hx('#1e1632'), hx('#3a2c5a'), hx('#6e5ca6')];
 const TROUS: Tone = [hx('#08060c'), hx('#17121f'), hx('#2a2236'), hx('#4c405e')];
@@ -5984,11 +5984,23 @@ function lordRig(L: LP, open: boolean): LRig {
   }
   // Нити между пальцами (сетка).
   if (L.web > 0.3) {
-    for (let k = 0; k < 5; k++) {
-      const a = vadd(j.haL, v3(0, (k - 2) * 0.8, 0));
-      const b = vadd(j.haR, v3(0, (2 - k) * 0.8 * (k % 2 ? 1 : -1), 0));
-      const n = Math.ceil(vlen(vsub(b, a)) / 0.55);
-      for (let i = 1; i < n; i++) rig.dot(vmix(a, b, i / n), THREAD, 1, 0.75);
+    // «Колыбель для кошки»: две пары нитей крест-накрест и одна прямая,
+    // с провисом к середине; редкие точки, чтобы между нитями был просвет.
+    const ends: [number, number][] = [
+      [1.4, -1.4],
+      [-1.4, 1.4],
+      [0.6, 0.6],
+      [-0.9, -0.9],
+    ];
+    for (const [ya, yb] of ends) {
+      const a = vadd(j.haL, v3(0, ya, 0));
+      const b = vadd(j.haR, v3(0, yb, 0));
+      const n = Math.ceil(vlen(vsub(b, a)) / 0.7);
+      for (let i = 1; i < n; i++) {
+        const p = vmix(a, b, i / n);
+        p.y -= Math.sin((i / n) * Math.PI) * 0.7 * L.web;
+        rig.dot(p, THREAD, 0.7, 0.5);
+      }
     }
   }
   return { rig, j, vg, hat };
@@ -6106,7 +6118,7 @@ function lordRender(d: LordDraw): LordCached {
   const [cx, cy] = proj(vg.c);
   if (d.open) {
     lit ??= new Px(LW, LH);
-    halo(lit, cx, cy, 7, P.gold[3], 0.3);
+    halo(lit, cx, cy, 8, P.gold[3], 0.3);
   }
   const { fr, x0, y0 } = cropFrame(o.px, lit, LAX, LAY);
   return { fr, vx: cx - x0, vy: cy - y0 };
@@ -6630,7 +6642,7 @@ function paintLord(m: Mob, pose: MobPose): MobFrame {
     ...c.fr,
     dx,
     dy,
-    shadow: dying ? 13 * sp.alpha : 13 - 6 * st.lift,
+    shadow: dying ? 15 * sp.alpha : 15 - 7 * st.lift,
     alpha: (ghost ? 0.84 : 1) * sp.alpha,
     ghost: sp.trail ? LORD_TRAIL : null,
   };
@@ -6657,7 +6669,7 @@ paintMob('f13boss', paintLord);
  * из последнего нарисованного кадра (поза, подъём, маятник, зеркало).
  */
 export function lordVagaPx(m: Mob, _now: number): [number, number] {
-  return LST.get(m.id)?.vaga ?? [-2, -37 - lordLiftPx(m)];
+  return LST.get(m.id)?.vaga ?? [-2, -44 - lordLiftPx(m)];
 }
 
 // ---- прогрев -----------------------------------------------------------------
