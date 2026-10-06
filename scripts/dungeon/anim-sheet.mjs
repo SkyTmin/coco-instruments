@@ -13,6 +13,9 @@
 //       "data": { "f1blade": 0 },          // m.data на этот ряд
 //       "hit": 0.75,                       // когда урон — кадр в красной рамке
 //       "left": false, "flash": false,
+//       "face": 0.785,        // угол взгляда, рад (вместо left) — для листа сторон
+//       "vx": 2, "vy": 2,     // скорость (ходьба), "kx"/"ky" — отдача от удара
+//       "look": "elite",      // или "albino"; "id": 7 — номер моба (фаза покоя)
 //       "next": { "mode": "recover", "dur": 0.7 },   // продолжение ряда
 //       "strike": { "art": "f1_cleave", "shape": "cone", "r": 2.4,
 //                   "ang": 0, "arc": 2.1, "warn": 0.75 }  // метка и контакт
@@ -78,23 +81,23 @@ const url = await p.evaluate(async (spec) => {
       for (let i = 0; i < count; i++) {
         const t = i / fps;
         const m = {
-          id: 7,
+          id: part.id ?? row.id ?? 7,
           kind: spec.kind,
           x: 0,
           y: 0,
           vx: part.vx ?? 0,
           vy: part.vy ?? 0,
-          kx: 0,
-          ky: 0,
+          kx: part.kx ?? row.kx ?? 0,
+          ky: part.ky ?? row.ky ?? 0,
           r: def.radius ?? 0.5,
           hp: 100,
           maxHp: 100,
           mode: part.mode,
           t,
-          face: (part.left ?? row.left) ? Math.PI : 0,
+          face: part.face ?? row.face ?? ((part.left ?? row.left) ? Math.PI : 0),
           dir: part.dir ?? 0,
-          elite: false,
-          albino: false,
+          elite: (part.look ?? row.look) === 'elite',
+          albino: (part.look ?? row.look) === 'albino',
           affixes: [],
           flash: (part.flash ?? row.flash) ? 0.1 : 0,
           data: { ...(row.data ?? {}), ...(part.data ?? {}) },
