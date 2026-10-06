@@ -1327,18 +1327,31 @@ function drumWaves(
     const a = (1 - eIn(st.t / 0.45)) * 0.95;
     const sd = Math.round(st.y * 31);
     // Передняя половина эллипса — к валу; задняя — бледнее.
-    const n = Math.round(60 + 100 * e);
-    for (let i = 0; i < n; i++) {
+    // Три прохода одним цветом: тень под комьями, хвост фронта, сами комья.
+    const n = Math.round(90 + 170 * e);
+    const at = (i: number, rr: number): [number, number, number] => {
       const ang = (i / n) * TAU + hash(sd, i, 1) * 0.05;
-      const front = Math.sin(ang) * dir > 0;
       const jit = (hash(sd, i, 2) - 0.5) * 3;
-      const x = DX + Math.cos(ang) * (rx + jit);
-      const y = DY + Math.sin(ang) * (ry + jit);
-      const aa = a * (front ? 1 : 0.35);
-      const sz = i % 4 === 0 ? 3 : 2;
-      if (ink(g, C.snowD, aa * 0.7)) pp(g, x, y + sz, sz, 1);
-      if (ink(g, i % 3 ? C.snow : C.white, aa)) clump(g, x, y, sz);
+      const front = Math.sin(ang) * dir > 0 ? 1 : 0.35;
+      return [DX + Math.cos(ang) * (rx * rr + jit), DY + Math.sin(ang) * (ry * rr + jit), front];
+    };
+    for (const pass of [0, 1, 2]) {
+      const col = pass === 0 ? C.snowD : pass === 1 ? C.snowM : C.snow;
+      if (!ink(g, col, a * (pass === 0 ? 0.6 : pass === 1 ? 0.5 : 1))) continue;
+      for (let i = 0; i < n; i++) {
+        const [x, y, f] = at(i, pass === 1 ? 0.9 : 1);
+        if (f < 1 && (pass === 1 || i % 2)) continue;
+        const sz = i % 4 === 0 ? 3 : 2;
+        if (pass === 0) pp(g, x, y + sz, sz, 1);
+        else if (pass === 1) pp(g, x, y, 2, 1);
+        else clump(g, x, y, sz);
+      }
     }
+    if (ink(g, C.white, a))
+      for (let i = 0; i < n; i += 3) {
+        const [x, y, f] = at(i, 1);
+        if (f === 1) pp(g, x, y - 1, 1, 1);
+      }
     // Хвост позёмки за фронтом.
     if (ink(g, C.snowM, a * 0.6))
       for (let i = 0; i < 24; i++) {
@@ -1401,6 +1414,29 @@ function blowWind(
       const y = ey + uy * p * 22 - p * 6 + (hash(i, 9, 79) - 0.5) * 4;
       if (ink(g, p < 0.4 ? C.fireL : C.fire, (1 - p) * q)) pp(g, x, y);
     }
+  }
+  // Погасла: жаровня под головой мамонта, поэтому дым и пар — здесь, над
+  // телом. Клубы растут и уходят по ветру, иней искрит у бивня.
+  if (t >= w.hit) {
+    const q = t - w.hit;
+    for (const pass of [0, 1])
+      for (let i = 0; i < 9; i++) {
+        const t0 = i * 0.03;
+        const p = (q - t0) / 0.42;
+        if (p < 0 || p > 1) continue;
+        const h = hash(i, 4, 82);
+        const r = 2 + Math.round(4 * eOut(p));
+        const x = ex + ux * 18 * eOut(p) + (h - 0.5) * 10 + Math.sin(p * 5 + h * 6) * 3;
+        const y = ey - 4 - 30 * eOut(p) + pass;
+        const col = pass ? (i % 3 ? C.smoke : C.smokeL) : C.ink;
+        if (ink(g, col, (pass ? 0.75 : 0.25) * (1 - eIn(p)))) clump(g, x, y, r);
+      }
+    if (q < 0.3)
+      for (let i = 0; i < 6; i++) {
+        const a = hash(i, 5, 83) * TAU;
+        const d = 3 + 14 * eOut(q / 0.3) * (0.5 + hash(i, 6, 83));
+        sparkPx(g, ex + Math.cos(a) * d, ey + Math.sin(a) * d * 0.6, 1 - q / 0.3);
+      }
   }
 }
 
@@ -1979,11 +2015,23 @@ registerImpactPainter('f12_snowwall', {
     const L = (rec.r ?? 4) * TS;
     const sd = rec.seed >>> 0;
     const hw = (rec.w ?? 1) * TS;
-    // Вал рушится: белая стена пыли на миг, потом низкий сугроб тает.
-    if (age < 0.14) {
-      const q = age / 0.14;
-      if (ink(g, C.white, 0.75 * (1 - q)))
-        fLane(g, px, py - 6, 0, 0, L, -hw * (1 + q), hw * (1 + q));
+    // Вал рушится: снег выстреливает столбиками с рваным верхом, по полу —
+    // белая полоса удара; потом низкий сугроб тает.
+    if (age < 0.24) {
+      const q = age / 0.24;
+      const up = eOut(Math.min(1, q * 2.2));
+      const fadeW = 1 - eIn(q);
+      if (ink(g, C.snowM, 0.6 * fadeW))
+        for (let x = 0; x < L; x += 3) {
+          const h = (6 + 12 * hash(sd, x, 21)) * up;
+          pp(g, px + x + 1, py - h + 1, 3, h);
+        }
+      if (ink(g, C.white, 0.85 * fadeW))
+        for (let x = 0; x < L; x += 3) {
+          const h = (6 + 12 * hash(sd, x, 21)) * up;
+          pp(g, px + x, py - h, 3, Math.max(1, h - 2));
+        }
+      if (ink(g, C.white, 0.7 * (1 - q))) pp(g, px - 2, py + hw * 0.5 * (1 - q), L + 4, 2);
     }
     // Вал оседает: уходит в пол и тает.
     const sink = 1 - eOut(age / 0.9);
