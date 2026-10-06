@@ -31,14 +31,16 @@ import { F15_MARK, F15_OBS, F15_ORBIT, F15_ROOTS } from './f15';
 import {
   ASTRO,
   COMET,
+  DEVOURER,
+  ECHO,
   F15_FX,
   f15State,
   GRAVITON,
+  inDark,
   METEOR as METEOR_K,
   MOON,
   MOTIFS,
   NOVA,
-  URCHIN,
 } from './f15-brains';
 import type { Arc, Chart, FShot, Ring, Well } from './f15-brains';
 import { F3, proj, renderRig, Rig, SE, vadd, vdot, vlen, vlerp, vmul, vnorm, vsub } from './f15-rig';
@@ -276,21 +278,12 @@ function sparkle(p: Px, x: number, y: number, c: RGBA, arm = 1): void {
   }
 }
 
-function clearPx(p: Px, x: number, y: number): void {
-  x = Math.round(x);
-  y = Math.round(y);
-  if (x < 0 || y < 0 || x >= p.w || y >= p.h) return;
-  const i = (y * p.w + x) * 4;
-  p.data[i + 3] = 0;
-}
-
 const INK = hx('#0a0614');
 const WHITE = hx('#ffffff');
 const GOLDK = hx('#ffd060');
 
 // Палитры этажа.
 const STONE = tn('#141230', '#211d46', '#2f2a5e', '#433c7c');
-const STONE2 = tn('#100e26', '#1a1638', '#26214c', '#363066');
 const CRYST = tn('#123a6a', '#1f6aa8', '#4cb6e8', '#c8f4ff');
 const VIOLET = tn('#2a1660', '#4a2a98', '#7a56d8', '#d0c0ff');
 const TEAL = tn('#0c3a44', '#147a86', '#2ec8d0', '#b8fff6');
@@ -298,7 +291,6 @@ const BRASS = tn('#4a3410', '#80601e', '#c09038', '#f4dc8a');
 const IVORY = tn('#6a6478', '#9a94aa', '#c8c2d4', '#f2eef8');
 const LAPIS = tn('#0a1440', '#14246a', '#22409a', '#4a70d0');
 const METEOR = tn('#1c1414', '#3a2a26', '#5e4a40', '#8a7464');
-const NIGHT = tn('#05030c', '#0a0820', '#141038', '#221c52');
 const GOLD = tn('#6a4410', '#b07a18', '#f0b838', '#fff2b0');
 const ROSE = tn('#3a1030', '#6a2050', '#b04a80', '#ffb8d8');
 const STAR_C = hx('#fff4d0');
@@ -2432,23 +2424,10 @@ registerPropPainter('f15_vortex', (_o, time) => {
 });
 
 // ---------------------------------------------------------------------------
-// Монстры. Каждый кадр строится раз на позу, сторону и вид (элита, альбинос),
-// живёт в кеше с вытеснением. Слой `lit` — светящиеся части поверх темноты.
+// Общие мелочи рисунка: слой света из ярких пикселей, обводка, сторона, шип.
 // ---------------------------------------------------------------------------
 
 type Look = MobPose['look'];
-
-interface Built {
-  p: Px;
-  /** Середина тела и земля в кадре (смотрит вправо). */
-  ax: number;
-  ay: number;
-  eye: [number, number] | null;
-  /** Светящееся: `true` — взять яркие пиксели кадра; Px — свой слой. */
-  lit?: Px | boolean | null;
-}
-
-const FR = frameLRU<MobFrame>(1600);
 
 /** Яркие пиксели кадра — слой поверх темноты. */
 function litOf(p: Px, thr = 200): Px {
@@ -2466,103 +2445,6 @@ function litOf(p: Px, thr = 200): Px {
   return q;
 }
 
-function finish(b: Built, look: Look, flash: boolean, left: boolean): MobFrame {
-  let p = b.p;
-  let lit: Px | null = b.lit === true ? litOf(p) : b.lit || null;
-  if (look === 'albino') {
-    const pale = hx('#f4f0ff');
-    const q = new Px(p.w, p.h);
-    for (let i = 0; i < p.data.length; i += 4) {
-      if (!p.data[i + 3]) continue;
-      const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-      const c = mixc([l, l, l, 255], pale, 0.5);
-      q.data[i] = c[0];
-      q.data[i + 1] = c[1];
-      q.data[i + 2] = c[2];
-      q.data[i + 3] = p.data[i + 3];
-    }
-    p = q;
-  }
-  // Золотая кайма элиты — по телу, а не по ореолу (иначе кольцо вокруг света).
-  if (look === 'elite') edge(p, GOLDK);
-  if (flash) p = p.tint(WHITE, 0.85);
-  if (left) {
-    p = p.flipX();
-    if (lit) lit = lit.flipX();
-  }
-  const eye = b.eye ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
-  return {
-    img: p.canvas(),
-    ax: left ? p.w - b.ax : b.ax,
-    ay: b.ay,
-    eye,
-    lit: lit ? lit.canvas() : null,
-  };
-}
-
-/**
- * Кадр из кеша. `flip` — отражать ли (кадры по направлению рисуются как
- * есть). `extra` — поля хода кадра (сдвиг, шлейф, прозрачность).
- */
-function frameOf(
-  kind: string,
-  pose: MobPose,
-  anim: string,
-  f: number,
-  build: () => Built,
-  extra?: Partial<MobFrame> | null,
-  flip: boolean = pose.left,
-): MobFrame {
-  const key = `${kind}|${anim}|${f}|${flip ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  let fr = FR.get(key);
-  // Осколки смерти элиты без золотой обводки: она съедала их цвет.
-  const look =
-    pose.look === 'elite' && (anim === 'die' || anim.startsWith('dying')) ? 'normal' : pose.look;
-  if (!fr) fr = FR.set(key, finish(build(), look, pose.flash, flip));
-  return extra ? { ...fr, ...extra } : fr;
-}
-
-/** Звёздочки над головой оглушённого (кадр f из 4). */
-function stars(p: Px, cx: number, cy: number, rx: number, f: number): void {
-  for (let i = 0; i < 3; i++) {
-    const a = (f / 4) * TAU + (i / 3) * TAU;
-    const x = Math.round(cx + Math.cos(a) * rx);
-    const y = Math.round(cy + Math.sin(a) * rx * 0.35);
-    sparkle(p, x, y, i === 0 ? WHITE : hx('#fff27a'), 1);
-  }
-}
-
-/** Смерть кристалла: фигура раскалывается, осколки летят в стороны и вниз. */
-function shatter(p: Px, k: number, seed: number, bits: RGBA[], cx: number, cy: number): Px {
-  if (k <= 0) return p;
-  const o = new Px(p.w, p.h);
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      const i = (y * p.w + x) * 4;
-      // Свечение не бьётся — гаснет; осколки — только из тела.
-      if (p.data[i + 3] < 150) continue;
-      const r = hash(x >> 1, y >> 1, seed);
-      if (r < k * 0.5) continue;
-      const dx = x - cx;
-      const dy = y - cy;
-      const d = Math.hypot(dx, dy) || 1;
-      const push = k * (1 + r * r * 9);
-      const tx = Math.round(x + (dx / d) * push + (hash(x, y, seed + 1) - 0.5) * k * 3);
-      const ty = Math.round(y + (dy / d) * push * 0.5 + k * k * 7 * r);
-      if (tx < 0 || ty < 0 || tx >= o.w || ty >= o.h) continue;
-      const j = (ty * o.w + tx) * 4;
-      const c: RGBA =
-        r < k * 0.75
-          ? bits[Math.floor(r * 97) % bits.length]
-          : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
-      o.data[j] = c[0];
-      o.data[j + 1] = c[1];
-      o.data[j + 2] = c[2];
-      o.data[j + 3] = Math.round(255 * (1 - k * 0.55));
-    }
-  return o;
-}
-
 /** Обводка по телу: свечение (полупрозрачное) не обводится. */
 function edge(p: Px, c: RGBA): void {
   const solid = (x: number, y: number) =>
@@ -2575,10 +2457,6 @@ function edge(p: Px, c: RGBA): void {
     }
   for (let i = 0; i < add.length; i += 2) p.set(add[i], add[i + 1], c);
 }
-
-/** Номер кадра смерти по времени режима (0…3). */
-const deathK = (pose: MobPose) =>
-  pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
 
 /** Номер направления 0…n−1 по углу. */
 const dirBucket = (a: number, n: number) => ((Math.round((a / TAU) * n) % n) + n) % n;
@@ -2624,358 +2502,7 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-// --- Пожиратель света -----------------------------------------------------------
 
-/**
- * Пожиратель света: скат-дыра в небе. Внутри крыльев — космос со звёздами,
- * край горит фиолетом, глаза — две холодные звезды. `suck` 0…1 — тянет свет
- * лампы (рот-воронка, искры летят внутрь), `wind` 0…1 — копит холод.
- */
-function devBody(o: { f: number; suck: number; wind: number; dk: number }): Built {
-  const p = new Px(64, 46);
-  const cx = 32;
-  const cy = 20;
-  const flap = Math.sin((o.f / 8) * TAU);
-  const span = 21 + o.wind * 2;
-  const shape: [number, number][] = [];
-  // Верхний край: от кончика левого крыла через голову к правому.
-  for (let i = 0; i <= 12; i++) {
-    const k = i / 12;
-    const x = cx - span + k * span * 2;
-    const t = Math.abs(k - 0.5) * 2;
-    shape.push([x, cy - 6 + t * t * 2 - flap * 6 * t * t + (t < 0.2 ? -2 : 0)]);
-  }
-  // Нижний край — волной, к хвосту.
-  for (let i = 12; i >= 0; i--) {
-    const k = i / 12;
-    const x = cx - span * 0.94 + k * span * 1.88;
-    const t = Math.abs(k - 0.5) * 2;
-    shape.push([x, cy + 5 - t * 3 - flap * 5 * t * t + Math.sin(k * 9 + o.f) * 0.8 * t]);
-  }
-  poly(p, shape, (x, y) => {
-    const n = fbm(x * 3, y * 3, 8, 1960);
-    let c = ramp([hx('#04020c'), hx('#0e0824'), hx('#221444')], n * 0.9 + o.wind * 0.3);
-    const h = hash(x, y, 1961);
-    if (h < 0.03) c = h < 0.01 ? WHITE : hx('#b8a8ff');
-    return c;
-  });
-  // Тело-холм: чуть светлее, глянец.
-  shadeEll(p, cx + 1, cy, 7 + o.wind * 1.5, 5 + o.wind, VOID_T, 0.1);
-  // Хвост-нить со звездой на конце.
-  for (let i = 0; i < 14; i++)
-    p.set(
-      cx - 2 - i * 0.5 + Math.sin(o.f * 0.8 + i * 0.5) * 1.6,
-      cy + 5 + i,
-      alpha(VIOLET[3], 0.85 - i * 0.04),
-    );
-  edge(p, alpha(VIOLET_GLOW, 0.95));
-  glow(p, cx, cy, 24, VIOLET_GLOW, 0.14);
-  if (o.wind > 0) glow(p, cx, cy, 8 + o.wind * 5, hx('#9ad0ff'), 0.4 * o.wind);
-  sparkle(p, cx + 2, cy - 2, hx('#e0f4ff'), 1);
-  sparkle(p, cx + 6, cy - 2, hx('#e0f4ff'), 1);
-  if (o.suck > 0) {
-    p.ell(cx + 4, cy + 3, 2 + o.suck * 1.5, 1.4 + o.suck, INK);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * TAU + o.f * 0.5;
-      const d = 4 + ((o.f * 2 + i * 3) % 10);
-      p.set(
-        cx + 4 + Math.cos(a) * d,
-        cy + 3 + Math.sin(a) * d * 0.7,
-        alpha(hx('#bff8ff'), 1 - d / 15),
-      );
-    }
-  }
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1962, [VOID_T[2], VIOLET[2], VIOLET_GLOW, WHITE], cx, cy);
-  return { p: out, ax: cx, ay: 36, eye: o.dk ? null : [cx + 4, cy - 2], lit: true };
-}
-
-const VOID_T = tn('#06040e', '#100a20', '#1e1438', '#34245c');
-
-registerMobPainter('f15_devourer', (_m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk) return frameOf('dev', pose, 'die', dk, () => devBody({ f: 0, suck: 0, wind: 0, dk }));
-  const f = Math.floor(pose.now * 8) % 8;
-  if (pose.mode === 'f15_snuff') {
-    const k = Math.min(2, Math.floor(pose.t * 3));
-    return frameOf(
-      'dev',
-      pose,
-      'snuff',
-      k * 8 + f,
-      () => devBody({ f, suck: (k + 1) / 3, wind: 0, dk: 0 }),
-      { still: true },
-    );
-  }
-  if (pose.mode === 'windup') {
-    const k = Math.min(3, Math.floor((pose.t / 0.7) * 4));
-    return frameOf(
-      'dev',
-      pose,
-      'wind',
-      k * 8 + f,
-      () => devBody({ f, suck: 0, wind: (k + 1) / 4, dk: 0 }),
-      { still: true },
-    );
-  }
-  return frameOf('dev', pose, 'fly', f, () => devBody({ f, suck: 0, wind: 0, dk: 0 }), { lift: 8 });
-});
-
-// --- Эхо: тени прошлых этажей ------------------------------------------------------
-
-/** Чей рисовальщик даёт тень каждому мотиву (в порядке `MOTIFS`). */
-const ECHO_SRC = ['f1_rat', 'f2_shroom', 'f6_salamander', 'f7_phantom', 'f11_harpy', 'f14_soldier'];
-const SPECTRAL: RGBA[] = [
-  hx('#140a38'),
-  hx('#3a2a90'),
-  hx('#6a7ae0'),
-  hx('#9ae8ff'),
-  hx('#ffffff'),
-];
-const ECHO_TINT = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
-
-/** Перекрасить кадр в призрачную палитру: яркость → индиго…бирюза…белое. */
-function spectral(src: HTMLCanvasElement): HTMLCanvasElement {
-  const hit = ECHO_TINT.get(src);
-  if (hit) return hit;
-  const c = document.createElement('canvas');
-  c.width = src.width;
-  c.height = src.height;
-  const g = c.getContext('2d');
-  if (!g || !src.width || !src.height) return src;
-  g.drawImage(src, 0, 0);
-  const d = g.getImageData(0, 0, c.width, c.height);
-  for (let i = 0; i < d.data.length; i += 4) {
-    if (!d.data[i + 3]) continue;
-    const l = (d.data[i] * 0.3 + d.data[i + 1] * 0.55 + d.data[i + 2] * 0.15) / 255;
-    const col = ramp(SPECTRAL, Math.min(1, l * 1.25 + 0.08));
-    d.data[i] = col[0];
-    d.data[i + 1] = col[1];
-    d.data[i + 2] = col[2];
-    d.data[i + 3] = Math.round(d.data[i + 3] * 0.88);
-  }
-  g.putImageData(d, 0, 0);
-  ECHO_TINT.set(src, c);
-  return c;
-}
-
-/** Своё эхо на случай, если чужого рисовальщика нет: облачко-силуэт. */
-function echoFallback(o: { f: number; motif: number; dk: number }): Built {
-  const p = new Px(28, 30);
-  const cx = 14;
-  glow(p, cx, 16, 11, hx('#9ae8ff'), 0.35);
-  shadeEll(p, cx, 16, 7, 8, tn('#1a1048', '#3a3aa0', '#6a8ae0', '#c8f4ff'), 0.1);
-  for (let i = 0; i < 4; i++)
-    p.set(cx - 5 + i * 3, 24 + ((o.f + i) % 2), alpha(hx('#9ae8ff'), 0.7));
-  motifGlyph(p, cx, 15, o.motif, WHITE);
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1970, SPECTRAL, cx, 16);
-  return { p: out, ax: cx, ay: 26, eye: null, lit: true };
-}
-
-const ECHO_MODE: Record<string, string> = {
-  f15_lunge_aim: 'windup',
-  f15_spore: 'windup',
-  f15_gust: 'windup',
-  f15_tick: 'windup',
-  f15_lunge: 'chase',
-  f15_blink: 'chase',
-  f15_born: 'idle',
-};
-
-registerMobPainter('f15_echo', (m: Mob, pose: MobPose) => {
-  const motif = (((m.data.motif ?? 0) % 6) + 6) % 6;
-  const src = MOB_PAINTERS.get(ECHO_SRC[motif]);
-  const born = pose.mode === 'f15_born' ? Math.min(1, pose.t / 0.7) : 1;
-  const blink = pose.mode === 'f15_blink' && (m.data.ghost ?? 0) > 0;
-  const extra: Partial<MobFrame> = {
-    alpha: blink ? 0.25 : 0.35 + born * 0.55,
-    ghost: { every: 0.08, life: 0.3, tint: '140,200,255', alpha: 0.3 },
-    lit: null,
-    linger: undefined,
-  };
-  if (src) {
-    try {
-      const mode = ECHO_MODE[pose.mode] ?? pose.mode;
-      const anim = mode === 'windup' ? 'wind' : pose.anim;
-      const fr = src(m, { ...pose, mode, anim, look: pose.look === 'elite' ? 'elite' : 'normal' });
-      if (fr && fr.img) {
-        return {
-          ...fr,
-          img: spectral(fr.img),
-          eye: fr.eye ?? null,
-          ...extra,
-          sy: (fr.sy ?? 1) * (0.4 + born * 0.6),
-          lit: null,
-          ghost: extra.ghost,
-          linger: undefined,
-        };
-      }
-    } catch {
-      // Чужой рисовальщик упал на нашем мобе — рисуем своё.
-    }
-  }
-  const dk = deathK(pose);
-  const f = Math.floor(pose.now * 6) % 4;
-  return frameOf(
-    'echo',
-    pose,
-    dk ? 'die' : 'fly',
-    motif * 8 + (dk || f),
-    () => echoFallback({ f, motif, dk }),
-    { ...extra, sy: 0.4 + born * 0.6 },
-  );
-});
-
-// --- Сверхновая ---------------------------------------------------------------------
-
-const NOVA_T = tn('#b0501a', '#f08a28', '#ffd060', '#fff8d8');
-
-/**
- * Сверхновая: шар плазмы с короной языков и ликом в огне. `g` 0…1 — набор:
- * сжимается и белеет, корона втягивается, по краю бегут лучи.
- */
-function novaBody(o: { f: number; g: number; step: number; dk: number }): Built {
-  const p = new Px(72, 72);
-  const cx = 36;
-  const cy = 34;
-  const R = 12 - o.g * 2.5;
-  glow(p, cx, cy, R + 16 + o.g * 6, hx('#ffb040'), 0.32 + o.g * 0.35);
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * TAU + o.f * 0.12;
-    const L = (6 + 3.5 * Math.sin(o.f * 0.9 + i * 1.7)) * (1 - o.g * 0.7);
-    for (let k = 0; k < L; k++) {
-      const r = R + k - 1;
-      const w = (1 - k / L) * 2.4;
-      const bend = Math.sin(o.f * 0.6 + i) * k * 0.08;
-      p.ell(
-        cx + Math.cos(a + bend) * r,
-        cy + Math.sin(a + bend) * r,
-        w,
-        w,
-        k / L < 0.4 ? NOVA_T[2] : alpha(NOVA_T[1], 0.75),
-      );
-    }
-  }
-  p.ell(cx, cy, R, R, (x, y) => {
-    const d = Math.hypot((x + 0.5 - cx) / R, (y + 0.5 - cy) / R);
-    const gran = vnoise(x * 3 + o.f * 2, y * 3, 3, 1990);
-    return tone(NOVA_T, 1 - d * 0.65 + (gran - 0.5) * 0.4 + o.g * 0.4);
-  });
-  if (!o.dk) {
-    const ey = cy - 2;
-    p.rect(cx - 6, ey, cx - 2, ey, NOVA_T[0]);
-    p.rect(cx + 3, ey, cx + 7, ey, NOVA_T[0]);
-    p.set(cx - 2, ey - 1, NOVA_T[0]);
-    p.set(cx + 3, ey - 1, NOVA_T[0]);
-    if (o.g > 0.3) p.ell(cx + 0.5, cy + 4, 2 + o.g * 1.5, 1 + o.g * 1.5, WHITE);
-    else p.rect(cx - 1, cy + 4, cx + 2, cy + 4, NOVA_T[0]);
-  }
-  if (o.g > 0.4)
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * TAU + o.f * 0.3;
-      for (let k = 0; k < 12 * o.g; k++)
-        p.set(
-          cx + Math.cos(a) * (R + 4 + k),
-          cy + Math.sin(a) * (R + 4 + k),
-          alpha(WHITE, 0.85 - k * 0.06),
-        );
-    }
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1991, [NOVA_T[2], NOVA_T[3], WHITE, NOVA_T[1]], cx, cy);
-  return { p: out, ax: cx, ay: 52 - o.step, eye: null, lit: true };
-}
-
-registerMobPainter('f15_nova', (_m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk)
-    return frameOf('nova', pose, 'die', dk, () => novaBody({ f: 0, g: 1, step: 0, dk }), {
-      shadow: 0,
-    });
-  const f = Math.floor(pose.now * 8) % 16;
-  if (pose.mode === 'f15_gather') {
-    const k = Math.min(4, Math.floor((pose.t / NOVA.gather) * 5));
-    return frameOf(
-      'nova',
-      pose,
-      'gather',
-      k * 16 + f,
-      () => novaBody({ f, g: (k + 1) / 5, step: 0, dk: 0 }),
-      {
-        still: true,
-        sx: 1 - k * 0.03,
-        sy: 1 - k * 0.03,
-      },
-    );
-  }
-  const step = pose.anim === 'run' ? (pose.frame % 2) * 1 : 0;
-  return frameOf('nova', pose, 'idle', f * 2 + step, () => novaBody({ f, g: 0, step, dk: 0 }), {
-    shadow: 10,
-  });
-});
-
-// --- Золотой скарабей (редкий бегун) ----------------------------------------------------
-
-/** Скарабей: золотой панцирь со звёздным узором; удирая, машет прозрачными крыльями. */
-function bugBody(o: { f: number; dk: number }): Built {
-  const p = new Px(34, 30);
-  const cx = 16;
-  const gy = 25;
-  const cy = gy - 7;
-  for (let i = 0; i < 3; i++) {
-    const lx = cx - 4 + i * 4;
-    const up = (o.f + i) % 2;
-    stroke(p, lx, cy + 3, lx - 1.5 + up * 3, gy - 1, GOLD[0]);
-  }
-  const flap = o.f % 2;
-  // Крылья: прозрачные, с прожилками.
-  for (const sgn of [0, 1]) {
-    const tipX = cx - 9 - sgn * 3;
-    const tipY = cy - 8 - flap * 4 + sgn * 2;
-    poly(
-      p,
-      [
-        [cx - 1, cy - 4],
-        [tipX, tipY],
-        [tipX + 3, tipY + 5],
-        [cx, cy],
-      ],
-      alpha(hx('#e8f8ff'), 0.4),
-    );
-    stroke(p, cx - 1, cy - 4, tipX, tipY, alpha(WHITE, 0.6));
-  }
-  shadeEll(p, cx, cy, 7.5, 5.6, GOLD, 0.15);
-  stroke(p, cx - 6, cy, cx + 6, cy, GOLD[0]);
-  p.set(cx - 3, cy - 2, WHITE);
-  p.set(cx - 4, cy - 2, alpha(WHITE, 0.6));
-  p.set(cx - 3, cy - 3, alpha(WHITE, 0.6));
-  p.set(cx + 2, cy - 2, GOLD[3]);
-  p.set(cx - 2, cy + 3, GOLD[3]);
-  p.set(cx + 3, cy + 2, GOLD[3]);
-  shadeEll(p, cx + 8, cy + 0.5, 2.8, 2.4, tn('#3a2a10', '#6a4c14', '#a07a20', '#e0b848'), 0.1);
-  // Усики-гребешки и жвалы.
-  stroke(p, cx + 9, cy - 1.5, cx + 12, cy - 4, GOLD[1]);
-  stroke(p, cx + 12, cy - 4, cx + 14, cy - 4, GOLD[2]);
-  stroke(p, cx + 8, cy - 1.5, cx + 10, cy - 5, GOLD[1]);
-  p.set(cx + 11, cy + 2, GOLD[0]);
-  p.set(cx + 10.5, cy + 2.5, GOLD[0]);
-  // Шов надкрылий.
-  stroke(p, cx - 5, cy - 3, cx + 5, cy - 3.5, alpha(GOLD[0], 0.7));
-  p.set(cx + 9, cy, INK);
-  edge(p, alpha(INK, 0.85));
-  glow(p, cx, cy, 11, GOLDK, 0.28);
-  sparkle(p, cx - 6 + ((o.f * 5) % 12), cy - 7, WHITE, 1);
-  let out = p;
-  if (o.dk) out = shatter(p, o.dk / 3, 1995, [GOLD[2], GOLD[3], WHITE], cx, cy);
-  return { p: out, ax: cx, ay: gy, eye: o.dk ? null : [cx + 9, cy], lit: true };
-}
-
-registerMobPainter('f15_goldbug', (_m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk) return frameOf('bug', pose, 'die', dk, () => bugBody({ f: 0, dk }));
-  const f = Math.floor(pose.now * 18) % 4;
-  return frameOf('bug', pose, 'run', f, () => bugBody({ f, dk: 0 }), { dy: f % 2 ? -0.5 : 0 });
-});
 // ---------------------------------------------------------------------------
 // Монстры в объёме (анимации 15). Каждый собран из примитивов мини-3D
 // (`f15-rig.ts`) и смотрит в одну из 16 сторон — туда, куда идёт: боком не
@@ -5197,34 +4724,732 @@ registerMobWarm('f15_moon', function* () {
   }
 });
 
-// --- Прогрев кадров ------------------------------------------------------------------
 
-/** Кадры по позам: рендер дорисует их по 3 мс за кадр, пока такой моб в мире. */
-function warm(kind: string, poses: [string, number, () => Built][]): () => Iterator<unknown> {
-  return function* () {
-    for (const [anim, f, build] of poses) {
-      for (const left of [false, true]) {
-        const key = `${kind}|${anim}|${f}|${left ? 1 : 0}|0|normal`;
-        if (!FR.get(key)) FR.set(key, finish(build(), 'normal', false, left));
-        yield 0;
-      }
-    }
+// --- Пожиратель света -------------------------------------------------------------
+//
+// Скат из пустоты: тёмное тело и крылья с фиолетовой каймой по свету, пасть
+// — чёрное кольцо. Вокруг него свет гаснет: под ним мутное пятно тьмы, к
+// пасти тянутся искры. Во тьме (затмение, рядом нет лампы) он
+// полупрозрачный — там его и не берут удары: рисунок говорит то же, что
+// игра. Гасит лампу: зависает, крылья запахиваются вперёд, свет лампы
+// струйками течёт в пасть. Хватка: взмах крыльями вверх — бросок пастью
+// со следом.
+
+const VOID_T = tn('#06040e', '#100a20', '#1e1438', '#34245c');
+const VOID_RIM = hx('#9a7ae8');
+
+interface DPose {
+  /** Взмах крыльев: −1 вниз … 1 вверх. */
+  flap: number;
+  /** Крылья запахнуты вперёд 0…1. */
+  wrap: number;
+  maw: number;
+  pitch: number;
+  fwd: number;
+  tail: number;
+  dk: number;
+}
+const D0: DPose = { flap: 0, wrap: 0, maw: 0.2, pitch: 0, fwd: 0, tail: 0, dk: 0 };
+
+function devRig(o: DPose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw).at(o.fwd, 0, 5).pitch(o.pitch);
+  const skin: Mat = {
+    T: VOID_T,
+    pat: (_q, l) => (l > 0.72 ? VOID_RIM : null),
   };
+  const from = r.size;
+  r.ell(B, [0, 0, 0], [5.4, 3.8, 2.2], skin);
+  // Крылья: передняя кромка от плеча к концу, задняя — к хвосту.
+  for (const s of [-1, 1]) {
+    const tipU = o.flap * 5 - o.dk * 3;
+    const tipF = -1.5 + o.wrap * 6;
+    const tipS = s * (11 - o.wrap * 4);
+    const sh = B.p(2.5, s * 2.8, 0.3);
+    const tip = B.p(tipF, tipS, tipU);
+    const mid = B.p(-1.5 + o.wrap * 3, s * (7 - o.wrap * 2), tipU * 0.5 - 0.6);
+    const back = B.p(-4.2, s * 2.4, -0.2);
+    r.poly([sh, tip, mid], skin);
+    r.poly([sh, mid, back], skin);
+    r.poly([mid, tip, B.p(tipF - 3, tipS * 0.8, tipU * 0.7)], { ...skin, bias: -0.15 });
+  }
+  // Хвост-плеть.
+  let prev = B.p(-5, 0, 0);
+  for (let i = 1; i <= 4; i++) {
+    const k = i / 4;
+    const P = B.p(-5 - k * 8, Math.sin(o.tail + k * 2.4) * 2.2 * k, -k * 1.5);
+    r.cap(prev, P, 0.9 - k * 0.5, 0.7 - k * 0.5, skin);
+    prev = P;
+  }
+  // Пасть — чёрное кольцо, светящаяся кайма; глаза над ней.
+  const mw = B.at(5.0, 0, -0.2);
+  const R = 1.2 + o.maw * 1.8;
+  r.ell(mw, [0, 0, 0], [0.6, R, R * 0.8], { T: tn('#000000', '#020104', '#05030a', '#0a0614'), flat: 0 });
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * TAU;
+    r.dot(mw.p(0.3, Math.cos(a) * (R + 0.4), Math.sin(a) * (R + 0.4) * 0.8), alpha(VOID_RIM, 0.9), 0.7, 1, 0.4);
+  }
+  if (o.dk <= 0)
+    for (const s of [-1, 1]) r.dot(B.p(3.6, s * 1.6, 1.8), hx('#d8b8ff'), 1, 1, 0.6);
+  if (o.dk <= 0) r.eye = B.p(3.6, -1.6, 1.8);
+  if (o.dk > 0) r.explode(sstep(0, 1, o.dk), B.o, 81, 7, 6, from, 0.7);
+  return r;
 }
 
-const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+/** Мутное пятно тьмы под пожирателем (рисуется в кадре под телом). */
+function voidHalo(p: Px, cx: number, cy: number, R: number, k: number): void {
+  for (let y = Math.floor(cy - R); y <= cy + R; y++)
+    for (let x = Math.floor(cx - R); x <= cx + R; x++) {
+      const d = Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) / 0.7) / R;
+      if (d >= 1 || p.data[(y * p.w + x) * 4 + 3] > 0) continue;
+      const a = (1 - d) * (1 - d) * 0.5 * k;
+      if (a > 0.04 && dith(x, y) + 0.5 < a * 2.2) p.set(x, y, alpha(hx('#05030c'), a));
+    }
+}
 
-registerMobWarm(
-  'f15_nova',
-  warm(
-    'nova',
-    range(16).map((f): [string, number, () => Built] => [
-      'idle',
-      f * 2,
-      () => novaBody({ f, g: 0, step: 0, dk: 0 }),
-    ]),
-  ),
-);
+function devPic(o: DPose, yaw: number, halo: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(devRig(o, yaw), 64, 52, 32, 34, (out, P) => {
+    const [x, y] = P([0, 0, 0]);
+    voidHalo(out.p, x, y, 18, halo);
+    if (post) post(out, P);
+  });
+}
+
+registerMobPainter('f15_devourer', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const tech = md === 'f15_snuff' || md === 'windup' || md === 'recover';
+  const v = visOf(m, pose, tech ? m.face : headOf(m), 6);
+  const { d, yaw } = side16(v.yaw);
+  const sa = scrAng(yaw);
+  const sim = paintSim();
+  const dark = sim ? inDark(sim, m.x, m.y) : false;
+  const o: DPose = { ...D0 };
+  const extra: Partial<MobFrame> = { shadow: 9, lift: 8 };
+  let anim = 'fly';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  if (md === 'dying') {
+    // Рассеивается дымом: крылья опадают, тело расползается.
+    const T = 0.9;
+    f = fi(t, 21);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    o.maw = 1;
+    o.flap = -0.5;
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.4, 1, k);
+    extra.lift = 8 * (1 - k * 0.6);
+    extra.still = true;
+  } else if (md === 'f15_snuff') {
+    // Гасит лампу: зависает, запахивает крылья, свет течёт в пасть.
+    const T = DEVOURER.snuff;
+    f = fi(t, 23);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'snuff';
+    o.wrap = easeOut(k / 0.4);
+    o.maw = 0.4 + 0.6 * easeOut(k / 0.3);
+    o.flap = Math.sin(k * 18) * 0.25;
+    o.pitch = 0.15;
+    o.tail = k * 6;
+    post = (out, P) => {
+      const [mx, my] = P(F3.yaw(yaw).p(5.5, 0, 5));
+      const lit = litOn(out);
+      for (let i = 0; i < 6; i++) {
+        const s = ((f * 0.13 + i / 6) % 1);
+        const a = sa + (hash(i, 3, 5) - 0.5) * 0.9;
+        const rr = 4 + (1 - s) * 18;
+        const x = mx + Math.cos(a) * rr;
+        const y = my + Math.sin(a) * rr * 0.7 + (1 - s) * 2;
+        stroke(lit, x, y, x - Math.cos(a) * 2, y - Math.sin(a) * 1.4, alpha(hx('#ffe9a0'), 0.35 + s * 0.6));
+      }
+    };
+    extra.still = true;
+  } else if (md === 'windup') {
+    // Хватка: крылья вверх, отводит голову — бросок пастью со следом.
+    const T = 0.85;
+    f = fi(t, 20);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'grab';
+    const up = easeOut(k / 0.65);
+    const go = easeOut((k - 0.78) / 0.22);
+    o.flap = up * (1 - go) - 0.8 * go;
+    o.pitch = -0.25 * up * (1 - go) + 0.3 * go;
+    o.fwd = -3 * up * (1 - go) + 6 * go;
+    o.maw = 0.3 + 0.7 * go + 0.3 * up * (1 - go);
+    o.wrap = 0.6 * go;
+    if (k > 0.78) post = biteTrail(18, sa, 1.6, (k - 0.78) / 0.22, 1, VOID_RIM);
+    extra.still = true;
+  } else if (md === 'recover' && v.prev === 'windup') {
+    const T = 0.55;
+    f = fi(t, 13);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'grabfol';
+    const hold = 1 - sstep(0.2, 0.9, k);
+    o.flap = -0.8 * hold;
+    o.pitch = 0.3 * hold;
+    o.fwd = 6 * hold;
+    o.maw = 0.3 + 0.5 * hold;
+    o.wrap = 0.6 * hold;
+    if (k < 0.4) post = biteTrail(18, sa, 1.6, 1, 1 - k / 0.4, VOID_RIM);
+    extra.still = true;
+  } else {
+    // Полёт: взмах из восьми кадров; на месте — медленнее.
+    const fly = moving(m);
+    f = Math.floor(pose.now * (fly ? 9 : 6)) % 8;
+    anim = fly ? 'fly' : 'hover';
+    o.flap = Math.sin((f / 8) * TAU);
+    o.tail = (f / 8) * TAU;
+    o.pitch = fly ? 0.12 : 0;
+    extra.dy = -o.flap * 0.8;
+  }
+  if (dark) extra.alpha = Math.min(extra.alpha ?? 1, 0.42);
+  return mobFrame('dev', pose, anim, f, d, () => devPic(o, yaw, 1, post), extra);
+});
+
+registerMobWarm('f15_devourer', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('dev', pose, 'fly', f, d, () =>
+        devPic({ ...D0, flap: Math.sin((f / 8) * TAU), tail: (f / 8) * TAU, pitch: 0.12 }, yaw, 1),
+      );
+      yield 0;
+    }
+  }
+});
+
+// --- Сверхновая ---------------------------------------------------------------------
+//
+// Звёздный голем: солнце-ядро в треснувшей скорлупе из каменных пластин,
+// тяжёлые ноги и руки. Набор: пластины расходятся, ядро белеет и растёт,
+// руки разводятся — вспышка кольцом ровно в кадр урона (кольцо рисует
+// картинка `f15_novaburst`), пластины выбивает наружу, потом они со стуком
+// встают на место. Гибель: пластины по спирали стягиваются к ядру, ядро
+// гаснет в фиолет и схлопывается в точку — на её месте мозг ставит колодец.
+
+const NOVA_T = tn('#b0501a', '#f08a28', '#ffd060', '#fff8d8');
+const NOVA_SHELL = tn('#1a1014', '#2e1c1c', '#4a3028', '#6e4a38');
+
+/** Пластины скорлупы: нормаль на сфере ядра. */
+const NOVA_PLATES: V3[] = (() => {
+  const out: V3[] = [];
+  const lats = [-0.5, 0.15, 0.75];
+  lats.forEach((la, j) => {
+    const n = j === 2 ? 3 : 5;
+    for (let i = 0; i < n; i++) {
+      const lo = ((i + j * 0.5) / n) * TAU;
+      out.push([Math.cos(lo) * Math.cos(la), Math.sin(lo) * Math.cos(la), Math.sin(la)]);
+    }
+  });
+  return out;
+})();
+
+interface NPose {
+  ph: number;
+  walk: number;
+  /** Пластины отошли от ядра (пиксели). */
+  open: number;
+  /** Ядро: яркость и рост. */
+  core: number;
+  arms: number;
+  /** Схлопывание 0…1. */
+  col: number;
+  shake: number;
+  lean: number;
+}
+const N0: NPose = { ph: 0, walk: 0, open: 0, core: 0.4, arms: 0, col: 0, shake: 0, lean: 0 };
+
+function novaRig(o: NPose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const col = o.col;
+  const H = 9 - col * 3;
+  const body = B.at(0, 0, H).pitch(o.lean);
+  const stone: Mat = { T: NOVA_SHELL, pat: (q, l) => (crackF(q) < 0.12 ? NOVA_T[2] : tone(NOVA_SHELL, l)), gpat: (q) => (crackF(q) < 0.12 ? 0.8 : 0) };
+  const legsAlive = col < 0.4;
+  // Ноги и руки (при схлопывании втягиваются).
+  if (legsAlive) {
+    const lk = 1 - col / 0.4;
+    for (const s of [-1, 1]) {
+      const p = (o.ph + (s > 0 ? 0.5 : 0)) % 1;
+      const sw = -Math.cos(p * TAU) * 2.4 * o.walk;
+      const up = Math.max(0, Math.sin(p * TAU)) * 1.4 * o.walk;
+      const hp = body.p(0, s * 3.4, -3);
+      const ft = vlerp(B.p(sw, s * 4, up), hp, 1 - lk);
+      const kn = ik2(hp, ft, 4.2, 4.2, B.v(1, 0, 0));
+      r.cap(hp, kn, 2.2 * lk, 1.8 * lk, stone);
+      r.cap(kn, ft, 1.8 * lk, 2.2 * lk, stone);
+    }
+    for (const s of [-1, 1]) {
+      const sh = body.p(0, s * 7, 4);
+      const hand = body.p(1.5 + o.arms * 1, s * (8.5 + o.arms * 5), 0 + o.arms * 9);
+      const h2 = vlerp(hand, sh, 1 - lk);
+      const el = ik2(sh, h2, 4.5, 4.5, body.v(-0.4, s, -0.5));
+      r.cap(sh, el, 2.0 * lk, 1.7 * lk, stone);
+      r.cap(el, h2, 1.7 * lk, 2.4 * lk, stone);
+    }
+  }
+  // Ядро.
+  const coreC = body.p(0, 0, 3);
+  const cr = (3.6 + o.core * 1.6) * (1 - col * 0.85);
+  const coreT: Tones =
+    col > 0.3 ? [VIOLET[0], VIOLET[1], mixc(VIOLET[2], NOVA_T[2], 1 - col), WHITE] : NOVA_T;
+  r.ball(coreC, cr, { T: coreT, glow: 1, soft: true, bias: 0.15 + o.core * 0.5 });
+  // Пластины: по нормали от ядра, при схлопывании — спиралью внутрь.
+  const from = r.size;
+  NOVA_PLATES.forEach((n0, i) => {
+    const sp = col * (2.4 + (i % 3) * 0.5);
+    const c0 = Math.cos(sp);
+    const s0 = Math.sin(sp);
+    const n: V3 = [n0[0] * c0 - n0[1] * s0, n0[0] * s0 + n0[1] * c0, n0[2]];
+    const jit = o.shake ? (hash(i, 1, 9) - 0.5) * o.shake : 0;
+    const dist = (6.2 + o.open + jit) * (1 - col * 0.9);
+    const nw = body.v(n[0], n[1], n[2]);
+    const c = vadd(coreC, vmul(nw, dist));
+    const ref: V3 = Math.abs(nw[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+    const e1 = vnorm([nw[1] * ref[2] - nw[2] * ref[1], nw[2] * ref[0] - nw[0] * ref[2], nw[0] * ref[1] - nw[1] * ref[0]]);
+    const e2: V3 = [nw[1] * e1[2] - nw[2] * e1[1], nw[2] * e1[0] - nw[0] * e1[2], nw[0] * e1[1] - nw[1] * e1[0]];
+    const F = new F3(c, nw, e1, e2);
+    const sz = (1 - col * 0.6) * (i % 2 ? 1 : 0.85);
+    r.ell(F, [0, 0, 0], [1.2, 3.4 * sz, 3.0 * sz], stone);
+  });
+  // Глаза — щели на верхней пластине-короне.
+  if (col < 0.2) {
+    const top = body.p(1.8, 0, 3 + 6.2 + o.open);
+    for (const s of [-1, 1]) r.dot(vadd(top, B.v(1.6, s * 1.4, -1)), WHITE, 1, 1, 1);
+    r.eye = vadd(top, B.v(1.6, -1.4, -1));
+  }
+  if (col > 0.85) r.prims.length = from;
+  return r;
+}
+
+function novaPic(o: NPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(novaRig(o, yaw), 64, 64, 32, 46, post);
+}
+
+registerMobPainter('f15_nova', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const v = visOf(m, pose, md === 'chase' ? headOf(m) : m.face, 5);
+  const { d, yaw } = side16(v.yaw);
+  const o: NPose = { ...N0 };
+  const extra: Partial<MobFrame> = { shadow: 12 };
+  let anim = 'idle';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  if (md === 'dying') {
+    // Схлопывание: пластины спиралью к ядру, ядро в фиолет и в точку.
+    const T = 0.8;
+    f = fi(t, 19);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.col = easeIn(k / 0.85);
+    o.core = 1 - k;
+    post = (out, P) => {
+      const [x, y] = P([0, 0, 12 - o.col * 3]);
+      const lit = litOn(out);
+      if (k > 0.8) {
+        const rr = 2 + (k - 0.8) * 60;
+        for (let i = 0; i < 24; i++) {
+          const a = (i / 24) * TAU;
+          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(VIOLET_GLOW, 1 - (k - 0.8) * 5));
+        }
+      } else
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * TAU + k * 6;
+          const rr = 22 * (1 - k);
+          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(NOVA_T[2], 0.9));
+        }
+    };
+    extra.linger = T;
+    extra.shadow = 12 * (1 - k);
+    extra.still = true;
+  } else if (md === 'f15_gather') {
+    // Набор света: скорлупа раскрывается, ядро растёт, руки вверх.
+    const T = NOVA.gather;
+    f = fi(t, 33);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'gather';
+    o.open = 3.5 * easeOut(k);
+    o.core = 0.4 + 0.6 * k;
+    o.arms = easeOut(k / 0.7);
+    o.lean = -0.12 * o.arms;
+    o.shake = k > 0.75 ? 1.6 * ((f % 2) * 2 - 1) : 0;
+    post = (out, P) => {
+      const [x, y] = P([0, 0, 12]);
+      const lit = litOn(out);
+      for (let i = 0; i < 8; i++) {
+        const s = (k * 3 + i / 8) % 1;
+        const a = (i / 8) * TAU + i;
+        const rr = 26 * (1 - s);
+        lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(NOVA_T[3], 0.4 + s * 0.6));
+      }
+    };
+    extra.still = true;
+  } else if (md === 'recover' && v.prev === 'f15_gather') {
+    // Выброс: пластины выбиты наружу и со стуком встают назад, ядро тускнеет.
+    const T = 0.8;
+    f = fi(t, 19);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'burst';
+    const out = k < 0.12 ? 1 : 1 - easeOut((k - 0.12) / 0.6);
+    o.open = 7 * out;
+    o.core = 1 - 0.6 * k;
+    o.arms = out;
+    o.lean = 0.1 * (1 - out);
+    extra.still = true;
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(t, 6);
+    anim = 'hurt';
+    o.open = 1.5 * (1 - f / 6);
+    o.lean = -0.1;
+  } else if (moving(m, 0.3)) {
+    f = Math.floor((v.dist / 1.3) * 8) % 8;
+    anim = 'walk';
+    o.walk = 1;
+    o.ph = f / 8;
+    o.core = 0.4 + 0.1 * Math.sin((f / 8) * TAU * 2);
+  } else {
+    f = Math.floor(pose.now * 3) % 4;
+    anim = 'idle';
+    o.core = 0.35 + (f === 1 ? 0.12 : f === 2 ? 0.2 : 0.05);
+    o.open = f === 2 ? 0.4 : 0;
+  }
+  return mobFrame('nova', pose, anim, f, d, () => novaPic(o, yaw, post), extra);
+});
+
+registerMobWarm('f15_nova', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('nova', pose, 'walk', f, d, () =>
+        novaPic({ ...N0, walk: 1, ph: f / 8, core: 0.4 + 0.1 * Math.sin((f / 8) * TAU * 2) }, yaw),
+      );
+      yield 0;
+    }
+  }
+});
+
+// --- Золотой метеорит --------------------------------------------------------------
+//
+// Самородок на шести быстрых лапках: золото гранями (узор по телу), за ним
+// золотая пыль. Удирает лицом по ходу, в вираже вокруг колодца кренится.
+// Монеты сыплются по-настоящему (добыча движка) — рисунок их не выдумывает.
+// Ушёл (14 с) — вертится волчком и исчезает искрой.
+
+interface BPose {
+  ph: number;
+  bank: number;
+  spin: number;
+  shrink: number;
+  glint: number;
+  dk: number;
+}
+const B0: BPose = { ph: 0, bank: 0, spin: 0, shrink: 0, glint: 0, dk: 0 };
+
+function bugRig(o: BPose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw + o.spin).at(0, 0, 4.2).roll(o.bank).scale(1 - o.shrink);
+  const gold: Mat = {
+    T: GOLD,
+    spec: true,
+    pat: (q, l) => {
+      // Грани: тон по квантованной нормали — кусок самородка.
+      const fq = Math.round(q[0] * 2) * 0.31 + Math.round(q[1] * 2) * 0.17 + Math.round(q[2] * 2) * 0.43;
+      return tone(GOLD, l + (fq % 0.3) - 0.1);
+    },
+  };
+  const legM: Mat = { T: BRASS, bias: -0.1 };
+  const from = r.size;
+  const hips: [number, number, number][] = [
+    [2.4, -1, 0],
+    [2.4, 1, 0.5],
+    [0, -1, 0.5],
+    [0, 1, 0],
+    [-2.4, -1, 0],
+    [-2.4, 1, 0.5],
+  ];
+  for (const [hf, s, off] of hips) {
+    const p = (o.ph + off) % 1;
+    const sw = -Math.cos(p * TAU) * 1.8;
+    const up = Math.max(0, Math.sin(p * TAU)) * 1.4;
+    const hip = B.p(hf * 0.8, s * 2.4, -1.4);
+    const ft = F3.yaw(yaw + o.spin).p(hf + sw, s * 5.2, up);
+    bugLeg(r, hip, vlerp(ft, hip, o.shrink), F3.yaw(yaw).v(0, s, 0), legM, 0.7);
+  }
+  r.ell(B, [-0.6, 0, 0.4], [4.4, 3.4, 3.0], gold);
+  r.ell(B, [3.4, 0, -0.2], [1.8, 2.0, 1.6], { T: BRASS });
+  for (const s of [-1, 1]) {
+    r.dot(B.p(4.6, s * 1.0, 0.4), hx('#3a1a00'), 0, 1, 0.5);
+    r.cap(B.p(4.4, s * 0.8, 1.0), B.p(6.4, s * 2.2, 2.6), 0.4, 0.2, legM);
+  }
+  r.eye = B.p(4.6, -1.0, 0.4);
+  if (o.glint > 0) r.dot(B.p(-0.6, -1.2, 3.3), WHITE, 1, 2, 1);
+  if (o.dk > 0) r.explode(sstep(0, 1, o.dk), B.o, 91, 9, 22, from, 0.4);
+  return r;
+}
+
+function bugPic(o: BPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(bugRig(o, yaw), 40, 36, 20, 24, post);
+}
+
+registerMobPainter('f15_goldbug', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const v = visOf(m, pose, headOf(m), 16);
+  const { d, yaw } = side16(v.yaw);
+  const o: BPose = { ...B0 };
+  const extra: Partial<MobFrame> = { shadow: 6 };
+  let anim = 'run';
+  let f = 0;
+  if (md === 'escape') {
+    // Ушёл: волчок, сжимается, вспышка-искра.
+    f = fi(t, 9);
+    const k = (f + 0.5) / FPS / 0.4;
+    anim = 'escape';
+    o.spin = k * TAU * 1.5;
+    o.shrink = easeIn(k) * 0.85;
+    o.glint = 1;
+    const post = (out: RigOut, P: Proj2) => {
+      if (k < 0.5) return;
+      const [x, y] = P([0, 0, 4]);
+      const lit = litOn(out);
+      const a = (k - 0.5) * 2;
+      sparkle(lit, Math.round(x), Math.round(y), alpha(WHITE, 1 - a * 0.5), Math.round(1 + a * 4));
+    };
+    extra.still = true;
+    extra.alpha = 1 - sstep(0.7, 1, k);
+    return mobFrame('gbug', pose, anim, f, d, () => bugPic(o, yaw, post), extra);
+  }
+  if (md === 'dying') {
+    const T = 0.8;
+    f = fi(t, 19);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.6, 1, k);
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(t, 6);
+    anim = 'hurt';
+    o.bank = (f % 2 ? 0.3 : -0.3) * (1 - f / 6);
+    o.glint = 1;
+  } else {
+    f = Math.floor((v.dist / 0.55) * 8) % 8;
+    const bank = Math.max(-1, Math.min(1, Math.round(v.yr / 4)));
+    anim = 'run' + bank;
+    o.ph = f / 8;
+    o.bank = bank * 0.3;
+    o.glint = f === 3 ? 1 : 0;
+    extra.dy = -Math.abs(Math.sin((f / 8) * TAU * 2)) * 0.8;
+    extra.ghost = { every: 0.06, life: 0.3, tint: '255,208,96', alpha: 0.35 };
+  }
+  return mobFrame('gbug', pose, anim, f, d, () => bugPic(o, yaw), extra);
+});
+
+
+// --- Отражение: тени прошлых этажей ---------------------------------------------------
+//
+// Монстр прошлого этажа, перекрашенный звёздным светом: берём кадр его же
+// рисовальщика и переводим яркость в палитру «индиго → бирюза → белое».
+// Перекраска считается раз на кадр источника и не зависит от времени,
+// звёздные искры стоят на своих точках фигуры — ничего не «кипит».
+// Рождение: друза кристалла памяти трескается, осколки расходятся и
+// падают, из неё поднимается фигура.
+
+/** Чей рисовальщик даёт тень каждому мотиву (в порядке `MOTIFS`). */
+const ECHO_SRC = ['f1_rat', 'f2_shroom', 'f6_salamander', 'f7_phantom', 'f11_harpy', 'f14_soldier'];
+const SPECTRAL: RGBA[] = [
+  hx('#140a38'),
+  hx('#3a2a90'),
+  hx('#6a7ae0'),
+  hx('#9ae8ff'),
+  hx('#ffffff'),
+];
+const ECHO_TINT = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+/** Перекрасить кадр в звёздную палитру; искры — по пикселям фигуры, без времени. */
+function spectral(src: HTMLCanvasElement): HTMLCanvasElement {
+  const hit = ECHO_TINT.get(src);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  if (!g || !src.width || !src.height) return src;
+  g.drawImage(src, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height);
+  const W = c.width;
+  for (let i = 0; i < d.data.length; i += 4) {
+    if (!d.data[i + 3]) continue;
+    const l = (d.data[i] * 0.3 + d.data[i + 1] * 0.55 + d.data[i + 2] * 0.15) / 255;
+    const px = (i >> 2) % W;
+    const py = Math.floor((i >> 2) / W);
+    const star = l > 0.35 && hash(px, py, 1511) > 0.975;
+    const col = star ? STAR_C : ramp(SPECTRAL, Math.min(1, l * 1.25 + 0.08));
+    d.data[i] = col[0];
+    d.data[i + 1] = col[1];
+    d.data[i + 2] = col[2];
+    d.data[i + 3] = Math.round(d.data[i + 3] * 0.88);
+  }
+  g.putImageData(d, 0, 0);
+  ECHO_TINT.set(src, c);
+  return c;
+}
+
+/** Своё эхо на случай, если чужого рисовальщика нет: облачко-силуэт. */
+function echoFallback(f: number, motif: number): Pic {
+  const p = new Px(28, 30);
+  const cx = 14;
+  glow(p, cx, 16, 11, hx('#9ae8ff'), 0.35);
+  shadeEll(p, cx, 16, 7, 8, tn('#1a1048', '#3a3aa0', '#6a8ae0', '#c8f4ff'), 0.1);
+  for (let i = 0; i < 4; i++) p.set(cx - 5 + i * 3, 24 + ((f + i) % 2), alpha(hx('#9ae8ff'), 0.7));
+  motifGlyph(p, cx, 15, motif, WHITE);
+  return { p, lit: litOf(p), ax: cx, ay: 26, eye: null };
+}
+
+/** Друза памяти на рождении: `k` 0 — целая, 1 — осколки разошлись и легли. */
+function bornShell(k: number): Pic {
+  const r = new Rig();
+  const m: Mat = { T: CRYST, spec: true, glow: 0.35 + (1 - k) * 0.4 };
+  const open = easeOut(sstep(0.25, 0.8, k));
+  const drop = easeIn(sstep(0.45, 1, k));
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * TAU + 0.3;
+    const out = 1.5 + open * 9;
+    const b: V3 = [Math.cos(a) * out, Math.sin(a) * out, 0];
+    const lean = 0.25 + open * 1.1;
+    const dir: V3 = [Math.cos(a) * lean, Math.sin(a) * lean, 1 - drop * 0.8];
+    const L = (9 + (i % 3) * 3) * (1 - drop * 0.55);
+    r.spike(b, dir, L, 2.2, m, 4, i);
+  }
+  if (k < 0.3) r.ball([0, 0, 6], 3 * (1 - k / 0.3), { T: CRYST, glow: 1, soft: true, bias: 0.6 });
+  const o = renderRig(r, 48, 48, 24, 36);
+  return { p: o.p, lit: o.lit, ax: 24, ay: 36, eye: null };
+}
+const BORN = new Map<number, Pic>();
+const bornAt = (f: number) => {
+  let b = BORN.get(f);
+  if (!b) BORN.set(f, (b = bornShell(f / 16)));
+  return b;
+};
+
+/** Наложить друзу на кадр фигуры (по точке ног), с кешем на пару. */
+const ECHO_BORN = new WeakMap<HTMLCanvasElement, Map<number, MobFrame>>();
+function withShell(fr: MobFrame, f: number): MobFrame {
+  let mp = ECHO_BORN.get(fr.img);
+  if (!mp) ECHO_BORN.set(fr.img, (mp = new Map()));
+  const hit = mp.get(f);
+  if (hit) return hit;
+  const sh = bornAt(f);
+  const ax = Math.max(fr.ax, sh.ax);
+  const ay = Math.max(fr.ay, sh.ay);
+  const w = ax + Math.max(fr.img.width - fr.ax, sh.p.w - sh.ax);
+  const h = ay + Math.max(fr.img.height - fr.ay, sh.p.h - sh.ay);
+  const mk = () => {
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(w);
+    c.height = Math.ceil(h);
+    return c;
+  };
+  const img = mk();
+  const lit = mk();
+  const g = img.getContext('2d');
+  const gl = lit.getContext('2d');
+  if (!g || !gl) return fr;
+  // Фигура поднимается из друзы: растёт от ног и наливается.
+  const rise = sstep(0.35, 1, f / 16);
+  const sy = 0.3 + rise * 0.7;
+  g.globalAlpha = 0.4 + rise * 0.5;
+  g.drawImage(
+    fr.img,
+    Math.round(ax - fr.ax),
+    Math.round(ay - fr.ay * sy),
+    fr.img.width,
+    Math.max(1, Math.round(fr.img.height * sy)),
+  );
+  g.globalAlpha = 1;
+  g.drawImage(sh.p.canvas(), Math.round(ax - sh.ax), Math.round(ay - sh.ay));
+  if (sh.lit) gl.drawImage(sh.lit.canvas(), Math.round(ax - sh.ax), Math.round(ay - sh.ay));
+  const out: MobFrame = { ...fr, img, lit, ax, ay, eye: null, sy: 1, alpha: 1, ghost: null };
+  mp.set(f, out);
+  return out;
+}
+
+const ECHO_MODE: Record<string, string> = {
+  f15_lunge_aim: 'windup',
+  f15_spore: 'windup',
+  f15_gust: 'windup',
+  f15_tick: 'windup',
+  f15_lunge: 'chase',
+  f15_blink: 'chase',
+  f15_born: 'idle',
+};
+
+registerMobPainter('f15_echo', (m: Mob, pose: MobPose) => {
+  const motif = (((m.data.motif ?? 0) % 6) + 6) % 6;
+  const src = MOB_PAINTERS.get(ECHO_SRC[motif]);
+  const bornF = pose.mode === 'f15_born' ? Math.min(16, Math.floor((pose.t / ECHO.born) * 16)) : 16;
+  const rise = sstep(0.35, 1, bornF / 16);
+  const blink = pose.mode === 'f15_blink' && (m.data.ghost ?? 0) > 0;
+  const extra: Partial<MobFrame> = {
+    alpha: blink ? 0.25 : 0.4 + rise * 0.5,
+    ghost: { every: 0.08, life: 0.3, tint: '140,200,255', alpha: 0.3 },
+    lit: null,
+    linger: undefined,
+  };
+  let fr: MobFrame | null = null;
+  if (src) {
+    try {
+      const mode = ECHO_MODE[pose.mode] ?? pose.mode;
+      const anim = mode === 'windup' ? 'wind' : pose.anim;
+      const s = src(m, { ...pose, mode, anim, look: pose.look === 'elite' ? 'elite' : 'normal' });
+      if (s && s.img)
+        fr = {
+          ...s,
+          img: spectral(s.img),
+          eye: s.eye ?? null,
+          ...extra,
+          sy: (s.sy ?? 1) * (0.3 + rise * 0.7),
+          lit: null,
+          ghost: extra.ghost,
+          linger: undefined,
+        };
+    } catch {
+      // Чужой рисовальщик упал на нашем мобе — рисуем своё.
+    }
+  }
+  if (!fr) {
+    const f = Math.floor(pose.now * 6) % 4;
+    fr = mobFrame('echo', pose, 'fly', motif * 8 + f, 0, () => echoFallback(f, motif), {
+      ...extra,
+      sy: 0.3 + rise * 0.7,
+    });
+  }
+  return bornF < 16 ? withShell(fr, bornF) : fr;
+});
 
 // ---------------------------------------------------------------------------
 // Метки и картинки механик. Рисуются контекстом в игровых пикселях; (px, py) —
