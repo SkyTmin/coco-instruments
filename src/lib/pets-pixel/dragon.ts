@@ -101,7 +101,17 @@ const MOUTH = ramp('#16040a', '#380a10', '#621218', '#8e2424', '#bc4440', '#e07a
 const PAL_V: RGBA[][][] = [
   [
     // Уголь: почти чёрный с лиловым отливом, блик — тёплый серый.
-    ramp('#09080b', '#111014', '#19171c', '#221f26', '#2d2931', '#3a353e', '#4c4550', '#675e68', '#8a7f86'),
+    ramp(
+      '#09080b',
+      '#111014',
+      '#19171c',
+      '#221f26',
+      '#2d2931',
+      '#3a353e',
+      '#4c4550',
+      '#675e68',
+      '#8a7f86',
+    ),
     // Брюхо: бледная охра.
     ramp('#3a2414', '#5c3c1e', '#83602c', '#a98440', '#cba65c', '#e4c584', '#f5e1b0'),
     // Перепонки: тёмный багрянец, к свету — жар.
@@ -117,21 +127,22 @@ const PAL_V: RGBA[][][] = [
   ],
   [
     // Золотой: бронза → золото.
-    ramp('#140a02', '#2a1606', '#44260a', '#62380e', '#844e14', '#a8681c', '#c88a2c', '#e2b04c', '#f8d87c'),
+    ramp(
+      '#140a02',
+      '#2a1606',
+      '#44260a',
+      '#62380e',
+      '#844e14',
+      '#a8681c',
+      '#c88a2c',
+      '#e2b04c',
+      '#f8d87c',
+    ),
     ramp('#5a3a10', '#86601c', '#b08c34', '#d2b052', '#ecd078', '#f8e8a8', '#fffbe0'),
     ramp('#3a1604', '#5e2808', '#8a420e', '#b46216', '#d88624', '#f0aa3c', '#fcd060'),
     ramp('#4a3a20', '#74603a', '#a08a5c', '#c8b484', '#e6d6ac', '#f8f0d4', '#fffef4'),
     ramp('#5a1a08', '#8e2a0c', '#c44a14', '#ec7424', '#ffa040', '#ffcc70', '#fff0c0'),
-    ramp(
-      '#4a2204',
-      '#8a4a08',
-      '#c8800e',
-      '#f0b020',
-      '#ffd648',
-      '#ffec88',
-      '#fff8c8',
-      '#ffffff',
-    ),
+    ramp('#4a2204', '#8a4a08', '#c8800e', '#f0b020', '#ffd648', '#ffec88', '#fff8c8', '#ffffff'),
     ramp('#2a1604', '#40220a', '#5a320e', '#764416', '#94581e'),
     STONE,
     MOUTH,
@@ -204,6 +215,7 @@ export interface Pose {
   lean: number;
   bow: number;
   hx: number;
+  hy: number;
   hz: number;
   turn: number;
   nod: number;
@@ -250,6 +262,8 @@ export interface Pose {
   shine: number;
   /** Сон: свернулся. */
   curl: number;
+  /** Крылья сложены: запястье у плеча, пальцы висят вдоль тела (0…1). */
+  fold: number;
   scale: number;
 }
 
@@ -260,6 +274,7 @@ const REST: Pose = {
   lean: 0,
   bow: 0,
   hx: 0,
+  hy: 0,
   hz: 0,
   turn: 0,
   nod: 0,
@@ -294,6 +309,7 @@ const REST: Pose = {
   nugK: 1,
   shine: 0,
   curl: 0,
+  fold: 0,
   scale: 1,
 };
 
@@ -778,12 +794,21 @@ function attackPose(t: number): Pose {
     [0.55, 1.15],
     [0.84, 1],
   ]);
+  // Голова: замах назад-вверх, в ударе — вперёд к зрителю, мордой прямо (пасть видна).
   o.nod = kf(t, [
     [0, 0],
     [0.3, -0.3, 'o'],
-    [0.38, 0.3, 'i'],
-    [0.5, 0.26],
-    [0.6, 0.14],
+    [0.38, -0.16, 'i'],
+    [0.5, -0.12],
+    [0.66, 0.04],
+    [0.84, 0],
+  ]);
+  o.hy = kf(t, [
+    [0, 0],
+    [0.3, -1.4, 'o'],
+    [0.38, 3.0, 'i'],
+    [0.5, 2.6],
+    [0.7, 0.6],
     [0.84, 0],
   ]);
   o.tilt = kf(t, [
@@ -879,22 +904,25 @@ function sleepPose(t: number): Pose {
     [2.95, 0],
     [T, 0],
   ]);
+  // Осел «буханкой», голова свесилась на грудь набок, лапы вместе, хвост кольцом спереди.
   o.curl = 1;
   o.chest = 0.3 * br;
-  o.sq = 0.16 - 0.025 * br;
-  o.z = -0.6 + 0.2 * br;
-  o.hz = -7.2 + 0.3 * br;
-  o.nod = 0.45 - 0.03 * br;
-  o.tilt = 0.16;
+  o.sq = 0.13 - 0.025 * br;
+  o.z = -0.5 + 0.18 * br;
+  o.bow = 0.06;
+  o.hy = 1.6;
+  o.hz = -5.6 + 0.3 * br;
+  o.nod = 0.34 - 0.03 * br;
+  o.tilt = 0.24;
   o.turn = -0.12;
-  o.hx = -1.0;
-  // Крылья сложены плащом вдоль тела.
-  o.thL = o.thR = 2.45 - 0.03 * br;
-  o.fanL = o.fanR = 0.42;
+  o.hx = -1.2;
+  // Крылья сложены: запястье у плеча, пальцы висят вдоль боков.
+  o.fold = 1;
+  o.thL = o.thR = 0.32 - 0.02 * br;
   o.eye = 'sleep';
-  o.glow = 0.34 + 0.12 * br;
+  o.glow = 0.34 + 0.14 * br;
   o.smoke = 1;
-  o.tailSw = 0.1 * Math.sin((t / T) * Math.PI * 2);
+  o.tailSw = 0.12 * Math.sin((t / T) * Math.PI * 2);
   return o;
 }
 
@@ -958,14 +986,14 @@ function skel(o: Pose): Skel {
     0.9 * s + dz + Math.max(0, o.z),
   ];
   const paw = (side: number, dy: number, dz: number): V3 => [
-    side * (4.6 - 1.2 * curl) * s + o.x * 0.25,
+    side * (4.6 - 1.6 * curl) * s + o.x * 0.25,
     (7.4 + 0.8 * curl) * s + dy,
     0.9 * s + dz + Math.max(0, o.z),
   ];
   return {
     up,
     body: up(BODY0),
-    head: up(add(HEAD0, [o.hx, 0, o.hz])),
+    head: up(add(HEAD0, [o.hx, o.hy, o.hz])),
     shoulderL: up([-5.4, 3.0, 17.6]),
     shoulderR: up([5.4, 3.0, 17.6]),
     wingL: up([-4.4, -3.6, 18.8]),
@@ -1213,7 +1241,7 @@ function wing(out: Part[], flats: Flat[], c: Ctx, side: -1 | 1): void {
   };
   const D = down(A);
   const DL = down(AL);
-  const LA = 10.6 * k;
+  const LA = 10.6 * k * (1 - 0.42 * o.fold);
   const elbow = add(add(R, mul(A, LA * 0.48)), mul(D, 1.1 * k));
   const W = add(R, mul(A, LA));
   // Рука: две кости, к запястью тоньше; вдоль — жилка лавы.
@@ -1245,10 +1273,11 @@ function wing(out: Part[], flats: Flat[], c: Ctx, side: -1 | 1): void {
   });
   // Пальцы: веер от запястья, кончики отстают пружиной.
   const PH = [0.5, 1.2, 1.9];
+  const FOLD = [2.62, 2.8, 2.98];
   const LEN = [9.0, 9.4, 7.8];
   const tips: V3[] = [];
   for (let j = 0; j < 3; j++) {
-    const phi = PH[j] * fan;
+    const phi = lerp(PH[j] * fan, FOLD[j], o.fold);
     const dNow = norm(add(mul(A, Math.cos(phi)), mul(D, Math.sin(phi))));
     const dLag = norm(add(mul(AL, Math.cos(phi)), mul(DL, Math.sin(phi))));
     const L = LEN[j] * k;
@@ -1306,11 +1335,29 @@ function tail(out: Part[], flats: Flat[], c: Ctx): void {
       (lerp(5.6, 2.2, cu) + lift * 2.2) * k,
     ],
   ];
+  // В прыжке хвост поднимается с телом, кончик отстаёт.
+  const jz = Math.max(0, o.z);
+  if (jz > 0)
+    for (let i = 1; i < pts.length; i++) {
+      const u = i / (pts.length - 1);
+      const zz = jz * (1 - 0.3 * u) + Math.min(0, lag.tailZ - S.body[2]) * 0.7 * u;
+      pts[i] = [pts[i][0], pts[i][1], Math.max(pts[i][2], pts[i][2] + zz)];
+    }
   const at = (u: number) => catmull(pts, u);
   const W = [3.4, 3.1, 2.7, 2.2, 1.7, 1.25, 0.9].map((w) => w * k);
-  const tid = chain(out, at, W, W.map((w) => w * 0.9), [0, 0, 1], P_COAL, null, 15, {
-    tex: HI ? scales(3, 3, 0.07) : undefined,
-  });
+  const tid = chain(
+    out,
+    at,
+    W,
+    W.map((w) => w * 0.9),
+    [0, 0, 1],
+    P_COAL,
+    null,
+    15,
+    {
+      tex: HI ? scales(3, 3, 0.07) : undefined,
+    },
+  );
   // Шипы по хребту хвоста — костяные.
   const nsp = HI ? 4 : 2;
   for (let j = 0; j < nsp; j++) {
@@ -1427,7 +1474,11 @@ function legs(out: Part[], c: Ctx): void {
     // Передняя лапа: плечо → локоть → кисть на полу.
     const sh = side < 0 ? S.shoulderL : S.shoulderR;
     const paw = side < 0 ? S.pawL : S.pawR;
-    const elbow = lerp3(S.up([side * 6.2, 4.6, 10.4]), add(paw, [side * 1.2 * k, -1.0 * k, 6 * k]), 0.35);
+    const elbow = lerp3(
+      S.up([side * 6.2, 4.6, 10.4]),
+      add(paw, [side * 1.2 * k, -1.0 * k, 6 * k]),
+      0.35,
+    );
     const lid = nid();
     for (const [p, q, rr] of [
       [sh, elbow, 2.3],
@@ -1539,9 +1590,9 @@ function body(out: Part[], c: Ctx): void {
     tex: HI ? scales(4, 4, 0.12) : undefined,
   });
   out.push({
-    c: S.up([0, 4.6, 20.8]),
+    c: S.up([0, 4.4, 20.2]),
     ax,
-    r: [3.1 * k, 1.8 * k, 3.8 * k],
+    r: [2.8 * k, 1.8 * k, 4.8 * k],
     pal: P_BELLY,
     id: nid(),
     tex: plates(HI ? 4 : 2, 0.98, 0.15),
@@ -1573,6 +1624,7 @@ function head(out: Part[], c: Ctx): void {
       r: [6.3 * k, 5.4 * k, 5.0 * k],
       pal: P_COAL,
       id: nid(),
+      bias: 0.05,
       tex: HI ? scales(6, 5, 0.12) : undefined,
     }),
     [
@@ -1633,14 +1685,14 @@ function head(out: Part[], c: Ctx): void {
     r: [4.6 * k, 3.6 * k, 2.6 * k],
     pal: P_COAL,
     id: sid,
-    bias: 0.03,
+    bias: 0.12,
     tex: HI ? (qx, _qy, qz) => (qz > 0.55 && Math.abs(qx) < 0.5 ? 0.06 : 0) : undefined,
   });
   // Нижняя челюсть: поворачивается вниз от шарнира под ушами.
   const jw = o.jaw;
   const piv: V3 = [0, 0.4, -2.4];
-  const jd = (p: V3): V3 => add(piv, pitchX(sub(p, piv), -jw * 0.5));
-  const jax = axes(h.dir(pitchX([1, 0, 0], -jw * 0.5)), h.dir(pitchX([0, 0, 1], -jw * 0.5)));
+  const jd = (p: V3): V3 => add(piv, pitchX(sub(p, piv), jw * 0.62));
+  const jax = axes(h.dir(pitchX([1, 0, 0], jw * 0.62)), h.dir(pitchX([0, 0, 1], jw * 0.62)));
   out.push({
     c: h.at(jd([0, 4.2, -3.9])),
     ax: jax,
@@ -1726,8 +1778,15 @@ function crown(c: Ctx, pts: V3[]): void {
 }
 
 /** Корона рисуется значком поверх: так зубцы и камни читаются и на малой. */
-const CROWN_S: string[] = ['a.a.a', 'bbwbb', 'crbrc'];
-const CROWN_L: string[] = ['.w..w..w.', '.a..a..a.', 'ab.aba.ba', 'bbbbwbbbb', 'crcbrbcrc', 'ddddddddd'];
+const CROWN_S: string[] = ['a.b.c', 'abwbc', 'brbrd'];
+const CROWN_L: string[] = [
+  '.w..w..c.',
+  '.a..b..c.',
+  'aa.abc.cc',
+  'aabbbbccd',
+  'arbbrbcrd',
+  'bbbccccdd',
+];
 
 function crownStamp(p: Px, f: Frame): void {
   if (!CROWN) return;
@@ -1877,45 +1936,62 @@ function stoneParts(out: Part[], c: Ctx): void {
   const { o } = c;
   if (o.stone <= 0) return;
   const m = o.melt;
-  const z0 = o.stoneZ;
   const S = STONE_AT;
-  const nk = o.nugK;
-  const lift = o.nugZ;
-  if (m < 1 || nk > 0) {
-    const sk = m < 1 ? 1 : nk;
-    const zz = z0 + (m >= 1 ? lift : 0);
-    // Основной ком: на плавке оседает и растекается.
+  // Камень (m = 0) → оплывший жидкий ком (m = 0,5) → самородок из трёх комков (m = 1).
+  const sk = m >= 1 ? o.nugK : 1;
+  if (sk <= 0.02) return;
+  const zz = o.stoneZ + (m >= 1 ? o.nugZ : 0);
+  const sag = bump(m, 0, 1);
+  const nug = clamp01((m - 0.5) / 0.5);
+  const lumps: [V3, V3, V3][] = [
+    // центр, радиусы камня, радиусы самородка
+    [
+      [0, 0, 2.5],
+      [3.3, 2.9, 2.6],
+      [2.5, 2.2, 1.8],
+    ],
+    [
+      [-1.5, 0.4, 4.6],
+      [2.0, 1.8, 1.5],
+      [1.6, 1.4, 1.3],
+    ],
+    [
+      [1.6, 0.6, 1.4],
+      [1.5, 1.4, 1.2],
+      [1.3, 1.2, 1.0],
+    ],
+  ];
+  lumps.forEach(([cc, rs, rn], j) => {
+    const r = lerp3(rs, rn, nug);
+    const flat = 1 - 0.45 * sag;
     out.push({
-      c: [S[0], S[1], (2.5 * (1 - 0.5 * m) + zz) * sk],
-      ax: axes([1, 0, 0.15 * (1 - m)], [0, 0, 1]),
-      r: [3.3 * (1 + 0.25 * m) * sk, 2.9 * (1 + 0.1 * m) * sk, 2.6 * (1 - 0.4 * m) * sk],
+      c: [
+        S[0] + cc[0] * (1 + 0.3 * sag) * sk,
+        S[1] + cc[1],
+        (cc[2] * lerp(1, 0.8, nug) * flat + zz) * sk + (m >= 1 ? 0 : 0),
+      ],
+      ax: axes([1, 0, 0.12 * (1 - m) * (j ? -1 : 1)], [0, 0, 1]),
+      r: [r[0] * (1 + 0.3 * sag) * sk, r[1] * (1 + 0.15 * sag) * sk, r[2] * flat * sk],
       pal: P_STONE,
       id: nid(),
+      bias: nug * 0.06,
       tex:
-        m < 0.6
-          ? (qx, qy, qz) => (Math.sin(qx * 4.2 + qz * 2.6 + qy) > 0.72 ? -0.14 : qz > 0.6 ? 0.08 : 0)
-          : (qx, _qy, qz) => (qz > 0.5 && qx < 0 ? 0.14 : 0),
+        m < 0.4
+          ? (qx, qy, qz) =>
+              Math.sin(qx * 4.2 + qz * 2.6 + qy + j) > 0.72 ? -0.14 : qz > 0.6 ? 0.08 : 0
+          : (qx, _qy, qz) => (qz > 0.45 && qx < 0.1 ? 0.16 : qz < -0.4 ? -0.1 : 0),
     });
+  });
+  if (sag > 0.15) {
+    // Лужица расплава под комом.
     out.push({
-      c: [S[0] - 1.5 * sk, S[1] + 0.4, (4.6 * (1 - 0.7 * m) + zz) * sk],
-      ax: axes([1, 0, -0.3], [0, 0, 1]),
-      r: [2.0 * (1 - 0.25 * m) * sk, 1.8 * sk, 1.5 * (1 - 0.35 * m) * sk],
+      c: [S[0], S[1] + 0.6, 0.35],
+      ax: axes([1, 0, 0], [0, 0, 1]),
+      r: [4.6 * sag, 3.4 * sag, 0.45],
       pal: P_STONE,
       id: nid(),
+      bias: 0.1,
     });
-    if (m > 0.05 && m < 1) {
-      // Капли оплывают по бокам.
-      for (const s of [-1, 1]) {
-        out.push({
-          c: [S[0] + s * (3.0 + 0.6 * m), S[1] + 1.2, 1.4 - 0.8 * m],
-          ax: axes([0, 0, 1], [0, 1, 0]),
-          r: [1.4 * m + 0.2, 0.8, 0.8],
-          pal: P_STONE,
-          id: nid(),
-          bias: 0.08,
-        });
-      }
-    }
   }
 }
 
@@ -1924,7 +2000,7 @@ function jetParts(out: Part[], c: Ctx): void {
   const { o, h } = c;
   if (o.jet <= 0.01) return;
   const mouth = h.at([0, 8.4, -3.6]);
-  const target: V3 = [STONE_AT[0] + 1.2, STONE_AT[1], 3.6];
+  const target: V3 = [STONE_AT[0] + 1.6, STONE_AT[1] - 1.5, 5.0];
   const ctrl = add(lerp3(mouth, target, 0.5), [0, 1.5, 2.2]);
   const n = HI ? 16 : 11;
   const len = o.jet;
@@ -1947,11 +2023,11 @@ function jetParts(out: Part[], c: Ctx): void {
   }
   if (len > 0.9) {
     // Пламя облизывает камень.
-    for (let j = 0; j < 4; j++) {
-      const s = j - 1.5;
+    for (let j = 0; j < 3; j++) {
+      const s = j - 1;
       const fl = flick(c.tau * 2, 340 + j);
-      const base: V3 = [STONE_AT[0] + s * 1.9, STONE_AT[1] + 1, 1.5];
-      const top = add(base, [s * 0.8 + fl * 0.9, 0, 6.5 + fl * 1.2 - Math.abs(s) * 1.2]);
+      const base: V3 = [STONE_AT[0] + s * 2.4, STONE_AT[1] - 2.2, 3.0];
+      const top = add(base, [s * 1.2 + fl * 0.9, 0, 4.5 + fl * 1.0 - Math.abs(s) * 1.2]);
       chain(
         out,
         (u) => bezQ(base, add(lerp3(base, top, 0.5), [-fl * 0.6, 0, 0]), top, u),
@@ -1967,47 +2043,33 @@ function jetParts(out: Part[], c: Ctx): void {
   }
 }
 
-/** Вспышка огня в атаке: веер языков из пасти вперёд-вниз, к зрителю. */
+/** Вспышка огня в атаке: веер языков из-под нижней челюсти вниз и в стороны, к зрителю; пасть видна. */
 function burstParts(out: Part[], c: Ctx): void {
   const { o, h } = c;
   if (o.burst <= 0.01) return;
-  const mouth = h.at([0, 8.0, -4.2]);
   const b = o.burst;
-  const dirs: V3[] = [
-    [-0.75, 0.55, -0.4],
-    [-0.35, 0.8, -0.6],
-    [0, 0.85, -0.55],
-    [0.35, 0.8, -0.6],
-    [0.75, 0.55, -0.4],
-  ];
-  dirs.forEach((d0, j) => {
+  const root = h.at([0, 9.6, -6.0]);
+  const n = HI ? 7 : 5;
+  for (let j = 0; j < n; j++) {
+    const q = j / (n - 1) - 0.5;
     const fl = flick(c.tau * 3, 400 + j);
-    const d = norm(d0);
-    const L = (j === 2 ? 11 : 9) * b * (1 + 0.12 * fl);
-    const tip = add(mouth, mul(d, L));
-    const mid = add(add(mouth, mul(d, L * 0.5)), [fl * 0.8, 0, 0.6]);
+    const ang = q * 2.4;
+    const d = norm([Math.sin(ang) * 1.1, 0.75, -Math.cos(ang) * 0.9]);
+    const L = (11 - Math.abs(q) * 5) * b * (1 + 0.12 * fl);
+    const tip = add(root, mul(d, L));
+    const mid = add(add(root, mul(d, L * 0.5)), [fl * 0.8, 0, 0.4]);
     chain(
       out,
-      (u) => bezQ(mouth, mid, tip, u),
-      [1.2, 2.6, 2.8, 2.0, 0.8],
-      2.0,
-      [0, 0, 1],
+      (u) => bezQ(root, mid, tip, u),
+      [1.0, 2.2, 2.4, 1.6, 0.5].map((w) => w * (1 - Math.abs(q) * 0.4)),
+      1.6,
+      [0, 1, 0],
       P_LAVA,
-      [0.98, 0.5],
+      [0.97, 0.45],
       6,
       { id: 902, lit: 0.15, noSeam: true },
     );
-  });
-  out.push({
-    c: mouth,
-    ax: axes([1, 0, 0], [0, 0, 1]),
-    r: [3.0 * b, 2.0 * b, 2.4 * b],
-    pal: P_LAVA,
-    id: 902,
-    bias: 0.4,
-    lit: 0.1,
-    noSeam: true,
-  });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2062,7 +2124,8 @@ function drawFlats(f: Frame, flats: Flat[]): void {
         for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
           const [xi, yi] = P[i];
           const [xj, yj] = P[j];
-          if (yi > sy !== yj > sy && sx < ((xj - xi) * (sy - yi)) / (yj - yi) + xi) inside = !inside;
+          if (yi > sy !== yj > sy && sx < ((xj - xi) * (sy - yi)) / (yj - yi) + xi)
+            inside = !inside;
         }
         if (!inside) continue;
         const d = ad + dA * (sx - ax) + dB * (sy - ay);
@@ -2154,7 +2217,10 @@ function lavaCracks(f: Frame, c: Ctx): void {
       } else if (best < halo) {
         pal[i] = P_WARM;
         const wn = PAL[P_WARM].length - 1;
-        tone[i] = Math.max(0, Math.min(wn, Math.round(tone[i] * 0.35 + gl * 1.6 - (best - core) * 0.6)));
+        tone[i] = Math.max(
+          0,
+          Math.min(wn, Math.round(tone[i] * 0.35 + gl * 1.6 - (best - core) * 0.6)),
+        );
       }
     }
 }
@@ -2193,12 +2259,7 @@ function hsl(hh: number, s: number, l: number): RGBA {
             : h6 < 5
               ? [xx, 0, cch]
               : [cch, 0, xx];
-  return [
-    Math.round((r + m) * 255),
-    Math.round((g + m) * 255),
-    Math.round((b + m) * 255),
-    255,
-  ];
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255), 255];
 }
 
 /** Радужный: оттенок от точки модели (голова алая → грудь золотая и зелёная → лапы синие и лиловые). */
@@ -2240,16 +2301,17 @@ function eyePal(): Record<string, RGBA> {
     b: iris ? iris[3] : g[4],
     c: iris ? iris[2] : g[3],
     d: iris ? iris[1] : g[2],
+    l: PAL[P_HORN][4],
   };
 }
 // Малая: глаз 3×3 — золото, вертикальный зрачок, блик (голова ~14 пикселей).
 const EYES_S: Record<string, string[]> = {
   open: ['aKW', 'bKb', 'cKc'],
   half: ['ooo', 'bKb', 'cKc'],
-  shut: ['...', 'ooo', '...'],
+  shut: ['...', 'lll', '...'],
   wide: ['aKW', 'bKb', 'cKc'],
-  happy: ['.o.', 'o.o', '...'],
-  sleep: ['...', 'o.o', '.o.'],
+  happy: ['.l.', 'l.l', '...'],
+  sleep: ['...', 'l.l', '.l.'],
   angry: ['oo.', 'bKW', 'cKc'],
 };
 // Крупная: глаз 6×5 — тёмный ободок, радужка светлее книзу, щель зрачка, блик.
@@ -2257,9 +2319,9 @@ const EYES_L: Record<string, string[]> = {
   open: ['.oooo.', 'obbKWo', 'oaaKao', 'occKco', '.oddo.'],
   wide: ['.oooo.', 'oabKWo', 'oaaKao', 'oaaKao', '.occo.'],
   half: ['......', 'oooooo', 'oaaKao', 'occKco', '.oddo.'],
-  shut: ['......', '......', 'oooooo', '......', '......'],
-  happy: ['......', '.oooo.', 'o....o', '......', '......'],
-  sleep: ['......', '......', 'o....o', '.oooo.', '......'],
+  shut: ['......', '......', 'olllll', '.oooo.', '......'],
+  happy: ['......', '.llll.', 'lo..ol', 'o....o', '......'],
+  sleep: ['......', 'o....o', 'lo..ol', '.llll.', '.oooo.'],
   angry: ['oo....', 'oooooo', 'obbKWo', 'oaaKao', '.occo.'],
 };
 
@@ -2330,7 +2392,14 @@ function smoke(p: Px, c: Ctx, amt: number): void {
 }
 
 /** Угольки: рождаются по расписанию петли, летят вверх, гаснут ступенями лавы. */
-function embers(p: Px, c: Ctx, n: number, life: number, origin: (j: number) => V3, rise = 10): void {
+function embers(
+  p: Px,
+  c: Ctx,
+  n: number,
+  life: number,
+  origin: (j: number) => V3,
+  rise = 10,
+): void {
   const lava = PAL[P_LAVA];
   for (let j = 0; j < n; j++) {
     const born = ((j / n) * FLICK_T + hash(j, 3, 9) * 0.3) * (PER / FLICK_T);
@@ -2441,6 +2510,8 @@ export function dragonFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   lavaCracks(f, c);
   seams(f, 1.4 * RR, 1);
   rimLight(f, PAL, (pl) => pl !== P_LAVA && pl !== P_WARM && pl !== P_MOUTH);
+  // Отсвет снизу-справа по углю: тёмный силуэт не тонет в тёмном фоне.
+  rimLight(f, PAL, (pl) => pl === P_COAL, 'br');
   if (HI) softBands(f);
   const p = toPx(f, PAL);
   if (v === 2) rainbow(p, f, o);
@@ -2470,7 +2541,14 @@ export function dragonFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
     const tw = Math.max(bump(t, 1.44, 1.62), bump(t, 1.64, 1.8), bump(t, 1.82, 1.96));
     if (tw > 0.2) {
       const [sx, sy] = project(mul([STONE_AT[0] - 1.2, STONE_AT[1], 4.4 + o.nugZ], RR));
-      star(p, Math.floor(OX + sx), Math.floor(OY + sy), Math.round(tw * (HI ? 3 : 2)), gold[6], gold[4]);
+      star(
+        p,
+        Math.floor(OX + sx),
+        Math.floor(OY + sy),
+        Math.round(tw * (HI ? 3 : 2)),
+        gold[6],
+        gold[4],
+      );
     }
   }
   if (o.shine > 0.05) {

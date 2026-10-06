@@ -42,21 +42,27 @@ for (const id of ids) {
     if (resOnly && res !== resOnly) continue;
     const dir = path.join(TMP, id, res);
     fs.mkdirSync(dir, { recursive: true });
-    const meta = { ...cv, anims: {} as Record<string, unknown> };
+    // Золотой и радужный, которые рисовальщик рисует сам (`variants`), пишутся
+    // рядом (`<anim>-v1.rgba`); у остальных их сделает post.py матрицами фильтров.
+    const vs = [0, ...(pet.variants ?? [])];
+    const meta = { ...cv, anims: {} as Record<string, unknown>, variants: pet.variants ?? [] };
     for (const a of Object.keys(pet.anims) as Anim[]) {
       if (anims && !anims.includes(a)) continue;
       const { n, fps } = pet.anims[a];
-      const buf = Buffer.alloc(n * cv.cw * cv.ch * 4);
+      const bufs = vs.map(() => Buffer.alloc(n * cv.cw * cv.ch * 4));
       const t0 = Date.now();
-      for (let i = 0; i < n; i++) {
-        const p = pet.frame(a, i, res);
-        if (p.w !== cv.cw || p.h !== cv.ch)
-          throw new Error(`${id}/${res}/${a}: кадр ${p.w}×${p.h}`);
-        buf.set(p.data, i * cv.cw * cv.ch * 4);
-      }
-      fs.writeFileSync(path.join(dir, `${a}.rgba`), buf);
+      for (let i = 0; i < n; i++)
+        vs.forEach((v, k) => {
+          const p = pet.frame(a, i, res, v);
+          if (p.w !== cv.cw || p.h !== cv.ch)
+            throw new Error(`${id}/${res}/${a}: кадр ${p.w}×${p.h}`);
+          bufs[k].set(p.data, i * cv.cw * cv.ch * 4);
+        });
+      vs.forEach((v, k) =>
+        fs.writeFileSync(path.join(dir, `${a}${v ? `-v${v}` : ''}.rgba`), bufs[k]),
+      );
       meta.anims[a] = { n, fps };
-      console.log(`${id}/${res}/${a}: ${n} кадров за ${Date.now() - t0} мс`);
+      console.log(`${id}/${res}/${a}: ${n} кадров × ${vs.length} за ${Date.now() - t0} мс`);
     }
     fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta));
   }
