@@ -45,7 +45,20 @@ import {
   NOVA,
 } from './f15-brains';
 import type { Arc, Chart, FShot, Ring, Well } from './f15-brains';
-import { F3, proj, renderRig, Rig, SE, vadd, vdot, vlen, vlerp, vmul, vnorm, vsub } from './f15-rig';
+import {
+  F3,
+  proj,
+  renderRig,
+  Rig,
+  SE,
+  vadd,
+  vdot,
+  vlen,
+  vlerp,
+  vmul,
+  vnorm,
+  vsub,
+} from './f15-rig';
 import type { Mat, RigOpt, RigOut, V3 } from './f15-rig';
 
 type RGBA = [number, number, number, number];
@@ -1374,7 +1387,8 @@ function cachedCell(area: string, f: (c: CellCtx) => Px | null) {
     const live = (F15_FX.sim ? 1 : 0) + (stNow() ? 2 : 0);
     // Метки — 5×5 (гравий), проходимость — 3×3 (стены, уступы, края).
     let ob = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) ob = (ob << 1) | (c.open(dx, dy) ? 1 : 0);
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) ob = (ob << 1) | (c.open(dx, dy) ? 1 : 0);
     let k = `${area}|${live}|${c.wx},${c.wy}|${c.tile}|${ob}|`;
     for (let dy = -2; dy <= 2; dy++)
       for (let dx = -2; dx <= 2; dx++) k += String.fromCharCode(48 + c.markAt(dx, dy));
@@ -2577,7 +2591,6 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-
 // ---------------------------------------------------------------------------
 // Монстры в объёме (анимации 15). Каждый собран из примитивов мини-3D
 // (`f15-rig.ts`) и смотрит в одну из 16 сторон — туда, куда идёт: боком не
@@ -2696,7 +2709,16 @@ const scrAng = (yaw: number) => Math.atan2(SE * Math.sin(yaw), Math.cos(yaw));
  * против 5,5 у прежних спрайтов). Курс снимается с той же стороны, что и
  * ключ кадра, — кадр из кеша всегда совпадает со своей стороной.
  */
-const LOCO_MODES = new Set(['chase', 'idle', 'wander', 'flee', 'return', 'sleep', 'patrol', 'roam']);
+const LOCO_MODES = new Set([
+  'chase',
+  'idle',
+  'wander',
+  'flee',
+  'return',
+  'sleep',
+  'patrol',
+  'roam',
+]);
 function side16(gameA: number, pose?: MobPose): { d: number; yaw: number } {
   const coarse = !!pose && !LOCO_MODES.has(pose.mode);
   const d = coarse ? (dirBucket(rigYaw(gameA), 8) * 2) % NDIR : dirBucket(rigYaw(gameA), NDIR);
@@ -2859,7 +2881,6 @@ function burstPx(p: Px, x: number, y: number, k: number, n: number, R: number, c
   }
 }
 
-
 // --- Кристальный ёж -----------------------------------------------------------
 //
 // Тельце в бурой шёрстке, мордочка, четыре лапки и иглы-кристаллы кольцами
@@ -2962,7 +2983,9 @@ function urchinRig(o: UPose, yaw: number): Rig {
       r.dot(hd.p(1.2, s * 1.55, 1.0), o.dk > 0 ? INK : U_EYE, o.dk > 0 ? 0 : 1, 1, 0.5);
     }
     if (o.jaw > 0.05) {
-      r.ell(hd, [1.6, 0, -1.3], [1.7, 1.25, 0.45 + o.jaw * 0.8], { T: tn('#1a0614', '#2a0c1e', '#4a1830', '#6a2440') });
+      r.ell(hd, [1.6, 0, -1.3], [1.7, 1.25, 0.45 + o.jaw * 0.8], {
+        T: tn('#1a0614', '#2a0c1e', '#4a1830', '#6a2440'),
+      });
       r.dot(hd.p(2.6, -0.6, -0.9), WHITE, 0, 1, 0.9);
       r.dot(hd.p(2.6, 0.6, -0.9), WHITE, 0, 1, 0.9);
     }
@@ -3028,7 +3051,12 @@ registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const roll = md === 'f15_roll';
   const tech = md !== 'chase' && md !== 'idle' && md !== 'wander' && md !== 'flee';
-  const v = visOf(m, pose, roll ? Math.atan2(m.vy, m.vx) : tech ? m.face : headOf(m), roll ? 40 : 11);
+  const v = visOf(
+    m,
+    pose,
+    roll ? Math.atan2(m.vy, m.vx) : tech ? m.face : headOf(m),
+    roll ? 40 : 11,
+  );
   const { d, yaw } = side16(v.yaw, pose);
   const sa = scrAng(yaw);
   const o: UPose = { ...U0 };
@@ -3100,11 +3128,19 @@ registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
     extra.still = true;
     const sf = f % 8;
     const base = urchinRig;
-    return mobFrame('urchin', pose, anim, f, d, () => {
-      const r = base(o, yaw);
-      dizzyStars(r, [0, 0, 13], sf, 4.2);
-      return draw(r, 44, 44, 22, 30);
-    }, extra);
+    return mobFrame(
+      'urchin',
+      pose,
+      anim,
+      f,
+      d,
+      () => {
+        const r = base(o, yaw);
+        dizzyStars(r, [0, 0, 13], sf, 4.2);
+        return draw(r, 44, 44, 22, 30);
+      },
+      extra,
+    );
   } else if (md === 'f15_open') {
     // Раскрытие: разворачивается, горбит спину к цели, иглы смотрят вперёд и
     // наливаются светом; выстрел — в конце режима.
@@ -3144,7 +3180,14 @@ registerMobPainter('f15_urchin', (m: Mob, pose: MobPose) => {
             const r0 = 6 + fk * 10;
             const x = x0 + Math.cos(a) * r0;
             const y = y0 + Math.sin(a) * r0 * 0.9;
-            stroke(lit, x, y, x - Math.cos(a) * 4, y - Math.sin(a) * 4, alpha(TEAL_GLOW, 0.8 - fk * 0.6));
+            stroke(
+              lit,
+              x,
+              y,
+              x - Math.cos(a) * 4,
+              y - Math.sin(a) * 4,
+              alpha(TEAL_GLOW, 0.8 - fk * 0.6),
+            );
             lit.set(Math.round(x), Math.round(y), alpha(WHITE, 1 - fk));
           }
         };
@@ -3202,7 +3245,10 @@ registerMobWarm('f15_urchin', function* () {
     const yaw = (d / NDIR) * TAU;
     for (let f = 0; f < 8; f++) {
       mobFrame('urchin', pose('run', 'chase'), 'run', f, d, () =>
-        urchinPic({ ...U0, ph: f / 8, lift: Math.abs(Math.sin((f / 8) * TAU)) * 0.6, pitch: 0.05 }, yaw),
+        urchinPic(
+          { ...U0, ph: f / 8, lift: Math.abs(Math.sin((f / 8) * TAU)) * 0.6, pitch: 0.05 },
+          yaw,
+        ),
       );
       yield 0;
     }
@@ -3214,7 +3260,6 @@ registerMobWarm('f15_urchin', function* () {
     }
   }
 });
-
 
 // --- Метеор-жук ---------------------------------------------------------------
 //
@@ -3288,7 +3333,9 @@ const M0: MPose = {
 function meteorRig(o: MPose, yaw: number): Rig {
   const r = new Rig();
   const B = F3.yaw(yaw);
-  const body = B.at(o.fwd, 0, 5.4 + o.lift).pitch(o.pitch).roll(o.side);
+  const body = B.at(o.fwd, 0, 5.4 + o.lift)
+    .pitch(o.pitch)
+    .roll(o.side);
   const shell = magmaMat(MET_ROCK, o.heat);
   const plate = magmaMat(MET_DARK, o.heat, 0.12);
   const legM: Mat = { T: MET_DARK, bias: -0.1 };
@@ -3312,7 +3359,11 @@ function meteorRig(o: MPose, yaw: number): Rig {
     }
     const spread = o.legs === 1 ? 9.5 : 7.4;
     const hip = body.p(hf, s * 3.4, -2.6);
-    const foot = B.p(o.fwd + hf * 1.15 + sw + (o.legs === 1 ? hf * 0.3 : 0), s * spread, up + (o.legs === 1 ? 1.5 : 0));
+    const foot = B.p(
+      o.fwd + hf * 1.15 + sw + (o.legs === 1 ? hf * 0.3 : 0),
+      s * spread,
+      up + (o.legs === 1 ? 1.5 : 0),
+    );
     bugLeg(r, hip, foot, B.v(0, s, 0), legM, o.dk > 0 ? 1 - o.dk * 0.5 : 1);
   }
   // Панцирь, переднеспинка, голова с рогом.
@@ -3564,7 +3615,6 @@ registerMobWarm('f15_meteor', function* () {
   }
 });
 
-
 // --- Комета-гончая --------------------------------------------------------------
 //
 // Поджарая гончая из звёздного льда: голова-ядро кометы, грива и хвост —
@@ -3627,9 +3677,17 @@ function cometRig(o: CPose, yaw: number): Rig {
   r.ell(hd, [0.3, 0, 0.2], [2.6, 2.3, 2.1], { T: HOUND, bias: 0.1 });
   r.cap(hd.p(1.6, 0, -0.2), hd.p(4.0, 0, -0.6 - o.jaw * 0.3), 1.4, 0.9, { T: HOUND });
   r.dot(hd.p(4.4, 0, -0.5), INK, 0, 1, 0.6);
-  if (o.jaw > 0.1) r.cap(hd.p(1.4, 0, -0.9), hd.p(3.0, 0, -1.2 - o.jaw * 1.3), 0.7, 0.45, { T: HOUND_D });
+  if (o.jaw > 0.1)
+    r.cap(hd.p(1.4, 0, -0.9), hd.p(3.0, 0, -1.2 - o.jaw * 1.3), 0.7, 0.45, { T: HOUND_D });
   for (const s of [-1, 1]) {
-    r.spike(hd.p(-0.6, s * 1.2, 1.5), hd.v(-0.8, s * 0.45, 1), 3.4, 1.1, { T: HOUND, bias: 0.1 }, 3);
+    r.spike(
+      hd.p(-0.6, s * 1.2, 1.5),
+      hd.v(-0.8, s * 0.45, 1),
+      3.4,
+      1.1,
+      { T: HOUND, bias: 0.1 },
+      3,
+    );
     r.dot(hd.p(1.6, s * 1.4, 0.7), o.dk > 0 ? INK : WHITE, o.dk > 0 ? 0 : 1, 1, 0.5);
   }
   if (o.dk <= 0) r.eye = hd.p(1.6, -1.4, 0.7);
@@ -3666,7 +3724,10 @@ function cometRig(o: CPose, yaw: number): Rig {
   for (let i = 1; i <= n; i++) {
     const k = i / n;
     const wob = (hash(i, o.fl, 41) - 0.5) * 1.6 * k;
-    const P = vadd(body.p(-4.6 * L - k * (4 + 12 * o.tail), wob, 0.8 + k * (2.4 - o.stretch * 1.4)), [0, 0, 0]);
+    const P = vadd(
+      body.p(-4.6 * L - k * (4 + 12 * o.tail), wob, 0.8 + k * (2.4 - o.stretch * 1.4)),
+      [0, 0, 0],
+    );
     const rr = (1.7 - k * 1.2) * (0.7 + o.tail * 0.5);
     r.cap(prev, P, rr + 0.2, rr, {
       T: COMA,
@@ -3766,7 +3827,11 @@ registerMobPainter('f15_comet', (m: Mob, pose: MobPose) => {
         for (let i = 0; i < 4; i++) {
           const a = sa + PI + (hash(i, 7, 3) - 0.5) * 1.4;
           const rr = 4 + k * 14 * (0.6 + hash(i, 8, 3));
-          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.6 - k * 4), alpha(COMA[2], 1 - k * 2));
+          lit.set(
+            Math.round(x + Math.cos(a) * rr),
+            Math.round(y + Math.sin(a) * rr * 0.6 - k * 4),
+            alpha(COMA[2], 1 - k * 2),
+          );
         }
       }
     };
@@ -3817,7 +3882,14 @@ registerMobWarm('f15_comet', function* () {
     for (let f = 0; f < 8; f++) {
       mobFrame('comet', pose, 'run', f, d, () =>
         cometPic(
-          { ...C0, ph: f / 8, pitch: Math.sin((f / 8) * TAU) * 0.07, tail: 0.55, glow: 0.45, fl: f % 4 },
+          {
+            ...C0,
+            ph: f / 8,
+            pitch: Math.sin((f / 8) * TAU) * 0.07,
+            tail: 0.55,
+            glow: 0.45,
+            fl: f % 4,
+          },
           yaw,
         ),
       );
@@ -3826,7 +3898,17 @@ registerMobWarm('f15_comet', function* () {
     for (let f = 0; f < 4; f++) {
       mobFrame('comet', pose, 'dash0', f, d, () =>
         cometPic(
-          { ...C0, legs: 1, stretch: 1, pitch: 0.05, head: 0.15, tail: 1, glow: 1, jaw: 0.6, fl: f },
+          {
+            ...C0,
+            legs: 1,
+            stretch: 1,
+            pitch: 0.05,
+            head: 0.15,
+            tail: 1,
+            glow: 1,
+            jaw: 0.6,
+            fl: f,
+          },
           yaw,
         ),
       );
@@ -3834,7 +3916,6 @@ registerMobWarm('f15_comet', function* () {
     }
   }
 });
-
 
 // --- Гравитонный страж ------------------------------------------------------------
 //
@@ -3972,7 +4053,13 @@ function gravRig(o: GPose, yaw: number): Rig {
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * TAU + o.charge * 5;
       const rr = 4.5 * (1.4 - o.charge);
-      r.dot(vadd(fist, [Math.cos(a) * rr, Math.sin(a) * rr, Math.sin(a * 2) * 2]), VIOLET_GLOW, 1, 1, 0.6);
+      r.dot(
+        vadd(fist, [Math.cos(a) * rr, Math.sin(a) * rr, Math.sin(a * 2) * 2]),
+        VIOLET_GLOW,
+        1,
+        1,
+        0.6,
+      );
     }
   if (o.dk > 0) {
     r.explode(sstep(0.35, 1, o.dk), core, 41, 6, 34, bodyFrom, 0.15);
@@ -4015,7 +4102,11 @@ registerMobPainter('f15_graviton', (m: Mob, pose: MobPose) => {
         const rr = 10 * (1 - k / 0.5);
         for (let i = 0; i < 10; i++) {
           const a = (i / 10) * TAU + k * 4;
-          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(VIOLET_GLOW, 0.9));
+          lit.set(
+            Math.round(x + Math.cos(a) * rr),
+            Math.round(y + Math.sin(a) * rr * 0.7),
+            alpha(VIOLET_GLOW, 0.9),
+          );
         }
       };
     extra.linger = T;
@@ -4048,7 +4139,15 @@ registerMobPainter('f15_graviton', (m: Mob, pose: MobPose) => {
           pts.push(P(F3.yaw(yaw).p(q[0], q[1], q[2])));
         }
         for (let i = 1; i < pts.length; i++)
-          stroke(lit, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], alpha(i > 6 ? WHITE : VIOLET_GLOW, 0.3 + (i / 8) * 0.6), 2);
+          stroke(
+            lit,
+            pts[i - 1][0],
+            pts[i - 1][1],
+            pts[i][0],
+            pts[i][1],
+            alpha(i > 6 ? WHITE : VIOLET_GLOW, 0.3 + (i / 8) * 0.6),
+            2,
+          );
       };
     extra.still = true;
   } else if (md === 'recover') {
@@ -4135,7 +4234,6 @@ registerMobWarm('f15_graviton', function* () {
     }
   }
 });
-
 
 // --- Звездочёт ----------------------------------------------------------------
 //
@@ -4241,7 +4339,10 @@ function astroRig(o: APose, yaw: number): Rig {
   const bot = vadd(hand, vmul(td, -10));
   r.cap(bot, top, 0.8, 0.9, { T: STAFF });
   const core = vadd(top, vmul(td, 2.2));
-  r.ball(core, 1.3, { T: tn('#6a4410', '#f0b838', '#fff2b0', '#ffffff'), glow: 0.6 + o.glow * 0.4 });
+  r.ball(core, 1.3, {
+    T: tn('#6a4410', '#f0b838', '#fff2b0', '#ffffff'),
+    glow: 0.6 + o.glow * 0.4,
+  });
   for (let k = 0; k < 2; k++) {
     const n = 10;
     let prev: V3 | null = null;
@@ -4251,8 +4352,16 @@ function astroRig(o: APose, yaw: number): Rig {
       const sp = o.spin + k * 1.3;
       const P: V3 =
         k === 0
-          ? vadd(core, [Math.cos(a) * R, Math.sin(a) * R * Math.cos(sp), Math.sin(a) * R * Math.sin(sp)])
-          : vadd(core, [Math.cos(a) * R * Math.cos(sp), Math.sin(a) * R, Math.cos(a) * R * Math.sin(sp)]);
+          ? vadd(core, [
+              Math.cos(a) * R,
+              Math.sin(a) * R * Math.cos(sp),
+              Math.sin(a) * R * Math.sin(sp),
+            ])
+          : vadd(core, [
+              Math.cos(a) * R * Math.cos(sp),
+              Math.sin(a) * R,
+              Math.cos(a) * R * Math.sin(sp),
+            ]);
       if (prev) r.line(prev, P, k ? hx('#c09038') : hx('#f4dc8a'), 0.5, 0.2);
       prev = P;
     }
@@ -4262,7 +4371,11 @@ function astroRig(o: APose, yaw: number): Rig {
     const k = clamp01(o.stars - i);
     if (k <= 0) continue;
     const a = (i / 3) * TAU + o.spin * 2;
-    const P = vadd(core, [Math.cos(a) * 4.2 * (1.4 - k * 0.4), Math.sin(a) * 4.2, 1.5 + Math.sin(a) * 1.5]);
+    const P = vadd(core, [
+      Math.cos(a) * 4.2 * (1.4 - k * 0.4),
+      Math.sin(a) * 4.2,
+      1.5 + Math.sin(a) * 1.5,
+    ]);
     r.dot(P, k > 0.95 ? WHITE : hx('#fff4d0'), 1, k > 0.5 ? 2 : 1, 1.2);
   }
   if (o.dk > 0) r.explode(sstep(0.4, 1, o.dk), body.p(0, 0, 6), 51, 5, 20, from, 0.4);
@@ -4295,7 +4408,10 @@ function stoneImg(i: number, rot: number, lit: boolean): HTMLCanvasElement {
 
 /** Кадр тела с камнями: дальние за телом, ближние перед ним. */
 /** Кадр с камнями — по холсту кадра (сам кадр из кеша приходит копией с полями хода). */
-const WITH_STONES = new WeakMap<HTMLCanvasElement, Map<string, { img: HTMLCanvasElement; lit: HTMLCanvasElement }>>();
+const WITH_STONES = new WeakMap<
+  HTMLCanvasElement,
+  Map<string, { img: HTMLCanvasElement; lit: HTMLCanvasElement }>
+>();
 function withStones(fr: MobFrame, n: number, phase: number, lift: number): MobFrame {
   if (n <= 0) return fr;
   const key = `${n}|${phase}|${lift}`;
@@ -4427,7 +4543,11 @@ registerMobPainter('f15_astro', (m: Mob, pose: MobPose) => {
         const rr = 3 + k * 7;
         for (let i = 0; i < 20; i++) {
           const a = (i / 20) * TAU;
-          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * SE), alpha(GOLDK, 0.8 * (1 - k)));
+          lit.set(
+            Math.round(x + Math.cos(a) * rr),
+            Math.round(y + Math.sin(a) * rr * SE),
+            alpha(GOLDK, 0.8 * (1 - k)),
+          );
         }
       };
     } else anim = 'rec';
@@ -4488,7 +4608,6 @@ registerMobWarm('f15_astro', function* () {
   }
 });
 
-
 // --- Страж созвездия -----------------------------------------------------------
 //
 // Узел фигуры — живая звезда: ядро и восемь лучей-кристаллов, ведущий луч
@@ -4519,7 +4638,9 @@ const S0: SPose = { spin: 0, tilt: 0.25, ext: 1, glow: 0.4, flat: 0, beam: 0, dk
 function constelRig(o: SPose, yaw: number): Rig {
   const r = new Rig();
   const Y = F3.yaw(yaw);
-  const base = Y.at(0, 0, 5 * (1 - o.flat) + 0.6).pitch(o.tilt).turn(o.spin);
+  const base = Y.at(0, 0, 5 * (1 - o.flat) + 0.6)
+    .pitch(o.tilt)
+    .turn(o.spin);
   const fl = 1 - o.flat * 0.9;
   const F = new F3(base.o, base.f, base.s, vmul(base.u, fl));
   const ray: Mat = { T: STAR_T, glow: 0.5 + o.glow * 0.5, spec: true, bias: o.glow * 0.2 - 0.1 };
@@ -4624,7 +4745,11 @@ registerMobPainter('f15_constel', (m: Mob, pose: MobPose) => {
           const rr = 4 + k * 26;
           for (let i = 0; i < 24; i++) {
             const a = (i / 24) * TAU;
-            lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.6), alpha(STAR_C, 0.9 * (1 - k * 2)));
+            lit.set(
+              Math.round(x + Math.cos(a) * rr),
+              Math.round(y + Math.sin(a) * rr * 0.6),
+              alpha(STAR_C, 0.9 * (1 - k * 2)),
+            );
           }
         };
       extra.lift = 4 + 2 * k;
@@ -4817,12 +4942,13 @@ registerMobWarm('f15_moon', function* () {
   for (let d = 0; d < NDIR; d++) {
     const yaw = (d / NDIR) * TAU;
     for (let f = 0; f < 8; f++) {
-      mobFrame('moon', pose, 'fly', f, d, () => moonPic({ ...O0, spin: (f / 8) * TAU, roll: 0.2 }, yaw));
+      mobFrame('moon', pose, 'fly', f, d, () =>
+        moonPic({ ...O0, spin: (f / 8) * TAU, roll: 0.2 }, yaw),
+      );
       yield 0;
     }
   }
 });
-
 
 // --- Пожиратель света -------------------------------------------------------------
 //
@@ -4883,13 +5009,21 @@ function devRig(o: DPose, yaw: number): Rig {
   // Пасть — чёрное кольцо, светящаяся кайма; глаза над ней.
   const mw = B.at(5.0, 0, -0.2);
   const R = 1.2 + o.maw * 1.8;
-  r.ell(mw, [0, 0, 0], [0.6, R, R * 0.8], { T: tn('#000000', '#020104', '#05030a', '#0a0614'), flat: 0 });
+  r.ell(mw, [0, 0, 0], [0.6, R, R * 0.8], {
+    T: tn('#000000', '#020104', '#05030a', '#0a0614'),
+    flat: 0,
+  });
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * TAU;
-    r.dot(mw.p(0.3, Math.cos(a) * (R + 0.4), Math.sin(a) * (R + 0.4) * 0.8), alpha(VOID_RIM, 0.9), 0.7, 1, 0.4);
+    r.dot(
+      mw.p(0.3, Math.cos(a) * (R + 0.4), Math.sin(a) * (R + 0.4) * 0.8),
+      alpha(VOID_RIM, 0.9),
+      0.7,
+      1,
+      0.4,
+    );
   }
-  if (o.dk <= 0)
-    for (const s of [-1, 1]) r.dot(B.p(3.6, s * 1.6, 1.8), hx('#d8b8ff'), 1, 1, 0.6);
+  if (o.dk <= 0) for (const s of [-1, 1]) r.dot(B.p(3.6, s * 1.6, 1.8), hx('#d8b8ff'), 1, 1, 0.6);
   if (o.dk <= 0) r.eye = B.p(3.6, -1.6, 1.8);
   if (o.dk > 0) r.explode(sstep(0, 1, o.dk), B.o, 81, 7, 6, from, 0.7);
   return r;
@@ -4956,12 +5090,19 @@ registerMobPainter('f15_devourer', (m: Mob, pose: MobPose) => {
       const [mx, my] = P(F3.yaw(yaw).p(5.5, 0, 5));
       const lit = litOn(out);
       for (let i = 0; i < 6; i++) {
-        const s = ((f * 0.13 + i / 6) % 1);
+        const s = (f * 0.13 + i / 6) % 1;
         const a = sa + (hash(i, 3, 5) - 0.5) * 0.9;
         const rr = 4 + (1 - s) * 18;
         const x = mx + Math.cos(a) * rr;
         const y = my + Math.sin(a) * rr * 0.7 + (1 - s) * 2;
-        stroke(lit, x, y, x - Math.cos(a) * 2, y - Math.sin(a) * 1.4, alpha(hx('#ffe9a0'), 0.35 + s * 0.6));
+        stroke(
+          lit,
+          x,
+          y,
+          x - Math.cos(a) * 2,
+          y - Math.sin(a) * 1.4,
+          alpha(hx('#ffe9a0'), 0.35 + s * 0.6),
+        );
       }
     };
     extra.still = true;
@@ -5076,7 +5217,11 @@ function novaRig(o: NPose, yaw: number): Rig {
   const col = o.col;
   const H = 9 - col * 3;
   const body = B.at(0, 0, H).pitch(o.lean);
-  const stone: Mat = { T: NOVA_SHELL, pat: (q, l) => (crackF(q) < 0.12 ? NOVA_T[2] : tone(NOVA_SHELL, l)), gpat: (q) => (crackF(q) < 0.12 ? 0.8 : 0) };
+  const stone: Mat = {
+    T: NOVA_SHELL,
+    pat: (q, l) => (crackF(q) < 0.12 ? NOVA_T[2] : tone(NOVA_SHELL, l)),
+    gpat: (q) => (crackF(q) < 0.12 ? 0.8 : 0),
+  };
   const legsAlive = col < 0.4;
   // Ноги и руки (при схлопывании втягиваются).
   if (legsAlive) {
@@ -5118,8 +5263,16 @@ function novaRig(o: NPose, yaw: number): Rig {
     const nw = body.v(n[0], n[1], n[2]);
     const c = vadd(coreC, vmul(nw, dist));
     const ref: V3 = Math.abs(nw[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
-    const e1 = vnorm([nw[1] * ref[2] - nw[2] * ref[1], nw[2] * ref[0] - nw[0] * ref[2], nw[0] * ref[1] - nw[1] * ref[0]]);
-    const e2: V3 = [nw[1] * e1[2] - nw[2] * e1[1], nw[2] * e1[0] - nw[0] * e1[2], nw[0] * e1[1] - nw[1] * e1[0]];
+    const e1 = vnorm([
+      nw[1] * ref[2] - nw[2] * ref[1],
+      nw[2] * ref[0] - nw[0] * ref[2],
+      nw[0] * ref[1] - nw[1] * ref[0],
+    ]);
+    const e2: V3 = [
+      nw[1] * e1[2] - nw[2] * e1[1],
+      nw[2] * e1[0] - nw[0] * e1[2],
+      nw[0] * e1[1] - nw[1] * e1[0],
+    ];
     const F = new F3(c, nw, e1, e2);
     const sz = (1 - col * 0.6) * (i % 2 ? 1 : 0.85);
     r.ell(F, [0, 0, 0], [1.2, 2.9 * sz, 2.6 * sz], stone);
@@ -5163,13 +5316,21 @@ registerMobPainter('f15_nova', (m: Mob, pose: MobPose) => {
         const rr = 2 + (k - 0.8) * 60;
         for (let i = 0; i < 24; i++) {
           const a = (i / 24) * TAU;
-          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(VIOLET_GLOW, 1 - (k - 0.8) * 5));
+          lit.set(
+            Math.round(x + Math.cos(a) * rr),
+            Math.round(y + Math.sin(a) * rr * 0.7),
+            alpha(VIOLET_GLOW, 1 - (k - 0.8) * 5),
+          );
         }
       } else
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * TAU + k * 6;
           const rr = 22 * (1 - k);
-          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(NOVA_T[2], 0.9));
+          lit.set(
+            Math.round(x + Math.cos(a) * rr),
+            Math.round(y + Math.sin(a) * rr * 0.7),
+            alpha(NOVA_T[2], 0.9),
+          );
         }
     };
     extra.linger = T;
@@ -5194,7 +5355,11 @@ registerMobPainter('f15_nova', (m: Mob, pose: MobPose) => {
         const s = (k * 3 + i / 8) % 1;
         const a = (i / 8) * TAU + i;
         const rr = 26 * (1 - s);
-        lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(NOVA_T[3], 0.4 + s * 0.6));
+        lit.set(
+          Math.round(x + Math.cos(a) * rr),
+          Math.round(y + Math.sin(a) * rr * 0.7),
+          alpha(NOVA_T[3], 0.4 + s * 0.6),
+        );
       }
     };
     extra.still = true;
@@ -5271,13 +5436,17 @@ const B0: BPose = { ph: 0, bank: 0, spin: 0, shrink: 0, glint: 0, dk: 0 };
 
 function bugRig(o: BPose, yaw: number): Rig {
   const r = new Rig();
-  const B = F3.yaw(yaw + o.spin).at(0, 0, 4.2).roll(o.bank).scale(1 - o.shrink);
+  const B = F3.yaw(yaw + o.spin)
+    .at(0, 0, 4.2)
+    .roll(o.bank)
+    .scale(1 - o.shrink);
   const gold: Mat = {
     T: GOLD,
     spec: true,
     pat: (q, l) => {
       // Грани: тон по квантованной нормали — кусок самородка.
-      const fq = Math.round(q[0] * 2) * 0.31 + Math.round(q[1] * 2) * 0.17 + Math.round(q[2] * 2) * 0.43;
+      const fq =
+        Math.round(q[0] * 2) * 0.31 + Math.round(q[1] * 2) * 0.17 + Math.round(q[2] * 2) * 0.43;
       return tone(GOLD, l + (fq % 0.3) - 0.1);
     },
   };
@@ -5368,7 +5537,6 @@ registerMobPainter('f15_goldbug', (m: Mob, pose: MobPose) => {
   }
   return mobFrame('gbug', pose, anim, f, d, () => bugPic(o, yaw), extra);
 });
-
 
 // --- Отражение: тени прошлых этажей ---------------------------------------------------
 //
@@ -5613,7 +5781,10 @@ interface Trail {
   seen: number;
 }
 /** Чьи снаряды оставляют след дуги и каким цветом. */
-const SHOT_TRAIL: Record<string, string> = { f15_needle: '140,230,255', f15_starbolt: '255,208,96' };
+const SHOT_TRAIL: Record<string, string> = {
+  f15_needle: '140,230,255',
+  f15_starbolt: '255,208,96',
+};
 const SHOT_KEY = -1e6;
 const TRAILS = new WeakMap<object, Map<number, Trail>>();
 const HERO_TRAIL = -1e9;
@@ -5674,7 +5845,10 @@ registerZonePainter('f15_life', (g, z, px, py, _s, time) => {
         const u = (h0 * 7.3 + time * 0.045) % 1;
         const v = (hash(cx, cy, 1502) + time * 0.018) % 1;
         const tw = 0.45 + 0.55 * Math.sin(time * (1.5 + h0 * 2) + h0 * 40);
-        g.fillStyle = h0 > 0.93 ? `rgba(200,240,255,${0.5 + tw * 0.4})` : `rgba(255,244,208,${0.18 + tw * 0.3})`;
+        g.fillStyle =
+          h0 > 0.93
+            ? `rgba(200,240,255,${0.5 + tw * 0.4})`
+            : `rgba(255,244,208,${0.18 + tw * 0.3})`;
         g.fillRect(Math.floor(sx + u * TS), Math.floor(sy + v * TS), 1, 1);
         continue;
       }
@@ -5702,7 +5876,12 @@ registerZonePainter('f15_life', (g, z, px, py, _s, time) => {
           const hk = hash(cx, cy, 1510 + k);
           const a = time * (0.4 + hk * 0.5) + hk * TAU;
           const x = sx + 4 + hk * 8 + Math.cos(a) * 3;
-          const y = sy + 4 + hash(cx, cy, 1520 + k) * 8 + Math.sin(a) * 2 - Math.sin(time * 0.7 + hk * 9) * 1.5;
+          const y =
+            sy +
+            4 +
+            hash(cx, cy, 1520 + k) * 8 +
+            Math.sin(a) * 2 -
+            Math.sin(time * 0.7 + hk * 9) * 1.5;
           g.fillStyle = `rgba(184,220,255,${0.25 + 0.25 * Math.sin(a * 1.7)})`;
           g.fillRect(Math.floor(x), Math.floor(y), 1, 1);
         }
@@ -5807,7 +5986,13 @@ registerZonePainter('f15_well', (g, z, px, py, _s, time) => {
   const s = w.state;
   const dir = w.mode < 0 ? -1 : 1;
   const depth =
-    s === 2 ? (w.f < 0.82 ? 1 : 1 - smooth((w.f - 0.82) / 0.18) * 0.5) : s === 1 ? 0.15 + 0.55 * smooth(w.f) : 0.08;
+    s === 2
+      ? w.f < 0.82
+        ? 1
+        : 1 - smooth((w.f - 0.82) / 0.18) * 0.5
+      : s === 1
+        ? 0.15 + 0.55 * smooth(w.f)
+        : 0.08;
   g.save();
   // Тень воронки: глубже к середине (толкает — светлый горб).
   if (depth > 0.1) {
@@ -6085,7 +6270,12 @@ registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
         const rr = mid + (hash(i, k, 2071) - 0.5) * r.width * TS * 0.8;
         const fl = (time * 3 + h0) % 1;
         g.fillStyle = `rgba(190,200,255,${0.4 * sp * (1 - fl)})`;
-        g.fillRect(Math.round(px + Math.cos(back) * rr), Math.round(py + Math.sin(back) * rr + 3 + fl * 3), 1, 1);
+        g.fillRect(
+          Math.round(px + Math.cos(back) * rr),
+          Math.round(py + Math.sin(back) * rr + 3 + fl * 3),
+          1,
+          1,
+        );
       }
     const draw = (img: HTMLCanvasElement, dy: number, a = 1) => {
       g.save();
@@ -6104,11 +6294,18 @@ registerZonePainter('f15_ring', (g, z, px, py, _s, time) => {
     if (docked) {
       const soon = r.dockLeft < 1.2;
       const on = soon ? Math.sin(time * 14) > 0 : Math.sin(time * 2.4 + k) > -0.6;
-      g.fillStyle = soon ? `rgba(255,196,80,${on ? 0.95 : 0.25})` : `rgba(130,255,180,${on ? 0.85 : 0.35})`;
+      g.fillStyle = soon
+        ? `rgba(255,196,80,${on ? 0.95 : 0.25})`
+        : `rgba(130,255,180,${on ? 0.85 : 0.35})`;
       for (const sd of [-1, 1]) {
         const la = ang + sd * r.half * 0.8;
         const lr = r.r1 * TS - 2;
-        g.fillRect(Math.round(px + Math.cos(la) * lr) - 1, Math.round(py + Math.sin(la) * lr + bob) - 1, 2, 2);
+        g.fillRect(
+          Math.round(px + Math.cos(la) * lr) - 1,
+          Math.round(py + Math.sin(la) * lr + bob) - 1,
+          2,
+          2,
+        );
       }
     }
     if (r.parade) {
@@ -6426,9 +6623,11 @@ registerZonePainter('f15_heavyall', (g, z, px, py, _s, time) => {
   const off = (time * 14) % TS;
   const sy = Math.floor((y0 - py) / TS) * TS + py + off - TS;
   g.fillStyle = `rgba(6,2,18,${0.3 * fade})`;
-  for (let y = sy; y < y1; y += TS) g.fillRect(Math.floor(x0), Math.round(y), Math.ceil(x1 - x0), 1);
+  for (let y = sy; y < y1; y += TS)
+    g.fillRect(Math.floor(x0), Math.round(y), Math.ceil(x1 - x0), 1);
   g.fillStyle = `rgba(6,2,18,${0.16 * fade})`;
-  for (let x = sx; x < x1; x += TS) g.fillRect(Math.round(x), Math.floor(y0), 1, Math.ceil(y1 - y0));
+  for (let x = sx; x < x1; x += TS)
+    g.fillRect(Math.round(x), Math.floor(y0), 1, Math.ceil(y1 - y0));
   g.fillStyle = `rgba(200,160,255,${0.35 * fade})`;
   for (let i = 0; i < 60; i++) {
     const x = px + (hash(i, 1, 2050) - 0.5) * R * 1.8;
