@@ -7798,8 +7798,8 @@ function walkSpec(m: Mob, now: number, mt: number, st: LState, D: Drive, o: LSpe
         const sn = Math.sin((f / 12) * TAU);
         o.L = lp(
           {
-            bob: 0.45 * sn,
-            hp: KNEEL.hp + 0.1 * sn,
+            bob: 0.8 * sn,
+            hp: KNEEL.hp + 0.16 * sn,
             lean: KNEEL.lean - 0.05 * sn,
             aR: dl(KNEEL.aR, 0.04 * sn, 0, 0),
             tb: KNEEL.tb + 0.03 * Math.sin((f / 12) * TAU - 1),
@@ -8001,7 +8001,10 @@ function lordPlan(
   const [sx, sy] = swingNow(D, now);
   const rot = -sx * sp.hang;
   const syT = 1 + (Math.cos(sy) + 0.56 * Math.sin(sy) - 1) * sp.hang;
-  const tq = sp.str.some((s) => s > 0.02) ? Math.round(rot / 0.06) : 0;
+  // Свои нити против поворота кадра — по середине отсчёта, а не по каждому
+  // кадру игры: ключ меняется не чаще отсчёта, и кадр «на потом» угадывается.
+  const mid = (driveAt(D, 0)[0] + driveAt(D, 1)[0]) / 2;
+  const tq = sp.str.some((s) => s > 0.02) ? Math.round((-mid * sp.hang) / 0.06) : 0;
   const sk = sp.str.map((s, i) => `${Math.round(s * 10)}.${Math.round(sp.sag[i])}`).join(',');
   const full = `${key}:${dir}:${flash ? 1 : 0}${open ? 'o' : ''}${ghost ? 'g' : ''}:${sk}:${tq}`;
   return {
