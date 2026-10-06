@@ -1964,3 +1964,457 @@ registerMobWarm('f3_jelly', function* () {
       yield 0;
     }
 });
+
+// ---------------------------------------------------------------------------
+// Шар-копьё: броненосец в охристых пластинах с костяной иглой на морде.
+// Ходит рысцой по пути, курс — по ходу (сперва поворот). Замах 1,0 с: присел
+// и вздёрнул иглу → свернулся в шар (игла вперёд) → раскрутка на месте с
+// ускорением, игла наливается светом, шар дрожит → откат назад и сжатие →
+// выстрел: первый кадр `roll` — шар вытянут, пыль из-под него, шлейф.
+// Катится: пояса пластин вращаются по пройденному пути (на скорости —
+// смазаны), пыль. Отход: тормозит юзом, разворачивается, встряхивается.
+// В стене: игла застряла — три рывка, звёзды, выдернул.
+// ---------------------------------------------------------------------------
+
+const S_SHELL = tn('#4e3018', '#86592c', '#b8864a', '#e0b878');
+const S_BAND: RGBA = hex('#3a2210');
+const S_SKIN = tn('#5a3a2a', '#8a6048', '#b48a6a', '#d8b490');
+const S_BONE = tn('#8a7c5e', '#c8b890', '#eee2c0', '#fffbea');
+const S_BELLY: RGBA = hex('#c8a47a');
+const S_LEG = tn('#2e1a0e', '#4a2c1a', '#6a4430', '#8a5e44');
+const S_DUST: RGBA = hex('#8a7a62');
+const S_EYE: RGBA = hex('#1a0e08');
+
+const mix = (a: number, b: number, k: number) => a + (b - a) * k;
+
+interface SpearO {
+  /** Свернулся 0…1 (1 — шар). */
+  curl: number;
+  /** Поворот шара (рад) и смаз поясов на скорости 0…1. */
+  spin: number;
+  blur: number;
+  /** Сжатие шара вдоль хода (+ сжат, − вытянут). */
+  sq: number;
+  h: number;
+  pitch: number;
+  roll: number;
+  /** Голова: кивок (+ вниз); игла — подъём (рад). */
+  hp: number;
+  up: number;
+  /** Шаг: фаза и размах. */
+  ph: number;
+  str: number;
+  tail: number;
+  /** Игла наливается светом 0…1. */
+  glow: number;
+  /** На спине (смерть) 0…1, лапы дёргаются. */
+  dk: number;
+  kick: number;
+}
+
+const SPEAR0: SpearO = {
+  curl: 0,
+  spin: 0,
+  blur: 0,
+  sq: 0,
+  h: 0,
+  pitch: 0,
+  roll: 0,
+  hp: 0,
+  up: 0.08,
+  ph: 0,
+  str: 0,
+  tail: 0,
+  glow: 0,
+  dk: 0,
+  kick: 0,
+};
+
+function spearRig(o: SpearO, yaw: number): Rig {
+  const r = new Rig();
+  const B = Fr.yaw(yaw);
+  const c = o.curl;
+  const R = mix(3.0, 3.5, c);
+  const body = B.at(0, 0, mix(3.3, 3.5, c) + o.h)
+    .pitch(o.pitch)
+    .roll(o.roll + o.dk * PI);
+  // Панцирь: пояса пластин вокруг боковой оси — у шара они и крутятся.
+  const sf = body.pitch(o.spin);
+  const rad: V3 = [
+    mix(4.6, 3.5, c) * (1 - 0.22 * o.sq),
+    mix(3.4, 3.4, c) * (1 + 0.08 * o.sq),
+    mix(3.0, R, c) * (1 + 0.1 * o.sq),
+  ];
+  r.ell(sf, [0, 0, 0], rad, {
+    T: S_SHELL,
+    pat: (q, l) => {
+      if (o.blur > 0.5) {
+        // Смаз: пояса слились в полосы по ходу.
+        const b = Math.abs((((q[1] * 3 + 10) % 1) + 1) % 1 - 0.5);
+        return b < 0.1 ? S_SHELL[l > 0.3 ? 2 : 1] : null;
+      }
+      if (c < 0.5 && q[2] < -0.5) return S_BELLY;
+      const a = Math.atan2(q[2], q[0]);
+      const b = ((((a * 6) / TAU) % 1) + 1) % 1;
+      if (b < 0.16 && Math.abs(q[1]) < 0.93) return S_BAND;
+      if (b > 0.2 && b < 0.3 && l > 0.35) return S_SHELL[3];
+      return null;
+    },
+  });
+  // Голова: стоя — спереди, свернувшись — внутри шара.
+  const hk = 1 - c * 0.45;
+  const hd = body
+    .at(mix(4.3, 1.6, c), 0, mix(0.1, -0.8, c))
+    .pitch(o.hp)
+    .scale(hk);
+  if (c < 0.9) {
+    r.ell(hd, [0.2, 0, 0], [1.9, 1.5, 1.45], { T: S_SKIN });
+    r.ell(hd, [1.5, 0, -0.3], [1.0, 0.9, 0.8], { T: S_SKIN, bias: 0.1 });
+    for (const s of [-1, 1])
+      r.cap(hd.p(-0.6, s * 0.9, 1.0), hd.p(-1.1, s * 1.3, 2.2), 0.5, 0.35, { T: S_SKIN });
+    if (o.dk < 0.5 && c < 0.6) {
+      r.dot(hd.p(0.9, 0.85, 0.5), S_EYE, 0, 1, 0.9);
+      r.eye = hd.p(0.9, 0.85, 0.5);
+    }
+  }
+  // Игла: от морды вперёд и чуть вверх; у шара торчит из него по ходу.
+  const base = vlerp(hd.p(2.2, 0, -0.2), body.p(R * 0.85, 0, 0.2), sstep(0.3, 0.8, c));
+  const dir = vnorm(body.v(Math.cos(o.up), 0, Math.sin(o.up)));
+  r.spike(base, dir, 8.2, 0.95, { T: S_BONE, spec: true, bias: 0.15, glow: o.glow * 0.8 }, 4, PI / 4);
+  // Хвост — короткий, в пластинах; у шара спрятан.
+  if (c < 0.8) {
+    const t0 = body.p(-4.0, 0, -0.4);
+    const t1 = body.p(-6.0 + c * 2, o.tail * 1.2, -1.3 + c * 1.5);
+    r.cap(t0, t1, 0.9, 0.45, { T: S_SHELL, bias: -0.05 });
+  }
+  // Лапы: рысь — диагональные пары вместе; у шара поджаты внутрь.
+  if (c < 0.85)
+    for (const [fx, s, off] of [
+      [2.1, 1, 0],
+      [-2.1, -1, 0],
+      [2.1, -1, 0.5],
+      [-2.1, 1, 0.5],
+    ] as const) {
+      const hip = body.p(fx, s * 2.1, -1.6);
+      const phase = (o.ph + off) % 1;
+      const sw = -Math.cos(phase * TAU) * 1.4 * o.str;
+      const lift = Math.max(0, Math.sin(phase * TAU)) * 1.1 * o.str;
+      let foot: V3;
+      if (o.dk > 0) foot = body.p(fx * 1.1, s * 2.6, -3.6 - Math.sin(o.kick + fx) * 0.6);
+      else foot = B.p(fx * 1.05 + sw, s * 2.5, lift);
+      foot = vlerp(foot, body.p(fx * 0.6, s * 1.4, -1.2), sstep(0.2, 0.75, c));
+      r.cap(hip, foot, 0.8, 0.55, { T: S_LEG });
+    }
+  return r;
+}
+
+const SW = 36;
+const SH = 30;
+const SAX = 18;
+const SAY = 18;
+/** Ход 8, покой 8, замах 24, катится 4 + смаз, отход 15, в стене 22, … × 5 сторон. */
+const SPEAR_LIM = 800;
+
+function spearPic(o: SpearO, yaw: number, post?: ((o: RigOut, P: Proj2) => void) | null): Pic {
+  return draw(spearRig(o, yaw), SW, SH, SAX, SAY, post);
+}
+
+/** Замах 1,0 с: поза на кадре `f` (0…23). Возвращает откат (точки, по ходу). */
+function spearCurl(f: number, o: SpearO): number {
+  const t = (f + 0.5) / FPS;
+  // Подготовка: присел, вздёрнул иглу — и свернулся.
+  o.pitch = kf(t, [
+    [0, 0],
+    [0.15, -0.3, 'o'],
+    [0.32, 0.1, 'i'],
+    [0.45, 0],
+  ]);
+  o.up = kf(t, [
+    [0, 0.08],
+    [0.15, 0.55, 'o'],
+    [0.38, 0.05, 'i'],
+    [1, 0],
+  ]);
+  o.hp = kf(t, [
+    [0, 0],
+    [0.15, -0.3],
+    [0.35, 0.6, 'i'],
+  ]);
+  o.h = kf(t, [
+    [0, 0],
+    [0.15, -0.5, 'o'],
+    [0.3, 0.6],
+    [0.42, 0, 'i'],
+  ]);
+  o.curl = sstep(0.18, 0.42, t);
+  o.tail = 0;
+  // Раскрутка на месте: ускоряется (угол — интеграл скорости).
+  const s0 = Math.max(0, t - 0.4);
+  o.spin = 0.5 * 90 * s0 * s0;
+  o.blur = t > 0.72 ? 1 : 0;
+  o.glow = sstep(0.45, 0.9, t);
+  o.sq = kf(t, [
+    [0, 0],
+    [0.8, 0],
+    [0.95, 0.35, 'o'],
+    [1, 0.4],
+  ]);
+  // Откат назад перед выстрелом.
+  return kf(t, [
+    [0, 0],
+    [0.78, 0],
+    [0.95, -2.2, 'o'],
+    [1, -2.4],
+  ]);
+}
+
+/** В стене, 1,8 с: три рывка, на третьем выдернул. Поза на время `q`. */
+function spearStuck(q: number, o: SpearO): number {
+  o.curl = kf(q, [
+    [0, 0.6],
+    [0.2, 0.25, 'o'],
+  ]);
+  const tug = (a: number) => Math.exp(-(((q - a) / 0.07) ** 2));
+  const pull = tug(0.45) * 0.7 + tug(0.85) * 0.85 + tug(1.25) * 1;
+  o.pitch = 0.18 - pull * 0.28;
+  o.hp = 0.1 - pull * 0.2;
+  o.h = -0.4;
+  o.up = -0.05;
+  o.ph = (q * 3.2) % 1;
+  o.str = 0.6 * pull + 0.25;
+  o.tail = Math.sin(q * 22) * 0.5;
+  // Выдернул на 1,6: отскок назад и встряхнулся.
+  if (q > 1.55) {
+    const k = clamp01((q - 1.55) / 0.25);
+    o.pitch = -0.3 * Math.sin(k * PI);
+    o.curl = 0;
+    o.roll = Math.sin(k * TAU * 2) * 0.15 * (1 - k);
+    return -2.5 * Math.sin(k * PI * 0.5);
+  }
+  return -pull * 1.1;
+}
+
+registerMobPainter('f3_spear', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = Math.max(0, pose.t);
+  const now = pose.now;
+  const id = m.id ?? 0;
+  const sp = speedOf(m);
+  const lock = md === 'curl' || md === 'roll' || md === 'dizzy';
+  const travel = sp > 0.4 ? Math.atan2(m.vy ?? 0, m.vx ?? 0) : (m.face ?? 0);
+  const v = visOf(m, pose, lock ? (m.face ?? 0) : travel, lock ? 40 : 6);
+  const d = side8(v.yaw);
+  const o: SpearO = { ...SPEAR0 };
+  const ex: Partial<MobFrame> = { shadow: 7, still: true };
+  const fwd = (k: number) => {
+    // Сдвиг кадра по ходу (экран): откат назад, выстрел вперёд.
+    ex.dx = (ex.dx ?? 0) + Math.cos(v.yaw) * k;
+    ex.dy = (ex.dy ?? 0) + Math.sin(v.yaw) * k * SE;
+  };
+  let key: string;
+  let post: ((r: RigOut, P: Proj2) => void) | null = null;
+  if (md === 'dying') {
+    // Смерть: кувырок на спину, лапы дёргаются и стихают, игла опустилась.
+    const f = Math.min(9, Math.floor(t * 12));
+    const k = f / 9;
+    o.dk = sstep(0, 0.45, k);
+    o.h = kf(k, [
+      [0, 0],
+      [0.25, 1.4, 'o'],
+      [0.45, -0.2, 'i'],
+      [0.55, 0.1],
+      [0.7, -0.3],
+    ]);
+    o.kick = f * 2.1;
+    o.up = -0.25 * k;
+    o.hp = 0.5 * k;
+    key = `die${f}`;
+    ex.linger = 0.85;
+    ex.alpha = 1 - sstep(0.6, 0.85, t);
+    ex.shadow = 7 * (1 - sstep(0.6, 0.85, t));
+    if (f === 4 || f === 5) {
+      const ff = f - 4;
+      post = (out, P) => {
+        const [cx, cy] = P([0, 0, 0]);
+        dust(out, cx, cy + 1, (ff + 0.5) / 2.5, 7, 17, S_DUST, 9);
+      };
+    }
+  } else if (md === 'curl') {
+    const f = fi(t, 23);
+    fwd(spearCurl(f, o));
+    if (f >= 10 && f <= 18) fwd(f % 2 ? 0.4 : -0.4);
+    key = `curl${f}`;
+    if (f >= 12) {
+      // Пыль из-под крутящегося шара.
+      const ff = f;
+      post = (out, P) => {
+        const [cx, cy] = P([-3, 0, 0]);
+        dust(out, cx, cy + 1, ((ff * 0.37) % 1) * 0.8 + 0.1, 5, ff, S_DUST, 6);
+      };
+    }
+  } else if (md === 'roll') {
+    // Катится: поворот шара — по пройденному пути; на скорости — смаз.
+    const vv = Math.max(3, m.data?.v ?? sp);
+    o.curl = 1;
+    const fast = vv >= 6;
+    const f0 = fi(t, 2);
+    if (f0 < 2) {
+      // Выстрел (кадр контакта): шар вытянут, пыль взрывом из-под него.
+      o.sq = f0 === 0 ? -0.5 : -0.3;
+      o.blur = 1;
+      o.glow = 1 - f0 * 0.3;
+      key = `shot${f0}`;
+      fwd(f0 === 0 ? 1.5 : 0.8);
+      const ff = f0;
+      post = (out, P) => {
+        const [cx, cy] = P([-4, 0, 0]);
+        dust(out, cx, cy + 1, 0.25 + ff * 0.3, 9, 5, S_DUST, 9);
+      };
+    } else if (fast) {
+      const s = Math.floor(now * 30) % 2;
+      const pf = Math.floor(v.dist * 2.2) % 3;
+      o.blur = 1;
+      o.sq = -0.15;
+      o.glow = 0.35;
+      key = `rollb${s}${pf}`;
+      post = (out, P) => {
+        const [cx, cy] = P([-3.5, 0, 0]);
+        dust(out, cx, cy + 1, (pf + 0.5) / 3.2, 5, 9 + pf, S_DUST, 7);
+      };
+      ex.ghost = { every: 0.035, life: 0.14, tint: '#e0b878', alpha: 0.35 };
+    } else {
+      const band = TAU / 6;
+      const sk = (((Math.floor((v.dist * 16) / 3.5 / (band / 4)) % 4) + 4) % 4) | 0;
+      o.spin = (sk * band) / 4;
+      o.glow = 0.2;
+      key = `roll${sk}`;
+    }
+  } else if (md === 'recover') {
+    // Отход 0,6 с: тормозит юзом, раскрывается, встряхивается.
+    const f = fi(t, 14);
+    const q = (f + 0.5) / FPS;
+    o.curl = 1 - sstep(0.12, 0.38, q);
+    o.spin = kf(q, [
+      [0, 0],
+      [0.2, 1.6, 'o'],
+    ]);
+    o.pitch = kf(q, [
+      [0, 0],
+      [0.38, 0.15],
+      [0.46, -0.12],
+      [0.6, 0],
+    ]);
+    o.roll = q > 0.36 ? Math.sin((q - 0.36) * 40) * 0.14 * (1 - sstep(0.36, 0.6, q)) : 0;
+    o.hp = kf(q, [
+      [0, 0.6],
+      [0.38, -0.2, 'o'],
+      [0.6, 0],
+    ]);
+    o.glow = 0.3 * (1 - q / 0.6);
+    o.tail = Math.sin(q * 30) * 0.6 * sstep(0.3, 0.4, q);
+    key = `unroll${f}`;
+    if (f < 6) {
+      const ff = f;
+      post = (out, P) => {
+        const [cx, cy] = P([3, 0, 0]);
+        dust(out, cx, cy + 1, (ff + 0.5) / 6, 6, 23, S_DUST, 7);
+      };
+    }
+  } else if (md === 'dizzy') {
+    // Игла в стене: дёргает три раза, звёзды, на третьем выдернул.
+    const f = t < 0.25 ? fi(t, 5) : 6 + Math.min(18, Math.floor((t - 0.25) * 12));
+    const q = f < 6 ? (f + 0.5) / FPS : 0.25 + (f - 6 + 0.5) / 12;
+    fwd(spearStuck(q, o) + (f < 2 ? 1 : 0));
+    key = `stuck${f}`;
+    if (f < 3) {
+      const qq = 1 - f / 3;
+      ex.sx = 1 + 0.14 * qq;
+      ex.sy = 1 - 0.14 * qq;
+    }
+    if (q > 0.2 && q < 1.55) {
+      const ph = (f % 8) / 8;
+      post = (out, P) => {
+        const [cx, cy] = P([1.5, 0, 9]);
+        stars(out, cx, cy, ph, 4);
+      };
+    }
+  } else if (md === 'stun') {
+    // Сбит: наполовину свернулся, качнулся.
+    const f = fi(t, 6);
+    const k = f / 6;
+    o.curl = 0.45 * (1 - k);
+    o.pitch = -0.25 * (1 - k);
+    o.hp = 0.4 * (1 - k);
+    o.roll = (f % 2 ? 0.08 : -0.08) * (1 - k);
+    key = `stun${f}`;
+  } else if (md === 'sleep') {
+    // Спит шаром, дышит.
+    const f = Math.floor(now * 1.2 + id * 0.7) % 2;
+    o.curl = 1;
+    o.sq = f ? -0.06 : 0.04;
+    key = `sleep${f}`;
+  } else if (md === 'alert') {
+    // Проснулся: раскрылся и вскинул иглу.
+    const f = fi(t, 8);
+    const k = f / 8;
+    o.curl = 1 - easeOut(k / 0.6);
+    o.up = 0.08 + 0.4 * Math.sin(k * PI);
+    o.h = Math.sin(k * PI) * 0.6;
+    key = `alert${f}`;
+  } else if (md === 'drop') {
+    // Падает шаром, вертится.
+    const f = Math.floor(t * 12) % 4;
+    o.curl = 1;
+    o.spin = (f * TAU) / 24;
+    key = `drop${f}`;
+  } else {
+    // Рысь по пути (круг — 0,9 клетки) и покой с фазой от номера.
+    if (sp > 0.4) {
+      const f = Math.floor((v.dist / 0.9) * 8) % 8;
+      o.ph = f / 8;
+      o.str = 1;
+      o.h = Math.abs(Math.sin(o.ph * TAU)) * 0.35;
+      o.pitch = Math.sin(o.ph * TAU * 2) * 0.04;
+      o.tail = Math.sin(o.ph * TAU) * 0.5;
+      o.hp = Math.sin(o.ph * TAU * 2 + 1) * 0.08;
+      key = `walk${f}`;
+    } else {
+      // Покой: нюхает — игла клюёт, хвост дёргается.
+      const f = (((Math.floor(now * 5 + id * 2.3) % 8) + 8) % 8) | 0;
+      o.hp = [0, 0.1, 0.25, 0.1, 0, -0.05, 0, 0][f];
+      o.up = 0.08 - o.hp * 0.3;
+      o.h = [0, 0.1, 0.15, 0.1, 0, 0, -0.05, 0][f];
+      o.tail = f === 5 ? 0.6 : f === 6 ? -0.3 : 0;
+      key = `idle${f}`;
+    }
+    // Удар героя: поджался 4 кадра (полусвернулся).
+    const hf = Math.floor(hurtAge(v, now) * FPS);
+    if (hf >= 0 && hf < 4) {
+      const q = [1, 0.75, 0.4, 0.15][hf];
+      Object.assign(o, SPEAR0);
+      o.curl = 0.4 * q;
+      o.hp = 0.5 * q;
+      o.pitch = -0.15 * q;
+      key = `hurt${hf}`;
+    }
+  }
+  if (md !== 'dying') recoil(v, now, 1.4, ex, 0.12);
+  return frameOf('spear', SPEAR_LIM, key, d, pose, (yaw) => spearPic(o, yaw, post), ex);
+});
+
+registerMobWarm('f3_spear', function* () {
+  const pose = warmPose('chase');
+  for (let d = 0; d < 8; d++) {
+    if (MIRR[d]) continue;
+    const yaw = yawOfSide(d);
+    for (let f = 0; f < 8; f++) {
+      const o: SpearO = { ...SPEAR0, ph: f / 8, str: 1 };
+      o.h = Math.abs(Math.sin(o.ph * TAU)) * 0.35;
+      o.pitch = Math.sin(o.ph * TAU * 2) * 0.04;
+      o.tail = Math.sin(o.ph * TAU) * 0.5;
+      o.hp = Math.sin(o.ph * TAU * 2 + 1) * 0.08;
+      frameOf('spear', SPEAR_LIM, `walk${f}`, d, pose, () => spearPic(o, yaw));
+      yield 0;
+    }
+  }
+});
