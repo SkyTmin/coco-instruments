@@ -20,15 +20,15 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
-import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Strike, Zone } from '../dungeon-sim';
 import type { WorldObj } from '../dungeon-world';
 import { F9_LAIR, F9_MARK, F9_MAZE, F9_RUINS, isBogMark, isRingMark, isWaterMark } from './f9';
 import { F9_VIEW, RS } from './f9-brains';
 import './f9-mob-lizards';
+import './f9-mob-toad';
 
 type RGBA = [number, number, number, number];
 
@@ -345,156 +345,6 @@ const LZ_ = {
   scaleDk: hx('#1c3a26'),
   scaleLt: hx('#6aa45c'),
 };
-
-// ---------------------------------------------------------------------------
-// Ядовитая жаба: приземистая, бородавчатая, оливковая с рыжими пятнами яда,
-// горловой мешок раздувается перед плевком. 22×18.
-// ---------------------------------------------------------------------------
-
-const TD = {
-  skin: T('#26300e', '#4a5a1c', '#6e8028', '#9aac44'),
-  belly: T('#6a5a2a', '#a8904a', '#cebc72', '#ece0a4'),
-  spot: hx('#e0781e'),
-  spotHi: hx('#ffc04a'),
-  wart: hx('#3a4614'),
-  sac: T('#6a5a14', '#b8a02a', '#e8d65a', '#fff6a8'),
-  eye: hx('#ff9a2a'),
-  mouth: hx('#4a1a14'),
-  slime: hx('#b8f050'),
-};
-
-function paintToad(anim: string, f: number): Built {
-  const W = 24;
-  const H = 20;
-  const p = new Px(W, H);
-  const G = 18;
-  if (anim === 'dead') {
-    shadeEll(p, 12, 14, 7, 3.6, TD.belly);
-    for (const [x, y, x2, y2] of [
-      [7, 12, 5, 8],
-      [16, 12, 18, 8],
-      [9, 15, 6, 17],
-      [15, 15, 18, 17],
-    ])
-      limb(p, x, y, x2, y2, 1.2, 0.8, TD.skin);
-    p.outline(INK);
-    p.set(10, 13, TD.spot);
-    return { p, ax: 12, ay: G, eye: null };
-  }
-  let by = 0;
-  let sac = 0;
-  let jump = 0;
-  let mouth = 0;
-  let squash = 0;
-  switch (anim) {
-    case 'idle':
-      sac = [0.2, 0.5, 0.2, 0][f % 4];
-      squash = f % 2 ? 0.3 : 0;
-      break;
-    case 'hop': {
-      const k = f % 4;
-      jump = [0, 2.2, 3, 1][k];
-      squash = k === 0 ? 0.8 : k === 3 ? 0.4 : -0.4;
-      break;
-    }
-    case 'aim':
-      sac = 0.7 + f * 0.3;
-      squash = 0.4;
-      break;
-    case 'spit':
-      mouth = 1;
-      sac = 0.1;
-      break;
-    case 'wind':
-      mouth = f % 2 ? 0.6 : 0.2;
-      squash = 0.5;
-      break;
-    case 'bite':
-      mouth = 1;
-      by = -0.5;
-      break;
-    case 'hurt':
-      squash = -0.6;
-      break;
-    case 'sleep':
-      squash = 0.6;
-      break;
-  }
-  by -= jump;
-  const bx = 11;
-  // Задние лапы — широкие, согнутые.
-  const hl = jump > 1 ? 1 : 0;
-  limb(p, bx - 4, 13 + by, bx - 7 - hl * 2, 16 + by * 0.3 + hl, 2.2, 1.4, TD.skin);
-  limb(p, bx - 7 - hl * 2, 16 + by * 0.3 + hl, bx - 3, G - 1, 1.2, 0.9, TD.skin);
-  // Тело: широкое, приплюснутое.
-  const rx = 7 + squash * 0.8;
-  const ry = 5.2 - squash * 0.8;
-  shadeEll(p, bx, 11.5 + by + squash, rx, ry, TD.skin);
-  // Брюхо.
-  shadeEll(p, bx + 1.5, 14 + by + squash * 0.6, rx * 0.7, ry * 0.45, TD.belly, 0.1);
-  // Бородавки и пятна яда.
-  for (let i = 0; i < 9; i++) {
-    const x = Math.round(bx - 5 + hash(i, 3) * 10);
-    const y = Math.round(8 + by + squash + hash(i, 5) * 5);
-    if (!p.solid(x, y)) continue;
-    if (i % 3 === 0) {
-      p.set(x, y, TD.spot);
-      p.set(x + 1, y, TD.spot);
-      p.set(x, y - 1, TD.spotHi);
-    } else p.set(x, y, TD.wart);
-  }
-  // Горловой мешок: раздувается жёлтым пузырём.
-  if (sac > 0.05) {
-    const s = 1.2 + sac * 2.6;
-    shadeEll(p, bx + 5.5, 14 + by + squash * 0.5, s, s * 0.85, TD.sac, 0.2);
-  }
-  // Передние лапы.
-  limb(p, bx + 4, 13.5 + by, bx + 5.5, G - 1, 1.2, 0.8, TD.skin);
-  p.set(bx + 6, G - 1, TD.belly[2]);
-  // Голова спереди: глаза сверху, широкая пасть.
-  shadeEll(p, bx + 5, 9 + by + squash, 3.4, 2.8, TD.skin);
-  shadeEll(p, bx + 3.6, 6.8 + by + squash, 1.7, 1.6, TD.skin, 0.2);
-  p.outline(INK);
-  // Пасть.
-  const my = Math.round(10.5 + by + squash);
-  for (let x = bx + 4; x <= bx + 8; x++) p.set(x, my, TD.mouth);
-  if (mouth > 0.3) {
-    for (let x = bx + 5; x <= bx + 8; x++) p.set(x, my + 1, hx('#8a2a2a'));
-    if (anim === 'spit') for (let x = bx + 8; x <= bx + 11; x++) p.set(x, my, TD.slime);
-  }
-  // Глаз: оранжевый с горизонтальным зрачком.
-  const ex = Math.round(bx + 4);
-  const ey = Math.round(6.3 + by + squash);
-  if (anim === 'sleep' || anim === 'hurt') {
-    p.set(ex, ey, INK);
-    p.set(ex + 1, ey, INK);
-  } else {
-    p.set(ex, ey, TD.eye);
-    p.set(ex + 1, ey, TD.eye);
-    p.set(ex, ey, INK);
-  }
-  // Капля слизи на губе.
-  if (anim === 'aim' && f % 2) p.set(bx + 8, my + 1, TD.slime);
-  return { p, ax: bx, ay: G, eye: anim === 'sleep' ? null : [ex + 1, ey] };
-}
-
-registerMobPainter('f9_toad', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim;
-  let f = pose.frame;
-  if (pose.mode === 'aim') {
-    anim = 'aim';
-    f = Math.min(2, Math.floor(pose.t * 5));
-  } else if (pose.mode === 'recover' && pose.t < 0.2) {
-    anim = 'spit';
-    f = 0;
-  } else if (anim === 'run') {
-    anim = 'hop';
-    f = cyc(pose.t * 9 + m.id, 4);
-  } else if (anim === 'idle') f = cyc(f, 4);
-  else if (anim === 'wind' || anim === 'bite') f = cyc(f, 2);
-  else f = 0;
-  return frameOf('f9_toad', pose, anim, f, () => paintToad(anim, f));
-});
 
 // ---------------------------------------------------------------------------
 // Телепорт-кобольд: мелкий, лопоухий, шакалья морда, лиловый капюшон с
@@ -6401,30 +6251,6 @@ registerZonePainter('f9_tidewater', (g, z, px, py, S, time) => {
   }
   return true;
 });
-
-// ---------------------------------------------------------------------------
-// Снаряды: плевок жабы, ледяной шар, ядовитый ком.
-// ---------------------------------------------------------------------------
-
-export function blobShot(key: string, core: Tones, tail: RGBA, frames: number) {
-  return (s: Shot, time: number): Sprite => {
-    const f = cyc(time * 12 + s.id, frames);
-    return spriteOf(`${key}|${f}`, () => {
-      const p = new Px(12, 12);
-      shadeEll(p, 6, 6, 3 + (f % 2) * 0.3, 2.8, core);
-      p.set(3, 8 + (f % 2), tail);
-      p.set(2, 9, alpha(tail, 0.6));
-      p.outline(alpha(INK, 0.8));
-      p.set(5, 5, WHITE);
-      return { img: p.canvas(), ax: 6, ay: 8 };
-    });
-  };
-}
-
-registerShotPainter(
-  'f9_spit',
-  blobShot('spit', T('#2a4a0a', '#5a8a14', '#a8d83a', '#e8ff9a'), hx('#c8f04a'), 2),
-);
 
 // ---------------------------------------------------------------------------
 // Иконки вещей 10×10.
