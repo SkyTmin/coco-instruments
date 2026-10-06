@@ -527,11 +527,14 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         col = mixq(BOG[0], BOG[2], n, X, Y);
         if (hash(X, Y, 60) < 0.012) col = BOG[4];
       } else {
-        // Ожог: звёздный пол, опалённый до пепла, по краю — тлеющее золото.
-        const dx = (X + 0.5) / 16 - g.cx;
-        const dy = (Y + 0.5) / 16 - g.cy;
-        col = mixq(skyAt(X, Y), INK, 0.6, X, Y);
-        if (vnoise(X / 3 + dx, Y / 3 + dy, 61) > 0.7) col = GOLD[2];
+        // Ожог: на месте лавы остывшие жилы той же лавы тусклым золотом,
+        // пепел гаснет к краю пятна — край не режется по клеткам.
+        const ex = Math.min(same(-1, 0) ? 99 : u + 0.5, same(1, 0) ? 99 : 15.5 - u, same(0, -1) ? 99 : v + 0.5, same(0, 1) ? 99 : 15.5 - v);
+        const fade = Math.min(1, ex / 7);
+        col = mixq(skyAt(X, Y), INK, 0.45 * fade, X, Y);
+        const dd = Math.abs(fbm(X / 7, Y / 7, 51) - 0.5);
+        if (dd < 0.006 + 0.03 * fade) col = fade > 0.55 ? GOLD[3] : GOLD[2];
+        else if (dd < 0.065 * fade) col = mixc(col, GOLD[1], 0.45);
       }
       p.set(u, v, col);
     }
@@ -1395,6 +1398,11 @@ const T_EXHALE = track([
   { t: EX, ...BLAZE },
 ]);
 const DIE = 2.6;
+// Сцена смерти идёт в 2,3 раза быстрее мира: страница открывает церемонию и
+// ставит мир на паузу через 1,5 с после `finale`, а мир к тому мгновению
+// проходит около 1,15 с (замедление финала 0,6 с при 0,4). Дорожка T_DIE
+// остаётся в «своих» секундах и успевает целиком.
+const DIE_K = 2.3;
 const T_DIE = track([
   { t: 0, L: [4, -22, 50, 2], R: [4, 22, 50, 2], flare: 1, open: 0.8, core: 2, eyes: 2, gl: 1, gr: 1, hover: 4, lean: -0.08 },
   { t: 0.35, L: [2, -24, 58, 2], R: [2, 24, 58, 2], hover: 7, lean: -0.12, e: 'out' },
@@ -1451,7 +1459,7 @@ const fr24 = (t: number) => Math.max(0, Math.floor(t * 24));
 function lordPose(m: Mob, pose: MobPose, now: number): LPose {
   const s = paintSim();
   const v = f15bView(s);
-  const T = pose.mode === 'dying' ? pose.t : m.t;
+  const T = pose.mode === 'dying' ? pose.t * DIE_K : m.t;
   const ph = Math.floor(now * 5) % 10;
   const sp = Math.hypot(m.vx, m.vy);
   const spQ = Math.round(clamp01(sp / 3.1) * 2) / 2;
@@ -2478,7 +2486,7 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
   const lk = `${m.id}|${Math.floor(now * 24)}|${gk}|${pose.mode}`;
   let lit = LIT_LAST.c;
   if (lk !== LIT_LAST.k || !lit) {
-    lit = paintLit(m, p, (dir * TAU) / DIRS, dir, geo, now, s, pose.mode === 'dying' ? pose.t : 0);
+    lit = paintLit(m, p, (dir * TAU) / DIRS, dir, geo, now, s, pose.mode === 'dying' ? pose.t * DIE_K : 0);
     LIT_LAST.k = lk;
     LIT_LAST.c = lit;
   }
@@ -2499,7 +2507,7 @@ registerMobPainter('f15boss', (m: Mob, pose: MobPose): MobFrame | null => {
     lit,
     alpha: p.alpha * (behind ? 0.55 : 1),
     ghost: ghostOn ? { every: 0.06, life: 0.32, tint: '#3a2a8a', alpha: 0.4 } : null,
-    linger: DIE,
+    linger: DIE / DIE_K,
   };
 });
 

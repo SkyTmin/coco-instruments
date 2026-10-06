@@ -5616,9 +5616,10 @@ registerZonePainter(
     const t = zz.t;
     const s = paintSim();
     const R = (f15bView(s)?.r ?? 13) * S;
-    if (t < 0.5) {
-      const u = t / 0.5;
-      p.col('#fffaf0', 0.9 * (1 - u));
+    // Вспышка короткая: под ней рассыпается плащ — сцену не закрывать.
+    if (t < 0.22) {
+      const u = t / 0.22;
+      p.col('#fffaf0', 0.6 * (1 - u));
       oval(p, cx, cy, S + R * eOut2(u), S + R * eOut2(u));
     }
     for (let j = 0; j < 3; j++) {

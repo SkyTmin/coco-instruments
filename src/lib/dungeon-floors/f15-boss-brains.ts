@@ -2590,8 +2590,12 @@ function finale(sim: Sim, b: BossFight, st: F15BState, api: SimApi): void {
   sim.zones = sim.zones.filter((z) => !z.art?.startsWith('f15b_'));
   vfx(sim, api, 'f15b_fxfinale', st.cx, st.cy, 3.2, { above: true });
   restoreArena(sim, st, api);
-  api.slowmo(sim, 2.6, 0.2);
-  sim.events.push({ t: 'flash', color: '#fff2c0', k: 1 });
+  // Страница открывает церемонию через 1,5 с и ставит мир на паузу: при
+  // прежних 2,6 с × 0,2 мир успевал пройти 0,3 с, и смерть владыки не была
+  // видна вовсе (кадр стоял выбеленным вспышкой). Короткое замедление —
+  // удар, потом сцена идёт почти в реальном времени.
+  api.slowmo(sim, 0.6, 0.4);
+  sim.events.push({ t: 'flash', color: '#fff2c0', k: 0.6 });
   sim.events.push({ t: 'shake', k: 1 });
   sim.events.push({ t: 'boss', what: 'finale' });
   void b;
