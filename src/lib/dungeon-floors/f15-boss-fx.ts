@@ -4,12 +4,16 @@
 // рисует `f15-boss-art.ts`, здесь — всё, что он делает с МИРОМ.
 //
 // Как устроено:
-//   • метка удара (`registerZonePainter` для strike) читается «куда» с
-//     первого кадра (вся фигура удара — ночью на полу с золотой кромкой) и
-//     «когда» — фронт налива доходит до края ровно в миг урона; последние
-//     0,2 с — «тик-тик» и белая кромка. У каждого приёма свой предвестник:
-//     ладонь-созвездие, звёзды, вспыхивающие там, куда придёт удар из тьмы,
-//     тень падающего метеора, орбита под планетой;
+//   • метка удара (`registerZonePainter` для strike) — язык астролябии
+//     (`astroMark`, `bandAstro`): «куда» с первого кадра — вся фигура удара
+//     ночью на полу, кромка с рисками, что идут по кругу; «когда» — фронт
+//     налива доходит до края ровно в миг урона; последние 0,2 с — «тик-тик»
+//     и белая кромка, заливка гуще, но не слепит. У каждого приёма свой
+//     предвестник: ладонь-созвездие встаёт из руки, звёзды вспыхивают там,
+//     куда придёт удар из тьмы, тень падающего метеора, дуга полёта планеты;
+//   • шов с телом: ладони — из `lordHandPx`, планеты — от `crownSpot` (по
+//     той же кривой, что у мозга); владыку, эхо, осколки и хранителей
+//     рисует `f15-boss-art.ts`, здесь их нет;
 //   • контакт (`registerImpactPainter`) — кадр-звезда в миг урона, потом
 //     след: отпечаток ладони гаснет, кристаллы планет звенят осколками,
 //     звёздная пыль клубами оседает; тряска — по силе удара;
@@ -17,17 +21,18 @@
 //     возвращается на плащ, затмение, сверхновая, финал, прицел осколка) —
 //     визуальные зоны `f15b_fx*` (`api.vfx` мозга, без урона и статусов);
 //   • всё светящееся (метеоры, лучи сверхновой, когти из тьмы) — поверх
-//     темноты; то, что в этом слое лежит на полу, прячется за телами,
-//     стоящими ближе к камере (`occOf`).
+//     темноты; то, что в этом слое лежит на полу, за телами, стоящими
+//     ближе к камере, ложится на треть (`occOf`).
 //
-// Плоти и крови нет (запрет владельца): старые «раны» и «кровь» приёмов эха
-// перекрашены в звёздный шрам и фиолетовую туманность.
+// Ни плоти, ни крови (запрет владельца): след удара — светящийся шрам
+// звёздного света в полу, брызги — фиолетовая туманность.
 //
 // Пиксели — на СЕТКЕ МИРА (`Pen`): эффект не «плывёт» по полу при движении
 // камеры. Частицы детерминированы — позиция считается от зерна и возраста.
 
 import { Px } from '../dungeon-art';
 import {
+  frameLRU,
   IMPACT_PAINTERS,
   paintSim,
   registerImpactPainter,
@@ -37,11 +42,11 @@ import {
   ZONE_PAINTERS,
 } from '../dungeon-paint';
 import type { ImpactRec, Sprite } from '../dungeon-paint';
-import type { Mob, Shot, Sim, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { F15B_MARK } from './f15-boss';
 import { crownSpot, f15bView, LORD } from './f15-boss-brains';
 import type { F15BState } from './f15-boss-brains';
-import { planetSprite } from './f15-boss-art';
+import { F15B_SKY, lordHandPx } from './f15-boss-art';
 
 type RGBA = [number, number, number, number];
 
@@ -71,17 +76,17 @@ const SIG = 0.2;
 const tick = (left: number) => left < SIG && Math.floor(left / 0.05) % 2 === 1;
 
 // ---- Палитра: ночь, звёздный шрам, золото, угли, память, созвездия ------------
-// Плоти и крови здесь нет (запрет владельца): «рана» — светящийся шрам
-// звёздного света в полу, «кровь» — фиолетовая туманность.
+// Ни плоти, ни крови: `neb` — фиолетовая туманность брызг, `scarCol` —
+// остывание светящегося шрама в полу.
 
 const C = {
   ink: '#05040f',
   groove: '#03020a',
-  flesh: ['#0a0920', '#100e30', '#171442', '#201b56', '#2b246c'],
+  dusk: ['#0a0920', '#100e30', '#171442', '#201b56', '#2b246c'],
   lip: '#6a5ab0',
   lipHi: '#a898e0',
-  blood: ['#0a0620', '#24104a', '#46207a', '#9a5ad0', '#c890f0'],
-  bloodHi: '#ecd4ff',
+  neb: ['#0a0620', '#24104a', '#46207a', '#9a5ad0', '#c890f0'],
+  nebHi: '#ecd4ff',
   ember: ['#4a0a04', '#9a2a08', '#e05010', '#ff8a2a', '#ffd080', '#fff4c8'],
   stone: ['#08071a', '#14122e', '#22204a', '#3a3870', '#5c5a9a', '#8c8ac4'],
   gold: ['#6e4a14', '#dcaa3c', '#ffd866', '#fff0b8'],
@@ -111,11 +116,9 @@ const emberCol = (k: number) =>
         : k < 0.88
           ? C.ember[2]
           : C.ember[1];
-/** Капля крови по доле жизни: светлая → алая → тёмная. */
-const bloodCol = (k: number) =>
-  k < 0.2 ? C.bloodHi : k < 0.55 ? C.blood[4] : k < 0.8 ? C.blood[3] : C.blood[2];
-/** Пылинка в ветре: белая → бледная → тает в пол. */
-const windCol = (k: number) => (k < 0.3 ? C.white : k < 0.7 ? C.wind : C.windMid);
+/** Капля туманности по доле жизни: светлая → сиреневая → тёмная. */
+const nebCol = (k: number) =>
+  k < 0.2 ? C.nebHi : k < 0.55 ? C.neb[4] : k < 0.8 ? C.neb[3] : C.neb[2];
 /** Призрачная искра: белая → голубая → синяя. */
 const ghostCol = (k: number) =>
   k < 0.25 ? C.ghost[5] : k < 0.55 ? C.ghost[4] : k < 0.85 ? C.ghost[3] : C.ghost[2];
@@ -132,19 +135,19 @@ const heatCol = (k: number) =>
           : k < 0.88
             ? C.ember[1]
             : C.ember[0];
-/** Свежая рана в плоти по остыванию: белая → алая → тёмная борозда. */
-const woundCol = (k: number) =>
+/** Свежий звёздный шрам по остыванию: белый → сиреневый → тёмная борозда. */
+const scarCol = (k: number) =>
   k < 0.08
     ? C.white
     : k < 0.2
-      ? C.bloodHi
+      ? C.nebHi
       : k < 0.38
-        ? C.blood[4]
+        ? C.neb[4]
         : k < 0.6
-          ? C.blood[3]
+          ? C.neb[3]
           : k < 0.82
-            ? C.blood[2]
-            : C.blood[1];
+            ? C.neb[2]
+            : C.neb[1];
 
 let rmq: MediaQueryList | null | undefined;
 /** Пользователь просил меньше движения: меньше частиц, без мигания. */
@@ -170,10 +173,22 @@ interface Box {
   y0: number;
   y1: number;
   fy: number;
+  /** Полуширина у макушки: тело колоколом (уже вверху), а не прямоугольником. */
+  ht?: number;
+}
+
+/** Заслонённый кусок строки `Y` у тела `b` — с колоколом, если он задан. */
+function spanOf(b: Box, Y: number): [number, number] {
+  if (b.ht === undefined) return [Math.floor(b.x0), Math.ceil(b.x1)];
+  const cx = (b.x0 + b.x1) / 2;
+  const hw = (b.x1 - b.x0) / 2;
+  const f = Math.min(1, Math.max(0, (Y - b.y0) / (b.y1 - b.y0)));
+  const half = b.ht + (hw - b.ht) * f;
+  return [Math.floor(cx - half), Math.ceil(cx + half)];
 }
 
 /**
- * Тела вылазки, что сейчас на экране: лев (огромный), сердце, эхо, сгустки,
+ * Тела вылазки, что сейчас на экране: владыка, эхо, осколки, хранители,
  * герой. Размеры — по кадрам их рисовальщиков, с запасом внутрь: лучше
  * чуть меньше спрятать, чем лечь метке герою на грудь.
  */
@@ -187,6 +202,8 @@ function occOf(S: number): Box[] {
     const lift = Math.round((m.data.z ?? 0) * 3) * 5;
     let hw: number;
     let h: number;
+    let ht: number | undefined;
+    let hem = 0;
     if (m.kind === 'f15boss') {
       // Герой за владыкой — рисовальщик тела делает его полупрозрачным:
       // тогда он ничего не заслоняет, иначе вырезанный прямоугольник
@@ -196,6 +213,9 @@ function occOf(S: number): Box[] {
       if (m.mode === 'f15l_sleep') continue;
       hw = 1.25 * S;
       h = 5 * S;
+      ht = 0.55 * S;
+      // Подол висит над полом на полклетки — там пол открыт (тень не в счёт).
+      hem = 0.5 * S;
     } else if (m.kind === 'f15b_keeper') {
       hw = 0.5 * S;
       h = 3.4 * S;
@@ -209,10 +229,26 @@ function occOf(S: number): Box[] {
       h = m.r * S * 3.2;
     }
     const fy = m.y * S + 2;
-    out.push({ x0: m.x * S - hw, x1: m.x * S + hw, y0: fy - lift - h, y1: fy - lift, fy });
+    out.push({
+      x0: m.x * S - hw,
+      x1: m.x * S + hw,
+      y0: fy - lift - h,
+      y1: fy - lift - hem,
+      fy,
+      ht,
+    });
   }
   const fy = hero.y * S + 2;
-  out.push({ x0: hero.x * S - 0.42 * S, x1: hero.x * S + 0.42 * S, y0: fy - 1.25 * S, y1: fy, fy });
+  // Герой — колоколом по шлему и плечам: прямоугольник 1,25 клетки торчал
+  // над шлемом тёмной рамкой на светлом сигнале.
+  out.push({
+    x0: hero.x * S - 0.42 * S,
+    x1: hero.x * S + 0.42 * S,
+    y0: fy - 1.05 * S,
+    y1: fy,
+    fy,
+    ht: 0.28 * S,
+  });
   return out;
 }
 
@@ -264,23 +300,45 @@ class Pen {
       this.g.fillRect(x + this.qx, y + this.qy, w, h);
       return;
     }
+    // Ни одно тело не задевает прямоугольник — одной заливкой, без строк.
+    if (h > 1 && !this.hits(x, y, x + w - 1, y + h - 1)) {
+      this.g.fillRect(x + this.qx, y + this.qy, w, h);
+      return;
+    }
     for (let yy = y; yy < y + h; yy++) this.run(yy, x, x + w - 1);
+  }
+  /** Задевает ли тело из `occ` строки [ya, yb] в столбцах [xa, xb]. */
+  private hits(xa: number, ya: number, xb: number, yb: number): boolean {
+    for (const b of this.occ!)
+      if (!(yb < b.y0 || ya > b.y1 || ya >= b.fy - 1 || b.x1 < xa || b.x0 > xb)) return true;
+    return false;
   }
   /** Строка пикселей [xa, xb] без заслонённых кусков. */
   private run(Y: number, xa: number, xb: number): void {
+    // Частый случай — строка мимо тел: без списка вырезов.
+    if (!this.hits(xa, Y, xb, Y)) {
+      this.g.fillRect(xa + this.qx, Y + this.qy, xb - xa + 1, 1);
+      return;
+    }
     let lo = xa;
     const cuts: [number, number][] = [];
     for (const b of this.occ!) {
       if (Y < b.y0 || Y > b.y1 || Y >= b.fy - 1 || b.x1 < xa || b.x0 > xb) continue;
-      cuts.push([Math.floor(b.x0), Math.ceil(b.x1)]);
-    }
-    if (!cuts.length) {
-      this.g.fillRect(xa + this.qx, Y + this.qy, xb - xa + 1, 1);
-      return;
+      cuts.push(spanOf(b, Y));
     }
     cuts.sort((p, q) => p[0] - q[0]);
+    // Заслонённое не вырезается дочиста, а ложится на треть: прямоугольник
+    // тела шире рисунка, и пустая рамка вокруг героя читалась чёрной дырой.
+    const ga = this.g.globalAlpha;
     for (const [c0, c1] of cuts) {
       if (c0 > lo) this.g.fillRect(lo + this.qx, Y + this.qy, Math.min(xb, c0 - 1) - lo + 1, 1);
+      const h0 = Math.max(lo, c0);
+      const h1 = Math.min(xb, c1);
+      if (h1 >= h0) {
+        this.g.globalAlpha = ga * 0.3;
+        this.g.fillRect(h0 + this.qx, Y + this.qy, h1 - h0 + 1, 1);
+        this.g.globalAlpha = ga;
+      }
       lo = Math.max(lo, c1 + 1);
       if (lo > xb) return;
     }
@@ -311,8 +369,9 @@ class Pen {
           const cuts: [number, number][] = [];
           for (const b of occ) {
             if (Yr < b.y0 || Yr > b.y1 || d >= b.fy - 1) continue;
-            const c0 = Math.floor(b.x0) - X;
-            const c1 = Math.ceil(b.x1) - X;
+            const [s0, s1] = spanOf(b, Yr);
+            const c0 = s0 - X;
+            const c1 = s1 - X;
             if (c1 < 0 || c0 >= c.width) continue;
             cuts.push([c0, c1]);
           }
@@ -732,7 +791,7 @@ const PUFF_PAL: [RGBA, RGBA, RGBA][] = [
   [hx('#2a5a68'), hx('#6aa8b8'), hx('#d0f4f8')], // 5 — брызги и пар бездны
   [hx('#1a3a10'), hx('#3e7020'), hx('#84b440')], // 6 — яд топи
   [hx('#24104a'), hx('#46207a'), hx('#7a4ab0')], // 7 — фиолетовая туманность
-  [hx('#5a4a30'), hx('#a08a5a'), hx('#e8d8a0')], // 8 — золотая пыль сердца
+  [hx('#5a4a30'), hx('#a08a5a'), hx('#e8d8a0')], // 8 — золотая пыль
 ];
 
 /**
@@ -846,7 +905,7 @@ function flameImg(h: number, f: number, pal = 0): HTMLCanvasElement {
   });
 }
 
-/** Тёмное пятно радиуса r: выжженное (0), лужа крови (1), копоть призрака (2). */
+/** Тёмное пятно радиуса r: выжженное (0), лужа туманности (1), копоть призрака (2). */
 function scorchImg(r: number, tone: number): HTMLCanvasElement {
   const R = Math.max(2, Math.min(24, Math.round(r)));
   return sprite(60000 + R * 4 + tone, () => {
@@ -1156,7 +1215,7 @@ const cracks = new Map<string, Crack>();
  * Сеть трещин из точки (0, 0): ветви `[угол, длина, ширина-у-корня]`,
  * извилистость `jag`, развилки с шансом `forkP`. Каждый пиксель знает путь
  * от корня — трещина «бежит», а не проявляется. Кромка — светлый пиксель
- * снизу-справа (свет сверху-слева), как разрыв в плоти.
+ * снизу-справа (свет сверху-слева), как трещина в камне.
  */
 function crackOf(
   key: string,
@@ -1456,7 +1515,7 @@ function sweepOf(a: number, arc: number): { as: number; dir: number } {
 /** Когда фронт `eOut2` на пути `span` за `T` с проходит точку s. */
 const sweepT = (s: number, span: number, T: number) => T * (1 - Math.sqrt(1 - k01(s / span)));
 
-/** Крошка плоти на полу метки дрожит, к удару — подскакивает. */
+/** Крошка звёздного пола в метке дрожит, к удару — подскакивает. */
 function hopBits(
   p: Pen,
   sd: number,
@@ -1536,7 +1595,7 @@ function gashOf(
  * Рана по пикселям: где удар прошёл раньше — там уже потемнела.
  * `when(u)` — когда удар прошёл долю u, `cool` — за сколько остывает.
  */
-function drawWound(
+function drawScar(
   p: Pen,
   gs: Gash,
   ox: number,
@@ -1546,7 +1605,7 @@ function drawWound(
   when: (u: number) => number,
   cool: number,
   fade: number,
-  colOf: (k: number) => string = woundCol,
+  colOf: (k: number) => string = scarCol,
   lip: string | null = C.lip,
 ): void {
   if (fade <= 0 || reveal <= 0) return;
@@ -1569,19 +1628,6 @@ function drawWound(
     }
   }
 }
-
-// =============================================================================
-// КОГТИ — веер r 3,1 дуга 1,8 от льва; метка встаёт в 0,2 с режима, удар —
-// в 0,9 (во второй фазе «КРЫЛЬЕВ» бывает вторая лапа следом). Метка: весь
-// веер тёмной кровью; налив от льва к краю с разгоном; три борозды —
-// где пройдут когти — процарапываются по ходу будущего взмаха; тень
-// занесённой лапы висит у того края, откуда она пойдёт. Контакт: три
-// когтя проходят веер дугами за 0,12 с (белое остриё, алое тело, тёмный
-// хвост) с проводкой за край; в плоти остаются три рваные раны, остывающие
-// от белого к тёмной борозде, кровь брызжет по ходу лапы, у края — пыль.
-// =============================================================================
-
-/** Радиусы трёх когтей — доли радиуса веера. */
 
 // =============================================================================
 // ПОДЗЕМЕЛЬЕ ПОМНИТ — четверти арены по очереди становятся прошлыми этажами:
@@ -3034,14 +3080,14 @@ registerImpactPainter('f15b_slash', {
       p.scan = -1;
       if (age < 0.07)
         ring(p, cx, cy, R, C.white, 1 - age / 0.07, (ang) => inArc(ang, a - arc / 2, arc), 0.5);
-      // Рубец в плоти: холодное свечение памяти остывает к тёмной ране.
+      // Рубец в полу: холодное свечение памяти остывает к тёмной борозде.
       const g0 = 0.12;
       const gspan = arc - 0.24;
       const gs = gashOf(sd, R * 0.78, at(g0), dir, gspan);
       const reveal = k01((front - g0) / gspan);
       const fade = 1 - k01((age - 0.95) / 0.4);
       const when = (u: number) => sweepT(g0 + u * gspan, span, ESLASH_SWEEP);
-      drawWound(p, gs, cx, cy, age, reveal, when, 0.85, fade, (h) =>
+      drawScar(p, gs, cx, cy, age, reveal, when, 0.85, fade, (h) =>
         h < 0.1
           ? C.white
           : h < 0.25
@@ -3051,8 +3097,8 @@ registerImpactPainter('f15b_slash', {
               : h < 0.65
                 ? G[3]
                 : h < 0.85
-                  ? C.blood[2]
-                  : C.blood[1],
+                  ? C.neb[2]
+                  : C.neb[1],
       );
       const pick = (i: number) =>
         Math.min(gs.x.length - 1, Math.floor(hash(sd, i, 81) * gs.x.length));
@@ -3282,7 +3328,7 @@ registerImpactPainter('f15b_cleave', {
         cx + ux * s0,
         cy + uy * s0,
         reach,
-        cool < 0.3 ? G[5] : cool < 0.6 ? G[3] : C.blood[1],
+        cool < 0.3 ? G[5] : cool < 0.6 ? G[3] : C.neb[1],
         C.lip,
         fade,
       );
@@ -3302,7 +3348,7 @@ registerImpactPainter('f15b_cleave', {
         p.scan = -1;
       }
       hitStar(p, bx, by - 2, age, 0.12, 16, a + 0.3, G[4]);
-      // Волна по полосе: плоть вскидывает, крошка и пыль в стороны.
+      // Волна по полосе: пол вскидывает, крошка и пыль в стороны.
       const n = few ? 6 : 16;
       const passT = (s: number) => ECLEAVE_RUN * k01((s - s0) / (L - s0));
       chunks(
@@ -3437,11 +3483,12 @@ registerZonePainter(
     const run = Math.floor(time * (12 + 30 * k));
     const pts = circle(R);
     const edge = sig ? (tk ? C.white : G[5]) : k > 0.5 ? G[4] : G[3];
+    // Кромка сплошная с первого кадра («куда»), по ней бегут светлые штрихи.
     for (let i = 0; i < pts.x.length; i++) {
-      if (!sig && mod(i - run, 7) >= 4) continue;
-      p.col(C.ink, 0.5);
+      const lit = sig || mod(i - run, 7) < 4;
+      p.col(C.ink, lit ? 0.5 : 0.3);
       p.dot(cx + pts.x[i] + 1, cy + pts.y[i] * 0.75 + 1);
-      p.col(edge, 0.9);
+      p.col(lit ? edge : G[3], lit ? 0.9 : 0.5);
       p.dot(cx + pts.x[i], cy + pts.y[i] * 0.75);
     }
     if (sig) {
@@ -3489,10 +3536,10 @@ registerImpactPainter('f15b_axe', {
       p.col(C.ink, fade);
       lens(p, cx, cy, 1, 0, 6.5, 1.7);
       // Призрачная секира в полу: тает строками.
-      if (age < 0.4) {
+      if (age < 0.55) {
         const im = ghostAxe();
         p.scan = scanOf(time);
-        p.alpha(1 - age / 0.4);
+        p.alpha(1 - age / 0.55);
         p.img(im, cx - 15, cy - im.height + 5);
         p.scan = -1;
       }
@@ -3694,7 +3741,7 @@ registerImpactPainter('f15b_bite', {
           0.5,
         );
       }
-      // Брызги эктоплазмы и кровь из прикуса.
+      // Брызги эктоплазмы и туманность из прикуса.
       drops(
         p,
         sd,
@@ -3721,8 +3768,8 @@ registerImpactPainter('f15b_bite', {
         20,
         30,
         () => 0.03,
-        bloodCol,
-        C.blood[2],
+        nebCol,
+        C.neb[2],
         [0.6, 0.95],
       );
     },
@@ -3753,7 +3800,8 @@ registerZonePainter(
     fillLane(p, cx, cy, ux, uy, 0, L, hw);
     // Фитиль: огонь бежит от змея к концу полосы.
     const lf = L * Math.pow(k, 1.25);
-    p.col(sig ? G[2] : G[1], (tk ? 0.7 : 0.42) + 0.14 * k);
+    // Сигнал мигает умеренно: полоса не должна слепить и прятать героя.
+    p.col(sig ? G[2] : G[1], (tk ? 0.56 : 0.42) + 0.1 * k);
     fillLane(p, cx, cy, ux, uy, 0, lf, hw * (0.5 + 0.5 * k));
     for (let j = -1; j <= 1; j++) {
       const f = mod(Math.floor(time * 14) + j + sd, 4);
@@ -4291,7 +4339,7 @@ registerZonePainter(
   }),
 );
 
-/** Лужа крови: рваное пятно с брызгами вокруг (вариант v). */
+/** Лужа туманности: рваное пятно с брызгами вокруг (вариант v). */
 registerZonePainter(
   'f15b_mist',
   guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
@@ -4342,19 +4390,15 @@ registerZonePainter(
 );
 
 // =============================================================================
-// СЕРДЦЕ — лев вырвал сердце и окаменел; сердце висит в центре и бьётся.
-// Сильный удар — три кольца (2,6 / 5,2 / 7,8, warn 0,55 / 0,8 / 1,05, поверх
-// темноты); артерии хлещут линиями (warn 1,05); раз в четыре удара стены
-// сжимаются на кольцо клеток (метка 1,7 с и до ближнего удара).
-// =============================================================================
-
-/** Кольцо пульса. Метка: полоса кольца наливается кровью, к ней от
- * предыдущего кольца бежит гребень давления, по полосе вспухают узлы
- * вен; кромка пунктиром. Контакт: полоса вздрагивает — гребень уходит
- * наружу, кровь подпрыгивает каплями, взвесь оседает. */
-
-// =============================================================================
 // ХОЗЯИН ПОДЗЕМЕЛЬЯ — приёмы владыки, стражи и сцены боя.
+//
+// Язык метки у владыки один на все приёмы. «Куда» — ночь-тень на полу и
+// кольцо астролябии с бегущими рисками: золото — руки и звёзды, голубой
+// кристалл — планеты, фиолет — волны тяготения. «Когда» — налив от центра:
+// его фронт доходит до края ровно в урон; последние 0,2 с — белая кромка и
+// «тик-тик». Метки лежат на полу поверх темноты (`above` мозга) и прячутся за
+// телами ближе к камере (`occOf`); летящее — ладонь, планеты, метеоры — в
+// воздухе, без заслонения.
 // =============================================================================
 
 /** Звёздная искра по доле жизни: белая → золото → фиолет. */
@@ -4378,6 +4422,10 @@ const vioCol = (k: number) =>
 const bez = (a: number, c: number, b: number, u: number) =>
   (1 - u) * (1 - u) * a + 2 * (1 - u) * u * c + u * u * b;
 const smooth3 = (u: number) => u * u * (3 - 2 * u);
+const eIn3 = (t: number) => t * t * t;
+
+/** Кадры техник владыки (планеты, камни метеоров): с вытеснением. */
+const LFX = frameLRU<HTMLCanvasElement>(360);
 
 /** Звёздочка-крест на сетке мира. */
 function twinkle(
@@ -4416,11 +4464,98 @@ const angOf = (st: Strike): number => {
   return st.ang ?? 0;
 };
 
+/** Ладонь владыки в пикселях мира — ближняя к точке (tx, ty); кадра нет — центр фигуры. */
+function handAt(m: Mob, S: number, tx: number, ty: number): [number, number] {
+  const ox = m.x * S;
+  const oy = m.y * S;
+  let best: [number, number] | null = null;
+  let bd = 1e9;
+  for (const side of [-1, 1]) {
+    const h = lordHandPx(m, side);
+    if (!h) continue;
+    const x = ox + h[0];
+    const y = oy + h[1];
+    const d = Math.hypot(x - tx, y - ty);
+    if (d < bd) {
+      bd = d;
+      best = [x, y];
+    }
+  }
+  return best ?? [ox, oy - 2.4 * S];
+}
+
+/** Риски астролябии наружу от окружности r: каждая четвёртая длиннее. */
+function ticks(
+  p: Pen,
+  cx: number,
+  cy: number,
+  r: number,
+  n: number,
+  rot: number,
+  len: number,
+  c: string,
+  a: number,
+  keep?: (ang: number) => boolean,
+): void {
+  for (let j = 0; j < n; j++) {
+    const t = rot + (j / n) * TAU;
+    if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) continue;
+    const L = j % 4 === 0 ? len * 2 : len;
+    const ux = Math.cos(t);
+    const uy = Math.sin(t);
+    p.lineS(cx + ux * (r + 1), cy + uy * (r + 1), cx + ux * (r + L), cy + uy * (r + L), c, a, 0.5);
+  }
+}
+
 /**
- * Полоса кольца: «куда» — ночь с кромкой, «когда» — фронт от центра доходит
- * до полосы ровно в урон. `keep(a)` — дуга (проход в кольце).
+ * Круглая метка владыки: тень, налив от центра (фронт доходит до края в
+ * урон), кольцо с рисками крутится; последние 0,2 с — белая кромка и вспышки
+ * внешнего кольца «тик-тик».
  */
-function bandMark(
+function astroMark(
+  p: Pen,
+  cx: number,
+  cy: number,
+  R: number,
+  k: number,
+  left: number,
+  time: number,
+  sd: number,
+  rim: string,
+  hot: string,
+  fill: string,
+  nt = 16,
+): void {
+  const sig = left < SIG;
+  const tk = !reduced() && tick(left);
+  p.col(C.night[1], 0.32 + 0.28 * k);
+  fillSector(p, cx, cy, 0, R, 0, TAU);
+  const rf = R * (0.12 + 0.88 * Math.pow(k, 1.25));
+  // Вспышка сигнала — белым светом: золото полупрозрачно над ночью давало бежевый.
+  p.col(tk ? C.white : fill, sig ? (tk ? 0.24 : 0.5) : 0.16 + 0.26 * k);
+  fillSector(p, cx, cy, 0, rf, 0, TAU);
+  ring(
+    p,
+    cx,
+    cy,
+    rf,
+    sig ? C.white : hot,
+    0.45 + 0.5 * k,
+    (_a, i) => hash(i >> 2, sd, 3) > 0.2,
+    0.4,
+  );
+  const rc = sig ? (tk ? C.white : hot) : rim;
+  ring(p, cx, cy, R, rc, sig ? 1 : 0.65 + 0.3 * k, undefined, 0.6);
+  ticks(p, cx, cy, R, nt, time * (sd & 1 ? 0.8 : -0.8), 2, sig ? C.white : rim, 0.5 + 0.45 * k);
+  if (sig) ring(p, cx, cy, R + 5, tk ? C.white : hot, 0.85, (_a, i) => i % 2 === 0);
+}
+
+/**
+ * Полоса кольца [R − w, R + w]: ночь и цвет, двойная кромка, риски поперёк
+ * бегут по кругу; фронт от `from` доходит до полосы ровно в урон. `keep(a)` —
+ * дуга (проход в кольце).
+ */
+function bandAstro(
   p: Pen,
   cx: number,
   cy: number,
@@ -4430,45 +4565,61 @@ function bandMark(
   left: number,
   sd: number,
   time: number,
-  base: string,
+  from: number,
+  fill: string,
+  edge: string,
   hot: string,
   keep?: (a: number) => boolean,
 ): void {
   const sig = left < SIG;
   const tk = !reduced() && tick(left);
-  p.col(base, 0.3 + 0.16 * k);
-  if (keep) {
-    for (let j = 0; j < 64; j++) {
-      const a0 = -Math.PI + (j / 64) * TAU;
-      const a1 = -Math.PI + ((j + 1) / 64) * TAU;
-      if (keep((a0 + a1) / 2)) fillSector(p, cx, cy, Math.max(0, R - w), R + w, a0, a1);
+  const r0 = Math.max(0, R - w);
+  const r1 = R + w;
+  const band = () => {
+    if (!keep) {
+      fillSector(p, cx, cy, r0, r1, 0, TAU);
+      return;
     }
-  } else fillSector(p, cx, cy, Math.max(0, R - w), R + w, 0, TAU);
+    for (let j = 0; j < 64; j++) {
+      const b0 = -Math.PI + (j / 64) * TAU;
+      const b1 = -Math.PI + ((j + 1) / 64) * TAU;
+      if (keep((b0 + b1) / 2)) fillSector(p, cx, cy, r0, r1, b0, b1);
+    }
+  };
   const kk = (a: number) => !keep || keep(a);
-  const r0 = 8;
-  const rf = r0 + (R - r0) * Math.pow(k, 1.3);
-  ring(
-    p,
-    cx,
-    cy,
-    rf,
-    sig ? C.white : hot,
-    (tk ? 1 : 0.75) * (0.35 + 0.6 * k),
-    (a, i) => kk(a) && hash(i >> 2, sd, 3) > 0.25,
-    0.4,
-  );
-  const run = Math.floor(time * (14 + 30 * k));
-  ring(
-    p,
-    cx,
-    cy,
-    R + w,
-    sig ? (tk ? C.white : C.gold[3]) : hot,
-    0.65 + 0.35 * k,
-    (a, i) => kk(a) && (sig || mod(i - run, 9) < 6),
-    0.6,
-  );
-  ring(p, cx, cy, Math.max(1, R - w), hot, 0.45, (a, i) => kk(a) && i % 3 === 0);
+  p.col(C.night[1], 0.3 + 0.2 * k);
+  band();
+  p.col(tk ? hot : fill, sig ? (tk ? 0.3 : 0.5) : 0.16 + 0.28 * k);
+  band();
+  const ec = sig ? (tk ? C.white : hot) : edge;
+  ring(p, cx, cy, r1, ec, 0.7 + 0.3 * k, (a) => kk(a), 0.6);
+  ring(p, cx, cy, r0, ec, 0.55 + 0.35 * k, (a) => kk(a), 0.5);
+  // Риски поперёк полосы: каждая четвёртая — во всю ширину.
+  const n = Math.max(12, Math.round((TAU * R) / 9));
+  const rot = time * (sd & 1 ? 0.35 : -0.35);
+  p.col(ec, 0.35 + 0.35 * k);
+  for (let j = 0; j < n; j++) {
+    const t = rot + (j / n) * TAU;
+    if (!kk(Math.atan2(Math.sin(t), Math.cos(t)))) continue;
+    const ux = Math.cos(t);
+    const uy = Math.sin(t);
+    const l0 = j % 4 === 0 ? r0 + 1 : R;
+    p.line(cx + ux * l0, cy + uy * l0, cx + ux * (r1 - 1), cy + uy * (r1 - 1));
+  }
+  // «Когда»: фронт идёт от владыки и доходит до полосы в урон.
+  const rf = from + (R - from) * Math.pow(k, 1.15);
+  if (rf < r0 - 1)
+    ring(
+      p,
+      cx,
+      cy,
+      rf,
+      hot,
+      0.3 + 0.55 * k,
+      (a, i) => kk(a) && mod(i + Math.floor(time * 20), 5) < 3,
+      0.4,
+    );
+  if (sig) ring(p, cx, cy, r1 + 2, tk ? C.white : hot, 0.85, (a, i) => kk(a) && i % 2 === 0);
 }
 
 /** Гребень волны контакта: светлое кольцо бежит наружу и гаснет. */
@@ -4484,7 +4635,7 @@ function crest(
   sd: number,
   keep?: (a: number) => boolean,
 ): void {
-  if (age >= T) return;
+  if (age >= T || age < 0) return;
   const k = age / T;
   const rc = R + grow * eOut2(k);
   const kk = (a: number, i: number) => (!keep || keep(a)) && hash(i >> 2, sd, 9) > 0.12;
@@ -4502,7 +4653,60 @@ function crest(
     );
 }
 
-// ---- Ладонь: созвездие руки ложится на пол, золотое кольцо сжимается --------
+/**
+ * Фигура по пикселям: `inside(u, v)` — в долях R вдоль угла a и поперёк.
+ * С меткой `tag` строки берутся из кеша (R — по полпикселя, угол — 1/64
+ * оборота, центр — в середине пикселя): ладонь иначе считала силуэт по
+ * пикселю каждый кадр.
+ */
+const SHAPES = frameLRU<number[]>(240);
+function shapeRows(
+  p: Pen,
+  cx: number,
+  cy: number,
+  R: number,
+  a: number,
+  inside: (u: number, v: number) => boolean,
+  tag?: string,
+): void {
+  if (R < 1) return;
+  const aq = Math.round((a / TAU) * 64);
+  const Rq = tag ? Math.round(R * 2) / 2 : R;
+  const key = tag ? `${tag}|${Rq}|${mod(aq, 64)}` : '';
+  let spans = tag ? SHAPES.get(key) : undefined;
+  if (!spans) {
+    spans = [];
+    const A = tag ? (aq / 64) * TAU : a;
+    const ux = Math.cos(A);
+    const uy = Math.sin(A);
+    const E = Math.ceil(Rq) + 1;
+    const fx = tag ? 0.5 : cx - Math.floor(cx);
+    const fy = tag ? 0.5 : cy - Math.floor(cy);
+    for (let y = -E; y <= E; y++) {
+      let run = NO_RUN;
+      for (let x = -E; x <= E + 1; x++) {
+        let on = false;
+        if (x <= E) {
+          const dx = (x + 0.5 - fx) / Rq;
+          const dy = (y + 0.5 - fy) / Rq;
+          on = inside(dx * ux + dy * uy, -dx * uy + dy * ux);
+        }
+        if (on && run === NO_RUN) run = x;
+        if (!on && run !== NO_RUN) {
+          spans.push(run, y, x - run);
+          run = NO_RUN;
+        }
+      }
+    }
+    if (tag) SHAPES.set(key, spans);
+  }
+  const x0 = Math.floor(cx);
+  const y0 = Math.floor(cy);
+  for (let i = 0; i < spans.length; i += 3)
+    p.rect(x0 + spans[i], y0 + spans[i + 1], spans[i + 2], 1);
+}
+
+// ---- Ладонь: созвездие выходит из руки, встаёт над целью и падает ----------
 
 /** Ладонь в долях радиуса: (вдоль руки, поперёк). */
 const PALM_PTS: [number, number][] = [
@@ -4543,6 +4747,46 @@ const PALM_LINES: [number, number][] = [
   [2, 15],
   [15, 16],
 ];
+/** Пальцы силуэта: поперёк у основания, кончик вдоль; веером расходятся. */
+const FINGERS: [number, number][] = [
+  [-0.33, 0.78],
+  [-0.11, 0.93],
+  [0.11, 0.93],
+  [0.33, 0.8],
+];
+const FING_W = 0.078;
+
+/** Отрезок (ax, ay) → (bx, by) полуширины w: попала ли точка. */
+function inSeg(u: number, v: number, ax: number, ay: number, bx: number, by: number, w: number) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const t = k01(((u - ax) * dx + (v - ay) * dy) / (dx * dx + dy * dy));
+  return Math.hypot(u - ax - dx * t, v - ay - dy * t) <= w;
+}
+
+/** Силуэт ладони (тень, отпечаток): ладонь овалом, четыре пальца веером, большой. */
+function inPalm(u: number, v: number): boolean {
+  const pu = (u + 0.25) / 0.5;
+  const pv = v / 0.42;
+  if (pu * pu + pv * pv <= 1) return true;
+  for (const [v0, tip] of FINGERS)
+    if (inSeg(u, v, 0.05, v0 * 0.9, tip, v0 * 1.35, FING_W)) return true;
+  return inSeg(u, v, -0.34, 0.32, 0.1, 0.62, 0.088);
+}
+
+/** Кромка фигуры: точка внутри, а сосед на пиксель — снаружи. */
+function edgeOf(inside: (u: number, v: number) => boolean, R: number, a: number) {
+  const ex = Math.cos(a) / R;
+  const ey = Math.sin(a) / R;
+  return (u: number, v: number) =>
+    inside(u, v) &&
+    !(
+      inside(u + ex, v - ey) &&
+      inside(u - ex, v + ey) &&
+      inside(u + ey, v + ex) &&
+      inside(u - ey, v - ex)
+    );
+}
 
 function palmDraw(
   p: Pen,
@@ -4583,8 +4827,173 @@ function palmDraw(
   }
 }
 
+/** Ладонь выходит из руки и встаёт над целью за столько секунд. */
+const PALM_RISE = 0.42;
+
 registerZonePainter(
   'f15b_palm',
+  guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
+    const st = z as Strike;
+    const { k, left } = warnOf(st);
+    const sig = left < SIG;
+    const cx = st.x * S;
+    const cy = st.y * S;
+    const p = new Pen(g, px, py, cx, cy);
+    p.occ = occOf(S);
+    const R = st.r * S;
+    const sd = seedOf(st.id);
+    const a = angOf(st);
+    astroMark(p, cx, cy, R, k, left, time, sd, C.gold[1], C.gold[3], C.vio[1]);
+    // Высота: ладонь встаёт над целью, висит, в последние 0,2 с падает.
+    const H = S * 1.7;
+    const rise = eOut2(k01(st.t / PALM_RISE));
+    const drop = k01(1 - left / SIG);
+    const h = H * (1 - eIn3(drop)) + Math.sin(time * 6) * 1.5 * (1 - drop) * rise;
+    // Тень ладони: большая и бледная, пока ладонь высоко, — чёткая под ней.
+    const near = k01(1 - h / H);
+    p.col(C.ink, (0.18 + 0.42 * near) * rise);
+    shapeRows(p, cx, cy, R * 0.92 * (1 + 0.45 * (1 - near)), a, inPalm, 'p');
+    // Ладонь-созвездие: из руки владыки — над целью.
+    p.occ = null;
+    const lord = mobOf(st.from);
+    const [hx2, hy2] = lord ? handAt(lord, S, cx, cy) : [cx, cy - H];
+    const ax = hx2 + (cx - hx2) * rise;
+    const ay = hy2 + (cy - h - hy2) * rise;
+    const Rp = R * 0.92 * (0.35 + 0.65 * rise);
+    // Нить света от руки к запястью — ладонь держит владыка.
+    if (lord) {
+      const wx = ax - Math.cos(a) * Rp * 0.85;
+      const wy = ay - Math.sin(a) * Rp * 0.85;
+      const n = Math.max(4, Math.floor(Math.hypot(wx - hx2, wy - hy2) / 3));
+      const run = Math.floor(time * 30);
+      for (let j = 0; j < n; j++) {
+        if (mod(j - run, 4) >= 2) continue;
+        const f = j / n;
+        p.col(C.gold[2], (0.25 + 0.35 * k) * (1 - drop));
+        p.dot(hx2 + (wx - hx2) * f, hy2 + (wy - hy2) * f - Math.sin(f * Math.PI) * 6);
+      }
+    }
+    // Ладонь: ночной силуэт с золотой кромкой — читается и на плаще владыки.
+    p.col(C.night[0], 0.55 + 0.2 * k);
+    shapeRows(p, ax, ay, Rp, a, inPalm, 'p');
+    p.col(sig ? C.white : C.gold[1], 0.7 + 0.3 * k);
+    shapeRows(p, ax, ay, Rp, a, edgeOf(inPalm, Math.round(Rp * 2) / 2, a), 'pe');
+    palmDraw(
+      p,
+      ax,
+      ay,
+      Rp,
+      a,
+      Math.min(1, 0.3 + rise),
+      sig ? C.white : C.gold[2],
+      0.55 + 0.45 * k,
+      time,
+      sd,
+    );
+    // Падает: полосы скорости над ладонью.
+    if (drop > 0 && !reduced())
+      for (let i = 0; i < 5; i++) {
+        const x = ax + (i - 2) * Rp * 0.32;
+        const y = ay - Rp * 0.55 - hash(sd, i, 44) * 4;
+        p.col(C.white, 0.7 * drop);
+        p.line(x, y - 4 - 10 * drop, x, y);
+      }
+  }),
+);
+
+/** Угол отпечатка по записи контакта: владыка к концу следа может смотреть иначе. */
+const PALM_ANG = new Map<number, number>();
+
+registerImpactPainter('f15b_palm', {
+  life: 1.2,
+  shake: 0.32,
+  above: true,
+  paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
+    const cx = rec.x * S;
+    const cy = rec.y * S;
+    const p = new Pen(g, px, py, cx, cy);
+    const R = (rec.r ?? 1.7) * S;
+    const sd = rec.seed >>> 0;
+    const few = reduced();
+    let a = PALM_ANG.get(sd);
+    if (a === undefined) {
+      a = lordNow()?.data.ang ?? 0;
+      PALM_ANG.set(sd, a);
+      if (PALM_ANG.size > 12) PALM_ANG.delete(PALM_ANG.keys().next().value as number);
+    }
+    const f = 1 - k01(age / 1.2);
+    // Вмятина и отпечаток ладони: белый → золото → фиолет, остывает.
+    p.occ = occOf(S);
+    p.col(C.night[0], 0.5 * f);
+    fillSector(p, cx, cy, 0, R * 0.95, 0, TAU);
+    const hot =
+      age < 0.05
+        ? C.white
+        : age < 0.16
+          ? C.gold[3]
+          : age < 0.4
+            ? C.gold[2]
+            : age < 0.7
+              ? '#c890f0'
+              : '#6a34a4';
+    p.col(hot, (age < 0.1 ? 0.75 : 0.4) * f);
+    shapeRows(p, cx, cy, R * 0.92, a, inPalm, 'p');
+    p.col(hot, Math.min(1, 1.5 * f));
+    shapeRows(p, cx, cy, R * 0.92, a, edgeOf(inPalm, Math.round(R * 1.84) / 2, a), 'pe');
+    ring(p, cx, cy, R, C.gold[2], 0.8 * f * f, (_a, i) => hash(i >> 1, sd, 5) > 0.3);
+    p.occ = null;
+    hitStar(p, cx, cy - 2, age, 0.1, R * 1.05, sd * 0.01, C.gold[2]);
+    crest(p, cx, cy, R, age, 0.42, S * 1.4, C.gold[3], sd);
+    crest(p, cx, cy, R * 0.7, age - 0.07, 0.4, S * 1.1, '#c890f0', sd + 1);
+    p.occ = occOf(S);
+    dust(p, sd, age, cx, cy, few ? 5 : 10, 0, 0.5, 30, 30, 3, 7, 6, 0.9, 0, 0.6, undefined, (i) => {
+      const t = (i / 10) * TAU + hash(sd, i, 45);
+      return [cx + Math.cos(t) * R * 0.85, cy + Math.sin(t) * R * 0.85, t];
+    });
+    chunks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      few ? 3 : 7,
+      0,
+      0.6,
+      40,
+      50,
+      60,
+      50,
+      [0.6, 1.1],
+      0.25,
+      1,
+      undefined,
+      (i) => {
+        const t = (i / 7) * TAU + hash(sd, i, 46);
+        return [cx + Math.cos(t) * R * 0.6, cy + Math.sin(t) * R * 0.6, t];
+      },
+    );
+    p.occ = null;
+    sparks(p, sd, age, cx, cy, few ? 6 : 14, -Math.PI / 2, 1.2, 40, 70, 0.6, 90, starCol);
+    // Созвездие рассеивается вверх.
+    const k = k01(age / 0.9);
+    if (k < 1) {
+      const ux = Math.cos(a);
+      const uy = Math.sin(a);
+      PALM_PTS.forEach(([u, v], i) => {
+        const z = 30 * eOut2(k) * (0.6 + 0.4 * hash(sd, i, 47));
+        const dx = (hash(sd, i, 48) - 0.5) * 12 * k;
+        const x = cx + (u * ux - v * uy) * R * 0.92 + dx;
+        const y = cy + (u * uy + v * ux) * R * 0.92 - z;
+        twinkle(p, x, y, i >= 11 && i <= 14 && k < 0.5 ? 2 : 1, starCol(k), (1 - k) * 0.95);
+      });
+    }
+  }),
+});
+
+// ---- Взмах: веер ночи, звёзды копятся у края, рука проходит дугой -----------
+
+registerZonePainter(
+  'f15b_sweep',
   guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
     const st = z as Strike;
     const { k, left } = warnOf(st);
@@ -4596,143 +5005,83 @@ registerZonePainter(
     p.occ = occOf(S);
     const R = st.r * S;
     const sd = seedOf(st.id);
-    const a = angOf(st);
-    // «Куда»: тень ладони — ночь, темнеет к удару.
-    p.col(C.night[1], 0.3 + 0.3 * k);
-    fillSector(p, cx, cy, 0, R, 0, TAU);
-    p.col(C.night[3], 0.25 + 0.2 * k);
-    fillSector(p, cx, cy, R * 0.82, R, 0, TAU);
-    // Ладонь-созвездие проступает линия за линией.
-    palmDraw(
-      p,
-      cx,
-      cy,
-      R * 0.92,
-      a,
-      Math.min(1, k * 1.25),
-      sig ? C.white : C.gold[2],
-      0.35 + 0.55 * k,
-      time,
-      sd,
-    );
-    // «Когда»: кольцо сжимается от полутора радиусов к краю метки.
-    const rr = R * (1 + 0.6 * (1 - eOut2(k)));
+    const a = st.ang ?? 0;
+    const arc = st.arc ?? 1.9;
+    const a0 = a - arc / 2;
+    const r0 = S * 0.5;
+    const inS = (t: number) => inArc(t, a0, arc);
+    p.col(C.night[1], 0.3 + 0.25 * k);
+    fillSector(p, cx, cy, r0, R, a0, a0 + arc);
+    // Налив от владыки к краю веера.
+    const rf = r0 + (R - r0) * Math.pow(k, 1.2);
+    // Сигнал — как у круглых меток: фиолет гуще, «тик» светлее; золото по
+    // ночи давало бежевую засветку поверх героя.
+    p.col(tk ? C.vio[3] : C.vio[1], sig ? (tk ? 0.26 : 0.5) : 0.14 + 0.22 * k);
+    fillSector(p, cx, cy, r0, rf, a0, a0 + arc);
     ring(
       p,
       cx,
       cy,
-      rr,
+      rf,
       sig ? C.white : C.gold[2],
-      (tk ? 1 : 0.7) * (0.4 + 0.6 * k),
-      undefined,
-      0.5,
+      0.45 + 0.5 * k,
+      (t, i) => inS(t) && hash(i >> 2, sd, 3) > 0.2,
+      0.4,
     );
-    ring(p, cx, cy, R, sig ? C.gold[3] : C.gold[1], 0.7, (_a, i) => sig || i % 3 !== 0);
-  }),
-);
-
-registerImpactPainter('f15b_palm', {
-  life: 1.2,
-  shake: 0.32,
-  paint: guarded(
-    (g, rec: ImpactRec, px: number, py: number, S: number, age: number, time: number) => {
-      const cx = rec.x * S;
-      const cy = rec.y * S;
-      const p = new Pen(g, px, py, cx, cy);
-      const R = (rec.r ?? 1.7) * S;
-      const sd = rec.seed >>> 0;
-      const few = reduced();
-      const a = lordNow()?.data.ang ?? 0;
-      const fade = Math.pow(1 - k01(age / 1.2), 1.4);
-      // Вмятина и отпечаток ладони — гаснут.
-      p.occ = occOf(S);
-      p.col(C.night[0], 0.4 * fade);
-      oval(p, cx, cy, R * 0.95, R * 0.95);
-      palmDraw(p, cx, cy, R * 0.92, a, 1, age < 0.12 ? C.white : C.gold[2], fade, time, sd);
-      p.occ = null;
-      hitStar(p, cx, cy, age, 0.1, R * 0.85, sd * 0.01, C.gold[2]);
-      crest(p, cx, cy, R, age, 0.4, S * 1.2, C.gold[2], sd);
-      sparks(p, sd, age, cx, cy, few ? 6 : 16, 0, Math.PI, 70, 90, 0.6, 70, starCol);
-      dust(
-        p,
-        sd,
-        age,
-        cx,
-        cy,
-        few ? 4 : 9,
-        0,
-        Math.PI,
-        40,
-        30,
-        3,
-        7,
-        6,
-        0.9,
-        0,
-        0.55,
-        undefined,
-        (i) => {
-          const t = (i / 9) * TAU;
-          return [cx + Math.cos(t) * R * 0.8, cy + Math.sin(t) * R * 0.8, t];
-        },
-      );
-    },
-  ),
-});
-
-// ---- Взмах: веер ночи, звёзды копятся у края, рука проходит дугой -----------
-
-registerZonePainter(
-  'f15b_sweep',
-  guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
-    const st = z as Strike;
-    const { k, left } = warnOf(st);
-    const sig = left < SIG;
-    const cx = st.x * S;
-    const cy = st.y * S;
-    const p = new Pen(g, px, py, cx, cy);
-    p.occ = occOf(S);
-    const R = st.r * S;
-    const sd = seedOf(st.id);
-    const a = st.ang ?? 0;
-    const arc = st.arc ?? 1.9;
-    const r0 = S * 0.5;
-    p.col(C.night[2], 0.3 + 0.18 * k);
-    fillSector(p, cx, cy, r0, R, a - arc / 2, a + arc / 2);
-    const run = Math.floor(time * (12 + 26 * k));
     sectorRim(
       p,
       cx,
       cy,
       R,
-      a - arc / 2,
+      a0,
       arc,
       r0,
-      sig ? C.white : C.gold[1],
-      0.5 + 0.4 * k,
-      sig ? undefined : (u) => mod(Math.floor(u / 3) - run, 4) < 3,
+      sig ? (tk ? C.white : C.gold[3]) : C.gold[1],
+      0.65 + 0.3 * k,
     );
-    // Рука идёт от a + arc/2 к a − arc/2: у начального края копятся звёзды.
-    const as = a + arc / 2;
-    for (let i = 0; i < 7; i++) {
+    ticks(
+      p,
+      cx,
+      cy,
+      R,
+      48,
+      time * (sd & 1 ? 0.5 : -0.5),
+      2,
+      sig ? C.white : C.gold[1],
+      0.45 + 0.45 * k,
+      inS,
+    );
+    // Рука пойдёт от края, что выше на экране: там копятся звёзды.
+    const { as, dir } = sweepOf(a, arc);
+    for (let i = 0; i < 9; i++) {
       const rr = r0 + (R - r0) * (0.15 + 0.85 * hash(sd, i, 51));
-      const aa = as - 0.12 * hash(sd, i, 52);
+      const aa = as + dir * 0.14 * hash(sd, i, 52);
       const on = k01(k * 1.6 - i * 0.08);
       twinkle(
         p,
         cx + Math.cos(aa) * rr,
         cy + Math.sin(aa) * rr,
-        sig ? 2 : 1,
+        sig || i % 3 === 0 ? 2 : 1,
         C.gold[3],
         on * (0.6 + 0.4 * Math.sin(time * 9 + i)),
       );
     }
-    // «Когда»: тонкий серп растёт по ходу удара; последние 0,16 с — сам взмах.
-    const pre = Math.min(arc * 0.18, arc * 0.18 * k);
-    crescent(p, cx, cy, R, as - pre, pre, 2, C.gold[1], 0.5 + 0.4 * k);
-    if (left < 0.16) {
-      const u = eIn2(1 - left / 0.16);
-      crescent(p, cx, cy, R, as - arc * u, arc * u, 4, C.gold[3], 0.9);
+    // Последние 0,14 с — сама рука: серп бежит от начального края.
+    if (left < 0.14) {
+      const u = eIn2(1 - left / 0.14);
+      const sw = Math.max(0.02, arc * u);
+      p.occ = null;
+      crescent(p, cx, cy, R, dir > 0 ? as : as - sw, sw, 5, C.gold[3], 0.95);
+      const e = as + dir * sw;
+      p.lineS(
+        cx + Math.cos(e) * r0,
+        cy + Math.sin(e) * r0,
+        cx + Math.cos(e) * R,
+        cy + Math.sin(e) * R,
+        C.white,
+        0.9,
+        0.4,
+      );
     }
   }),
 );
@@ -4740,6 +5089,7 @@ registerZonePainter(
 registerImpactPainter('f15b_sweep', {
   life: 0.8,
   shake: 0.22,
+  above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
     const cx = rec.x * S;
     const cy = rec.y * S;
@@ -4748,39 +5098,59 @@ registerImpactPainter('f15b_sweep', {
     const sd = rec.seed >>> 0;
     const a = rec.ang ?? 0;
     const arc = rec.arc ?? 1.9;
-    const k = k01(age / 0.55);
-    // След руки: серп звёздного света тоньше и тусклее.
+    const { as, dir } = sweepOf(a, arc);
+    // Рука проходит за край на 15 % и тает: серп звёздного света со следом.
+    const span = arc * (1 + 0.15 * eOut2(k01(age / 0.09)));
+    const lo = dir > 0 ? as : as - span;
+    const k = k01(age / 0.5);
     if (k < 1) {
-      crescent(
-        p,
-        cx,
-        cy,
-        R,
-        a - arc / 2,
-        arc,
-        Math.max(1, 6 * (1 - k)),
-        age < 0.05 ? C.white : C.gold[3],
-        1 - k,
-      );
-      crescent(
-        p,
-        cx,
-        cy,
-        R - 6,
-        a - arc / 2,
-        arc,
-        Math.max(1, 3 * (1 - k)),
-        '#c890f0',
-        0.6 * (1 - k),
-      );
+      const col = age < 0.05 ? C.white : age < 0.14 ? C.gold[3] : k < 0.6 ? C.gold[2] : '#c890f0';
+      crescent(p, cx, cy, R, lo, span, Math.max(1, 7 * (1 - k)), col, 1 - k * 0.8);
+      crescent(p, cx, cy, R - 6, lo, span, Math.max(1, 3 * (1 - k)), '#c890f0', 0.6 * (1 - k));
+      if (age < 0.18) {
+        const e = as + dir * span;
+        twinkle(
+          p,
+          cx + Math.cos(e) * (R - 3),
+          cy + Math.sin(e) * (R - 3),
+          3,
+          C.gold[3],
+          1 - age / 0.18,
+        );
+      }
     }
+    p.occ = occOf(S);
+    dust(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      reduced() ? 4 : 8,
+      0,
+      0.4,
+      20,
+      30,
+      2,
+      6,
+      5,
+      0.7,
+      0,
+      0.55,
+      (i) => i * 0.012,
+      (i) => {
+        const t = as + dir * span * ((i + 0.5) / 8);
+        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+      },
+    );
+    p.occ = null;
     sparks(
       p,
       sd,
       age,
       cx,
       cy,
-      reduced() ? 6 : 14,
+      reduced() ? 6 : 16,
       0,
       0.3,
       50,
@@ -4791,13 +5161,13 @@ registerImpactPainter('f15b_sweep', {
       undefined,
       (i) => {
         const t = a - arc / 2 + arc * hash(sd, i, 53);
-        return [cx + Math.cos(t) * R * 0.92, cy + Math.sin(t) * R * 0.92, t - Math.PI / 2];
+        return [cx + Math.cos(t) * R * 0.92, cy + Math.sin(t) * R * 0.92, t + dir * 0.6];
       },
     );
   }),
 });
 
-// ---- Волна: ладони врозь — кольца ночи разбегаются от владыки ---------------
+// ---- Волна: ладони врозь — кольца тяготения разбегаются от владыки ----------
 
 registerZonePainter(
   'f15b_repel',
@@ -4811,60 +5181,92 @@ registerZonePainter(
     const R = st.r * S;
     const sd = seedOf(st.id);
     if (st.shape === 'circle') {
-      const sig = left < SIG;
-      p.col(C.blood[1], 0.28 + 0.16 * k);
-      fillSector(p, cx, cy, 0, R, 0, TAU);
-      ring(
-        p,
-        cx,
-        cy,
-        6 + (R - 6) * Math.pow(k, 1.3),
-        sig ? C.white : '#c890f0',
-        0.4 + 0.5 * k,
-        (_a, i) => hash(i >> 2, sd, 3) > 0.25,
-        0.4,
-      );
-      ring(p, cx, cy, R, sig ? C.white : '#c890f0', 0.7 + 0.3 * k, undefined, 0.6);
+      astroMark(p, cx, cy, R, k, left, time, sd, '#9a5ad0', C.vio[3], C.vio[1], 20);
       return;
     }
-    bandMark(p, cx, cy, R, (st.w ?? 0.55) * S, k, left, sd, time, C.blood[1], '#c890f0');
+    bandAstro(
+      p,
+      cx,
+      cy,
+      R,
+      (st.w ?? 0.55) * S,
+      k,
+      left,
+      sd,
+      time,
+      S * 0.8,
+      C.vio[1],
+      '#c890f0',
+      C.vio[3],
+    );
   }),
 );
 
 registerImpactPainter('f15b_repel', {
   life: 0.8,
   shake: 0.16,
+  above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
     const cx = rec.x * S;
     const cy = rec.y * S;
     const p = new Pen(g, px, py, cx, cy);
     const R = (rec.r ?? 2.2) * S;
+    const disc = rec.shape === 'circle';
+    const w = disc ? 0 : (rec.w ?? 0.55) * S;
     const sd = rec.seed >>> 0;
-    crest(p, cx, cy, R, age, 0.45, S * 0.9, '#c890f0', sd);
-    sparks(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      reduced() ? 8 : 18,
-      0,
-      0.4,
-      40,
-      50,
-      0.5,
-      30,
-      vioCol,
-      undefined,
-      (i) => {
-        const t = TAU * hash(sd, i, 55);
-        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-      },
-    );
+    const few = reduced();
+    // Полоса вспыхивает и гаснет.
+    p.occ = occOf(S);
+    if (age < 0.16) {
+      p.col(age < 0.05 ? C.white : '#c890f0', 0.55 * (1 - age / 0.16));
+      fillSector(p, cx, cy, disc ? 0 : R - w, R + w, 0, TAU);
+    }
+    const n = disc ? (few ? 5 : 8) : few ? 6 : 14;
+    dust(p, sd, age, cx, cy, n, 0, 0.3, 20, 25, 2, 6, 4, 0.7, 7, 0.55, undefined, (i) => {
+      const t = (i / n) * TAU + hash(sd, i, 54);
+      return [cx + Math.cos(t) * (R + w), cy + Math.sin(t) * (R + w), t];
+    });
+    p.occ = null;
+    crest(p, cx, cy, R + w, age, 0.45, S * 1.1, '#c890f0', sd);
+    sparks(p, sd, age, cx, cy, few ? 8 : 18, 0, 0.4, 40, 50, 0.5, 30, vioCol, undefined, (i) => {
+      const t = TAU * hash(sd, i, 55);
+      return [cx + Math.cos(t) * (R + w), cy + Math.sin(t) * (R + w), t];
+    });
   }),
 });
 
-// ---- Колодец тяготения: кулак — точка тьмы, спираль звёзд, схлопывание ------
+// ---- Колодец тяготения: кулак сжат — воронка гнёт пол, схлопывание ---------
+
+/** Сетка пола в воронке: линии решётки стянуты к центру и закручены. */
+function wellGrid(p: Pen, cx: number, cy: number, PR: number, pull: number, few: boolean): void {
+  const step = few ? 16 : 12;
+  const n = Math.floor(PR / step);
+  const gam = 1 + pull;
+  const warp = (x: number, y: number): [number, number, number] => {
+    const f = Math.min(1, Math.hypot(x, y) / PR);
+    const rr = PR * Math.pow(f, gam);
+    const t = Math.atan2(y, x) + pull * 1.1 * (1 - f) * (1 - f);
+    return [cx + Math.cos(t) * rr, cy + Math.sin(t) * rr, f];
+  };
+  for (let o = 0; o < 2; o++)
+    for (let j = -n; j <= n; j++) {
+      const c = j * step;
+      const half = Math.sqrt(Math.max(0, PR * PR - c * c));
+      let prev: [number, number, number] | null = null;
+      for (let s = -half; s <= half + 0.01; s += 6) {
+        const q = o ? warp(c, s) : warp(s, c);
+        if (prev) {
+          const f = (prev[2] + q[2]) / 2;
+          p.col(
+            f < 0.3 ? '#c890f0' : f < 0.65 ? C.vio[2] : C.night[7],
+            0.2 + 0.55 * (1 - f) * Math.min(1, pull),
+          );
+          p.line(prev[0], prev[1], q[0], q[1]);
+        }
+        prev = q;
+      }
+    }
+}
 
 registerZonePainter(
   'f15b_well',
@@ -4884,76 +5286,132 @@ registerZonePainter(
     const t = st.t;
     const few = reduced();
     if (t < W) {
-      // Кулак сжимается: граница тяги проступает пунктиром, звёзды стягиваются.
+      // Кулак сжимается: граница тяги проступает, звёзды стягиваются спиралью.
       const k = t / W;
       ring(
         p,
         cx,
         cy,
         PR,
-        '#9a5ad0',
-        0.2 + 0.35 * k,
-        (_a, i) => mod(i - Math.floor(time * 12), 8) < 3,
+        C.gold[1],
+        0.15 + 0.45 * k,
+        (_a, i) => mod(i - Math.floor(time * 12), 8) < 4,
+        0.4,
       );
-      for (let i = 0; i < 12; i++) {
-        const a0 = (i / 12) * TAU + hash(sd, i, 61);
-        const rr = PR * (1 - 0.55 * eIn2(k)) * (0.6 + 0.4 * hash(sd, i, 62));
-        const aa = a0 + k * 2.2;
-        twinkle(p, cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr, 1, '#c890f0', 0.3 + 0.6 * k);
+      for (let i = 0; i < 16; i++) {
+        const a0 = (i / 16) * TAU + hash(sd, i, 61);
+        const rr = PR * (1 - 0.85 * eIn2(k)) * (0.55 + 0.45 * hash(sd, i, 62));
+        const aa = a0 + k * 2.6;
+        twinkle(
+          p,
+          cx + Math.cos(aa) * rr,
+          cy + Math.sin(aa) * rr,
+          i % 4 ? 1 : 2,
+          i % 3 ? '#c890f0' : C.gold[3],
+          0.3 + 0.65 * k,
+        );
       }
-      p.col(C.ink, 0.5 + 0.4 * k);
-      oval(p, cx, cy, 2 + 4 * k, 2 + 4 * k);
+      const hr = 1.5 + 5 * eIn2(k);
+      p.col(C.ink, 0.5 + 0.45 * k);
+      oval(p, cx, cy, hr, hr);
+      ring(p, cx, cy, hr + 1, C.gold[2], 0.4 + 0.5 * k);
       return;
     }
     const u = (t - W) / LORD.wellLife;
-    const grow = Math.min(1, u * 5);
-    // Поле тяги: еле видная ночь и кольца, бегущие внутрь.
-    p.col(C.blood[0], 0.18 * grow);
-    fillSector(p, cx, cy, 0, PR, 0, TAU);
-    for (let j = 0; j < 3; j++) {
-      const f = mod(time * 0.55 + j / 3, 1);
-      const rr = PR * (1 - f);
-      if (rr < R * 0.5) continue;
-      ring(p, cx, cy, rr, '#6a34a4', 0.35 * grow * Math.sin(f * Math.PI), (_a, i) => i % 2 === 0);
+    const grow = Math.min(1, u * 4);
+    // Последние 0,8 с — воронка сжимается перед схлопыванием.
+    const end = k01(1 - left / 0.8);
+    // Воронка: пол темнеет ступенями к центру — глубина.
+    const shrink = 1 - 0.25 * end;
+    const DEPTH: [number, string, number][] = [
+      [1, C.night[0], 0.2],
+      [0.72, C.night[0], 0.14],
+      [0.48, C.neb[1], 0.22],
+      [0.28, C.neb[0], 0.3],
+    ];
+    for (const [f, c, al] of DEPTH) {
+      p.col(c, al * grow);
+      fillSector(p, cx, cy, 0, PR * f * (f < 1 ? shrink : 1), 0, TAU);
     }
-    // Диск: три рукава звёзд закручиваются к центру.
-    const arms = 3;
-    const per = few ? 14 : 26;
-    for (let ar = 0; ar < arms; ar++)
-      for (let i = 0; i < per; i++) {
-        const f = mod(i / per - time * 0.35, 1);
-        const rr = R * 0.35 + (PR * 0.85 - R * 0.35) * f;
-        const aa = (ar / arms) * TAU + Math.log(1 + rr / S) * 2.6 - time * 2.4;
-        const x = cx + Math.cos(aa) * rr;
-        const y = cy + Math.sin(aa) * rr;
-        const c = f < 0.3 ? '#ffffff' : f < 0.55 ? C.gold[3] : f < 0.8 ? '#c890f0' : '#6a34a4';
-        p.col(c, grow * (0.9 - f * 0.6));
-        p.dot(x, y);
-        if (f < 0.25 && i % 3 === 0) p.dot(x + 1, y);
+    wellGrid(p, cx, cy, PR, grow * (0.6 + 0.8 * end), few);
+    // Граница тяги: золотой пунктир, точки бегут внутрь.
+    ring(
+      p,
+      cx,
+      cy,
+      PR,
+      C.gold[1],
+      0.7 * grow,
+      (_a, i) => mod(i + Math.floor(time * 6), 8) < 4,
+      0.5,
+    );
+    if (!few)
+      for (let i = 0; i < 18; i++) {
+        const aa = (i / 18) * TAU + time * 0.3;
+        const f = mod(time * 0.9 + hash(sd, i, 63), 1);
+        const r1 = PR * (1 - 0.45 * f);
+        const r2 = PR * (1 - 0.45 * Math.max(0, f - 0.08));
+        p.col(C.gold[2], 0.75 * grow * (1 - f));
+        p.line(
+          cx + Math.cos(aa) * r2,
+          cy + Math.sin(aa) * r2,
+          cx + Math.cos(aa) * r1,
+          cy + Math.sin(aa) * r1,
+        );
       }
-    // Горизонт: чёрный диск, вокруг — кольцо света; к схлопыванию мигает.
-    const hr = S * 0.42 * (0.6 + 0.4 * grow) * (1 + 0.12 * Math.sin(time * 9));
-    p.col(C.ink, 0.95);
-    oval(p, cx, cy, hr, hr);
-    ring(p, cx, cy, hr + 1, sig ? C.white : C.gold[2], tk ? 1 : 0.85);
-    // Где рванёт: граница схлопывания.
-    const near = k01(1 - left / 0.8);
+    // Рукава звёзд закручиваются к центру — со следом по ходу.
+    const per = few ? 12 : 22;
+    const sp = 1 + end;
+    const arm = (ar: number, f: number): [number, number] => {
+      const rr = R * 0.3 + (PR * 0.9 * shrink - R * 0.3) * f;
+      const aa = (ar / 3) * TAU + Math.log(1 + rr / S) * 2.6 - time * 2.4 * sp;
+      return [cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr];
+    };
+    for (let ar = 0; ar < 3; ar++)
+      for (let i = 0; i < per; i++) {
+        const f = mod(i / per - time * 0.35 * sp, 1);
+        const [x, y] = arm(ar, f);
+        const [x2, y2] = arm(ar, Math.min(1, f + 0.035));
+        const c = f < 0.3 ? '#ffffff' : f < 0.55 ? C.gold[3] : f < 0.8 ? '#c890f0' : '#6a34a4';
+        p.col(c, grow * (1 - f * 0.55));
+        p.line(x2, y2, x, y);
+        if (f < 0.35) p.dot(x - 0.5, y - 0.5, 2, 2);
+      }
+    // Кольцо взрыва: риски, к схлопыванию — золото и белое.
+    p.col(C.night[1], 0.2 + 0.35 * end);
+    fillSector(p, cx, cy, 0, R, 0, TAU);
+    const bc = sig ? (tk ? C.white : C.gold[3]) : end > 0 ? C.gold[2] : C.gold[1];
+    ring(p, cx, cy, R + 1, '#9a5ad0', 0.6, undefined, 0.4);
     ring(
       p,
       cx,
       cy,
       R,
-      sig ? C.white : near > 0 ? C.gold[3] : '#9a5ad0',
-      0.35 + 0.6 * near,
+      bc,
+      0.65 + 0.35 * end,
       (_a, i) => sig || mod(i - Math.floor(time * 20), 6) < 4,
       0.5,
     );
+    ticks(p, cx, cy, R, 12, -time * 1.5, 2, bc, 0.5 + 0.45 * end);
+    // Горизонт: чёрный диск, кольцо аккреции бежит.
+    const hr = S * 0.6 * (0.6 + 0.4 * grow) * (1 + 0.35 * end) * (1 + 0.08 * Math.sin(time * 9));
+    p.col(C.ink, 0.95);
+    oval(p, cx, cy, hr, hr);
+    const run = Math.floor(time * 24);
+    ring(p, cx, cy, hr + 1.5, C.gold[2], 0.95, (_a, i) => mod(i + run, 5) < 3);
+    ring(p, cx, cy, hr + 1.5, C.white, 0.9, (_a, i) => mod(i + run, 5) === 0);
+    ring(p, cx, cy, hr + 3.5, '#c890f0', 0.55, (_a, i) => mod(i - run, 6) < 2);
+    // «Сейчас»: кольцо схлопывания сжимается к горизонту.
+    if (sig) ring(p, cx, cy, hr + (R - hr) * (left / SIG), C.white, 0.9, undefined, 0.4);
   }),
 );
 
 registerImpactPainter('f15b_well', {
   life: 1.1,
-  shake: 0.42,
+  shake: 0.45,
+  flash: 0.3,
+  flashRgb: '200,150,255',
+  above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
     const cx = rec.x * S;
     const cy = rec.y * S;
@@ -4961,16 +5419,145 @@ registerImpactPainter('f15b_well', {
     const R = (rec.r ?? 1.6) * S;
     const sd = rec.seed >>> 0;
     const few = reduced();
-    hitStar(p, cx, cy, age, 0.12, R, sd * 0.01, '#c890f0');
-    crest(p, cx, cy, R, age, 0.5, S * 1.6, '#c890f0', sd);
-    crest(p, cx, cy, R * 0.5, age - 0.06, 0.4, S, C.gold[3], sd + 1);
-    sparks(p, sd, age, cx, cy, few ? 8 : 22, 0, Math.PI, 90, 110, 0.7, 60, vioCol);
-    chunks(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 50, 60, 70, 60, [0.6, 1.0], 0.3, 1);
+    const f = 1 - k01(age / 1.1);
+    // Шрам схлопывания: звезда трещин светится и гаснет.
+    p.occ = occOf(S);
+    const v = sd % 5;
+    const cr = crackOf(`well${v}`, 31 + v, starBranches(31 + v, 7, v, R * 0.9, R * 1.5, 2), 0.45);
+    drawCrack(
+      p,
+      cr,
+      cx,
+      cy,
+      cr.max * eOut2(k01(age / 0.18)),
+      age < 0.14 ? C.white : '#c890f0',
+      null,
+      f * f,
+    );
+    p.col(C.ink, 0.5 * f);
+    oval(p, cx, cy, R * 0.55, R * 0.4);
     dust(p, sd, age, cx, cy, few ? 4 : 10, 0, Math.PI, 50, 40, 3, 8, 6, 1.0, 7, 0.6);
+    chunks(p, sd, age, cx, cy, few ? 3 : 8, 0, Math.PI, 50, 60, 70, 60, [0.6, 1.0], 0.3, 1);
+    p.occ = null;
+    if (age < 0.12) {
+      const q = age / 0.12;
+      p.col(C.white, 0.85 * (1 - q));
+      oval(p, cx, cy, R * (0.6 + 0.8 * q), R * (0.6 + 0.8 * q));
+    }
+    hitStar(p, cx, cy, age, 0.14, R * 1.3, sd * 0.01, '#c890f0');
+    crest(p, cx, cy, R, age, 0.55, S * 2.2, '#c890f0', sd);
+    crest(p, cx, cy, R * 0.6, age - 0.06, 0.45, S * 1.4, C.gold[3], sd + 1);
+    sparks(p, sd, age, cx, cy, few ? 8 : 22, 0, Math.PI, 90, 110, 0.7, 60, vioCol);
   }),
 });
 
-// ---- Планеты: орбита под меткой, тень растёт; удар — звон кристалла ---------
+// ---- Планеты: дуга полёта золотым пунктиром, кристалл падает и лежит -------
+
+/** Радиусы и палитры планет короны (как у «Тела»): тень, основа, свет, блик. */
+const PL_R = [2.6, 3.0, 2.4, 2.8, 3.3];
+const PL_PAL = [
+  ['#163a6a', '#4c9ad6', '#8cd0f4', '#ffffff'],
+  ['#6e4a14', '#dcaa3c', '#ffd866', '#fff0b8'],
+  ['#2a1250', '#6a34a4', '#9a5ad0', '#ecd4ff'],
+  ['#0c2a40', '#2a7a9a', '#5ab8d0', '#e6faff'],
+  ['#2b246c', '#8cd0f4', '#d0f4ff', '#ffffff'],
+];
+
+/** Планета: шар с гранями кристалла, грани бегут по кругу (кадр f из 8). */
+function planetImg(i: number, r: number, f: number): HTMLCanvasElement {
+  const R = Math.max(2, Math.round(r));
+  const fr = f & 7;
+  const key = `pl|${i}|${R}|${fr}`;
+  const hit = LFX.get(key);
+  if (hit) return hit;
+  const ringed = i === 4;
+  const rx = ringed ? R * 2 : R;
+  const w = Math.ceil(rx * 2) + 4;
+  const h = Math.ceil(R * 2) + 4;
+  const px = new Px(w, h);
+  const ox = w / 2;
+  const oy = h / 2;
+  const pal = PL_PAL[i % 5].map((c) => hx(c));
+  const ringPx = (front: boolean) => {
+    if (!ringed) return;
+    for (let q = 0; q < 72; q++) {
+      const t = (q / 72) * TAU;
+      if (Math.sin(t) >= 0 !== front) continue;
+      px.set(
+        Math.floor(ox + Math.cos(t) * rx),
+        Math.floor(oy + Math.sin(t) * R * 0.42 - Math.cos(t) * R * 0.2),
+        hx(front ? C.gold[2] : C.gold[1]),
+      );
+    }
+  };
+  ringPx(false);
+  const rot = (fr / 8) * (TAU / 3);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const dx = (x + 0.5 - ox) / R;
+      const dy = (y + 0.5 - oy) / R;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > 1) continue;
+      const dz = Math.sqrt(1 - d2);
+      const l = -dx * 0.55 - dy * 0.6 + dz * 0.58;
+      let c = l > 0.78 ? 3 : l > 0.3 ? 2 : l > -0.15 ? 1 : 0;
+      // Грани: полосы по долготе, с поворотом бегут через шар.
+      const lon = Math.atan2(dx, dz) + rot;
+      if (Math.cos(lon * 3 + dy * 1.2) > 0.6) c = Math.min(3, c + 1);
+      else if (Math.cos(lon * 3 + dy * 1.2) < -0.75) c = Math.max(0, c - 1);
+      px.set(x, y, pal[c]);
+    }
+  ringPx(true);
+  px.outline(hx(C.ink, 210));
+  return LFX.set(key, px.canvas());
+}
+
+/** Какая планета летит в эту метку (по точке падения). */
+function planetOf(v: Readonly<F15BState>, st: Strike): number {
+  let best = -1;
+  let bd = 0.05;
+  v.planets.forEach((pl, i) => {
+    const d = Math.abs(pl.tx - st.x) + Math.abs(pl.ty - st.y);
+    if (d < bd) {
+      bd = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/** Пунктир дуги (точки мира × S), бежит к концу. */
+function dashArc(
+  p: Pen,
+  S: number,
+  sx: number,
+  sy: number,
+  qx: number,
+  qy: number,
+  tx: number,
+  ty: number,
+  e0: number,
+  e1: number,
+  run: number,
+  col: string,
+  a: number,
+): void {
+  const len = (Math.hypot(qx - sx, qy - sy) + Math.hypot(tx - qx, ty - qy)) * S;
+  const n = Math.max(12, Math.min(90, Math.floor(len / 3)));
+  for (let j = 0; j < n; j++) {
+    const e = j / n;
+    const e2 = (j + 1) / n;
+    if (e2 < e0 || e > e1 || mod(j - run, 4) >= 2) continue;
+    const x0 = bez(sx, qx, tx, e) * S;
+    const y0 = bez(sy, qy, ty, e) * S;
+    const x1 = bez(sx, qx, tx, e2) * S;
+    const y1 = bez(sy, qy, ty, e2) * S;
+    const al = a * (0.6 + 0.4 * e);
+    p.lineS(x0, y0, x1, y1, col, al, 0.6);
+    p.col(col, al * 0.7);
+    p.line(x0 + 1, y0, x1 + 1, y1);
+  }
+}
 
 registerZonePainter(
   'f15b_planet',
@@ -4978,37 +5565,57 @@ registerZonePainter(
     const st = z as Strike;
     const { k, left } = warnOf(st);
     const sig = left < SIG;
-    const tk = !reduced() && tick(left);
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
     p.occ = occOf(S);
     const R = st.r * S;
     const sd = seedOf(st.id);
-    p.col(C.night[2], 0.28 + 0.18 * k);
-    fillSector(p, cx, cy, 0, R, 0, TAU);
-    // Орбита: пунктир крутится, перекрестье по сторонам света.
-    const run = Math.floor(time * 10);
-    ring(
-      p,
-      cx,
-      cy,
-      R,
-      sig ? C.white : C.ice[4],
-      (tk ? 1 : 0.7) * (0.5 + 0.5 * k),
-      (_a, i) => sig || mod(i + run, 7) < 5,
-      0.5,
-    );
-    p.col(sig ? C.white : C.ice[4], 0.5 + 0.4 * k);
+    astroMark(p, cx, cy, R, k, left, time, sd, C.ice[3], C.ice[5], C.ice[1], 12);
+    // Перекрестье прицела.
     for (let q = 0; q < 4; q++) {
-      const a = (q * TAU) / 4 + 0.25;
-      for (let d = R + 2; d < R + 5; d++) p.dot(cx + Math.cos(a) * d, cy + Math.sin(a) * d);
+      const aa = (q * TAU) / 4 + Math.PI / 4;
+      p.lineS(
+        cx + Math.cos(aa) * R * 0.3,
+        cy + Math.sin(aa) * R * 0.3,
+        cx + Math.cos(aa) * R * 0.68,
+        cy + Math.sin(aa) * R * 0.68,
+        sig ? C.white : C.ice[4],
+        0.45 + 0.45 * k,
+        0.4,
+      );
     }
+    const s = paintSim();
+    const v = f15bView(s);
+    const i = v ? planetOf(v, st) : -1;
+    const pl = v && i >= 0 ? v.planets[i] : undefined;
+    if (!s || !pl) return;
     // Тень падающей планеты растёт, пока она летит.
-    const fly = k01((st.t - LORD.orbitWarn) / LORD.orbitFly);
-    if (fly > 0) {
-      p.col(C.ink, 0.25 + 0.45 * fly);
-      oval(p, cx, cy, R * (0.25 + 0.55 * fly), R * (0.25 + 0.55 * fly) * 0.7);
+    const fu = pl.stage === 1 ? k01((s.time - pl.at) / LORD.orbitFly) : pl.stage === 2 ? 1 : 0;
+    if (fu > 0) {
+      p.col(C.ink, 0.2 + 0.4 * fu);
+      oval(p, cx, cy, R * (0.3 + 0.55 * fu), R * (0.3 + 0.55 * fu) * 0.6);
+    }
+    // Дуга полёта — золотой бегущий пунктир от короны к метке.
+    p.occ = null;
+    const lord = mobOf(st.from);
+    const run = Math.floor(time * 18);
+    const ca = sig ? 1 : 0.55 + 0.45 * k;
+    const col = sig ? C.white : C.gold[2];
+    if (pl.stage === 1) {
+      const u = k01((s.time - pl.at) / LORD.orbitFly);
+      const e0 = smooth3(u) * 0.35 + u * u * 0.65;
+      dashArc(p, S, pl.sx, pl.sy, pl.cx, pl.cy, st.x, st.y, e0, 1, run, col, ca);
+    } else if (pl.stage === 0 && lord) {
+      // До срыва: дуга считается так же, как её построит мозг в миг срыва.
+      const [sx, sy] = crownSpot(lord, i, s.time + Math.max(0, LORD.orbitWarn - st.t));
+      const dx = st.x - sx;
+      const dy = st.y - sy;
+      const d = Math.hypot(dx, dy) || 1;
+      const side = (i % 2 ? 1 : -1) * (lord.data.side ?? 1) * (1.6 + i * 0.35);
+      const qx = (sx + st.x) / 2 + (-dy / d) * side;
+      const qy = (sy + st.y) / 2 + (dx / d) * side - 1.6;
+      dashArc(p, S, sx, sy, qx, qy, st.x, st.y, 0, 1, run, col, ca);
     }
   }),
 );
@@ -5016,6 +5623,7 @@ registerZonePainter(
 registerImpactPainter('f15b_planet', {
   life: 1.1,
   shake: 0.28,
+  above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
     const cx = rec.x * S;
     const cy = rec.y * S;
@@ -5023,20 +5631,37 @@ registerImpactPainter('f15b_planet', {
     const R = (rec.r ?? 1.15) * S;
     const sd = rec.seed >>> 0;
     const few = reduced();
+    const f = 1 - k01(age / 1.1);
+    // Кратер: тёмная чаша, по кругу встают шипы кристалла.
     p.occ = occOf(S);
-    p.col(C.ink, 0.45 * (1 - k01(age / 1.1)));
-    oval(p, cx, cy, R * 0.9, R * 0.65);
-    p.occ = null;
-    hitStar(p, cx, cy, age, 0.1, R * 1.1, sd * 0.01, C.ice[4]);
-    crest(p, cx, cy, R, age, 0.4, S * 1.1, C.ice[4], sd);
+    p.col(C.ink, 0.5 * f);
+    oval(p, cx, cy, R * 0.85, R * 0.6);
+    const up = eOut3(k01(age / 0.12)) * (1 - k01((age - 0.7) / 0.4));
+    for (let i = 0; i < 7; i++) {
+      const t = (i / 7) * TAU + hash(sd, i, 66);
+      const rr = R * (0.7 + 0.25 * hash(sd, i, 67));
+      const bx = cx + Math.cos(t) * rr;
+      const by = cy + Math.sin(t) * rr * 0.75;
+      const hh = (3 + 4 * hash(sd, i, 68)) * up;
+      if (hh < 1) continue;
+      const lean = Math.cos(t) * 1.5;
+      p.col(C.ice[5], 0.95);
+      p.line(bx, by, bx + lean, by - hh);
+      p.col(C.ice[3], 0.95);
+      p.line(bx + 1, by, bx + 1 + lean, by - hh + 1);
+    }
+    dust(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 30, 30, 3, 6, 5, 0.9, 5, 0.45);
     chunks(p, sd, age, cx, cy, few ? 4 : 9, 0, Math.PI, 60, 70, 90, 70, [0.55, 1.0], 0.35, 3);
-    sparks(p, sd, age, cx, cy, few ? 5 : 12, 0, Math.PI, 60, 70, 0.5, 60, iceCol);
-    dust(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 30, 30, 3, 6, 5, 0.9, 0, 0.5);
+    p.occ = null;
+    hitStar(p, cx, cy - 2, age, 0.1, R * 1.15, sd * 0.01, C.ice[4]);
+    crest(p, cx, cy, R, age, 0.42, S * 1.2, C.ice[4], sd);
+    sparks(p, sd, age, cx, cy, few ? 5 : 12, -Math.PI / 2, 1.3, 50, 70, 0.5, 70, iceCol);
   }),
 });
 
-// ---- Звездопад: кольцо метеоров, тень летит с неба, удар — вспышка ----------
+// ---- Звездопад: прицелы кольцом, метеоры падают издалека со следом ---------
 
+/** Метеор приходит сверху-справа: направление ОТ цели к небу. */
 const METEOR_IN: [number, number] = (() => {
   const x = 0.55;
   const y = -1;
@@ -5044,24 +5669,94 @@ const METEOR_IN: [number, number] = (() => {
   return [x / n, y / n];
 })();
 
-function meteorHead(p: Pen, x: number, y: number, k: number, sd: number): void {
-  // Хвост — назад по ходу (вверх-вправо), голова — белое ядро в золоте.
+/** Камень метеора: неровный, кувыркается (кадр f из 8), передний край раскалён. */
+function rockImg(sz: number, f: number): HTMLCanvasElement {
+  const fr = f & 7;
+  const key = `rock|${sz}|${fr}`;
+  const hit = LFX.get(key);
+  if (hit) return hit;
+  const s = sz * 2 + 3;
+  const px = new Px(s, s);
+  const c = s / 2;
+  const rot = (fr / 8) * TAU;
+  // Ход — вниз-влево (против METEOR_IN): этот бок горит.
+  const mx = -METEOR_IN[0];
+  const my = -METEOR_IN[1];
+  for (let y = 0; y < s; y++)
+    for (let x = 0; x < s; x++) {
+      const dx = x + 0.5 - c;
+      const dy = y + 0.5 - c;
+      const ang = Math.atan2(dy, dx) - rot;
+      const rr = sz * (0.8 + 0.14 * Math.cos(ang * 3) + 0.08 * Math.cos(ang * 5 + 1));
+      const d = Math.hypot(dx, dy);
+      if (d > rr) continue;
+      const hot = (dx * mx + dy * my) / sz;
+      const l = (-dx * 0.6 - dy * 0.8) / sz;
+      const pit = Math.cos(ang * 2 + 0.7) > 0.8 && d > sz * 0.3 && d < sz * 0.6;
+      const col =
+        hot > 0.5
+          ? '#fff0b8'
+          : hot > 0.15
+            ? C.ember[4]
+            : pit
+              ? C.crust[1]
+              : l > 0.35
+                ? C.crust[4]
+                : l > -0.3
+                  ? C.crust[3]
+                  : C.crust[2];
+      px.set(x, y, hx(col));
+    }
+  px.outline(hx(C.ink, 220));
+  return LFX.set(key, px.canvas());
+}
+
+/** Метеор в полёте: длинный след (белый → золото → угли → фиолет) и камень. */
+function meteorFly(
+  p: Pen,
+  x: number,
+  y: number,
+  u: number,
+  sd: number,
+  big: boolean,
+  time: number,
+): void {
   const [ux, uy] = METEOR_IN;
-  const L = 10 + 14 * k;
-  for (let i = L; i > 0; i--) {
+  const nx = -uy;
+  const ny = ux;
+  const L = (26 + 40 * u) * (big ? 1.25 : 1);
+  for (let i = Math.floor(L); i > 0; i--) {
     const f = i / L;
-    p.col(f > 0.6 ? '#6a34a4' : f > 0.3 ? C.gold[2] : C.gold[3], (1 - f) * 0.9);
-    const w = f < 0.3 ? 2 : 1;
-    p.rect(Math.floor(x + ux * i), Math.floor(y + uy * i), w, 1);
-    if (hash(sd, i, 71) < 0.15) {
-      p.col(C.gold[3], 0.6 * (1 - f));
-      p.dot(x + ux * i + (hash(sd, i, 72) - 0.5) * 6, y + uy * i + (hash(sd, i, 73) - 0.5) * 6);
+    const c =
+      f < 0.12
+        ? '#ffffff'
+        : f < 0.3
+          ? C.gold[3]
+          : f < 0.55
+            ? C.ember[3]
+            : f < 0.8
+              ? '#9a5ad0'
+              : '#46207a';
+    const w = f < 0.25 ? 5 : f < 0.5 ? 3 : 2;
+    p.col(c, (1 - f) * 0.95);
+    for (let o = 0; o < w; o++) {
+      const d = o - (w - 1) / 2;
+      p.dot(x + ux * i + nx * d, y + uy * i + ny * d);
     }
   }
-  p.col(C.gold[2], 1);
-  p.rect(Math.floor(x) - 1, Math.floor(y) - 1, 3, 3);
-  p.col('#ffffff', 1);
-  p.dot(x, y);
+  // Отлетающие искры следа.
+  for (let j = 0; j < 6; j++) {
+    const f = mod(hash(sd, j, 71) + time * 2.2, 1);
+    const i = L * (0.15 + 0.7 * f);
+    const off = (hash(sd, j, 72) - 0.5) * 8 * f;
+    p.col(f < 0.5 ? C.gold[3] : '#c890f0', 0.8 * (1 - f));
+    p.dot(x + ux * i + nx * off, y + uy * i + ny * off);
+  }
+  const sz = big ? 6 : 5;
+  ring(p, x, y, sz + 2, C.gold[2], 0.45);
+  const im = rockImg(sz, Math.floor(time * 16) + sd);
+  p.alpha(1);
+  p.img(im, x - im.width / 2, y - im.height / 2);
 }
 
 registerZonePainter(
@@ -5070,51 +5765,43 @@ registerZonePainter(
     const st = z as Strike;
     const { k, left } = warnOf(st);
     const sig = left < SIG;
-    const tk = !reduced() && tick(left);
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
     p.occ = occOf(S);
     const R = st.r * S;
     const sd = seedOf(st.id);
-    p.col(C.ember[0], 0.25 + 0.2 * k);
-    fillSector(p, cx, cy, 0, R, 0, TAU);
-    const rr = R * (1 + 0.5 * (1 - eOut2(k)));
-    ring(
-      p,
-      cx,
-      cy,
-      rr,
-      sig ? C.white : C.ember[3],
-      (tk ? 1 : 0.75) * (0.4 + 0.6 * k),
-      undefined,
-      0.5,
-    );
-    ring(
-      p,
-      cx,
-      cy,
-      R,
-      sig ? C.gold[3] : C.ember[2],
-      0.6,
-      (_a, i) => sig || mod(i + Math.floor(time * 8), 5) < 3,
-    );
-    // Метеор: последние 0,55 с падает с неба прямо в метку.
-    const fall = 0.55;
-    if (left < fall) {
-      const u = eIn2(1 - left / fall);
-      const D = 9 * S * (1 - u);
+    const big = st.r > 1.1;
+    astroMark(p, cx, cy, R, k, left, time, sd, C.gold[1], C.gold[3], C.night[5], big ? 16 : 12);
+    // Перекрестье: четыре риски к центру.
+    for (let q = 0; q < 4; q++) {
+      const aa = (q * TAU) / 4;
+      p.lineS(
+        cx + Math.cos(aa) * R * 0.35,
+        cy + Math.sin(aa) * R * 0.35,
+        cx + Math.cos(aa) * R * 0.75,
+        cy + Math.sin(aa) * R * 0.75,
+        sig ? C.white : C.gold[2],
+        0.45 + 0.45 * k,
+        0.4,
+      );
+    }
+    // Метеор падает издалека с ускорением; тень растёт под ним.
+    const FALL = big ? 0.85 : 0.75;
+    if (left < FALL) {
+      const u = 1 - left / FALL;
+      p.col(C.ink, 0.2 + 0.45 * u);
+      oval(p, cx, cy, R * (0.25 + 0.5 * u), R * (0.25 + 0.5 * u) * 0.6);
       p.occ = null;
-      p.col(C.ink, 0.25 + 0.4 * u);
-      oval(p, cx, cy, 2 + 4 * u, 1 + 2.5 * u);
-      meteorHead(p, cx + METEOR_IN[0] * D, cy + METEOR_IN[1] * D, u, sd);
+      const D = (big ? 10 : 8) * S * (1 - u * u);
+      meteorFly(p, cx + METEOR_IN[0] * D, cy + METEOR_IN[1] * D, u, sd, big, time);
     }
   }),
 );
 
 registerImpactPainter('f15b_meteor', {
   life: 1.0,
-  shake: 0.2,
+  shake: 0.22,
   above: true,
   paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
     const cx = rec.x * S;
@@ -5123,17 +5810,19 @@ registerImpactPainter('f15b_meteor', {
     const R = (rec.r ?? 1) * S;
     const sd = rec.seed >>> 0;
     const few = reduced();
-    p.occ = occOf(S);
     const f = 1 - k01(age / 1.0);
-    p.col(C.ink, 0.5 * f);
+    // Кратер: чаша, раскалённая кромка остывает.
+    p.occ = occOf(S);
+    p.col(C.ink, 0.55 * f);
     oval(p, cx, cy, R * 0.8, R * 0.55);
-    p.col(C.ember[3], 0.7 * f * f);
-    ring(p, cx, cy, R * 0.6, C.ember[3], 0.8 * f * f, (_a, i) => hash(i, sd, 74) > 0.3);
+    const hk = k01(age / 0.9);
+    ring(p, cx, cy, R * 0.62, heatCol(hk), 0.9 * (1 - hk), (_a, i) => hash(i, sd, 74) > 0.25);
+    dust(p, sd, age, cx, cy, few ? 2 : 4, 0, Math.PI, 25, 30, 3, 6, 6, 0.8, 7, 0.45);
+    chunks(p, sd, age, cx, cy, few ? 2 : 5, 0, Math.PI, 40, 55, 70, 60, [0.5, 0.95], 0.3, 5);
     p.occ = null;
-    hitStar(p, cx, cy, age, 0.1, R * 1.1, sd * 0.01, C.gold[2]);
-    crest(p, cx, cy, R, age, 0.35, S * 0.9, C.ember[4], sd);
-    sparks(p, sd, age, cx, cy, few ? 6 : 14, -Math.PI / 2, 1.3, 60, 80, 0.55, 90, emberCol);
-    chunks(p, sd, age, cx, cy, few ? 2 : 5, 0, Math.PI, 40, 50, 60, 50, [0.5, 0.9], 0.3, 0);
+    hitStar(p, cx, cy - 2, age, 0.1, R * 1.2, sd * 0.01, C.gold[2]);
+    crest(p, cx, cy, R, age, 0.38, S, C.gold[3], sd);
+    sparks(p, sd, age, cx, cy, few ? 6 : 14, -Math.PI / 2, 1.3, 50, 80, 0.55, 90, emberCol);
   }),
 });
 
@@ -5161,6 +5850,28 @@ function clawLines(
   return out;
 }
 
+/** Ломаная до доли пути `u` (0…1). */
+function polyTo(
+  p: Pen,
+  pts: [number, number][],
+  u: number,
+  c: string,
+  a: number,
+  thick: boolean,
+): void {
+  const n = pts.length - 1;
+  const end = u * n;
+  for (let j = 0; j < n && j < end; j++) {
+    const [x0, y0] = pts[j];
+    const [x1b, y1b] = pts[j + 1];
+    const s = Math.min(1, end - j);
+    const x1 = x0 + (x1b - x0) * s;
+    const y1 = y0 + (y1b - y0) * s;
+    p.lineS(x0, y0, x1, y1, c, a, 0.5);
+    if (thick) p.line(x0 + 1, y0, x1 + 1, y1);
+  }
+}
+
 registerZonePainter(
   'f15b_nightclaw',
   guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
@@ -5171,54 +5882,60 @@ registerZonePainter(
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
+    p.occ = occOf(S);
     const R = st.r * S;
     const sd = seedOf(st.id);
     const a = st.ang ?? 0;
     const arc = st.arc ?? 1.6;
-    // «Куда»: сектор чуть светлее тьмы — звёздное небо проступает.
-    p.col(C.night[3], 0.22 + 0.2 * k);
-    fillSector(p, cx, cy, S * 0.6, R, a - arc / 2, a + arc / 2);
+    const a0 = a - arc / 2;
+    const r0 = S * 0.6;
+    const W = Math.max(0.01, st.warn);
+    // «Куда»: в секторе тьмы проступает звёздное небо; налив — к краю.
+    p.col(C.night[3], 0.2 + 0.22 * k);
+    fillSector(p, cx, cy, r0, R, a0, a0 + arc);
+    const rf = r0 + (R - r0) * Math.pow(k, 1.2);
+    p.col(sig ? '#9a5ad0' : C.vio[1], sig ? (tk ? 0.3 : 0.18) : 0.12 + 0.2 * k);
+    fillSector(p, cx, cy, r0, rf, a0, a0 + arc);
     sectorRim(
       p,
       cx,
       cy,
       R,
-      a - arc / 2,
+      a0,
       arc,
-      S * 0.6,
-      sig ? C.white : '#9a5ad0',
-      0.4 + 0.5 * k,
+      r0,
+      sig ? (tk ? C.white : '#ecd4ff') : '#9a5ad0',
+      0.45 + 0.5 * k,
       sig ? undefined : (u) => mod(Math.floor(u / 3) + Math.floor(time * 14), 4) < 2,
     );
-    // Звёзды загораются в секторе одна за другой.
-    for (let i = 0; i < 28; i++) {
-      const th = hash(sd, i, 81);
-      if (k < th * 0.85) continue;
-      const rr = S * 0.7 + (R - S * 0.7) * hash(sd, i, 82);
-      const aa = a + (hash(sd, i, 83) - 0.5) * arc;
+    // Звёзды вспыхивают одна за другой, всё гуще; новая — с лучами.
+    for (let i = 0; i < 36; i++) {
+      const th = hash(sd, i, 81) * 0.9;
+      if (k < th) continue;
+      const born = (k - th) * W;
+      const rr = r0 + (R - r0) * hash(sd, i, 82);
+      const aa = a + (hash(sd, i, 83) - 0.5) * arc * 0.95;
       const tw = 0.55 + 0.45 * Math.sin(time * 11 + i * 2.3);
       twinkle(
         p,
         cx + Math.cos(aa) * rr,
         cy + Math.sin(aa) * rr,
-        hash(sd, i, 84) < 0.25 ? 2 : 1,
-        sig ? C.white : '#c890f0',
-        tw,
+        born < 0.1 ? 3 : hash(sd, i, 84) < 0.25 ? 2 : 1,
+        sig ? C.white : born < 0.1 ? C.gold[3] : '#c890f0',
+        born < 0.1 ? 1 : tw,
       );
     }
-    // Три когтя — созвездиями, к удару — сплошные.
-    for (const pts of clawLines(cx, cy, R, a, arc)) {
-      const n = Math.max(1, Math.floor(k * 1.3 * (pts.length - 1)));
-      for (let j = 0; j < Math.min(n, pts.length - 1); j++) {
-        const [x0, y0] = pts[j];
-        const [x1, y1] = pts[j + 1];
-        if (sig) p.lineS(x0, y0, x1, y1, tk ? '#ffffff' : '#ecd4ff', 0.95, 0);
-        else {
-          p.col('#c890f0', 0.5 + 0.4 * k);
-          p.dot(x0, y0);
-          p.dot((x0 + x1) / 2, (y0 + y1) / 2);
-        }
-      }
+    // Три когтя — созвездиями; в последние 0,14 с проходят от основания к концу.
+    const lines = clawLines(cx, cy, R, a, arc);
+    for (const pts of lines) {
+      const shown = Math.min(pts.length, Math.ceil(k * 1.3 * pts.length));
+      for (let j = 0; j < shown; j++)
+        twinkle(p, pts[j][0], pts[j][1], 1, '#ecd4ff', 0.5 + 0.45 * k);
+    }
+    if (left < 0.14) {
+      p.occ = null;
+      const u = eIn2(1 - left / 0.14);
+      for (const pts of lines) polyTo(p, pts, u, C.white, 0.95, true);
     }
   }),
 );
@@ -5236,19 +5953,18 @@ registerImpactPainter('f15b_nightclaw', {
     const a = rec.ang ?? 0;
     const arc = rec.arc ?? 1.6;
     const k = k01(age / 0.55);
-    const lines = clawLines(cx, cy, R, a, arc);
-    if (k < 1)
-      for (const pts of lines)
-        for (let j = 0; j + 1 < pts.length; j++) {
-          const [x0, y0] = pts[j];
-          const [x1, y1] = pts[j + 1];
-          const c = age < 0.06 ? '#ffffff' : k < 0.4 ? '#ecd4ff' : '#9a5ad0';
-          p.lineS(x0, y0, x1, y1, c, 1 - k, 0.5);
-          if (k < 0.35) {
-            p.col('#c890f0', 0.7 * (1 - k / 0.35));
-            p.line(x0 + 1, y0, x1 + 1, y1);
-          }
-        }
+    // Когти уходят за край на 15 %, гаснут белый → сирень → фиолет.
+    const over = 1 + 0.15 * eOut2(k01(age / 0.08));
+    const lines = clawLines(cx, cy, R * over, a, arc);
+    if (k < 1) {
+      const c = age < 0.06 ? '#ffffff' : k < 0.4 ? '#ecd4ff' : '#9a5ad0';
+      for (const pts of lines) polyTo(p, pts, 1, c, 1 - k, k < 0.4);
+      // След на полу — тонкий шрам звёздного света.
+      p.occ = occOf(S);
+      for (const pts of clawLines(cx, cy, R, a, arc))
+        polyTo(p, pts, 1, '#6a34a4', 0.5 * (1 - k), false);
+      p.occ = null;
+    }
     sparks(
       p,
       sd,
@@ -5266,7 +5982,7 @@ registerImpactPainter('f15b_nightclaw', {
       undefined,
       (i) => {
         const pts = lines[i % 3];
-        const [x, y] = pts[pts.length - 1 - (i % 2)];
+        const [x, y] = pts[pts.length - 1 - (i % 3)];
         return [x, y, a];
       },
     );
@@ -5279,34 +5995,42 @@ registerZonePainter(
     const st = z as Strike;
     const { k, left } = warnOf(st);
     const sig = left < SIG;
-    const tk = !reduced() && tick(left);
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
+    p.occ = occOf(S);
     const R = st.r * S;
-    p.col(C.night[3], 0.2 + 0.2 * k);
-    fillSector(p, cx, cy, 0, R, 0, TAU);
-    ring(
-      p,
-      cx,
-      cy,
-      R * (1 + 0.8 * (1 - eOut2(k))),
-      sig ? C.white : C.ice[4],
-      (tk ? 1 : 0.7) * (0.35 + 0.6 * k),
-      (_a, i) => sig || i % 2 === 0,
-      0.4,
-    );
-    ring(p, cx, cy, R, sig ? C.white : C.ice[3], 0.55 + 0.4 * k);
-    // Звезда разгорается в центре — будущий удар.
-    const r = Math.round(1 + 4 * k);
+    const sd = seedOf(st.id);
+    astroMark(p, cx, cy, R, k, left, time, sd, C.ice[3], C.ice[5], C.night[5], 8);
+    // Звезда разгорается в точке удара.
     twinkle(
       p,
       cx,
       cy,
-      r,
-      sig ? '#ffffff' : C.ice[4],
+      Math.round(1 + 3 * k),
+      sig ? '#ffffff' : k < 0.5 ? C.ice[4] : C.gold[3],
       0.5 + 0.5 * k * (0.75 + 0.25 * Math.sin(time * 14)),
     );
+    // Последние 0,45 с — звезда падает с неба со следом.
+    const FALL = 0.45;
+    if (left < FALL) {
+      const u = 1 - left / FALL;
+      p.col(C.ink, 0.2 + 0.4 * u);
+      oval(p, cx, cy, R * (0.2 + 0.45 * u), R * (0.2 + 0.45 * u) * 0.6);
+      p.occ = null;
+      const D = 9 * S * (1 - u * u);
+      const [ux, uy] = METEOR_IN;
+      const x = cx + ux * D;
+      const y = cy + uy * D;
+      const L = 10 + 18 * u;
+      for (let i = Math.floor(L); i > 0; i--) {
+        const f = i / L;
+        p.col(f < 0.25 ? '#ffffff' : f < 0.6 ? C.ice[5] : C.ice[3], (1 - f) * 0.9);
+        p.dot(x + ux * i, y + uy * i);
+        if (f < 0.3) p.dot(x + ux * i + 1, y + uy * i);
+      }
+      twinkle(p, x, y, 2, C.ice[5], 1);
+    }
   }),
 );
 
@@ -5320,9 +6044,14 @@ registerImpactPainter('f15b_starfall', {
     const p = new Pen(g, px, py, cx, cy);
     const R = (rec.r ?? 0.95) * S;
     const sd = rec.seed >>> 0;
-    hitStar(p, cx, cy, age, 0.12, R * 1.3, 0.4, C.ice[4]);
+    // След звезды на полу гаснет.
+    p.occ = occOf(S);
+    const f = 1 - k01(age / 0.7);
+    twinkle(p, cx, cy, Math.round(1 + 3 * f), C.ice[4], f);
+    p.occ = null;
+    hitStar(p, cx, cy - 1, age, 0.12, R * 1.3, 0.4, C.ice[4]);
     crest(p, cx, cy, R, age, 0.35, S * 0.8, C.ice[4], sd);
-    sparks(p, sd, age, cx, cy, reduced() ? 5 : 11, 0, Math.PI, 50, 60, 0.45, 50, iceCol);
+    sparks(p, sd, age, cx, cy, reduced() ? 5 : 11, -Math.PI / 2, 1.4, 40, 60, 0.45, 70, iceCol);
   }),
 });
 
@@ -5343,26 +6072,43 @@ registerZonePainter(
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
+    p.occ = occOf(S);
     const R = st.r * S;
     const w = (st.w ?? 0.6) * S;
     const sd = seedOf(st.id);
     const keep = arcKeep(st);
-    bandMark(p, cx, cy, R, w, k, left, sd, time, C.gold[0], C.gold[2], keep);
-    // Проход: два столбика света по краям — «сюда».
-    if (st.arc !== undefined) {
-      const a0 = (st.ang ?? 0) - st.arc / 2;
-      for (const ea of [a0, a0 + st.arc]) {
-        for (let d = -w; d <= w; d += 2)
-          twinkle(
-            p,
-            cx + Math.cos(ea) * (R + d),
-            cy + Math.sin(ea) * (R + d),
-            1,
-            C.ice[4],
-            0.6 + 0.3 * Math.sin(time * 8),
-          );
+    bandAstro(p, cx, cy, R, w, k, left, sd, time, S * 0.9, C.vio[1], C.gold[2], C.gold[3], keep);
+    // В полосе копится звёздный свет: искры бегут поперёк полосы наружу.
+    if (!reduced())
+      for (let i = 0; i < 36; i++) {
+        const t = hash(sd, i, 94) * TAU;
+        if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) continue;
+        const rr = R - w + 2 * w * mod(hash(sd, i, 95) + time * (0.6 + 0.8 * k), 1);
+        twinkle(p, cx + Math.cos(t) * rr, cy + Math.sin(t) * rr, 1, C.gold[3], 0.35 + 0.55 * k);
       }
-    }
+    const span = st.arc ?? TAU;
+    if (span >= TAU - 1e-3) return;
+    // Проход: края — столбы кристального света, в проходе — голубой путь.
+    const a0 = (st.ang ?? 0) - span / 2;
+    for (const ea of [a0, a0 + span])
+      for (const d of [-w, 0, w]) {
+        const bx = cx + Math.cos(ea) * (R + d);
+        const by = cy + Math.sin(ea) * (R + d);
+        const H = S * (1.1 + 0.25 * Math.sin(time * 6 + d));
+        for (let hh = 0; hh < H; hh++) {
+          p.col(hh < 2 ? C.white : C.ice[4], (0.8 - (0.75 * hh) / H) * (0.55 + 0.45 * k));
+          p.dot(bx, by - hh);
+        }
+      }
+    ring(
+      p,
+      cx,
+      cy,
+      R,
+      C.ice[5],
+      0.6,
+      (t, i) => inArc(t, a0 + span, TAU - span) && mod(i + Math.floor(time * 10), 6) < 2,
+    );
   }),
 );
 
@@ -5376,29 +6122,32 @@ registerImpactPainter('f15b_pulse', {
     const p = new Pen(g, px, py, cx, cy);
     const R = (rec.r ?? 3.2) * S;
     const sd = rec.seed >>> 0;
+    const few = reduced();
     const keep = arcKeep(rec);
+    // Стена света: по полосе встают столбы — снизу белые, вверху тают в фиолет.
+    const hk = Math.sin(Math.PI * k01(age / 0.45));
+    if (hk > 0.1) {
+      const n = few ? 14 : Math.round((TAU * R) / 7);
+      for (let i = 0; i < n; i++) {
+        const t = (i / n) * TAU + hash(sd, i, 92) * 0.1;
+        if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) continue;
+        const x = cx + Math.cos(t) * R;
+        const y = cy + Math.sin(t) * R;
+        const H = S * 1.5 * hk * (0.55 + 0.45 * hash(sd, i, 93));
+        p.col(C.white, 0.9 * hk);
+        p.line(x, y, x, y - H * 0.3);
+        p.col(C.gold[3], 0.75 * hk);
+        p.line(x, y - H * 0.3, x, y - H * 0.65);
+        p.col('#c890f0', 0.5 * hk);
+        p.line(x, y - H * 0.65, x, y - H);
+      }
+    }
     crest(p, cx, cy, R, age, 0.45, S * 1.2, C.gold[3], sd, keep);
-    sparks(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      reduced() ? 8 : 20,
-      0,
-      0.5,
-      60,
-      60,
-      0.5,
-      40,
-      starCol,
-      undefined,
-      (i) => {
-        let t = TAU * hash(sd, i, 91);
-        if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) t += Math.PI;
-        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-      },
-    );
+    sparks(p, sd, age, cx, cy, few ? 8 : 20, 0, 0.5, 60, 60, 0.5, 40, starCol, undefined, (i) => {
+      let t = TAU * hash(sd, i, 91);
+      if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) t += Math.PI;
+      return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+    });
   }),
 });
 
@@ -5410,8 +6159,8 @@ registerZonePainter(
     const cx = st.x * S;
     const cy = st.y * S;
     const p = new Pen(g, px, py, cx, cy);
-    if (!st.above) p.occ = occOf(S);
-    bandMark(
+    p.occ = occOf(S);
+    bandAstro(
       p,
       cx,
       cy,
@@ -5421,8 +6170,10 @@ registerZonePainter(
       left,
       seedOf(st.id),
       time,
-      C.blood[1],
-      '#c890f0',
+      S * 0.6,
+      C.neb[2],
+      '#9a5ad0',
+      '#ecd4ff',
     );
   }),
 );
@@ -5437,27 +6188,18 @@ registerImpactPainter('f15b_shock', {
     const p = new Pen(g, px, py, cx, cy);
     const R = (rec.r ?? 2.6) * S;
     const sd = rec.seed >>> 0;
+    const few = reduced();
+    if (age < 0.14) {
+      p.occ = occOf(S);
+      p.col(age < 0.05 ? C.white : '#c890f0', 0.5 * (1 - age / 0.14));
+      fillSector(p, cx, cy, Math.max(0, R - (rec.w ?? 0.55) * S), R + (rec.w ?? 0.55) * S, 0, TAU);
+      p.occ = null;
+    }
     crest(p, cx, cy, R, age, 0.5, S * 1.4, '#c890f0', sd);
-    sparks(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      reduced() ? 8 : 18,
-      0,
-      0.5,
-      40,
-      50,
-      0.6,
-      30,
-      starCol,
-      undefined,
-      (i) => {
-        const t = TAU * hash(sd, i, 93);
-        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-      },
-    );
+    sparks(p, sd, age, cx, cy, few ? 8 : 18, 0, 0.5, 40, 50, 0.6, 30, starCol, undefined, (i) => {
+      const t = TAU * hash(sd, i, 93);
+      return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+    });
   }),
 });
 
@@ -5476,43 +6218,28 @@ registerZonePainter(
     p.occ = occOf(S);
     const R = st.r * S;
     const sd = seedOf(st.id);
-    p.col(C.gold[0], 0.22 + 0.16 * k);
-    fillSector(p, cx, cy, 0, R, 0, TAU);
-    // Круг рун: восемь засечек ходят по кругу — архив листает память.
+    // Метка владыки (астролябия) золотом, внутри — круг рун: восемь засечек
+    // ходят по кругу — архив листает память.
+    astroMark(p, cx, cy, R, k, left, time, sd, C.gold[2], C.gold[3], C.vio[1], 12);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * TAU + time * 0.8;
-      const r1 = R * 0.72;
+      const r1 = R * 0.62;
       p.lineS(
         cx + Math.cos(a) * r1,
         cy + Math.sin(a) * r1,
         cx + Math.cos(a) * (r1 + 4),
         cy + Math.sin(a) * (r1 + 4),
-        C.gold[2],
+        sig ? C.white : C.gold[2],
         0.4 + 0.5 * k,
         0.3,
       );
     }
-    ring(p, cx, cy, R * 0.72 - 2, C.gold[1], 0.35 + 0.3 * k, (_a, i) => i % 2 === 0);
-    ring(
-      p,
-      cx,
-      cy,
-      5 + (R - 5) * Math.pow(k, 1.3),
-      sig ? C.white : C.gold[3],
-      (tk ? 1 : 0.7) * (0.35 + 0.6 * k),
-      (_a, i) => hash(i >> 2, sd, 3) > 0.25,
-      0.4,
-    );
-    ring(
-      p,
-      cx,
-      cy,
-      R,
-      sig ? C.white : C.gold[2],
-      0.7 + 0.3 * k,
-      sig ? undefined : (_a, i) => mod(i - Math.floor(time * 18), 9) < 6,
-      0.6,
-    );
+    ring(p, cx, cy, R * 0.62 - 2, C.gold[1], 0.35 + 0.3 * k, (_a, i) => i % 2 === 0);
+    // Посох над меткой: светлая риска падает к центру в последние 0,2 с.
+    if (sig) {
+      const f = 1 - left / SIG;
+      p.lineS(cx, cy - S * 2.2 * (1 - f), cx, cy - S * 0.2, tk ? C.white : C.gold[3], 0.9, 0.5);
+    }
   }),
 );
 
@@ -5528,7 +6255,14 @@ registerImpactPainter('f15b_kslam', {
     const few = reduced();
     hitStar(p, cx, cy, age, 0.1, S * 0.9, 0, C.gold[2]);
     crest(p, cx, cy, R, age, 0.45, S * 1.1, C.gold[3], sd);
-    chunks(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 50, 60, 70, 60, [0.55, 0.95], 0.3, 0);
+    // Руны вспыхивают по кругу удара и гаснут.
+    if (age < 0.4) {
+      const f = age / 0.4;
+      ring(p, cx, cy, R * (0.62 + 0.38 * eOut2(f)), C.white, 0.9 * (1 - f), (_a, i) => i % 3 !== 2);
+      ticks(p, cx, cy, R * 0.62, 8, 0, 3, C.gold[3], 1 - f);
+    }
+    chunks(p, sd, age, cx, cy, few ? 3 : 7, 0, Math.PI, 50, 60, 70, 60, [0.55, 0.95], 0.3, 1);
+    sparks(p, sd + 3, age, cx, cy, few ? 4 : 10, 0, TAU, 40, 50, 0.45, 30, starCol);
     dust(
       p,
       sd,
@@ -5544,7 +6278,7 @@ registerImpactPainter('f15b_kslam', {
       7,
       5,
       0.9,
-      8,
+      0,
       0.55,
       undefined,
       (i) => {
@@ -5718,6 +6452,64 @@ registerZonePainter(
     const cy = z.y * S;
     const p = new Pen(g, px, py, cx, cy);
     p.occ = occOf(S);
+    // Астролябия живая: риски колец медленно вращаются (внешнее — по
+    // часовой, среднее — против), звёзды созвездий мерцают.
+    const [vx0, vx1, vy0, vy1] = viewOf(p);
+    const seen = (x: number, y: number) => x > vx0 && x < vx1 && y > vy0 && y < vy1;
+    const [r0, r1, r2] = F15B_SKY.rings.map((r) => r * S);
+    const rot = time * 0.045;
+    for (let j = 0; j < 60; j++) {
+      const a = rot + (j / 60) * TAU;
+      const ux = Math.cos(a);
+      const uy = Math.sin(a);
+      const x0 = cx + ux * (r2 + 1);
+      const y0 = cy + uy * (r2 + 1);
+      if (!seen(x0, y0)) continue;
+      const long = j % 5 === 0;
+      const L = long ? 4 : 2;
+      p.lineS(
+        x0,
+        y0,
+        x0 + ux * L,
+        y0 + uy * L,
+        long ? C.gold[1] : '#a8761e',
+        long ? 0.95 : 0.8,
+        0.5,
+      );
+    }
+    for (let j = 0; j < 24; j++) {
+      const a = -rot * 1.6 + (j / 24) * TAU;
+      const ux = Math.cos(a);
+      const uy = Math.sin(a);
+      const x0 = cx + ux * (r1 - 4);
+      const y0 = cy + uy * (r1 - 4);
+      if (!seen(x0, y0)) continue;
+      if (j % 6 === 0) {
+        // Указатель сети: ромб на кольце.
+        p.col(C.gold[2], 0.9);
+        p.dot(x0 - 1, y0, 3, 1);
+        p.dot(x0, y0 - 1, 1, 3);
+        p.col('#ffffff', 0.9);
+        p.dot(x0, y0);
+      } else {
+        p.col('#a8761e', 0.75);
+        p.dot(x0, y0);
+      }
+    }
+    for (let j = 0; j < 8; j++) {
+      const a = rot * 2.4 + (j / 8) * TAU;
+      const x0 = cx + Math.cos(a) * (r0 + 2);
+      const y0 = cy + Math.sin(a) * (r0 + 2);
+      if (seen(x0, y0)) twinkle(p, x0, y0, 1, C.gold[2], 0.75);
+    }
+    if (!reduced())
+      F15B_SKY.stars.forEach(([sx, sy], i) => {
+        const x = cx + sx * S;
+        const y = cy + sy * S;
+        if (!seen(x, y)) return;
+        const tw = Math.sin(time * (1.3 + hash(i, 5, 99) * 2.2) + i * 1.7);
+        if (tw > 0.35) twinkle(p, x, y, tw > 0.8 ? 2 : 1, C.ice[5], (tw - 0.35) * 1.4);
+      });
     novaBeams(p, v, S, s.time, true);
     // Свет под упавшими планетами.
     for (const pl of v.planets) {
@@ -5742,21 +6534,33 @@ registerZonePainter(
     const lord = lordNow();
     v.planets.forEach((pl, i) => {
       if (pl.stage === 0) return;
-      const img = planetSprite(i);
       const t = now - pl.at;
+      const pal = PL_PAL[i % 5];
       if (pl.stage === 2) {
-        // Лежит: кристалл в полу, мерцает перед возвратом.
+        // Лежит в кратере: медленно поворачивается, светится; перед возвратом
+        // мигает, и пунктир показывает дорогу назад, к короне.
         p.occ = occOf(S);
         const X = pl.x * S;
         const Y = pl.y * S;
+        const r = PL_R[i] * 1.6;
+        const glow = 0.5 + 0.2 * Math.sin(time * 5 + i);
+        ring(p, X, Y - r * 0.4, r + 3, pal[2], glow * 0.55, (_a, q) => q % 2 === 0);
+        const im = planetImg(i, r, Math.floor(time * 4) + i);
         p.alpha(1);
-        p.img(img, X - 7.5, Y - 9, Y);
-        if (t > LORD.orbitStay - 0.45 && Math.floor(time * 16) % 2 === 0)
-          ring(p, X, Y - 4, 7, '#ffffff', 0.8);
+        p.img(im, X - im.width / 2, Y - r * 0.4 - im.height / 2, Y);
         p.occ = null;
+        const back = k01((t - (LORD.orbitStay - 0.45)) / 0.45);
+        if (back > 0 && lord) {
+          const [hx2, hy2] = crownSpot(lord, i, now + (LORD.orbitStay - t));
+          const mx = (pl.x + hx2) / 2;
+          const my = Math.min(pl.y, hy2) - 1.8;
+          dashArc(p, S, pl.x, pl.y, mx, my, hx2, hy2, 0, back, Math.floor(time * 18), pal[2], 0.7);
+          if (!reduced() && Math.floor(time * 12) % 2 === 0)
+            ring(p, X, Y - r * 0.4, r + 1, C.white, 0.8);
+        }
         return;
       }
-      // Летит: след из точек по той же дуге, что у мозга.
+      // Летит по той же дуге, что у мозга, и кувыркается; за ним — хвост.
       const at = (u: number): [number, number] => {
         const uu = k01(u);
         if (pl.stage === 1) {
@@ -5770,24 +6574,44 @@ registerZonePainter(
         return [bez(pl.sx, mx, hx2, e), bez(pl.sy, my, hy2, e)];
       };
       const T = pl.stage === 1 ? LORD.orbitFly : LORD.orbitBack;
-      const u = t / T;
-      for (let j = 8; j >= 1; j--) {
-        const [x, y] = at(u - j * 0.03);
-        const f = j / 8;
-        p.col(pl.stage === 1 ? (f < 0.4 ? C.gold[3] : '#c890f0') : C.ice[4], 0.75 * (1 - f));
-        p.rect(Math.floor(x * S) - (f < 0.3 ? 1 : 0), Math.floor(y * S), f < 0.3 ? 2 : 1, 1);
+      const u = k01(t / T);
+      const grow = pl.stage === 1 ? u : 1 - u;
+      const r = PL_R[i] * (1 + 0.8 * grow);
+      const n = reduced() ? 6 : 12;
+      for (let j = n; j >= 1; j--) {
+        const [x0, y0] = at(u - j * 0.028);
+        const [x1, y1] = at(u - (j - 1) * 0.028);
+        const f = j / n;
+        const c = f < 0.25 ? C.white : f < 0.55 ? pal[2] : pl.stage === 1 ? '#c890f0' : pal[1];
+        p.col(c, 0.85 * (1 - f));
+        p.line(x0 * S, y0 * S, x1 * S, y1 * S);
+        if (f < 0.6) p.line(x0 * S + 1, y0 * S, x1 * S + 1, y1 * S);
+        if (f < 0.3) p.line(x0 * S, y0 * S + 1, x1 * S, y1 * S + 1);
       }
-      const X = pl.x * S;
-      const Y = pl.y * S;
+      const [X0, Y0] = at(u);
+      const X = X0 * S;
+      const Y = Y0 * S;
+      ring(p, X, Y, r + 2, C.gold[3], 0.35, (_a, q) => q % 2 === 0);
+      const im = planetImg(i, r, Math.floor(time * 16) + i * 3);
       p.alpha(1);
-      p.img(img, X - 7.5, Y - 5.5);
-      p.col(C.gold[3], 0.3);
-      ring(p, X, Y, 8, C.gold[3], 0.3, (_a, k) => k % 2 === 0);
+      p.img(im, X - im.width / 2, Y - im.height / 2);
     });
   }),
 );
 
 // ---- Затмение: ночь на всю арену, окна у героя и у распахнутого плаща -------
+
+/** Видимая часть экрана в пикселях мира (с запасом в пиксель). */
+function viewOf(p: Pen): [number, number, number, number] {
+  const m = p.g.getTransform();
+  const sc = m.a || 1;
+  return [
+    Math.floor(-m.e / sc - p.qx) - 1,
+    Math.ceil((p.g.canvas.width - m.e) / sc - p.qx) + 1,
+    Math.floor(-m.f / sc - p.qy) - 1,
+    Math.ceil((p.g.canvas.height - m.f) / sc - p.qy) + 1,
+  ];
+}
 
 function veil(
   p: Pen,
@@ -5797,18 +6621,14 @@ function veil(
   holes: [number, number, number][],
   col: string,
   a: number,
+  clip?: [number, number, number],
 ): void {
   const LV = [0, 0.35, 0.7, 1];
   const RING = [0.75, 1, 1.3];
   // Только видимая часть экрана: ночь на всю арену — сотни строк за кадром.
-  const m = p.g.getTransform();
-  const sc = m.a || 1;
-  const vx0 = Math.floor(-m.e / sc - p.qx) - 1;
-  const vx1 = Math.ceil((p.g.canvas.width - m.e) / sc - p.qx) + 1;
-  const vy0 = Math.floor(-m.f / sc - p.qy) - 1;
-  const vy1 = Math.ceil((p.g.canvas.height - m.f) / sc - p.qy) + 1;
-  const y0 = Math.max(vy0, Math.floor(cy - R));
-  const y1 = Math.min(vy1, Math.ceil(cy + R));
+  const [vx0, vx1, vy0, vy1] = viewOf(p);
+  const y0 = Math.max(vy0, Math.floor(cy - R), clip ? Math.floor(clip[1] - clip[2]) : -1e9);
+  const y1 = Math.min(vy1, Math.ceil(cy + R), clip ? Math.ceil(clip[1] + clip[2]) : 1e9);
   const lvAt = (X: number, Y: number) => {
     let lv = 3;
     for (const [hx2, hy2, hr] of holes) {
@@ -5818,12 +6638,32 @@ function veil(
     return lv;
   };
   const cuts: number[] = [];
+  // Строки без окон с теми же краями сливаются в один прямоугольник: в
+  // затмении это почти весь экран — сотни строк превращаются в единицы.
+  let bx0 = 0;
+  let bx1 = -1;
+  let by0 = 0;
+  let bn = 0;
+  const flush = () => {
+    if (bn > 0) {
+      p.col(col, a);
+      p.rect(bx0, by0, bx1 - bx0 + 1, bn);
+    }
+    bn = 0;
+  };
   for (let Y = y0; Y <= y1; Y++) {
     const yy = Y + 0.5 - cy;
     if (Math.abs(yy) >= R) continue;
     const hw = Math.sqrt(R * R - yy * yy);
-    const xa = Math.max(vx0, Math.ceil(cx - hw - 0.5));
-    const xb = Math.min(vx1, Math.floor(cx + hw - 0.5));
+    let xa = Math.max(vx0, Math.ceil(cx - hw - 0.5));
+    let xb = Math.min(vx1, Math.floor(cx + hw - 0.5));
+    if (clip) {
+      const cyy = Y + 0.5 - clip[1];
+      if (Math.abs(cyy) >= clip[2]) continue;
+      const cw = Math.sqrt(clip[2] * clip[2] - cyy * cyy);
+      xa = Math.max(xa, Math.ceil(clip[0] - cw - 0.5));
+      xb = Math.min(xb, Math.floor(clip[0] + cw - 0.5));
+    }
     if (xb < xa) continue;
     // Границы ступеней окон в этой строке: уровень меняется только на них.
     cuts.length = 0;
@@ -5838,10 +6678,16 @@ function veil(
       }
     }
     if (!cuts.length) {
-      p.col(col, a);
-      p.rect(xa, Y, xb - xa + 1, 1);
+      if (bn > 0 && (xa !== bx0 || xb !== bx1 || Y !== by0 + bn)) flush();
+      if (bn === 0) {
+        bx0 = xa;
+        bx1 = xb;
+        by0 = Y;
+      }
+      bn += 1;
       continue;
     }
+    flush();
     cuts.push(xa, xb + 1);
     cuts.sort((q1, q2) => q1 - q2);
     let runX = xa;
@@ -5869,6 +6715,7 @@ function veil(
       p.rect(runX, Y, xb - runX + 1, 1);
     }
   }
+  flush();
 }
 
 registerZonePainter(
@@ -5880,20 +6727,50 @@ registerZonePainter(
     const cx = z.x * S;
     const cy = z.y * S;
     const p = new Pen(g, px, py, cx, cy);
-    const R = (v.r + 3) * S;
+    // Тьма — на весь видимый мир: и коридор ворот, и лампы зала гаснут.
+    const R = (v.r + 24) * S;
+    const RS = (v.r + 3) * S;
     const holes: [number, number, number][] = [[s.hero.x * S, (s.hero.y - 0.4) * S, 1.5 * S]];
     const lord = lordNow();
     const open = !!lord && lord.mode === 'f15l_open';
     if (open && lord) holes.push([lord.x * S, (lord.y - 2.2) * S, 3.4 * S * k01(lord.t / 0.4)]);
-    const a = 0.8 * v.dark;
-    veil(p, cx, cy, R, holes, C.night[0], a);
-    // Небо затмения: редкие звёзды мерцают.
+    // Ночь выходит из плаща волной: фронт бежит от владыки по арене, а когда
+    // свет возвращается — сворачивается обратно в плащ.
+    const lx = lord ? lord.x * S : cx;
+    const ly = lord ? (lord.y - 2.2) * S : cy;
+    const maxR = Math.hypot(lx - cx, ly - cy) + R;
+    const w = k01(v.dark / 0.9);
+    const Rw = maxR * w;
+    if (Rw < 2) return;
+    const a = 0.8;
+    const [vx0, vx1, vy0, vy1] = viewOf(p);
+    const inArena = (x: number, y: number) =>
+      x > vx0 && x < vx1 && y > vy0 && y < vy1 && Math.hypot(x - cx, y - cy) < R;
+    veil(p, lx, ly, Rw, holes, C.night[0], a, [cx, cy, R]);
+    // Фронт волны: кайма ночи светится фиолетом, по ней бегут звёзды.
+    if (w < 0.999) {
+      const keep = (t: number) => inArena(lx + Math.cos(t) * Rw, ly + Math.sin(t) * Rw);
+      ring(p, lx, ly, Rw + 2, C.night[0], 0.45, (t) => keep(t));
+      ring(p, lx, ly, Rw, '#6a34a4', 0.85, (t, i) => keep(t) && hash(i >> 2, 3, 97) > 0.2);
+      ring(p, lx, ly, Rw - 2, '#c890f0', 0.6, (t, i) => keep(t) && i % 3 === 0);
+      if (!reduced())
+        for (let i = 0; i < 24; i++) {
+          const t = (i / 24) * TAU + time * 0.4;
+          const x = lx + Math.cos(t) * (Rw - 4);
+          const y = ly + Math.sin(t) * (Rw - 4);
+          if (inArena(x, y)) twinkle(p, x, y, 1, C.gold[3], 0.8);
+        }
+    }
+    // Небо затмения: редкие звёзды мерцают — только там, куда дошла ночь.
     for (let i = 0; i < 60; i++) {
-      const rr = R * Math.sqrt(hash(i, 1, 97));
+      const rr = RS * Math.sqrt(hash(i, 1, 97));
       const aa = TAU * hash(i, 2, 97);
+      const x = cx + Math.cos(aa) * rr;
+      const y = cy + Math.sin(aa) * rr * 0.9;
+      if (Math.hypot(x - lx, y - ly) > Rw - 3) continue;
       const tw = 0.5 + 0.5 * Math.sin(time * (1.5 + hash(i, 3, 97) * 3) + i);
       p.col(i % 5 ? C.ice[4] : C.gold[3], a * 0.5 * tw);
-      p.dot(cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr * 0.9);
+      p.dot(x, y);
     }
     // Плащ распахнут — кромка окна золотом.
     if (open && lord)
@@ -5992,19 +6869,39 @@ registerZonePainter(
         const e = eIn2(k01(q));
         return [bez(ox, mx, tx, e), bez(oy - 8, my, ty, e)];
       };
-      for (let j = 1; j <= 5; j++) {
-        const [x, y] = pos(u - j * 0.035);
-        p.col(C.gold[2], 0.7 * (1 - j / 6));
-        p.dot(x, y);
+      // След — сплошной хвост кометы: у головы белый, к концу золото гаснет.
+      let [lx, ly] = pos(u);
+      for (let j = 1; j <= 9; j++) {
+        const [x, y] = pos(u - j * 0.03);
+        p.lineS(lx, ly, x, y, j < 3 ? C.gold[3] : C.gold[2], 0.85 * (1 - j / 10), j < 4 ? 0.5 : 0);
+        lx = x;
+        ly = y;
       }
       const [x, y] = pos(u);
-      twinkle(p, x, y, 1, C.gold[3], 1);
+      twinkle(p, x, y, 2, C.white, 1);
     }
-    // Звезда загорелась на плаще.
+    // Звезда загорелась на плаще: вспышка лучами, кольцо, искры.
     const k = k01((t - 0.7) / 0.4);
     if (k > 0 && k < 1) {
-      ring(p, tx, ty, 2 + k * 14, C.gold[3], 1 - k);
+      hitStar(p, tx, ty, t - 0.7, 0.3, S * 1.1, 0.25, C.gold[3]);
+      ring(p, tx, ty, 2 + k * 18, C.gold[3], 1 - k, undefined, 0.5);
+      ring(p, tx, ty, 1 + k * 10, C.white, 0.8 * (1 - k), (_a, i) => i % 3 !== 2);
       twinkle(p, tx, ty, Math.round(4 * (1 - k)) + 1, C.gold[3], 1 - k * 0.5);
+      sparks(
+        p,
+        (zz.n ?? 0) * 31 + 5,
+        t - 0.7,
+        tx,
+        ty,
+        reduced() ? 4 : 10,
+        0,
+        TAU,
+        30,
+        50,
+        0.4,
+        -20,
+        starCol,
+      );
     }
   }),
 );
@@ -6015,43 +6912,83 @@ registerZonePainter(
   'f15b_fxnova',
   guarded((g, z: Zone | Strike, px: number, py: number, S: number, time: number) => {
     const zz = z as FxZone;
-    const cx = zz.x * S;
-    const cy = zz.y * S;
-    const p = new Pen(g, px, py, cx, cy);
+    const fx = zz.x * S;
+    const fy = zz.y * S;
+    const p = new Pen(g, px, py, fx, fy);
+    const lord = lordNow();
+    // Звезда копится в ядре владыки (над полом), волна идёт по полу.
+    const cx = lord ? lord.x * S : fx;
+    const cy = lord ? (lord.y - 3.5) * S : fy - 3.5 * S;
+    const few = reduced();
     const t = zz.t;
     const T = LORD.nova - 0.6;
     if (t < T + 0.1) {
       const k = k01(t / T);
+      // Звёздная пыль арены стекается спиралью в ядро — всё быстрее.
+      const n = few ? 18 : 40;
+      const Rm = S * 7;
+      for (let i = 0; i < n; i++) {
+        const f = mod(hash(i, 1, 141) + t * (0.35 + 0.9 * k), 1);
+        const pos = (q: number): [number, number] => {
+          const rr = Rm * Math.pow(1 - q, 1.6);
+          const aa = hash(i, 2, 141) * TAU + q * 2.6;
+          return [cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr * 0.75];
+        };
+        const [x0, y0] = pos(Math.max(0, f - 0.05));
+        const [x1, y1] = pos(f);
+        p.col(starCol(1 - f), (0.3 + 0.6 * k) * (f < 0.1 ? f * 10 : 1));
+        p.line(x0, y0, x1, y1);
+      }
+      // Лучи из ядра: растут и крутятся.
       const rays = 12;
       for (let i = 0; i < rays; i++) {
         const a = (i / rays) * TAU + time * 0.3;
-        const L = S * (0.8 + 6 * eIn2(k)) * (i % 2 ? 0.7 : 1);
+        const L = S * (0.5 + 2.6 * eIn2(k)) * (i % 2 ? 0.6 : 1);
         p.lineS(
           cx,
           cy,
           cx + Math.cos(a) * L,
           cy + Math.sin(a) * L,
           i % 2 ? C.gold[2] : C.gold[3],
-          0.3 + 0.5 * k,
+          0.35 + 0.5 * k,
           0,
         );
       }
-      const r = S * (0.5 + 2.2 * eIn2(k)) * (1 + 0.05 * Math.sin(time * 20));
-      p.col(C.gold[1], 0.3);
-      oval(p, cx, cy, r * 1.4, r * 1.4);
-      p.col(C.gold[3], 0.6);
+      // Ядро разгорается: кольца света, белая сердцевина.
+      const r = S * (0.25 + 0.75 * eIn2(k)) * (1 + 0.06 * Math.sin(time * 20));
+      ring(p, cx, cy, r * 1.6, C.gold[2], 0.35 + 0.4 * k, (_a, i) => i % 2 === 0);
+      ring(p, cx, cy, r * 1.25, C.gold[3], 0.6);
+      p.col(C.gold[3], 0.75);
       oval(p, cx, cy, r, r);
-      p.col('#ffffff', 0.9);
-      oval(p, cx, cy, r * 0.5, r * 0.5);
+      p.col('#ffffff', 0.95);
+      oval(p, cx, cy, r * 0.55, r * 0.55);
+      // На полу — кольцо астролябии сходится к звезде.
+      const f = mod(t * 0.9, 1);
+      ring(p, fx, fy, S * (6 - 5 * f), C.gold[2], 0.5 * k * (1 - f), (_a, i) => i % 3 !== 0, 0.4);
     }
     const e = t - T;
     if (e >= 0) {
-      if (e < 0.4) {
-        const u = e / 0.4;
-        p.col('#ffffff', 0.9 * (1 - u));
-        oval(p, cx, cy, S * (2 + 9 * eOut2(u)), S * (2 + 9 * eOut2(u)));
+      // Вспышка — кольцами, а не белым экраном: сцену видно.
+      if (e < 0.5) {
+        const u = e / 0.5;
+        p.col('#ffffff', (few ? 0.35 : 0.55) * (1 - u));
+        oval(p, cx, cy, S * (0.8 + 1.6 * eOut2(u)), S * (0.8 + 1.6 * eOut2(u)));
+        for (let j = 0; j < 3; j++) {
+          const uu = k01(u * 1.2 - j * 0.15);
+          if (uu <= 0 || uu >= 1) continue;
+          ring(
+            p,
+            fx,
+            fy,
+            S * (1 + 11 * eOut2(uu)),
+            j === 1 ? '#c890f0' : C.gold[3],
+            0.9 * (1 - uu),
+            undefined,
+            0.5,
+          );
+        }
       }
-      sparks(p, 4141, e, cx, cy, reduced() ? 10 : 30, 0, Math.PI, 120, 160, 1.0, 40, starCol);
+      sparks(p, 4141, e, cx, cy, few ? 10 : 30, 0, Math.PI, 120, 160, 1.0, 40, starCol);
     }
   }),
 );
@@ -6069,8 +7006,52 @@ registerZonePainter(
     // Вспышка короткая: под ней рассыпается плащ — сцену не закрывать.
     if (t < 0.22) {
       const u = t / 0.22;
-      p.col('#fffaf0', 0.6 * (1 - u));
+      p.col('#fffaf0', (reduced() ? 0.1 : 0.22) * (1 - u));
       oval(p, cx, cy, S + R * eOut2(u), S + R * eOut2(u));
+    }
+    // Звёзды плаща возвращаются на небо арены: из владыки разлетаются
+    // дугами, садятся звёздами пола, мерцают и гаснут к концу сцены.
+    const lord = lordNow();
+    const ox = lord ? lord.x * S : cx;
+    const oy = lord ? (lord.y - 2.2) * S : cy - 2 * S;
+    const nStar = reduced() ? 16 : 36;
+    const gone = 1 - k01((t - 2.4) / 0.8);
+    for (let i = 0; i < nStar; i++) {
+      const u = k01((t - 0.12 - 0.5 * hash(i, 4, 103)) / 1.1);
+      if (u <= 0) continue;
+      // Садятся в 2–7 клетках от сердца: столько видит экран вокруг героя.
+      const rr = R * (0.15 + 0.4 * Math.sqrt(hash(i, 5, 103)));
+      const aa = TAU * hash(i, 6, 103);
+      const ex = cx + Math.cos(aa) * rr;
+      const ey = cy + Math.sin(aa) * rr;
+      const mx = (ox + ex) / 2;
+      const my = Math.min(oy, ey) - S * (1.5 + 2 * hash(i, 7, 103));
+      const pos = (q: number): [number, number] => {
+        const e = eOut2(k01(q));
+        return [bez(ox, mx, ex, e), bez(oy, my, ey, e)];
+      };
+      if (u < 1) {
+        let [lx, ly] = pos(u);
+        for (let j = 1; j <= 5; j++) {
+          const [x, y] = pos(u - j * 0.035);
+          p.lineS(lx, ly, x, y, C.gold[2], 0.7 * (1 - j / 6) * gone, 0);
+          lx = x;
+          ly = y;
+        }
+      }
+      const [x, y] = pos(u);
+      // Села — звезда вспыхивает кольцом и дальше мерцает.
+      const land = t - 0.12 - 0.5 * hash(i, 4, 103) - 1.1;
+      if (land > 0 && land < 0.3)
+        ring(p, x, y, 1 + 9 * eOut2(land / 0.3), C.gold[3], 0.8 * (1 - land / 0.3));
+      // Севшая звезда крупнее звёзд неба и с ореолом — иначе тонет в россыпи.
+      const flick = land < 0.3 || Math.sin(time * 4 + i * 1.7) > 0.3;
+      const big = u >= 1 ? (flick ? 3 : 2) : 1;
+      if (u >= 1) {
+        p.col(C.gold[2], 0.2 * gone);
+        oval(p, x, y, 3.5, 3.5);
+      }
+      twinkle(p, x, y, big, u < 1 ? C.white : C.gold[3], gone);
     }
     for (let j = 0; j < 3; j++) {
       const u = (t - j * 0.3) / 2;
@@ -6167,10 +7148,10 @@ registerZonePainter(
     const p = new Pen(g, px, py, cx, cy);
     const t = zz.t;
     const env = k01(t / 0.2) * (1 - k01((t - (zz.life - 0.35)) / 0.35));
-    const hx2 = lord.x * S;
-    const hy2 = (lord.y - 3.4) * S;
     const ex = qx * S;
     const ey = qy * S;
+    // Нить — от поднятой ладони (точка из кадра «Тела»).
+    const [hx2, hy2] = handAt(lord, S, ex, ey);
     const col = QUAD_HEX[mod(zz.q ?? 0, 4)];
     // Нить от поднятой руки к четверти, по ней бежит свет.
     const n = Math.max(8, Math.floor(Math.hypot(ex - hx2, ey - hy2) / 3));
@@ -6228,6 +7209,12 @@ const WARM_STRIKES: [string, 'circle' | 'line' | 'cone' | 'ring', number, number
 ];
 const WARM_SHOTS = ['f15b_fireball', 'f15b_ice'];
 const WARM_FX = [
+  'f15b_fxsky',
+  'f15b_fxplanets',
+  'f15b_fxeclipse',
+  'f15b_fxconduct',
+  'f15b_fxaim',
+  'f15b_fxqwake',
   'f15b_fxswirl',
   'f15b_fxwarp',
   'f15b_flames',
@@ -6263,7 +7250,14 @@ function* warmFx(): Generator<void> {
   hydraHead(0);
   hydraHead(1);
   ghostAxe();
-  for (let i = 0; i < 5; i++) planetSprite(i);
+  yield;
+  // Планеты: все радиусы полёта (от короны до ×1,8) и лёжа, по 8 кадров.
+  for (let i = 0; i < 5; i++) {
+    for (let r = Math.round(PL_R[i]); r <= Math.round(PL_R[i] * 1.8); r++)
+      for (let f = 0; f < 8; f++) planetImg(i, r, f);
+    yield;
+  }
+  for (const sz of [5, 6]) for (let f = 0; f < 8; f++) rockImg(sz, f);
   yield;
   for (let h = 2; h <= 56; h += 2) {
     for (let f = 0; f < 4; f++) waterCol(h, f);

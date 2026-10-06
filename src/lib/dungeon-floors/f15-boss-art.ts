@@ -290,6 +290,12 @@ const CONSTEL: Constel[] = CONSTEL_RAW.map((c) => {
   return { pts: c.pts.map(([x, y]) => [x + ox, y + oy] as [number, number]), lines: c.lines };
 });
 
+/** Небо арены для живого рисунка («Техники»): кольца и звёзды созвездий, клетки от центра. */
+export const F15B_SKY: { rings: readonly number[]; stars: readonly [number, number][] } = {
+  rings: RINGS,
+  stars: CONSTEL.flatMap((c) => c.pts),
+};
+
 /** Ночное небо пола: туманность и редкие тусклые звёзды. */
 function skyAt(X: number, Y: number): RGBA {
   const n = fbm(X / 46, Y / 46, 3);
@@ -361,14 +367,8 @@ function starFloor(p: Px, c: CellCtx, g: Geo): void {
         if (Math.abs(e) < 0.6) col = lit ? GOLD[4] : GOLD[3];
         else if (e >= 0.6 && e < 1.5) col = mixc(col, INK, 0.45);
         else if (i === 1 && Math.abs(e + 3) < 0.5) col = mixc(col, GOLD[2], 0.7);
-        if (i === 2 && e > 0.6 && e < 4.6) {
-          // Риски внешнего кольца: каждые 6° короткая, каждые 30° — длинная.
-          const deg = ((a * 180) / Math.PI + 360) % 360;
-          const k6 = Math.abs(((deg + 3) % 6) - 3) * (Math.PI / 180) * d16;
-          const k30 = Math.abs(((deg + 15) % 30) - 15) * (Math.PI / 180) * d16;
-          if (k30 < 0.6) col = e < 4.4 ? GOLD[3] : col;
-          else if (k6 < 0.5 && e < 2.6) col = mixc(col, GOLD[2], 0.8);
-        }
+        // Риски колец не здесь: они вращаются, их рисует небо арены
+        // (`f15b_fxsky` в f15-boss-fx.ts) — клетка собирается один раз.
       }
       // Созвездия: тонкий пунктир между звёздами.
       for (const [ax, ay, bx, by] of segs) {
@@ -571,7 +571,7 @@ function groundFloor(p: Px, c: CellCtx, dust: boolean): void {
           const hi = tint < 0.55 ? ICE[5] : tint < 0.8 ? GOLD[5] : VIO[5];
           const mid = tint < 0.55 ? ICE[3] : tint < 0.8 ? GOLD[3] : VIO[3];
           if (kind === 0) {
-            // Крест в пять точек с белым сердцем.
+            // Крест в пять точек с белой серединой.
             if (ad === 0) col = WHITE;
             else if ((ddx === 0 || ddy === 0) && ad <= 2) col = ad === 1 ? hi : mixc(col, mid, 0.6);
           } else if (kind === 1) {
@@ -600,20 +600,62 @@ function groundFloor(p: Px, c: CellCtx, dust: boolean): void {
     }
 }
 
+/** Восемь соседей клетки. */
+const NB8: [number, number][] = [
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+];
+
+/**
+ * Расстояние (px) от пикселя клетки до ближней чужой клетки — по восьми
+ * соседям, с шумом: берег пятна скруглён и рван, лесенки клеток нет.
+ */
+function shoreOf(
+  u: number,
+  v: number,
+  X: number,
+  Y: number,
+  same: (dx: number, dy: number) => boolean,
+  seed: number,
+  amp: number,
+): number {
+  let ex = 99;
+  for (const [dx, dy] of NB8) {
+    if (same(dx, dy)) continue;
+    const gx = Math.max(dx * 16 - (u + 0.5), u + 0.5 - (dx * 16 + 16), 0);
+    const gy = Math.max(dy * 16 - (v + 0.5), v + 0.5 - (dy * 16 + 16), 0);
+    ex = Math.min(ex, Math.hypot(gx, gy));
+  }
+  return ex + (vnoise(X / 4, Y / 4, seed) - 0.5) * amp;
+}
+
 /** Клетки памяти: прошлые этажи — в кристалле и звёздном свете. */
-function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
+function memoryFloor(p: Px, c: CellCtx, _g: Geo): void {
   const mk = c.mark;
   const same = (dx: number, dy: number) => c.markAt(dx, dy) === mk;
+  const glass = (dx: number, dy: number) => {
+    const m = c.markAt(dx, dy);
+    return m === MK.mirror || m === MK.mirrorFloor;
+  };
+  const mire = (dx: number, dy: number) => {
+    const m = c.markAt(dx, dy);
+    return m === MK.bog || m === MK.circleA || m === MK.circleB;
+  };
+  const wet = (dx: number, dy: number) => {
+    const m = c.markAt(dx, dy);
+    return m === MK.abyss || m === MK.shallow;
+  };
   for (let v = 0; v < 16; v++)
     for (let u = 0; u < 16; u++) {
       const X = c.wx * 16 + u;
       const Y = c.wy * 16 + v;
       let col: RGBA;
-      const edge =
-        (u === 0 && !same(-1, 0)) ||
-        (u === 15 && !same(1, 0)) ||
-        (v === 0 && !same(0, -1)) ||
-        (v === 15 && !same(0, 1));
       if (mk === MK.lava) {
         // Звёздная лава: жилы ярче, корка — тёмный кристалл.
         const n = fbm(X / 7, Y / 7, 51);
@@ -629,7 +671,11 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         if (vnoise(X / 5, Y / 5, 53) > 0.72)
           col = mixq(VIO[0], NIGHT[2], vnoise(X / 2, Y / 2, 54), X, Y);
         if (hash(X, Y, 55) < 0.006) col = WHITE;
-        if (edge) col = mixc(LAVA[1], INK, 0.3);
+        // Берег: корка тёмного кристалла с раскалённой кромкой, рваный.
+        const sh = shoreOf(u, v, X, Y, same, 62, 5);
+        if (sh < 1.2) col = mixq(NIGHT[1], VIO[0], vnoise(X / 2, Y / 2, 63), X, Y);
+        else if (sh < 2.2) col = LAVA[2];
+        else if (sh < 3.2) col = mixc(col, LAVA[5], 0.5);
       } else if (mk === MK.crust) {
         const n = vnoise(X / 4, Y / 4, 56);
         col = mixq(NIGHT[1], VIO[0], n, X, Y);
@@ -643,7 +689,11 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         const h = hash(X, Y, 58);
         if (h < 0.006) col = SEA[6];
         else if (h < 0.012) col = ICE[4];
-        if (edge) col = SEA[5];
+        // Берег бездны: пена по рваной кромке, у самой кромки — мель.
+        const sh = shoreOf(u, v, X, Y, wet, 64, 4);
+        if (sh < 1.5) col = mixq(skyAt(X, Y), SEA[3], 0.5, X, Y);
+        else if (sh < 2.6) col = SEA[5];
+        else if (sh < 3.4 && hash(X, Y, 65) < 0.5) col = SEA[4];
       } else if (mk === MK.shallow) {
         col = mixq(skyAt(X, Y), SEA[3], 0.55, X, Y);
         if (Math.sin(X * 0.3 + Y * 0.1 + vnoise(X / 5, Y / 5, 57) * 7) > 0.8)
@@ -656,8 +706,18 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         if (m < 7.2) col = m > 6 ? ICE[1] : du + dv < -3 ? ICE[6] : du + dv < 2 ? ICE[5] : ICE[4];
         else col = mixc(skyAt(X, Y), ICE[2], 0.4);
       } else if (mk === MK.mirrorFloor) {
-        col = mixc(skyAt(X, Y), ICE[2], 0.3);
-        if ((u + v) % 6 === 0 || (u - v + 32) % 9 === 0) col = mixc(col, ICE[5], 0.45);
+        // Зеркальный пол: тёмное стекло, в нём звёзды и длинные косые блики
+        // (по миру, а не по клетке — блик идёт через всю гладь). К рваной
+        // кромке стекло истончается, по кромке — светлый скол.
+        const sh = shoreOf(u, v, X, Y, glass, 66, 5);
+        const f = clamp01((sh - 0.5) / 4);
+        col = mixq(skyAt(X, Y), ICE[1], 0.25 + 0.3 * f, X, Y);
+        const band = (((X - Y * 0.5) % 23) + 23) % 23;
+        if (band < 1.5) col = mixc(col, ICE[4], 0.45 * f);
+        else if (band < 3) col = mixc(col, ICE[3], 0.25 * f);
+        const hs = hash(X, Y, 67);
+        if (hs < 0.008) col = hs < 0.003 ? WHITE : ICE[5];
+        if (sh > 0.4 && sh < 1.4 && hash(X, Y, 70) < 0.6) col = ICE[3];
       } else if (mk === MK.circleA || mk === MK.circleB) {
         const cc = mk === MK.circleA ? BOG[4] : TEAL[3];
         const du = u + 0.5 - 8;
@@ -673,16 +733,15 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
         const n = vnoise(X / 4, Y / 4, 59);
         col = mixq(BOG[0], BOG[2], n, X, Y);
         if (hash(X, Y, 60) < 0.012) col = BOG[4];
+        // Топь расползается по полу рваными языками, кромка — ряска.
+        const sh = shoreOf(u, v, X, Y, mire, 68, 6);
+        if (sh < 1.2) col = mixq(skyAt(X, Y), BOG[1], 0.35, X, Y);
+        else if (sh < 2.2) col = hash(X, Y, 69) < 0.5 ? BOG[3] : BOG[2];
       } else {
         // Ожог: на месте лавы остывшие жилы той же лавы тусклым золотом,
-        // пепел гаснет к краю пятна — край не режется по клеткам.
-        const ex = Math.min(
-          same(-1, 0) ? 99 : u + 0.5,
-          same(1, 0) ? 99 : 15.5 - u,
-          same(0, -1) ? 99 : v + 0.5,
-          same(0, 1) ? 99 : 15.5 - v,
-        );
-        const fade = Math.min(1, ex / 7);
+        // пепел гаснет к краю пятна. Край — по расстоянию до ближней чужой
+        // клетки (и по диагонали тоже) с шумом: углы скруглены, лесенки клеток нет.
+        const fade = clamp01((shoreOf(u, v, X, Y, same, 61, 6) - 1) / 8);
         col = mixq(skyAt(X, Y), INK, 0.45 * fade, X, Y);
         const dd = Math.abs(fbm(X / 7, Y / 7, 51) - 0.5);
         if (dd < 0.006 + 0.03 * fade) col = fade > 0.55 ? GOLD[3] : GOLD[2];
@@ -695,7 +754,9 @@ function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
 // Верх стены — гранёный обсидиан: грани светлее сверху-слева, тёмные швы.
 // Прежде порода была «ночным небом» со звёздами и читалась провалом, а не
 // стеной: звёзды — примета пола.
-const WT = [hx('#0b0a22'), hx('#131133'), hx('#1a1744'), hx('#231f56'), hx('#2d2868')];
+// Порода светлее и серее звёздного пола: пол — синий с фиолетом и звёздами,
+// стена — сизый камень с бликами граней. С одного взгляда видно, где край.
+const WT = [hx('#0a0a1c'), hx('#1f2140'), hx('#2a2e54'), hx('#373d68'), hx('#4a5280')];
 function facet(X: number, Y: number): [number, number] {
   const gx = Math.floor(X / 7);
   const gy = Math.floor(Y / 7);
@@ -883,7 +944,16 @@ registerCellPainter(F15_HEART, (c: CellCtx) => {
     (c.open(1, 0) ? 4 : 0) |
     (c.open(0, -1) ? 8 : 0) |
     (c.open(0, 1) ? 16 : 0);
-  const key = `${c.wx},${c.wy},${g.top}|${c.tile}|${c.mark}|${ob}|${c.markAt(-1, 0)},${c.markAt(1, 0)},${c.markAt(0, -1)},${c.markAt(0, 1)}`;
+  // Ожог скругляет углы по диагональным соседям — им они нужны в ключе.
+  const diag =
+    c.mark === MK.scorch ||
+    c.mark === MK.lava ||
+    c.mark === MK.abyss ||
+    c.mark === MK.bog ||
+    c.mark === MK.mirrorFloor
+      ? `|${c.markAt(-1, -1)},${c.markAt(1, -1)},${c.markAt(-1, 1)},${c.markAt(1, 1)}`
+      : '';
+  const key = `${c.wx},${c.wy},${g.top}|${c.tile}|${c.mark}|${ob}|${c.markAt(-1, 0)},${c.markAt(1, 0)},${c.markAt(0, -1)},${c.markAt(0, 1)}${diag}`;
   const hit = CELL_LRU.get(key);
   if (hit !== undefined) return hit;
   return CELL_LRU.set(key, cellOf(c, g));
@@ -912,7 +982,36 @@ function cellOf(c: CellCtx, g: Geo): Px | null {
   else if (m === MK.hall) hallFloor(p, c);
   else if (m === MK.runway) runwayFloor(p, c);
   else groundFloor(p, c, m === MK.dust);
+  wallShadow(p, c);
   return p;
+}
+
+/**
+ * Тень стены на полу: под лицом стены и у боковых стен пол темнеет на
+ * несколько пикселей. Звёздный пол и гранёная порода близки по яркости —
+ * без тени край арены читался не сразу. Свет сверху-слева: тень с севера и
+ * запада шире, с востока — узкая.
+ */
+const SHADE = [0.5, 0.64, 0.78, 0.9];
+function wallShadow(p: Px, c: CellCtx): void {
+  const n = !c.open(0, -1) ? 4 : 0;
+  const w = !c.open(-1, 0) ? 4 : 0;
+  const e = !c.open(1, 0) ? 2 : 0;
+  if (!n && !w && !e) return;
+  const d = p.data;
+  for (let v = 0; v < 16; v++)
+    for (let u = 0; u < 16; u++) {
+      let k = 9;
+      if (v < n) k = Math.min(k, v);
+      if (u < w) k = Math.min(k, u);
+      if (15 - u < e) k = Math.min(k, (15 - u) * 2);
+      if (k > 3) continue;
+      const f = SHADE[k];
+      const i = (v * 16 + u) * 4;
+      d[i] *= f;
+      d[i + 1] *= f;
+      d[i + 2] = d[i + 2] * (f * 0.85 + 0.15);
+    }
 }
 
 // =============================================================================
