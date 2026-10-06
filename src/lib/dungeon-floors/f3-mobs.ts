@@ -936,3 +936,596 @@ registerMobWarm('f3_crab', function* () {
       }
   }
 });
+
+// ---------------------------------------------------------------------------
+// Пересмешник: пепельная птица с длинным хвостом и белой маской-лицом.
+// Летает: тень и подъём задаёт кадр (`lift`, `still`). Курс — по ходу с
+// пределом поворота. Зов (`call`) — приманка, а не атака: висит, крылья
+// раскрыты вперёд, как руки, голова склонена набок, рот маски «говорит»,
+// маска светится лицом в темноте, красного глаза нет. Замах (`aim` 0,6 с,
+// быстрый — 0,42 с тем же треком): вздыбился вверх, крылья высоко, хвост
+// веером → задержка на пике, крик, глаз загорается → взвод: голова назад,
+// корпус клонится к цели, крылья складываются → пике (первый кадр `dive` —
+// бросок): шлейф, вниз к герою. После пике — посадка со сжатием, одышка,
+// взлёт. В стену — оглушён на земле, звёзды.
+// ---------------------------------------------------------------------------
+
+const M_FEATH = tn('#3a4652', '#66747f', '#96a2aa', '#cad2d4');
+const M_FAR = tn('#232a33', '#36404b', '#505b66', '#6a7680');
+const M_TIP: RGBA = hex('#141820');
+const M_PALE: RGBA = hex('#d8dacd');
+const M_MASK = tn('#7a725e', '#b8ae94', '#e6dec6', '#fbf5e4');
+const M_HOLE: RGBA = hex('#1a1210');
+const M_BEAK = tn('#1e1812', '#3a3024', '#5a4a36', '#7a6648');
+const M_MOUTH = tn('#2a0c0c', '#2a0c0c', '#3a1010', '#3a1010');
+const M_EYE: RGBA = hex('#ff5a3c');
+const M_FEATHER_C: RGBA = hex('#9aa6ae');
+
+interface MockO {
+  /** Ближнее крыло: подъём (рад, + вверх), отвод назад (рад), сложено 0…1. */
+  el: number;
+  sw: number;
+  fold: number;
+  /** Дальнее крыло (отстаёт по фазе). */
+  elFar: number;
+  pitch: number;
+  roll: number;
+  /** Высота корпуса над точкой ног. */
+  h: number;
+  /** Голова: кивок (+ вниз), наклон набок. */
+  hp: number;
+  ht: number;
+  mouth: number;
+  /** Хвост: изгиб у корня и у конца (отстаёт), веер. */
+  tail: number;
+  tail2: number;
+  fan: number;
+  /** Лапы выпущены 0…1. */
+  legs: number;
+  /** Глаз горит 0…1; маска светится 0…1 (зов — без глаза). */
+  eye: number;
+  mask: number;
+  /** Смерть: глаз погас. */
+  dk: number;
+}
+
+const MOCK0: MockO = {
+  el: 0.4,
+  sw: 0.15,
+  fold: 0,
+  elFar: 0.4,
+  pitch: 0,
+  roll: 0,
+  h: 3.4,
+  hp: 0,
+  ht: 0,
+  mouth: 0,
+  tail: 0,
+  tail2: 0,
+  fan: 0,
+  legs: 0,
+  eye: 0,
+  mask: 0,
+  dk: 0,
+};
+
+/** Крыло: плечо → запястье (кроющие), веер маховых с тёмными концами. */
+function mockWing(
+  r: Rig,
+  body: Fr,
+  side: number,
+  el: number,
+  sw: number,
+  fold: number,
+  far: boolean,
+): void {
+  const T = far ? M_FAR : M_FEATH;
+  const sh = body.p(0.7, side * 1.4, 0.9);
+  const ce = Math.cos(el);
+  const se = Math.sin(el);
+  // Рука крыла в рамке корпуса: наружу, вверх по `el`, назад по `sw`.
+  const L = vnorm(body.v(-Math.sin(sw), side * Math.cos(sw) * ce, Math.cos(sw) * se));
+  const back = body.v(-1, 0, 0);
+  const arm = 3.6 * (1 - 0.35 * fold);
+  const wr = vadd(sh, vmul(L, arm));
+  // Маховые: от запястья наружу и назад; сложенное крыло — вдоль спины.
+  const fl = (1 - 0.4 * fold) * 5.0;
+  const fdir = (k: number) => vnorm(vadd(vmul(L, 1 - k), vmul(back, k + fold * 0.7)));
+  const t1 = vadd(wr, vmul(fdir(0.1), fl));
+  const n2 = vadd(wr, vmul(fdir(0.24), fl * 0.66));
+  const t2 = vadd(wr, vmul(fdir(0.38), fl * 0.92));
+  const n3 = vadd(wr, vmul(fdir(0.52), fl * 0.58));
+  const t3 = vadd(wr, vmul(fdir(0.66), fl * 0.8));
+  const t4 = vadd(vadd(sh, vmul(back, 2.4)), vmul(L, 1.3));
+  const mat: Mat = {
+    T,
+    pat: (q, l) => {
+      const dw = Math.hypot(q[0] - wr[0], q[1] - wr[1], q[2] - wr[2]);
+      if (dw > fl * 0.7) return far ? T[0] : M_TIP;
+      if (dw < 1.5 && l > 0.1) return T[3];
+      return null;
+    },
+  };
+  r.poly([vadd(sh, vmul(back, -0.5)), wr, t1, n2, t2, n3, t3, t4, vadd(sh, vmul(back, 1.7))], mat);
+  r.cap(sh, wr, far ? 0.9 : 1.1, 0.75, { T, bias: 0.2 });
+}
+
+function mockRig(o: MockO, yaw: number): Rig {
+  const r = new Rig();
+  const B = Fr.yaw(yaw);
+  const body = B.at(0, 0, o.h).pitch(o.pitch).roll(o.roll);
+  // Хвост: две длинные ленты со светлыми концами; изгиб отстаёт от корпуса.
+  const spread = 0.45 + o.fan * 1.4;
+  for (const s of [-1, 1]) {
+    const a = body.p(-2.6, s * 0.4, 0.2);
+    const b = body.p(-5.8, s * spread * 0.9, -0.2 + o.tail * 1.2);
+    const c = body.p(-8.8, s * spread * 1.6, -0.4 + o.tail * 1.6 + o.tail2 * 1.4);
+    const tm: Mat = { T: s > 0 ? M_FEATH : M_FAR, bias: 0.1 };
+    r.cap(a, b, 0.9, 0.65, tm);
+    r.cap(b, c, 0.65, 0.45, tm);
+    r.ball(c, 0.7, { T: [M_PALE, M_PALE, M_PALE, M_PALE], flat: 0 });
+  }
+  // Корпус: светлое брюхо, тёмная спина.
+  r.ell(body, [0, 0, 0], [3.2, 2.0, 2.0], {
+    T: M_FEATH,
+    pat: (q, l) => (q[2] < -0.3 ? M_FEATH[l > 0.1 ? 3 : 2] : null),
+  });
+  // Лапы: сидит — до земли, летит — поджаты под брюхо.
+  if (o.legs > 0.05)
+    for (const s of [-1, 1]) {
+      const hip = body.p(0.2, s * 0.7, -1.6);
+      const foot = vlerp(body.p(-1.2, s * 0.7, -2.3), B.p(0.4, s * 0.9, 0), o.legs);
+      r.cap(hip, foot, 0.5, 0.4, { T: M_BEAK });
+      if (o.legs > 0.6) r.cap(foot, vadd(foot, B.v(1.1, 0, 0)), 0.35, 0.3, { T: M_BEAK });
+    }
+  // Крылья: дальнее темнее и отстаёт.
+  mockWing(r, body, -1, o.elFar, o.sw, o.fold, true);
+  mockWing(r, body, 1, o.el, o.sw, o.fold, false);
+  // Голова и маска: лицо почти человеческое — глазницы, крючок клюва снизу.
+  const hd = body.at(3.0, 0, 1.6).pitch(o.hp).roll(o.ht);
+  r.ell(hd, [0, 0, 0], [2.1, 2.1, 2.0], { T: M_FEATH });
+  r.ell(hd, [1.1, 0, -0.1], [1.15, 1.75, 1.95], { T: M_MASK, bias: 0.2, glow: o.mask * 0.45 });
+  for (const s of [-1, 1]) r.dot(hd.p(2.2, s * 0.75, 0.35), M_HOLE, 0, 1, 0.9);
+  if (o.eye > 0.05) r.dot(hd.p(2.25, 0.75, 0.35), M_EYE, o.eye, 1, 1.1);
+  r.cap(hd.p(2.0, 0, -0.9), hd.p(2.6, 0, -1.9), 0.6, 0.3, { T: M_BEAK });
+  if (o.mouth > 0.05)
+    r.ell(hd, [2.15, 0, -0.85], [0.45, 0.65, 0.25 + o.mouth * 0.5], { T: M_MOUTH, flat: 0 });
+  if (o.dk < 0.5 && o.mask < 0.5) r.eye = hd.p(2.2, 0.75, 0.35);
+  return r;
+}
+
+const MW = 40;
+const MH = 36;
+const MAX = 20;
+const MAY = 27;
+/** Полёт 8 × 2, зов 16, замах 15, пике 6, посадка 21, оглушение 20, … × 5 сторон. */
+const MOCK_LIM = 900;
+
+function mockPic(o: MockO, yaw: number, post?: ((o: RigOut, P: Proj2) => void) | null): Pic {
+  return draw(mockRig(o, yaw), MW, MH, MAX, MAY, post);
+}
+
+/** Взмах: фаза 0…1 → крылья и хвост; возвращает подскок корпуса (точки). */
+function flap(o: MockO, ph: number, amp = 1): number {
+  const wing = (p: number): number => {
+    // Вниз — быстро (0…0,45), вверх — медленнее.
+    const top = 1.15 * amp;
+    const bot = -0.55 * amp;
+    return p < 0.45
+      ? top + (bot - top) * smooth(p / 0.45)
+      : bot + (top - bot) * smooth((p - 0.45) / 0.55);
+  };
+  const p = ((ph % 1) + 1) % 1;
+  o.el = wing(p);
+  o.elFar = wing((p + 0.92) % 1);
+  // На подъёме крыло подогнуто и отведено назад.
+  const up = p < 0.45 ? 0 : Math.sin(((p - 0.45) / 0.55) * PI);
+  o.sw = 0.05 + 0.35 * up;
+  o.fold = 0.35 * up;
+  // Хвост отстаёт от корпуса.
+  o.tail = Math.sin((p - 0.2) * TAU) * 0.35 * amp;
+  o.tail2 = Math.sin((p - 0.35) * TAU) * 0.4 * amp;
+  // Корпус подскакивает на взмахе вниз.
+  return Math.sin((p - 0.1) * TAU) * 0.8 * amp;
+}
+
+/** Замах: доля `k` 0…1 (быстрый — тот же трек короче). Возвращает подъём. */
+function mockAim(o: MockO, k: number): number {
+  o.el = kf(k, [
+    [0, 0.5],
+    [0.3, 1.3, 'o'],
+    [0.62, 1.35],
+    [0.9, 1.5, 'i'],
+    [1, 0.6, 'i'],
+  ]);
+  // Задержка на пике: кончики крыльев дрожат через кадр.
+  if (k > 0.32 && k < 0.6) o.el += Math.floor(k * 30) % 2 ? 0.07 : -0.07;
+  o.elFar = o.el - 0.08;
+  o.sw = kf(k, [
+    [0, 0.1],
+    [0.3, -0.1],
+    [0.62, 0],
+    [0.9, 0.55, 'i'],
+    [1, 1.0],
+  ]);
+  o.fold = kf(k, [
+    [0, 0],
+    [0.9, 0.1],
+    [1, 0.6, 'i'],
+  ]);
+  o.pitch = kf(k, [
+    [0, 0],
+    [0.3, -0.42, 'o'],
+    [0.62, -0.38],
+    [0.92, 0.25, 'i'],
+    [1, 0.35],
+  ]);
+  o.hp = kf(k, [
+    [0, 0],
+    [0.3, 0.25],
+    [0.62, 0.3],
+    [0.85, -0.25, 'i'],
+    [1, 0.1],
+  ]);
+  o.mouth = kf(k, [
+    [0, 0],
+    [0.3, 0.2],
+    [0.45, 1, 'o'],
+    [0.85, 1],
+    [1, 0.6],
+  ]);
+  o.fan = kf(k, [
+    [0, 0],
+    [0.3, 1, 'o'],
+    [0.85, 0.8],
+    [1, 0],
+  ]);
+  o.tail = kf(k, [
+    [0, 0],
+    [0.3, -0.9, 'o'],
+    [0.85, -0.6],
+    [1, 0.3],
+  ]);
+  o.tail2 = o.tail * 0.8;
+  o.eye = kf(k, [
+    [0, 0],
+    [0.35, 0],
+    [0.6, 1, 'o'],
+  ]);
+  // Подъём: вздыбился вверх, на взводе — чуть ниже.
+  return kf(k, [
+    [0, 0],
+    [0.3, 4, 'o'],
+    [0.62, 4.5],
+    [0.92, 3.2, 'i'],
+    [1, 3],
+  ]);
+}
+
+/** Удар героя в полёте: взъерошился 4 кадра. */
+function mockHurt(o: MockO, hf: number): void {
+  const q = [1, 0.75, 0.4, 0.15][hf] ?? 0;
+  flap(o, 0.1, 0.9);
+  o.el = 1.35 * q + o.el * (1 - q);
+  o.elFar = 1.2 * q + o.elFar * (1 - q);
+  o.pitch = -0.3 * q;
+  o.hp = -0.45 * q;
+  o.tail = 0.9 * q;
+  o.fan = 0.6 * q;
+  o.mouth = 0.7 * q;
+}
+
+registerMobPainter('f3_mocker', (m: Mob, pose: MobPose) => {
+  const md = pose.mode;
+  const t = Math.max(0, pose.t);
+  const now = pose.now;
+  const id = m.id ?? 0;
+  const sp = speedOf(m);
+  const lock = md === 'aim' || md === 'dive' || md === 'call';
+  const travel = sp > 1.2 ? Math.atan2(m.vy ?? 0, m.vx ?? 0) : (m.face ?? 0);
+  const v = visOf(m, pose, lock ? (m.face ?? 0) : travel, lock ? 30 : 9);
+  const d = side8(v.yaw);
+  const o: MockO = { ...MOCK0 };
+  const ex: Partial<MobFrame> = { shadow: 5, still: true, lift: 7 };
+  let key: string;
+  let post: ((r: RigOut, P: Proj2) => void) | null = null;
+  if (md === 'dying') {
+    // Смерть: крылья вскинуты, кувырок вниз, удар о землю — перья, лежит.
+    const f = Math.min(10, Math.floor(t * 12));
+    const k = f / 12;
+    const fall = clamp01(k / 0.4);
+    o.el = kf(k, [
+      [0, 1.3],
+      [0.15, 1.45, 'o'],
+      [0.45, 0.6],
+      [0.55, -0.4, 'o'],
+    ]);
+    o.elFar = o.el + 0.2;
+    o.sw = 0.3;
+    o.roll = kf(k, [
+      [0, 0],
+      [0.4, 1.0, 'i'],
+      [0.5, 1.25, 'o'],
+    ]);
+    o.pitch = kf(k, [
+      [0, -0.3],
+      [0.4, 0.5, 'i'],
+      [0.6, 0.15],
+    ]);
+    o.hp = 0.6 * sstep(0.35, 0.6, k);
+    o.h = kf(k, [
+      [0, 3.4],
+      [0.45, 1.6, 'i'],
+      [0.55, 1.3],
+    ]);
+    o.tail = 0.6 * (1 - k);
+    o.mouth = 0.8 * (1 - fall);
+    o.dk = sstep(0.4, 0.6, k);
+    key = `die${f}`;
+    ex.lift = Math.round(7 * (1 - fall * fall));
+    ex.linger = 0.9;
+    ex.alpha = 1 - sstep(0.65, 0.9, t);
+    ex.shadow = 5 + fall;
+    if (f >= 5 && f <= 8) {
+      const ff = f - 5;
+      post = (out, P) => {
+        const [cx, cy] = P([0, 0, 2]);
+        for (let i = 0; i < 7; i++) {
+          const a = rnd(i, 11) * TAU;
+          const rr = 3 + ff * 2.4 * (0.5 + rnd(i, 12));
+          const c = i % 2 ? M_PALE : M_FEATHER_C;
+          dotA(out.p, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.5 - ff * 0.6, c, 1 - ff / 4);
+        }
+      };
+    }
+  } else if (md === 'aim') {
+    // Замах: тот же трек и у быстрого (0,42 с) — кадры реже.
+    const wind = (m.data?.quick ?? 0) > 0 ? 0.42 : 0.6;
+    const f = Math.min(14, Math.floor((t / wind) * 15));
+    const lift = mockAim(o, (f + 0.5) / 15);
+    key = `aim${f}`;
+    ex.lift = Math.round(7 + lift);
+  } else if (md === 'dive') {
+    // Пике: кадр 0 — бросок (крылья сложены назад, корпус к цели), дальше —
+    // бреющий со шлейфом, подъём падает к герою за 0,14 с.
+    const f = fi(t, 7);
+    const k = clamp01((f + 0.5) / FPS / 0.14);
+    o.el = kf(k, [
+      [0, 0.6],
+      [1, 0.15, 'o'],
+    ]);
+    o.elFar = o.el;
+    o.sw = kf(k, [
+      [0, 1.0],
+      [1, 1.4, 'o'],
+    ]);
+    o.fold = kf(k, [
+      [0, 0.6],
+      [1, 1, 'o'],
+    ]);
+    o.pitch = kf(k, [
+      [0, 0.45],
+      [1, 0.12],
+    ]);
+    o.mouth = 1;
+    o.eye = 1;
+    o.hp = -0.15;
+    o.tail = 0.25;
+    o.tail2 = f % 2 ? 0.3 : -0.1;
+    key = `dive${Math.min(f, 4)}${f > 4 ? f % 2 : ''}`;
+    ex.lift = Math.round(
+      kf(t, [
+        [0, 10],
+        [0.14, 3, 'o'],
+      ]),
+    );
+    ex.ghost = { every: 0.03, life: 0.16, tint: '#c8d4dc', alpha: 0.4 };
+    ex.sx = 1.06;
+    ex.sy = 0.95;
+  } else if (md === 'perch' || (md === 'chase' && v.prev === 'perch' && t < 0.25)) {
+    // После пике: посадка (крылья тормозят, сжатие), одышка, взлёт.
+    const tt = md === 'perch' ? t : 0.95 + t;
+    const f = tt < 0.25 ? fi(tt, 5) : 6 + Math.min(14, Math.floor((tt - 0.25) * 12));
+    const q = f < 6 ? (f + 0.5) / FPS : 0.25 + (f - 6 + 0.5) / 12;
+    const breath = Math.sin(((q - 0.25) / 0.33) * TAU);
+    const rest = q > 0.25 && q < 0.8;
+    o.legs = kf(q, [
+      [0, 0.4],
+      [0.08, 1],
+      [0.92, 1],
+      [1.1, 0, 'o'],
+    ]);
+    o.el = kf(q, [
+      [0, 1.2],
+      [0.1, 1.0],
+      [0.25, -0.45, 'o'],
+      [0.8, -0.45],
+      [0.95, 1.1, 'i'],
+      [1.1, -0.2, 'o'],
+    ]);
+    o.elFar = o.el + 0.05;
+    o.sw = kf(q, [
+      [0, -0.2],
+      [0.25, 0.75],
+      [0.8, 0.75],
+      [0.95, 0.1],
+    ]);
+    o.fold = kf(q, [
+      [0, 0],
+      [0.25, 0.55],
+      [0.8, 0.55],
+      [0.95, 0],
+    ]);
+    o.pitch = kf(q, [
+      [0, -0.35],
+      [0.12, 0.15, 'o'],
+      [0.25, 0.05],
+      [0.8, 0.05],
+      [0.92, 0.25, 'i'],
+      [1.05, -0.1],
+    ]);
+    o.h = 3.6 + (rest ? breath * 0.25 : 0) - (q > 0.82 && q < 0.95 ? 0.6 : 0);
+    o.mouth = q > 0.2 && q < 0.85 ? 0.4 + 0.5 * Math.max(0, breath) : 0;
+    o.hp = rest ? 0.15 + breath * 0.08 : 0;
+    o.tail = kf(q, [
+      [0, -0.5],
+      [0.12, 0.6, 'o'],
+      [0.3, 0.2],
+    ]);
+    key = `perch${f}`;
+    ex.lift = Math.round(
+      kf(q, [
+        [0, 3],
+        [0.08, 0, 'i'],
+        [0.95, 0],
+        [1.15, 7, 'o'],
+      ]),
+    );
+    ex.shadow = 6;
+    if (f >= 1 && f <= 3) {
+      const qq = 1 - (f - 1) / 3;
+      ex.sx = 1 + 0.18 * qq;
+      ex.sy = 1 - 0.18 * qq;
+    }
+  } else if (md === 'call') {
+    // Зов: манит. Крылья раскрыты вперёд и плавно «зовут», голова набок,
+    // рот маски шевелится по слогам, маска светится. Без угрозы.
+    const f = (((Math.floor(now * 8 + id * 3.1) % 16) + 16) % 16) | 0;
+    const ph = f / 16;
+    // Манящий жест: крылья раскрыты, кончики подгибаются к себе («иди сюда»).
+    const beck = Math.max(0, Math.sin(ph * TAU * 2));
+    o.el = 0.6 + 0.2 * Math.sin(ph * TAU);
+    o.elFar = 0.6 + 0.2 * Math.sin(ph * TAU - 0.5);
+    o.sw = -0.7 + 0.3 * beck;
+    o.fold = 0.55 * beck;
+    o.pitch = -0.25;
+    o.ht = 0.45 * Math.sin(ph * TAU + 0.4);
+    o.hp = 0.2;
+    o.mouth = [0, 0.7, 0.2, 0.8, 0, 0, 0.6, 0.3, 0.9, 0.2, 0, 0, 0, 0.5, 0.8, 0][f];
+    o.tail = 0.3 * Math.sin(ph * TAU - 1);
+    o.tail2 = 0.3 * Math.sin(ph * TAU - 1.6);
+    o.mask = 1;
+    key = `call${f}`;
+    ex.lift = Math.round(7 + Math.sin(ph * TAU) * 1.2);
+  } else if (md === 'dizzy') {
+    // В стену: шлёпнулся, сидит, голова ходит кругом, звёзды.
+    const f = t < 0.2 ? fi(t, 4) : 5 + Math.min(14, Math.floor((t - 0.2) * 12));
+    const q = f < 5 ? (f + 0.5) / FPS : 0.2 + (f - 5 + 0.5) / 12;
+    const wob = (q - 0.2) * 6;
+    const daze = q > 0.2 && q < 1.2;
+    o.legs = 1;
+    o.el = kf(q, [
+      [0, 1.4],
+      [0.15, -0.5, 'o'],
+      [1.2, -0.5],
+      [1.4, 1.0],
+    ]);
+    o.elFar = o.el + 0.1;
+    o.sw = 0.6;
+    o.fold = 0.4;
+    o.pitch = kf(q, [
+      [0, 0.4],
+      [0.15, 0.1],
+    ]);
+    o.ht = daze ? Math.sin(wob) * 0.35 : 0;
+    o.hp = daze ? Math.cos(wob) * 0.15 + 0.1 : 0;
+    key = `dizzy${f}`;
+    ex.lift = Math.round(
+      kf(q, [
+        [0, 2],
+        [0.1, 0, 'i'],
+        [1.25, 0],
+        [1.4, 3, 'o'],
+      ]),
+    );
+    ex.shadow = 6;
+    if (f < 4) {
+      const qq = 1 - f / 4;
+      ex.sx = 1 + 0.2 * qq;
+      ex.sy = 1 - 0.2 * qq;
+    }
+    if (q > 0.15 && q < 1.25) {
+      const ph = (f % 8) / 8;
+      post = (out, P) => {
+        const [cx, cy] = P([2.5, 0, 8.6]);
+        stars(out, cx, cy, ph, 4);
+      };
+    }
+  } else if (md === 'sleep') {
+    // Спит на земле: голова под крылом, дышит.
+    const f = Math.floor(now * 1.2 + id * 0.7) % 2;
+    o.legs = 1;
+    o.el = -0.5;
+    o.elFar = -0.5;
+    o.sw = 1.1;
+    o.fold = 1;
+    o.hp = 0.9;
+    o.h = 3.1 + f * 0.2;
+    key = `sleep${f}`;
+    ex.lift = 0;
+    ex.shadow = 6;
+  } else if (md === 'alert') {
+    // Проснулся: вскинул голову, крылья — и в воздух.
+    const f = fi(t, 8);
+    const k = f / 8;
+    o.legs = 1 - k;
+    flap(o, 0.1 + k * 0.9, 1.1);
+    o.hp = 0.9 * (1 - easeOut(k / 0.4));
+    key = `alert${f}`;
+    ex.lift = Math.round(7 * easeOut(k));
+  } else if (md === 'drop') {
+    // Сорвался со свода: крылья бьют часто, ловит воздух.
+    const f = Math.floor(t * 16) % 4;
+    flap(o, f / 4, 1.2);
+    o.pitch = -0.3;
+    o.hp = -0.3;
+    o.fan = 1;
+    key = `drop${f}`;
+  } else if (md === 'stun') {
+    // Сбит ударом: крылья вразлёт, голову откинуло, просел.
+    const f = fi(t, 7);
+    const k = f / 7;
+    o.el = 1.4 - 0.9 * k;
+    o.elFar = 1.2 - 0.8 * k;
+    o.sw = -0.2;
+    o.pitch = -0.4 * (1 - k);
+    o.hp = -0.4 * (1 - k);
+    o.tail = 0.9 * (1 - k);
+    o.mouth = 0.8 * (1 - k);
+    key = `stun${f}`;
+    ex.lift = Math.round(7 - 3 * Math.sin(k * PI));
+  } else {
+    // Полёт и парение: взмахи по пройденному пути, покой — своей фазой.
+    const moving = sp > 1.2;
+    const ph = moving ? v.dist / 1.15 : now * 2.6 + id * 0.41;
+    const f = Math.floor((((ph % 1) + 1) % 1) * 8) % 8;
+    const bob = flap(o, f / 8, moving ? 1 : 0.8);
+    o.pitch = moving ? 0.12 : -0.05;
+    key = `fly${moving ? '' : 'h'}${f}`;
+    ex.lift = Math.round(7 + bob);
+    const hf = Math.floor(hurtAge(v, now) * FPS);
+    if (hf >= 0 && hf < 4) {
+      Object.assign(o, MOCK0);
+      mockHurt(o, hf);
+      key = `hurt${hf}`;
+    }
+  }
+  if (md !== 'dying') recoil(v, now, 2.2, ex, 0.12);
+  return frameOf('mock', MOCK_LIM, key, d, pose, (yaw) => mockPic(o, yaw, post), ex);
+});
+
+registerMobWarm('f3_mocker', function* () {
+  const pose = warmPose('chase');
+  for (let d = 0; d < 8; d++) {
+    if (MIRR[d]) continue;
+    const yaw = yawOfSide(d);
+    for (const moving of [true, false])
+      for (let f = 0; f < 8; f++) {
+        const o: MockO = { ...MOCK0 };
+        flap(o, f / 8, moving ? 1 : 0.8);
+        o.pitch = moving ? 0.12 : -0.05;
+        frameOf('mock', MOCK_LIM, `fly${moving ? '' : 'h'}${f}`, d, pose, () => mockPic(o, yaw));
+        yield 0;
+      }
+  }
+});
