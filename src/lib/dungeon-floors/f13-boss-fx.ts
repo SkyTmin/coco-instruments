@@ -21,7 +21,7 @@ import type { ImpactRec, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { Px } from '../dungeon-art';
 import { BOSS, F13_FX, F13_SCENERY, SPOT, stringsOf } from './f13-brains';
-import { css, hash, hx, INK, lordLiftPx, P, spiderLift, TAU } from './f13-art';
+import { css, hash, hx, INK, lordVagaPx, P, spiderLift, TAU } from './f13-art';
 import type { RGBA } from './f13-art';
 
 const GOLD = P.gold;
@@ -62,12 +62,13 @@ function shoulderH(m: Mob): number {
 /** Вага Кукловода на экране: [x, y, сдвиг от его точки на полу по y]. */
 function vagaScreen(
   to: (x: number, y: number) => [number, number],
+  time: number,
 ): [number, number, number] | null {
   const lord = F13_FX.mobs.find((q) => q.kind === 'f13boss' && q.mode !== 'dying');
   if (!lord) return null;
   const [x, y] = to(lord.x, lord.y);
-  const dy = -37 - lordLiftPx(lord);
-  return [x - 2, y + dy, dy];
+  const [dx, dy] = lordVagaPx(lord, time);
+  return [x + dx, y + dy, dy];
 }
 
 /** Нить: чуть провисшая, с бегущим бликом. */
@@ -121,7 +122,7 @@ function drawStrings(
   hy0: number,
   time: number,
 ): void {
-  const vaga = vagaScreen(to);
+  const vaga = vagaScreen(to, time);
   for (const m of F13_FX.mobs) {
     if (m.mode === 'dying' || (m.data.sn ?? 0) <= 0) continue;
     if (Math.abs(m.x - hx0) > 14 || Math.abs(m.y - hy0) > 12) continue;

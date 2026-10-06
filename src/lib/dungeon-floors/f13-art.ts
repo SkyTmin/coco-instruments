@@ -4025,10 +4025,19 @@ const LORD_BODY: Body = {
 /** Время смерти-сцены: лопнули нити → куча → встал → поклон → занавес. */
 export const LORD_DEATH = 5.2;
 
-/** На сколько пикселей Кукловод над полом; вагу считает по ней `f13-boss-fx.ts`. */
+/** На сколько пикселей Кукловод над полом. */
 export function lordLiftPx(m: Mob): number {
   if (m.mode === 'dying') return 0;
   return (m.data.lift ?? 0) * 30;
+}
+
+/**
+ * Где вага Кукловода относительно его точки на полу, игровые пиксели
+ * `[dx, dy]` (зеркало кадра уже учтено). Сюда `f13-boss-fx.ts` крепит нити
+ * исполина: рисуя вагу в руке, держи эту функцию в согласии с кадром.
+ */
+export function lordVagaPx(m: Mob, _now: number): [number, number] {
+  return [-2, -37 - lordLiftPx(m)];
 }
 
 interface LordQ {
