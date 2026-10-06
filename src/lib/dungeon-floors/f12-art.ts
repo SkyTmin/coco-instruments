@@ -276,13 +276,17 @@ export function renderRig(
   const idb = new Int16Array(w * h).fill(-1);
   const glowAt = new Uint8Array(w * h);
   let anyGlow = false;
-  // Сперва плотные части, потом прозрачные (лёд вокруг вмёрзшего, дух).
+  // Сперва плотные части — от ближних к дальним (дальний пиксель за ближним
+  // отсекает буфер глубины без расчёта цвета; итог тот же: в пикселе всегда
+  // ближайшая часть), потом прозрачные (лёд вокруг вмёрзшего, дух).
   const order = parts
-    .map((pt, k) => [pt, k] as const)
-    .sort((a, b) => ((a[0].alpha ?? 1) < 1 ? 1 : 0) - ((b[0].alpha ?? 1) < 1 ? 1 : 0));
-  order.forEach(([pt, k]) => {
-    const glass = (pt.alpha ?? 1) < 1;
-    const A = axesOf(pt, face);
+    .map((pt, k) => {
+      const A = axesOf(pt, face);
+      const glass = (pt.alpha ?? 1) < 1;
+      return { pt, k, A, glass, d: glass ? 0 : dot(VIEW, A.c) };
+    })
+    .sort((a, b) => (a.glass ? 1 : 0) - (b.glass ? 1 : 0) || (a.glass ? a.k - b.k : b.d - a.d || a.k - b.k));
+  order.forEach(({ pt, k, A, glass }) => {
     const [e1, e2, e3] = A.e;
     const [r1, r2, r3] = A.r;
     // Рамка на экране — точная тень эллипсоида (опорная функция по осям
@@ -4531,11 +4535,11 @@ function beatAt(t: number, hits: number[]): number {
   return 0;
 }
 
-const FROST_C = hx('#d4e6f8');
-/** Иней на шерсти: светлые тона седеют сильнее тёмных. */
+const FROST_R = ramp('#2c3a56', '#4c6080', '#7890b0', '#a8c0dc', '#e2eefa');
+/** Иней на шерсти: тон к тону (светотень остаётся), светлые седеют сильнее. */
 function frostRamp(r: RGBA[], k: number): RGBA[] {
   if (k <= 0) return r;
-  return r.map((c, i) => mixc(c, FROST_C, Math.min(0.9, k * (0.35 + i * 0.16))));
+  return r.map((c, i) => mixc(c, FROST_R[i], Math.min(0.88, k * (0.45 + i * 0.12))));
 }
 
 const RIM_C = hx('#a9c8f2');
@@ -4599,14 +4603,16 @@ function fillTri(
 // две ленты сияния от плеч (светятся поверх темноты). На спине мамонта и в
 // небе она одна и та же — и одного размера.
 
-const SH_PARKA = ramp('#3a2414', '#5e3c22', '#8a5e36', '#b88a56', '#e2bc88');
+const SH_PARKA = ramp('#2e0a14', '#5a1222', '#8a2230', '#bc3e3a', '#e8785a');
 const SH_FACE = ramp('#5a3a2a', '#86563c', '#b07a56', '#d4a07a', '#f0c8a0');
 const SH_TRIM = ramp('#5a5e6e', '#8a90a2', '#b8bece', '#dde2ec', '#ffffff');
-const SH_LEG = ramp('#1a120c', '#2e2016', '#4a3424', '#664a34', '#86664a');
+const SH_LEG = ramp('#160a10', '#2a121c', '#44202a', '#62323a', '#84504e');
 const RIB_V = ramp('#3a1a6a', '#5a2ea0', '#8a5ad8', '#b89aff', '#eee0ff');
 const SH_EYE = hx('#6cff9a');
 /** Масштаб наездницы и летуньи — как у мамонта: спрыгнув, она не уменьшается. */
 const SH_SC = 1.3;
+/** Рост фигуры шаманки в модели (до масштаба `SH_SC`). */
+const SH_S = 1;
 const CV_SHA: Canvas = { w: 76, h: 92, ox: 38, oy: 70 };
 const SH_HIGH = 30;
 
@@ -4711,13 +4717,18 @@ function shamanParts(
     });
   // Бубен в левой: кожа и обод охрой; поднятый — смотрит вверх.
   const dc = shDrumLocal(o);
-  sub.push({ x: dc[0], y: dc[1], z: dc[2], rx: 3.6 * s, ry: 0.75 * s, rz: 3.6 * s, yaw: 0.15, roll: -o.drum * 0.75, ramp: BONE, id: 125 });
-  sub.push({ x: dc[0], y: dc[1] - 0.3 * s, z: dc[2], rx: 3.95 * s, ry: 0.45 * s, rz: 3.95 * s, yaw: 0.15, roll: -o.drum * 0.75, ramp: OCHRE, id: 126 });
+  // Кожа смотрит вверх-наружу: бубен читается сверху с любой стороны.
+  // В миг удара кожа вспыхивает сиянием (сама волна — у «Техник»).
+  const hitK = clamp01((o.beat - 0.7) / 0.3);
+  const skinR = hitK > 0 ? BONE.map((c) => mixc(c, AURORA[4], hitK * 0.75)) : BONE;
+  const dRoll = -(0.85 + 0.35 * o.drum);
+  sub.push({ x: dc[0], y: dc[1], z: dc[2], rx: 3.9 * s, ry: 0.8 * s, rz: 3.9 * s, yaw: 0.35, roll: dRoll, ramp: skinR, glow: hitK > 0.3, id: 125 });
+  sub.push({ x: dc[0], y: dc[1], z: dc[2], rx: 4.3 * s, ry: 0.5 * s, rz: 4.3 * s, yaw: 0.35, roll: dRoll, ramp: OCHRE, id: 126 });
   // Колотушка в правой: занесена — вверх-назад, удар — в кожу бубна.
   const bd = o.beat < 0 ? lerp3([0.7, -0.5, 0.25], [-0.3, 0.25, 1], -o.beat) : lerp3([0.7, -0.5, 0.25], [0.25, -1, -0.1], o.beat);
   const bl = Math.hypot(bd[0], bd[1], bd[2]) || 1;
-  const end = haft(sub, j.handR, Math.atan2(bd[1], bd[0]), Math.asin(bd[2] / bl), 0.6 * s, 4.6 * s, 0.42 * s, WOOD, 127);
-  sub.push({ x: end[0], y: end[1], z: end[2], rx: 1.05 * s, ry: 1.05 * s, rz: 1.05 * s, ramp: SH_TRIM, id: 128 });
+  const end = haft(sub, j.handR, Math.atan2(bd[1], bd[0]), Math.asin(bd[2] / bl), 0.5 * s, 3.8 * s, 0.62 * s, WOOD, 127);
+  sub.push({ x: end[0], y: end[1], z: end[2], rx: 1.1 * s, ry: 1.1 * s, rz: 1.1 * s, ramp: SH_TRIM, fur: 0.3, id: 128 });
   // Ленты сияния от плеч: волна бежит от плеча к концу, цвет — к фиолету.
   const aur = Math.max(0, o.aurora);
   const ribR = [0, 1, 2].map((q) =>
@@ -4760,8 +4771,8 @@ function shamanParts(
 
 // ---- Мамонт -------------------------------------------------------------------
 
-const M_FUR = ramp('#1a0e0a', '#38200f', '#5c3519', '#84512a', '#b0763e');
-const M_HAIR = ramp('#120906', '#2a160b', '#472613', '#6a3b1d', '#93572b');
+const M_FUR = ramp('#120806', '#26140b', '#3e2312', '#5e351b', '#8a5428');
+const M_HAIR = ramp('#0b0504', '#1c0e07', '#311a0d', '#4c2a15', '#704020');
 const M_TUSK = ramp('#6a604c', '#9a8e72', '#c8bc98', '#e8e0c4', '#fffaea');
 const M_TUSKB = ramp('#4a3e2c', '#6e5e44', '#968466', '#bcae8c', '#ddd2b4');
 const M_SKIN = ramp('#1c1310', '#33241c', '#4f3b2e', '#6e5444', '#8e705c');
@@ -4935,7 +4946,7 @@ function mamTusks(S: MamSkel): { ctl: V3[][]; tip: V3[]; mid: V3[] } {
   return {
     ctl,
     tip: ctl.map((c) => c[2]),
-    mid: ctl.map((c) => bezQ(c[0], c[1], c[2], 0.5)),
+    mid: ctl.map((c) => bezQ(c[0], c[1], c[2], 0.7)),
   };
 }
 
@@ -4948,7 +4959,7 @@ function riderSh(o: MamO): ShO {
   return {
     body: {
       ...BODY0,
-      s: 0.85,
+      s: SH_S,
       lean: o.rLean + o.rCrouch * 0.35,
       crouch: o.rCrouch * 1.6,
       wide: 1.6,
@@ -4973,7 +4984,7 @@ function riderSh(o: MamO): ShO {
 
 /** Где сидит наездница: седло на загривке (за горбом), при смерти — сползает с бока. */
 function riderPlace(o: MamO, S: MamSkel): { place: (p: V3) => V3; onBody: boolean } {
-  const hip0 = 9 * 0.85;
+  const hip0 = 9 * SH_S;
   const seat: V3 = [5, 0, S.z0 + 16 + o.rUp - o.rCrouch * 0.6];
   if (o.rSlide <= 0) return { place: (p) => S.B([seat[0] + p[0], p[1], seat[2] + p[2] - hip0]), onBody: true };
   const A = S.B(seat);
@@ -4990,7 +5001,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   const fur = lookRamp(frostRamp(M_FUR, fr), look);
   const hair = lookRamp(frostRamp(M_HAIR, fr * 1.5), look);
   const skin = frostRamp(M_SKIN, o.frost * 0.7);
-  const snowy = Math.min(0.9, 0.16 + o.phase * 0.07 + o.frost * 0.6);
+  const snowy = Math.min(0.9, 0.1 + o.phase * 0.08 + o.frost * 0.6);
   const ice = o.frost > 0.45;
   const P = o.pitch;
   const R = o.roll;
@@ -5055,14 +5066,14 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
     for (let k = 0; k < 9; k++) {
       const x = -21 + k * 4.5;
       const hw = 11.6 * Math.sqrt(Math.max(0.15, 1 - ((x + 2) / 21) ** 2));
-      strand([x, e * (hw - 0.6), z0 - 4], 7 + hash(k, e + 3, 91) * 2.2 + (k > 2 && k < 7 ? 1.2 : 0), e, 6 + (k % 2));
+      strand([x, e * (hw - 1), z0 - 1], 12 + hash(k, e + 3, 91) * 4 + (k > 2 && k < 7 ? 2 : 0), e, 6 + (k % 2));
     }
-  for (let k = 0; k < 4; k++) strand([17, -4.5 + k * 3, z0 - 7], 6.5 + (k % 2), 0, 8 + (k % 2));
-  for (let k = 0; k < 3; k++) strand([-24, -4 + k * 4, z0 - 4], 6, 0, 8 + (k % 2));
+  for (let k = 0; k < 4; k++) strand([17, -4.5 + k * 3, z0 - 5], 11 + (k % 2) * 2.5, 0, 8 + (k % 2));
+  for (let k = 0; k < 3; k++) strand([-24, -4 + k * 4, z0 - 2], 10 + (k % 2) * 2, 0, 8 + (k % 2));
   // Голова: купол с высокой макушкой, лоб к хоботу, уши, пасть.
-  head([2, 0, 2], 8.6, 8.6, 9, fur, 10, { fur: 0.28 });
-  head([-1, 0, 9.5], 6.6, 6.4, 5.6, fur, 10, { fur: 0.3, snowy });
-  head([7.5, 0, -2], 5, 5.4, 6.2, fur, 11, { fur: 0.24 });
+  head([2, 0, 3], 8.8, 8.8, 9.5, fur, 10, { fur: 0.28 });
+  head([-0.5, 0, 11.5], 6.4, 6, 6, hair, 10, { fur: 0.4, snowy });
+  head([7.5, 0, -2], 5.2, 5.6, 6.6, lookRamp(frostRamp(M_SKIN, o.frost * 0.7), look), 11, { fur: 0.2 });
   for (const e of [-1, 1])
     head([-1.5, e * 7.6, 2.5], 1.5, 2.4 + o.ear * 1.4, 3.8, hair, 12, { fur: 0.45, yaw: e * (0.25 + o.ear * 0.7) });
   if (o.jaw > 0.05) head([5.5, 0, -7.5 - o.jaw], 3, 3, 1.4 + o.jaw * 1.6, M_MOUTH, 16);
@@ -5164,6 +5175,12 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   }
   const extent: V3[] = [];
   if (o.trail) for (const fr2 of o.trail) extent.push(...fr2);
+  if (o.daze >= 0) {
+    const c = S.H(-1, 0, 20);
+    for (const [dx, dy] of [[15, 0], [-15, 0], [0, 15], [0, -15]] as const) extent.push([c[0] + dx, c[1] + dy, c[2]]);
+  }
+  if (o.breath > 0)
+    for (const [dy, dz] of [[-9, 6], [9, -6]] as const) extent.push([trunkTip[0], trunkTip[1] + dy, trunkTip[2] + dz]);
   return scaleBuild(
     {
       parts,
@@ -5215,38 +5232,46 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
         if (o.breath > 0) {
           const [x, y] = scr(trunkTip[0], trunkTip[1], trunkTip[2]);
           const k = o.breath;
-          for (let i = 0; i < 9; i++) {
+          for (let i = 0; i < 5; i++) {
             const an = hash(i, 3, 77) * TAU;
-            const rr = (1 + k * 6) * (0.35 + hash(i, 5, 78) * 0.65);
-            p.set(x + Math.cos(an) * rr, y + Math.sin(an) * rr * 0.6 - k * 2.5, alpha(hx('#e4eef8'), 0.85 * (1 - k)));
+            const rr = (1 + k * 5) * (0.3 + hash(i, 5, 78) * 0.7);
+            const cx = x + Math.cos(an) * rr;
+            const cy = y + Math.sin(an) * rr * 0.6 - k * 3;
+            const r = 1 + k * 2.2 * (0.6 + hash(i, 7, 79) * 0.4);
+            p.ell(cx, cy, r, r * 0.8, alpha(hx('#e4eef8'), 0.75 * (1 - k * k)));
+            p.set(cx - r * 0.4, cy - r * 0.4, alpha(WHITE, 0.8 * (1 - k)));
           }
         }
-        // Оглушён: звёзды и снежинки кругом над головой.
+        // Оглушён: звёзды и снежинки кругом над головой (дальние — тусклее).
         if (o.daze >= 0) {
-          const c = S.H(-1, 0, 19);
+          const c = S.H(-1, 0, 20);
           const gl = fx.lit();
           for (let i = 0; i < 4; i++) {
             const an = o.daze * TAU + (i / 4) * TAU;
-            const [x, y] = scr(c[0] + Math.cos(an) * 10, c[1] + Math.sin(an) * 10, c[2]);
+            const [x, y] = scr(c[0] + Math.cos(an) * 12, c[1] + Math.sin(an) * 12, c[2]);
             const X = Math.round(x);
             const Y = Math.round(y);
-            const far = Math.sin(an) < -0.2;
-            const col = i % 2 ? hx(far ? '#c8a838' : '#fff2a0') : hx(far ? '#7a9ac0' : '#e8f6ff');
-            for (const [dx, dy] of i % 2
-              ? [
-                  [0, 0],
-                  [1, 0],
-                  [-1, 0],
-                  [0, 1],
-                  [0, -1],
-                ]
-              : [
-                  [0, 0],
-                  [1, 1],
-                  [-1, -1],
-                  [1, -1],
-                  [-1, 1],
-                ]) {
+            const far = Math.sin(an + Math.PI * 0.1) < -0.25;
+            const star = i % 2 === 1;
+            const hi = star ? hx(far ? '#c8a838' : '#fff2a0') : hx(far ? '#8aa8cc' : '#f0faff');
+            const lo = star ? hx(far ? '#7a5a18' : '#e0b030') : hx(far ? '#4a6488' : '#9cc8f0');
+            const arm = far ? 1 : 2;
+            const pts: [number, number, RGBA][] = [[0, 0, WHITE]];
+            for (let r = 1; r <= arm; r++)
+              for (const [dx, dy] of [
+                [1, 0],
+                [-1, 0],
+                [0, 1],
+                [0, -1],
+              ])
+                pts.push([dx * r, dy * r, r === 1 ? hi : lo]);
+            if (star) for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) pts.push([dx, dy, lo]);
+            else if (!far) for (const [dx, dy] of [[2, 2], [-2, 2], [2, -2], [-2, -2]]) pts.push([dx, dy, lo]);
+            for (const [dx, dy] of pts)
+              for (const [ex, ey] of [[1, 0], [0, 1], [-1, 0], [0, -1]])
+                if (!pts.some((q) => q[0] === dx + ex && q[1] === dy + ey))
+                  p.set(X + dx + ex, Y + dy + ey, alpha(INK, 0.55));
+            for (const [dx, dy, col] of pts) {
               p.set(X + dx, Y + dy, col);
               if (!far) gl.set(X + dx, Y + dy, col);
             }
@@ -5271,7 +5296,15 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
             if (mask[i] > 0.04) {
               const x = i % p.w;
               const y = (i / p.w) | 0;
-              p.set(x, y, alpha(mask[i] > 0.6 ? WHITE : M_TUSK[4], Math.min(1, mask[i])));
+              p.set(x, y, alpha(mixc(FROST_R[3], WHITE, mask[i]), Math.min(0.85, mask[i] * 0.9)));
+            }
+          // Кромка следа — путь самих кончиков, ярче к свежему.
+          for (let j = 0; j < 2; j++)
+            for (let k = 0; k < tr.length - 1; k++) {
+              const a = tr[k][j];
+              const b = tr[k + 1][j];
+              if (fx.z(a[0], a[1]) > a[2] + 3) continue;
+              p.line(a[0], a[1], b[0], b[1], alpha(WHITE, 0.95 - k * 0.25));
             }
         }
       },
@@ -5358,7 +5391,7 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       const top = rear ? 0.8 : 0.66;
       const sh = (x: number) => (x * H) / 1.0;
       o.pitch = kf(t, [[0, 0], [sh(0.22), -0.06], [sh(0.72), top - 0.04, 'o'], [sh(0.88), top], [H, 0, 'i'], [H + 0.08, -0.05, 'o'], [H + 0.3, 0.02], [H + 0.55, 0]]);
-      o.crouch = kf(t, [[0, 0], [sh(0.22), 3.2], [sh(0.5), 0], [H, 0], [H + 0.06, 3.4, 'o'], [H + 0.4, rear ? 0.5 : 0], [H + 0.6, 0]]);
+      o.crouch = kf(t, [[0, 0], [sh(0.22), 3.2], [sh(0.5), 0], [H, 0], [H + 0.06, 2.8, 'o'], [H + 0.4, rear ? 0.5 : 0], [H + 0.6, 0]]);
       const paw = t > sh(0.35) && t < H - 0.05;
       const sw = Math.sin((t - sh(0.35)) * 4.5 * Math.PI);
       o.liftL = paw ? Math.max(0, sw) * 4.5 : 0;
@@ -5395,8 +5428,8 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       const si = Math.floor(sc);
       const su = sc - si;
       const scr2 = si >= 0 && si < 3;
-      o.liftR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 5 : 5 * Math.max(0, 1 - ease((su - 0.35) / 0.25))) : 0;
-      o.reachR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 4 : 4 - ease((su - 0.35) / 0.65) * 9) : 0;
+      o.liftR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 8.5 : 8.5 * Math.max(0, 1 - ease((su - 0.35) / 0.22))) : 0;
+      o.reachR = scr2 ? (su < 0.35 ? ease(su / 0.35) * 6 : 6 - ease((su - 0.35) / 0.65) * 13) : 0;
       o.hp = kf(tt, [[0, 0.1], [0.25, 0.42], [1.05, 0.46]]) + (scr2 ? bump(su, 0.35, 0.8) * 0.05 : 0);
       o.pitch = kf(tt, [[0, 0], [0.25, -0.05], [0.85, -0.05], [1.05, -0.1]]);
       o.crouch = kf(tt, [[0, 0], [0.25, 1.6], [0.85, 1.6], [1.05, 2.4]]);
@@ -5480,9 +5513,9 @@ function mamAt(mode: string, t: number, now: number, c: MamCtx): MamO {
       const fl = Math.floor(((t - 0.5) / 1.2) * 12) % 12;
       const u = fl / 12;
       const a = u * TAU;
-      o.hp = 0.45 + 0.05 * Math.sin(a * 2);
-      o.hy = 0.16 * Math.sin(a);
-      o.roll = 0.05 + 0.04 * Math.sin(a + 0.6);
+      o.hp = 0.45 + 0.06 * Math.sin(a * 2);
+      o.hy = 0.28 * Math.sin(a);
+      o.roll = 0.04 + 0.08 * Math.sin(a + 0.6);
       o.crouch = 2.6;
       o.pitch = -0.03;
       o.ta = 1.75 + 0.06 * Math.sin(a * 2);
@@ -5694,7 +5727,6 @@ const MAM_LEN: Record<string, number> = {
 /** Где след бивней: [с, по] времени режима. */
 const MAM_TRAIL: Record<string, [number, number]> = {
   f12b_tusk: [0.72, 1.06],
-  f12b_spikes: [0.82, 1.0],
 };
 
 /** Кадр мамонта: поза на квантованное время, ключ и поля движка. */
@@ -5728,8 +5760,10 @@ function mamFrame(
       ex.dx = Math.cos(face) * rec;
       ex.dy = Math.sin(face) * rec;
     } else {
-      ex.dx = -Math.cos(face) * 2;
-      ex.dy = -Math.sin(face) * 2;
+      // Шатается: корпус ходит вбок вместе с креном.
+      const sw = Math.sin(((Math.floor(((t - 0.5) / 1.2) * 12) % 12) / 12) * TAU + 0.6) * 1.2;
+      ex.dx = -Math.cos(face) * 2 - Math.sin(face) * sw;
+      ex.dy = -Math.sin(face) * 2 + Math.cos(face) * sw;
     }
   } else if (mode === 'f12b_getup') {
     o = mamAt(mode, t, now, c);
@@ -5844,7 +5878,8 @@ lruOf('f12_shaman', 320);
 
 regMob('f12boss', (m, pose) => {
   const { o, key, ex } = mamPose(m, pose);
-  const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => mammothBuild(pose.look, o));
+  const PF = ((globalThis as any).__mp ??= { b: 0, r: 0, p: 0, n: 0, parts: 0 }); // PROF
+  const c = rigFrame('f12boss', key, m.face, CV_MAM, pose.flash, () => { const t0 = performance.now(); const bb = mammothBuild(pose.look, o); PF.b += performance.now() - t0; PF.n++; PF.parts += bb.parts.length; const pp = bb.post; if (pp) bb.post = (q, sc, fx) => { const t1 = performance.now(); pp(q, sc, fx); PF.p += performance.now() - t1; }; return bb; }); // PROF
   MAM_PTS.set(m.id, mamPts(o, m.face, ex));
   if (MAM_PTS.size > 8) MAM_PTS.delete(MAM_PTS.keys().next().value as number);
   return mobFrame(c, CV_MAM, ex);
@@ -5904,7 +5939,7 @@ function shFly(lean: number, rib: number): ShO {
   return {
     body: {
       ...BODY0,
-      s: 0.85,
+      s: SH_S,
       lean,
       handL: [3.5, -3.2, 12.5],
       handR: [-1, 4, 11],
