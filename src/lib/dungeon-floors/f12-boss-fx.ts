@@ -3696,14 +3696,21 @@ zoneFx('f12_wake', (g, z, X, Y, k, age, time) => {
     const [tx, ty] = mamPointPx(m, 'tusk');
     const hx = X + (m.x - z.x) * TS + tx;
     const hy = Y + (m.y - z.y) * TS + ty;
-    for (let i = 0; i < 4; i++) {
-      const t = age - 0.45 - i * 0.28;
-      if (t < 0 || t > 0.5) continue;
-      const q = t / 0.5;
-      if (ink(g, C.white, 0.75 * (1 - q))) {
-        arcPx(g, hx, hy, 6 + 34 * eOut(q), -1.1, 1.1, 0, 0);
-        arcPx(g, hx, hy, 6 + 34 * eOut(q), Math.PI - 1.1, Math.PI + 1.1, 0, 0);
-      }
+    // По часам рёва (m.t), а не зоны: зона ставится раньше рёва.
+    for (let i = 0; i < 5; i++) {
+      const t = m.t - 0.6 - i * 0.3;
+      if (t < 0 || t > 0.55) continue;
+      const q = t / 0.55;
+      const r = 6 + 46 * eOut(q);
+      for (const [c, rr, a] of [
+        [C.shade, r + 1, 0.45],
+        [C.white, r, 0.85],
+        [C.frost, r - 1, 0.6],
+      ] as const)
+        if (ink(g, c, a * (1 - q))) {
+          arcPx(g, hx, hy, rr, -1.1, 1.1);
+          arcPx(g, hx, hy, rr, Math.PI - 1.1, Math.PI + 1.1);
+        }
     }
   }
   // Снег со свода: хлопья падают, комья бьются о лёд.
