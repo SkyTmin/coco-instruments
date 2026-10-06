@@ -817,9 +817,9 @@ registerMobPainter('f5_ant', (m: Mob, pose: MobPose) => {
   if (md === 'dying') {
     f = fi(t, 14);
     anim = 'die';
-    ex.linger = 0.95;
-    ex.alpha = 1 - sstep(0.7, 0.95, t);
-    ex.shadow = 7 * (1 - sstep(0.62, 0.95, t));
+    ex.linger = 0.9;
+    ex.alpha = 1 - sstep(0.68, 0.9, t);
+    ex.shadow = 7 * (1 - sstep(0.6, 0.9, t));
     ex.still = true;
   } else if (md === 'windup') {
     f = fi(t, 11);
@@ -1405,9 +1405,9 @@ registerMobPainter('f5_hound', (m: Mob, pose: MobPose) => {
   if (md === 'dying') {
     f = fi(t, 15);
     anim = 'die';
-    ex.linger = 1.0;
-    ex.alpha = 1 - sstep(0.75, 1.0, t);
-    ex.shadow = 8 * (1 - sstep(0.66, 1.0, t));
+    ex.linger = 0.9;
+    ex.alpha = 1 - sstep(0.72, 0.9, t);
+    ex.shadow = 8 * (1 - sstep(0.62, 0.9, t));
     ex.still = true;
   } else if (md === 'breath') {
     f = fi(t, 18);
