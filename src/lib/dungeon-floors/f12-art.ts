@@ -178,6 +178,8 @@ export interface Part {
   ramp: RGBA[];
   /** Мех: доля прядей (тёмные штрихи вниз по телу). */
   fur?: number;
+  /** Снег на спине: доля верха тела под рваными пятнами снега. */
+  snowy?: number;
   /** Светится (слой поверх темноты). */
   glow?: boolean;
   /** Блеск льда: светлая искра на изломе. */
@@ -347,7 +349,22 @@ export function renderRig(
           const hs = (nx * 0.2 + ny * 0.5 + nz * 0.84) / nl;
           if (hs > 0.93) k2 = 1;
         }
-        const col = toneOf(pt.ramp, k2, px, py);
+        let rp = pt.ramp;
+        if (pt.snowy) {
+          // Пятна снега там, куда смотрит небо: чем ровнее верх, тем гуще.
+          const up = nz / nl - (1 - pt.snowy);
+          if (up > 0) {
+            const hs =
+              hash(Math.round(qx * 3.2 + qy * 1.3), Math.round(qy * 3.2 - qx * 1.1), id + 77) *
+                0.6 +
+              hash(Math.round(qx * 9), Math.round(qy * 9 + qz * 4), id + 78) * 0.4;
+            if (hs < (up / pt.snowy) * 1.15) {
+              rp = SNOW;
+              k2 += 0.08;
+            }
+          }
+        }
+        const col = toneOf(rp, k2, px, py);
         if (glass) {
           // Стекло: кромка плотнее середины.
           const edge = 1 - Math.abs((nx * VIEW[0] + ny * VIEW[1] + nz * VIEW[2]) / nl);
@@ -4670,20 +4687,22 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
   // Наклон корпуса: на дыбы — вокруг задних ног.
   const pa = o.rear * 0.55 - o.brace * 0.12;
   const piv: V3 = [-10, 0, 14];
-  // Корпус, горб, круп.
-  raw.push({ x: 0, y: 0, z: z0, rx: 17, ry: 12, rz: 12, ramp: fur, fur: 0.32, id: 1 });
-  raw.push({ x: 6, y: 0, z: z0 + 8, rx: 10, ry: 9.5, rz: 8, ramp: fur, fur: 0.3, id: 2 });
-  raw.push({ x: -10, y: 0, z: z0 - 1, rx: 9, ry: 10.5, rz: 10, ramp: fur, fur: 0.32, id: 3 });
-  // Снег на холке (с фазой — толще).
+  // Корпус, горб, круп. Снег на холке — рваными пятнами по верху меха (с
+  // фазой гуще): гладким эллипсом он читался сверху бледной тарелкой.
+  const snowy = 0.2 + o.phase * 0.06;
+  raw.push({ x: 0, y: 0, z: z0, rx: 17, ry: 12, rz: 12, ramp: fur, fur: 0.32, snowy, id: 1 });
+  raw.push({ x: 6, y: 0, z: z0 + 8, rx: 10, ry: 9.5, rz: 8, ramp: fur, fur: 0.3, snowy, id: 2 });
   raw.push({
-    x: 4,
+    x: -10,
     y: 0,
-    z: z0 + 13 + o.phase * 0.6,
-    rx: 8 + o.phase,
-    ry: 6.5 + o.phase * 0.6,
-    rz: 2.4,
-    ramp: SNOW,
-    id: 4,
+    z: z0 - 1,
+    rx: 9,
+    ry: 10.5,
+    rz: 10,
+    ramp: fur,
+    fur: 0.32,
+    snowy,
+    id: 3,
   });
   // Бахрома шерсти: свисает по бокам до колен.
   for (let k = 0; k < 6; k++) {
