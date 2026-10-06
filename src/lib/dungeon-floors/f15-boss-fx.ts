@@ -38,7 +38,7 @@ import {
   ZONE_PAINTERS,
 } from '../dungeon-paint';
 import type { ImpactRec, Sprite } from '../dungeon-paint';
-import type { Mob, Shot, Sim, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
 import { F15B_MARK } from './f15-boss';
 import { crownSpot, f15bView, LORD } from './f15-boss-brains';
 import type { F15BState } from './f15-boss-brains';
@@ -115,8 +115,6 @@ const emberCol = (k: number) =>
 /** Капля туманности по доле жизни: светлая → сиреневая → тёмная. */
 const nebCol = (k: number) =>
   k < 0.2 ? C.nebHi : k < 0.55 ? C.neb[4] : k < 0.8 ? C.neb[3] : C.neb[2];
-/** Пылинка в ветре: белая → бледная → тает в пол. */
-const windCol = (k: number) => (k < 0.3 ? C.white : k < 0.7 ? C.wind : C.windMid);
 /** Призрачная искра: белая → голубая → синяя. */
 const ghostCol = (k: number) =>
   k < 0.25 ? C.ghost[5] : k < 0.55 ? C.ghost[4] : k < 0.85 ? C.ghost[3] : C.ghost[2];
@@ -4643,7 +4641,8 @@ function shapeRows(
   }
   const x0 = Math.floor(cx);
   const y0 = Math.floor(cy);
-  for (let i = 0; i < spans.length; i += 3) p.rect(x0 + spans[i], y0 + spans[i + 1], spans[i + 2], 1);
+  for (let i = 0; i < spans.length; i += 3)
+    p.rect(x0 + spans[i], y0 + spans[i + 1], spans[i + 2], 1);
 }
 
 // ---- Ладонь: созвездие выходит из руки, встаёт над целью и падает ----------
@@ -4848,107 +4847,86 @@ registerImpactPainter('f15b_palm', {
   life: 1.2,
   shake: 0.32,
   above: true,
-  paint: guarded(
-    (g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
-      const cx = rec.x * S;
-      const cy = rec.y * S;
-      const p = new Pen(g, px, py, cx, cy);
-      const R = (rec.r ?? 1.7) * S;
-      const sd = rec.seed >>> 0;
-      const few = reduced();
-      let a = PALM_ANG.get(sd);
-      if (a === undefined) {
-        a = lordNow()?.data.ang ?? 0;
-        PALM_ANG.set(sd, a);
-        if (PALM_ANG.size > 12) PALM_ANG.delete(PALM_ANG.keys().next().value as number);
-      }
-      const f = 1 - k01(age / 1.2);
-      // Вмятина и отпечаток ладони: белый → золото → фиолет, остывает.
-      p.occ = occOf(S);
-      p.col(C.night[0], 0.5 * f);
-      fillSector(p, cx, cy, 0, R * 0.95, 0, TAU);
-      const hot =
-        age < 0.05
-          ? C.white
-          : age < 0.16
-            ? C.gold[3]
-            : age < 0.4
-              ? C.gold[2]
-              : age < 0.7
-                ? '#c890f0'
-                : '#6a34a4';
-      p.col(hot, (age < 0.1 ? 0.75 : 0.4) * f);
-      shapeRows(p, cx, cy, R * 0.92, a, inPalm, 'p');
-      p.col(hot, Math.min(1, 1.5 * f));
-      shapeRows(p, cx, cy, R * 0.92, a, edgeOf(inPalm, Math.round(R * 1.84) / 2, a), 'pe');
-      ring(p, cx, cy, R, C.gold[2], 0.8 * f * f, (_a, i) => hash(i >> 1, sd, 5) > 0.3);
-      p.occ = null;
-      hitStar(p, cx, cy - 2, age, 0.1, R * 1.05, sd * 0.01, C.gold[2]);
-      crest(p, cx, cy, R, age, 0.42, S * 1.4, C.gold[3], sd);
-      crest(p, cx, cy, R * 0.7, age - 0.07, 0.4, S * 1.1, '#c890f0', sd + 1);
-      p.occ = occOf(S);
-      dust(
-        p,
-        sd,
-        age,
-        cx,
-        cy,
-        few ? 5 : 10,
-        0,
-        0.5,
-        30,
-        30,
-        3,
-        7,
-        6,
-        0.9,
-        0,
-        0.6,
-        undefined,
-        (i) => {
-          const t = (i / 10) * TAU + hash(sd, i, 45);
-          return [cx + Math.cos(t) * R * 0.85, cy + Math.sin(t) * R * 0.85, t];
-        },
-      );
-      chunks(
-        p,
-        sd,
-        age,
-        cx,
-        cy,
-        few ? 3 : 7,
-        0,
-        0.6,
-        40,
-        50,
-        60,
-        50,
-        [0.6, 1.1],
-        0.25,
-        1,
-        undefined,
-        (i) => {
-          const t = (i / 7) * TAU + hash(sd, i, 46);
-          return [cx + Math.cos(t) * R * 0.6, cy + Math.sin(t) * R * 0.6, t];
-        },
-      );
-      p.occ = null;
-      sparks(p, sd, age, cx, cy, few ? 6 : 14, -Math.PI / 2, 1.2, 40, 70, 0.6, 90, starCol);
-      // Созвездие рассеивается вверх.
-      const k = k01(age / 0.9);
-      if (k < 1) {
-        const ux = Math.cos(a);
-        const uy = Math.sin(a);
-        PALM_PTS.forEach(([u, v], i) => {
-          const z = 30 * eOut2(k) * (0.6 + 0.4 * hash(sd, i, 47));
-          const dx = (hash(sd, i, 48) - 0.5) * 12 * k;
-          const x = cx + (u * ux - v * uy) * R * 0.92 + dx;
-          const y = cy + (u * uy + v * ux) * R * 0.92 - z;
-          twinkle(p, x, y, i >= 11 && i <= 14 && k < 0.5 ? 2 : 1, starCol(k), (1 - k) * 0.95);
-        });
-      }
-    },
-  ),
+  paint: guarded((g, rec: ImpactRec, px: number, py: number, S: number, age: number) => {
+    const cx = rec.x * S;
+    const cy = rec.y * S;
+    const p = new Pen(g, px, py, cx, cy);
+    const R = (rec.r ?? 1.7) * S;
+    const sd = rec.seed >>> 0;
+    const few = reduced();
+    let a = PALM_ANG.get(sd);
+    if (a === undefined) {
+      a = lordNow()?.data.ang ?? 0;
+      PALM_ANG.set(sd, a);
+      if (PALM_ANG.size > 12) PALM_ANG.delete(PALM_ANG.keys().next().value as number);
+    }
+    const f = 1 - k01(age / 1.2);
+    // Вмятина и отпечаток ладони: белый → золото → фиолет, остывает.
+    p.occ = occOf(S);
+    p.col(C.night[0], 0.5 * f);
+    fillSector(p, cx, cy, 0, R * 0.95, 0, TAU);
+    const hot =
+      age < 0.05
+        ? C.white
+        : age < 0.16
+          ? C.gold[3]
+          : age < 0.4
+            ? C.gold[2]
+            : age < 0.7
+              ? '#c890f0'
+              : '#6a34a4';
+    p.col(hot, (age < 0.1 ? 0.75 : 0.4) * f);
+    shapeRows(p, cx, cy, R * 0.92, a, inPalm, 'p');
+    p.col(hot, Math.min(1, 1.5 * f));
+    shapeRows(p, cx, cy, R * 0.92, a, edgeOf(inPalm, Math.round(R * 1.84) / 2, a), 'pe');
+    ring(p, cx, cy, R, C.gold[2], 0.8 * f * f, (_a, i) => hash(i >> 1, sd, 5) > 0.3);
+    p.occ = null;
+    hitStar(p, cx, cy - 2, age, 0.1, R * 1.05, sd * 0.01, C.gold[2]);
+    crest(p, cx, cy, R, age, 0.42, S * 1.4, C.gold[3], sd);
+    crest(p, cx, cy, R * 0.7, age - 0.07, 0.4, S * 1.1, '#c890f0', sd + 1);
+    p.occ = occOf(S);
+    dust(p, sd, age, cx, cy, few ? 5 : 10, 0, 0.5, 30, 30, 3, 7, 6, 0.9, 0, 0.6, undefined, (i) => {
+      const t = (i / 10) * TAU + hash(sd, i, 45);
+      return [cx + Math.cos(t) * R * 0.85, cy + Math.sin(t) * R * 0.85, t];
+    });
+    chunks(
+      p,
+      sd,
+      age,
+      cx,
+      cy,
+      few ? 3 : 7,
+      0,
+      0.6,
+      40,
+      50,
+      60,
+      50,
+      [0.6, 1.1],
+      0.25,
+      1,
+      undefined,
+      (i) => {
+        const t = (i / 7) * TAU + hash(sd, i, 46);
+        return [cx + Math.cos(t) * R * 0.6, cy + Math.sin(t) * R * 0.6, t];
+      },
+    );
+    p.occ = null;
+    sparks(p, sd, age, cx, cy, few ? 6 : 14, -Math.PI / 2, 1.2, 40, 70, 0.6, 90, starCol);
+    // Созвездие рассеивается вверх.
+    const k = k01(age / 0.9);
+    if (k < 1) {
+      const ux = Math.cos(a);
+      const uy = Math.sin(a);
+      PALM_PTS.forEach(([u, v], i) => {
+        const z = 30 * eOut2(k) * (0.6 + 0.4 * hash(sd, i, 47));
+        const dx = (hash(sd, i, 48) - 0.5) * 12 * k;
+        const x = cx + (u * ux - v * uy) * R * 0.92 + dx;
+        const y = cy + (u * uy + v * ux) * R * 0.92 - z;
+        twinkle(p, x, y, i >= 11 && i <= 14 && k < 0.5 ? 2 : 1, starCol(k), (1 - k) * 0.95);
+      });
+    }
+  }),
 });
 
 // ---- Взмах: веер ночи, звёзды копятся у края, рука проходит дугой -----------
@@ -4987,8 +4965,29 @@ registerZonePainter(
       (t, i) => inS(t) && hash(i >> 2, sd, 3) > 0.2,
       0.4,
     );
-    sectorRim(p, cx, cy, R, a0, arc, r0, sig ? (tk ? C.white : C.gold[3]) : C.gold[1], 0.65 + 0.3 * k);
-    ticks(p, cx, cy, R, 48, time * (sd & 1 ? 0.5 : -0.5), 2, sig ? C.white : C.gold[1], 0.45 + 0.45 * k, inS);
+    sectorRim(
+      p,
+      cx,
+      cy,
+      R,
+      a0,
+      arc,
+      r0,
+      sig ? (tk ? C.white : C.gold[3]) : C.gold[1],
+      0.65 + 0.3 * k,
+    );
+    ticks(
+      p,
+      cx,
+      cy,
+      R,
+      48,
+      time * (sd & 1 ? 0.5 : -0.5),
+      2,
+      sig ? C.white : C.gold[1],
+      0.45 + 0.45 * k,
+      inS,
+    );
     // Рука пойдёт от края, что выше на экране: там копятся звёзды.
     const { as, dir } = sweepOf(a, arc);
     for (let i = 0; i < 9; i++) {
@@ -5047,7 +5046,14 @@ registerImpactPainter('f15b_sweep', {
       crescent(p, cx, cy, R - 6, lo, span, Math.max(1, 3 * (1 - k)), '#c890f0', 0.6 * (1 - k));
       if (age < 0.18) {
         const e = as + dir * span;
-        twinkle(p, cx + Math.cos(e) * (R - 3), cy + Math.sin(e) * (R - 3), 3, C.gold[3], 1 - age / 0.18);
+        twinkle(
+          p,
+          cx + Math.cos(e) * (R - 3),
+          cy + Math.sin(e) * (R - 3),
+          3,
+          C.gold[3],
+          1 - age / 0.18,
+        );
       }
     }
     p.occ = occOf(S);
@@ -5153,51 +5159,16 @@ registerImpactPainter('f15b_repel', {
       fillSector(p, cx, cy, disc ? 0 : R - w, R + w, 0, TAU);
     }
     const n = disc ? (few ? 5 : 8) : few ? 6 : 14;
-    dust(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      n,
-      0,
-      0.3,
-      20,
-      25,
-      2,
-      6,
-      4,
-      0.7,
-      7,
-      0.55,
-      undefined,
-      (i) => {
-        const t = (i / n) * TAU + hash(sd, i, 54);
-        return [cx + Math.cos(t) * (R + w), cy + Math.sin(t) * (R + w), t];
-      },
-    );
+    dust(p, sd, age, cx, cy, n, 0, 0.3, 20, 25, 2, 6, 4, 0.7, 7, 0.55, undefined, (i) => {
+      const t = (i / n) * TAU + hash(sd, i, 54);
+      return [cx + Math.cos(t) * (R + w), cy + Math.sin(t) * (R + w), t];
+    });
     p.occ = null;
     crest(p, cx, cy, R + w, age, 0.45, S * 1.1, '#c890f0', sd);
-    sparks(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      few ? 8 : 18,
-      0,
-      0.4,
-      40,
-      50,
-      0.5,
-      30,
-      vioCol,
-      undefined,
-      (i) => {
-        const t = TAU * hash(sd, i, 55);
-        return [cx + Math.cos(t) * (R + w), cy + Math.sin(t) * (R + w), t];
-      },
-    );
+    sparks(p, sd, age, cx, cy, few ? 8 : 18, 0, 0.4, 40, 50, 0.5, 30, vioCol, undefined, (i) => {
+      const t = TAU * hash(sd, i, 55);
+      return [cx + Math.cos(t) * (R + w), cy + Math.sin(t) * (R + w), t];
+    });
   }),
 });
 
@@ -5318,7 +5289,12 @@ registerZonePainter(
         const r1 = PR * (1 - 0.45 * f);
         const r2 = PR * (1 - 0.45 * Math.max(0, f - 0.08));
         p.col(C.gold[2], 0.75 * grow * (1 - f));
-        p.line(cx + Math.cos(aa) * r2, cy + Math.sin(aa) * r2, cx + Math.cos(aa) * r1, cy + Math.sin(aa) * r1);
+        p.line(
+          cx + Math.cos(aa) * r2,
+          cy + Math.sin(aa) * r2,
+          cx + Math.cos(aa) * r1,
+          cy + Math.sin(aa) * r1,
+        );
       }
     // Рукава звёзд закручиваются к центру — со следом по ходу.
     const per = few ? 12 : 22;
@@ -5385,7 +5361,16 @@ registerImpactPainter('f15b_well', {
     p.occ = occOf(S);
     const v = sd % 5;
     const cr = crackOf(`well${v}`, 31 + v, starBranches(31 + v, 7, v, R * 0.9, R * 1.5, 2), 0.45);
-    drawCrack(p, cr, cx, cy, cr.max * eOut2(k01(age / 0.18)), age < 0.14 ? C.white : '#c890f0', null, f * f);
+    drawCrack(
+      p,
+      cr,
+      cx,
+      cy,
+      cr.max * eOut2(k01(age / 0.18)),
+      age < 0.14 ? C.white : '#c890f0',
+      null,
+      f * f,
+    );
     p.col(C.ink, 0.5 * f);
     oval(p, cx, cy, R * 0.55, R * 0.4);
     dust(p, sd, age, cx, cy, few ? 4 : 10, 0, Math.PI, 50, 40, 3, 8, 6, 1.0, 7, 0.6);
@@ -5881,7 +5866,8 @@ registerZonePainter(
     const lines = clawLines(cx, cy, R, a, arc);
     for (const pts of lines) {
       const shown = Math.min(pts.length, Math.ceil(k * 1.3 * pts.length));
-      for (let j = 0; j < shown; j++) twinkle(p, pts[j][0], pts[j][1], 1, '#ecd4ff', 0.5 + 0.45 * k);
+      for (let j = 0; j < shown; j++)
+        twinkle(p, pts[j][0], pts[j][1], 1, '#ecd4ff', 0.5 + 0.45 * k);
     }
     if (left < 0.14) {
       p.occ = null;
@@ -5912,7 +5898,8 @@ registerImpactPainter('f15b_nightclaw', {
       for (const pts of lines) polyTo(p, pts, 1, c, 1 - k, k < 0.4);
       // След на полу — тонкий шрам звёздного света.
       p.occ = occOf(S);
-      for (const pts of clawLines(cx, cy, R, a, arc)) polyTo(p, pts, 1, '#6a34a4', 0.5 * (1 - k), false);
+      for (const pts of clawLines(cx, cy, R, a, arc))
+        polyTo(p, pts, 1, '#6a34a4', 0.5 * (1 - k), false);
       p.occ = null;
     }
     sparks(
@@ -6093,27 +6080,11 @@ registerImpactPainter('f15b_pulse', {
       }
     }
     crest(p, cx, cy, R, age, 0.45, S * 1.2, C.gold[3], sd, keep);
-    sparks(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      few ? 8 : 20,
-      0,
-      0.5,
-      60,
-      60,
-      0.5,
-      40,
-      starCol,
-      undefined,
-      (i) => {
-        let t = TAU * hash(sd, i, 91);
-        if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) t += Math.PI;
-        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-      },
-    );
+    sparks(p, sd, age, cx, cy, few ? 8 : 20, 0, 0.5, 60, 60, 0.5, 40, starCol, undefined, (i) => {
+      let t = TAU * hash(sd, i, 91);
+      if (keep && !keep(Math.atan2(Math.sin(t), Math.cos(t)))) t += Math.PI;
+      return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+    });
   }),
 });
 
@@ -6162,26 +6133,10 @@ registerImpactPainter('f15b_shock', {
       p.occ = null;
     }
     crest(p, cx, cy, R, age, 0.5, S * 1.4, '#c890f0', sd);
-    sparks(
-      p,
-      sd,
-      age,
-      cx,
-      cy,
-      few ? 8 : 18,
-      0,
-      0.5,
-      40,
-      50,
-      0.6,
-      30,
-      starCol,
-      undefined,
-      (i) => {
-        const t = TAU * hash(sd, i, 93);
-        return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
-      },
-    );
+    sparks(p, sd, age, cx, cy, few ? 8 : 18, 0, 0.5, 40, 50, 0.6, 30, starCol, undefined, (i) => {
+      const t = TAU * hash(sd, i, 93);
+      return [cx + Math.cos(t) * R, cy + Math.sin(t) * R, t];
+    });
   }),
 });
 
@@ -6449,7 +6404,15 @@ registerZonePainter(
       if (!seen(x0, y0)) continue;
       const long = j % 5 === 0;
       const L = long ? 4 : 2;
-      p.lineS(x0, y0, x0 + ux * L, y0 + uy * L, long ? C.gold[1] : '#a8761e', long ? 0.95 : 0.8, 0.5);
+      p.lineS(
+        x0,
+        y0,
+        x0 + ux * L,
+        y0 + uy * L,
+        long ? C.gold[1] : '#a8761e',
+        long ? 0.95 : 0.8,
+        0.5,
+      );
     }
     for (let j = 0; j < 24; j++) {
       const a = -rot * 1.6 + (j / 24) * TAU;
@@ -6612,6 +6575,19 @@ function veil(
     return lv;
   };
   const cuts: number[] = [];
+  // Строки без окон с теми же краями сливаются в один прямоугольник: в
+  // затмении это почти весь экран — сотни строк превращаются в единицы.
+  let bx0 = 0;
+  let bx1 = -1;
+  let by0 = 0;
+  let bn = 0;
+  const flush = () => {
+    if (bn > 0) {
+      p.col(col, a);
+      p.rect(bx0, by0, bx1 - bx0 + 1, bn);
+    }
+    bn = 0;
+  };
   for (let Y = y0; Y <= y1; Y++) {
     const yy = Y + 0.5 - cy;
     if (Math.abs(yy) >= R) continue;
@@ -6639,10 +6615,16 @@ function veil(
       }
     }
     if (!cuts.length) {
-      p.col(col, a);
-      p.rect(xa, Y, xb - xa + 1, 1);
+      if (bn > 0 && (xa !== bx0 || xb !== bx1 || Y !== by0 + bn)) flush();
+      if (bn === 0) {
+        bx0 = xa;
+        bx1 = xb;
+        by0 = Y;
+      }
+      bn += 1;
       continue;
     }
+    flush();
     cuts.push(xa, xb + 1);
     cuts.sort((q1, q2) => q1 - q2);
     let runX = xa;
@@ -6670,6 +6652,7 @@ function veil(
       p.rect(runX, Y, xb - runX + 1, 1);
     }
   }
+  flush();
 }
 
 registerZonePainter(
@@ -6841,7 +6824,21 @@ registerZonePainter(
       ring(p, tx, ty, 2 + k * 18, C.gold[3], 1 - k, undefined, 0.5);
       ring(p, tx, ty, 1 + k * 10, C.white, 0.8 * (1 - k), (_a, i) => i % 3 !== 2);
       twinkle(p, tx, ty, Math.round(4 * (1 - k)) + 1, C.gold[3], 1 - k * 0.5);
-      sparks(p, (zz.n ?? 0) * 31 + 5, t - 0.7, tx, ty, reduced() ? 4 : 10, 0, TAU, 30, 50, 0.4, -20, starCol);
+      sparks(
+        p,
+        (zz.n ?? 0) * 31 + 5,
+        t - 0.7,
+        tx,
+        ty,
+        reduced() ? 4 : 10,
+        0,
+        TAU,
+        30,
+        50,
+        0.4,
+        -20,
+        starCol,
+      );
     }
   }),
 );
@@ -6916,7 +6913,16 @@ registerZonePainter(
         for (let j = 0; j < 3; j++) {
           const uu = k01(u * 1.2 - j * 0.15);
           if (uu <= 0 || uu >= 1) continue;
-          ring(p, fx, fy, S * (1 + 11 * eOut2(uu)), j === 1 ? '#c890f0' : C.gold[3], 0.9 * (1 - uu), undefined, 0.5);
+          ring(
+            p,
+            fx,
+            fy,
+            S * (1 + 11 * eOut2(uu)),
+            j === 1 ? '#c890f0' : C.gold[3],
+            0.9 * (1 - uu),
+            undefined,
+            0.5,
+          );
         }
       }
       sparks(p, 4141, e, cx, cy, few ? 10 : 30, 0, Math.PI, 120, 160, 1.0, 40, starCol);

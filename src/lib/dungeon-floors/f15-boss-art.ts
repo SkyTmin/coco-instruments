@@ -636,7 +636,7 @@ function shoreOf(
 }
 
 /** Клетки памяти: прошлые этажи — в кристалле и звёздном свете. */
-function memoryFloor(p: Px, c: CellCtx, g: Geo): void {
+function memoryFloor(p: Px, c: CellCtx, _g: Geo): void {
   const mk = c.mark;
   const same = (dx: number, dy: number) => c.markAt(dx, dy) === mk;
   const glass = (dx: number, dy: number) => {
