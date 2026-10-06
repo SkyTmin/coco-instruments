@@ -39,7 +39,7 @@ import {
   URCHIN,
 } from './f15-brains';
 import type { Arc, Chart, FShot, Ring, Well } from './f15-brains';
-import { F3, proj, renderRig, Rig, SE, vadd, vlerp, vmul, vnorm } from './f15-rig';
+import { F3, proj, renderRig, Rig, SE, vadd, vdot, vlen, vlerp, vmul, vnorm, vsub } from './f15-rig';
 import type { Mat, RigOpt, RigOut, V3 } from './f15-rig';
 
 type RGBA = [number, number, number, number];
@@ -2622,172 +2622,6 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-// --- Гравитон -----------------------------------------------------------------
-
-const GRAV_T = tn('#0e0c1e', '#1c1a36', '#2e2c54', '#48467c');
-const GRAV_PLATE = tn('#1a1c34', '#2c3256', '#465284', '#7c8ac0');
-
-/**
- * Гравитон: тяжёлый страж из тёмной материи. Спереди — щит на руке (удар в
- * лоб гасится), на спине — открытая трещина ядра (бей сзади). Вокруг пояса
- * — кольцо-линза с камешками на орбите. `arms` 0…1 — кулаки вверх (замах),
- * `slam` — удар вниз.
- */
-function gravBody(o: { step: number; arms: number; slam: number; f: number; dk: number }): Built {
-  const p = new Px(64, 64);
-  const cx = 30;
-  const gy = 58;
-  const cy = 38 + o.slam * 2;
-  const ringR = 17;
-  const ringY = cy + 2;
-  const ringA = (o.f / 8) * TAU;
-  const pebble = (front: boolean) => {
-    for (let i = 0; i < 3; i++) {
-      const a = ringA + (i * TAU) / 3;
-      if (Math.sin(a) > 0 !== front) continue;
-      const x = cx + Math.cos(a) * ringR;
-      const y = ringY + Math.sin(a) * ringR * 0.3;
-      shadeEll(p, x, y, 1.6, 1.4, i === 1 ? VIOLET : METEOR, 0.2);
-    }
-  };
-  // Задняя половина кольца и камешки за спиной.
-  for (let a = PI; a < TAU; a += 0.025)
-    p.set(cx + Math.cos(a) * ringR, ringY + Math.sin(a) * ringR * 0.3, alpha(VIOLET_GLOW, 0.5));
-  pebble(false);
-  // Ноги-столбы.
-  for (const [lx, ph] of [
-    [cx - 6, 0],
-    [cx + 5, 2],
-  ] as [number, number][]) {
-    const up = (o.step + ph) % 4 < 2 ? 1 : 0;
-    limb(p, lx, cy + 7, lx, gy - 2 - up, 4, 3.6, GRAV_PLATE, -0.05);
-    p.rect(lx - 4, gy - 3 - up, lx + 4, gy - 1 - up, GRAV_PLATE[1]);
-    p.rect(lx - 4, gy - 3 - up, lx + 4, gy - 3 - up, GRAV_PLATE[2]);
-  }
-  // Задняя рука.
-  const sh = cy - 9;
-  const hb = o.arms > 0 ? sh - 14 * o.arms + o.slam * 24 : cy + 7;
-  const bx = cx - 12 + o.arms * 5;
-  limb(p, cx - 9, sh, bx, hb, 3.4, 3.8, GRAV_T, -0.1);
-  shadeEll(p, bx, hb, 4.4, 4, GRAV_PLATE, -0.1);
-  // Корпус: широкие плечи, к поясу уже; гладкая тень, пара швов.
-  poly(
-    p,
-    [
-      [cx - 13, sh - 3],
-      [cx + 12, sh - 3],
-      [cx + 9, cy + 8],
-      [cx - 9, cy + 8],
-    ],
-    (x, y) => {
-      const nx = (x - cx) / 13;
-      const l = nx * LX * 1.4 + ((sh - y) / 20) * -LY * 0.6 + 0.42 + dith(x, y) * 0.12;
-      return tone(GRAV_T, l);
-    },
-  );
-  p.rect(cx - 12, sh - 3, cx + 11, sh - 3, GRAV_T[3]);
-  stroke(p, cx - 9, cy + 1, cx + 9, cy + 1, GRAV_T[0]);
-  stroke(p, cx, sh - 2, cx, cy + 7, alpha(GRAV_T[0], 0.7));
-  // Трещина ядра на спине (слева): слабое место.
-  poly(
-    p,
-    [
-      [cx - 12, sh + 1],
-      [cx - 7, sh + 3],
-      [cx - 9, cy + 2],
-      [cx - 12, cy],
-    ],
-    hx('#2a0c50'),
-  );
-  for (let y = sh + 2; y < cy + 1; y++) p.set(cx - 10 + Math.sin(y * 0.9) * 1.2, y, VIOLET[3]);
-  // Голова: низкий шлем, щель-глаз.
-  shadeEll(p, cx + 2, sh - 6, 6, 4.6, GRAV_PLATE, 0.05);
-  p.rect(cx + 3, sh - 7, cx + 7, sh - 6, hx('#e0c8ff'));
-  // Передняя рука со щитом.
-  const hf = o.arms > 0 ? sh - 16 * o.arms + o.slam * 26 : cy + 6;
-  const fx = cx + 13 - o.arms * 3 + o.slam * 3;
-  limb(p, cx + 10, sh, fx, hf, 3.6, 4, GRAV_T, 0.05);
-  shadeEll(p, fx, hf, 5, 4.6, GRAV_PLATE, 0.1);
-  if (o.arms < 0.3) {
-    // Щит: плита в рост, руна тяжести.
-    poly(
-      p,
-      [
-        [cx + 11, sh - 2],
-        [cx + 18, sh + 1],
-        [cx + 17, cy + 9],
-        [cx + 11, cy + 11],
-      ],
-      (x, y) => tone(GRAV_PLATE, (cx + 18 - x) * 0.05 + (cy - y) * 0.03 + 0.4 + dith(x, y) * 0.1),
-    );
-    stroke(p, cx + 11, sh - 2, cx + 18, sh + 1, GRAV_PLATE[3]);
-    for (let a = 0; a < TAU; a += 0.45)
-      p.set(cx + 14.5 + Math.cos(a) * 2.2, cy + Math.sin(a) * 3.2, VIOLET[3]);
-    p.set(cx + 14.5, cy, WHITE);
-  }
-  // Передняя половина кольца и камешки.
-  for (let a = 0; a < PI; a += 0.025)
-    p.set(cx + Math.cos(a) * ringR, ringY + Math.sin(a) * ringR * 0.3, alpha(hx('#e0d0ff'), 0.75));
-  pebble(true);
-  edge(p, alpha(INK, 0.9));
-  glow(p, cx - 10, cy - 3, 7, VIOLET_GLOW, 0.55);
-  if (o.arms > 0.3) {
-    glow(p, fx, hf, 8, VIOLET_GLOW, 0.5 * o.arms);
-    glow(p, bx, hb, 6, VIOLET_GLOW, 0.35 * o.arms);
-  }
-  let out = p;
-  if (o.dk)
-    out = shatter(p, o.dk / 3, 1931, [GRAV_T[2], VIOLET[2], VIOLET_GLOW, GRAV_PLATE[2]], cx, cy);
-  return { p: out, ax: cx, ay: gy, eye: o.dk ? null : [cx + 6, sh - 7], lit: true };
-}
-
-registerMobPainter('f15_graviton', (_m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk)
-    return frameOf('grav', pose, 'die', dk, () =>
-      gravBody({ step: 0, arms: 0, slam: 0, f: 0, dk }),
-    );
-  const f = Math.floor(pose.now * 6) % 8;
-  if (pose.mode === 'windup') {
-    // Замах: кулаки поднимаются, последние 0,15 с — удар вниз.
-    const T = GRAVITON.punchAt;
-    const k = Math.min(1, pose.t / (T - 0.15));
-    const slam = pose.t > T - 0.15 ? Math.min(1, (pose.t - (T - 0.15)) / 0.12) : 0;
-    const kb = Math.min(5, Math.floor(k * 6));
-    const sb = Math.min(2, Math.floor(slam * 3));
-    return frameOf(
-      'grav',
-      pose,
-      'wind',
-      kb * 3 + sb,
-      () => gravBody({ step: 0, arms: slam ? 1 - slam * 0.2 : kb / 5, slam, f: 0, dk: 0 }),
-      {
-        still: true,
-        sy: slam ? 0.94 : 1 + kb * 0.01,
-      },
-    );
-  }
-  if (pose.mode === 'recover')
-    return frameOf(
-      'grav',
-      pose,
-      'rec',
-      0,
-      () => gravBody({ step: 0, arms: 0.8, slam: 1, f: 0, dk: 0 }),
-      { still: true },
-    );
-  const run = pose.anim === 'run';
-  const st = run ? pose.frame % 4 : 0;
-  return frameOf(
-    'grav',
-    pose,
-    run ? 'run' : 'idle',
-    st * 8 + f,
-    () => gravBody({ step: st, arms: 0, slam: 0, f, dk: 0 }),
-    run ? { dy: st % 2 ? 0.6 : 0 } : null,
-  );
-});
-
 // --- Звездочёт ----------------------------------------------------------------
 
 const ROBE = tn('#0c0c2a', '#18184a', '#262a70', '#3a44a0');
@@ -4729,6 +4563,307 @@ registerMobWarm('f15_comet', function* () {
   }
 });
 
+
+// --- Гравитонный страж ------------------------------------------------------------
+//
+// Каменный страж с ядром тяжести в груди: щит на левой руке смотрит туда
+// же, куда `m.face` (щит гасит удары спереди — рисунок обязан показывать
+// правду), кулак на правой. Поворачивается медленно — как мозг. Ноги шагают
+// туда, куда он идёт, даже если идёт не лицом (мозг ведёт его к герою, а
+// разворачивает отдельно). Замах: кулак вверх-назад, ядро стягивает к нему
+// свет; удар — кулак в пол ровно в круг метки в кадр урона; проводка —
+// кулак лежит в пыли и медленно уходит назад.
+
+const GRAV_T = tn('#16142a', '#2a2850', '#45437a', '#6e6ca8');
+const GRAV_PLATE = tn('#22264a', '#3a4474', '#5c6ea8', '#a4b4e8');
+const GRAV_CORE = tn('#4a2a98', '#7a56d8', '#c0a8ff', '#ffffff');
+
+/** Два звена (плечо — локоть — кисть): локоть уходит в сторону `bend`. */
+function ik2(a: V3, c: V3, l1: number, l2: number, bend: V3): V3 {
+  const d = vsub(c, a);
+  const L = Math.min(vlen(d), l1 + l2 - 0.01);
+  const u = vnorm(d);
+  const x = (l1 * l1 - l2 * l2 + L * L) / (2 * L);
+  const h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
+  const b = vnorm(vsub(bend, vmul(u, vdot(bend, u))));
+  return vadd(vadd(a, vmul(u, x)), vmul(b, h));
+}
+
+interface GPose {
+  ph: number;
+  /** Куда шагают ноги относительно корпуса (рад). */
+  rel: number;
+  walk: number;
+  /** Кулак в осях земли под стражем (вперёд, вправо, вверх). */
+  fist: V3;
+  lean: number;
+  crouch: number;
+  /** Щит: на сколько выдвинут вперёд 0…1. */
+  guard: number;
+  core: number;
+  /** Свет, стянутый к кулаку 0…1. */
+  charge: number;
+  side: number;
+  dk: number;
+}
+/** Кулак в осях земли (вперёд, вправо, вверх от ног). */
+const G_REST: V3 = [4, 7.5, 6];
+const G0: GPose = {
+  ph: 0,
+  rel: 0,
+  walk: 0,
+  fist: G_REST,
+  lean: 0,
+  crouch: 0,
+  guard: 0.5,
+  core: 0.4,
+  charge: 0,
+  side: 0,
+  dk: 0,
+};
+
+function gravRig(o: GPose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const fall = o.dk > 0 ? sstep(0, 0.45, o.dk) : 0;
+  const H = 10.5 - o.crouch * 2 - fall * 4;
+  const hip = B.at(0, 0, H).roll(o.side);
+  const body = hip.pitch(o.lean + fall * 0.3);
+  const stone: Mat = { T: GRAV_T };
+  const plate: Mat = { T: GRAV_PLATE, spec: true };
+  // Ноги — короткие столбы; шаг вдоль `rel`.
+  const legsFrom = r.size;
+  for (const s of [-1, 1]) {
+    const p = (o.ph + (s > 0 ? 0.5 : 0)) % 1;
+    const sw = -Math.cos(p * TAU) * 2.6 * o.walk;
+    const up = Math.max(0, Math.sin(p * TAU)) * 1.6 * o.walk;
+    const hp = hip.p(0, s * 3.4, -1);
+    const ft = B.p(Math.cos(o.rel) * sw, s * 3.8 + Math.sin(o.rel) * sw, up);
+    const kn = ik2(hp, ft, 5.2, 5.2, B.v(1, s * 0.3, 0));
+    r.cap(hp, kn, 2.4, 2.0, stone);
+    r.cap(kn, ft, 2.0, 2.2, stone);
+    r.ell(F3.yaw(yaw, ft), [0.8, 0, 0.6], [2.6, 2.4, 1.0], plate);
+  }
+  // Корпус: глыба торса, пластины на плечах, ядро в груди.
+  const bodyFrom = r.size;
+  r.ell(body, [0, 0, 6], [5.4, 6.4, 6.2], stone);
+  r.ell(body, [0.6, 0, 9.5], [4.0, 6.6, 2.6], plate);
+  const core = body.p(4.2, 0, 6.4);
+  r.ell(body, [3.9, 0, 6.4], [1.2, 2.4, 2.4], {
+    T: GRAV_CORE,
+    glow: 0.5 + o.core * 0.5,
+    bias: o.core * 0.4,
+    soft: true,
+  });
+  // Голова, вжатая в плечи: забрало со щелью.
+  const hd = body.at(1.2, 0, 12.6);
+  r.ell(hd, [0, 0, 0], [2.6, 2.6, 2.2], plate);
+  r.line(hd.p(2.55, -1.4, 0.2), hd.p(2.55, 1.4, 0.2), hx('#d8c8ff'), 1, 0.5);
+  if (o.dk <= 0) r.eye = hd.p(2.6, 0, 0.2);
+  // Левая рука со щитом.
+  const shL = body.p(0.5, -6.6, 9.2);
+  const handL = body.p(4.5 + o.guard * 2.2, -5.5 + o.guard * 1.2, 6);
+  const elL = ik2(shL, handL, 4.8, 4.8, body.v(-0.3, -1, -0.6));
+  r.ball(shL, 2.6, plate);
+  r.cap(shL, elL, 2.0, 1.7, stone);
+  r.cap(elL, handL, 1.7, 1.6, stone);
+  const sh = body.at(4.8 + o.guard * 2.6, -4.2 + o.guard * 1.6, 6.2).turn(-0.35 + o.guard * 0.25);
+  const ring: V3[] = [];
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * TAU;
+    ring.push(sh.p(0, Math.cos(a) * 4.6, Math.sin(a) * 5.4));
+  }
+  r.poly(ring, {
+    T: GRAV_PLATE,
+    pat: (q, l) => {
+      const c0 = sh.o;
+      const d = Math.hypot(q[0] - c0[0], q[1] - c0[1], q[2] - c0[2]);
+      if (d > 4.0) return tone(BRASS, l + 0.2);
+      if (d < 1.3) return GRAV_CORE[2];
+      return null;
+    },
+    gpat: (q) => (Math.hypot(q[0] - sh.o[0], q[1] - sh.o[1], q[2] - sh.o[2]) < 1.3 ? 0.8 : 0),
+  });
+  // Правая рука с кулаком.
+  const shR = body.p(0.5, 6.6, 9.2);
+  const fist = B.p(o.fist[0], o.fist[1], o.fist[2]);
+  const elR = ik2(shR, fist, 9, 9, body.v(-0.6, 0.6, -0.2));
+  r.ball(shR, 2.6, plate);
+  r.cap(shR, elR, 2.1, 1.9, stone);
+  r.cap(elR, fist, 1.9, 2.1, stone);
+  r.ell(F3.yaw(yaw, fist), [0, 0, 0], [2.9, 2.7, 2.6], {
+    ...plate,
+    glow: o.charge * 0.6,
+    bias: o.charge * 0.35,
+  });
+  if (o.charge > 0.2)
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * TAU + o.charge * 5;
+      const rr = 4.5 * (1.4 - o.charge);
+      r.dot(vadd(fist, [Math.cos(a) * rr, Math.sin(a) * rr, Math.sin(a * 2) * 2]), VIOLET_GLOW, 1, 1, 0.6);
+    }
+  if (o.dk > 0) {
+    r.explode(sstep(0.35, 1, o.dk), core, 41, 6, 34, bodyFrom, 0.15);
+    r.explode(sstep(0.45, 1, o.dk) * 0.5, core, 7, 3, 12, legsFrom, 0.05);
+  }
+  return r;
+}
+
+function gravPic(o: GPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(gravRig(o, yaw), 72, 72, 36, 50, post);
+}
+
+/** Где кулак в кадр удара: точка метки мозга (`punchAt` вперёд), чуть над полом. */
+const G_PUNCH: V3 = [GRAVITON.punchAt * TS - 3, 2, 3];
+
+registerMobPainter('f15_graviton', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const v = visOf(m, pose, m.face, 60);
+  const { d, yaw } = side16(m.face);
+  const o: GPose = { ...G0 };
+  const extra: Partial<MobFrame> = { shadow: 13 };
+  let anim = 'idle';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  if (md === 'dying') {
+    const T = 1.3;
+    f = fi(t, 31);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    o.core = k < 0.35 ? 1 : 1 - sstep(0.35, 0.6, k);
+    o.fist = vlerp(G_REST, [6, 7, 2], sstep(0, 0.4, k));
+    o.guard = 0.5 * (1 - k);
+    o.side = 0.2 * sstep(0, 0.4, k);
+    if (k < 0.5)
+      post = (out, P) => {
+        const [x, y] = P([4, 0, 16]);
+        const lit = litOn(out);
+        const rr = 10 * (1 - k / 0.5);
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * TAU + k * 4;
+          lit.set(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr * 0.7), alpha(VIOLET_GLOW, 0.9));
+        }
+      };
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.75, 1, k);
+    extra.shadow = 13 * (1 - k * 0.6);
+  } else if (md === 'windup') {
+    // Замах кулаком: подъём вверх-назад, задержка с набором, удар в круг.
+    const T = 0.95;
+    f = fi(t, 22);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'punch';
+    const up = easeOut(k / 0.55);
+    const slam = easeIn((k - 0.8) / 0.2);
+    const high: V3 = [-3, 7, 24];
+    o.fist = slam > 0 ? vlerp(high, G_PUNCH, slam) : vlerp(G_REST, high, up);
+    o.lean = -0.18 * up * (1 - slam) + 0.5 * slam;
+    o.crouch = 0.4 * up + 0.6 * slam;
+    o.guard = 0.8;
+    o.charge = sstep(0.3, 0.8, k) * (1 - slam * 0.3);
+    o.core = 0.4 + 0.6 * sstep(0.2, 0.8, k);
+    o.side = -0.06 * up * (1 - slam);
+    if (slam > 0.3)
+      post = (out, P) => {
+        // След кулака: дуга сверху вниз.
+        const lit = litOn(out);
+        const pts: [number, number][] = [];
+        for (let i = 0; i <= 8; i++) {
+          const s = (slam * i) / 8;
+          const q = vlerp(high, G_PUNCH, s);
+          pts.push(P(F3.yaw(yaw).p(q[0], q[1], q[2])));
+        }
+        for (let i = 1; i < pts.length; i++)
+          stroke(lit, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], alpha(i > 6 ? WHITE : VIOLET_GLOW, 0.3 + (i / 8) * 0.6), 2);
+      };
+    extra.still = true;
+  } else if (md === 'recover') {
+    const T = 0.9;
+    f = fi(t, 21);
+    const k = (f + 0.5) / FPS / T;
+    if (v.prev === 'windup') {
+      // Проводка: кулак лежит в пыли, отдача по корпусу, затем уходит назад.
+      anim = 'slam';
+      const hold = 1 - sstep(0.35, 1, k);
+      o.fist = vlerp(G_REST, G_PUNCH, hold);
+      o.lean = 0.5 * hold;
+      o.crouch = 0.6 * hold + (k < 0.12 ? 0.3 : 0);
+      o.guard = 0.8;
+      o.core = 0.4 + 0.4 * hold;
+      o.charge = Math.max(0, 1 - k * 5) * 0.8;
+      if (k < 0.45)
+        post = (out, P) => {
+          const g = F3.yaw(yaw).p(G_PUNCH[0], G_PUNCH[1], 0);
+          const [x, y] = P(g);
+          dustPuffs(out.p, x, y, scrAng(yaw) + PI, k / 0.45, 7, 29);
+          dustPuffs(out.p, x, y, scrAng(yaw), k / 0.45, 5, 31);
+          burstPx(litOn(out), x, y - 2, k / 0.3, 8, 10, VIOLET_GLOW, 3);
+        };
+    } else {
+      anim = 'rec';
+    }
+    extra.still = true;
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(t, 6);
+    anim = 'hurt';
+    const k = 1 - f / 6;
+    o.lean = -0.12 * k;
+    o.guard = 1;
+    o.core = 0.4 + 0.5 * k;
+  } else if (moving(m, 0.3)) {
+    const ta = rigYaw(Math.atan2(m.vy, m.vx));
+    const rb = Math.round(angD(ta, yaw) / (TAU / 8));
+    f = Math.floor((v.dist / 1.4) * 8) % 8;
+    anim = 'walk' + (((rb % 8) + 8) % 8);
+    o.walk = 1;
+    o.rel = (rb * TAU) / 8;
+    o.ph = f / 8;
+    o.side = Math.sin((f / 8) * TAU) * 0.07;
+    o.crouch = Math.abs(Math.cos((f / 8) * TAU)) * 0.25;
+    o.fist = [4 - Math.sin((f / 8) * TAU) * 1.5, 7.5, 6];
+  } else {
+    f = Math.floor(pose.now * 2.5) % 4;
+    anim = 'idle';
+    o.crouch = f === 1 || f === 2 ? 0.15 : 0;
+    o.core = 0.35 + (f === 2 ? 0.25 : f === 1 ? 0.12 : 0);
+  }
+  return mobFrame('grav', pose, anim, f, d, () => gravPic(o, yaw, post), extra);
+});
+
+registerMobWarm('f15_graviton', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('grav', pose, 'walk0', f, d, () =>
+        gravPic(
+          {
+            ...G0,
+            walk: 1,
+            ph: f / 8,
+            side: Math.sin((f / 8) * TAU) * 0.07,
+            crouch: Math.abs(Math.cos((f / 8) * TAU)) * 0.25,
+            fist: [4 - Math.sin((f / 8) * TAU) * 1.5, 7.5, 6],
+          },
+          yaw,
+        ),
+      );
+      yield 0;
+    }
+  }
+});
+
 // --- Прогрев кадров ------------------------------------------------------------------
 
 /** Кадры по позам: рендер дорисует их по 3 мс за кадр, пока такой моб в мире. */
@@ -4746,17 +4881,6 @@ function warm(kind: string, poses: [string, number, () => Built][]): () => Itera
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
-registerMobWarm(
-  'f15_graviton',
-  warm(
-    'grav',
-    range(8).map((f): [string, number, () => Built] => [
-      'idle',
-      f,
-      () => gravBody({ step: 0, arms: 0, slam: 0, f, dk: 0 }),
-    ]),
-  ),
-);
 registerMobWarm(
   'f15_nova',
   warm(
