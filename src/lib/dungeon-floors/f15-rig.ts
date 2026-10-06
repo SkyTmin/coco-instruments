@@ -129,6 +129,8 @@ export interface Mat {
   soft?: boolean;
   /** Ровный тон без света: номер ступени. */
   flat?: number;
+  /** Свечение по точке тела 0…1 (трещины с магмой) — сверх `glow`. */
+  gpat?: (q: V3) => number;
 }
 
 interface PEll {
@@ -358,6 +360,8 @@ export function renderRig(
     return band(m.T, l);
   };
   const glowOf = (m: Mat) => Math.round(Math.max(0, Math.min(1, m.glow ?? 0)) * 255);
+  const gq = (m: Mat, g: number, q: V3) =>
+    m.gpat ? Math.max(g, Math.round(Math.max(0, Math.min(1, m.gpat(q))) * 255)) : g;
 
   rig.prims.forEach((q, pid) => {
     if (q.k === 0) {
@@ -412,7 +416,7 @@ export function renderRig(
             Q[0] * A1[2] * inv[0] + Q[1] * A2[2] * inv[1] + Q[2] * A3[2] * inv[2],
           ]);
           if (back) n = vmul(n, -0.6);
-          put(i, t, pid, shade(q.m, n, Q), g);
+          put(i, t, pid, shade(q.m, n, Q), gq(q.m, g, Q));
         }
       }
     } else if (q.k === 1) {
@@ -448,7 +452,8 @@ export function renderRig(
           const ny = oy / r;
           const nz = hz / r;
           const n: V3 = [nx, ny * SE + nz * CE, -ny * CE + nz * SE];
-          put(i, z, pid, shade(q.m, n, [t, nx, ny]), g);
+          const Q: V3 = [t, nx, ny];
+          put(i, z, pid, shade(q.m, n, Q), gq(q.m, g, Q));
         }
     } else if (q.k === 2) {
       mats.push(q.m);

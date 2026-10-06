@@ -2622,186 +2622,6 @@ function spike(
   p.set(tx, ty, tip);
 }
 
-// --- Метеорит ------------------------------------------------------------------
-
-/**
- * Живой метеорит: крупная гранёная глыба (грани — плоскими пятнами света),
- * трещины тлеют. `heat` 0…1 — накал, `dir` — куда летит (хвост огня против
- * хода), `trail` — длина хвоста.
- */
-function meteorBody(o: {
-  heat: number;
-  f: number;
-  dir: number;
-  trail: number;
-  dizzy: number;
-  dk: number;
-  crouch: number;
-}): Built {
-  const p = new Px(64, 56);
-  const cx = 32;
-  const gy = 47;
-  const cy = gy - 12 + o.crouch;
-  const ux = Math.cos(o.dir);
-  const uy = Math.sin(o.dir);
-  if (o.trail > 0) {
-    for (let i = 0; i < 30; i++) {
-      const k = i / 30;
-      const d = 8 + k * 20 * o.trail;
-      const wob = Math.sin(o.f * 1.7 + i * 0.9) * k * 2.5;
-      const x = cx - ux * d - uy * wob;
-      const y = cy - uy * d * 0.8 + ux * wob;
-      const c = k < 0.2 ? hx('#fff4c0') : k < 0.5 ? hx('#ffb040') : hx('#c84a20');
-      glow(p, x, y, (1 - k) * 8 + 1.5, c, 0.8 * (1 - k));
-    }
-  }
-  // Глыба: 11 вершин, грани — веер треугольников от смещённого центра.
-  const pts: [number, number][] = [];
-  for (let i = 0; i < 11; i++) {
-    const a = (i / 11) * TAU + 0.2;
-    const r = 12 + hash(i, 3, 1910) * 3;
-    pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.82]);
-  }
-  const hub: [number, number] = [cx - 2.5, cy - 3];
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i];
-    const b = pts[(i + 1) % pts.length];
-    const mx = (a[0] + b[0]) / 2 - hub[0];
-    const my = (a[1] + b[1]) / 2 - hub[1];
-    const ml = Math.hypot(mx, my) || 1;
-    const l = (mx / ml) * LX + (my / ml) * LY + 0.42 + hash(i, 4, 1910) * 0.15;
-    poly(p, [hub, a, b], (x, y) =>
-      tone(METEOR, l + (fbm(x * 2, y * 2, 4, 1911) - 0.5) * 0.3 + dith(x, y) * 0.1),
-    );
-  }
-  // Рёбра граней — чуть светлее, к свету.
-  for (let i = 0; i < pts.length; i++)
-    if (pts[i][1] < cy) stroke(p, hub[0], hub[1], pts[i][0], pts[i][1], alpha(METEOR[3], 0.35));
-  // Тлеющие трещины.
-  const hot = mixc(hx('#c04010'), hx('#fff0a0'), o.heat);
-  const warm = mixc(hx('#7a2408'), hx('#ffb040'), o.heat);
-  const cracks: [number, number, number, number][] = [
-    [cx - 9, cy + 1, cx - 3, cy + 2],
-    [cx - 3, cy + 2, cx + 3, cy - 4],
-    [cx - 3, cy + 2, cx, cy + 8],
-    [cx + 3, cy - 4, cx + 9, cy - 2],
-    [cx + 3, cy - 4, cx + 2, cy - 9],
-  ];
-  for (const [a, b, c2, d] of cracks) {
-    stroke(p, a, b + 1, c2, d + 1, warm);
-    stroke(p, a, b, c2, d, hot);
-  }
-  if (!o.dk) {
-    // Глазницы — тёмные впадины, в них угли.
-    const ex = cx + 4;
-    const ey = cy + 1;
-    p.ell(ex, ey, 2.2, 1.7, hx('#120a08'));
-    p.ell(ex + 6, ey, 2, 1.6, hx('#120a08'));
-    if (o.dizzy) {
-      for (const d of [-1, 0, 1]) {
-        p.set(ex + d, ey + d, hx('#ff9a40'));
-        p.set(ex + d, ey - d, hx('#ff9a40'));
-        p.set(ex + 6 + d, ey + d, hx('#ff9a40'));
-        p.set(ex + 6 + d, ey - d, hx('#ff9a40'));
-      }
-    } else {
-      p.rect(ex, ey - 1, ex + 1, ey, hx('#fff0a0'));
-      p.rect(ex + 6, ey - 1, ex + 7, ey, hx('#fff0a0'));
-      p.set(ex, ey - 1, WHITE);
-      p.set(ex + 6, ey - 1, WHITE);
-      // Брови-сколы.
-      stroke(p, ex - 2, ey - 3, ex + 2, ey - 2, METEOR[3]);
-      stroke(p, ex + 5, ey - 2, ex + 8, ey - 3, METEOR[3]);
-    }
-  }
-  edge(p, alpha(INK, 0.9));
-  glow(p, cx, cy, 16, hx('#ff9a30'), 0.08 + o.heat * 0.2);
-  if (o.dizzy) stars(p, cx, cy - 15, 9, o.dizzy - 1);
-  let out = p;
-  if (o.dk)
-    out = shatter(p, o.dk / 3, 1912, [METEOR[1], METEOR[2], hx('#ffb040'), hx('#fff0a0')], cx, cy);
-  return { p: out, ax: cx, ay: gy, eye: o.dk || o.dizzy ? null : [cx + 4, cy], lit: true };
-}
-
-registerMobPainter('f15_meteor', (m: Mob, pose: MobPose) => {
-  const dk = deathK(pose);
-  if (dk)
-    return frameOf('meteor', pose, 'die', dk, () =>
-      meteorBody({ heat: 0.4, f: 0, dir: 0, trail: 0, dizzy: 0, dk, crouch: 0 }),
-    );
-  switch (pose.mode) {
-    case 'aim': {
-      const k = Math.min(3, Math.floor((pose.t / METEOR_K.aim) * 4));
-      const f = Math.floor(pose.now * 12) % 2;
-      return frameOf(
-        'meteor',
-        pose,
-        'aim',
-        k * 2 + f,
-        () =>
-          meteorBody({
-            heat: 0.4 + k * 0.2,
-            f,
-            dir: 0,
-            trail: 0,
-            dizzy: 0,
-            dk: 0,
-            crouch: k * 0.6,
-          }),
-        {
-          still: true,
-          dx: f ? 0.5 : -0.5,
-        },
-      );
-    }
-    case 'f15_charge': {
-      const b = dirBucket(Math.atan2(m.vy, m.vx), 16);
-      const f = Math.floor(pose.now * 14) % 3;
-      return frameOf(
-        'meteor',
-        pose,
-        'charge',
-        b * 3 + f,
-        () => meteorBody({ heat: 1, f, dir: (b / 16) * TAU, trail: 1, dizzy: 0, dk: 0, crouch: 0 }),
-        { still: true, ghost: { every: 0.04, life: 0.2, tint: '255,150,60', alpha: 0.5 } },
-        false,
-      );
-    }
-    case 'f15_dizzy': {
-      const f = Math.floor(pose.now * 6) % 4;
-      return frameOf(
-        'meteor',
-        pose,
-        'dizzy',
-        f,
-        () => meteorBody({ heat: 0.15, f: 0, dir: 0, trail: 0, dizzy: f + 1, dk: 0, crouch: 1 }),
-        { still: true },
-      );
-    }
-    default: {
-      const run = pose.anim === 'run' || pose.anim === 'wind';
-      const f = Math.floor(pose.now * 5) % 4;
-      return frameOf(
-        'meteor',
-        pose,
-        'idle',
-        f,
-        () =>
-          meteorBody({
-            heat: 0.35 + 0.1 * Math.sin((f / 4) * TAU),
-            f,
-            dir: 0,
-            trail: 0,
-            dizzy: 0,
-            dk: 0,
-            crouch: 0,
-          }),
-        run ? { rot: Math.sin(pose.now * 8) * 0.08 } : null,
-      );
-    }
-  }
-});
-
 // --- Комета -------------------------------------------------------------------
 
 /** Комета: ледяное ядро с мордочкой и хвост света против хода. */
@@ -3809,6 +3629,8 @@ interface Vis {
   yaw: number;
   /** Пройденный путь, клетки. */
   dist: number;
+  /** Скорость поворота курса, рад/с (сглажена) — крен в вираже. */
+  yr: number;
   mode: string;
   prev: string;
 }
@@ -3853,6 +3675,7 @@ function visOf(m: Mob, pose: MobPose, want: number, turn: number): Vis {
       y: m.y,
       yaw: want,
       dist: sp * pose.t,
+      yr: 0,
       mode: pose.mode,
       prev: SHEET_PREV[m.data.vSheetPrev ?? 0] ?? '',
     };
@@ -3866,7 +3689,9 @@ function visOf(m: Mob, pose: MobPose, want: number, turn: number): Vis {
     v.y = m.y;
     v.now = pose.now;
     const mx = turn * dt;
-    v.yaw += Math.max(-mx, Math.min(mx, angD(want, v.yaw)));
+    const dy = Math.max(-mx, Math.min(mx, angD(want, v.yaw)));
+    v.yaw += dy;
+    v.yr += (dy / dt - v.yr) * Math.min(1, dt * 10);
   }
   if (pose.mode !== v.mode) {
     v.prev = v.mode;
@@ -4386,6 +4211,355 @@ registerMobWarm('f15_urchin', function* () {
     for (let f = 0; f < 5; f++) {
       mobFrame('urchin', pose('sleep', 'f15_roll'), 'roll', f, d, () =>
         urchinPic({ ...U0, c: 1, spin: (f * TAU) / 30 + 0.6, glow: 0.7 }, yaw),
+      );
+      yield 0;
+    }
+  }
+});
+
+
+// --- Метеор-жук ---------------------------------------------------------------
+//
+// Жук-носорог в панцире из метеорита: по камню — трещины с магмой (узор в
+// координатах тела: поворачивается с ним), рог загнут вверх, шесть ног
+// треногой. Прицел — опустил рог, скребёт задними лапами, трещины
+// разгораются; таран — пламя из-под панциря назад; о стену — оглушён.
+
+const MET_ROCK = tn('#1a1210', '#33261f', '#55433a', '#86705e');
+const MET_DARK = tn('#120c0a', '#221814', '#3a2a22', '#5a463a');
+const FLAME = tn('#a02008', '#f06018', '#ffb030', '#fff0b0');
+const MAGMA_LO = hx('#6a1e0a');
+const MAGMA_HI = hx('#ffb040');
+
+/** Сеть трещин: нулевые линии суммы синусов в координатах тела. */
+const crackF = (q: V3) =>
+  Math.abs(
+    Math.sin(q[0] * 5.3 + 1.7 * Math.sin(q[1] * 4.1 + 0.3)) +
+      Math.sin(q[1] * 5.9 + 1.3 * Math.sin(q[2] * 3.7)) * 0.8 +
+      Math.sin(q[2] * 6.1 + q[0] * 2.3) * 0.6,
+  );
+
+/** Камень с магмой в трещинах: `heat` 0…1 — как сильно горят. */
+function magmaMat(T: Tones, heat: number, w = 0.16): Mat {
+  const c = mixc(MAGMA_LO, MAGMA_HI, heat);
+  return {
+    T,
+    pat: (q, l) => (crackF(q) < w ? (heat > 0.85 && crackF(q) < w * 0.4 ? WHITE : c) : tone(T, l)),
+    gpat: (q) => (crackF(q) < w ? 0.35 + heat * 0.65 : 0),
+  };
+}
+
+/** Нога насекомого: бедро вверх-наружу, голень к земле. */
+function bugLeg(r: Rig, hip: V3, foot: V3, out: V3, m: Mat, k = 1): void {
+  const knee = vadd(vlerp(hip, foot, 0.42), vadd(vmul(out, 1.6 * k), [0, 0, 2.6 * k]));
+  r.cap(hip, knee, 0.95 * k, 0.75 * k, m);
+  r.cap(knee, foot, 0.75 * k, 0.45 * k, m);
+}
+
+interface MPose {
+  ph: number;
+  /** Наклон корпуса носом вниз. */
+  pitch: number;
+  /** Голова (с рогом) носом вниз. */
+  head: number;
+  fwd: number;
+  lift: number;
+  heat: number;
+  /** Ноги: 0 — шаг, 1 — врастопырку (оглушён), 2 — смазаны бегом. */
+  legs: number;
+  side: number;
+  /** Пламя тарана 0…1, `fl` — кадр языков. */
+  fire: number;
+  fl: number;
+  dk: number;
+}
+const M0: MPose = {
+  ph: 0,
+  pitch: 0,
+  head: 0,
+  fwd: 0,
+  lift: 0,
+  heat: 0.25,
+  legs: 0,
+  side: 0,
+  fire: 0,
+  fl: 0,
+  dk: 0,
+};
+
+function meteorRig(o: MPose, yaw: number): Rig {
+  const r = new Rig();
+  const B = F3.yaw(yaw);
+  const body = B.at(o.fwd, 0, 5.4 + o.lift).pitch(o.pitch).roll(o.side);
+  const shell = magmaMat(MET_ROCK, o.heat);
+  const plate = magmaMat(MET_DARK, o.heat, 0.12);
+  const legM: Mat = { T: MET_DARK, bias: -0.1 };
+  // Ноги — треногой: (1, 3 слева и 2 справа) против остальных.
+  const hips: [number, number, number][] = [
+    [3.2, -1, 0],
+    [3.2, 1, 0.5],
+    [0.4, -1, 0.5],
+    [0.4, 1, 0],
+    [-2.8, -1, 0],
+    [-2.8, 1, 0.5],
+  ];
+  const legsFrom = r.size;
+  for (const [hf, s, off] of hips) {
+    const p = (o.ph + off) % 1;
+    let sw = -Math.cos(p * TAU) * 2.2;
+    let up = Math.max(0, Math.sin(p * TAU)) * 1.6;
+    if (o.legs === 2) {
+      sw = (off ? -1 : 1) * 1.2;
+      up = 0.4;
+    }
+    const spread = o.legs === 1 ? 9.5 : 7.4;
+    const hip = body.p(hf, s * 3.4, -2.6);
+    const foot = B.p(o.fwd + hf * 1.15 + sw + (o.legs === 1 ? hf * 0.3 : 0), s * spread, up + (o.legs === 1 ? 1.5 : 0));
+    bugLeg(r, hip, foot, B.v(0, s, 0), legM, o.dk > 0 ? 1 - o.dk * 0.5 : 1);
+  }
+  // Панцирь, переднеспинка, голова с рогом.
+  const bodyFrom = r.size;
+  r.ell(body, [-1.6, 0, 0], [7.2, 5.6, 4.3], shell);
+  r.line(body.p(-1.6, 0, 4.35), body.p(-8.6, 0, 0.6), hx('#120c0a'), 0, 0.4);
+  r.line(body.p(4.0, 0, 3.4), body.p(-1.0, 0, 4.4), hx('#120c0a'), 0, 0.4);
+  r.ell(body, [4.4, 0, 0.2], [2.9, 4.3, 3.2], plate);
+  const hd = body.at(6.6, 0, -0.6).pitch(o.head);
+  r.ell(hd, [0.6, 0, 0], [2.3, 2.7, 2.1], { T: MET_DARK });
+  const hornM: Mat = { T: MET_ROCK, bias: 0.15 };
+  const h0 = hd.p(1.8, 0, 1.0);
+  const h1 = hd.p(4.4, 0, 3.0);
+  const h2 = hd.p(5.2, 0, 6.0);
+  r.cap(h0, h1, 1.45, 1.0, hornM);
+  r.cap(h1, h2, 1.0, 0.35, { ...hornM, glow: o.heat > 0.6 ? 0.5 : 0 });
+  r.dot(h2, mixc(MAGMA_HI, WHITE, o.heat), o.heat, 1, 0.6);
+  for (const s of [-1, 1]) {
+    r.cap(hd.p(2.0, s * 1.3, -1.2), hd.p(3.2, s * 0.5, -1.7), 0.6, 0.3, legM);
+    r.dot(hd.p(1.9, s * 1.8, 0.6), o.dk > 0 ? INK : hx('#ffb040'), o.dk > 0 ? 0 : 1, 1, 0.5);
+  }
+  if (o.dk <= 0) r.eye = hd.p(1.9, -1.8, 0.6);
+  // Пламя тарана: языки из-под панциря назад.
+  if (o.fire > 0) {
+    const fm: Mat = { T: FLAME, glow: 1, soft: true, bias: 0.35 };
+    for (let i = 0; i < 5; i++) {
+      const s = (i - 2) * 1.5;
+      const z = 1.2 + Math.abs(i - 2) * 0.6 + (i % 2) * 1.2;
+      const fl = 0.75 + 0.5 * hash(i, o.fl, 77);
+      const L = (6 + 6 * fl) * o.fire;
+      const a = body.p(-7.6, s, z - 1);
+      const b = vadd(a, vadd(B.v(-L, s * 0.35, 0), [0, 0, 1.4 * fl]));
+      r.cap(a, b, 2.1 * o.fire, 0.3, fm);
+    }
+  }
+  if (o.dk > 0) {
+    r.explode(sstep(0.15, 1, o.dk), body.o, 23, 12, 30, bodyFrom, 0.25);
+    r.explode(sstep(0.3, 1, o.dk) * 0.4, body.o, 5, 5, 10, legsFrom, 0.1);
+  }
+  return r;
+}
+
+function meteorPic(o: MPose, yaw: number, post?: (o: RigOut, P: Proj2) => void): Pic {
+  return draw(meteorRig(o, yaw), 60, 52, 30, 34, post);
+}
+
+/** Клубы пыли у ног (2D): `k` — возраст 0…1, `n` штук, за спиной по углу `sa`. */
+function dustPuffs(p: Px, x: number, y: number, sa: number, k: number, n: number, seed: number) {
+  if (k <= 0 || k >= 1) return;
+  for (let i = 0; i < n; i++) {
+    const a = sa + PI + (hash(i, seed, 1) - 0.5) * 1.6;
+    const d = 3 + k * (5 + hash(i, seed, 2) * 6);
+    const cx = x + Math.cos(a) * d;
+    const cy = y + Math.sin(a) * d * 0.6 - k * 2;
+    const rr = 1 + k * 2;
+    p.ell(Math.round(cx), Math.round(cy), rr, rr * 0.8, alpha(hx('#7a7088'), 0.55 * (1 - k)));
+  }
+}
+
+registerMobPainter('f15_meteor', (m: Mob, pose: MobPose) => {
+  const t = pose.t;
+  const md = pose.mode;
+  const charge = md === 'f15_charge';
+  const tech = md !== 'chase' && md !== 'idle' && md !== 'wander';
+  const v = visOf(m, pose, charge ? m.dir : tech ? m.face : headOf(m), charge ? 30 : 8);
+  const { d, yaw } = side16(v.yaw);
+  const sa = scrAng(yaw);
+  const o: MPose = { ...M0 };
+  const extra: Partial<MobFrame> = { shadow: 9 };
+  let anim = 'idle';
+  let f = 0;
+  let post: ((o: RigOut, P: Proj2) => void) | undefined;
+  if (md === 'dying') {
+    const T = 1.1;
+    f = fi(t, 26);
+    const k = f / FPS / T;
+    anim = 'die';
+    o.dk = k;
+    o.heat = 1 - k;
+    o.legs = 1;
+    extra.linger = T;
+    extra.alpha = 1 - sstep(0.72, 1, k);
+    extra.shadow = 9 * (1 - k);
+  } else if (md === 'aim') {
+    // Прицел: опустил рог, роет задними лапами, трещины разгораются, дрожит.
+    const T = METEOR_K.aim;
+    f = fi(t, 19);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'aim';
+    const dn = easeOut(k / 0.4);
+    o.head = 0.38 * dn;
+    o.pitch = 0.16 * dn;
+    o.fwd = -1.6 * dn;
+    o.heat = 0.25 + 0.75 * sstep(0.1, 1, k);
+    o.ph = 0.25 + (f % 4 < 2 ? 0.08 : -0.08) * dn;
+    o.side = k > 0.6 ? (f % 2 ? 0.04 : -0.04) : 0;
+    post = (out, P) => {
+      const [x, y] = P([0, 0, 0]);
+      dustPuffs(out.p, x, y + 1, sa, ((f % 6) + 1) / 7, 3, f >> 1);
+      const lit = litOn(out);
+      for (let i = 0; i < 3; i++) {
+        const sk = ((f + i * 3) % 9) / 9;
+        const [sx, sy] = P([(hash(i, 3, 3) - 0.5) * 8, (hash(i, 4, 3) - 0.5) * 6, 9 + sk * 8]);
+        if (o.heat > 0.5) lit.set(Math.round(sx), Math.round(sy), alpha(MAGMA_HI, (1 - sk) * 0.8));
+        else out.p.set(Math.round(sx), Math.round(sy), alpha(hx('#8a8090'), 0.6 * (1 - sk)));
+      }
+    };
+    extra.still = true;
+  } else if (charge) {
+    // Таран: корпус низко, ноги смазаны, пламя назад; шлейф — огненный.
+    f = Math.floor(pose.now * 16) % 4;
+    anim = 'charge';
+    o.pitch = 0.14;
+    o.head = 0.3;
+    o.heat = 1;
+    o.legs = 2;
+    o.ph = (f % 2) * 0.5;
+    o.fire = 1;
+    o.fl = f;
+    o.lift = f % 2 ? 0.5 : 0;
+    extra.ghost = { every: 0.03, life: 0.22, tint: '255,140,50', alpha: 0.5 };
+    extra.still = true;
+  } else if (md === 'f15_dizzy') {
+    // О стену: отбросило, рог задран, лапы врастопырку, звёзды над головой.
+    f = fi(t, 33);
+    const k = f / FPS;
+    anim = 'dizzy';
+    const bump = 1 - easeOut(k / 0.25);
+    o.pitch = -0.28 * bump - 0.08;
+    o.head = -0.3 * bump - 0.1;
+    o.fwd = -3 * bump;
+    o.legs = 1;
+    o.heat = 0.35 * (1 - k / 1.4) + 0.1;
+    o.side = Math.sin(k * 11) * 0.12 * (1 - k / 1.5);
+    const sf = f % 8;
+    extra.still = true;
+    return mobFrame(
+      'meteor',
+      pose,
+      anim,
+      f,
+      d,
+      () => {
+        const r = meteorRig(o, yaw);
+        if (k > 0.12) dizzyStars(r, [Math.cos(yaw) * 5, Math.sin(yaw) * 5, 16], sf, 4.5);
+        return draw(r, 60, 52, 30, 34, (out, P) => {
+          if (k < 0.3) {
+            const [x, y] = P([Math.cos(yaw) * 14, Math.sin(yaw) * 14, 7]);
+            burstPx(litOn(out), x, y, k / 0.3, 9, 9, MAGMA_HI, 5);
+            dustPuffs(out.p, x, y + 3, sa + PI, k / 0.3, 5, 9);
+          }
+        });
+      },
+      extra,
+    );
+  } else if (md === 'windup') {
+    // Удар рогом: опустил голову — взмах снизу вверх через конус.
+    const T = 0.8;
+    f = fi(t, 19);
+    const k = (f + 0.5) / FPS / T;
+    anim = 'gore';
+    const dn = easeOut(k / 0.6);
+    const up = easeOut((k - 0.75) / 0.25);
+    o.head = 0.45 * dn * (1 - up) - 0.45 * up;
+    o.pitch = 0.18 * dn * (1 - up) - 0.12 * up;
+    o.fwd = -2 * dn * (1 - up) + 3.5 * up;
+    o.heat = 0.3 + 0.5 * dn;
+    o.ph = 0.25;
+    if (k > 0.75) post = biteTrail(17, sa, 1.5, (k - 0.75) / 0.25, 1, hx('#ffb040'));
+    extra.still = true;
+  } else if (md === 'recover') {
+    const T = 0.7;
+    f = fi(t, 16);
+    const k = (f + 0.5) / FPS / T;
+    if (v.prev === 'f15_charge') {
+      // Торможение: упёрся лапами, корпус клюёт вперёд, пыль веером, остывает.
+      anim = 'brake';
+      const br = 1 - easeOut(k / 0.6);
+      o.pitch = 0.2 * br;
+      o.head = 0.2 * br;
+      o.heat = 0.4 + 0.6 * br;
+      o.legs = 1;
+      o.fire = Math.max(0, 1 - k * 4) * 0.6;
+      o.fl = f % 4;
+      o.fwd = 1.5 * br;
+      if (k < 0.6)
+        post = (out, P) => {
+          const [x, y] = P([Math.cos(yaw) * 8, Math.sin(yaw) * 8, 0]);
+          dustPuffs(out.p, x, y, sa + PI, k / 0.6, 6, 13);
+        };
+    } else if (v.prev === 'windup') {
+      anim = 'gorefol';
+      const hold = 1 - sstep(0.15, 0.8, k);
+      o.head = -0.45 * hold;
+      o.pitch = -0.12 * hold;
+      o.fwd = 3.5 * hold;
+      o.heat = 0.3 + 0.5 * hold;
+      o.ph = 0.25;
+      if (k < 0.35) post = biteTrail(17, sa, 1.5, 1, 1 - k / 0.35, hx('#ffb040'));
+    } else {
+      anim = 'rec';
+      o.heat = 0.3;
+    }
+    extra.still = true;
+  } else if (md === 'stun' || pose.anim === 'hurt') {
+    f = fi(t, 6);
+    anim = 'hurt';
+    const k = 1 - f / 6;
+    o.pitch = -0.15 * k;
+    o.fwd = -1.5 * k;
+    o.heat = 0.25 + 0.5 * k;
+  } else if (moving(m)) {
+    f = Math.floor((v.dist / 0.85) * 8) % 8;
+    anim = 'run';
+    o.ph = f / 8;
+    o.lift = f % 4 === 1 ? 0.4 : 0;
+    o.side = Math.sin((f / 8) * TAU) * 0.04;
+  } else {
+    f = Math.floor(pose.now * 3) % 4;
+    anim = 'idle';
+    o.heat = 0.2 + (f === 1 ? 0.15 : f === 2 ? 0.25 : 0.05);
+    o.head = f === 2 ? 0.05 : 0;
+  }
+  return mobFrame('meteor', pose, anim, f, d, () => meteorPic(o, yaw, post), extra);
+});
+
+registerMobWarm('f15_meteor', function* () {
+  const pose: MobPose = {
+    anim: 'run',
+    frame: 0,
+    mode: 'chase',
+    t: 0,
+    left: false,
+    flash: false,
+    look: 'normal',
+    now: 0,
+  };
+  for (let d = 0; d < NDIR; d++) {
+    const yaw = (d / NDIR) * TAU;
+    for (let f = 0; f < 8; f++) {
+      mobFrame('meteor', pose, 'run', f, d, () =>
+        meteorPic(
+          { ...M0, ph: f / 8, lift: f % 4 === 1 ? 0.4 : 0, side: Math.sin((f / 8) * TAU) * 0.04 },
+          yaw,
+        ),
       );
       yield 0;
     }
