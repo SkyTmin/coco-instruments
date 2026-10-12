@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as books from './props-pixel/books';
@@ -10,6 +11,33 @@ const ROOT = path.resolve(__dirname, '../..');
 const RES: Res[] = ['s', 'l'];
 const empty = (p: { data: Uint8ClampedArray | Uint8Array }) =>
   p.data.every((v, i) => i % 4 !== 3 || v === 0);
+
+/**
+ * Простая и редкая понравились владельцу как есть (v2.140): эпическую и легендарную
+ * переделали своим путём, а эти полосы обязаны остаться байт в байт. sha1 всех кадров.
+ */
+const KEEP: Record<string, string> = {
+  'apply-burn-rare/l': 'b18029ad642ba455',
+  'apply-burn-rare/s': 'dd93905d1a8e3080',
+  'apply-burn-simple/l': '85d146e95e1bd6be',
+  'apply-burn-simple/s': '458a99d29b96de79',
+  'apply-ok-rare/l': '1a3768d04f9be1a9',
+  'apply-ok-rare/s': '996fe67882ceb150',
+  'apply-ok-simple/l': '7b405de1a186bbde',
+  'apply-ok-simple/s': '9a3ad621abff7e9c',
+  'idle-rare/l': 'd95ae7a3a93409b0',
+  'idle-rare/s': '0ae7002a922c1e80',
+  'idle-simple/l': '7dc9842c6218dad2',
+  'idle-simple/s': 'adb77300e354edc1',
+  'reveal-rare/l': '259f235d89166796',
+  'reveal-rare/s': 'e59bfd8c6e2a1880',
+  'reveal-simple/l': '57057e4b01c2cfb8',
+  'reveal-simple/s': 'd637a7b8b30c8969',
+  'still-rare/l': '63d4b425d61b97ea',
+  'still-rare/s': '5725d54a9c800282',
+  'still-simple/l': 'aa7a00329e7e9f8b',
+  'still-simple/s': 'e7015faef2637529',
+};
 
 describe('пиксельные книги', () => {
   it('рисунок детерминирован, у каждой полосы свой холст', () => {
@@ -63,6 +91,17 @@ describe('пиксельные книги', () => {
       for (const v of a.glyph) expect(v > 0 && v < 1).toBe(true);
     }
   });
+
+  it('простая и редкая — байт в байт как в v2.140', () => {
+    const got: Record<string, string> = {};
+    for (const key of Object.keys(KEEP)) {
+      const [name, r] = key.split('/') as [string, Res];
+      const h = createHash('sha1');
+      for (let i = 0; i < books.STRIPS[name].frames; i++) h.update(books.frame(name, i, r).data);
+      got[key] = h.digest('hex').slice(0, 16);
+    }
+    expect(got).toEqual(KEEP);
+  }, 120_000);
 
   it('вписывание и сгорание кончаются пустым кадром, лучи бьют ниже книги', () => {
     for (const t of books.TIERS) {
