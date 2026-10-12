@@ -228,6 +228,33 @@ Owner: «добавь возможность выбирать скин у пит
   chin on paws, ears laid back (1.1). Hatch plays `happy`. Weight 460 KB v0+v1 (small 47 / 53,
   large 170 / 187, thumbs 1 KB; ink was 1.89 MB). Released in v2.116. Tests «пиксельная овчарка» in
   `pets-pixel.test.ts`.
+- **Spider** (`pets-pixel/spider.ts`, `spiderFrame(a, i, res, v)`, `variants: [1]`): «Паук-отмычка»,
+  a round hairy tarantula facing us (fox's `drawPartsF` + `pick`, `tube` legs). Abdomen ball
+  behind/above the head, orange tuft = `abdPick` patch + orange `hair` locks; fur = dark mass +
+  `furTex` strands along meridians from the top (LOCAL coords — no boiling), light-tipped `hair`
+  locks round the silhouette rim (broken outline; rim points fixed in the ball's rest frame, so
+  they don't crawl). Head: 2 big glossy eye stamps (9×9 large / 4×4 small, glint top-left), 4
+  small eyes (3×3 beads large, 2 glints small), blush, fuzzy chelicerae, ivory fangs. 8 legs:
+  hip on the body → knee by two-bone `ik` (pole per leg) → ankle → foot; feet stay planted while
+  the body moves (no sliding); rest knees are the highest point, feet far out (idle frame 0 fits
+  the 48 box). Orange knee band = `shinPick` on the first fifth of the shin (ankle band large
+  only). Walk = alternating tetrapod L1 R2 L3 R4 / R1 L2 R3 L4 (test). Lockpick (viewer's right,
+  hook) and tension wrench («Г», left) = steel `rod`s rasterized straight into the frame with
+  depth (1 px small, 2 px with a lit side large), swaying on springs after the palps. Work: front
+  legs raised to tips (±15, 9, 36) with bones stretched ×1.12 — lower, they sank into the
+  abdomen (same dark, inside the silhouette); the other legs splay 0.75 and raised legs are one
+  step lighter, else they drown in the neighbours' knees. Web = overlay lines with a depth test,
+  centre fixed to the BODY (between the feet it slid over the face as the legs came down),
+  spokes 1 and 3 hooked to the leg tips, polygonal spiral rings → teal token (raven's) flies in
+  from the right, sticks at 1.3 s (wobble spring, spark) → dance → fade 1.68–1.94 s, props reset
+  to REST (test). Attack: rear up (body +3.8, front legs up and out over the head — held
+  sideways they read as a crouch) → pounce (scale 1.18, chelicerae apart, red gape, fangs out
+  f8–11) → rays over empty pixels. Sleep: tucked knees went UP into a cage round the body — the
+  pole goes out-and-back, low; tools laid outward. Gold: the body lives in tones 5–8, so the gold
+  ramp is bronze there and gold only on strand tips (a bright ramp read as a yellow plush);
+  copper bands darker and redder. Hatch plays `happy`. Weight 818 KB v0+v1 (small 72 / 81, large
+  319 / 344, thumbs 1 KB; ink was 1.69 MB) — heavier than the others because of the strands.
+  Tests «пиксельный паук» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
