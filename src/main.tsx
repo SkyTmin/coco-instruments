@@ -18,8 +18,12 @@ import { init } from '@/init';
 import { setWebAuth } from '@/lib/storage';
 import { setWebMode } from '@/lib/runtime';
 import { installGlobalErrorLogging, logError } from '@/lib/log';
+// Game language (detected now, its chunk loads in parallel) and device settings.
+import '@/i18n';
+import { startSettings } from '@/settings/apply';
 
 installGlobalErrorLogging();
+startSettings();
 
 /**
  * Снять заставку Telegram. Пока её не снять, поверх окна висит загрузчик

@@ -105,8 +105,11 @@ export function savedLang(): Lang | null {
  * Russian players get Russian through either source.
  */
 export function detectLang(): Lang {
-  const saved = savedLang();
-  if (saved) return saved;
+  return savedLang() ?? autoLang();
+}
+
+/** What auto-detect picks, ignoring the saved choice (Telegram → browser → en). */
+export function autoLang(): Lang {
   const tg = matchLang(telegramCode());
   if (tg) return tg;
   try {
