@@ -253,7 +253,7 @@ Owner: «добавь возможность выбирать скин у пит
   pole goes out-and-back, low; tools laid outward. Gold: the body lives in tones 5–8, so the gold
   ramp is bronze there and gold only on strand tips (a bright ramp read as a yellow plush);
   copper bands darker and redder. Hatch plays `happy`. Weight 818 KB v0+v1 (small 72 / 81, large
-  319 / 344, thumbs 1 KB; ink was 1.69 MB) — heavier than the others because of the strands.
+  319 / 344, thumbs 1 KB; ink was 1.69 MB) — heavier than the others because of the strands. Released in v2.117.
   Tests «пиксельный паук» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
