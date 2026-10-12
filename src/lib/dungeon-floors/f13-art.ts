@@ -3462,7 +3462,7 @@ paintMob(
 // Скрипач.
 // ---------------------------------------------------------------------------
 
-const FIDDLE_BODY: Body = {
+export const FIDDLE_BODY: Body = {
   ...KNIGHT_BODY,
   hip: 9,
   torso: 7.5,
@@ -3484,57 +3484,6 @@ const FIDDLE_BODY: Body = {
   },
   torsoPat: (t, nx) => (t > 0.7 && Math.abs(nx) < 0.3 ? P.cream : null),
 };
-
-function fiddlePose(c: Ctx, q: Pose): { q: Pose; key: string } | null {
-  const { m } = c;
-  const playing = m.mode === 'aim' || m.mode === 'windup';
-  const b = playing ? { q, key: '' } : basePose(c);
-  if (!b) return null;
-  const bow = playing ? Math.floor(c.now * 14) % 6 : Math.floor(c.now * 4) % 6;
-  const s = Math.sin((bow / 6) * TAU);
-  // Скрипка у подбородка, смычок ходит.
-  b.q.aL = limb(1.2, 0.9, 1.3);
-  b.q.aR = limb(1.0 + 0.25 * s, 0.6 + 0.3 * s, 1.2);
-  b.q.hr = 0.35;
-  if (playing) {
-    b.q.lean = -0.1;
-    b.q.bob = 1 + 0.5 * s;
-  }
-  return { q: b.q, key: `${b.key}b${bow}${playing ? 'p' : ''}` };
-}
-
-paintMob(
-  'f13_fiddler',
-  puppetPainter('f13_fiddler', {
-    w: 40,
-    h: 44,
-    ax: 20,
-    ay: 38,
-    dirs: 8,
-    body: FIDDLE_BODY,
-    shadow: 5,
-    pose: (c, q) =>
-      c.m.mode === 'dying' || c.m.mode === 'f13_reel' || c.m.mode === 'sleep' || c.m.data.crawl
-        ? null
-        : fiddlePose(c, q),
-    dress: (rig, j, c) => {
-      const R = FIDDLE_BODY.head;
-      rig.dot(onHead(j, R, 0.95, -0.35, 0.1), INK, 1);
-      rig.dot(onHead(j, R, 0.95, 0.35, 0.1), INK, 1);
-      rig.dot(onHead(j, R, 0.97, 0, -0.4), P.red[1], 1);
-      // Чёлка-парик.
-      rig.cap(onHead(j, R, 0.2, -0.6, 0.7), onHead(j, R, 0.2, 0.6, 0.7), 1.6, 1.6, P.cream);
-      if (c.m.mode === 'dying' || c.m.data.crawl) return;
-      // Скрипка: корпус у плеча, гриф к левой руке.
-      const body = vadd(vadd(j.shL, vsc(j.fwd, 2)), v3(0, 0.6, 0));
-      rig.cap(body, vadd(body, vsc(j.right, 1.8)), 1.9, 1.5, P.wood);
-      rig.cap(body, j.haL, 0.45, 0.4, P.black);
-      // Смычок.
-      const bd = vnorm(vadd(vsc(j.right, -1), vsc(j.fwd, 0.3)));
-      rig.cap(vadd(j.haR, vsc(bd, -1)), vadd(j.haR, vsc(bd, 8)), 0.35, 0.3, P.cream);
-    },
-  }),
-);
 
 // ---------------------------------------------------------------------------
 // Балерина-волчок.
@@ -7919,14 +7868,7 @@ export function lordVagaPx(m: Mob, _now: number): [number, number] {
 
 // ---- прогрев -----------------------------------------------------------------
 
-for (const k of [
-  'f13_nutcracker',
-  'f13_drummer',
-  'f13_fiddler',
-  'f13_prompter',
-  'f13_shade',
-  'f13_cashier',
-])
+for (const k of ['f13_nutcracker', 'f13_drummer', 'f13_prompter', 'f13_shade', 'f13_cashier'])
   warmPuppet(k, 8);
 
 /**
