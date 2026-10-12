@@ -425,7 +425,7 @@ function spiritRig(o: SpO, yaw: number): Rig {
         const a = 2.2 * o.spin + i * PI + k * 3 * PI;
         const rr = 0.4 + 3 * o.whirl * k;
         const p: V3 = [C[0] + Math.cos(a) * rr, C[1] + Math.sin(a) * rr, C[2] - H * 0.45 + H * k];
-        if (prev) r.line(prev, p, i ? alpha(CYAN, 220) : hx('#ffffff', 230), gl);
+        if (prev) r.line(prev, p, i ? alpha(CYAN, 0.86) : hx('#ffffff', 230), gl);
         prev = p;
       }
     }

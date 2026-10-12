@@ -35,7 +35,6 @@ import {
   GARDENER,
   gustBlow,
   gustWarn,
-  JELLY,
   millDir,
   stormOn,
   towerTurn,
@@ -50,6 +49,7 @@ import './f11-mob-ray';
 import './f11-mob-guard';
 import './f11-mob-boarder';
 import './f11-mob-spirit';
+import './f11-mob-jelly';
 
 type RGBA = [number, number, number, number];
 
@@ -2099,22 +2099,6 @@ registerZonePainter('f11_flapfx', (g, z, px, py) => {
   return true;
 });
 
-/** Облачко лопнувшей медузы. */
-registerZonePainter('f11_puff', (g, z, px, py, _s, time) => {
-  const k = Math.min(1, z.t / (z as Zone).life);
-  g.globalAlpha = 0.55 * (1 - k);
-  g.fillStyle = '#e8f4ff';
-  for (let i = 0; i < 7; i++) {
-    const a = i * 0.9 + time * 0.6;
-    const r = z.r * TS * 0.55;
-    g.beginPath();
-    g.arc(px + Math.cos(a) * r * 0.6, py - 4 + Math.sin(a) * r * 0.35, r * 0.55, 0, TAU);
-    g.fill();
-  }
-  g.globalAlpha = 1;
-  return true;
-});
-
 registerZonePainter('f11_mossland', (g, z, px, py) => {
   const k = Math.min(1, z.t / (z as Zone).life);
   g.strokeStyle = `rgba(200,240,120,${0.9 * (1 - k)})`;
@@ -3619,86 +3603,10 @@ const FEATH = tn('#4a2e22', '#7a4a30', '#a8703f', '#d49c62');
 const FEATH_TIP = tn('#1e5a5e', '#2c8088', '#48a8ac', '#7cd0cc');
 
 // --- Облачная медуза -------------------------------------------------------------
+// Рисовальщик, разряд `f11_zapring` и облачко `f11_puff` — `f11-mob-jelly.ts`
+// (анимации мобов 11); палитра купола здесь — для шёлка-предмета.
 
 const JELLY_T = tn('#7a90b8', '#b4c6e6', '#dce6f6', '#ffffff');
-const ZAP = hx('#fff27a');
-
-function jellyPx(f: number, zap: number, dim: boolean): Built {
-  const W = 26;
-  const H = 32;
-  const p = new Px(W, H);
-  const cx = 13;
-  const cy = 11;
-  const a = dim ? 0.55 : 0.82;
-  // Купол: верх полукругом, край фестонами.
-  const rx = 8.5 + (f % 2) * 0.4;
-  const ry = 7.5 - (f % 2) * 0.4;
-  for (let y = Math.floor(cy - ry - 1); y <= cy + 5; y++)
-    for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
-      const dx = (x + 0.5 - cx) / rx;
-      const dy = (y + 0.5 - cy) / ry;
-      const rim = cy + 2.5 + Math.abs(Math.sin((x - cx) * 0.9)) * 1.6;
-      if (dx * dx + (dy < 0 ? dy * dy : 0) > 1 || y > rim) continue;
-      const nz = Math.sqrt(Math.max(0, 1 - dx * dx - Math.min(1, dy * dy)));
-      const l = dx * LX + dy * LY + nz * LZ + 0.15;
-      const c = zap ? mixc(tone(JELLY_T, l), ZAP, 0.35) : tone(JELLY_T, l);
-      p.set(x, y, alpha(c, a));
-    }
-  // Облачка внутри купола.
-  for (const [ox, oy, r] of [
-    [-3, -1, 2.2],
-    [1, -3, 2.6],
-    [3.5, 0, 2],
-  ] as const)
-    p.ell(cx + ox, cy + oy, r, r * 0.8, alpha(WHITE, dim ? 0.35 : 0.6));
-  // Молния внутри — при разряде.
-  if (zap) {
-    let x = cx - 4;
-    let y = cy - 2 + (f % 2);
-    for (let k = 0; k < 8; k++) {
-      p.set(x, y, ZAP);
-      x += 1;
-      y += k % 2 ? -1 : 1;
-    }
-  }
-  // Глазки.
-  p.set(cx - 2, cy + 1, alpha(INK, 0.8));
-  p.set(cx + 2, cy + 1, alpha(INK, 0.8));
-  const out = ink(p, hx('#44557a'));
-  // Щупальца — после контура: тонкие и полупрозрачные, тёмная и светлая
-  // нить через одну, чтобы читались и на светлой траве, и на небе.
-  for (let i = 0; i < 5; i++) {
-    const x0 = cx + (i - 2) * 2.8;
-    let px = x0;
-    let py = cy + 4;
-    const long = 13 + ((i * 7) % 3);
-    for (let k = 0; k < long; k++) {
-      const t = k / long;
-      px = x0 + Math.sin(k * 0.55 + f * 1.3 + i * 1.7) * 1.4 * t + (i - 2) * t * 0.9;
-      py = cy + 4 + k;
-      const c = zap && (k + f + i) % 3 === 0 ? ZAP : i % 2 ? hx('#7c9ccc') : hx('#9ab8e4');
-      out.set(Math.round(px), Math.round(py), alpha(c, a * (1 - t * 0.45)));
-    }
-    out.set(Math.round(px), Math.round(py) + 1, alpha(zap ? ZAP : CYAN, 0.9));
-  }
-  return { p: out, ax: cx, ay: H - 2, eye: [cx + 2, cy + 1] };
-}
-
-registerMobPainter('f11_jelly', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('jelly', pose, 'dead', () => jellyPx(1, 0, true));
-  if (pose.mode === 'f11_zap') {
-    const on = pose.t > JELLY.zap - 0.25;
-    const f = Math.floor(pose.t * (on ? 20 : 10)) % 2;
-    return mobFrame('jelly', pose, `zap${on ? 1 : 0}${f}`, () =>
-      jellyPx(f + (on ? 2 : 0), on ? 1 : f, false),
-    );
-  }
-  if (pose.mode === 'recover') return mobFrame('jelly', pose, 'rest', () => jellyPx(1, 0, true));
-  if (pose.anim === 'hurt') return mobFrame('jelly', pose, 'hurt', () => jellyPx(0, 0, true));
-  const f = ((Math.floor((paintSim()?.time ?? 0) * 4 + m.id) % 6) + 6) % 6;
-  return mobFrame('jelly', pose, `idle${f}`, () => jellyPx(f, 0, false));
-});
 
 // --- Абордажник ------------------------------------------------------------------
 // Рисовальщик и подлёт на планере — `f11-mob-boarder.ts` (анимации мобов 11).
