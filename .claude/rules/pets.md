@@ -184,7 +184,7 @@ Owner: «добавь возможность выбирать скин у пит
   Work: padlock falls → key raised in the right wing (glint) → hop → key in, turn → flash,
   shackle springs → token + coin jump into the key ring → lock vanishes; trick props reset to
   REST once the lock is gone (seam test). Hatch plays `happy`. Weight 697 KB v0+v1 (small
-  68 / 79, large 260 / 288, thumbs 1 KB; ink was 1.6 MB). Tests «пиксельный ворон» in
+  68 / 79, large 260 / 288, thumbs 1 KB; ink was 1.6 MB). Released in v2.113. Tests «пиксельный ворон» in
   `pets-pixel.test.ts`.
 - **Fox** (`pets-pixel/fox.ts`, `foxFrame(a, i, res, v)`, `variants: [1]`): sitting red fox
   card-sharp facing us. Own rasterizer `drawPartsF` with `pick` (palette per point: burgundy
@@ -203,7 +203,7 @@ Owner: «добавь возможность выбирать скин у пит
   (scale 1.2, jaws open f8–11, muzzle up so the face shows) → `snap` rays from the muzzle only
   over EMPTY pixels (arcs across the white face read as stitches) → head shake. Sleep: curled,
   tail across the nose. Hatch plays `happy`. Weight 399 KB v0+v1 (small
-  42 / 47, large 149 / 160, thumbs 1 KB; ink was 1.67 MB). Head spring lag is capped
+  42 / 47, large 149 / 160, thumbs 1 KB; ink was 1.67 MB). Released in v2.115. Head spring lag is capped
   (`lagged(..., cap)`): in the pounce it left the head in the air after landing — white neck column. Tests «пиксельный лис» in
   `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
