@@ -64,7 +64,7 @@ import { bandAt, bandOf, fogEncode, fogGet, liftOf, Tile, walkableTile } from '@
 import type { World, WorldObj } from '@/lib/dungeon-world';
 import { itemUrl } from '@/lib/dungeon-art';
 import { registerEscape } from '@/lib/escape-stack';
-import { useAction, useGameplayCapture, useMoveAxis } from '@/input/hooks';
+import { useAction, useGameplayCapture, useHotkeys, useMoveAxis } from '@/input/hooks';
 import { playTotem } from '@/lib/totem';
 import { rainCoins } from '@/lib/coins';
 import { FLOORS } from '@/lib/dungeon-floors';
@@ -1543,6 +1543,8 @@ export function DungeonRun({
     },
     { phases: ['down', 'up'] },
   );
+  // I / «View» геймпада — рюкзак, как в лагере.
+  useHotkeys({ inventory: () => setSheet('inv') }, { enabled: playing });
 
   // ---- Контекстное действие ------------------------------------------------
 
@@ -1986,6 +1988,7 @@ export function DungeonRun({
             <AudioToggles className="dgx-menu__audio" />
             <button
               className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
+              data-autofocus
               onClick={() => setSheet(null)}
             >
               <KIcon name="arrowRight" />
