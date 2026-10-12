@@ -39,7 +39,6 @@ import {
   gustWarn,
   JELLY,
   millDir,
-  MOSS as MOSS_AI,
   SPIRIT,
   stormOn,
   towerTurn,
@@ -48,6 +47,7 @@ import {
 } from './f11-brains';
 import type { F11State } from './f11-brains';
 import './f11-mob-harpy';
+import './f11-mob-moss';
 
 type RGBA = [number, number, number, number];
 
@@ -4346,131 +4346,9 @@ registerMobPainter('f11_boarder', (m: Mob, pose: MobPose) => {
 });
 
 // --- Мох-пружина -----------------------------------------------------------------
+// Рисовальщик — `f11-mob-moss.ts` (анимации мобов 11); латунь здесь — для предметов.
 
 const BRASS = tn('#6a4a1a', '#a07a30', '#d0a84a', '#f4d884');
-
-function springPx(
-  len: number,
-  h: number,
-  sq: number,
-  eyes: 'open' | 'angry' | 'closed' | 'peek',
-  bend = 0,
-  mound = false,
-): Built {
-  const W = 22;
-  const H = 34;
-  const p = new Px(W, H);
-  const gy = 32;
-  const cx = 11;
-  const top = gy - 2 - h - len;
-  // Пружина — после контура: кольца через два пикселя, у каждого своя
-  // тёмная кромка снизу, иначе контур сливает витки в сплошной брусок.
-  const coil = (out: Px): void => {
-    if (len <= 0.5 || mound) return;
-    const n = Math.max(2, Math.floor(len / 2) + 1);
-    for (let k = 0; k < n; k++) {
-      const t = n > 1 ? k / (n - 1) : 0;
-      const x = Math.round(cx + bend * t * 3);
-      const y = Math.round(gy - 2 - h - t * len);
-      for (let dx = -3; dx <= 3; dx++) {
-        if (out.get(x + dx, y)[3]) continue;
-        out.set(x + dx, y, Math.abs(dx) === 3 ? BRASS[1] : dx < 0 ? BRASS[3] : BRASS[2]);
-        out.set(x + dx, y + 1, BRASS[0]);
-      }
-      out.set(x - 4, y, INK);
-      out.set(x + 4, y + 1, INK);
-    }
-  };
-  // Шар мха (или плоская кочка, когда затаился).
-  const bx = cx + bend * 3;
-  const rx = 6.5 + sq;
-  const ry = 5.2 - sq;
-  const by = mound ? gy - 2 : top - ry + 1.5;
-  if (mound) shadeEll(p, cx, gy - 2, 8, 3, MOSS, 0.1);
-  else shadeEll(p, bx, by, rx, ry, MOSS, 0.05);
-  // Кочки и травинки (только по мху, не по латуни).
-  for (let i = 0; i < 36; i++) {
-    const x = Math.floor(hash(i, 1, 761) * W);
-    const y = Math.floor(hash(i, 2, 762) * H);
-    if (!p.solid(x, y) || p.get(x, y)[0] > 120) continue;
-    const up = !p.solid(x, y - 1);
-    p.set(x, y, up ? MOSS[3] : hash(i, 3, 763) < 0.4 ? MOSS[0] : MOSS[2]);
-    if (up && hash(i, 4, 764) < 0.35) p.set(x, y - 1, MOSS[3]);
-  }
-  const top0 = mound ? gy - 5 : Math.round(by - ry);
-  p.set(Math.round(bx - 2), top0, hx('#f4f0ea'));
-  p.set(Math.round(bx - 3), top0 + 1, hx('#f4f0ea'));
-  p.set(Math.round(bx - 1), top0 + 1, hx('#f4f0ea'));
-  p.set(Math.round(bx - 2), top0 + 1, hx('#e888a8'));
-  // Глаза 2×2 со зрачком, рот.
-  const ey = mound ? gy - 3 : Math.round(by);
-  const ex = mound ? cx + 1 : Math.round(bx + 1);
-  for (const dx of [0, 3]) {
-    if (eyes === 'closed') {
-      p.set(ex + dx, ey + 1, INK);
-      p.set(ex + dx + 1, ey + 1, INK);
-      continue;
-    }
-    p.rect(ex + dx, ey, ex + dx + 1, ey + 1, WHITE);
-    p.set(ex + dx + 1, ey + (eyes === 'angry' ? 1 : 0), INK);
-    if (eyes === 'angry') {
-      p.set(ex + dx, ey - 1, INK);
-      p.set(ex + dx + 1, ey - 1, INK);
-    }
-  }
-  if (!mound) {
-    p.set(ex + 2, ey + 3, eyes === 'angry' ? INK : MOSS[0]);
-    p.set(ex + 3, ey + 3, eyes === 'angry' ? INK : MOSS[0]);
-  }
-  const out = ink(p);
-  coil(out);
-  return { p: out, ax: cx, ay: gy, eye: [ex + 1, ey] };
-}
-
-registerMobPainter('f11_moss', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('moss', pose, 'dead', () => springPx(1, 0, 1.5, 'closed', 1));
-  switch (pose.mode) {
-    case 'f11_hide':
-      return mobFrame(
-        'moss',
-        pose,
-        `hide${Math.floor(pose.t * 0.7 + m.id) % 3 === 0 ? 1 : 0}`,
-        () =>
-          springPx(0, 0, 0, Math.floor(pose.t * 0.7 + m.id) % 3 === 0 ? 'closed' : 'peek', 0, true),
-      );
-    case 'f11_pop': {
-      const f = Math.min(3, Math.floor(pose.t * 10));
-      return mobFrame('moss', pose, `pop${f}`, () =>
-        springPx([1, 6, 5, 3][f], [0, 3, 1, 0][f], [1, -1, -0.5, 0][f], 'angry'),
-      );
-    }
-    case 'f11_crouch': {
-      const f = pose.t < MOSS_AI.crouch * 0.5 ? 0 : 1;
-      return mobFrame('moss', pose, `crouch${f}`, () =>
-        springPx(f ? 0.8 : 1.6, 0, f ? 1.6 : 1, 'angry'),
-      );
-    }
-    case 'f11_jump': {
-      const k = Math.min(1, pose.t / MOSS_AI.air);
-      const f = Math.min(5, Math.floor(k * 6));
-      const h = Math.round(Math.sin(((f + 0.5) / 6) * PI) * 9);
-      return mobFrame('moss', pose, `jump${f}`, () =>
-        springPx(f < 3 ? 6 : 4, h, f < 2 ? -1 : 0, 'angry'),
-      );
-    }
-    case 'f11_tired': {
-      const f = Math.floor(pose.t * 2) % 2;
-      return mobFrame('moss', pose, `tired${f}`, () => springPx(2, 0, 1 + f * 0.3, 'closed', 1));
-    }
-  }
-  if (pose.anim === 'hurt')
-    return mobFrame('moss', pose, 'hurt', () => springPx(2, 0, 1.2, 'closed'));
-  const f4 = ((pose.frame % 4) + 4) % 4;
-  return mobFrame('moss', pose, `idle${f4}`, () =>
-    springPx([3, 4, 3, 2][f4], 0, [0, -0.5, 0, 0.6][f4], 'open'),
-  );
-});
 
 // --- Ветряной дух ----------------------------------------------------------------
 

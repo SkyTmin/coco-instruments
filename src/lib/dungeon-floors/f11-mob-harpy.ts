@@ -737,7 +737,7 @@ function harpyPose(anim: string, f: number): HaO {
 
 // ---- Кадр -------------------------------------------------------------------
 
-const HA = kindOf('harpy', 72, 66, 36, 54, 1400);
+const HA = kindOf('harpy', 72, 66, 36, 54, 1600);
 
 /** Концы крыльев на экране (след хлопка). */
 function tipsOf(anim: string, f: number, d: number, P2: (v: V3) => [number, number]) {
