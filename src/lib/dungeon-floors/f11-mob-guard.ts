@@ -989,38 +989,44 @@ const guardPic = (anim: string, f: number, d: number): Pic => {
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * TAU + f * 0.7;
         const rr = 7 * (1 - ((f - 18 + i * 0.5) % 4) / 4);
-        spark2(
-          o,
-          portP[0] + Math.cos(a) * rr,
-          portP[1] + Math.sin(a) * rr * 0.7,
-          alpha(SPARK[i % 3], 0.9),
-          0.8,
-        );
+        const x = Math.round(portP[0] + Math.cos(a) * rr);
+        const y = Math.round(portP[1] + Math.sin(a) * rr * 0.7);
+        // Спиной к зрителю порт за корпусом — искры только вокруг силуэта.
+        if (Math.sin(yaw) < -0.35 && o.p.get(x, y)[3]) continue;
+        spark2(o, x, y, alpha(SPARK[i % 3], 0.9), 0.8);
       }
     }
     if (anim === 'vent' && f <= 2) {
-      // Вспышка выстрела из порта, луч уходит вперёд.
+      // Вспышка выстрела из порта, луч уходит вперёд. Спиной к зрителю — порт
+      // за корпусом: свет только вокруг силуэта.
+      const behind = Math.sin(yaw) < -0.35;
+      const fl = (x: number, y: number, c: RGBA) => {
+        const X = Math.round(x);
+        const Y = Math.round(y);
+        if (
+          behind &&
+          X >= 0 &&
+          Y >= 0 &&
+          X < o.p.w &&
+          Y < o.p.h &&
+          o.p.data[(Y * o.p.w + X) * 4 + 3]
+        )
+          return;
+        spark2(o, X, Y, c, 1);
+      };
       const fx = Math.cos(yaw);
       const fy = Math.sin(yaw) * 0.6;
       const L = [9, 6, 3][f];
       for (let j = 0; j <= L; j++)
-        spark2(
-          o,
-          portP[0] + fx * j,
-          portP[1] + fy * j,
-          alpha(j < 2 ? WHITE : PORT_C, 1 - j / (L + 2)),
-          1,
-        );
-      const R = [3, 2, 1][f];
+        fl(portP[0] + fx * j, portP[1] + fy * j, alpha(j < 2 ? WHITE : PORT_C, 1 - j / (L + 2)));
+      const R = [3, 2, 1][f] + (behind ? 1 : 0);
       for (let yy = -R; yy <= R; yy++)
         for (let xx = -R; xx <= R; xx++)
           if (xx * xx + yy * yy <= R * R + 0.5)
-            spark2(
-              o,
+            fl(
               portP[0] + xx,
               portP[1] + yy,
               xx * xx + yy * yy <= 1 ? WHITE : alpha(hx('#ffb090'), 0.85),
-              1,
             );
     }
     if (g.steam > 0) {
