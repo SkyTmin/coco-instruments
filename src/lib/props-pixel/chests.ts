@@ -35,24 +35,17 @@ import {
 } from '../pets-pixel/rig';
 import type { Frame, RGBA, V3 } from '../pets-pixel/rig';
 import { Px } from '../dungeon-art';
+import type { Canvas, Res, StripDef } from './types';
 
 // ---------------------------------------------------------------------------
 // Полосы.
 // ---------------------------------------------------------------------------
 
-export type Res = 's' | 'l';
-export interface Canvas {
-  box: number;
-  cw: number;
-  ch: number;
-  bx: number;
-  by: number;
-}
 /**
  * Малая — значки (30, 58 точек), крупная — сцена и витрина (210, 240):
  * рамка 120 при 240 точках — ровно ×6 на DPR 3 и ×4 на DPR 2.
  */
-export const RES: Record<Res, Canvas> = {
+export const RES: { s: Canvas; l: Canvas } = {
   s: { box: 48, cw: 128, ch: 144, bx: 40, by: 78 },
   l: { box: 120, cw: 320, ch: 360, bx: 100, by: 195 },
 };
@@ -62,35 +55,15 @@ export type Kind = Tier | 'mystery';
 export const TIERS: Tier[] = ['common', 'rare', 'epic', 'legend'];
 export const KINDS: Kind[] = ['common', 'rare', 'epic', 'legend', 'mystery'];
 
-export interface Strip {
-  frames: number;
-  fps: number;
-  loop: boolean;
-  /** Именованные кадры: сцена вешает на них звук и отклик. */
-  marks?: Record<string, number>;
-}
-
-const OPEN_MARKS: Record<Tier, Record<string, number>> = {
+/** Метки разовых: ключ повернулся, защёлка, крышка пошла, пик света. */
+export const OPEN_MARKS: Record<Tier, Record<string, number>> = {
   common: { turn: 1, latch: 6, lidOpen: 10, peak: 18 },
   rare: { turn: 1, latch: 6, lidOpen: 10, peak: 11 },
   epic: { turn: 1, latch: 6, lidOpen: 18, peak: 19 },
   legend: { turn: 1, latch: 6, lidOpen: 25, peak: 26 },
 };
 const OPEN_N: Record<Tier, number> = { common: 26, rare: 30, epic: 40, legend: 54 };
-
-export const STRIPS: Record<string, Strip> = {
-  'idle-common': { frames: 24, fps: 12, loop: true },
-  'idle-rare': { frames: 24, fps: 12, loop: true },
-  'idle-epic': { frames: 24, fps: 12, loop: true },
-  'idle-legend': { frames: 24, fps: 12, loop: true },
-  'idle-mystery': { frames: 24, fps: 12, loop: true },
-  /** Два настоящих оборота за 0,92 с; кадр 0 — поза неподвижного. */
-  'mystery-spin': { frames: 22, fps: 24, loop: true },
-  'open-common': { frames: OPEN_N.common, fps: 24, loop: false, marks: OPEN_MARKS.common },
-  'open-rare': { frames: OPEN_N.rare, fps: 24, loop: false, marks: OPEN_MARKS.rare },
-  'open-epic': { frames: OPEN_N.epic, fps: 24, loop: false, marks: OPEN_MARKS.epic },
-  'open-legend': { frames: OPEN_N.legend, fps: 24, loop: false, marks: OPEN_MARKS.legend },
-};
+const SPIN_N = 22;
 
 // ---------------------------------------------------------------------------
 // Камера и свет (своя камера: выше, чем у питомцев).
@@ -1675,7 +1648,7 @@ function parse(name: string): Parsed {
 
 export function poseOf(name: string, t: number): Pose {
   const { kind, mode } = parse(name);
-  if (mode === 'spin') return { ...REST, yaw: 4 * PI * (t * 24 / STRIPS['mystery-spin'].frames) };
+  if (mode === 'spin') return { ...REST, yaw: (4 * PI * t * 24) / SPIN_N };
   if (mode === 'idle') return idlePose(kind, t);
   return openPose(kind as Tier, t);
 }
@@ -1779,35 +1752,46 @@ function ring(p: Px, o: Pose, r: number, vis: number, col: RGBA, thick: number):
   }
 }
 
-/** Столб света из проёма: глубина — середины проёма, ближний край короба его прячет. */
-function beam(p: Px, o: Pose, k: number, col: RGBA, lite: RGBA, wide: number): void {
+/**
+ * Столб света из проёма: ядро белее, края цветом редкости, по нему вверх
+ * бегут светлые штрихи; глубина — середины проёма, поэтому передняя стенка
+ * прячет его основание, а откинутая крышка (она дальше) им подсвечена.
+ * `hgt` — высота в единицах модели, `wid` — доля ширины проёма.
+ */
+function beam(p: Px, o: Pose, t: number, k: number, col: RGBA, lite: RGBA, hgt: number, wid: number): void {
   if (k <= 0.01) return;
-  const c = chestPt(o, [0, 0, H]);
+  const c = chestPt(o, [0, -1, H - 1]);
   const [cx, cy, cd] = sp(c);
-  const top = Math.max(0, cy - RR * (34 + 26 * wide));
-  const hw0 = RR * (W2 - T) * 0.95 * (0.7 + 0.3 * k);
-  for (let y = Math.floor(top); y <= Math.ceil(cy + RR * 3); y++) {
+  const top = cy - RR * hgt;
+  const hw0 = RR * (W2 - T) * wid;
+  const hot = mixc(lite, WHITE, 0.55);
+  const sw = HI ? 3 : 2;
+  for (let y = Math.floor(top); y <= Math.ceil(cy); y++) {
     const up = clamp01((cy - y) / (cy - top));
-    const hw = hw0 * (1 + 0.25 * up * wide);
-    const fade = k * (1 - up) ** 1.3;
+    const hw = hw0 * (1 + 0.35 * up);
+    const fade = k * (1 - up) ** 1.1;
     for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
       const dx = Math.abs(x + 0.5 - cx) / hw;
       if (dx > 1) continue;
+      // Штрихи: свой столбик, бегут вверх.
+      const col0 = Math.floor((x - cx) / sw);
+      const run = frac((y / RR + t * (50 + 30 * hash(col0, 3))) / (7 + 5 * hash(col0, 4)) + hash(col0, 5));
+      const streak = hash(col0, 6) > 0.45 && run < 0.35;
       let a: number;
       let cc: RGBA;
-      if (dx < 0.3) {
-        a = 0.85 * fade;
-        cc = mixc(lite, WHITE, 0.4);
-      } else if (dx < 0.65) {
-        a = 0.6 * fade;
-        cc = lite;
+      if (dx < 0.22) {
+        a = 0.9 * fade;
+        cc = hot;
+      } else if (dx < 0.55) {
+        a = (streak ? 0.85 : 0.55) * fade;
+        cc = streak ? hot : lite;
       } else {
-        a = 0.45 * fade;
-        cc = col;
-        if (!dith(x, y, 1 - (dx - 0.65) / 0.35)) continue;
+        a = (streak ? 0.7 : 0.4) * fade;
+        cc = streak ? lite : col;
+        if (!dith(x, y, 1.15 - (dx - 0.55) / 0.45)) continue;
       }
-      if (a < 0.04) continue;
-      if (up > 0.55 && !dith(x, y, (1 - up) / 0.45 + 0.1)) continue;
+      if (a < 0.05) continue;
+      if (up > 0.5 && !dith(x, y, (1 - up) / 0.5 + 0.15)) continue;
       put(p, x, y, cd, withA(cc, a), true);
     }
   }
@@ -1853,12 +1837,12 @@ function coinSpr(p: Px, x: number, y: number, d: number, spin: number, vis: numb
 
 /** Руны: 5×7 для крупной, 3×4 для малой. */
 const RUNES_L = [
-  ['x...x', 'x..x.', 'x.x..', 'xx...', 'x.x..', 'x..x.', 'x...x'],
-  ['..x..', '.x.x.', 'x...x', '.x.x.', '..x..', '..x..', '..x..'],
-  ['x...x', 'xx.xx', 'x.x.x', 'x...x', 'x...x', 'x...x', 'x...x'],
-  ['xxxx.', 'x..x.', 'x.x..', 'xx...', 'x.x..', 'x..x.', 'x...x'],
-  ['x....', 'xx...', 'x.x..', 'x..x.', 'x.x..', 'xx...', 'x....'],
-  ['..x..', '..x..', 'x.x.x', '.xxx.', '..x..', '..x..', '..x..'],
+  ['x....x.', 'x...x..', 'x..x...', 'x.x....', 'xx.....', 'x.x....', 'x..x...', 'x...x..', 'x....x.'],
+  ['...x...', '..x.x..', '.x...x.', 'x.....x', '.x...x.', '..x.x..', '...x...', '...x...', '...x...'],
+  ['x.....x', 'xx...xx', 'x.x.x.x', 'x..x..x', 'x.x.x.x', 'xx...xx', 'x.....x', 'x.....x', 'x.....x'],
+  ['xxxx...', 'x...x..', 'x....x.', 'x...x..', 'xxxx...', 'x.x....', 'x..x...', 'x...x..', 'x....x.'],
+  ['x......', 'xx.....', 'x.x....', 'x..x...', 'x...x..', 'x..x...', 'x.x....', 'xx.....', 'x......'],
+  ['x..x..x', '.x.x.x.', '..xxx..', '...x...', '...x...', '...x...', '...x...', '...x...', '...x...'],
 ];
 const RUNES_S = [
   ['x.x', 'xx.', 'x.x', 'x..'],
@@ -1889,9 +1873,11 @@ function rune(p: Px, j: number, x: number, y: number, d: number, vis: number, co
     }
 }
 
-/** Свет до открытия: щели и скважина горят цветом редкости. */
+/** Свет до открытия: щели и скважина горят цветом редкости, рядом — отсвет. */
 function leakFx(p: Px, f: CFrame, k: number, col: RGBA, lite: RGBA): void {
   if (k <= 0.01) return;
+  const w = f.w;
+  const halo: number[] = [];
   for (let i = 0; i < f.w * f.h; i++) {
     if (f.emi[i] !== 1) continue;
     const j = i * 4;
@@ -1899,6 +1885,14 @@ function leakFx(p: Px, f: CFrame, k: number, col: RGBA, lite: RGBA): void {
     p.data[j] = c[0];
     p.data[j + 1] = c[1];
     p.data[j + 2] = c[2];
+    for (const n of [i - w, i + w]) if (n >= 0 && n < f.w * f.h && f.emi[n] !== 1 && f.pal[n] >= 0) halo.push(n);
+  }
+  const a = 0.5 * k;
+  for (const n of halo) {
+    const j = n * 4;
+    p.data[j] = Math.min(255, p.data[j] + col[0] * a);
+    p.data[j + 1] = Math.min(255, p.data[j + 1] + col[1] * a);
+    p.data[j + 2] = Math.min(255, p.data[j + 2] + col[2] * a);
   }
 }
 
@@ -2146,7 +2140,9 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
   }
 
   // Столб света из проёма.
-  beam(p, o, o.beam, col, lite, tier === 'legend' ? 1 : tier === 'epic' ? 0.6 : 0.2);
+  if (tier === 'rare') beam(p, o, t, o.beam, col, lite, 22, 0.62);
+  if (tier === 'epic') beam(p, o, t, o.beam, col, lite, 58, 0.5);
+  if (tier === 'legend') beam(p, o, t, o.beam, col, lite, 84, 0.66);
   if (tier === 'legend') burst(p, o, kf(t, [[1.08, 0], [1.12, 1], [1.5, 0]]), t * 0.6, col, lite);
 
   // Кольцо света по полу (редкий — при открытии, эпик — на посадке).
@@ -2207,13 +2203,13 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
     for (let j = 0; j < 6; j++) {
       const t0 = 0.8 + j * 0.04;
       const u = t - t0;
-      if (u < 0 || t > 1.64) continue;
+      if (u < 0 || t > 1.52) continue;
       const rise = clamp01(u / 0.35);
       const e = 1 - (1 - rise) ** 2;
       const a = (j / 6) * PI * 2 + u * ((2 * PI) / 1.2) + 0.4;
       const r = 4 + 24 * e;
       const z = H + 2 + 12 * e - 3 * clamp01((u - 0.35) / 0.4) + Math.sin(u * 7 + j) * 1.2;
-      const vis = clamp01(rise * 3) * clamp01((1.64 - t) / 0.28);
+      const vis = clamp01(rise * 3) * clamp01((1.52 - t) / 0.24);
       const base = chestPt({ ...o, lift: 0 }, [0, 0, 0]);
       const w: V3 = [base[0] + Math.cos(a) * r * 1.15, base[1] + Math.sin(a) * r * 0.8, z];
       const [x, y, d] = sp(w);
@@ -2234,27 +2230,36 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
         const z = 6 + rnd(j, 23) * 16 * (1 - u) + 6 * u;
         const w: V3 = [Math.cos(a) * r, Math.sin(a) * r * 0.7, z];
         const [x, y, d] = sp(chestPt({ ...o, shx: 0, roll: 0 }, w));
-        const c = tr === 0 ? lite : withA(col, 0.7 - tr * 0.2);
+        const c = tr === 0 ? lite : withA(col, 0.75 - tr * 0.2);
         if (tr === 0) {
-          put(p, x, y, d, c);
+          put(p, x, y, d, WHITE);
+          put(p, x + 1, y, d, lite);
+          put(p, x - 1, y, d, lite);
+          put(p, x, y + 1, d, lite);
+          put(p, x, y - 1, d, lite);
           if (HI) {
-            put(p, x + 1, y, d, withA(col, 0.8), true);
-            put(p, x, y + 1, d, withA(col, 0.8), true);
+            put(p, x + 2, y, d, withA(col, 0.8), true);
+            put(p, x - 2, y, d, withA(col, 0.8), true);
+            put(p, x, y + 2, d, withA(col, 0.8), true);
+            put(p, x, y - 2, d, withA(col, 0.8), true);
           }
-        } else put(p, x, y, d, c, true);
+        } else {
+          put(p, x, y, d, c, true);
+          if (HI) put(p, x + 1, y, d, withA(col, 0.4), true);
+        }
       }
     }
     // Монеты: вылет из проёма, падение на пол на своей глубине, отскок, покой.
-    const G = 170;
+    const G = 220;
     for (let j = 0; j < 16; j++) {
       const t0 = 1.12 + j * 0.03;
       const tau = t - t0;
       if (tau < 0) continue;
       const a = rnd(j, 31) * PI * 2;
-      const hv = 12 + rnd(j, 32) * 16;
+      const hv = 14 + rnd(j, 32) * 18;
       const vx = Math.cos(a) * hv * 1.2;
-      const vy = Math.sin(a) * hv * 0.6 + 4;
-      const vz = 48 + rnd(j, 33) * 22;
+      const vy = Math.sin(a) * hv * 0.6 + 5;
+      const vz = 72 + rnd(j, 33) * 26;
       const x0 = (rnd(j, 34) - 0.5) * 16;
       const y0 = (rnd(j, 35) - 0.5) * 8;
       const z0 = H + 1;
@@ -2320,19 +2325,33 @@ function idleFx(p: Px, kind: Kind, t: number, o: Pose): void {
   }
 }
 
-/** Точки-якоря в процентах рамки: куда летит ключ (скважина в покое). */
-export function anchors(res: Res = 'l'): Record<string, [number, number]> {
-  const cv = setup(res);
+/** Скважина в покое — в долях рамки (туда летит ключ). */
+function lockAnchor(): [number, number] {
+  const cv = setup('l');
   const [x, y] = sp(chestPt(REST, [0, PLATE_Y, KEY_Z]));
-  return {
-    lock: [
-      Math.round(((x - cv.bx) / cv.box) * 1000) / 10,
-      Math.round(((y - cv.by) / cv.box) * 1000) / 10,
-    ],
-  };
+  return [
+    Math.round(((x - cv.bx) / cv.box) * 1000) / 1000,
+    Math.round(((y - cv.by) / cv.box) * 1000) / 1000,
+  ];
 }
+const LOCK = lockAnchor();
 
-export const ANCHORS = anchors('l');
+export const STRIPS: Record<string, StripDef> = {
+  'idle-common': { frames: 24, fps: 12, loop: true, anchors: { lock: LOCK } },
+  'idle-rare': { frames: 24, fps: 12, loop: true, anchors: { lock: LOCK } },
+  'idle-epic': { frames: 24, fps: 12, loop: true, anchors: { lock: LOCK } },
+  'idle-legend': { frames: 24, fps: 12, loop: true, anchors: { lock: LOCK } },
+  'idle-mystery': { frames: 24, fps: 12, loop: true },
+  /** Два настоящих оборота за 0,92 с; кадр 0 — поза неподвижного. Только сцена — крупная. */
+  'mystery-spin': { frames: SPIN_N, fps: 24, loop: true, res: ['l'] },
+  'open-common': openDef('common'),
+  'open-rare': openDef('rare'),
+  'open-epic': openDef('epic'),
+  'open-legend': openDef('legend'),
+};
+function openDef(t: Tier): StripDef {
+  return { frames: OPEN_N[t], fps: 24, loop: false, marks: OPEN_MARKS[t], anchors: { lock: LOCK } };
+}
 
 // Служебное для тестов: поза полосы.
 export const __test = { poseOf, REST, parse };
