@@ -27,8 +27,6 @@ import {
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Strike, Zone } from '../dungeon-sim';
-import { heroSprite } from '../dungeon-sprites';
-import type { Dir4 } from '../dungeon-sprites';
 import { F14_DIAL, F14_GEO, F14_MARK, F14_MECH, F14_SAND, F14_TOP } from './f14';
 import { MAP_F14_DIAL, MAP_F14_SAND } from './f14-map';
 import { F14_FX, KNIFE_ANG, LORD, NOON, rewindTrail, worldStopped } from './f14-brains';
@@ -38,6 +36,7 @@ import './f14-mob-sand';
 import './f14-mob-rewinder';
 import './f14-mob-reaper';
 import './f14-mob-keeper';
+import './f14-mob-double';
 
 type RGBA = [number, number, number, number];
 
@@ -668,93 +667,6 @@ registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
   if (pose.look === 'elite') q.outline(GOLDK);
   if (pose.flash) q = q.tint(WHITE, 0.85);
   const out: MobFrame = { img: q.canvas(), ax: c, ay: c + 4, eye: null };
-  frames.set(key, out);
-  return out;
-});
-
-// ---------------------------------------------------------------------------
-// Двойник из прошлого: лист самого героя в сепии, сквозь него шахматкой
-// проступает пол, по краю — золотой кант. Ступень — как у героя (из стора,
-// ленивым импортом, как у этажа 7).
-// ---------------------------------------------------------------------------
-
-let gearGet: (() => number) | null = null;
-let gearAsked = false;
-function heroTier(): number {
-  if (!gearAsked && typeof window !== 'undefined') {
-    gearAsked = true;
-    void import('../../store')
-      .then((S) => {
-        gearGet = () => S.useFinanceStore.getState().dungeon?.gear?.robe?.tier ?? 8;
-      })
-      .catch(() => undefined);
-  }
-  return gearGet?.() ?? 8;
-}
-
-const dirOf = (face: number): Dir4 => {
-  const c = Math.cos(face);
-  const s = Math.sin(face);
-  return Math.abs(c) > Math.abs(s) * 1.1 ? (c < 0 ? 'left' : 'right') : s < 0 ? 'up' : 'down';
-};
-
-function pastSelf(tier: number, dir: Dir4, row: number, fade: number): Px | null {
-  const c = heroSprite(tier, dir, row);
-  if (!c) return null;
-  const g = c.getContext('2d');
-  if (!g) return null;
-  const img = g.getImageData(0, 0, c.width, c.height);
-  const p = new Px(c.width + 4, c.height + 4);
-  // Засвеченная плёнка: светлота — своя у каждого пикселя героя (форма и
-  // забрало читаются), цвет — бледный янтарь; второй отпечаток со сдвигом —
-  // двойная экспозиция. Сепия по тонам уводила тёмный доспех Т8 в бурую
-  // бочку, а свои цвета с янтарём давали оливковое пятно — ни то ни другое
-  // не узнавалось как «я». Контур — золото.
-  const PALE = hx('#ffe6a8');
-  const DEEP = hx('#5a3a14');
-  const px = (x: number, y: number): RGBA | null => {
-    const i = (y * c.width + x) * 4;
-    if (!img.data[i + 3]) return null;
-    const l = Math.min(
-      1,
-      ((img.data[i] * 0.3 + img.data[i + 1] * 0.55 + img.data[i + 2] * 0.15) / 255) * 1.5 + 0.12,
-    );
-    return l < 0.2 ? DEEP : mixc(DEEP, PALE, l);
-  };
-  // Отпечаток прошлого кадра: на пиксель выше и левее, еле виден.
-  for (let y = 0; y < c.height; y++)
-    for (let x = 0; x < c.width; x++) {
-      const o = px(x, y);
-      if (o) p.set(x + 1, y + 1, alpha(PALE, 0.26 * fade));
-    }
-  for (let y = 0; y < c.height; y++)
-    for (let x = 0; x < c.width; x++) {
-      const o = px(x, y);
-      if (!o) continue;
-      const line = y % 4 === 3;
-      p.set(x + 2, y + 2, alpha(o, (line ? 0.66 : 0.88) * fade));
-    }
-  p.outline(hx('#ffcf5a', 210));
-  return p;
-}
-
-registerMobPainter('f14_double', (m: Mob, pose: MobPose) => {
-  const tier = heroTier();
-  const dir = dirOf(m.face);
-  const now = paintSim()?.time ?? 0;
-  const since = pose.mode !== 'dying' && m.data.swing !== undefined ? now - m.data.swing : 9;
-  const sp = Math.hypot(m.vx, m.vy);
-  const row = since < 0.3 ? 4 : sp > 0.4 ? pose.frame % 4 : 0;
-  const dk = pose.mode === 'dying' ? deathK(pose) : 0;
-  const key = `f14_double|${tier}|${dir}|${row}|${pose.flash ? 1 : 0}|${dk}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  const p = pastSelf(tier, dir, row, 1 - dk * 0.22);
-  if (!p) return null;
-  let q = p;
-  if (dk) q = scatter(q, dk, 17, [hx('#ffe9a0'), hx('#fff4c8')]);
-  if (pose.flash) q = q.tint(WHITE, 0.85);
-  const out: MobFrame = { img: q.canvas(), ax: 10, ay: 18, eye: null };
   frames.set(key, out);
   return out;
 });
