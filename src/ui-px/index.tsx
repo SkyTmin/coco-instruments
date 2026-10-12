@@ -80,7 +80,7 @@ export function Panel({
         'px-panel',
         `px-panel--${material}`,
         `pxk-frame-${material}`,
-        stage && 'px-stage pxt-stone',
+        stage && 'px-stage pxt-stone px-nofill',
         tight && 'is-tight',
         className,
       )}

@@ -90,6 +90,9 @@ for (const piece of PIECES) {
         `  border-image-slice: var(--pxk-${piece.name}-s);\n  border-image-width: var(--pxk-${piece.name}-w);\n` +
         `  border-image-repeat: ${rep};\n}`,
     );
+    // Without the centre (`fill` paints over the background): stages show their floor tile.
+    if (piece.fill)
+      css.push(`.pxk-${piece.name}.px-nofill {\n  border-image-slice: ${m.join(' ')};\n}`);
   } else if (piece.kind === 'icon') {
     css.push(
       `.pxi-${piece.name.slice(2)} {\n  -webkit-mask-image: ${url};\n  mask-image: ${url};\n  --i-w: ${p.w};\n  --i-h: ${p.h};\n}`,

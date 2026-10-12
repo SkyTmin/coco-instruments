@@ -40,6 +40,8 @@
   display: grid;
 }
 .nur-stage {
+  /* the wall dimmed by a flat veil: the pet and the text read first */
+  background-image: linear-gradient(rgb(12 10 18 / 0.55), rgb(12 10 18 / 0.55)), var(--tile);
   display: grid;
   min-width: 0;
   gap: calc(3 * var(--u));
@@ -111,6 +113,7 @@
 }
 .nur-id {
   grid-area: id;
+  text-shadow: var(--u) var(--u) 0 var(--px-ink);
   display: grid;
   gap: calc(2 * var(--u));
   min-width: 0;

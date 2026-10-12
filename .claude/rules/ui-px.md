@@ -41,6 +41,9 @@ Moonlighter, Darkest Dungeon, Octopath, Diablo, PoE2). Study only — never copy
   `.pxk-NAME`. Icons: `.pxi-NAME` (mask, colour = `currentColor`). Images: `--pximg-NAME`, `-w`, `-h`.
 - **Pitfall:** the `border` shorthand resets `border-image` — set `border-width/-style/-color`
   longhands only. State switching goes through `--b/--bs/--bw` vars (buttons, slots).
+- **Pitfall:** a frame's `fill` paints its centre OVER the element background — a stage with a
+  floor tile looked flat. `Panel stage` adds `px-nofill` (generated `.pxk-NAME.px-nofill` = slice
+  without `fill`). Text over the tile: a flat veil (`linear-gradient` of one colour) + ink shadow.
 - Defaults use `:where()` (zero specificity) so variant classes win regardless of order.
 - New piece: add to `PIECES` with its declared slice, bake, run `npx vitest run src/ui-px`
   (`paint.test.ts`: slice = measured, deterministic, icons 9×9 white, no half-alpha, unique names).
