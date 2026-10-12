@@ -249,7 +249,13 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
   if (!hoard) r.ell(T, [0.9, 0, 2.6], [1.4, 1.6, 2.3], FUR_LT_M);
   else
     for (let i = 0; i < 3; i++)
-      r.dot(T.p(2.15, (i - 1) * 0.9, 2.0 + (i % 2) * 1.1), o.rune > 0.6 ? RUNE : RUNE_DIM, o.rune, 1, 1);
+      r.dot(
+        T.p(2.15, (i - 1) * 0.9, 2.0 + (i % 2) * 1.1),
+        o.rune > 0.6 ? RUNE : RUNE_DIM,
+        o.rune,
+        1,
+        1,
+      );
   // Полы капюшона-плаща за спиной (отстают при беге).
   if (!hoard) {
     const a = T.p(-1.6, 0, 5.4);
