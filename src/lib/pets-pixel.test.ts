@@ -13,6 +13,7 @@ import * as Dragon from './pets-pixel/dragon';
 import * as Ferret from './pets-pixel/ferret';
 import * as Fox from './pets-pixel/fox';
 import * as Mole from './pets-pixel/mole';
+import * as Mouse from './pets-pixel/mouse';
 import * as Owl from './pets-pixel/owl';
 import * as Raccoon from './pets-pixel/raccoon';
 import * as Raven from './pets-pixel/raven';
@@ -1112,5 +1113,154 @@ describe('пиксельный крот', () => {
     const b = W.poseAt('walk', 0.75);
     expect(b.fRz).toBeGreaterThan(1);
     expect(b.fLz).toBe(0);
+  });
+});
+
+describe('пиксельная мышь', () => {
+  const W = Mouse;
+  const at = (i: number) => {
+    const o = W.poseAt('work', i / W.FPS);
+    const S = W.skel(o);
+    return { o, S, T: W.tokAt(o, S), lag: W.lagOf('work', i / W.FPS) };
+  };
+  const dist = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  /** Пиксели латуни жетона правее середины кадра (жетон на цепочке — в левой лапе, левее). */
+  const brassRight = (i: number, r: 's' | 'l', v: number) => {
+    const p = W.mouseFrame('work', i, r, v);
+    const cv = W.RES[r];
+    const x0 = cv.bx + cv.box / 2 + Math.round(cv.box / 48);
+    const pal = W.PAL_V[v][W.P_BRASS].map((c) => c.slice(0, 3).join(','));
+    let n = 0;
+    for (let y = 0; y < p.h; y++)
+      for (let x = x0; x < p.w; x++) {
+        const j = (y * p.w + x) * 4;
+        if (p.data[j + 3] === 255 && pal.includes(`${p.data[j]},${p.data[j + 1]},${p.data[j + 2]}`)) n++;
+      }
+    return n;
+  };
+
+  it('рисунок детерминирован; золотой рисует сам, на том же холсте', () => {
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1]) {
+        const a = W.mouseFrame('work', 26, r, v);
+        const b = W.mouseFrame('work', 26, r, v);
+        expect([a.w, a.h]).toEqual([W.RES[r].cw, W.RES[r].ch]);
+        expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
+      }
+    const plain = W.mouseFrame('idle', 0, 's', 0).data;
+    const gold = W.mouseFrame('idle', 0, 's', 1).data;
+    expect(Buffer.from(plain).equals(Buffer.from(gold))).toBe(false);
+  });
+
+  it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, только свой золотой', () => {
+    const m = PET_PX.mouse;
+    expect(m.box).toBe(W.RES.s.box);
+    expect(m.large?.box).toBe(W.RES.l.box);
+    for (const a of ANIMS) {
+      for (const set of [m, m.large!]) {
+        expect(set.anims[a].n).toBe(W.FRAMES[a]);
+        expect(set.anims[a].fps).toBe(W.FPS);
+      }
+      expect(PIXEL_PETS.mouse.anims[a]).toEqual({ n: W.FRAMES[a], fps: W.FPS });
+    }
+    expect(PIXEL_PETS.mouse.variants).toEqual([1]);
+    expect(PET_SPRITES.mouse).toBeUndefined();
+    const sec = (a: Anim) => W.FRAMES[a] / W.FPS;
+    expect([sec('idle'), sec('sleep'), sec('walk'), sec('work')]).toEqual([3, 3, 1, 2]);
+    expect(Math.abs(sec('happy') - 1.1)).toBeLessThan(0.05);
+    expect(Math.abs(sec('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {
+    const T = (a: Anim) => W.FRAMES[a] / W.FPS;
+    const rest = W.poseAt('idle', 0);
+    const lag0 = W.lagOf('idle', 0);
+    for (const a of ['happy', 'work', 'attack'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), rest)]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), lag0, 0.05)]).toEqual([a, []]);
+    }
+    for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), W.poseAt(a, 0))]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), W.lagOf(a, 0), 0.05)]).toEqual([a, []]);
+    }
+  });
+
+  it('трюк: жетон лежит на полу перед правой ступнёй; в кадре касания пальцы на нём', () => {
+    const before = at(12);
+    expect(before.o.tokU).toBe(0);
+    const T0 = before.T!;
+    expect(T0.c[2]).toBeLessThan(1);
+    const foot = before.S.foot[1];
+    expect(T0.c[1]).toBeGreaterThan(foot[1] + 4);
+    expect(Math.abs(T0.c[0] - foot[0])).toBeLessThan(2.5);
+    // Заметила: глаза шире, блик на жетоне.
+    expect(before.o.eye).toBe('wide');
+    expect(before.o.glint).toBeGreaterThan(0.3);
+    // Кадр касания — целый кадр; за кадр до него жетон ещё на полу, лапа над ним.
+    const gi = Math.round(W.GRAB * W.FPS);
+    expect(gi / W.FPS).toBe(W.GRAB);
+    expect(at(gi - 1).o.tokU).toBe(0);
+    const g = at(gi);
+    expect(g.o.tokU).toBeGreaterThan(0);
+    expect(dist(g.S.grip[1], T0.c)).toBeLessThan(1);
+    expect(dist(g.T!.c, T0.c)).toBeLessThan(0.05);
+    // Достаёт, нагнувшись и присев: рука не длиннее себя.
+    expect(g.o.bow).toBeGreaterThan(0.3);
+    expect(g.o.cz).toBeGreaterThan(1.5);
+  });
+
+  it('жетон в правой лапе от касания до пелерины, поднят над плечом, потом спрятан', () => {
+    const gi = Math.round(W.GRAB * W.FPS);
+    for (let i = gi; i < 39; i++) {
+      const { S, T } = at(i);
+      expect([i, T !== null]).toEqual([i, true]);
+      expect([i, dist(T!.c, S.grip[1]) < 1]).toEqual([i, true]);
+    }
+    // Поднят: над плечом и сбоку от головы.
+    const hi = at(28);
+    expect(hi.T!.c[2]).toBeGreaterThan(hi.S.sh[1][2] + 4);
+    expect(hi.T!.c[0]).toBeGreaterThan(9);
+    expect(hi.o.glint).toBeGreaterThan(0.5);
+    // Под кокеткой: внутри пелерины, спереди его закрывает ткань (не разрез).
+    const tk = Math.ceil(W.TUCKED * W.FPS);
+    const u = at(tk);
+    expect(u.o.tuck).toBe(1);
+    expect(W.underCape(u.o, u.S, u.lag, u.T!.c)).toBe(true);
+    // После — жетона нет, подмигнула.
+    for (let i = tk + 1; i < W.FRAMES.work; i++) expect(at(i).T).toBeNull();
+    expect(W.poseAt('work', 1.72).wink).toBeGreaterThan(0.5);
+  });
+
+  it('жетон уходит ЗА край пелерины: виден, пока поднят и у края, не виден под кокеткой', () => {
+    const tk = Math.ceil(W.TUCKED * W.FPS);
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1]) {
+        expect([r, v, brassRight(28, r, v) > 0]).toEqual([r, v, true]);
+        expect([r, v, brassRight(34, r, v) > 0]).toEqual([r, v, true]);
+        expect([r, v, brassRight(tk, r, v)]).toEqual([r, v, 0]);
+      }
+  });
+
+  it('атака: в кадре удара резцы наголо, морда вверх, когти; сон — сидит, закутана, уши обвисли', () => {
+    const strike = W.poseAt('attack', 0.42);
+    expect(strike.jaw).toBeGreaterThan(0.9);
+    expect(strike.claw).toBe(1);
+    expect(strike.nod).toBeLessThan(-0.2);
+    expect(strike.swipe).toBeGreaterThanOrEqual(0);
+    const sleep = W.poseAt('sleep', 1);
+    expect([sleep.sit, sleep.wrap, sleep.earDrop, sleep.eye]).toEqual([1, 1, 1, 'sleep']);
+  });
+
+  it('ходьба на цыпочках: ноги по очереди, опорная стоит на месте', () => {
+    const a = W.poseAt('walk', 0.125);
+    expect(a.fLz).toBeGreaterThan(1);
+    expect(a.fRz).toBe(0);
+    const b = W.poseAt('walk', 0.375);
+    expect(b.fRz).toBeGreaterThan(1);
+    expect(b.fLz).toBe(0);
+    const R0 = W.skel(a).foot[1];
+    const R1 = W.skel(W.poseAt('walk', 0.6)).foot[1];
+    expect(W.poseAt('walk', 0.6).fRz).toBe(0);
+    expect(dist(R0, R1)).toBeLessThan(0.01);
   });
 });

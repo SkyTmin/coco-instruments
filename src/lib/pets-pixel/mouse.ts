@@ -71,14 +71,14 @@ const P_PINK = 1;
 const P_CREAM = 2;
 const P_CAPE = 3;
 const P_ROPE = 4;
-const P_BRASS = 5;
+export const P_BRASS = 5;
 const P_MOUTH = 6;
 const P_TOOTH = 7;
 
 const MOUTH = ramp('#24070a', '#45111a', '#6e2228', '#9a3c40', '#d06a6a', '#ee8f8a');
 const TOOTH = ramp('#6e6658', '#968e7e', '#bcb4a2', '#dad4c6', '#eeeae0', '#f9f7f2', '#ffffff');
 
-const PAL_V: RGBA[][][] = [
+export const PAL_V: RGBA[][][] = [
   [
     // Светло-серый мех: тёплая тень → серый → почти белый на свету.
     ramp(
@@ -670,7 +670,7 @@ function happyPose(t: number): Pose {
   o.tailUp = 0.8 * env;
   o.tailSw = 0.4 * Math.sin(t * TAU * 2.5) * env;
   o.whisk = 0.8 * Math.sin(t * TAU * 5) * env;
-  return o;
+  return settle(o, t, T, 0.2);
 }
 
 /**
@@ -836,7 +836,7 @@ function workPose(t: number): Pose {
 }
 const PROPS = ['tok', 'tokU', 'tuck', 'glint', 'spark'] as const;
 
-/** Атака: присела, лапы с когтями у щёк → бросок к зрителю, резцы наголо, когти → проводка. */
+/** Атака: присела, лапы с когтями вскинуты у щёк → бросок к зрителю, резцы наголо, лапы крест-накрест вниз → проводка. */
 function attackPose(t: number): Pose {
   const T = dur('attack');
   const o: Pose = { ...REST };
@@ -868,10 +868,10 @@ function attackPose(t: number): Pose {
   ]);
   o.eye = t < 0.7 ? 'angry' : 'open';
   o.grin = REST.grin * (1 - bump(t, 0, T));
-  // Лапы: у щёк когтями вперёд → вперёд к зрителю → накрест вниз → на место.
-  const W: V3 = [-1.0, 0.6, 8.6];
-  const S: V3 = [-3.0, 6.8, 6.6];
-  const F: V3 = [-4.6, 4.4, 0.8];
+  // Лапы: вскинуты у щёк когтями вверх → удар вперёд-вниз перед грудью → накрест вниз → на место.
+  const W: V3 = [1.0, 1.0, 11.5];
+  const S: V3 = [-3.4, 6.0, 6.0];
+  const F: V3 = [-4.4, 4.6, 2.0];
   const arm = (j: number, d: number): number =>
     kf(t - d, [
       [0, 0],
@@ -902,7 +902,10 @@ function attackPose(t: number): Pose {
   o.turn = 0.14 * Math.sin(((t - 0.52) / 0.16) * TAU) * bump(t, 0.52, 0.76);
   o.chest = 0.8 * bump(t, 0.1, 0.5);
   o.whisk = 0.8 * bump(t, 0.3, 0.6);
-  return o;
+  // Атака: следы когтей к концу уже погасли — их не тянем к покою.
+  const r = settle(o, t, T, 0.2);
+  r.swipe = o.swipe;
+  return r;
 }
 
 /** Сон: сидит, закутавшись в пелерину; уши обвисли, хвост вокруг; медленное дыхание. */
@@ -1463,22 +1466,44 @@ function capeInner(): number {
   return P_CAPE;
 }
 
-function cape(out: PartF[], rods: Rod[], c: Ctx): void {
-  const { S, o, lag } = c;
+/** Оболочка пелерины: середина, оси, радиусы (отстаёт от тела на пружине). */
+export function capeFrame(o: Pose, S: Skel, lag: Lag): { c: V3; ax: [V3, V3, V3]; r: V3 } {
   const k = S.k;
-  // Отстаёт от тела: качается вбок и вздувается при подъёме/падении (вокруг плеч).
+  // Качается вбок и вздувается при подъёме/падении (вокруг плеч).
   const sw = -0.05 * lag.capeX;
   const fl = 0.04 * lag.capeZ;
   const piv = S.up([0, 0, 14]);
   const rot = (v: V3) => pitchX(rollY(v, sw), -fl);
   const c0 = S.up(CAPE_C);
-  const cc = add(piv, rot(sub(c0, piv)));
-  const ax = S.bax.map((e) => rot(e)) as [V3, V3, V3];
   const br = 1 + 0.03 * o.chest;
+  return {
+    c: add(piv, rot(sub(c0, piv))),
+    ax: S.bax.map((e) => rot(e)) as [V3, V3, V3],
+    r: [CAPE_R[0] * k * br, CAPE_R[1] * k * br, CAPE_R[2] * k],
+  };
+}
+
+/** Точка внутри пелерины и спереди её закрывает ткань (кокетка, не разрез): так прячется жетон. */
+export function underCape(o: Pose, S: Skel, lag: Lag, p: V3): boolean {
+  const F = capeFrame(o, S, lag);
+  const d = sub(p, F.c);
+  const q = F.ax.map((e, j) => dot(d, e) / F.r[j]);
+  if (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] >= 1) return false;
+  WRAP = o.wrap;
+  const qy = Math.sqrt(Math.max(0, 1 - q[0] * q[0] - q[2] * q[2]));
+  return !capeCut(q[0], qy, q[2]);
+}
+
+function cape(out: PartF[], rods: Rod[], c: Ctx): void {
+  const { S, o, lag } = c;
+  const k = S.k;
+  const F = capeFrame(o, S, lag);
+  const cc = F.c;
+  const ax = F.ax;
   out.push({
     c: cc,
     ax,
-    r: [CAPE_R[0] * k * br, CAPE_R[1] * k * br, CAPE_R[2] * k],
+    r: F.r,
     pal: P_CAPE,
     id: nid(),
     bias: -0.02,
@@ -2072,7 +2097,7 @@ function eyeL(
         mode === 'happy'
           ? cy - 0.6 + Math.abs(u) * 2.2
           : mode === 'sleep'
-            ? cy + 1.6 - (1 - u * u) * 1.8
+            ? cy + 0.2 + (1 - u * u) * 1.6
             : cy + 1.2 + u * u * 0.6;
       p.set(cx + x, Math.round(yy), d);
       if (Math.abs(x) <= 3) p.set(cx + x, Math.round(yy) + 1, d);
@@ -2335,29 +2360,34 @@ function sparkFx(p: Px, mask: Uint8Array, c: Ctx): void {
   }
 }
 
-/** Следы когтей: три дуги у каждой лапы — только по пустому, лицо не перечёркивают. */
+/** Следы когтей: три косые царапины у каждой лапы сверху-снаружи вниз-внутрь — только по пустому. */
 function swipeFx(p: Px, mask: Uint8Array, c: Ctx): void {
   const { o, S } = c;
   const u = o.swipe;
   const col = hx('#fff4dc');
   const dim = hx('#f0c070', 220);
   const vis = u < 0.55 ? 1.1 : (1 - u) / 0.45;
-  const span = Math.min(1, u * 1.8);
+  const span = Math.min(1, u * 2.2);
+  const k = RR * S.k;
   for (const j of [0, 1]) {
     const side = j === 0 ? -1 : 1;
-    const [cx, cy] = scr(S.sh[j]);
+    const [sx, sy] = scr(S.sh[j]);
+    const dx = -side * 0.62;
+    const dy = 1;
+    const dl = Math.hypot(dx, dy);
     for (let n = 0; n < 3; n++) {
-      const R = (10.5 + n * 1.6) * RR * S.k;
-      const a0 = -1.25;
-      const a1 = a0 + 2.0 * span;
-      for (let a = a0; a <= a1; a += 0.5 / R) {
-        const ang = side > 0 ? a : Math.PI - a;
-        const x = Math.round(cx + Math.cos(ang) * R);
-        const y = Math.round(cy + Math.sin(ang) * R);
+      const x0 = sx + side * (8.5 + n * 2.0) * k;
+      const y0 = sy - (9 - n * 1.0) * k;
+      const L = 17 * k * span;
+      for (let s = 0; s <= L; s += 0.5) {
+        const v = s / (17 * k);
+        const bend = Math.sin(Math.PI * v) * 1.6 * k;
+        const x = Math.round(x0 + (dx / dl) * s + side * bend);
+        const y = Math.round(y0 + (dy / dl) * s);
         if (x < 0 || y < 0 || x >= p.w || y >= p.h || mask[y * p.w + x]) continue;
-        const tl = (a - a0) / Math.max(1e-3, a1 - a0);
+        const tl = s / Math.max(1e-3, L);
         if (!dith(x, y, vis * (0.35 + 0.75 * tl))) continue;
-        p.set(x, y, tl > 0.55 ? col : dim);
+        p.set(x, y, tl > 0.5 ? col : dim);
       }
     }
   }
@@ -2365,7 +2395,7 @@ function swipeFx(p: Px, mask: Uint8Array, c: Ctx): void {
 
 /** Сон: буквы «z» поднимаются над головой (вверх в мире) и тают. */
 const Z_S = ['zzz', '.z.', 'zzz'];
-const Z_L = ['zzzz', '..z.', '.z..', 'zzzz'];
+const Z_L = ['zzzzz', '...z.', '..z..', '.z...', 'zzzzz'];
 function zzz(p: Px, mask: Uint8Array, c: Ctx): void {
   const { h, t } = c;
   const col = hx('#f4ead8');
