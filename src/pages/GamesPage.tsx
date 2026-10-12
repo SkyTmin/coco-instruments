@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { AnimatedNumber } from '@/components/ui';
@@ -12,8 +13,8 @@ import { tapLight } from '@/lib/haptics';
 import { useGameAudio } from '@/lib/use-game-audio';
 import { AudioToggles } from '@/components/AudioToggles';
 import { GameScreen } from '@/game-shell/GameScreen';
-
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+import { fmtNum as fmt, useT } from '@/i18n';
+import { GameSettings } from '@/settings';
 
 /**
  * Казино — здание двора (v2.66). Каторга — главная игра, автоматы — её
@@ -29,6 +30,8 @@ export function GamesPage() {
   const slotsBest = useFinanceStore((s) => s.slotsBest);
   const scatterSpins = useFinanceStore((s) => s.scatterSpins);
   const scatterBest = useFinanceStore((s) => s.scatterBest);
+  const t = useT();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useGameAudio('hall');
   const level = levelFromXp(xp);
@@ -51,9 +54,24 @@ export function GamesPage() {
       bg={<div className="yard-scene-bg" />}
       top={
         <GameTop
-          title="Казино"
+          title={t('hall.title')}
           onBack={() => nav(-1)}
-          right={<AudioToggles />}
+          right={
+            <>
+              <AudioToggles />
+              <button
+                type="button"
+                className="gx-round gx-round--dark"
+                aria-label={t('common.settings')}
+                onClick={() => {
+                  tapLight();
+                  setSettingsOpen(true);
+                }}
+              >
+                <KIcon name="gear" />
+              </button>
+            </>
+          }
           chips={
             <>
               <span className="gx-chip">
@@ -61,7 +79,7 @@ export function GamesPage() {
                 <AnimatedNumber value={balance} format={(n) => fmt(n)} duration={450} />
               </span>
               <span className="gx-chip">
-                <KIcon name="star" size={16} /> {level.level} ур.
+                <KIcon name="star" size={16} /> {t('common.level', { n: level.level })}
               </span>
             </>
           }
@@ -71,21 +89,25 @@ export function GamesPage() {
       <div className="gxh__cards">
         <GameCard
           autoFocus
-          title={theme.title}
+          title={t(`skins.${theme.id}.title`)}
           art={<span className="gxh-card__reels">{reels(['seven', 'star', 'bell'])}</span>}
-          tags={['3 барабана', '5 линий']}
-          stat={slotsSpins ? `${fmt(slotsSpins)} спинов · лучший ${fmt(slotsBest)}` : null}
+          tags={[t('hall.reels', { n: 3 }), t('hall.lines', { n: 5 })]}
+          stat={slotsSpins ? t('hall.stat', { n: slotsSpins, best: fmt(slotsBest) }) : null}
           onClick={() => go('/slots')}
         />
         <GameCard
-          title="Каскад"
+          title={t('hall.cascade')}
           art={<span className="gxh-card__reels">{reels(['diamond', 'grape', 'cherry'])}</span>}
-          tags={[`Поле ${SCATTER_COLS}×${SCATTER_ROWS}`, 'Сферы до ×500']}
-          stat={scatterSpins ? `${fmt(scatterSpins)} спинов · лучший ${fmt(scatterBest)}` : null}
+          tags={[
+            t('hall.grid', { cols: SCATTER_COLS, rows: SCATTER_ROWS }),
+            t('hall.orbsUpTo', { x: 500 }),
+          ]}
+          stat={scatterSpins ? t('hall.stat', { n: scatterSpins, best: fmt(scatterBest) }) : null}
           onClick={() => go('/scatter')}
         />
       </div>
-      <p className="gxh__note">Те же монеты, что в шахте. Купить их нельзя — только заработать</p>
+      <p className="gxh__note">{t('hall.note')}</p>
+      {settingsOpen && <GameSettings onClose={() => setSettingsOpen(false)} />}
     </GameScreen>
   );
 }
