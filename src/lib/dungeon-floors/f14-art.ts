@@ -35,6 +35,7 @@ import { F14_FX, KNIFE_ANG, LORD, NOON, REAPER, rewindTrail, worldStopped } from
 import './f14-mob-beetle';
 import './f14-mob-soldier';
 import './f14-mob-sand';
+import './f14-mob-rewinder';
 
 type RGBA = [number, number, number, number];
 
@@ -518,20 +519,6 @@ const EMPTY = (() => {
   };
 })();
 
-/** Звёздочки над головой оглушённого (кадр f из 4). */
-function stars(p: Px, cx: number, cy: number, rx: number, f: number): void {
-  const c1 = hx('#fff27a');
-  const c2 = hx('#ffffff');
-  for (let i = 0; i < 3; i++) {
-    const a = (f / 4) * TAU + (i / 3) * TAU;
-    const x = Math.round(cx + Math.cos(a) * rx);
-    const y = Math.round(cy + Math.sin(a) * rx * 0.35);
-    p.set(x, y, c2);
-    p.set(x - 1, y, c1);
-    p.set(x + 1, y, c1);
-  }
-}
-
 /** Смерть механизма: фигура оседает, из неё сыплются шестерёнки. */
 function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
   if (k <= 0) return p;
@@ -682,133 +669,6 @@ registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
   const out: MobFrame = { img: q.canvas(), ax: c, ay: c + 4, eye: null };
   frames.set(key, out);
   return out;
-});
-
-// ---------------------------------------------------------------------------
-// Отмотчик: тело — песочные часы в латунной раме, песок бирюзовый; капюшон
-// на верхней плите, руки-стрелки. Ранен — песок разгорается (окно перед
-// отмоткой); отматывается — песок идёт вверх. Кадр 22×27, земля 25.
-// ---------------------------------------------------------------------------
-
-const RW_SAND = tn('#1e5a66', '#3aa0b0', '#7ce0ec', '#d8fcff');
-const HOOD = tn('#0a0c14', '#181c2a', '#2a3042', '#44506a');
-
-type RwArm = 'down' | 'up' | 'strike';
-interface RwPose {
-  f: number;
-  legs: number;
-  arm: RwArm;
-  rew: boolean;
-  hot: boolean;
-  broken: boolean;
-}
-
-function drawRewinder(o: RwPose): Built {
-  const p = new Px(22, 27);
-  const G = 25;
-  const cx = 10;
-  // Ноги — латунные прутья.
-  const st = [1.2, 0, -1.2, 0][o.legs % 4];
-  limb(p, cx - 1.5, 18, cx - 2 - st, G - 1, 0.7, 0.6, BRASS);
-  limb(p, cx + 1.5, 18, cx + 2 + st, G - 1, 0.7, 0.6, BRASS);
-  p.set(Math.round(cx - 3 - st), G - 1, BRASS[0]);
-  p.set(Math.round(cx + 3 + st), G - 1, BRASS[0]);
-  // Корпус — песочные часы: отматывается — песок наверху растёт.
-  const k = o.rew ? 0.25 + 0.2 * (o.f % 2) : 0.6 - (o.f % 4) * 0.04;
-  hourglass(p, cx + 0.5, 5, 10, 14, k, !o.rew, o.f, {
-    sand: o.rew || o.hot ? TEAL : RW_SAND,
-    broken: o.broken,
-    glow: o.hot || o.rew ? TEAL_GLOW : null,
-  });
-  if (o.rew) for (let y = 8; y < 17; y += 2) p.set(Math.floor(cx), y - (o.f % 2), TEAL_GLOW);
-  // Капюшон на верхней плите.
-  shadeEll(p, cx + 0.5, 3.2, 3.2, 2.7, HOOD, 0.1);
-  const arm = (x0: number, y0: number, x1: number, y1: number) => {
-    stroke(p, x0, y0, x1, y1, IRON[2]);
-    const a = Math.atan2(y1 - y0, x1 - x0);
-    poly(
-      p,
-      [
-        [x1 + Math.cos(a) * 2, y1 + Math.sin(a) * 2],
-        [x1 - Math.sin(a) * 1.2, y1 + Math.cos(a) * 1.2],
-        [x1 + Math.sin(a) * 1.2, y1 - Math.cos(a) * 1.2],
-      ],
-      STEEL[3],
-    );
-  };
-  if (o.arm === 'up') {
-    arm(cx + 5, 9, cx + 8, 3);
-    arm(cx - 4, 9, cx - 6, 13);
-  } else if (o.arm === 'strike') {
-    arm(cx + 5, 9, cx + 10, 12);
-    arm(cx + 5, 10, cx + 10, 9);
-  } else {
-    arm(cx + 5, 9, cx + 7, 14);
-    arm(cx - 4, 9, cx - 6, 14);
-  }
-  p.outline(INK);
-  p.set(Math.round(cx + 1.5), 3, TEAL_GLOW);
-  p.set(Math.round(cx + 2.5), 3, TEAL[3]);
-  return { p, ax: cx, ay: G, eye: [Math.round(cx + 2), 3] };
-}
-
-registerMobPainter('f14_rewinder', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame % 4;
-  let anim = 'idle';
-  let fr = f;
-  let o: RwPose = { f, legs: 0, arm: 'down', rew: false, hot: false, broken: false };
-  const gray = mode === 'f14_frozen';
-  if (gray) {
-    anim = 'tableau';
-    fr = 0;
-    o = { f: 0, legs: 1, arm: 'strike', rew: false, hot: false, broken: false };
-  } else if (mode === 'f14_rewind') {
-    anim = 'rew';
-    fr = Math.floor(pose.t * 12) % 2;
-    o = { f: fr, legs: 0, arm: 'up', rew: true, hot: true, broken: false };
-  } else if (mode === 'f14_dazed') {
-    anim = 'dazed';
-    fr = Math.floor(pose.t * 6) % 4;
-    o = { f: 0, legs: 0, arm: 'down', rew: false, hot: false, broken: true };
-  } else if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-    o = { f: 0, legs: 0, arm: 'down', rew: false, hot: false, broken: true };
-  } else if (mode === 'windup') {
-    anim = 'wind';
-    fr = 0;
-    o = { f: 0, legs: 0, arm: 'up', rew: false, hot: false, broken: false };
-  } else if (mode === 'recover' && pose.t < 0.2) {
-    anim = 'strike';
-    fr = 0;
-    o = { f: 0, legs: 0, arm: 'strike', rew: false, hot: false, broken: false };
-  } else if (pose.anim === 'run') {
-    anim = 'run';
-    o = { f, legs: f, arm: 'down', rew: false, hot: false, broken: false };
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    fr = 0;
-    o = { f: 0, legs: 0, arm: 'up', rew: false, hot: false, broken: false };
-  }
-  // Ранен — окно перед отмоткой: песок уже светится.
-  if (m.data.rwAt !== undefined && mode !== 'f14_rewind' && anim !== 'dead') {
-    anim += '+';
-    o.hot = true;
-  }
-  return frameOf(
-    'f14_rewinder',
-    pose,
-    anim,
-    fr,
-    () => {
-      const b = drawRewinder(o);
-      if (anim === 'dazed') stars(b.p, b.ax, 1, 4, fr);
-      if (anim === 'dead') b.p = scatter(b.p, fr, 5, [TEAL[3], BRASS[3], GLASS_HI]);
-      return b;
-    },
-    gray,
-  );
 });
 
 // ---------------------------------------------------------------------------

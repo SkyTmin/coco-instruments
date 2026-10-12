@@ -787,3 +787,39 @@ export function cog2(
       p.set(x, y, l > 0.78 ? t[3] : l > 0.42 ? t[2] : l > 0.1 ? t[1] : t[0]);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Позы ключами: смешение полей (числа и векторы) и дорожка ключевых поз.
+// ---------------------------------------------------------------------------
+
+/** Смесь двух поз: числа и векторы — линейно. */
+export function mixPose<T extends object>(a: T, b: T, k: number): T {
+  const A = a as Record<string, unknown>;
+  const Bv = b as Record<string, unknown>;
+  const o: Record<string, unknown> = { ...A };
+  for (const key of Object.keys(A)) {
+    const x = A[key];
+    const y = Bv[key];
+    if (typeof x === 'number') o[key] = lerp(x, y as number, k);
+    else if (Array.isArray(x))
+      o[key] = x.map((v: number, i: number) => lerp(v, (y as number[])[i], k));
+  }
+  return o as T;
+}
+
+export type KeyPose<T> = [number, Partial<T>, Ease?];
+
+/** Ключевые позы по времени поверх `base` (кривая — у ключа, к которому идём). */
+export function keyPose<T extends object>(T: number, keys: KeyPose<T>[], base: T): T {
+  const full = (p: Partial<T>): T => ({ ...base, ...p });
+  if (T <= keys[0][0]) return full(keys[0][1]);
+  for (let i = 1; i < keys.length; i++) {
+    const [t1, p1, e] = keys[i];
+    if (T <= t1) {
+      const [t0, p0] = keys[i - 1];
+      const x = (T - t0) / (t1 - t0 || 1);
+      return mixPose(full(p0), full(p1), (e ?? smooth)(clamp01(x)));
+    }
+  }
+  return full(keys[keys.length - 1][1]);
+}
