@@ -136,7 +136,7 @@ function serpRig(o: SerpO, yaw: number): Rig {
   const r = new Rig();
   const B = F3.yaw(yaw);
   const cs = camSide(yaw);
-  const step = 2.2 * (1 - 0.3 * o.coil);
+  const step = 1.85 * (1 - 0.3 * o.coil);
   // Хребет на полу: от основания шеи назад; курс каждого кольца — изгиб
   // (растёт к хвосту) плюс бегущая волна.
   const base = 4.5;
@@ -161,7 +161,8 @@ function serpRig(o: SerpO, yaw: number): Rig {
   }
   // Шея поднимается от основания к голове (две капсулы, светлое брюхо спереди).
   const fall = o.fall;
-  const hz = lerp(o.hz, 1.6, fall);
+  // Голова стоит высоко, как у кобры (позы задают высоту в прежней мере).
+  const hz = lerp(o.hz * 1.3, 1.6, fall);
   const hxp = base + lerp(o.hx, 4.0, fall);
   const N0 = B.p(base, 0, 2.0);
   const N1 = B.p(base + (hxp - base) * 0.35 - 0.6, 0, lerp(2.0, hz, 0.55));
@@ -171,10 +172,11 @@ function serpRig(o: SerpO, yaw: number): Rig {
   r.cap(N1, HP, 2.0, 1.6, neck);
   r.cap(B.p(base + 0.9, 0, 2.6), vadd(HP, B.v(0.5, 0, -1.1)), 1.0, 0.9, { T: BELLY });
   // Капюшон: плоский веер за головой, раскрывается во взгляде.
-  const Hd = F3.yaw(yaw, vadd(HP, B.v(-0.9, 0, -1.4)));
+  const Hd = F3.yaw(yaw, vadd(HP, B.v(-1.1, 0, -1.6))).scale(1.2);
   r.ell(Hd, [0, 0, 0], [1.1, 1.4 + o.hood * 2.0, 2.0 + o.hood * 1.1], stoneHood(o.stone));
   // Голова.
-  const H = F3.yaw(yaw, HP).pitch(o.hp);
+  // Голова крупная (читается рядом с героем): вся разметка головы — в её осях.
+  const H = F3.yaw(yaw, HP).pitch(o.hp).scale(1.3);
   r.ell(H, [0.6, 0, 0], [2.3, 1.7, 1.2], scaleMat(BODY, 11, o.stone));
   if (o.jaw > 0.12) {
     const J = H.at(-0.2, 0, -0.6).pitch(o.jaw * 0.9);

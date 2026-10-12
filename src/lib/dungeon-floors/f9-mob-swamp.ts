@@ -437,18 +437,15 @@ function rootRig(o: RootO, yaw: number): Rig {
   // Корни по земле — веером.
   for (let i = 0; i < 5 && h > 0.25; i++) {
     const a = (i / 5) * TAU + 0.5;
-    const L = 4.8 * Math.min(1, h);
-    r.cap(
-      B.p(Math.cos(a) * 1.4, Math.sin(a) * 1.4, 0.9),
-      B.p(Math.cos(a) * L, Math.sin(a) * L, 0.4),
-      1.0,
-      0.35,
-      BARK_FAR,
-    );
+    // Клубок: корни расходятся широко и выгибаются над трясиной.
+    const L = (6.2 + (i % 2) * 1.2) * Math.min(1, h);
+    const M = B.p(Math.cos(a) * L * 0.55, Math.sin(a) * L * 0.55, 1.6);
+    r.cap(B.p(Math.cos(a) * 1.6, Math.sin(a) * 1.6, 1.2), M, 1.4, 0.9, BARK_FAR);
+    r.cap(M, B.p(Math.cos(a) * L, Math.sin(a) * L, 0.4), 0.9, 0.35, BARK_FAR);
   }
   if (h > 0.02) {
     // Ствол — три колена, с наклоном и качанием (верх отстаёт).
-    const H = 12.5 * h;
+    const H = 11.5 * h;
     const P0 = B.p(0, 0, 0.3);
     const P1 = B.p(o.lean * 1.2 + o.sway * 0.4, o.sway * 0.6, H * 0.4);
     const P2 = B.p(o.lean * 2.6 + o.sway * 1.0, o.sway * 1.4 - o.wilt * 1.0, H * 0.75);
@@ -457,9 +454,9 @@ function rootRig(o: RootO, yaw: number): Rig {
       o.sway * 2.0 - o.wilt * 2.0,
       H * (1 - o.wilt * 0.35),
     );
-    r.cap(P0, P1, 3.4, 2.8, BARK_M);
-    r.cap(P1, P2, 2.8, 2.3, BARK_M);
-    r.cap(P2, P3, 2.3, 1.5, BARK_M);
+    r.cap(P0, P1, 4.2, 3.4, BARK_M);
+    r.cap(P1, P2, 3.4, 2.7, BARK_M);
+    r.cap(P2, P3, 2.7, 1.7, BARK_M);
     // Побеги на макушке.
     for (let i = 0; i < 3; i++)
       r.spike(
@@ -473,13 +470,13 @@ function rootRig(o: RootO, yaw: number): Rig {
     // Глаз-сучок спереди и сучок поменьше.
     const kc = KNOT;
     const kg = clamp01(o.knot);
-    r.ball(B.p(o.lean * 2.6 + o.sway + 2.1, o.sway * 1.4, H * 0.68), 1.15, {
+    r.ball(B.p(o.lean * 2.6 + o.sway + 2.5, o.sway * 1.4, H * 0.66), 1.6, {
       T: kc,
       glow: kg,
       bias: 0.2,
     });
     r.dot(B.p(o.lean * 1.6 + 2.6, 1.0, H * 0.45), KNOT[1], kg * 0.6, 1, 1);
-    r.eye = kg > 0.2 ? B.p(o.lean * 2.6 + o.sway + 3.0, o.sway * 1.4, H * 0.7) : null;
+    r.eye = kg > 0.2 ? B.p(o.lean * 2.6 + o.sway + 3.9, o.sway * 1.4, H * 0.68) : null;
     // Руки-корни: с плеч, по четыре звена, кончик — коготь.
     for (const sd of [-1, 1]) {
       const S = B.p(o.lean * 2.2 + o.sway * 0.8, sd * 2.2 + o.sway, H * 0.7);
@@ -728,7 +725,7 @@ function rootPose(anim: string, f: number): RootO {
   return o;
 }
 
-const ROOT = kindOf('f9_root', 56, 52, 28, 34, 900, 1.2);
+const ROOT = kindOf('f9_root', 56, 52, 28, 34, 900, 1.25);
 const rootPic = (anim: string, f: number, d: number): Pic =>
   drawRig(ROOT, rootRig(rootPose(anim, f), yawN(d)));
 
