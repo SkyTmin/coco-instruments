@@ -909,20 +909,20 @@ const CURL: Plan = {
   neckR: [4.8, 4.0, 3.8],
   head: [0.4, 6.0, 9.0],
   sh: [3.0, 6.0, 4.0],
-  paw: [2.8, 10.2, 1.0],
+  paw: [2.6, 8.6, 0.9],
   haunch: [7.4, -3.0, 4.4],
   haunchR: [4.4, 5.8, 4.2],
-  hpaw: [9.6, 4.4, 1.0],
+  hpaw: [8.8, 2.8, 0.9],
   // Хвост вокруг, кончиком на нос.
   tail: [
     [6.6, -5.0, 2.4],
     [11.0, 0.2, 2.5],
     [10.6, 7.4, 2.8],
-    [6.8, 12.6, 4.0],
-    [1.6, 14.4, 5.4],
-    [-3.2, 14.0, 6.2],
-    [-6.4, 12.0, 6.2],
-    [-7.4, 9.4, 5.8],
+    [6.8, 12.6, 4.4],
+    [1.6, 14.6, 6.6],
+    [-3.2, 14.2, 7.6],
+    [-6.4, 12.0, 7.4],
+    [-7.4, 9.4, 6.8],
   ],
 };
 
@@ -2128,27 +2128,31 @@ function face(p: Px, f: Frame, c: Ctx): void {
 function scar(p: Px, f: Frame, c: Ctx): void {
   const { h, o } = c;
   if (o.curl > 0.5 && !HI) return;
-  const a = seen(f, mul(h.at([1.85, 2.9, 3.1]), RR), OX, OY, 2.4 * RR);
-  const b = seen(f, mul(h.at([3.0, 4.0, -1.5]), RR), OX, OY, 2.4 * RR);
-  if (!a || !b) return;
+  // Каждая точка шрама проверяется на глубину: хвост или лапа перед мордой его прячут.
+  const A = mul(h.at([1.85, 2.9, 3.1]), RR);
+  const B = mul(h.at([3.0, 4.0, -1.5]), RR);
+  const pa = project(A);
+  const pb = project(B);
+  const dx = pb[0] - pa[0];
+  const dy = pb[1] - pa[1];
+  const steps = Math.max(Math.round(Math.abs(dx)), Math.round(Math.abs(dy)), 1);
   const col = SCAR[V];
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const steps = Math.max(Math.abs(dx), Math.abs(dy), 1);
+  const pts: ([number, number] | null)[] = [];
   for (let s = 0; s <= steps; s++) {
-    const x = Math.round(a[0] + (dx * s) / steps);
-    const y = Math.round(a[1] + (dy * s) / steps);
-    p.set(x, y, col[0]);
-    if (HI) p.set(x + 1, y, col[1]);
+    const at = seen(f, lerp3(A, B, s / steps), OX, OY, 2.2 * RR);
+    pts.push(at);
+    if (!at) continue;
+    p.set(at[0], at[1], col[0]);
+    if (HI) p.set(at[0] + 1, at[1], col[1]);
   }
   if (!HI) return;
   const L = Math.hypot(dx, dy) || 1;
   const nx = -dy / L;
   const ny = dx / L;
   for (const u of [0.12, 0.3, 0.72, 0.9]) {
-    const cx = a[0] + dx * u + 0.5;
-    const cy = a[1] + dy * u;
-    for (const d of [-2, -1, 2, 3]) p.set(Math.round(cx + nx * d), Math.round(cy + ny * d), col[2]);
+    const at = pts[Math.round(u * steps)];
+    if (!at) continue;
+    for (const d of [-2, -1, 2, 3]) p.set(Math.round(at[0] + 0.5 + nx * d), Math.round(at[1] + ny * d), col[2]);
   }
 }
 
