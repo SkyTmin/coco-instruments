@@ -41,6 +41,12 @@ import { FPS as OWL_FPS, FRAMES as OWL_FRAMES, owlFrame, RES as OWL_RES } from '
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
 import {
+  FPS as PIGEON_FPS,
+  FRAMES as PIGEON_FRAMES,
+  pigeonFrame,
+  RES as PIGEON_RES,
+} from './pigeon';
+import {
   FPS as RACCOON_FPS,
   FRAMES as RACCOON_FRAMES,
   raccoonFrame,
@@ -188,6 +194,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: MOUSE_RES,
     anims: at24(MOUSE_FRAMES, MOUSE_FPS),
     frame: mouseFrame,
+    variants: [1],
+  },
+  // Голубь-почтальон: свой золотой.
+  pigeon: {
+    res: PIGEON_RES,
+    anims: at24(PIGEON_FRAMES, PIGEON_FPS),
+    frame: pigeonFrame,
     variants: [1],
   },
 };
