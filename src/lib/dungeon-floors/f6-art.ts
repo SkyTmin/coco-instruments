@@ -1,9 +1,9 @@
 // Этаж 6 «Огненный разлом» — рисовальщики: монстры, реквизит, свои клетки
 // трёх районов, метки ударов, тело Красного змея, иконки вещей.
 //
-// Мобы (кроме бесёнка — кадры атласа 0x72 (CC0) с мешком) — мини-3D в
-// `f6-mob-*.ts` (анимации мобов 6); лист `public/dungeon/f6/f6-sheet.png`
-// (Ninja Adventure, CC0) больше не рисуется. Остальное рисует код: пиксели
+// Мобы — мини-3D в `f6-mob-*.ts`, их снаряды и контакты — `f6-mob-fx.ts`
+// (анимации мобов 6); лист `public/dungeon/f6/f6-sheet.png` (Ninja
+// Adventure, CC0) больше не рисуется. Остальное рисует код: пиксели
 // 16 на клетку, свет сверху-слева, контур тёмный. Кадры собираются один раз
 // и лежат в кеше.
 
@@ -16,11 +16,10 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
-import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
+import type { Mob, Strike, Zone } from '../dungeon-sim';
 import { F6_GALLERY, F6_LAKES, F6_MARK, F6_NEST } from './f6';
 import { serpentView } from './f6-brains';
 import './f6-mob-sal';
@@ -31,6 +30,7 @@ import './f6-mob-golem';
 import './f6-mob-ore';
 import './f6-mob-worm';
 import './f6-mob-imp';
+import './f6-mob-fx';
 
 type RGBA = [number, number, number, number];
 
@@ -5391,25 +5391,7 @@ registerZonePainter('f6_rise', (g, z, px, py, S, time) => {
   return true;
 });
 
-// Петарда беса: красная палочка с горящим фитилём.
-registerZonePainter('f6_cracker', (g, z, px, py, S, time) => {
-  const k = kOf(z as ZoneX);
-  const R = z.r * S;
-  g.strokeStyle = rgba(FIRE[2], 0.35 + 0.6 * k);
-  g.lineWidth = 1;
-  g.beginPath();
-  g.ellipse(px, py, R, R * 0.8, 0, 0, TAU);
-  g.stroke();
-  g.fillStyle = rgba(hx('#c8201a'), 1);
-  g.fillRect(Math.round(px) - 1, Math.round(py) - 4, 3, 5);
-  g.fillStyle = rgba(hx('#f0e0a0'), 1);
-  g.fillRect(Math.round(px) - 1, Math.round(py) - 4, 3, 1);
-  if (Math.floor(time * 16) % 2) {
-    g.fillStyle = rgba(FIRE[3], 1);
-    g.fillRect(Math.round(px) + 1, Math.round(py) - 6 + Math.round(k * 2), 1, 1);
-  }
-  return true;
-});
+// Петарда беса — `f6-mob-fx.ts` (анимации мобов 6).
 
 // Мозаика под логовом: змей свернулся кольцом, красное на чёрном, золото.
 let emblemImg: HTMLCanvasElement | null = null;
@@ -5458,22 +5440,7 @@ registerZonePainter('f6_emblem', (g, _z, px, py) => {
   return true;
 });
 
-// ---------------------------------------------------------------------------
-// Снаряд: плевок лавы — ком с коркой, внутри горит, за ним капли.
-// ---------------------------------------------------------------------------
-
-registerShotPainter('f6_glob', (_s: Shot, time) => {
-  const f = Math.floor(time * 12) % 4;
-  return spriteOf(`glob|${f}`, () => {
-    const p = new Px(12, 12);
-    p.ell(6, 6, 4, 3.6, LAVA.crust);
-    p.ell(6 + (f % 2 ? 0.5 : -0.5), 5.6, 2.8, 2.4, LAVA.hot);
-    p.ell(5.4, 5, 1.2, 1, LAVA.white);
-    p.outline(INK);
-    p.set(2 + f, 10, LAVA.bright);
-    return { img: p.canvas(), ax: 6, ay: 6 };
-  });
-});
+// Снаряд червя `f6_glob` и его контакт — `f6-mob-fx.ts` (анимации мобов 6).
 
 // ---------------------------------------------------------------------------
 // Иконки вещей 10×10.
