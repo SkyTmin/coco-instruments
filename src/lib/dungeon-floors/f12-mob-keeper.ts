@@ -316,7 +316,17 @@ function keepParts(o: KeepO): { parts: Part[]; eyes: V3[]; cr: V3; G: V3; u: V3 
   const th = (v: V3): V3 => [v[0] * ch + v[2] * sh, v[1], v[2] * ch - v[0] * sh];
   const H = add(C, tl([0, 0, 4.1 * (1 - sk * 0.3)]));
   const hood = add(H, th([-0.7, 0, 0.3]));
-  P.push({ x: hood[0], y: 0, z: hood[2], rx: 3.1, ry: 3, rz: 3.2, pitch: -hl, ramp: K_ROBE, id: 74 });
+  P.push({
+    x: hood[0],
+    y: 0,
+    z: hood[2],
+    rx: 3.1,
+    ry: 3,
+    rz: 3.2,
+    pitch: -hl,
+    ramp: K_ROBE,
+    id: 74,
+  });
   const peak = add(H, th([-2.3, 0, 2.5]));
   P.push({ x: peak[0], y: 0, z: peak[2], rx: 1.5, ry: 1.4, rz: 1.6, ramp: K_ROBE, id: 74 });
   const mk0 = add(H, th([1.5, 0, -0.2]));
@@ -353,8 +363,7 @@ function keepParts(o: KeepO): { parts: Part[]; eyes: V3[]; cr: V3; G: V3; u: V3 
         id: 76,
       });
     }
-  const eyes: V3[] =
-    o.mask > 0.25 ? [] : [-1, 1].map((e) => add(H, th([2.55, e * 0.75, 0.2])));
+  const eyes: V3[] = o.mask > 0.25 ? [] : [-1, 1].map((e) => add(H, th([2.55, e * 0.75, 0.2])));
   // Посох и кристалл.
   const st = staffOf(o);
   const nS = 14;
@@ -387,18 +396,35 @@ function keepParts(o: KeepO): { parts: Part[]; eyes: V3[]; cr: V3; G: V3; u: V3 
   for (const e of [-1, 1]) {
     const shd = add(C, tl([-0.2, e * 3.4, 0.9]));
     const hand =
-      e > 0 ? (o.arm ? add(o.arm, [0, 0, o.z]) : st.G) : lerp3(add(o.hL, [0, 0, o.z]), onStaff, o.grip);
+      e > 0
+        ? o.arm
+          ? add(o.arm, [0, 0, o.z])
+          : st.G
+        : lerp3(add(o.hL, [0, 0, o.z]), onStaff, o.grip);
     const el = joint(shd, hand, 4.2, 4.4, [-0.4, e * 0.9, -1]);
     seg(P, shd, el, 1.4, 1.5, K_ROBE, 80 + e);
     const wr = lerp3(el, hand, 0.82);
     seg(P, el, wr, 1.55, 2.05, K_ROBE, 82 + e);
-    P.push({ x: hand[0], y: hand[1], z: hand[2], rx: 0.95, ry: 0.95, rz: 0.95, ramp: K_MASK, id: 84 + e });
+    P.push({
+      x: hand[0],
+      y: hand[1],
+      z: hand[2],
+      rx: 0.95,
+      ry: 0.95,
+      rz: 0.95,
+      ramp: K_MASK,
+      id: 84 + e,
+    });
   }
   // Щит: шесть осколков по кругу (втягиваются в кристалл).
   if (o.shield > 0.02)
     for (let k = 0; k < 6; k++) {
       const a = o.spin + (k / 6) * TAU;
-      const at: V3 = [Math.cos(a) * o.shR, Math.sin(a) * o.shR, o.shZ + o.z + Math.sin(a * 2 + 0.5)];
+      const at: V3 = [
+        Math.cos(a) * o.shR,
+        Math.sin(a) * o.shR,
+        o.shZ + o.z + Math.sin(a * 2 + 0.5),
+      ];
       const pk = o.pull * o.pull;
       const p = lerp3(at, st.cr, pk);
       const s = o.shield * (1 - 0.75 * pk);
@@ -446,7 +472,11 @@ function keepPost(o: KeepO, m: { cr: V3; G: V3; u: V3 }): (p: Px, scr: Scr, fx: 
         if (o.swC) {
           const a = o.swPh * 1.4 + u * TAU;
           const r = lerp(6.5, 1.9, o.swirl) + (i % 3) * 0.5;
-          pt = [cr[0] + Math.cos(a) * r, cr[1] + Math.sin(a) * r, cr[2] + Math.sin(a * 2) * r * 0.35];
+          pt = [
+            cr[0] + Math.cos(a) * r,
+            cr[1] + Math.sin(a) * r,
+            cr[2] + Math.sin(a * 2) * r * 0.35,
+          ];
         } else {
           const a = o.swPh + u * TAU * 2;
           const r = lerp(10.5, 6.5, o.swirl) * (1 - u * 0.25);
@@ -513,16 +543,21 @@ function keepPost(o: KeepO, m: { cr: V3; G: V3; u: V3 }): (p: Px, scr: Scr, fx: 
       // Держит занавес: искры текут от кристалла вперёд к земле.
       for (let i = 0; i < 7; i++) {
         const d = (((o.strPh + i / 7) % 1) + 1) % 1;
-        const pt: V3 = [
-          cr[0] + d * 11,
-          cr[1] + Math.sin(d * 9 + i) * 0.9,
-          lerp(cr[2], 1.2, d * d),
-        ];
+        const pt: V3 = [cr[0] + d * 11, cr[1] + Math.sin(d * 9 + i) * 0.9, lerp(cr[2], 1.2, d * d)];
         mote(p, fx, scr(pt[0], pt[1], pt[2]), MOTE[i % 4], o.stream * (1 - d * 0.6));
       }
       const c0 = scr(cr[0], cr[1], cr[2]);
       const c1 = scr(cr[0] + 3.5, cr[1], cr[2] - 0.8);
-      trail(p, [[c0[0], c0[1]], [c1[0], c1[1]]], AURORA[3], 0.7 * o.stream, 0.1);
+      trail(
+        p,
+        [
+          [c0[0], c0[1]],
+          [c1[0], c1[1]],
+        ],
+        AURORA[3],
+        0.7 * o.stream,
+        0.1,
+      );
     }
     if (o.slam > 0 && o.slam < 1) {
       // Посох в лёд: крошка и снег от кончика, искры сияния вверх.
@@ -531,7 +566,11 @@ function keepPost(o: KeepO, m: { cr: V3; G: V3; u: V3 }): (p: Px, scr: Scr, fx: 
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * TAU + 0.3;
         const r = 1 + 4 * easeOut(o.slam);
-        const s = scr(tip[0] + Math.cos(a) * r, tip[1] + Math.sin(a) * r, 0.5 + 5 * o.slam * hash(i, 5, 316));
+        const s = scr(
+          tip[0] + Math.cos(a) * r,
+          tip[1] + Math.sin(a) * r,
+          0.5 + 5 * o.slam * hash(i, 5, 316),
+        );
         mote(p, fx, s, MOTE[i % 4], 1 - o.slam);
       }
     }
@@ -554,7 +593,16 @@ function keepPost(o: KeepO, m: { cr: V3; G: V3; u: V3 }): (p: Px, scr: Scr, fx: 
         const p1 = lerp3(at, cr, Math.max(0, o.pull - 0.35) ** 2);
         const s0 = scr(p0[0], p0[1], p0[2]);
         const s1 = scr(p1[0], p1[1], p1[2]);
-        trail(p, [[s0[0], s0[1]], [s1[0], s1[1]]], TEAL[4], 0.8, 0.1);
+        trail(
+          p,
+          [
+            [s0[0], s0[1]],
+            [s1[0], s1[1]],
+          ],
+          TEAL[4],
+          0.8,
+          0.1,
+        );
       }
     }
   };
@@ -574,7 +622,8 @@ function keepBuild(o: KeepO): Build {
   const cr = m.cr;
   if (o.swirl > 0 && !o.swC) ext.push([10.5, 10.5, 2], [-10.5, -10.5, 26]);
   if (o.swirl > 0 && o.swC) ext.push(add(cr, [7, 7, 3]), add(cr, [-7, -7, -3]));
-  if (o.burst > 0 && o.burst < 1 && o.side === 0) ext.push(add(cr, [12, 6, 4]), add(cr, [12, -6, -5]));
+  if (o.burst > 0 && o.burst < 1 && o.side === 0)
+    ext.push(add(cr, [12, 6, 4]), add(cr, [12, -6, -5]));
   if (o.burst > 0 && o.burst < 1 && o.side === 1) ext.push([2, 18, 16], [2, -18, 16]);
   if (o.burst > 0 && o.burst < 1 && o.side === 2) ext.push([14, 14, 13], [-14, -14, 1]);
   if (o.stream > 0) ext.push(add(cr, [11, 1, -cr[2] + 1]));
@@ -1067,6 +1116,8 @@ const DIE = 1.15;
 const FORM = 0.45;
 /** Наклон по ходу (сглажен): парит, а не шагает. */
 const TILT = new WeakMap<Mob, { r: number; now: number }>();
+/** Последний отход — после броска (true) или после призыва. */
+const REC = new WeakMap<Mob, boolean>();
 
 /** У горящей жаровни — тёплый, щита нет (как в мозгу). */
 function warmAt(m: Mob): boolean {
@@ -1086,7 +1137,13 @@ paintMob('f12_keeper', (m: Mob, p: MobPose): MobFrame => {
   const ex: Partial<MobFrame> = { shadow: 6 };
   let anim = 'idleS';
   let f = 0;
-  const castRec = (d.sum ?? 0) <= 10.6 && v.prev !== 'f12_summon';
+  // Какой отход: живьём — по прошлому режиму (запомнен на погоню после
+  // отхода), на листе (свежий моб) — по таймеру призыва (после призыва он ≥ 11).
+  let castRec = REC.get(m) ?? (d.sum ?? 0) <= 10.6;
+  if (mode === 'recover') {
+    castRec = v.prev ? v.prev !== 'f12_summon' : (d.sum ?? 0) <= 10.6;
+    REC.set(m, castRec);
+  }
   if (mode === 'dying') {
     anim = 'die';
     f = fi(t, LEN.die - 1);
