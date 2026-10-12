@@ -37,6 +37,7 @@ import './f14-mob-rewinder';
 import './f14-mob-reaper';
 import './f14-mob-keeper';
 import './f14-mob-double';
+import './f14-mob-cuckoo';
 
 type RGBA = [number, number, number, number];
 
@@ -507,18 +508,6 @@ function frameOf(
   return finish(key, build(), pose.look, pose.flash, pose.left, gray);
 }
 
-/** Пустой кадр (спрятан в часах, висит под потолком — рисует другое). */
-const EMPTY = (() => {
-  let c: MobFrame | null = null;
-  return (): MobFrame => {
-    if (!c) {
-      const p = new Px(1, 1);
-      c = { img: p.canvas(), ax: 0, ay: 0, eye: null };
-    }
-    return c;
-  };
-})();
-
 /** Смерть механизма: фигура оседает, из неё сыплются шестерёнки. */
 function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
   if (k <= 0) return p;
@@ -555,121 +544,6 @@ function clear(p: Px, x: number, y: number): void {
   if (x < 0 || y < 0 || x >= p.w || y >= p.h) return;
   p.data[(y * p.w + x) * 4 + 3] = 0;
 }
-
-// ---------------------------------------------------------------------------
-// Кукушка: резная деревянная птица на латунной пружине. Спрятана в часах —
-// кадра нет (дверцы рисуют часы); вылетела — пружина тянется к часам.
-// ---------------------------------------------------------------------------
-
-const BIRD = {
-  body: tn('#3a2210', '#6a4020', '#9a6436', '#c89458'),
-  wing: tn('#24140a', '#4a2c14', '#6a4020', '#8a5a30'),
-  breast: tn('#8a7a5a', '#c8b48a', '#ece0bc', '#fff8e0'),
-  beak: hx('#ff9a30'),
-  eye: hx('#1a3a8a'),
-};
-
-function drawBird(p: Px, cx: number, cy: number, right: boolean, open: boolean): void {
-  const s = right ? 1 : -1;
-  // Хвост — назад и вниз, веером.
-  polyShade(
-    p,
-    [
-      [cx - 4 * s, cy],
-      [cx - 10 * s, cy + 2],
-      [cx - 9 * s, cy + 5],
-      [cx - 3 * s, cy + 2.5],
-    ],
-    BIRD.body,
-    -0.1,
-  );
-  for (let i = 0; i < 3; i++)
-    p.set(Math.round(cx - (7 + i) * s), Math.round(cy + 2.5 + i * 0.6), BIRD.body[0]);
-  shadeEll(p, cx, cy, 5.5, 4, BIRD.body, 0.05);
-  shadeEll(p, cx + 2 * s, cy + 1.3, 3, 2.5, BIRD.breast, 0.2);
-  // Крыло распахнуто — резное, в три пера.
-  polyShade(
-    p,
-    [
-      [cx - 3 * s, cy - 1.5],
-      [cx + 1 * s, cy - 2],
-      [cx - 2 * s, cy - 7],
-      [cx - 6 * s, cy - 5],
-    ],
-    BIRD.wing,
-    0.1,
-  );
-  stroke(p, cx - 1 * s, cy - 2.5, cx - 3 * s, cy - 6, BIRD.wing[3]);
-  // Голова и клюв.
-  shadeEll(p, cx + 4.2 * s, cy - 3, 2.8, 2.6, BIRD.body, 0.15);
-  poly(
-    p,
-    [
-      [cx + 6.5 * s, cy - 3.8],
-      [cx + 10 * s, cy - (open ? 4.5 : 3)],
-      [cx + 6.5 * s, cy - 2.2],
-    ],
-    BIRD.beak,
-  );
-  if (open)
-    poly(
-      p,
-      [
-        [cx + 6.5 * s, cy - 2.2],
-        [cx + 9.5 * s, cy - 1],
-        [cx + 6.5 * s, cy - 1.4],
-      ],
-      hx('#c85010'),
-    );
-}
-
-registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  if (mode !== 'f14_peck' && mode !== 'f14_out' && mode !== 'f14_back' && mode !== 'dying')
-    return EMPTY();
-  // Пружина — от птицы к часам: направление и длина от места гнезда.
-  const nx = m.data.nx ?? m.x;
-  const ny = m.data.ny ?? m.y;
-  const dx = nx - m.x;
-  const dy = ny - m.y - 0.7;
-  const len = Math.hypot(dx, dy) * 16;
-  const ab = Math.round((Math.atan2(dy, dx) / TAU) * 32);
-  const lb = Math.round(len / 3);
-  const right = Math.cos(m.dir) >= 0;
-  const open = mode === 'f14_peck' || (mode === 'f14_out' && pose.t < 0.25);
-  const dk = mode === 'dying' ? deathK(pose) : 0;
-  const key = `f14_cuckoo|${ab}|${lb}|${right ? 1 : 0}|${open ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}|${dk}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  const L = lb * 3;
-  const S = Math.max(30, 2 * L + 30);
-  const p = new Px(S, S);
-  const c = S / 2;
-  const a = (ab / 32) * TAU;
-  // Пружина: латунный зигзаг до часов.
-  if (L > 3 && !dk)
-    spring(
-      p,
-      c,
-      c + 1,
-      c + Math.cos(a) * L,
-      c + Math.sin(a) * L,
-      Math.max(2, L / 5),
-      1.6,
-      BRASS[3],
-      BRASS[1],
-    );
-  drawBird(p, c, c, right, open);
-  p.outline(INK);
-  p.set(Math.round(c + (right ? 5 : -5)), Math.round(c - 3), BIRD.eye);
-  let q = p;
-  if (dk) q = scatter(q, dk, 7, [BIRD.body[2], BIRD.breast[2], BRASS[3]]);
-  if (pose.look === 'elite') q.outline(GOLDK);
-  if (pose.flash) q = q.tint(WHITE, 0.85);
-  const out: MobFrame = { img: q.canvas(), ax: c, ay: c + 4, eye: null };
-  frames.set(key, out);
-  return out;
-});
 
 // ---------------------------------------------------------------------------
 // Гиря: чугунный цилиндр с латунными обручами и кольцом, цепь уходит вверх.
