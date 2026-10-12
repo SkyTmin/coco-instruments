@@ -358,6 +358,8 @@ export const F8_MOB_STAT = {
   by: {} as Record<string, number>,
   miss: [] as string[],
   warm: 0,
+  /** Площадь построенных холстов (кадр + `lit`), точек — оценка памяти кеша. */
+  px: 0,
   /** Сейчас идёт прогрев (кадры прогрева не попадают в `miss`). */
   warming: false,
   sizes: () => KINDS.map((K) => `${K.id}:${K.frames.size}/${K.limit}`).join(' '),
@@ -489,25 +491,35 @@ export function finishPic(pic: Pic, look: MobPose['look']): MobFrame {
 
 /**
  * Белая вспышка удара из готового кадра: тот же холст, залитый белым поверх
- * себя, без перерисовки позы — кеш по холсту (как у 4-го этажа).
+ * себя, без перерисовки позы. Холсты вспышки — кольцо из `FL_N` штук: новый
+ * холст на каждый кадр вспышки стоил ~45 мкс и копил копии кадров, перекраска
+ * готового — ~13 мкс; кадр, что вспыхнул недавно, берётся из кольца как есть.
+ * Кольцо длиннее шлейфа (`ghost` держит картинку до 0,16 с).
  */
-const FLASHED = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+const FL_N = 96;
+const FL_RING: { src: HTMLCanvasElement | null; c: HTMLCanvasElement }[] = [];
+let flAt = 0;
 export function flashImg(img: HTMLCanvasElement): HTMLCanvasElement {
-  let c = FLASHED.get(img);
-  if (!c) {
-    c = document.createElement('canvas');
-    c.width = img.width;
-    c.height = img.height;
-    const g = c.getContext('2d');
-    if (g) {
-      g.drawImage(img, 0, 0);
-      g.globalCompositeOperation = 'source-atop';
-      g.globalAlpha = 0.85;
-      g.fillStyle = '#ffffff';
-      g.fillRect(0, 0, c.width, c.height);
-    }
-    FLASHED.set(img, c);
+  for (const e of FL_RING) if (e.src === img) return e.c;
+  let e = FL_RING[flAt];
+  if (!e) e = FL_RING[flAt] = { src: null, c: document.createElement('canvas') };
+  flAt = (flAt + 1) % FL_N;
+  const c = e.c;
+  if (c.width !== img.width) c.width = img.width;
+  if (c.height !== img.height) c.height = img.height;
+  const g = c.getContext('2d');
+  if (g) {
+    g.globalCompositeOperation = 'copy';
+    g.globalAlpha = 1;
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.globalAlpha = 0.85;
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
   }
+  e.src = img;
   return c;
 }
 
@@ -526,6 +538,7 @@ export function frameOf(
     const t0 = performance.now();
     fr = K.frames.set(key, finishPic(build(), pose.look));
     stat(K, performance.now() - t0, key);
+    F8_MOB_STAT.px += fr.img.width * fr.img.height * (fr.lit ? 2 : 1);
   }
   return pose.flash ? { ...fr, img: flashImg(fr.img) } : fr;
 }
