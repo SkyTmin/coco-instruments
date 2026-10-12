@@ -10,6 +10,7 @@ import * as Badger from './pets-pixel/badger';
 import * as Bulldog from './pets-pixel/bulldog';
 import * as Cat from './pets-pixel/cat';
 import * as Dragon from './pets-pixel/dragon';
+import * as Ferret from './pets-pixel/ferret';
 import * as Fox from './pets-pixel/fox';
 import * as Owl from './pets-pixel/owl';
 import * as Raccoon from './pets-pixel/raccoon';
@@ -842,5 +843,93 @@ describe('пиксельный кот', () => {
     const c = W.poseAt('walk', 0.25);
     expect(c.hLz).toBeGreaterThan(1);
     expect(c.hRz).toBe(0);
+  });
+});
+
+describe('пиксельный хорёк', () => {
+  const W = Ferret;
+
+  it('рисунок детерминирован; золотой рисует сам, на том же холсте', () => {
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1]) {
+        const a = W.ferretFrame('work', 24, r, v);
+        const b = W.ferretFrame('work', 24, r, v);
+        expect([a.w, a.h]).toEqual([W.RES[r].cw, W.RES[r].ch]);
+        expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
+      }
+    const plain = W.ferretFrame('idle', 0, 's', 0).data;
+    const gold = W.ferretFrame('idle', 0, 's', 1).data;
+    expect(Buffer.from(plain).equals(Buffer.from(gold))).toBe(false);
+  });
+
+  it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, только свой золотой', () => {
+    const m = PET_PX.ferret;
+    expect(m.box).toBe(W.RES.s.box);
+    expect(m.large?.box).toBe(W.RES.l.box);
+    for (const a of ANIMS) {
+      for (const set of [m, m.large!]) {
+        expect(set.anims[a].n).toBe(W.FRAMES[a]);
+        expect(set.anims[a].fps).toBe(W.FPS);
+      }
+      expect(PIXEL_PETS.ferret.anims[a]).toEqual({ n: W.FRAMES[a], fps: W.FPS });
+    }
+    expect(PIXEL_PETS.ferret.variants).toEqual([1]);
+    expect(PET_SPRITES.ferret).toBeUndefined();
+    const sec = (a: Anim) => W.FRAMES[a] / W.FPS;
+    expect([sec('idle'), sec('sleep'), sec('walk'), sec('work')]).toEqual([3, 3, 1, 2]);
+    expect(Math.abs(sec('happy') - 1.1)).toBeLessThan(0.05);
+    expect(Math.abs(sec('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {
+    const T = (a: Anim) => W.FRAMES[a] / W.FPS;
+    const rest = W.poseAt('idle', 0);
+    const lag0 = W.lagOf('idle', 0);
+    for (const a of ['happy', 'work', 'attack'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), rest)]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), lag0, 0.05)]).toEqual([a, []]);
+    }
+    for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), W.poseAt(a, 0))]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), W.lagOf(a, 0), 0.05)]).toEqual([a, []]);
+    }
+  });
+
+  it('трюк «псст»: оглянулся, распахнул пальто, щёлкнул секундомером, к концу всё убрано', () => {
+    expect(W.poseAt('work', 0.3).turn).toBeLessThan(-0.4);
+    expect(W.poseAt('work', 0.56).turn).toBeGreaterThan(0.4);
+    const open = W.poseAt('work', 1.0);
+    expect(open.open).toBe(1);
+    expect(open.glint).toBeGreaterThan(0.5);
+    expect(open.watch).toBe(0);
+    const click = W.poseAt('work', 1.5);
+    expect(click.watch).toBe(1);
+    expect(click.click).toBeGreaterThanOrEqual(0);
+    expect(click.hRz).toBeGreaterThan(20);
+    expect(W.poseAt('work', 1.62).speed).toBe(1);
+    const end = W.poseAt('work', W.FRAMES.work / W.FPS);
+    expect([end.open, end.glint, end.watch, end.press, end.click, end.hand, end.speed]).toEqual([
+      0, 0, 0, 0, -1, 0, 0,
+    ]);
+  });
+
+  it('атака: в кадре удара пасть открыта, когти растопырены; сон — клубком, кепка на глазах', () => {
+    const strike = W.poseAt('attack', 0.42);
+    expect(strike.jaw).toBeGreaterThan(0.9);
+    expect(strike.claws).toBe(1);
+    expect(strike.bite).toBeGreaterThanOrEqual(0);
+    const sleep = W.poseAt('sleep', 1);
+    expect(sleep.curl).toBe(1);
+    expect(sleep.capDn).toBe(1);
+    expect(sleep.eye).toBe('sleep');
+  });
+
+  it('побежка: ноги по очереди, вторая стоит на полу', () => {
+    const a = W.poseAt('walk', 0.125);
+    expect(a.fLz).toBeGreaterThan(1);
+    expect(a.fRz).toBe(0);
+    const b = W.poseAt('walk', 0.375);
+    expect(b.fRz).toBeGreaterThan(1);
+    expect(b.fLz).toBe(0);
   });
 });

@@ -28,6 +28,12 @@ import {
   FRAMES as DRAGON_FRAMES,
   RES as DRAGON_RES,
 } from './dragon';
+import {
+  ferretFrame,
+  FPS as FERRET_FPS,
+  FRAMES as FERRET_FRAMES,
+  RES as FERRET_RES,
+} from './ferret';
 import { FPS as FOX_FPS, FRAMES as FOX_FRAMES, foxFrame, RES as FOX_RES } from './fox';
 import { FPS as OWL_FPS, FRAMES as OWL_FRAMES, owlFrame, RES as OWL_RES } from './owl';
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
@@ -151,6 +157,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: CAT_RES,
     anims: at24(CAT_FRAMES, CAT_FPS),
     frame: catFrame,
+    variants: [1],
+  },
+  // Хорёк-шнырь: свой золотой.
+  ferret: {
+    res: FERRET_RES,
+    anims: at24(FERRET_FRAMES, FERRET_FPS),
+    frame: ferretFrame,
     variants: [1],
   },
 };

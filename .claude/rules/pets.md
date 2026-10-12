@@ -384,6 +384,28 @@ Owner: «добавь возможность выбирать скин у пит
   stripes, emerald eyes, warm cloth; the gold coin is weak on the gold chest. Hatch plays
   `happy`. Weight 490 KB v0+v1 (small 48 / 53, large 186 / 200, thumbs 1 KB; ink was 1.89 MB).
   Tests «пиксельный кот» in `pets-pixel.test.ts`.
+- **Ferret** (`pets-pixel/ferret.ts`, `ferretFrame(a, i, res, v)`, `variants: [1]`): «Хорёк-шнырь»,
+  a slim cream ferret STANDING tall like a sentry facing us (fox's `drawPartsF` + `pick`, ears =
+  `drawFlats`, own `vis` fade). 44-px read: flat cap, bead eyes in brown drops, white muzzle, red
+  scarf, long olive coat, dark legs and bushy dark tail curling out to the viewer's right. Mask
+  = two sable DROPS (`facePick`, inner edge |X| ≈ 1.6) with a pale blaze between and white
+  brows — a joined band read as a raccoon (v2.74 lesson); cheeks cream, only muzzle/chin white.
+  Cap: crown with a `cut` + a peak that must stick out PAST the crown (inside it the peak was
+  invisible); roll −0.16 and a short peak, else it hid the left eye in happy/attack. Coat =
+  multi-cut ellipsoids (`Part.cuts`, each cut a plane with its own face shader): back piece cut
+  at the front (cut face = dark lining seen in the slit), two front panels cut by the slit plane
+  (wider toward the hem) that rotate on side hinges (`coatXf`, `OPEN_A` 2.85) so their cut face
+  becomes the red lining with painted contraband (`liningFace`: 5 pocket watches with chains,
+  key, gold token, pocket stitches); paws follow `panelCorner`. Work («псст», 2 s): glance left
+  0.2 s → right 0.48 s (sneak, half eyes) → coat flung open 0.74–0.86 s, wink, watches glint →
+  right paw grabs the stopwatch, coat shuts 1.16–1.32 s → watch to the ear, click 1.46 s (flash
+  + ring + ticks over EMPTY pixels) → speed lines + lean 1.48–1.88 s → watch fades, props reset
+  to REST (test). Attack: crouch with the head UP (nod −0.16 cancels the bow, else the cap hid
+  the face) → lunge (scale 1.18, jaws open 0.36–0.46 s, claws) → rays. Sleep: curled in the coat,
+  tail ring in front, cap pulled over the eyes, zzz. Gold: gold fur with bronze depth, bronze
+  legs/tail, dark-bronze mask, COOLER grey-green coat (olive sank into gold). Hatch plays
+  `happy`. Weight 451 KB v0+v1 (small 42 / 47, large 173 / 187, thumbs 1 KB; ink was 1.65 MB).
+  Tests «пиксельный хорёк» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
