@@ -357,10 +357,21 @@ const REST: Pose = {
 const loopK = (t: number, T: number, keys: Key[]) => kf(wrap(t, T), keys);
 const TAU = Math.PI * 2;
 
-/** Кристалл в трюке: где лежит на полу и куда сова подскакивает. */
+/**
+ * Кристалл в трюке: где лежит на полу и куда сова подскакивает. Лежит ПЕРЕД
+ * когтями правой лапы после подскока (на y 3,4 она садилась на него).
+ */
 const GEM_X = 12.5;
-const GEM_Y = 3.4;
+const GEM_Y = 6.4;
 const HOP_X = 8.4;
+/**
+ * Пятно луча на полу идёт дугой вокруг совы (фонарь на лбу поворачивается с
+ * головой), через кристалл и ПЕРЕД лапами: по прямой у лап (y 3,4) луч из
+ * фонаря на лбу проходил сквозь грудь.
+ */
+const SPOT_C = 0.6;
+const SPOT_R = Math.hypot(GEM_X, GEM_Y - SPOT_C);
+const spotAt = (x: number): V3 => [x, SPOT_C + Math.sqrt(Math.max(0, SPOT_R * SPOT_R - x * x)), 0];
 
 // ---------------------------------------------------------------------------
 // Дорожки анимаций.
@@ -576,7 +587,7 @@ function happyPose(t: number): Pose {
 }
 
 /** Трюк: когда сова поднимает кристалл (с). */
-const T_GRAB = 1.36;
+const T_GRAB = 1.34;
 
 function workPose(t: number): Pose {
   const o: Pose = { ...REST };
@@ -596,8 +607,8 @@ function workPose(t: number): Pose {
     [1.14, 0, 'i'],
   ]);
   o.beamX = kf(t, [
-    [0.3, -18],
-    [0.45, -17],
+    [0.3, -12.8],
+    [0.45, -12.2],
     [0.98, GEM_X],
   ]);
   // Луч погас — его точка возвращается к покою (иначе шов с покоем по полю позы).
@@ -695,28 +706,35 @@ function workPose(t: number): Pose {
     [1.73, 0.8, 'o'],
     [1.92, REST_FAN],
   ]);
-  // 1,36–1,66 — подняла кристалл в правой лапе (по кадру — правой), стоит на левой.
-  o.fRz = kf(t, [
-    [1.32, 0],
-    [1.46, 11.0, 'o'],
-    [1.58, 10.6],
-    [1.66, 0, 'i'],
-  ]);
-  o.fRy = kf(t, [
-    [1.32, 0],
-    [1.46, 5.4, 'o'],
-    [1.58, 5.2],
-    [1.66, 0, 'i'],
-  ]);
+  // Подскок — как сова на добычу: правая лапа в воздухе тянется вперёд и
+  // садится НА кристалл (1,3), когти смыкаются; 1,34–1,66 — подняла его к
+  // груди, стоит на левой. Раньше лапа садилась рядом и кристалл прыгал с пола
+  // в уже поднятую лапу.
   o.fRx = kf(t, [
-    [1.32, 0],
+    [1.08, 0],
+    [1.26, GEM_X - HOP_X - 3.6, 'o'],
+    [T_GRAB, GEM_X - HOP_X - 3.6],
     [1.46, -2.6, 'o'],
     [1.58, -2.4],
     [1.66, 0, 'i'],
   ]);
+  o.fRy = kf(t, [
+    [1.08, 0],
+    [1.26, GEM_Y - 2.4 - 0.6, 'o'],
+    [T_GRAB, GEM_Y - 2.4 - 0.6],
+    [1.46, 5.4, 'o'],
+    [1.58, 5.2],
+    [1.66, 0, 'i'],
+  ]);
+  o.fRz = kf(t, [
+    [T_GRAB, 0],
+    [1.46, 11.0, 'o'],
+    [1.58, 10.6],
+    [1.66, 0, 'i'],
+  ]);
   o.grip = kf(t, [
-    [1.3, 0],
-    [1.36, 1, 'o'],
+    [1.25, 0],
+    [1.32, 1, 'o'],
     [1.44, 0.4],
     [1.6, 0.4],
     [1.68, 0],
@@ -1836,12 +1854,40 @@ function chevrons(p: Px, f: Frame, c: Ctx): void {
   }
 }
 
-/** Луч фонаря: конус от стекла к пятну на полу — только по пустому фону. */
-function beam(p: Px, mask: Uint8Array, c: Ctx): void {
+/** Допуск глубины (в единицах кадра): свет виден, если тело не ближе него. */
+const lightTol = () => 0.6 * RR;
+/** Сила света по телу: середина конуса, край (по фону — альфа, по телу — подсветка). */
+const VEIL = [0.55, 0.34];
+/** Тёплый свет фонаря (доли на канал). */
+const LAMP_L = [1.0, 0.9, 0.66];
+/**
+ * Свет на непрозрачный пиксель: перо отражает свет фонаря по своему цвету
+ * (c·(1 + k·L)) — кремовое теплеет и белеет, бурое светлеет, контур остаётся
+ * тёмным; пиксель не просвечивает.
+ */
+function lightOn(p: Px, i: number, k: number): void {
+  const d = p.data;
+  for (let n = 0; n < 3; n++)
+    d[i * 4 + n] = Math.min(255, Math.round(d[i * 4 + n] * (1 + k * LAMP_L[n])));
+}
+
+/**
+ * Луч фонаря: конус от стекла к пятну на полу. Фонарь на лбу, СПЕРЕДИ, и луч
+ * идёт перед лицом и грудью к полу перед лапами — поэтому он ложится и на тело,
+ * светлой вуалью (свет смешан с цветом пикселя, пиксель остаётся непрозрачным;
+ * по телу вуаль слабее, чем по фону, — сова читается). Где тело ближе луча
+ * (буфер глубины кадра: крыло, лапа перед пятном) — луча там нет. Раньше конус
+ * рисовался только по пустому фону и казался светящим из-за спины.
+ */
+function beam(p: Px, f: Frame, mask: Uint8Array, c: Ctx): void {
   const { o } = c;
   if (o.beam <= 0.02) return;
-  const [lx, ly] = scr(LAMP_AT);
-  const [tx, ty] = scr([o.beamX, GEM_Y, 0]);
+  const [gx, gy, gd] = project(mul(LAMP_AT, RR));
+  const [sx, sy, sd] = project(mul(spotAt(o.beamX), RR));
+  const lx = OX + gx;
+  const ly = OY + gy;
+  const tx = OX + sx;
+  const ty = OY + sy;
   const srx = (HI ? 11 : 5) * o.beam;
   const sry = HI ? 3.2 : 1.6;
   const ax = tx - lx;
@@ -1855,20 +1901,32 @@ function beam(p: Px, mask: Uint8Array, c: Ctx): void {
   const X1 = Math.min(p.w - 1, Math.ceil(Math.max(...xs)) + 1);
   const Y0 = Math.max(0, Math.floor(Math.min(...ys)) - 1);
   const Y1 = Math.min(p.h - 1, Math.ceil(Math.max(...ys)) + 1);
+  const tol = lightTol();
   for (let Y = Y0; Y <= Y1; Y++)
     for (let X = X0; X <= X1; X++) {
-      if (mask[Y * p.w + X]) continue;
       const dx = X + 0.5 - lx;
       const dy = Y + 0.5 - ly;
       const u = (dx * ux + dy * uy) / L;
       const v = Math.abs(dx * uy - dy * ux);
       const spot = ((X + 0.5 - tx) / Math.max(0.5, srx)) ** 2 + ((Y + 0.5 - ty) / sry) ** 2;
-      let a = 0;
       const half = lerp(0.7, srx * 0.9, u);
-      if (spot < 1) a = 200 - 70 * spot;
-      else if (u > 0 && u < 1 && v < half) a = (v < half * 0.35 ? 120 : 82) + 40 * (1 - u);
-      if (a <= 0) continue;
-      p.set(X, Y, [BEAM[0], BEAM[1], BEAM[2], Math.round(a * o.beam)]);
+      const inSpot = spot < 1;
+      const inCone = u > 0 && u < 1 && v < half;
+      if (!inSpot && !inCone) continue;
+      const i = Y * p.w + X;
+      if (!mask[i]) {
+        const a = inSpot ? 200 - 70 * spot : (v < half * 0.35 ? 120 : 82) + 40 * (1 - u);
+        p.set(X, Y, [BEAM[0], BEAM[1], BEAM[2], Math.round(a * o.beam)]);
+        continue;
+      }
+      // По телу: конус — его ближняя к нам сторона на этой точке оси; пятно — пол.
+      const z = f.zb[i];
+      const dCone = lerp(gd, sd, u) + Math.sqrt(Math.max(0, half * half - v * v));
+      const dFloor = ((Y + 0.5 - OY) * CE) / SE;
+      let k = 0;
+      if (inCone && z <= dCone + tol) k = v < half * 0.35 ? VEIL[0] : VEIL[1];
+      else if (inSpot && z <= dFloor + tol) k = VEIL[0];
+      if (k > 0) lightOn(p, i, k * o.beam);
     }
 }
 
@@ -1931,7 +1989,8 @@ function gemFx(p: Px, c: Ctx): void {
     }
   }
   if (o.held > 0.02) {
-    const q = add(S.footR, [0, 0.6 * S.k, 1.4 * S.k]);
+    // В когтях: у пола — там, где лежал; с подъёмом лапы садится в пальцы.
+    const q = add(S.footR, [0, 0.6 * S.k, 1.4 * S.k * clamp01(o.fRz / 4)]);
     const [x, y] = scr(q);
     gemAt(p, x, y, o.held);
     if (o.glint > 0.3) {
@@ -1948,21 +2007,33 @@ function gemFx(p: Px, c: Ctx): void {
   }
 }
 
-/** Фонарь: ореол, когда горит; щелчок; блик латуни. */
-function lampFx(p: Px, mask: Uint8Array, c: Ctx): void {
+/**
+ * Фонарь: ореол, когда горит (стекло — самая передняя точка головы: ореол
+ * ложится и на лоб, слабее и ступенями; где тело ближе стекла — нет); щелчок;
+ * блик латуни.
+ */
+function lampFx(p: Px, f: Frame, mask: Uint8Array, c: Ctx): void {
   const { o } = c;
   const [lx, ly] = scr(LAMP_AT);
   if (o.lamp > 0.05) {
     const R = HI ? 7.5 : 3.4;
     const n = Math.ceil(R);
+    const gd = project(mul(LAMP_AT, RR))[2];
+    const tol = lightTol();
     for (let dy = -n; dy <= n; dy++)
       for (let dx = -n; dx <= n; dx++) {
         const X = Math.floor(lx) + dx;
         const Y = Math.floor(ly) + dy;
-        if (X < 0 || Y < 0 || X >= p.w || Y >= p.h || mask[Y * p.w + X]) continue;
+        if (X < 0 || Y < 0 || X >= p.w || Y >= p.h) continue;
         const d = Math.hypot(X + 0.5 - lx, Y + 0.5 - ly) / R;
         if (d >= 1) continue;
-        p.set(X, Y, [BEAM[0], BEAM[1], BEAM[2], Math.round(120 * (1 - d) * o.lamp)]);
+        const i = Y * p.w + X;
+        if (!mask[i]) {
+          p.set(X, Y, [BEAM[0], BEAM[1], BEAM[2], Math.round(120 * (1 - d) * o.lamp)]);
+          continue;
+        }
+        if (f.zb[i] > gd + tol || d >= 0.75) continue;
+        lightOn(p, i, (d < 0.45 ? VEIL[0] : VEIL[1]) * o.lamp);
       }
   }
   if (o.click > 0) {
@@ -2133,9 +2204,9 @@ export function owlFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   const mask = new Uint8Array(p.w * p.h);
   for (let j = 0; j < mask.length; j++) mask[j] = p.data[j * 4 + 3] > 0 ? 1 : 0;
   chevrons(p, f, c);
-  beam(p, mask, c);
   eyes(p, f, c);
-  lampFx(p, mask, c);
+  beam(p, f, mask, c);
+  lampFx(p, f, mask, c);
   gemFx(p, c);
   strikeFx(p, mask, c);
   if (a === 'sleep') zzz(p, mask, c);
