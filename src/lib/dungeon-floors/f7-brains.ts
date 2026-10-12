@@ -1465,6 +1465,7 @@ registerBrain('f7_thief', {
             const out = pickMirror(sim, api, 7, 13);
             if (out) {
               m.data.dcd = 3.2;
+              m.data.vDive = Math.atan2(here.y + 0.5 - m.y, here.x + 0.5 - m.x); // анимации мобов 7 — только рисунок
               api.setMode(m, 'f7_dive');
               const z: ZoneIn & { mx: number; my: number } = {
                 x: here.x + 0.5,

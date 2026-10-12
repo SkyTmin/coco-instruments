@@ -43,6 +43,7 @@ import './f7-mob-spider';
 import './f7-mob-moth';
 import './f7-mob-prism';
 import './f7-mob-shadow';
+import './f7-mob-thief';
 
 type RGBA = [number, number, number, number];
 
@@ -261,88 +262,10 @@ const dirOf = (face: number): Dir4 => {
 };
 
 // ---------------------------------------------------------------------------
-// Кадр монстра: общий конвейер (облик, вспышка, отражение, кеш).
+// Облик кадра. Мобы — `f7-mob-*.ts`, их конвейер кадров — `f7-mobkit.ts`.
 // ---------------------------------------------------------------------------
 
 type Look = MobPose['look'];
-
-interface Built {
-  p: Px;
-  ax: number;
-  ay: number;
-  eye: [number, number] | null;
-}
-
-const frames = new Map<string, MobFrame>();
-
-function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean): MobFrame {
-  let p = b.p;
-  if (look === 'albino') {
-    const pale = hx('#f4f2ff');
-    const q = new Px(p.w, p.h);
-    for (let i = 0; i < p.data.length; i += 4) {
-      if (!p.data[i + 3]) continue;
-      const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-      const c = mixc([l, l, l, 255], pale, 0.45);
-      q.data[i] = c[0];
-      q.data[i + 1] = c[1];
-      q.data[i + 2] = c[2];
-      q.data[i + 3] = p.data[i + 3];
-    }
-    p = q;
-  }
-  if (look === 'elite') p.outline(GOLD);
-  if (flash) p = p.tint(WHITE, 0.85);
-  if (left) p = p.flipX();
-  const eye = b.eye ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
-  const out: MobFrame = { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye };
-  frames.set(key, out);
-  return out;
-}
-
-function frameOf(
-  kind: string,
-  pose: MobPose,
-  anim: string,
-  f: number,
-  build: () => Built | null,
-  mirror = true,
-): MobFrame | null {
-  const left = mirror && pose.left;
-  const key = `${kind}|${anim}|${f}|${left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  const b = build();
-  if (!b) return null;
-  return finish(key, b, pose.look, pose.flash, left);
-}
-
-/** Разлёт осколками: кадр `p`, разрезанный клиньями, разлетается от середины (k 0…1). */
-function shatter(p: Px, cx: number, cy: number, k: number, seed: number): Px {
-  const o = new Px(p.w, p.h);
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      const i = (y * p.w + x) * 4;
-      if (!p.data[i + 3]) continue;
-      // Осколок — клин вокруг середины (по углу), свой сдвиг и падение.
-      const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx);
-      const wedge = Math.floor(((a + Math.PI) / TAU) * 7 + hash(seed, Math.floor(y / 4)) * 0.8) % 7;
-      const wa = ((wedge + 0.5) / 7) * TAU - Math.PI;
-      const sp = 3 + hash(seed, wedge) * 5;
-      const nx = Math.round(x + Math.cos(wa) * sp * k);
-      const ny = Math.round(y + Math.sin(wa) * sp * k + k * k * 6);
-      if (nx < 0 || ny < 0 || nx >= o.w || ny >= o.h) continue;
-      const c: RGBA = [
-        p.data[i],
-        p.data[i + 1],
-        p.data[i + 2],
-        Math.round(p.data[i + 3] * (1 - k * 0.8)),
-      ];
-      // Грань осколка светлеет: стекло ловит свет, падая.
-      o.set(nx, ny, (x + y + wedge) % 5 === 0 ? mixc(c, alpha(CYAN_HOT, c[3] / 255), 0.6) : c);
-    }
-  return o;
-}
 
 // ---------------------------------------------------------------------------
 // Перекраска листа героя в холодное стекло.
@@ -2333,28 +2256,6 @@ function bossFrame(q: BReq, left: boolean, flash: boolean): BFrame | null {
   });
 }
 
-/** Сквозь зеркало: фигура распадается полосами-осколками (k 0…1). */
-function slices(p: Px, k: number, out: boolean): Px {
-  const o = new Px(p.w, p.h);
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      const i = (y * p.w + x) * 4;
-      if (!p.data[i + 3]) continue;
-      const band = Math.floor(x / 3);
-      const th = hash(band, 3);
-      const vis = out ? th > k : th < k;
-      if (!vis) continue;
-      const lift = out ? Math.round(k * 5 * hash(band, 9)) : 0;
-      o.set(x, y - lift, [
-        p.data[i],
-        p.data[i + 1],
-        p.data[i + 2],
-        Math.round(p.data[i + 3] * (out ? 1 - k * 0.5 : 0.5 + k * 0.5)),
-      ]);
-    }
-  return o;
-}
-
 // ---- Всё, что светится вокруг тела ------------------------------------------
 
 /**
@@ -3075,92 +2976,6 @@ const SHD: Tones = [hx('#0e0a1a'), hx('#261c44'), hx('#43346e'), hx('#6c5aa8')];
 const RAINBOW = ['#ff5a7a', '#ffb050', '#fff080', '#80f0a0', '#70c8ff', '#b890ff'].map((c) =>
   hx(c),
 );
-
-// ---------------------------------------------------------------------------
-// Стекольщик-воришка: бесёнок в фартуке и зеркальных очках, за спиной мешок
-// с монетами. Ныряет в зеркало — пропадает.
-// ---------------------------------------------------------------------------
-
-const LEATHER: Tones = [hx('#3a2a1e'), hx('#5a4430'), hx('#7a6044'), hx('#9a7c5a')];
-const SACK: Tones = [hx('#4a3418'), hx('#86683a'), hx('#b89a5c'), hx('#e0c890')];
-
-function paintThief(anim: string, f: number): Built {
-  const p = new Px(22, 22);
-  const hop = anim === 'run' ? [0, -1, -2, -1][f % 4] : 0;
-  const cx = 10;
-  const gy = 20;
-  const st = anim === 'run' ? [1, 0, -1, 0][f % 4] : 0;
-  // Ноги.
-  limb(p, cx - 1, gy - 5 + hop, cx - 2 - st, gy, 0.8, 0.7, LEATHER);
-  limb(p, cx + 2, gy - 5 + hop, cx + 3 + st, gy, 0.8, 0.7, LEATHER);
-  // Мешок за спиной.
-  shadeEll(p, cx - 4, gy - 9 + hop, 4, 4.4, SACK);
-  p.set(cx - 5, gy - 12 + hop, GOLD);
-  p.set(cx - 3, gy - 7 + hop, hx('#fff0a0'));
-  stroke(p, cx - 4, gy - 13 + hop, cx - 3, gy - 14 + hop, hx('#5a3a1a'));
-  // Тело в фартуке.
-  shadeEll(p, cx + 1, gy - 8 + hop, 3.2, 3.6, GL, 0.1);
-  poly(
-    p,
-    [
-      [cx - 1, gy - 9 + hop],
-      [cx + 4, gy - 9 + hop],
-      [cx + 4, gy - 4 + hop],
-      [cx - 1, gy - 4 + hop],
-    ],
-    hx('#6a4a2c'),
-  );
-  stroke(p, cx - 1, gy - 9 + hop, cx + 4, gy - 9 + hop, hx('#8a6a42'));
-  // Голова, уши, очки-зеркальца.
-  shadeEll(p, cx + 2, gy - 14 + hop, 3.6, 3.2, GL, 0.15);
-  poly(
-    p,
-    [
-      [cx - 1, gy - 16 + hop],
-      [cx - 3, gy - 19 + hop],
-      [cx, gy - 17 + hop],
-    ],
-    GL[1],
-  );
-  poly(
-    p,
-    [
-      [cx + 5, gy - 16 + hop],
-      [cx + 7, gy - 19 + hop],
-      [cx + 4, gy - 17 + hop],
-    ],
-    GL[1],
-  );
-  p.ell(cx + 1, gy - 14 + hop, 1.2, 1.2, SILV[2]);
-  p.ell(cx + 4, gy - 14 + hop, 1.2, 1.2, SILV[2]);
-  p.set(cx + 1, gy - 15 + hop, WHITE);
-  p.set(cx + 4, gy - 15 + hop, WHITE);
-  stroke(p, cx + 2, gy - 12 + hop, cx + 3, gy - 12 + hop, INK);
-  p.outline(alpha(INK, 0.9));
-  return { p, ax: 10, ay: 21, eye: [cx + 3, gy - 14 + hop] };
-}
-
-registerMobPainter('f7_thief', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'f7_dive') {
-    // Ныряет в зеркало: распадается полосами, как отражение, уходящее в стекло.
-    const k = Math.min(3, Math.floor(pose.t / 0.1));
-    return frameOf('f7_thief', pose, 'dive', k, () => {
-      if (k >= 3) return { p: new Px(2, 2), ax: 1, ay: 1, eye: null };
-      const b = paintThief('run', 1);
-      return { ...b, p: slices(b.p, (k + 1) / 4, true), eye: null };
-    });
-  }
-  const anim = pose.anim === 'run' ? 'run' : 'idle';
-  const f = anim === 'run' ? pose.frame % 4 : 0;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_thief', pose, 'dead', k, () => {
-      const b = paintThief('idle', 0);
-      return { ...b, p: shatter(b.p, 10, 12, (k + 1) / 4, 17) };
-    });
-  }
-  return frameOf('f7_thief', pose, anim, f, () => paintThief(anim, f));
-});
 
 // ---------------------------------------------------------------------------
 // Реквизит. Живые (кадрами): блик по зеркалу, колонна со светом внутри,
