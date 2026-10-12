@@ -186,6 +186,26 @@ Owner: «добавь возможность выбирать скин у пит
   REST once the lock is gone (seam test). Hatch plays `happy`. Weight 697 KB v0+v1 (small
   68 / 79, large 260 / 288, thumbs 1 KB; ink was 1.6 MB). Tests «пиксельный ворон» in
   `pets-pixel.test.ts`.
+- **Fox** (`pets-pixel/fox.ts`, `foxFrame(a, i, res, v)`, `variants: [1]`): sitting red fox
+  card-sharp facing us. Own rasterizer `drawPartsF` with `pick` (palette per point: burgundy
+  waistcoat with a narrow V and white chest on ONE torso part — separate vest parts hid the
+  chest or floated) and `tube` (tail normal without its along-axis part, else the brush reads
+  as a caterpillar of beads); tail = 8 segments thickest toward the white tip, wrapped round
+  the paws to the viewer's left, `lock` strands along it. 44-px read: black ear backs/tips,
+  white cheek tufts flaring SIDEWAYS (down = a beard), white tail tip, black socks, the vest as
+  a dark block between the arms, the card as a white-red flag. Ace of hearts = flat behind the
+  viewer's-right ear, heart/«A» painted over its pixels via the inverse affine (`CARD_ID`),
+  swings on its own spring; brass buttons + gold watch chain and fob drawn over `seen` pixels.
+  Eyes: heavy-lidded slit stamps, wink in work. Work (shell game): crate (`quad` faces) + three
+  tin cups (`cup`, a cone solved per row) fade in → coin shown under the middle → three swaps
+  with blur lines → lift a cup: coin pile + spark → wink → props fade; props reset to REST once
+  the crate is gone (seam test). Attack: crouch with rear wiggle → pounce toward the viewer
+  (scale 1.2, jaws open f8–11, muzzle up so the face shows) → `snap` rays from the muzzle only
+  over EMPTY pixels (arcs across the white face read as stitches) → head shake. Sleep: curled,
+  tail across the nose. Hatch plays `happy`. Weight 399 KB v0+v1 (small
+  42 / 47, large 149 / 160, thumbs 1 KB; ink was 1.67 MB). Head spring lag is capped
+  (`lagged(..., cap)`): in the pounce it left the head in the air after landing — white neck column. Tests «пиксельный лис» in
+  `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;

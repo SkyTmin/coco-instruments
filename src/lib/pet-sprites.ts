@@ -275,58 +275,6 @@ export const PET_SPRITES: Record<string, { anims: Record<string, PetStrip> }> = 
       },
     },
   },
-  fox: {
-    anims: {
-      attack: {
-        fps: 14,
-        h: 1.1682,
-        n: 12,
-        w: 0.7636,
-        x: 0.1284,
-        y: -0.1114,
-      },
-      happy: {
-        fps: 14,
-        h: 1.1341,
-        n: 16,
-        w: 0.7727,
-        x: 0.1125,
-        y: -0.1114,
-      },
-      idle: {
-        fps: 6,
-        h: 1.0477,
-        n: 18,
-        w: 0.6886,
-        x: 0.1557,
-        y: -0.0227,
-      },
-      sleep: {
-        fps: 6,
-        h: 1.0227,
-        n: 18,
-        w: 0.7114,
-        x: 0.1443,
-        y: 0.0,
-      },
-      walk: {
-        fps: 12,
-        h: 1.0455,
-        n: 12,
-        w: 0.6886,
-        x: 0.1557,
-        y: -0.0227,
-      },
-      work: {
-        fps: 8,
-        h: 1.0318,
-        n: 16,
-        w: 0.6841,
-        x: 0.1625,
-        y: -0.0068,
-      },
-    },
-  },
   mole: {
     anims: {
       attack: {
