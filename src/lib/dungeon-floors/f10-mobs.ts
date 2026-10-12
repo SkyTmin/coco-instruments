@@ -335,6 +335,7 @@ export const F10_MOB_STAT = {
   /** Пикселей во всех построенных кадрах (с `lit`) и число кадров — средний вес кадра. */
   px: 0,
   built: 0,
+  lit: 0,
   clear: () => {
     for (const K of KINDS) {
       K.pics.clear();
@@ -381,6 +382,7 @@ if (import.meta.env?.DEV && typeof window !== 'undefined') {
       max: +F10_MOB_STAT.max.toFixed(2),
       maxKey: F10_MOB_STAT.maxKey,
       sizes: F10_MOB_STAT.sizes(),
+      litShare: +(F10_MOB_STAT.lit / Math.max(1, F10_MOB_STAT.built)).toFixed(2),
       kbPerFrame: +((F10_MOB_STAT.px * 4) / 1024 / Math.max(1, F10_MOB_STAT.built)).toFixed(1),
       battle: [...F10_MOB_STAT.battle.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14),
     };
@@ -492,11 +494,18 @@ function cropCanvas(p: Px, x0: number, y0: number, w: number, h: number): HTMLCa
   return c;
 }
 
-/** Есть ли в слое хоть что-то. */
-function anyPx(p: Px | null): boolean {
+/**
+ * Стоит ли слой света своего вывода: слой — второй `drawImage` во весь кадр
+ * на каждый кадр экрана, а пара точек глаз его не окупает (глаз движок и так
+ * рисует поверх темноты по `eye`). Держим слой, если в нём больше `LIT_MIN`
+ * заметных точек.
+ */
+const LIT_MIN = 10;
+function litWorth(p: Px | null): boolean {
   if (!p) return false;
   const d = p.data;
-  for (let i = 3; i < d.length; i += 4) if (d[i]) return true;
+  let n = 0;
+  for (let i = 3; i < d.length; i += 4) if (d[i] >= 40 && ++n > LIT_MIN) return true;
   return false;
 }
 
@@ -507,7 +516,7 @@ function finish(pic: Pic, look: MobPose['look'], dark: number, darkC: RGBA): Mob
   if (dark > 0) p = darkOf(p, dark, darkC);
   if (look === 'albino') p = paleOf(p);
   if (look === 'elite') p = goldEdge(p);
-  const lit = pic.lit && dark < 2 && anyPx(pic.lit) ? pic.lit : null;
+  const lit = pic.lit && dark < 2 && litWorth(pic.lit) ? pic.lit : null;
   const bb = bbox(p, lit, 0);
   if (!bb) {
     const c = document.createElement('canvas');
@@ -570,6 +579,7 @@ export function frameOf(
     fr = K.frames.set(fk, finish(pic, pose.look, dark, darkC));
     stat(performance.now() - t0, K, fk);
     F10_MOB_STAT.built++;
+    if (fr.lit) F10_MOB_STAT.lit++;
     F10_MOB_STAT.px += fr.img.width * fr.img.height + (fr.lit ? fr.lit.width * fr.lit.height : 0);
   }
   return pose.flash ? { ...fr, img: flashImg(fr.img) } : fr;
