@@ -635,8 +635,20 @@ function workPose(t: number): Pose {
   // Рыбка: два кувырка вверх; монета вертится на ребре и встаёт лицом к зрителю.
   if (t < T_APEX) o.spin = TAU * 2 * clamp01((t - T_LAUNCH) / (T_APEX - T_LAUNCH)) ** 0.8;
   else o.spin = TAU * 3 * (1 - (1 - clamp01((t - T_APEX) / (T_CATCH - T_APEX + 0.06))) ** 2);
-  o.fish = t < T_APEX + 0.02 ? kf(t, [[0, 0], [0.14, 1, 'l']]) : 0;
-  o.coin = t >= T_APEX + 0.02 ? kf(t, [[1.7, 1], [1.92, 0, 'l']]) : 0;
+  o.fish =
+    t < T_APEX + 0.02
+      ? kf(t, [
+          [0, 0],
+          [0.14, 1, 'l'],
+        ])
+      : 0;
+  o.coin =
+    t >= T_APEX + 0.02
+      ? kf(t, [
+          [1.7, 1],
+          [1.92, 0, 'l'],
+        ])
+      : 0;
   o.flash = bump(t, 0.74, 0.98);
   o.glint = bump(t, 1.36, 1.6);
   // Тело: присел — бросок с подъёмом груди — хлопок.
@@ -1214,7 +1226,7 @@ function neckPick(qx: number, qy: number, qz: number): number {
 
 /** Платок: арестантские полосы — по углу (повязка) или поперёк ширины (треугольник). */
 function clothPick(n: number, round: boolean, blk = HI ? 0.38 : 0.45) {
-  return (qx: number, qy: number, qz: number) => {
+  return (qx: number, qy: number, _qz: number) => {
     PICK_T = 0;
     const v = round ? (Math.atan2(qx, qy) / Math.PI) * n * 0.5 : (qx + 1) * 0.5 * n;
     const f = frac(v + 0.5);
@@ -1486,7 +1498,8 @@ function tail(out: PartF[], c: Ctx): void {
   const cu = lag.tailCurl * 0.5 + lag.tailFl * 0.55;
   if (Math.abs(cu) > 0.005) {
     const piv = pts[n - 4];
-    for (let i = n - 3; i < n; i++) pts[i] = add(piv, rotXZ(sub(pts[i], piv), cu * ((i - (n - 4)) / 3)));
+    for (let i = n - 3; i < n; i++)
+      pts[i] = add(piv, rotXZ(sub(pts[i], piv), cu * ((i - (n - 4)) / 3)));
   }
   const wp = pts.map((p) => S.up(p));
   const segs = HI ? 16 : 11;
@@ -2014,7 +2027,6 @@ function rodF(f: Frame, r: Rod): void {
     }
 }
 
-
 /** Крупная: редкая шахматка на границе двух ступеней одной части — мягкий переход. */
 function softBands(f: Frame): void {
   const { w, h, pal, tone, idb } = f;
@@ -2068,14 +2080,54 @@ const EYES_S: Record<string, string[]> = {
 // Крупная: лимон 9×7 — веко срезает верх (довольный прищур), щель зрачка, блик.
 const EYES_L: Record<string, string[]> = {
   open: ['..ooooo..', '.oooooooo', 'odccKccdo', 'oabbKbbco', '.oWbKbco.', '..ooooo..', '...ppp...'],
-  openL: ['..ooooo..', '.oooooooo', 'odKcccddo', 'oaKbbbbco', '.oKWbbco.', '..ooooo..', '...ppp...'],
-  openR: ['..ooooo..', '.oooooooo', 'odcccKcdo', 'oabbbKbco', '.oWbbKco.', '..ooooo..', '...ppp...'],
+  openL: [
+    '..ooooo..',
+    '.oooooooo',
+    'odKcccddo',
+    'oaKbbbbco',
+    '.oKWbbco.',
+    '..ooooo..',
+    '...ppp...',
+  ],
+  openR: [
+    '..ooooo..',
+    '.oooooooo',
+    'odcccKcdo',
+    'oabbbKbco',
+    '.oWbbKco.',
+    '..ooooo..',
+    '...ppp...',
+  ],
   wide: ['..ooooo..', '.oabbbbo.', 'oabbKbbco', 'oaWbKbbco', 'obbbKbcco', '.obcKcco.', '..ooooo..'],
   smug: ['.........', '.........', '.oooooooo', 'oodcKcdoo', '.oabKbco.', '..ooooo..', '...ppp...'],
   shut: ['.........', '.........', '.........', 'o.......o', '.ooooooo.', '.........', '.........'],
-  happy: ['.........', '...ooo...', '..oo.oo..', '.oo...oo.', 'oo.....oo', '.........', '.........'],
-  sleep: ['.........', '.........', '.........', '.........', 'oo.....oo', '.ooooooo.', '.........'],
-  angry: ['.........', 'ooo......', 'oooooo...', 'oddcKoooo', '.oabKbco.', '..ooooo..', '...ppp...'],
+  happy: [
+    '.........',
+    '...ooo...',
+    '..oo.oo..',
+    '.oo...oo.',
+    'oo.....oo',
+    '.........',
+    '.........',
+  ],
+  sleep: [
+    '.........',
+    '.........',
+    '.........',
+    '.........',
+    'oo.....oo',
+    '.ooooooo.',
+    '.........',
+  ],
+  angry: [
+    '.........',
+    'ooo......',
+    'oooooo...',
+    'oddcKoooo',
+    '.oabKbco.',
+    '..ooooo..',
+    '...ppp...',
+  ],
 };
 
 function face(p: Px, f: Frame, c: Ctx): void {
@@ -2101,7 +2153,13 @@ function face(p: Px, f: Frame, c: Ctx): void {
   const nose = seen(f, mul(h.at([0, 5.0, -0.45]), RR), OX, OY, 1.8 * RR);
   if (nose && HI) {
     const nl = PAL[P_NOSE];
-    stamp(p, ['hnnnd', '.nnd.', '..d..'], { h: nl[6], n: nl[4], d: nl[2] }, nose[0] - 2, nose[1] - 1);
+    stamp(
+      p,
+      ['hnnnd', '.nnd.', '..d..'],
+      { h: nl[6], n: nl[4], d: nl[2] },
+      nose[0] - 2,
+      nose[1] - 1,
+    );
   }
   // Рот (крупная): от носа вниз и двумя дугами «ω»; с `grin` уголки выше.
   if (HI && o.jaw < 0.12 && o.snarl < 0.3) {
@@ -2152,7 +2210,8 @@ function scar(p: Px, f: Frame, c: Ctx): void {
   for (const u of [0.12, 0.3, 0.72, 0.9]) {
     const at = pts[Math.round(u * steps)];
     if (!at) continue;
-    for (const d of [-2, -1, 2, 3]) p.set(Math.round(at[0] + 0.5 + nx * d), Math.round(at[1] + ny * d), col[2]);
+    for (const d of [-2, -1, 2, 3])
+      p.set(Math.round(at[0] + 0.5 + nx * d), Math.round(at[1] + ny * d), col[2]);
   }
 }
 
