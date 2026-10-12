@@ -45,6 +45,29 @@ export const PET_PX: Record<string, PetPx> = {
       },
     },
   },
+  bulldog: {
+    box: 48,
+    rev: 'b05bc96551',
+    anims: {
+      idle: { n: 72, fps: 24, x: 5, y: 0, w: 38, h: 51 },
+      walk: { n: 24, fps: 24, x: 2, y: 4, w: 44, h: 46 },
+      happy: { n: 26, fps: 24, x: 3, y: -4, w: 42, h: 55 },
+      work: { n: 48, fps: 24, x: -1, y: 0, w: 60, h: 51 },
+      attack: { n: 22, fps: 24, x: 2, y: -4, w: 49, h: 57 },
+      sleep: { n: 72, fps: 24, x: 3, y: 20, w: 42, h: 33 },
+    },
+    large: {
+      box: 112,
+      anims: {
+        idle: { n: 72, fps: 24, x: 15, y: 6, w: 82, h: 107 },
+        walk: { n: 24, fps: 24, x: 10, y: 15, w: 92, h: 96 },
+        happy: { n: 26, fps: 24, x: 14, y: -3, w: 83, h: 116 },
+        work: { n: 48, fps: 24, x: 3, y: 6, w: 129, h: 108 },
+        attack: { n: 22, fps: 24, x: 10, y: -4, w: 102, h: 124 },
+        sleep: { n: 72, fps: 24, x: 13, y: 54, w: 86, h: 63 },
+      },
+    },
+  },
   dragon: {
     box: 48,
     rev: 'fc3b9fa1e8',
