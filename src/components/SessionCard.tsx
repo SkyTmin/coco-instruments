@@ -7,20 +7,71 @@ import { levelFromXp } from '@/lib/slots-meta';
 import { skinOf } from '@/lib/skins';
 import {
   GAME_ROUTES,
-  GRADE_NAME,
   isStale,
   rankAmong,
   sessionGrade,
-  sessionLength,
   sessionNet,
   sessionPeak,
 } from '@/lib/session';
-import type { Grade, Peak } from '@/lib/session';
+import type { Grade, Peak, Session } from '@/lib/session';
+import { orbRarity } from '@/lib/orb-rarity';
+import { fmtDec, fmtNum as fmt, t, useT } from '@/i18n';
 import { burstConfetti } from '@/lib/confetti';
 import { coinDing, jackpotFanfare, primeAudio, winChime } from '@/lib/sound';
 import { notifySuccess, tapLight } from '@/lib/haptics';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+/** Множитель: ×12 без хвоста, ×2,4 — с одним знаком (по локали). */
+const fmtMult = (m: number) => `×${m >= 10 ? fmt(m) : fmtDec(m, 1).replace(/[.,]0$/, '')}`;
+
+/** Строки пика по его виду — `sessionPeak` в lib отдаёт их по-русски для тестов. */
+function peakText(p: Peak, s: Session): { title: string; detail: string } {
+  const at = (n: number) => t('slots.session.at', { at: n, of: s.spins });
+  switch (p.kind) {
+    case 'win':
+      return {
+        title: t('slots.session.winTitle', { x: fmtMult(s.bestMult) }),
+        detail: t('slots.session.winDetail', {
+          coins: t('common.coins', { n: s.bestWin }),
+          at: s.bestWinAt,
+          of: s.spins,
+        }),
+      };
+    case 'orb':
+      return {
+        title: `${t(`slots.orb.${orbRarity(s.bestOrb)}`)} ×${s.bestOrb}`,
+        detail: at(s.bestOrbAt),
+      };
+    case 'chain':
+      return { title: t('slots.session.chain', { n: s.bestChain }), detail: at(s.bestChainAt) };
+    case 'bonus':
+      return {
+        title:
+          s.bonuses > 1
+            ? t('slots.session.bonusTimes', { n: s.bonuses })
+            : t('slots.session.bonusOnce'),
+        detail: t('slots.session.bonusDetail', { at: s.bonusAt, of: s.spins }),
+      };
+    case 'level':
+      return {
+        title: t('slots.session.level', { n: s.topLevel }),
+        detail: s.levels > 1 ? t('slots.session.levelMore', { n: s.levels - 1 }) : at(s.levelAt),
+      };
+    default:
+      return {
+        title: t('slots.session.flat'),
+        detail: t('slots.session.flatDetail', { n: s.spins }),
+      };
+  }
+}
+
+function sessionLength(s: Session): string {
+  const mins = Math.round((s.lastAt - s.startedAt) / 60_000);
+  if (mins < 1) return t('slots.session.lessMin');
+  if (mins < 60) return t('slots.session.min', { m: mins });
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? t('slots.session.hm', { h, m }) : t('slots.session.h', { h });
+}
 
 /**
  * Оформление пика по его яркости — та же лестница, что у сфер. Заход с
@@ -74,6 +125,7 @@ export function SessionCard() {
   const xp = useFinanceStore((s) => s.slotsXp);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const tr = useT();
   const theme = skinOf(skin);
 
   const grade = session ? sessionGrade(session) : 'quiet';
@@ -108,6 +160,7 @@ export function SessionCard() {
   if (!session) return null;
 
   const peak = sessionPeak(session);
+  const text = peakText(peak, session);
   const tone = peakTone(peak);
   const net = sessionNet(session);
   // Прошлые заходы уже содержат этот — сравниваем с остальными.
@@ -125,28 +178,29 @@ export function SessionCard() {
     dismiss();
   };
 
-  const rankLine = rank.of < 3 ? null : rank.rank === 1 ? `Лучший заход за ${rank.of}` : null;
+  const rankLine =
+    rank.of < 3 ? null : rank.rank === 1 ? tr('slots.session.best', { n: rank.of }) : null;
 
   return (
     <div className="ses" role="presentation" onClick={close}>
       <div
         className={`ses__card ses__card--${grade}`}
         role="dialog"
-        aria-label="Итог захода"
+        aria-label={tr('slots.session.aria')}
         onClick={(e) => e.stopPropagation()}
       >
         {grade === 'unforgettable' && <div className="ses__rays" aria-hidden="true" />}
 
-        <div className="ses__grade">{GRADE_NAME[grade]}</div>
+        <div className="ses__grade">{tr(`slots.session.grade.${grade}`)}</div>
 
         {/* Пик — единственное, что здесь по-настоящему крупно. Заход должен
             вспоминаться одним кадром, а не таблицей достижений. */}
         <div className={`ses__peak ses__peak--${tone}`}>
           <div className="ses__peak-label">
-            {peak.kind === 'none' ? 'Без громких событий' : 'Пик захода'}
+            {peak.kind === 'none' ? tr('slots.session.noPeak') : tr('slots.session.peak')}
           </div>
-          <div className="ses__peak-title">{peak.title}</div>
-          <div className="ses__peak-detail">{peak.detail}</div>
+          <div className="ses__peak-title">{text.title}</div>
+          <div className="ses__peak-detail">{text.detail}</div>
         </div>
 
         <div className={`ses__net${net >= 0 ? ' is-up' : ' is-down'}`}>
@@ -160,22 +214,22 @@ export function SessionCard() {
         <div className="ses__stats">
           <span>
             <b>{fmt(session.spins)}</b>
-            <i>вращений</i>
+            <i>{tr('slots.session.spins')}</i>
           </span>
           <span>
             <b>{fmt(session.bestWin)}</b>
-            <i>лучший спин</i>
+            <i>{tr('slots.session.bestSpin')}</i>
           </span>
           <span>
             <b>{sessionLength(session)}</b>
-            <i>за игрой</i>
+            <i>{tr('slots.session.played')}</i>
           </span>
         </div>
 
         {/* Крючок на возврат — честный и без восклицаний: просто сколько
             осталось до следующего уровня. */}
         <div className="ses__hook">
-          До {level.level + 1} уровня — {fmt(toNext)} опыта
+          {tr('slots.session.hook', { lvl: level.level + 1, xp: toNext })}
         </div>
 
         <div className="ses__actions">
@@ -188,10 +242,10 @@ export function SessionCard() {
               navigate(back);
             }}
           >
-            Ещё разок
+            {tr('slots.session.again')}
           </button>
           <button className="ses__btn" onClick={close}>
-            На сегодня хватит
+            {tr('slots.session.enough')}
           </button>
         </div>
       </div>

@@ -7,11 +7,11 @@ import { rainCoins } from '@/lib/coins';
 import { coinDing, primeAudio } from '@/lib/sound';
 import { notifySuccess, tapMedium } from '@/lib/haptics';
 import { CreativeRow } from '@/components/CreativePanel';
+import { fmtDate, fmtNum as fmt, t, useT } from '@/i18n';
 
 const AMOUNTS = [10_000, 100_000, 1_000_000];
 /** Токены каторги: их в игре добывать тяжелее всего. */
 const TOKENS = [1_000, 10_000, 100_000];
-const fmt = (n: number) => n.toLocaleString('ru-RU');
 
 /**
  * Касса: кнопка «закинуть себе монет» — и токенов каторги. Монеты и токены
@@ -25,6 +25,7 @@ export function CashDesk() {
   const addTokens = useFinanceStore((s) => s.prisonAddTokens);
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const owner = !!status?.owner;
+  useT();
 
   useEffect(() => {
     let alive = true;
@@ -57,8 +58,8 @@ export function CashDesk() {
   return (
     <div className="reward-block">
       <div className="reward-block__head">
-        <span className="reward-block__title">Касса</span>
-        <span className="reward-block__meta">монеты виртуальные</span>
+        <span className="reward-block__title">{t('cash.title')}</span>
+        <span className="reward-block__meta">{t('cash.meta')}</span>
       </div>
       <div className="cash-row">
         {AMOUNTS.map((n) => (
@@ -76,17 +77,14 @@ export function CashDesk() {
         ))}
       </div>
       <CreativeRow />
-      <p className="reward-block__hint">
-        Отдача автомата от этого не меняется: спины по-прежнему считает честный ГСЧ, и проигрывать
-        тоже будет. Это просто способ не ждать ежедневных бонусов.
-      </p>
+      <p className="reward-block__hint">{t('cash.hint')}</p>
       <BackupHealth s={status} />
     </div>
   );
 }
 
 const when = (iso: string) =>
-  new Date(iso).toLocaleString('ru-RU', {
+  fmtDate(new Date(iso), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -109,35 +107,36 @@ function BackupHealth({ s }: { s: BackupStatus | null }) {
   return (
     <div className="backup-health">
       <div className="backup-health__row">
-        <span>Связь с Telegram</span>
+        <span>{t('cash.telegram')}</span>
         <b className={out?.ok ? 'is-ok' : 'is-bad'}>
-          {out == null ? '—' : out.ok ? `есть · ${out.ms} мс` : 'НЕТ'}
+          {out == null ? '—' : out.ok ? t('cash.linkOk', { ms: out.ms ?? 0 }) : t('cash.linkNo')}
         </b>
       </div>
       {out && !out.ok && out.error && <p className="backup-health__err">{out.error}</p>}
 
       <div className="backup-health__row">
-        <span>Свободно на диске</span>
+        <span>{t('cash.disk')}</span>
         <b className={s.freeMb != null && s.freeMb < 300 ? 'is-bad' : 'is-ok'}>
-          {s.freeMb != null ? `${s.freeMb.toLocaleString('ru-RU')} МБ` : '—'}
+          {s.freeMb != null ? t('cash.mb', { n: s.freeMb }) : '—'}
         </b>
       </div>
 
       <div className="backup-health__row">
-        <span>Последняя копия</span>
+        <span>{t('cash.last')}</span>
         <b className={stale ? 'is-bad' : 'is-ok'}>
-          {s.lastBackup ? `${when(s.lastBackup.at)} · ${s.lastBackup.sizeMb} МБ` : 'нет ни одной'}
+          {s.lastBackup
+            ? `${when(s.lastBackup.at)} · ${t('cash.mb', { n: s.lastBackup.sizeMb })}`
+            : t('cash.none')}
         </b>
       </div>
 
       {s.lastError && (
         <p className="backup-health__err">
-          Прошлый запуск не удался ({s.lastError.stage}): {s.lastError.error}
+          {t('cash.failed', { stage: s.lastError.stage, error: s.lastError.error })}
         </p>
       )}
       <p className="reward-block__hint" style={{ marginBottom: 0 }}>
-        Копии собираются каждую ночь в 03:30 и приходят в бота. Забрать прямо сейчас — команда
-        /backup.
+        {t('cash.schedule')}
       </p>
     </div>
   );

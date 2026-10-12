@@ -154,7 +154,6 @@ const INSTRUMENT_DIRS = ['src/pages/clothing/', 'src/pages/finance/', 'src/pages
  */
 const NOT_YET_TRANSLATED = [
   'src/components/BooksTab.tsx',
-  'src/components/CashDesk.tsx',
   'src/components/ChestTab.tsx',
   'src/components/CreativePanel.tsx',
   'src/components/Critters.tsx',
@@ -167,8 +166,6 @@ const NOT_YET_TRANSLATED = [
   'src/components/Inventory.tsx',
   'src/components/PetsTab.tsx',
   'src/components/PrisonCamp.tsx',
-  'src/components/SessionCard.tsx',
-  'src/components/SkinSheet.tsx',
   'src/components/YardBits.tsx',
   'src/pages/DungeonPage.tsx',
   'src/pages/FishingPage.tsx',

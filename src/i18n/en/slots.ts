@@ -1,0 +1,68 @@
+import type { Translation } from '../types';
+import type { slots as ru } from '../ru/slots';
+
+export const slots: Translation<typeof ru> = {
+  orb: {
+    common: 'Common',
+    uncommon: 'Fine',
+    rare: 'Rare',
+    epic: 'Treasured',
+    legendary: 'Legendary',
+    mythic: 'Relic',
+  },
+  session: {
+    aria: 'Session summary',
+    grade: {
+      quiet: 'A quiet run',
+      ordinary: 'Run over',
+      good: 'Lucky run',
+      great: 'Great run',
+      unforgettable: 'One for the books',
+    },
+    noPeak: 'No big moments',
+    peak: 'Run highlight',
+    winTitle: '{x} in one spin',
+    winDetail: '{coins} on spin {at} of {of}',
+    at: 'on spin {at} of {of}',
+    chain: {
+      one: 'A {n}-link chain',
+      other: 'A {n}-link chain',
+    },
+    bonusOnce: 'Bonus',
+    bonusTimes: {
+      one: 'Bonus ×{n}',
+      other: 'Bonus ×{n}',
+    },
+    bonusDetail: 'first on spin {at} of {of}',
+    level: 'Level {n}',
+    levelMore: 'plus {n} more on the way',
+    flat: 'A steady run',
+    flatDetail: {
+      one: '{n} spin',
+      other: '{n} spins',
+    },
+    best: 'Your best of {n} runs',
+    spins: 'spins',
+    bestSpin: 'best spin',
+    played: 'played',
+    hook: '{xp} XP to level {lvl}',
+    again: 'One more go',
+    enough: 'Call it a day',
+    lessMin: 'under a minute',
+    min: '{m} min',
+    h: '{h} h',
+    hm: '{h} h {m} min',
+  },
+  skin: {
+    title: 'Machine skins',
+    granted: 'granted',
+    earned: 'earned',
+    relic: 'relic',
+    grantedNote: "granted to the machine's owner",
+    earnedBy: 'won with a {x} spin',
+    relicWhat: 'a ×{x} win in one spin',
+    yourBest: 'your best: {x} of ×{goal}',
+    fromLevel: 'from level {n}',
+    note: '“Relic” isn’t unlocked by level — you earn it with one big spin, and it stays forever. Symbols: Twemoji (CC-BY 4.0, Twitter Inc. and contributors).',
+  },
+};

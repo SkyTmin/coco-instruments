@@ -1,3 +1,4 @@
+import { cash } from './cash';
 import { common } from './common';
 import { field } from './field';
 import { hall } from './hall';
@@ -5,6 +6,7 @@ import { mine } from './mine';
 import { pets } from './pets';
 import { settings } from './settings';
 import { skins } from './skins';
+import { slots } from './slots';
 import { ui } from './ui';
 
 /**
@@ -12,6 +14,7 @@ import { ui } from './ui';
  * area; add an area here AND in every `<lang>/index.ts` (tsc enforces it).
  */
 export const ru = {
+  cash,
   common,
   field,
   hall,
@@ -19,5 +22,6 @@ export const ru = {
   pets,
   settings,
   skins,
+  slots,
   ui,
 } as const;

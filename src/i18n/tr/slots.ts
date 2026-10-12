@@ -1,0 +1,68 @@
+import type { Translation } from '../types';
+import type { slots as ru } from '../ru/slots';
+
+export const slots: Translation<typeof ru> = {
+  orb: {
+    common: 'Sıradan',
+    uncommon: 'Sağlam',
+    rare: 'Nadir',
+    epic: 'Kıymetli',
+    legendary: 'Efsanevi',
+    mythic: 'Kalıntı',
+  },
+  session: {
+    aria: 'Tur özeti',
+    grade: {
+      quiet: 'Sakin bir tur',
+      ordinary: 'Tur bitti',
+      good: 'Şanslı tur',
+      great: 'Harika tur',
+      unforgettable: 'Unutulmaz',
+    },
+    noPeak: 'Büyük an yok',
+    peak: 'Turun zirvesi',
+    winTitle: 'Tek spinde {x}',
+    winDetail: '{coins}, spin {at}/{of}',
+    at: 'spin {at}/{of}',
+    chain: {
+      one: '{n} halkalı zincir',
+      other: '{n} halkalı zincir',
+    },
+    bonusOnce: 'Bonus',
+    bonusTimes: {
+      one: 'Bonus ×{n}',
+      other: 'Bonus ×{n}',
+    },
+    bonusDetail: 'ilki: spin {at}/{of}',
+    level: 'Seviye {n}',
+    levelMore: 'yolda {n} seviye daha',
+    flat: 'Dümdüz bir tur',
+    flatDetail: {
+      one: '{n} spin',
+      other: '{n} spin',
+    },
+    best: '{n} tur içinde en iyisi',
+    spins: 'spin',
+    bestSpin: 'en iyi spin',
+    played: 'oyunda',
+    hook: 'Seviye {lvl} için {xp} XP',
+    again: 'Bir el daha',
+    enough: 'Bugünlük bu kadar',
+    lessMin: 'bir dakikadan az',
+    min: '{m} dk',
+    h: '{h} sa',
+    hm: '{h} sa {m} dk',
+  },
+  skin: {
+    title: 'Makine görünümleri',
+    granted: 'verildi',
+    earned: 'kazanıldı',
+    relic: 'kalıntı',
+    grantedNote: 'makine sahibine verildi',
+    earnedBy: '{x} spinle kazanıldı',
+    relicWhat: 'tek spinde ×{x} kazanç',
+    yourBest: 'en iyin: {x} / ×{goal}',
+    fromLevel: 'seviye {n} ile açılır',
+    note: '“Kalıntı” seviyeyle açılmaz — tek bir büyük spinle kazanılır ve sonsuza dek kalır. Semboller: Twemoji (CC-BY 4.0, Twitter Inc. ve katkıda bulunanlar).',
+  },
+};

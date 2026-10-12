@@ -1,0 +1,68 @@
+import type { Translation } from '../types';
+import type { slots as ru } from '../ru/slots';
+
+export const slots: Translation<typeof ru> = {
+  orb: {
+    common: 'Gewöhnlich',
+    uncommon: 'Solide',
+    rare: 'Selten',
+    epic: 'Kostbar',
+    legendary: 'Legendär',
+    mythic: 'Relikt',
+  },
+  session: {
+    aria: 'Rundenbilanz',
+    grade: {
+      quiet: 'Ruhige Runde',
+      ordinary: 'Runde vorbei',
+      good: 'Gute Runde',
+      great: 'Starke Runde',
+      unforgettable: 'Unvergesslich',
+    },
+    noPeak: 'Keine großen Momente',
+    peak: 'Highlight der Runde',
+    winTitle: '{x} in einem Spin',
+    winDetail: '{coins} im {at}. Spin von {of}',
+    at: 'im {at}. Spin von {of}',
+    chain: {
+      one: 'Kette aus {n} Glied',
+      other: 'Kette aus {n} Gliedern',
+    },
+    bonusOnce: 'Bonus',
+    bonusTimes: {
+      one: 'Bonus ×{n}',
+      other: 'Bonus ×{n}',
+    },
+    bonusDetail: 'erstmals im {at}. Spin von {of}',
+    level: 'Level {n}',
+    levelMore: 'und {n} weitere unterwegs',
+    flat: 'Gleichmäßige Runde',
+    flatDetail: {
+      one: '{n} Spin',
+      other: '{n} Spins',
+    },
+    best: 'Beste Runde von {n}',
+    spins: 'Spins',
+    bestSpin: 'bester Spin',
+    played: 'gespielt',
+    hook: 'Noch {xp} EP bis Level {lvl}',
+    again: 'Noch eine Runde',
+    enough: "Für heute reicht's",
+    lessMin: 'unter einer Minute',
+    min: '{m} Min.',
+    h: '{h} Std.',
+    hm: '{h} Std. {m} Min.',
+  },
+  skin: {
+    title: 'Automaten-Skins',
+    granted: 'verliehen',
+    earned: 'erspielt',
+    relic: 'Relikt',
+    grantedNote: 'dem Besitzer des Automaten verliehen',
+    earnedBy: 'mit einem {x}-Spin erspielt',
+    relicWhat: 'ein ×{x}-Gewinn in einem Spin',
+    yourBest: 'dein Bestwert: {x} von ×{goal}',
+    fromLevel: 'ab Level {n}',
+    note: '„Relikt“ schaltet kein Level frei — man erspielt es mit einem großen Spin, und es bleibt für immer. Symbole: Twemoji (CC-BY 4.0, Twitter Inc. und Mitwirkende).',
+  },
+};
