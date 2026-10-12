@@ -248,6 +248,8 @@ export interface Kind {
   name: string;
   pics: FrameLRU<Pic>;
   frames: FrameLRU<MobFrame>;
+  /** Элита и альбинос — свой кеш: не вытесняют прогретые обычные кадры. */
+  looks: FrameLRU<MobFrame>;
   limit: number;
 }
 const KINDS: Kind[] = [];
@@ -257,6 +259,7 @@ export function kindOf(name: string, limit: number, picsK = 0.6): Kind {
     name,
     pics: frameLRU<Pic>(Math.max(16, Math.round(limit * picsK))),
     frames: frameLRU<MobFrame>(limit),
+    looks: frameLRU<MobFrame>(Math.max(32, Math.round(limit * 0.35))),
     limit,
   };
   KINDS.push(K);
@@ -279,6 +282,7 @@ export const F7_MOB_STAT = {
     for (const K of KINDS) {
       K.pics.clear();
       K.frames.clear();
+      K.looks.clear();
     }
   },
 };
@@ -296,36 +300,6 @@ function stat(K: Kind, ms: number, key: string): void {
     F7_MOB_STAT.max = ms;
     F7_MOB_STAT.maxKey = `${K.name}|${key}`;
   }
-}
-
-function paleOf(p: Px): Px {
-  const pale = hx('#f4f2ff');
-  const q = new Px(p.w, p.h);
-  for (let i = 0; i < p.data.length; i += 4) {
-    if (!p.data[i + 3]) continue;
-    const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-    const c = mixc([l, l, l, 255], pale, 0.45);
-    q.data[i] = c[0];
-    q.data[i + 1] = c[1];
-    q.data[i + 2] = c[2];
-    q.data[i + 3] = p.data[i + 3];
-  }
-  return q;
-}
-
-/** Золотой кант элиты — кольцом снаружи контура (по плотным точкам). */
-function goldOf(p: Px): Px {
-  const q = new Px(p.w, p.h);
-  q.data.set(p.data);
-  const solid = (x: number, y: number) =>
-    x >= 0 && y >= 0 && x < p.w && y < p.h && p.data[(y * p.w + x) * 4 + 3] >= 100;
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      if (p.data[(y * p.w + x) * 4 + 3] >= 100) continue;
-      if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))
-        q.set(x, y, GOLD);
-    }
-  return q;
 }
 
 /** Холст из куска буфера [x0, y0, w, h]. */
@@ -359,12 +333,78 @@ function bbox(p: Px, b: [number, number, number, number]): void {
       }
 }
 
+/**
+ * Облик из готового обычного кадра (холст уже обрезан): альбинос — бледная
+ * перекраска, элита — золотой кант снаружи контура (холст шире на точку с
+ * каждой стороны, якорь, глаз и `lit` — следом).
+ */
+function lookOf(fr: MobFrame, look: Look): MobFrame {
+  // Только операции холста — без чтения точек обратно (это дорого).
+  const src = fr.img;
+  const w = src.width;
+  const h = src.height;
+  const m = look === 'elite' ? 1 : 0;
+  const c = document.createElement('canvas');
+  c.width = w + 2 * m;
+  c.height = h + 2 * m;
+  const g = c.getContext('2d');
+  if (g && w > 0 && h > 0) {
+    if (m) {
+      const s = document.createElement('canvas');
+      s.width = w;
+      s.height = h;
+      const sg = s.getContext('2d');
+      if (sg) {
+        sg.drawImage(src, 0, 0);
+        sg.globalCompositeOperation = 'source-in';
+        sg.fillStyle = GOLD_CSS;
+        sg.fillRect(0, 0, w, h);
+        for (const [dx, dy] of [
+          [0, 1],
+          [2, 1],
+          [1, 0],
+          [1, 2],
+        ])
+          g.drawImage(s, dx, dy);
+      }
+      g.drawImage(src, 1, 1);
+    } else {
+      g.drawImage(src, 0, 0);
+      g.globalCompositeOperation = 'saturation';
+      g.fillStyle = '#808080';
+      g.fillRect(0, 0, w, h);
+      g.globalCompositeOperation = 'source-atop';
+      g.globalAlpha = 0.45;
+      g.fillStyle = '#f4f2ff';
+      g.fillRect(0, 0, w, h);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'destination-in';
+      g.drawImage(src, 0, 0);
+    }
+  }
+  let lit = fr.lit ?? null;
+  if (lit && m) {
+    const l = document.createElement('canvas');
+    l.width = w + 2;
+    l.height = h + 2;
+    l.getContext('2d')?.drawImage(lit, 1, 1);
+    lit = l;
+  }
+  return {
+    ...fr,
+    img: c,
+    lit,
+    ax: fr.ax + m,
+    ay: fr.ay + m,
+    eye: fr.eye ? [fr.eye[0] + m, fr.eye[1] + m] : null,
+  };
+}
+const GOLD_CSS = `rgb(${GOLD[0]},${GOLD[1]},${GOLD[2]})`;
+
 /** Картинка → кадр: облик, зеркало, обрезка (якорь, глаз и `lit` — следом). */
-function bake(pic: Pic, mir: boolean, look: Look): MobFrame {
+function bake(pic: Pic, mir: boolean): MobFrame {
   let p = pic.p;
   let lit = pic.lit;
-  if (look === 'albino') p = paleOf(p);
-  if (look === 'elite') p = goldOf(p);
   let ax = pic.ax;
   let eye = pic.eye;
   if (mir) {
@@ -405,12 +445,23 @@ export function frameOf(
   build: () => Pic,
 ): MobFrame {
   const fk = `${key}|${mir ? 1 : 0}|${look}`;
+  if (look !== 'normal') {
+    // Элита и альбинос — из готового (прогретого) обычного кадра: картинку
+    // позы заново не строим (она могла уйти из кеша картинок).
+    const hit = K.looks.get(fk);
+    if (hit) return hit;
+    const base = frameOf(K, key, mir, 'normal', build);
+    const t1 = performance.now();
+    const fr = K.looks.set(fk, lookOf(base, look));
+    stat(K, performance.now() - t1, fk);
+    return fr;
+  }
   let fr = K.frames.get(fk);
   if (fr) return fr;
   const t0 = performance.now();
   let pic = K.pics.get(key);
   if (!pic) pic = K.pics.set(key, build());
-  fr = K.frames.set(fk, bake(pic, mir, look));
+  fr = K.frames.set(fk, bake(pic, mir));
   stat(K, performance.now() - t0, fk);
   return fr;
 }
