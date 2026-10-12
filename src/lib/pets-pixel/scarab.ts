@@ -124,7 +124,16 @@ const STONE = ramp(
   '#9c9284',
   '#b8ae9e',
 );
-const WING = ramp('#241a18', '#3c2e28', '#5a4840', '#7c6658', '#9e8672', '#bea68e', '#dcc8ae', '#f2e6d2');
+const WING = ramp(
+  '#241a18',
+  '#3c2e28',
+  '#5a4840',
+  '#7c6658',
+  '#9e8672',
+  '#bea68e',
+  '#dcc8ae',
+  '#f2e6d2',
+);
 const INNER = ramp('#0a0608', '#160c0e', '#241416', '#341e1e', '#462a26', '#5a3830');
 
 const PAL_V: RGBA[][][] = [
@@ -612,10 +621,12 @@ function idlePose(t: number): Pose {
   o.lean = 0.03 * Math.sin((TAU * t) / T);
   o.bx = 0.35 * Math.sin((TAU * t) / T);
   o.hturn = 0.1 * Math.sin((TAU * t) / T + 1.2);
-  o.nod = 0.04 * Math.sin((TAU * t) / T * 2 + 0.3);
+  o.nod = 0.04 * Math.sin(((TAU * t) / T) * 2 + 0.3);
   // Веера булав раскрываются и складываются вразнобой.
-  o.fanL = 0.42 + 0.3 * pos(Math.sin((TAU * t) / T * 2 + 0.4)) + 0.3 * bump(wrap(t - 0.2, T), 0, 0.5);
-  o.fanR = 0.42 + 0.3 * pos(Math.sin((TAU * t) / T * 2 + 2.2)) + 0.3 * bump(wrap(t - 1.6, T), 0, 0.5);
+  o.fanL =
+    0.42 + 0.3 * pos(Math.sin(((TAU * t) / T) * 2 + 0.4)) + 0.3 * bump(wrap(t - 0.2, T), 0, 0.5);
+  o.fanR =
+    0.42 + 0.3 * pos(Math.sin(((TAU * t) / T) * 2 + 2.2)) + 0.3 * bump(wrap(t - 1.6, T), 0, 0.5);
   o.antL = 0.15 * Math.sin((TAU * t) / T + 0.5);
   o.antR = 0.15 * Math.sin((TAU * t) / T + 2.1);
   for (const [i, t0, L] of TAPS) {
@@ -783,7 +794,8 @@ function ballClear(o: Pose, gap: number): number {
     }
   for (let d = 0; d < 80; d += 0.1) {
     const C: V3 = [FG[0] * d, FG[1] * d, BALL_R];
-    if (pts.every((q) => Math.hypot(q[0] - C[0], q[1] - C[1], q[2] - C[2]) >= BALL_R + gap)) return d;
+    if (pts.every((q) => Math.hypot(q[0] - C[0], q[1] - C[1], q[2] - C[2]) >= BALL_R + gap))
+      return d;
   }
   return 40;
 }
@@ -846,7 +858,8 @@ function workS(t: number): number {
   ]);
 }
 /** Сколько шар прокатился к моменту `t`. */
-const rolled = (t: number) => (t < T_HS ? 0 : t > T_BUMP ? D_PUSH : Math.max(0, Math.min(D_PUSH, workS(t) - S_H)));
+const rolled = (t: number) =>
+  t < T_HS ? 0 : t > T_BUMP ? D_PUSH : Math.max(0, Math.min(D_PUSH, workS(t) - S_H));
 
 interface Step {
   i: number;
@@ -856,8 +869,7 @@ interface Step {
   hs?: boolean;
   to?: V3;
 }
-const tri = (g: number[], a: number, b: number, h = 1.6): Step[] =>
-  g.map((i) => ({ i, a, b, h }));
+const tri = (g: number[], a: number, b: number, h = 1.6): Step[] => g.map((i) => ({ i, a, b, h }));
 /** Передняя (в стойке на голове) и средняя лапы — шаг вместе. */
 const pair = (f: number, m: number, a: number, b: number): Step[] => [
   { i: f, a, b, h: 1.2, hs: true },
@@ -1001,11 +1013,16 @@ function planted(i: number, t: number): V3 {
   for (const st of WORK_STEPS) {
     if (st.i !== i) continue;
     if (t < st.a) break;
-    const to = st.to ?? homeW(i, workRoot(st.b + Math.min(0.035, (st.b - st.a) * 0.5)), st.hs ?? false);
+    const to =
+      st.to ?? homeW(i, workRoot(st.b + Math.min(0.035, (st.b - st.a) * 0.5)), st.hs ?? false);
     if (t < st.b) {
       const u = (t - st.a) / (st.b - st.a);
       const w = smooth(u);
-      return [lerp(p[0], to[0], w), lerp(p[1], to[1], w), lerp(p[2], to[2], w) + st.h * Math.sin(Math.PI * u)];
+      return [
+        lerp(p[0], to[0], w),
+        lerp(p[1], to[1], w),
+        lerp(p[2], to[2], w) + st.h * Math.sin(Math.PI * u),
+      ];
     }
     p = to;
   }
@@ -1399,7 +1416,8 @@ function limb(
 ): void {
   const d = sub(q, p);
   const dl = Math.hypot(d[0], d[1], d[2]) || 1;
-  const h = Math.abs(dot(d, hint)) / dl > 0.9 ? (Math.abs(d[2]) / dl > 0.9 ? [1, 0, 0] : [0, 0, 1]) : hint;
+  const h =
+    Math.abs(dot(d, hint)) / dl > 0.9 ? (Math.abs(d[2]) / dl > 0.9 ? [1, 0, 0] : [0, 0, 1]) : hint;
   out.push({
     c: mul(add(p, q), 0.5),
     ax: axes(d, h as V3),
@@ -1486,7 +1504,11 @@ function bodyParts(out: PartF[], c: Ctx): void {
       const hg: V3 = [s * 1.2, ELY_C[1] + ELY_R[1] * 0.78, ELY_C[2] + ELY_R[2] * 0.55];
       const turn = (v: V3): V3 => yawZ(pitchX(rollY(v, -s * 0.55 * e), 0.85 * e), -s * 0.5 * e);
       const cc = add(hg, turn(sub(ec, hg)));
-      const hax: [V3, V3, V3] = [F.Rd(turn([1, 0, 0])), F.Rd(turn([0, 1, 0])), F.Rd(turn([0, 0, 1]))];
+      const hax: [V3, V3, V3] = [
+        F.Rd(turn([1, 0, 0])),
+        F.Rd(turn([0, 1, 0])),
+        F.Rd(turn([0, 0, 1])),
+      ];
       out.push({
         c: bodyAt(F, cc),
         ax: hax,
@@ -1543,7 +1565,11 @@ function bodyParts(out: PartF[], c: Ctx): void {
       noSeam: true,
     });
   const tilt = (v: V3) => pitchX(v, CLY_TILT);
-  const cax: [V3, V3, V3] = [F.HRd(tilt([1, 0, 0])), F.HRd(tilt([0, 1, 0])), F.HRd(tilt([0, 0, 1]))];
+  const cax: [V3, V3, V3] = [
+    F.HRd(tilt([1, 0, 0])),
+    F.HRd(tilt([0, 1, 0])),
+    F.HRd(tilt([0, 0, 1])),
+  ];
   const nT = HI ? 6 : 4;
   const dA = HI ? 0.36 : 0.5;
   const cid = nid();
@@ -1617,8 +1643,14 @@ function antennae(out: PartF[], c: Ctx): void {
   for (const s of [-1, 1]) {
     const { fan, base, elbow, tip, d2, u, nf } = antGeo(o, F, lag, s);
     const sid = nid();
-    limb(out, base, elbow, HI ? 0.42 : 0.5, HI ? 0.42 : 0.5, P_BODY, sid, { tube: true, bias: 0.1 });
-    limb(out, elbow, tip, HI ? 0.38 : 0.45, HI ? 0.38 : 0.45, P_BODY, sid, { tube: true, bias: 0.12 });
+    limb(out, base, elbow, HI ? 0.42 : 0.5, HI ? 0.42 : 0.5, P_BODY, sid, {
+      tube: true,
+      bias: 0.1,
+    });
+    limb(out, elbow, tip, HI ? 0.38 : 0.45, HI ? 0.38 : 0.45, P_BODY, sid, {
+      tube: true,
+      bias: 0.12,
+    });
     const L = (HI ? 3.3 : 3.5) * KB;
     for (const j of [-1, 0, 1]) {
       const a = j * (0.12 + 0.55 * fan);
@@ -2087,7 +2119,14 @@ function eyes(p: Px, f: Frame, c: Ctx): void {
     }
     const rows = HI ? EYES_L[key] : EYES_S[key];
     const wd = rows[0].length;
-    stamp(p, rows, ep, e[0] - Math.floor(wd / 2), e[1] - Math.floor(rows.length / 2), s > 0 && key === 'angry');
+    stamp(
+      p,
+      rows,
+      ep,
+      e[0] - Math.floor(wd / 2),
+      e[1] - Math.floor(rows.length / 2),
+      s > 0 && key === 'angry',
+    );
   }
 }
 
@@ -2162,7 +2201,14 @@ function sparkles(p: Px, f: Frame, c: Ctx): void {
   if (o.glint >= 0) {
     const q = mul(headAt(F, GROOM), RR * SC);
     const e = seen(f, q, OX, OY, 2 * RR);
-    if (e) star(p, e[0], e[1] - (HI ? 1 : 0), Math.round((HI ? 3 : 2) * Math.sin(Math.PI * o.glint) + 0.4), gold);
+    if (e)
+      star(
+        p,
+        e[0],
+        e[1] - (HI ? 1 : 0),
+        Math.round((HI ? 3 : 2) * Math.sin(Math.PI * o.glint) + 0.4),
+        gold,
+      );
   }
 }
 
@@ -2176,7 +2222,10 @@ function crackLines(p: Px, f: Frame, c: Ctx): void {
   const b = add(C, [0, o.ballR * 0.6, o.ballR * 0.8]);
   const [ax, ay] = scr(a);
   const [bx, by] = scr(b);
-  const n = Math.max(1, Math.round(Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * Math.min(1, u * 1.6)));
+  const n = Math.max(
+    1,
+    Math.round(Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * Math.min(1, u * 1.6)),
+  );
   const col = hx('#1a0c02');
   const L = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) || 1;
   for (let i = 0; i <= n; i++) {

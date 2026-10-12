@@ -254,7 +254,7 @@ export const PET_PX: Record<string, PetPx> = {
   },
   scarab: {
     box: 48,
-    rev: '197e11a660',
+    rev: '4df61ab8d7',
     anims: {
       idle: { n: 72, fps: 24, x: -1, y: 13, w: 50, h: 38 },
       walk: { n: 24, fps: 24, x: -1, y: 13, w: 50, h: 39 },
