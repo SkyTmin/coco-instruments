@@ -432,7 +432,6 @@ interface Xf {
   /** Направление с масштабом (длина = растяжение вдоль него). */
   d(v: V3): V3;
 }
-const IDX: Xf = { p: (v) => v, d: (v) => v };
 
 /** Поворот вокруг вертикали через точку o: + — от +x к +y (к зрителю). */
 function rotZ(v: V3, a: number, o: V3 = [0, 0, 0]): V3 {
@@ -1178,9 +1177,10 @@ export function frame(name: string, i: number, res: Res, _v = 0): Px {
   if (!st) throw new Error(`книги: нет полосы ${name}`);
   const { kind, tier } = parse(name);
   const t = i / FPS;
-  if (kind === 'still') return render(tier, REST, res);
+  if (kind === 'still') return idleFrame(tier, 0, res);
   if (kind === 'idle') return idleFrame(tier, i, res);
-  if (kind === 'reveal') return revealFrame(tier, t, res);
+  // Последний кадр открытия — книга на полке, как кадр 0 покоя: сцена меняет полосу без скачка.
+  if (kind === 'reveal') return i >= st.frames - 1 ? idleFrame(tier, 0, res) : revealFrame(tier, t, res);
   if (kind === 'apply-ok') return applyFrame(tier, t, res);
   if (kind === 'apply-burn') return burnFrame(tier, t, res);
   throw new Error(`книги: неизвестная полоса ${name}`);
@@ -1201,7 +1201,7 @@ function idleFrame(tier: Tier, i: number, res: Res): Px {
   pose.sheen = s > -0.1 && s < 1.15 ? s : null;
   if (tier === 'epic') pose.gem = bump(u, 0.1, 0.4);
   if (tier === 'legend') pose.sigil = 0.5 + 0.5 * Math.sin(u * Math.PI * 4);
-  if (tier !== 'simple') pose.edge = tier === 'rare' ? 0 : 0.18 + 0.12 * Math.sin(u * Math.PI * 2);
+  pose.edge = idleEdge(tier, u);
   return render(tier, pose, res, (sc) => {
     if (tier === 'rare' && bump(u, 0.12, 0.3) > 0) {
       // Искра на серебряном уголке.
@@ -1212,16 +1212,26 @@ function idleFrame(tier: Tier, i: number, res: Res): Px {
       const p = bookPoint(pose, [MED_X - W / 2 - 0.6, T / 2 + 2, MED_Z + MED_R + 5.4]);
       star(sc, p, bump(u, 0.12, 0.34), ['#ffffff', '#f8b0f2', '#e070e0']);
     }
-    if (tier === 'legend') {
-      // Огоньки на орбите: дальняя половина — за книгой.
-      for (let k = 0; k < 5; k++) {
-        const a = u * Math.PI * 2 + (k * Math.PI * 2) / 5;
-        const pz = H * 0.5 + Math.sin(a * 2 + k) * 4 + pose.z;
-        const p: V3 = [pose.x + Math.cos(a) * (W * 0.78), Math.sin(a) * (W * 0.5), pz];
-        mote(sc, p, GLOW.legend, k % 2 === 0 ? 2 : 1);
-      }
-    }
+    if (tier === 'legend') legendMotes(sc, pose, u);
   });
+}
+
+/** Сколько светится обрез в покое (кадр u петли). */
+const idleEdge = (tier: Tier, u: number) =>
+  tier === 'simple' || tier === 'rare' ? 0 : 0.18 + 0.12 * Math.sin(u * Math.PI * 2);
+
+/**
+ * Огоньки легендарной на орбите (кадр u петли покоя): дальняя половина — за книгой.
+ * `k` < 1 — гаснут (открытие их зажигает, вписывание гасит).
+ */
+function legendMotes(sc: Scene, pose: Pose, u: number, k = 1): void {
+  for (let j = 0; j < 5; j++) {
+    if (k < 1 && (j + 0.5) / 5 > k) continue;
+    const a = u * Math.PI * 2 + (j * Math.PI * 2) / 5;
+    const pz = H * 0.5 + Math.sin(a * 2 + j) * 4 + pose.z;
+    const p: V3 = [pose.x + Math.cos(a) * (W * 0.78), Math.sin(a) * (W * 0.5), pz];
+    mote(sc, p, GLOW.legend, j % 2 === 0 ? 2 : 1);
+  }
 }
 
 /** Точка книги (в своих координатах, крышка закрыта) → мир. */
@@ -1422,7 +1432,7 @@ function revealPose(tier: Tier, t: number): Pose {
       [R.open + 0.2, 0],
       [R.close + 0.12, 0],
       [R.close + 0.2, 0.6],
-      [T0, 0],
+      [T0, idleEdge(tier, 0)],
     ]);
   const gMax = tier === 'simple' ? 0.35 : 1;
   o.glow = kf(t, [
@@ -1433,7 +1443,11 @@ function revealPose(tier: Tier, t: number): Pose {
   ]);
   if (tier === 'epic') o.gem = clamp01(bump(t, R.land + 0.2, R.snap + 0.2) * 1.2) * (0.6 + 0.4 * Math.sin(t * 40));
   if (tier === 'legend')
-    o.sigil = Math.max(bump(t, R.land + 0.2, R.snap + 0.1) * (0.7 + 0.3 * Math.sin(t * 38)), bump(t, R.lock - 0.1, T0 + 0.3) * 0.6);
+    o.sigil = Math.max(
+      bump(t, R.land + 0.2, R.snap + 0.1) * (0.7 + 0.3 * Math.sin(t * 38)),
+      // На замке знак вспыхивает и садится к свечению покоя.
+      t > R.lock - 0.1 ? kf(t, [[R.lock - 0.1, 0], [R.lock + 0.1, 0.85], [T0, 0.5]]) : 0,
+    );
   const fl = tier === 'legend' ? 1 : tier === 'epic' ? 0.7 : tier === 'rare' ? 0.5 : 0.25;
   o.flash = fl * kf(t, [
     [R.peak - 0.05, 0],
@@ -1509,6 +1523,8 @@ function revealFrame(tier: Tier, t: number, res: Res): Px {
     if (tier === 'legend') {
       runes(sc, o, t, R.snap + 0.12, R.lock + 0.05);
       legendChains(sc, o, t);
+      // Огоньки покоя зажигаются к концу: последний кадр — кадр 0 петли покоя.
+      if (t > R.T - 0.35) legendMotes(sc, o, (t - R.T) / IDLE_T.legend, (t - (R.T - 0.35)) / 0.35);
     }
     },
     { chains: false },
@@ -1777,8 +1793,9 @@ function runes(sc: Scene, o: Pose, t: number, a: number, b: number): void {
   const k = Math.min(clamp01((t - a) / 0.25), clamp01((b - t) / 0.25));
   if (k <= 0) return;
   const R = sc.c.RR;
-  const sx = R > 1 ? 2 : 1;
-  const sy = R > 1 ? 2.25 : 1.25;
+  const sx = R > 1 ? 2.6 : 1.1;
+  const sy = R > 1 ? 3 : 1.35;
+  const thick = R > 1 ? 2 : 1;
   const core = hx('#fff2c0');
   const edge = hx('#d0780e');
   for (let j = 0; j < RUNES.length; j++) {
@@ -1791,8 +1808,8 @@ function runes(sc: Scene, o: Pose, t: number, a: number, b: number): void {
         const px = Math.round(x - sx + ((x0 + ((x1 - x0) * s) / n) * sx));
         const py = Math.round(y - 2 * sy + ((y0 + ((y1 - y0) * s) / n) * sy));
         if (k < 1 && !dith(px, py, k)) continue;
-        put(sc, px + 1, py + 1, edge, d);
-        put(sc, px, py, back ? edge : core, d);
+        for (let q = 0; q < thick; q++) put(sc, px + q + 1, py + 1, edge, d);
+        for (let q = 0; q < thick; q++) put(sc, px + q, py, back ? edge : core, d);
       }
     }
   }
@@ -1921,13 +1938,15 @@ function applyPose(tier: Tier, t: number): Pose {
     // Лист приподнимается к зрителю и срывается (дальше это луч).
     o.sheets.push(t < tk + LIFT ? 1.25 * u * u : 0);
   }
-  if (tier !== 'simple') o.edge = bump(t, 0.05, 0.5) * 0.8;
+  // Начало — кадр 0 покоя (обрез и знак легендарной светятся), дальше — своё.
+  const from0 = clamp01(1 - t / 0.2);
+  o.edge = Math.max(idleEdge(tier, 0) * from0, tier !== 'simple' ? bump(t, 0.05, 0.5) * 0.8 : 0);
   o.glow = kf(t, [
     [0.36, 0.25],
     [0.6, tier === 'simple' ? 0.5 : 1],
   ]);
   if (tier === 'epic') o.gem = bump(t, 0.05, 0.45);
-  if (tier === 'legend') o.sigil = bump(t, 0.05, 0.45);
+  if (tier === 'legend') o.sigil = Math.max(0.5 * from0, bump(t, 0.05, 0.45));
   o.fade = kf(t, [
     [A - 0.44, 0],
     [A - 0.1, 1],
@@ -1955,6 +1974,8 @@ function applyFrame(tier: Tier, t: number, res: Res): Px {
           link(sc, p, j % 2 === 0, dt * 16 + j, 1 - dt / 0.4);
         });
     }
+    // Огоньки легендарной гаснут.
+    if (tier === 'legend' && t < 0.3) legendMotes(sc, o, t / IDLE_T.legend, 1 - t / 0.3);
     // Листы — лучи света вниз, к кирке.
     for (let k = 0; k < APPLY_N[tier]; k++) {
       const t0 = SHEET0 + k * gap + LIFT;
@@ -1965,6 +1986,13 @@ function applyFrame(tier: Tier, t: number, res: Res): Px {
       const side = (k % 2 ? 1 : -1) * (6 + 10 * hash(k, 3, 9));
       const ctrl: V3 = [lerp(from[0], APPLY_TO[0], 0.3) + side, from[1] + 6, lerp(from[2], APPLY_TO[2], 0.25) + 8];
       streak(sc, from, ctrl, APPLY_TO, u, ramp);
+      // От редкой — второй, тоньше и с другим изгибом: лист рвётся светом на полосы.
+      if (tier !== 'simple' && u > 0.1) {
+        const c2: V3 = [ctrl[0] - side * 0.9, ctrl[1], ctrl[2] + 4];
+        streak(sc, add(from, [-2.5, 0, -3]), c2, APPLY_TO, (u - 0.1) * 1.05, ramp);
+      }
+      // Лист вспыхивает, когда срывается.
+      if (u < 0.3) star(sc, from, 1 - u / 0.3, ['#ffffff', ...ramp.slice(-3).reverse()], false);
     }
     // Попадание: искра в точке кирки.
     const hitK = bump(t, applyHit(tier) - 0.02, applyHit(tier) + 0.2);
@@ -2144,7 +2172,7 @@ function burnFx(sc: Scene, t: number, T0: number, crumble: number): void {
     const snap = new Uint8ClampedArray(p.data);
     for (let i = 0; i < n; i++) if (orig[i * 4 + 3] > 0) p.data[i * 4 + 3] = 0;
     const done = new Set<number>();
-    const fade = clamp01((t - (T0 - 0.32)) / 0.26);
+    const fade = clamp01((t - (T0 - 0.34)) / 0.24);
     for (const i of cells) {
       const x = i % w;
       const y = (i / w) | 0;
@@ -2174,7 +2202,7 @@ function burnFx(sc: Scene, t: number, T0: number, crumble: number): void {
           if (!burnt[si / 4]) continue;
           const nx = Math.floor(bx + xx + oxx);
           const ny = Math.floor(by + yy + oyy);
-          if (fade > 0 && dith(nx, ny, fade)) continue;
+          if (fade >= 1 || (fade > 0 && dith(nx, ny, fade))) continue;
           // Хлопья гаснут: жар уходит в серый пепел.
           const c: RGBA =
             dt > 0.15 ? (hash(nx, ny, 9) > 0.8 ? hx('#5a4a40') : hx('#2a2220')) : [snap[si], snap[si + 1], snap[si + 2], 255];
@@ -2185,7 +2213,8 @@ function burnFx(sc: Scene, t: number, T0: number, crumble: number): void {
   // Искры летят вверх из огня.
   for (let j = 0; j < 16; j++) {
     const t0 = 0.12 + hash(j, 1, 13) * (T0 - 0.62);
-    const uu = (t - t0) / 0.55;
+    // Искра гаснет до последнего кадра: он пуст.
+    const uu = (t - t0) / Math.min(0.55, T0 - 0.08 - t0);
     if (uu <= 0 || uu >= 1) continue;
     const sx = sc.ox + (hash(j, 2, 13) - 0.5) * W * R;
     const sy = sc.oy - hash(j, 3, 13) * H * 0.9 * R;
