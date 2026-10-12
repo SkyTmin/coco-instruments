@@ -8,6 +8,7 @@ import type { Anim } from './pets-pixel/index';
 import { FPS, FRAMES, phoenixFrame, poseAt, RES } from './pets-pixel/phoenix';
 import * as Dragon from './pets-pixel/dragon';
 import * as Fox from './pets-pixel/fox';
+import * as Raccoon from './pets-pixel/raccoon';
 import * as Raven from './pets-pixel/raven';
 import * as Shepherd from './pets-pixel/shepherd';
 import * as Spider from './pets-pixel/spider';
@@ -436,5 +437,70 @@ describe('пиксельный паук', () => {
     const p = W.poseAt('walk', 0.25) as unknown as Record<string, number>;
     for (const k of ['lL0', 'lR1', 'lL2', 'lR3']) expect(p[k]).toBeGreaterThan(1);
     for (const k of ['lR0', 'lL1', 'lR2', 'lL3']) expect(p[k]).toBe(0);
+  });
+});
+
+describe('пиксельный енот', () => {
+  const W = Raccoon;
+
+  it('рисунок детерминирован; золотой рисует сам, на том же холсте', () => {
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1]) {
+        const a = W.raccoonFrame('work', 31, r, v);
+        const b = W.raccoonFrame('work', 31, r, v);
+        expect([a.w, a.h]).toEqual([W.RES[r].cw, W.RES[r].ch]);
+        expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
+      }
+    const plain = W.raccoonFrame('idle', 0, 's', 0).data;
+    const gold = W.raccoonFrame('idle', 0, 's', 1).data;
+    expect(Buffer.from(plain).equals(Buffer.from(gold))).toBe(false);
+  });
+
+  it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, только свой золотой', () => {
+    const m = PET_PX.raccoon;
+    expect(m.box).toBe(W.RES.s.box);
+    expect(m.large?.box).toBe(W.RES.l.box);
+    for (const a of ANIMS) {
+      for (const set of [m, m.large!]) {
+        expect(set.anims[a].n).toBe(W.FRAMES[a]);
+        expect(set.anims[a].fps).toBe(W.FPS);
+      }
+      expect(PIXEL_PETS.raccoon.anims[a]).toEqual({ n: W.FRAMES[a], fps: W.FPS });
+    }
+    expect(PIXEL_PETS.raccoon.variants).toEqual([1]);
+    expect(PET_SPRITES.raccoon).toBeUndefined();
+    const sec = (a: Anim) => W.FRAMES[a] / W.FPS;
+    expect([sec('idle'), sec('sleep'), sec('walk'), sec('work')]).toEqual([3, 3, 1, 2]);
+    expect(Math.abs(sec('happy') - 1.1)).toBeLessThan(0.05);
+    expect(Math.abs(sec('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {
+    const T = (a: Anim) => W.FRAMES[a] / W.FPS;
+    const rest = W.poseAt('idle', 0);
+    const lag0 = W.lagOf('idle', 0);
+    for (const a of ['happy', 'work', 'attack'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), rest)]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), lag0, 0.05)]).toEqual([a, []]);
+    }
+    for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), W.poseAt(a, 0))]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), W.lagOf(a, 0), 0.05)]).toEqual([a, []]);
+    }
+  });
+
+  it('валун: слушает со стетоскопом, бьёт молоточком, половинки с рудой; к концу всё убрано', () => {
+    const listen = W.poseAt('work', 0.6);
+    expect([listen.rock, listen.bell, listen.ticks, listen.split]).toEqual([1, 1, 1, 0]);
+    const tap = W.poseAt('work', 1.14);
+    expect(tap.ham).toBe(1);
+    expect(tap.crack).toBeGreaterThan(0.5);
+    const open = W.poseAt('work', 1.5);
+    expect([open.rock, open.split]).toEqual([1, 1]);
+    expect(open.glint).toBeGreaterThan(0);
+    const end = W.poseAt('work', W.FRAMES.work / W.FPS);
+    expect([end.rock, end.split, end.crack, end.ham, end.bell, end.ticks]).toEqual([
+      0, 0, 0, 0, 0, -1,
+    ]);
   });
 });

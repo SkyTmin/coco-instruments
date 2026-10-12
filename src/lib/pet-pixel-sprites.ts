@@ -91,6 +91,29 @@ export const PET_PX: Record<string, PetPx> = {
       },
     },
   },
+  raccoon: {
+    box: 48,
+    rev: '4df02dbcf8',
+    anims: {
+      idle: { n: 72, fps: 24, x: 8, y: 4, w: 38, h: 45 },
+      walk: { n: 24, fps: 24, x: 7, y: 7, w: 41, h: 42 },
+      happy: { n: 26, fps: 24, x: 8, y: -1, w: 38, h: 50 },
+      work: { n: 48, fps: 24, x: 8, y: 5, w: 38, h: 48 },
+      attack: { n: 22, fps: 24, x: 5, y: -2, w: 44, h: 52 },
+      sleep: { n: 72, fps: 24, x: 9, y: 17, w: 33, h: 32 },
+    },
+    large: {
+      box: 112,
+      anims: {
+        idle: { n: 72, fps: 24, x: 24, y: 16, w: 80, h: 93 },
+        walk: { n: 24, fps: 24, x: 24, y: 22, w: 85, h: 87 },
+        happy: { n: 26, fps: 24, x: 25, y: 4, w: 80, h: 105 },
+        work: { n: 48, fps: 24, x: 23, y: 18, w: 82, h: 101 },
+        attack: { n: 22, fps: 24, x: 18, y: 1, w: 92, h: 109 },
+        sleep: { n: 72, fps: 24, x: 27, y: 41, w: 67, h: 69 },
+      },
+    },
+  },
   raven: {
     box: 48,
     rev: 'dde083d6b0',

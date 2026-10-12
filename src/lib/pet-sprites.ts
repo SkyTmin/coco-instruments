@@ -483,58 +483,6 @@ export const PET_SPRITES: Record<string, { anims: Record<string, PetStrip> }> = 
       },
     },
   },
-  raccoon: {
-    anims: {
-      attack: {
-        fps: 14,
-        h: 1.0773,
-        n: 12,
-        w: 0.9372,
-        x: 0.0302,
-        y: -0.0386,
-      },
-      happy: {
-        fps: 14,
-        h: 1.1377,
-        n: 16,
-        w: 0.9275,
-        x: 0.0012,
-        y: -0.128,
-      },
-      idle: {
-        fps: 6,
-        h: 0.9348,
-        n: 18,
-        w: 0.8116,
-        x: 0.0906,
-        y: 0.0749,
-      },
-      sleep: {
-        fps: 6,
-        h: 1.0266,
-        n: 18,
-        w: 0.8309,
-        x: 0.0978,
-        y: -0.0097,
-      },
-      walk: {
-        fps: 12,
-        h: 0.9372,
-        n: 12,
-        w: 0.8527,
-        x: 0.0713,
-        y: 0.0725,
-      },
-      work: {
-        fps: 8,
-        h: 0.9758,
-        n: 16,
-        w: 0.9638,
-        x: 0.0036,
-        y: 0.0507,
-      },
-    },
-  },
   roach: {
     anims: {
       attack: {

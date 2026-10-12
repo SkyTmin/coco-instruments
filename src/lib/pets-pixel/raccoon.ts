@@ -179,15 +179,15 @@ const PAL_V: RGBA[][][] = [
     ramp('#141110', '#1e1a18', '#2a2522', '#36302c', '#433b36', '#524842', '#625650', '#74675f'),
     // Перчатки — мягкая коричневая кожа.
     ramp(
-      '#2a1a10',
-      '#3e2616',
-      '#55341e',
-      '#6d4428',
-      '#865634',
-      '#9e6a42',
-      '#b58052',
-      '#c99866',
-      '#dbb27e',
+      '#20120a',
+      '#321c10',
+      '#462816',
+      '#5a341e',
+      '#704228',
+      '#865232',
+      '#9a643e',
+      '#ae784e',
+      '#c08e62',
     ),
     // Скрутка — кожа темнее и краснее.
     ramp('#1c0e06', '#2c160a', '#3e200f', '#522a14', '#66361a', '#7c4422', '#92542c', '#a86838'),
@@ -261,7 +261,6 @@ const PAL_V: RGBA[][][] = [
 ];
 const INK_V: RGBA[] = [hx('#0b0806'), hx('#1a0d02')];
 const WHITE = hx('#ffffff');
-const BLUR = hx('#f4ead8', 170);
 
 // ---------------------------------------------------------------------------
 // Кадр: холст и рамка тела у двух полос (как у волка и лиса).
@@ -382,7 +381,7 @@ export interface Pose {
 }
 
 /** Кисти в покое: опущены по бокам, у пояса (в координатах тела). */
-const HAND0: V3 = [9.6, 3.4, 9.0];
+const HAND0: V3 = [9.2, 3.6, 8.8];
 
 const REST: Pose = {
   x: 0,
@@ -408,7 +407,7 @@ const REST: Pose = {
   flR: 0,
   tailSw: 0,
   tailUp: 0,
-  tailCurl: 0,
+  tailCurl: 0.25,
   hLx: -HAND0[0],
   hLy: HAND0[1],
   hLz: HAND0[2],
@@ -513,7 +512,7 @@ function idlePose(t: number): Pose {
   o.flR = bump(t, 2.3, 2.42) + 0.6 * bump(t, 2.44, 2.54);
   o.blink = Math.max(bump(t, 0.3, 0.46), bump(t, 2.6, 2.74));
   o.tailSw = 0.16 * Math.sin((t / T) * TAU);
-  o.tailCurl = 0.25 + 0.2 * Math.sin((t / T) * TAU * 2);
+  o.tailCurl = REST.tailCurl + 0.2 * Math.sin((t / T) * TAU * 2);
   return o;
 }
 
@@ -594,7 +593,7 @@ function happyPose(t: number): Pose {
   o.grin = lerp(REST.grin, 1, env);
   o.tailSw = 0.5 * Math.sin(TAU * 2.6 * t) * env;
   o.tailUp = 0.9 * env;
-  o.tailCurl = 0.5 * env;
+  o.tailCurl = REST.tailCurl + 0.3 * env;
   return o;
 }
 
@@ -732,7 +731,7 @@ function workPose(t: number): Pose {
   o.earR += -0.3 * glad;
   o.tailUp = 0.7 * glad;
   o.tailSw = 0.4 * Math.sin(TAU * 2.5 * t) * glad;
-  o.tailCurl = 0.4 * glad;
+  o.tailCurl = REST.tailCurl + 0.2 * glad;
   o.look = -0.6 * listen;
   o.chest = 0.5 * bump(t, 0.98, 1.12);
   // Реквизит растаял — всё на места покоя (половинки, трещина, молоточек).
@@ -820,7 +819,7 @@ function attackPose(t: number): Pose {
   o.fRz = 0.8 * air;
   o.tailSw = 0.5 * Math.sin(t * TAU * 9) * bump(t, 0.04, 0.27) + 0.4 * bump(t, 0.4, 0.86);
   o.tailUp = 0.8 * bump(t, 0.1, 0.8);
-  o.tailCurl = 0.5 * bump(t, 0.3, 0.8);
+  o.tailCurl = REST.tailCurl + 0.3 * bump(t, 0.3, 0.8);
   o.bite = t >= 0.35 && t < 0.56 ? (t - 0.35) / 0.21 : -1;
   return o;
 }
@@ -887,12 +886,12 @@ interface Plan {
   tail: V3[];
 }
 const STAND: Plan = {
-  body: [0, 0.2, 9.4],
+  body: [0, 0.2, 9.2],
   bodyR: [9.2, 7.0, 8.4],
-  chest: [0, -0.2, 15.8],
-  chestR: [7.4, 5.8, 5.8],
+  chest: [0, -0.2, 15.6],
+  chestR: [6.8, 5.6, 5.8],
   head: [0, 1.4, 27.0],
-  sh: [7.0, 1.0, 17.2],
+  sh: [6.2, 1.0, 16.6],
   hip: [4.6, 0.8, 4.0],
   hipR: [3.2, 3.4, 3.4],
   foot: [4.0, 2.0, 0],
@@ -1001,16 +1000,6 @@ function skel(o: Pose): Skel {
     cr: mul([pl.chestR[0] * (1 + 0.03 * ch), pl.chestR[1] * (1 + 0.05 * ch), pl.chestR[2]], s),
     k: s,
   };
-}
-
-/** Точка на поверхности живота спереди: qx вправо, qz вверх (доли радиусов). */
-function bellyAt(S: Skel, qx: number, qz: number, out = 1): V3 {
-  const qy = Math.sqrt(Math.max(0, 1 - qx * qx - qz * qz));
-  const [e1, e2, e3] = S.bax;
-  return add(
-    S.bc,
-    add(mul(e1, S.br[0] * qx * out), add(mul(e2, S.br[1] * qy * out), mul(e3, S.br[2] * qz * out))),
-  );
 }
 
 /** Точка тела спереди на высоте `z` и сдвиге `x` (координаты тела): ближняя из груди и живота. */
@@ -1315,7 +1304,10 @@ function glove(out: PartF[], c: Ctx, side: number, elb: V3, wr: V3): void {
   if (o.claws > 0.05) {
     for (const a of [-0.5, 0, 0.5]) {
       const cd = norm(rollY(dir, a * side + 0.0));
-      const base = add(add(wr, mul(dir, 3.6 * k)), mul([cd[0] - dir[0], 0, cd[2] - dir[2]], 1.6 * k));
+      const base = add(
+        add(wr, mul(dir, 3.6 * k)),
+        mul([cd[0] - dir[0], 0, cd[2] - dir[2]], 1.6 * k),
+      );
       out.push({
         c: add(base, mul(cd, 0.7 * k * o.claws)),
         ax: axes(cd, [0, 1, 0]),
@@ -1339,11 +1331,11 @@ function arms(out: PartF[], c: Ctx): void {
     const pole = norm(lerp3([side * 0.8, -0.5, -0.45], [side * 0.5, -0.2, -1], o.curl));
     const [elb, wr] = ik(sh, hand, 5.8 * k, 5.6 * k, pole);
     const id = nid();
-    limb(out, sh, elb, 2.35 * k, 2.4 * k, P_FUR, id, {
+    limb(out, sh, elb, 2.0 * k, 2.05 * k, P_FUR, id, {
       bias: 0.0,
       tex: HI ? tufts(4, 2.4, 0.06, 1) : undefined,
     });
-    limb(out, elb, wr, 2.0 * k, 2.05 * k, P_FUR, id, { bias: 0.03 });
+    limb(out, elb, wr, 1.8 * k, 1.85 * k, P_FUR, id, { bias: 0.03 });
     glove(out, c, side, elb, wr);
   }
 }
@@ -1382,7 +1374,11 @@ function bellyPick(qx: number, qy: number, qz: number): number {
       return P_BRASS;
     }
     if (Math.abs(dz) > BAND_H - (HI ? 0.035 : 0.05)) PICK_T = -0.14;
-    else if (HI && Math.abs(Math.abs(dz) - (BAND_H - 0.07)) < 0.012 && ((qx * 40 + 100) | 0) % 2 === 0)
+    else if (
+      HI &&
+      Math.abs(Math.abs(dz) - (BAND_H - 0.07)) < 0.012 &&
+      ((qx * 40 + 100) | 0) % 2 === 0
+    )
       PICK_T = 0.12;
     // Петли под инструменты — тёмные полоски поверх скрутки.
     if (qy > 0.2)
@@ -1488,7 +1484,9 @@ function tail(out: PartF[], c: Ctx): void {
           PICK_T = 0.12;
           return P_MASK;
         }
-        PICK_T = 0.06 + (HI && (Math.atan2(qy, qz) * 4.5 + qx * 0.5 + i * 0.3 + 20) % 1 < 0.15 ? -0.08 : 0);
+        PICK_T =
+          0.06 +
+          (HI && (Math.atan2(qy, qz) * 4.5 + qx * 0.5 + i * 0.3 + 20) % 1 < 0.15 ? -0.08 : 0);
         return P_FUR;
       },
     });
@@ -1506,7 +1504,17 @@ function tail(out: PartF[], c: Ctx): void {
       const w = profile(wid, u) * k;
       const s = total * u;
       const dark = ring(s, 0);
-      lock(out, add(p, mul(side, 0.5 * w)), dir, [0, 1, 0], 3.4 * k, w * 0.55, w * 0.45, dark ? P_MASK : P_FUR, dark ? 0.1 : 0.04);
+      lock(
+        out,
+        add(p, mul(side, 0.5 * w)),
+        dir,
+        [0, 1, 0],
+        3.4 * k,
+        w * 0.55,
+        w * 0.45,
+        dark ? P_MASK : P_FUR,
+        dark ? 0.1 : 0.04,
+      );
     }
   }
 }
@@ -1530,10 +1538,10 @@ function pw(keys: [number, number][], x: number): number {
 const maskTop = (a: number) =>
   pw(
     [
-      [0, 0.2],
-      [0.2, 0.33],
-      [0.4, 0.44],
-      [0.6, 0.42],
+      [0, 0.27],
+      [0.2, 0.35],
+      [0.4, 0.43],
+      [0.6, 0.41],
       [0.8, 0.26],
       [0.97, 0.0],
     ],
@@ -1766,7 +1774,11 @@ function ears(flats: Flat[], c: Ctx): void {
 /** Головка стетоскопа: в покое на животе, в трюке — в левой руке. */
 function bellPos(c: Ctx): V3 {
   const { o, S, lag } = c;
-  const rest = add(frontAt(S, 0, 12.0, 0.7), [(lag.bellX - S.bc[0]) * 0.9, 0, (lag.bellZ - S.bc[2]) * 0.6]);
+  const rest = add(frontAt(S, 0, 12.0, 0.7), [
+    (lag.bellX - S.bc[0]) * 0.9,
+    0,
+    (lag.bellZ - S.bc[2]) * 0.6,
+  ]);
   if (o.bell <= 0.001) return rest;
   return lerp3(rest, mul(BELL_AT, G), o.bell);
 }
@@ -1948,12 +1960,7 @@ function drawPartsF(f: Frame, parts: PartF[], pals: RGBA[][], ox: number, oy: nu
     let cn: V3 = [0, 0, 0];
     let cmd = 0;
     if (cut) {
-      cn = norm(
-        add(
-          add(mul(e1, cut.m[0] / r1), mul(e2, cut.m[1] / r2)),
-          mul(e3, cut.m[2] / r3),
-        ),
-      );
+      cn = norm(add(add(mul(e1, cut.m[0] / r1), mul(e2, cut.m[1] / r2)), mul(e3, cut.m[2] / r3)));
       cmd = cut.m[0] * qdx + cut.m[1] * qdy + cut.m[2] * qdz;
     }
     const vis = pt.vis ?? 1;
@@ -2265,7 +2272,11 @@ function softBands(f: Frame): void {
 // ---------------------------------------------------------------------------
 
 function eyePal(): Record<string, RGBA> {
-  const iris = ramp('#140a04', '#2a1810', '#4a2c18', '#6a4426', '#8a5c34');
+  // У золотого маска — бронза: радужка янтарная, иначе глаз тонет.
+  const iris =
+    V === 1
+      ? ramp('#2a1004', '#5a2a08', '#8a4a10', '#c07a20', '#eaa840')
+      : ramp('#140a04', '#2a1810', '#4a2c18', '#6a4426', '#8a5c34');
   const pale = PAL[P_PALE];
   return {
     K: INK_V[V],
@@ -2397,7 +2408,8 @@ function sparks(p: Px, c: Ctx): void {
     const tipp = add(head, mul(n, -1.9 * c.S.k));
     const [sx, sy] = project(mul(tipp, RR));
     const L = Math.round(o.tap * (HI ? 5 : 2.4));
-    if (L >= 1) star(p, Math.round(OX + sx), Math.round(OY + sy + RR), L, WHITE, hx('#ffe08a', 220));
+    if (L >= 1)
+      star(p, Math.round(OX + sx), Math.round(OY + sy + RR), L, WHITE, hx('#ffe08a', 220));
   }
   if (o.glint > 0.05 && o.split > 0.3) {
     const g = G;
