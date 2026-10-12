@@ -213,7 +213,7 @@ function toadRig(o: ToadO, yaw: number): Rig {
   for (const sd of [-1, 1]) {
     r.ball(H.p(0.4, sd * 2.1, 1.7), 1.35, SKIN_PLAIN);
     if (o.shut > 0.5) r.line(H.p(0.9, sd * 2.0, 2.2), H.p(0.9, sd * 2.8, 2.1), INK, 0, 1);
-    else r.dot(H.p(1.2, sd * 2.4, 2.3), EYE, 0.8, 1, 1.2);
+    else r.dot(H.p(1.2, sd * 2.4, 2.3), EYE, 0, 1, 1.2);
   }
   r.eye = o.shut > 0.5 ? null : H.p(1.2, cs * 2.4, 2.3);
   // Брызги яда изо рта в миг плевка.

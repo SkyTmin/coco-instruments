@@ -194,7 +194,7 @@ function serpRig(o: SerpO, yaw: number): Rig {
   for (const sd of [-1, 1]) {
     const E = H.p(1.3, sd * 1.15, 0.5);
     if (o.shut > 0.5 || o.stone > 0.6) r.dot(E, CRACK, 0, 1, 1.2);
-    else r.dot(E, ec, clamp01(0.4 + o.eye * 0.6), 1, 1.2);
+    else r.dot(E, ec, o.eye > 0.7 ? clamp01(0.4 + o.eye * 0.6) : 0, 1, 1.2);
   }
   r.eye = o.shut > 0.5 || o.stone > 0.6 ? null : H.p(1.3, cs * 1.15, 0.5);
   if (o.crumble > 0) r.explode(o.crumble, B.p(-4, 0, 3), 9, 7, 22, 0, 0.45);

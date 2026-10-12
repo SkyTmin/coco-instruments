@@ -221,7 +221,7 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
       r.dot(
         vadd(S0, T.v(-0.4 + (i % 2) * 0.9, (i - 1.5) * 0.6, 2.6 + (i % 2) * 0.4)),
         i % 2 ? COIN : COIN_HI,
-        0.3,
+        0,
         1,
         1,
       );
@@ -252,7 +252,7 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
       r.dot(
         T.p(2.15, (i - 1) * 0.9, 2.0 + (i % 2) * 1.1),
         o.rune > 0.6 ? RUNE : RUNE_DIM,
-        o.rune,
+        o.rune > 0.6 ? o.rune : 0,
         1,
         1,
       );
@@ -263,7 +263,13 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
     r.cap(a, b, 1.9, 1.4, HOOD_M);
     for (let i = 1; i <= 3; i++) {
       const p = vlerp(a, b, i / 4);
-      r.dot(vadd(p, B.v(-1.5, 0, 0)), o.rune > 0.6 ? RUNE : RUNE_DIM, o.rune, 1, 1);
+      r.dot(
+        vadd(p, B.v(-1.5, 0, 0)),
+        o.rune > 0.6 ? RUNE : RUNE_DIM,
+        o.rune > 0.6 ? o.rune : 0,
+        1,
+        1,
+      );
     }
   }
 
@@ -288,7 +294,7 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
       3,
     );
     if (o.shut > 0.5) r.dot(H.p(1.0, sd * 0.95, 0.45), INK, 0, 1, 1.2);
-    else r.dot(H.p(1.0, sd * 0.95, 0.45), EYE, 0.6 + o.rune * 0.4, 1, 1.2);
+    else r.dot(H.p(1.0, sd * 0.95, 0.45), EYE, o.rune > 0.6 ? 0.9 : 0, 1, 1.2);
   }
   r.eye = o.shut > 0.5 ? null : H.p(1.0, cs * 0.95, 0.45);
 

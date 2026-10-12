@@ -337,6 +337,8 @@ export const F9_MOB_STAT = {
   kms: {} as Record<string, number[]>,
   /** Из неё — рисунок рига (остальное — облик, обрезка, холст), мс. */
   build: 0,
+  /** Сколько кадров вида несут слой поверх темноты. */
+  lit: {} as Record<string, number>,
   bake: 0,
   miss: [] as string[],
   sizes: () => Object.fromEntries(KINDS.map((K) => [K.name, [K.frames.size, K.limit]])),
@@ -460,7 +462,10 @@ function bake(K: Kind, pic: Pic, look: Look): MobFrame {
           if (x > lx) lx = x;
           ly = y;
         }
-    if (lx >= 0) lit = cut(pic.lit, x0, y0, lx + 1 - x0, ly + 1 - y0);
+    if (lx >= 0) {
+      lit = cut(pic.lit, x0, y0, lx + 1 - x0, ly + 1 - y0);
+      F9_MOB_STAT.lit[K.name] = (F9_MOB_STAT.lit[K.name] ?? 0) + 1;
+    }
   }
   return {
     img,

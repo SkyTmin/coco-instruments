@@ -310,7 +310,8 @@ function lizRig(o: LizO, yaw: number, priest: boolean): Rig {
   for (const sd of [-1, 1]) {
     const E = H.p(1.2, sd * 1.6, 0.9);
     if (o.shut > 0.5) r.dot(E, INK, 0, 1, 1.2);
-    else r.dot(E, priest ? ORB_EYE : EYE, 0.9, 1, 1.2);
+    // Глаза в темноте зажигает движок (`eye`) — свой слой поверх темноты не нужен.
+    else r.dot(E, priest ? ORB_EYE : EYE, 0, 1, 1.2);
     if (!priest) r.dot(H.p(4.7, sd * 0.5, 0.6), INK, 0, 1, 0.6);
   }
   r.eye = o.shut > 0.5 ? null : H.p(1.2, cs * 1.6, 0.9);
