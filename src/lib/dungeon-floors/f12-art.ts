@@ -34,6 +34,7 @@ import './f12-mob-spirit';
 import './f12-mob-fox';
 import './f12-mob-golem';
 import './f12-mob-seal';
+import './f12-mob-icicle';
 import {
   f12Aurora,
   f12Broken,
@@ -1894,105 +1895,6 @@ function regMob(id: string, fn: (m: Mob, pose: MobPose) => MobFrame | null): voi
 
 // Тёмная краска (нос, глазницы) — песец переехал в `f12-mob-fox.ts`.
 const DARK = ramp('#05060a', '#0e1018', '#1a1c26', '#2a2c36', '#3c3e48');
-
-// ---------------------------------------------------------------------------
-// Сосулька: висит под сводом (тень на полу — где упадёт), трещит у корня,
-// падает в такт удару и торчит из льда, пока не растает.
-// ---------------------------------------------------------------------------
-
-const CV_ICI: Canvas = { w: 20, h: 40, ox: 10, oy: 34 };
-
-function icicleBuild(o: { crack: number; stuck: number; melt: number }): Build {
-  const parts: Part[] = [];
-  const L = 22;
-  const n = 9;
-  // Корень вверху (z = L), остриё внизу (z = 0). Воткнутая — остриём в лёд.
-  for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    const r = 0.6 + (1 - t) * 3.2 * (1 - o.melt * 0.4);
-    const z = t * L - o.stuck * 6;
-    parts.push({ x: 0, y: 0, z: L - z, rx: r, ry: r, rz: r * 1.5, ramp: ICE, gloss: true });
-  }
-  return {
-    parts,
-    clip: o.stuck > 0 ? 0 : undefined,
-    post: (p, scr) => {
-      if (o.crack > 0) {
-        // Трещины у корня: белые зигзаги.
-        const [x, y] = scr(0, 0, L);
-        const n2 = Math.round(o.crack * 4);
-        for (let k = 0; k < n2; k++) {
-          p.set(x - 2 + k, y + 1 + (k % 2), WHITE);
-          p.set(x + 2 - k, y + 3 + (k % 2), ICE[4]);
-        }
-      }
-      if (o.stuck > 0) {
-        // Лёд вокруг острия раскололся звездой.
-        const [x, y] = scr(0, 0, 0);
-        for (let a = 0; a < 6; a++) {
-          const t = (a / 6) * TAU + 0.3;
-          for (let r = 2; r < 6; r++)
-            p.set(x + Math.cos(t) * r, y + Math.sin(t) * r * 0.55, alpha(WHITE, 0.8));
-        }
-      }
-    },
-  };
-}
-
-regMob('f12_icicle', (m, pose) => {
-  const mode = pose.mode;
-  const HANG = 18;
-  if (mode === 'f12_hang' || mode === 'f12_crack') {
-    const t = mode === 'f12_crack' ? pose.t : 0;
-    const shake = t > 0 && t < 0.35;
-    const fall = t > 0.35 ? Math.min(1, (t - 0.35) / 0.45) : 0;
-    const crack = mode === 'f12_crack' ? Math.min(1, t / 0.3) : 0;
-    const c = rigCached(
-      'f12_icicle',
-      `h${Math.round(crack * 4)}`,
-      0,
-      CV_ICI,
-      pose.flash,
-      () => icicleBuild({ crack, stuck: 0, melt: 0 }),
-      1,
-    );
-    return mobFrame(c, CV_ICI, {
-      lift: HANG * (1 - fall * fall) + 0.01,
-      dx: shake ? (k24(t) % 2 ? 0.6 : -0.6) : 0,
-      still: true,
-      shadow: 2 + crack * 1.5 + fall * 2,
-      alpha: mode === 'f12_hang' ? 0.9 : 1,
-    });
-  }
-  if (mode === 'f12_stuck' || mode === 'escape' || mode === 'dying') {
-    const melt = mode === 'f12_stuck' ? Math.max(0, (pose.t - 2.2) / 0.8) : 1;
-    const c = rigCached(
-      'f12_icicle',
-      `s${Math.round(melt * 4)}`,
-      0,
-      CV_ICI,
-      pose.flash,
-      () => icicleBuild({ crack: 0, stuck: 1, melt }),
-      1,
-    );
-    return mobFrame(c, CV_ICI, {
-      still: true,
-      shadow: 3,
-      alpha: mode === 'f12_stuck' ? 1 - melt * 0.5 : Math.max(0, 0.5 - pose.t),
-      sy: mode === 'dying' ? 1 - Math.min(1, pose.t * 2) * 0.6 : 1,
-    });
-  }
-  const c = rigCached(
-    'f12_icicle',
-    'h0',
-    0,
-    CV_ICI,
-    pose.flash,
-    () => icicleBuild({ crack: 0, stuck: 0, melt: 0 }),
-    1,
-  );
-  return mobFrame(c, CV_ICI, { lift: HANG, still: true, shadow: 2 });
-});
 
 // ---------------------------------------------------------------------------
 // Человекоподобные: вмёрзший воин, хранитель, шаманка. Риг из шаров:
