@@ -39,6 +39,7 @@ import './f14-mob-keeper';
 import './f14-mob-double';
 import './f14-mob-cuckoo';
 import './f14-mob-weight';
+import './f14-mob-smith';
 
 type RGBA = [number, number, number, number];
 
@@ -193,20 +194,6 @@ const hash = (a: number, b: number, c = 0) => {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
-/** Обесцветить (статуя, замершее время) с лёгкой сепией. */
-function toGray(p: Px, sepia = 0.25): Px {
-  const o = new Px(p.w, p.h);
-  for (let i = 0; i < p.data.length; i += 4) {
-    if (!p.data[i + 3]) continue;
-    const l = p.data[i] * 0.3 + p.data[i + 1] * 0.55 + p.data[i + 2] * 0.15;
-    o.data[i] = Math.min(255, l * (1 + sepia * 0.25));
-    o.data[i + 1] = Math.min(255, l * (1 + sepia * 0.08));
-    o.data[i + 2] = Math.min(255, l * (1 - sepia * 0.18));
-    o.data[i + 3] = p.data[i + 3];
-  }
-  return o;
-}
-
 // ---------------------------------------------------------------------------
 // Палитра этажа: камень подземелья + латунь + бирюза времени.
 // ---------------------------------------------------------------------------
@@ -221,7 +208,6 @@ export const TEAL = tn('#0e3a44', '#1e7a88', '#4cc8d8', '#b8f4ff');
 export const SAND = tn('#6a4a24', '#a8844c', '#d8b878', '#f4e2b0');
 const WOOD = tn('#2a160c', '#4a2816', '#6e3e22', '#9a5e34');
 const REDC = tn('#3a0a0c', '#6a1418', '#a42228', '#d8484a');
-const SKIN = tn('#8a4a38', '#c88a70', '#f0c0a0', '#ffe4cc');
 const GLASS = hx('#bfe8f0', 150);
 const GLASS_HI = hx('#ffffff', 200);
 export const TEAL_GLOW = hx('#8fe8ff');
@@ -445,70 +431,6 @@ function spring(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Кадр монстра: облик, вспышка, отражение, серость статуи, кеш.
-// ---------------------------------------------------------------------------
-
-type Look = MobPose['look'];
-
-interface Built {
-  p: Px;
-  /** Середина тела и земля в кадре (смотрит вправо). */
-  ax: number;
-  ay: number;
-  eye: [number, number] | null;
-}
-
-const frames = new Map<string, MobFrame>();
-
-function finish(
-  key: string,
-  b: Built,
-  look: Look,
-  flash: boolean,
-  left: boolean,
-  gray = false,
-): MobFrame {
-  let p = b.p;
-  if (look === 'albino') {
-    const pale = hx('#f4ece4');
-    const q = new Px(p.w, p.h);
-    for (let i = 0; i < p.data.length; i += 4) {
-      if (!p.data[i + 3]) continue;
-      const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-      const c = mixc([l, l, l, 255], pale, 0.45);
-      q.data[i] = c[0];
-      q.data[i + 1] = c[1];
-      q.data[i + 2] = c[2];
-      q.data[i + 3] = p.data[i + 3];
-    }
-    p = q;
-  }
-  if (gray) p = toGray(p);
-  if (look === 'elite') p.outline(GOLDK);
-  if (flash) p = p.tint(WHITE, 0.85);
-  if (left) p = p.flipX();
-  const eye =
-    b.eye && !gray ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
-  const out: MobFrame = { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye };
-  frames.set(key, out);
-  return out;
-}
-
-function frameOf(
-  kind: string,
-  pose: MobPose,
-  anim: string,
-  f: number,
-  build: () => Built,
-  gray = false,
-): MobFrame {
-  const key = `${kind}|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}|${gray ? 1 : 0}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  return finish(key, build(), pose.look, pose.flash, pose.left, gray);
-}
-
 /** Смерть механизма: фигура оседает, из неё сыплются шестерёнки. */
 export function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
   if (k <= 0) return p;
@@ -545,74 +467,6 @@ export function clear(p: Px, x: number, y: number): void {
   if (x < 0 || y < 0 || x >= p.w || y >= p.h) return;
   p.data[(y * p.w + x) * 4 + 3] = 0;
 }
-
-// ---------------------------------------------------------------------------
-// Часовщик (редкий): сгорбленный старик в зелёном козырьке, с моноклем и
-// мешком часов за спиной. Переводит свои часы — мигает шахматкой.
-// Кадр 20×23, земля 21.
-// ---------------------------------------------------------------------------
-
-function drawSmith(o: { legs: number; blink: number }): Built {
-  const p = new Px(20, 23);
-  const G = 21;
-  const cx = 9;
-  const st = [1.2, 0, -1.2, 0][o.legs % 4];
-  limb(p, cx - 1, 16, cx - 1 - st, G - 1, 1, 0.9, tn('#1a1410', '#34281e', '#4e3e2e', '#6a5642'));
-  limb(p, cx + 1, 16, cx + 1 + st, G - 1, 1, 0.9, tn('#22180e', '#3e2e1e', '#5a4430', '#76604a'));
-  // Мешок за спиной — из него торчат циферблаты.
-  shadeEll(p, cx - 4, 11, 4, 4.4, tn('#3a2a14', '#6a5028', '#9a7a44', '#c8a468'), 0.05);
-  dialFace(p, cx - 5, 7.5, 2.4, 0.8, 2.4);
-  dialFace(p, cx - 2, 7, 1.8, 2.2, 4);
-  // Туловище и фартук.
-  polyShade(
-    p,
-    [
-      [cx - 2, 9],
-      [cx + 3, 9],
-      [cx + 4, 17],
-      [cx - 2, 17],
-    ],
-    tn('#1c2a1c', '#2e4430', '#46644a', '#6a8a6e'),
-    0.05,
-  );
-  p.rect(cx, 11, cx + 3, 16, hx('#7a5a3a'));
-  p.set(cx + 1, 12, BRASS[3]);
-  // Голова: седина, борода, козырёк, монокль.
-  shadeEll(p, cx + 2, 6.5, 2.6, 2.6, SKIN, 0.1);
-  p.rect(cx + 1, 8, cx + 4, 9, hx('#e8e4dc'));
-  p.rect(cx - 0.5, 4, cx + 4.5, 4, hx('#2a8a4a'));
-  p.set(cx + 5, 4, hx('#4ab86a'));
-  p.outline(INK);
-  p.set(cx + 3, 6, hx('#fff0a0'));
-  p.set(cx + 4, 6, BRASS[3]);
-  if (o.blink > 0)
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) if ((x + y + o.blink) % 2 === 0) clear(p, x, y);
-  return { p, ax: cx, ay: G, eye: [cx + 3, 6] };
-}
-
-registerMobPainter('f14_smith', (_m: Mob, pose: MobPose) => {
-  const f = pose.frame % 4;
-  let anim = 'idle';
-  let fr = f;
-  let o = { legs: 0, blink: 0 };
-  if (pose.mode === 'f14_blink') {
-    anim = 'blink';
-    fr = Math.floor(pose.t * 20) % 2;
-    o = { legs: 0, blink: 1 + fr };
-  } else if (pose.mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-  } else if (pose.anim === 'run' || pose.mode === 'flee') {
-    anim = 'run';
-    o = { legs: f, blink: 0 };
-  }
-  return frameOf('f14_smith', pose, anim, fr, () => {
-    const b = drawSmith(o);
-    if (anim === 'dead') b.p = scatter(b.p, fr, 23, [BRASS[3], hx('#ffd040')]);
-    return b;
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Повелитель часа (анимация тела — v2.87; переделано по мерке мамонта 12-го).
