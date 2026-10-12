@@ -32,7 +32,6 @@ import {
   BOSS,
   expoAt,
   f11State,
-  GARDENER,
   gustBlow,
   gustWarn,
   millDir,
@@ -50,6 +49,7 @@ import './f11-mob-guard';
 import './f11-mob-boarder';
 import './f11-mob-spirit';
 import './f11-mob-jelly';
+import './f11-mob-gardener';
 
 type RGBA = [number, number, number, number];
 
@@ -2074,10 +2074,7 @@ export function beamFx(
   g.globalAlpha = 1;
 }
 
-registerZonePainter('f11_jetfx', (g, z, px, py) => {
-  beamFx(g, z as Zone, px, py, 4, 'rgba(240,252,255,0.95)', 'rgba(110,190,255,0.55)');
-  return true;
-});
+// Струя садовника `f11_jetfx` — `f11-mob-gardener.ts` (анимации мобов 11).
 registerZonePainter('f11_laserfx', (g, z, px, py) => {
   beamFx(g, z as Zone, px, py, 3, 'rgba(255,250,240,1)', 'rgba(255,60,40,0.7)');
   return true;
@@ -3301,297 +3298,12 @@ function mobFrame(kind: string, pose: MobPose, anim: string, build: () => Built)
   return mobFrames.get(key) ?? finishMob(key, build(), pose.look, pose.flash, pose.left);
 }
 
-/** Линза-глаз робота: оправа, стекло, блик. */
-function lens(p: Px, x: number, y: number, r: number, c: RGBA, bright = false): void {
-  p.ell(x, y, r + 1, r + 1, LENS_RIM);
-  p.ell(x, y, r, r, mixc(c, INK, 0.45));
-  p.ell(x + 0.2, y + 0.2, r * 0.7, r * 0.7, c);
-  p.set(Math.floor(x - r * 0.35), Math.floor(y - r * 0.45), bright ? WHITE : mixc(c, WHITE, 0.65));
-}
-
-/** Пар клубами — поверх контура, полупрозрачный. */
-function puffs(p: Px, x: number, y: number, f: number, n = 3, spread = 3): void {
-  for (let i = 0; i < n; i++) {
-    const k = (((f * 0.37 + i / n) % 1) + 1) % 1;
-    const px = x + Math.sin(i * 2.1 + f) * spread * k;
-    const py = y - k * 6;
-    const r = 1 + k * 1.6;
-    for (let yy = -2; yy <= 2; yy++)
-      for (let xx = -2; xx <= 2; xx++)
-        if (xx * xx + yy * yy <= r * r)
-          p.set(Math.round(px + xx), Math.round(py + yy), alpha(WHITE, 0.55 * (1 - k * 0.6)));
-  }
-}
-
-/** Оглушение — звёздочки кругом над головой. */
-function dizzy(p: Px, cx: number, cy: number, rx: number, f: number): void {
-  for (let i = 0; i < 3; i++) {
-    const a = (f / 4) * TAU + (i / 3) * TAU;
-    const x = Math.round(cx + Math.cos(a) * rx);
-    const y = Math.round(cy + Math.sin(a) * rx * 0.35);
-    p.set(x, y, WHITE);
-    p.set(x - 1, y, GOLD[3]);
-    p.set(x + 1, y, GOLD[3]);
-    p.set(x, y - 1, GOLD[3]);
-    p.set(x, y + 1, GOLD[3]);
-  }
-}
-
 // --- Роботы: садовник и страж ----------------------------------------------------
+// Рисовальщики — `f11-mob-gardener.ts`, `f11-mob-guard.ts` (анимации мобов 11);
+// цвета линзы здесь — для Древнего стража.
 
-const BOT = tn('#4a3a2a', '#6e583e', '#957856', '#b99c74');
-const BOT_SEAM = hx('#34281c');
-const EYE_CALM = hx('#6ff4e6');
 const EYE_ANGRY = hx('#ff5a3a');
 const EYE_OFF = hx('#3a4048');
-
-type Arm = [number, number, number, number, number, number];
-
-interface BotPose {
-  /** Сдвиг корпуса вперёд (+) или назад. */
-  lean: number;
-  /** Корпус ниже на столько (присел). */
-  sink: number;
-  legF: number;
-  legB: number;
-  /** Плечо, локоть, кисть: дальняя и ближняя рука. */
-  armB: Arm;
-  armF: Arm;
-  headDy: number;
-  eye: RGBA;
-  eyeBright?: boolean;
-  tool?: 'shears-open' | 'shears' | 'hose' | 'flower' | 'blade' | null;
-  steam?: number;
-  /** Сидит на земле (страж спит). */
-  seated?: boolean;
-  /** Грудь открыта — ядро видно (страж остывает). */
-  open?: boolean;
-}
-
-function claw(p: Px, x: number, y: number, t: Tones, dir = 1): void {
-  p.set(x, y + 1, t[1]);
-  p.set(x + dir, y + 1, t[2]);
-  p.set(x - dir, y + 1, t[0]);
-  p.set(x + dir, y + 2, t[0]);
-  p.set(x - dir, y + 2, t[0]);
-}
-
-function armPx(p: Px, a: Arm, r: number, t: Tones, bias: number): void {
-  limb(p, a[0], a[1], a[2], a[3], r * 1.15, r, t, bias);
-  limb(p, a[2], a[3], a[4], a[5], r, r * 0.85, t, bias);
-  shadeEll(p, a[2], a[3], r * 1.05, r * 1.05, t, bias + 0.1);
-}
-
-const STEEL = tn('#5c6470', '#9aa4b0', '#cfd6de', '#ffffff');
-
-function tool(p: Px, kind: BotPose['tool'], x: number, y: number): void {
-  if (!kind) return;
-  if (kind === 'shears-open') {
-    stroke(p, x, y, x + 5, y - 3, STEEL[2]);
-    stroke(p, x, y + 1, x + 5, y + 3, STEEL[1]);
-    p.set(x, y, GOLD[2]);
-  } else if (kind === 'shears') {
-    stroke(p, x, y, x + 6, y, STEEL[2]);
-    stroke(p, x, y + 1, x + 5, y + 1, STEEL[1]);
-    p.set(x, y, GOLD[2]);
-  } else if (kind === 'hose') {
-    p.rect(x, y - 1, x + 3, y + 1, GOLD[1]);
-    p.rect(x, y - 1, x + 3, y - 1, GOLD[3]);
-    p.set(x + 4, y, IRON[1]);
-  } else if (kind === 'flower') {
-    p.set(x + 1, y + 1, hx('#3c7a3a'));
-    p.set(x + 1, y, hx('#f4f0ea'));
-    p.set(x, y - 1, hx('#f4f0ea'));
-    p.set(x + 2, y - 1, hx('#f4f0ea'));
-    p.set(x + 1, y - 2, hx('#f4f0ea'));
-    p.set(x + 1, y - 1, hx('#f6d24a'));
-  } else if (kind === 'blade') {
-    stroke(p, x, y, x + 4, y + 3, STEEL[3]);
-    stroke(p, x + 1, y, x + 5, y + 2, STEEL[2]);
-  }
-}
-
-/** Садовник: круглый корпус в мху, маленькая голова с одной линзой, длинные руки. */
-function gardenerPx(q: BotPose, f: number): Built {
-  const W = 28;
-  const H = 32;
-  const p = new Px(W, H);
-  const gy = 30;
-  const cx = 13 + q.lean;
-  const cy = 17 + q.sink;
-  // Дальняя рука — за корпусом.
-  armPx(p, q.armB, 1.1, BOT, -0.25);
-  claw(p, Math.round(q.armB[4]), Math.round(q.armB[5]), BOT, -1);
-  // Ноги.
-  limb(p, cx - 3, cy + 5, cx - 3 + q.legB, gy - 1, 2, 1.7, BOT, -0.15);
-  limb(p, cx + 2, cy + 5, cx + 2 + q.legF, gy - 1, 2, 1.7, BOT, 0);
-  shadeEll(p, cx - 3 + q.legB, gy - 0.5, 2.4, 1.3, BOT, -0.1);
-  shadeEll(p, cx + 2.5 + q.legF, gy - 0.5, 2.4, 1.3, BOT);
-  // Корпус: бочонок с поясом заклёпок и решёткой.
-  shadeEll(p, cx, cy, 6.8, 7.6, BOT);
-  for (let x = cx - 7; x <= cx + 7; x++) if (p.solid(x, cy + 1)) p.set(x, cy + 1, BOT_SEAM);
-  for (let x = cx - 5; x <= cx + 5; x += 3) p.set(x, cy + 2, BOT[3]);
-  for (let i = 0; i < 3; i++) p.rect(cx + 1, cy - 4 + i * 2, cx + 4, cy - 4 + i * 2, BOT_SEAM);
-  // Мох на плечах и макушке корпуса, цветок.
-  for (let i = 0; i < 26; i++) {
-    const x = Math.round(cx - 6 + hash(i, 1, 711) * 12);
-    const y = Math.round(cy - 8 + hash(i, 2, 712) * 4);
-    if (p.solid(x, y) && !p.solid(x, y - 2)) p.set(x, y, MOSS[hash(i, 3, 713) < 0.5 ? 2 : 3]);
-    else if (p.solid(x, y) && hash(i, 4, 714) < 0.4) p.set(x, y, MOSS[1]);
-  }
-  p.set(cx - 4, cy - 8, hx('#f4f0ea'));
-  p.set(cx - 5, cy - 7, hx('#f4f0ea'));
-  p.set(cx - 3, cy - 7, hx('#f4f0ea'));
-  p.set(cx - 4, cy - 7, hx('#f6d24a'));
-  // Голова — вперёд и чуть вниз от макушки.
-  const hx0 = cx + 2.5;
-  const hy0 = cy - 8.5 + q.headDy;
-  shadeEll(p, hx0, hy0, 4.2, 3.3, BOT, 0.05);
-  for (let x = Math.floor(hx0 - 4); x <= hx0 + 4; x++)
-    if (p.solid(x, Math.round(hy0 + 2))) p.set(x, Math.round(hy0 + 2), BOT_SEAM);
-  lens(p, hx0 + 1.8, hy0 - 0.2, 1.4, q.eye, q.eyeBright);
-  // Ближняя рука и инструмент.
-  armPx(p, q.armF, 1.15, BOT, 0.05);
-  claw(p, Math.round(q.armF[4]), Math.round(q.armF[5]), BOT);
-  tool(p, q.tool, Math.round(q.armF[4]), Math.round(q.armF[5]));
-  const out = ink(p);
-  if (q.steam) {
-    puffs(out, hx0 - 3, hy0 - 3, f, 2, 2);
-    puffs(out, hx0 + 3, hy0 - 3, f + 1.3, 2, 2);
-  }
-  return { p: out, ax: 13, ay: gy, eye: [Math.round(hx0 + 1.8), Math.round(hy0)] };
-}
-
-function gardenerDead(): Built {
-  const p = new Px(30, 18);
-  shadeEll(p, 13, 11, 7.5, 5, BOT);
-  for (let x = 6; x < 21; x++) if (p.solid(x, 12)) p.set(x, 12, BOT_SEAM);
-  shadeEll(p, 23, 12, 3.6, 3, BOT);
-  lens(p, 24, 12, 1.2, EYE_OFF);
-  limb(p, 8, 13, 3, 15, 1.1, 1, BOT);
-  limb(p, 16, 14, 19, 16, 1.1, 1, BOT);
-  for (let i = 0; i < 20; i++) {
-    const x = Math.floor(hash(i, 1, 721) * 30);
-    const y = Math.floor(hash(i, 2, 722) * 16);
-    if (p.solid(x, y) && !p.solid(x, y - 1)) p.set(x, y, MOSS[2]);
-  }
-  return { p: ink(p), ax: 14, ay: 16, eye: null };
-}
-
-registerMobPainter('f11_gardener', (m: Mob, pose: MobPose) => {
-  const angry = !!m.data.angry;
-  const eye = angry ? EYE_ANGRY : EYE_CALM;
-  const tag = angry ? 'a' : 'c';
-  const base: BotPose = {
-    lean: 0,
-    sink: 0,
-    legF: 0,
-    legB: 0,
-    armB: [8, 13, 6, 19, 5, 24],
-    armF: [18, 13, 20, 19, 20, 24],
-    headDy: 0,
-    eye,
-  };
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('gard', pose, 'dead', gardenerDead);
-  const f4 = ((pose.frame % 4) + 4) % 4;
-  switch (pose.mode) {
-    case 'f11_tend': {
-      const f = Math.floor(pose.t * 1.6 + m.id) % 2;
-      return mobFrame('gard', pose, `tend${f}`, () =>
-        gardenerPx(
-          {
-            ...base,
-            lean: 1,
-            headDy: 1 + f * 0.5,
-            armF: [18, 13, 22, 20, 23, 26 - f],
-            tool: 'flower',
-          },
-          0,
-        ),
-      );
-    }
-    case 'f11_rage': {
-      const f = Math.floor(pose.t * 8) % 2;
-      return mobFrame('gard', pose, `rage${f}`, () =>
-        gardenerPx(
-          {
-            ...base,
-            eye: EYE_ANGRY,
-            eyeBright: true,
-            armB: [8, 13, 5, 8, 4 + f, 4],
-            armF: [18, 13, 21, 8, 22 - f, 4],
-            steam: 1,
-          },
-          f * 2,
-        ),
-      );
-    }
-    case 'f11_snip': {
-      const strike = pose.t > GARDENER.snip - 0.18;
-      if (!strike)
-        return mobFrame('gard', pose, `snipw${tag}`, () =>
-          gardenerPx(
-            {
-              ...base,
-              lean: -1,
-              eyeBright: true,
-              armF: [18, 13, 20, 7, 16, 3],
-              tool: 'shears-open',
-            },
-            0,
-          ),
-        );
-      return mobFrame('gard', pose, `snips${tag}`, () =>
-        gardenerPx(
-          { ...base, lean: 2, legF: 2, legB: -1, armF: [19, 13, 22, 14, 25, 15], tool: 'shears' },
-          0,
-        ),
-      );
-    }
-    case 'f11_hose': {
-      const f = Math.floor(pose.t * 12) % 2;
-      return mobFrame('gard', pose, `hose${f}${tag}`, () =>
-        gardenerPx(
-          { ...base, lean: 1, eyeBright: true, armF: [18, 13, 21, 15, 24, 14 + f], tool: 'hose' },
-          0,
-        ),
-      );
-    }
-  }
-  if (pose.anim === 'hurt')
-    return mobFrame('gard', pose, `hurt${tag}`, () =>
-      gardenerPx({ ...base, lean: -1, headDy: -1, eye: WHITE }, 0),
-    );
-  if (pose.anim === 'run') {
-    const sw = [-2, 0, 2, 0][f4];
-    return mobFrame('gard', pose, `run${f4}${tag}`, () =>
-      gardenerPx(
-        {
-          ...base,
-          sink: f4 % 2 ? -0.5 : 0,
-          legF: sw,
-          legB: -sw,
-          armB: [8, 13, 6 - sw * 0.5, 19, 5 - sw, 24],
-          armF: [18, 13, 20 + sw * 0.5, 19, 20 + sw, 24],
-        },
-        0,
-      ),
-    );
-  }
-  const b = f4 === 1 || f4 === 2 ? 0.5 : 0;
-  return mobFrame('gard', pose, `idle${f4}${tag}`, () =>
-    gardenerPx(
-      {
-        ...base,
-        headDy: b,
-        armB: [8, 13, 6, 19 + b, 5, 24 + b],
-        armF: [18, 13, 20, 19 + b, 20, 24 + b],
-      },
-      0,
-    ),
-  );
-});
 
 // Робот-страж — `f11-mob-guard.ts` (анимации мобов 11).
 
