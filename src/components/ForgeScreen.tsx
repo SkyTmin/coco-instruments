@@ -577,24 +577,23 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
           </div>
         )}
       </div>
-      {shown && (
-        <div className="fgr__text">
-          <RarityChip rarity={d.rarity} />
-          <RarityName rarity={d.rarity}>{d.name} кирка</RarityName>
-          <span className="fgr__stats">
-            ⛏ {d.power} · {fmt(pickSpeed(p.mine.id, pick, m))} блоков/мин
+      {/* Подпись занимает место с начала сцены (скрыта): иначе по вспышке сцена прыгнула бы вверх. */}
+      <div className={`fgr__text${shown ? '' : ' is-wait'}`} aria-hidden={!shown}>
+        <RarityChip rarity={d.rarity} />
+        <RarityName rarity={d.rarity}>{d.name} кирка</RarityName>
+        <span className="fgr__stats">
+          ⛏ {d.power} · {fmt(pickSpeed(p.mine.id, pick, m))} блоков/мин
+        </span>
+        {opens.length > 0 && (
+          <span className="fgr__opens">
+            Берёт {oreList(opens)}
+            {opens.map((x) => (
+              <OreIcon key={x} rock={x} size={18} />
+            ))}
           </span>
-          {opens.length > 0 && (
-            <span className="fgr__opens">
-              Берёт {oreList(opens)}
-              {opens.map((x) => (
-                <OreIcon key={x} rock={x} size={18} />
-              ))}
-            </span>
-          )}
-          <span className="fgr__cta">В шахту</span>
-        </div>
-      )}
+        )}
+        <span className="fgr__cta">В шахту</span>
+      </div>
     </div>
   );
 }

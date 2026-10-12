@@ -5444,8 +5444,10 @@ button.fg-slot {
   opacity: 0;
   transition: opacity 260ms ease-out;
 }
+/* Пока куют — тёплый свет горна, не цвет ступени: он выдал бы, что выпадет. */
 .fgr.is-forge .fgr__burst {
-  opacity: 0.22;
+  background: radial-gradient(closest-side, #ff8a2a, transparent 70%);
+  opacity: 0.2;
 }
 .fgr.is-reveal .fgr__burst {
   opacity: 0.4;
@@ -5479,6 +5481,10 @@ button.fg-slot {
   gap: 6px;
   text-align: center;
   animation: fgr-text 380ms 120ms ease-out both;
+}
+.fgr__text.is-wait {
+  visibility: hidden;
+  animation: none;
 }
 .fgr__text .rname {
   font-size: 28px;

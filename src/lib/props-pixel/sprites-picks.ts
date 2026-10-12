@@ -158,7 +158,7 @@ export const PX: PxManifest = {
       loop: false,
       s: { x: -1, y: 0, w: 46, h: 48, cols: 1 },
       l: { x: 1, y: 3, w: 102, h: 105, cols: 1 },
-      rev: '3fa97eeb',
+      rev: 'b41af913',
     },
     'spin-9': {
       n: 48,
@@ -166,7 +166,7 @@ export const PX: PxManifest = {
       loop: true,
       s: { x: -2, y: -9, w: 48, h: 58, cols: 48 },
       l: { x: -1, y: -21, w: 105, h: 130, cols: 48 },
-      rev: '027471fc',
+      rev: 'e7e3141f',
     },
     'icon-10': {
       n: 1,
