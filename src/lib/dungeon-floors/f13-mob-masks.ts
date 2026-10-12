@@ -75,7 +75,7 @@ const SL_LIFT = 15;
 const LIE_LIFT = 5;
 /** Толщина скорлупы, шаг точек, звенья лент. */
 const TH = 0.9;
-const STEP = 0.35;
+const STEP = 0.45;
 const SEG = 1.45;
 const NR = 9;
 /** Рисуемые стороны; 3, 4, 5 — зеркало 1, 0, 7. */
@@ -546,7 +546,12 @@ function dirM(X: Xf, u: number, v: number, w: number): number[] {
 
 const shade = (l: number) => (l > 0.9 ? 3 : l > 0.52 ? 2 : l > 0.12 ? 1 : 0);
 
+/** Занятые строки кадра (индексы точек) — контур обходит только их. */
+let iMin = 0;
+let iMax = 0;
 function setPx(p: Px, i: number, c: RGBA): void {
+  if (i < iMin) iMin = i;
+  if (i > iMax) iMax = i;
   const o = i * 4;
   p.data[o] = c[0];
   p.data[o + 1] = c[1];
@@ -668,6 +673,28 @@ function ribbons(M: Mask, q: MP, X: Xf, p: Px, b: Buf, w: number, h: number, flo
   }
 }
 
+/** Контур тушью снаружи рисунка — по занятым строкам, без лишних вызовов. */
+const OUTL: number[] = [];
+function outlineFast(p: Px): void {
+  const { w, h, data: d } = p;
+  if (iMax < iMin) return;
+  const y0 = Math.max(0, Math.floor(iMin / w) - 1);
+  const y1 = Math.min(h - 1, Math.floor(iMax / w) + 1);
+  OUTL.length = 0;
+  for (let y = y0; y <= y1; y++)
+    for (let x = 0, j = y * w; x < w; x++, j++) {
+      if (d[j * 4 + 3]) continue;
+      if (
+        (x > 0 && d[j * 4 - 1]) ||
+        (x < w - 1 && d[j * 4 + 7]) ||
+        (y > 0 && d[(j - w) * 4 + 3]) ||
+        (y < h - 1 && d[(j + w) * 4 + 3])
+      )
+        OUTL.push(j);
+    }
+  for (const j of OUTL) setPx(p, j, INK);
+}
+
 const SDX = new Float32Array(7);
 const SDY = new Float32Array(7);
 const SHOP = new Float32Array(7);
@@ -684,6 +711,8 @@ function render(
   const h = K.h;
   const p = new Px(w, h);
   const b = bufOf(w, h);
+  iMin = w * h;
+  iMax = -1;
   const X = xfOf(q, yaw, K);
   // Черепки: разлёт в плоскости маски и подскок.
   if (q.sh > 0) {
@@ -750,10 +779,28 @@ function render(
       } else setPx(p, j, INK);
       continue;
     }
+    if (!front && glow <= 0.05) {
+      // Изнанка — бархатная подкладка, по краю — срез скорлупы.
+      setPx(p, j, M.Q[i] > 0.88 ? M.skin[l > 0.3 ? 2 : 1] : M.inner[l > 0.45 ? 2 : l > 0 ? 1 : 0]);
+      continue;
+    }
     const c = faceAt(M, q, u0, v0, M.Q[i]);
+    if (hole && !front) {
+      // Сзади прорези затянуты подкладкой — изнанка не «лицо»; свет духа
+      // в технике пробивается насквозь.
+      if (glow > 0.05) {
+        setPx(p, j, mixc(M.inner[0], M.glow, Math.min(1, glow)));
+        if (glow >= 0.35) {
+          b.la[j] = glow * 0.7;
+          b.lc[j] = 0;
+          anyLit = true;
+        }
+      } else setPx(p, j, M.inner[l > 0.45 ? 2 : l > 0 ? 1 : 0]);
+      continue;
+    }
     if (hole) {
-      if (!front || c === C_VOID || q.pu < 0) {
-        if (front && glow > 0.05) {
+      if (c === C_VOID || q.pu < 0) {
+        if (glow > 0.05) {
           setPx(p, j, mixc(VOID, M.glow, Math.min(1, glow * 1.1)));
           if (glow >= 0.35) {
             b.la[j] = glow * 0.85;
@@ -807,7 +854,7 @@ function render(
     }
   }
   ribbons(M, q, X, p, b, w, h, floorY);
-  p.outline(INK);
+  outlineFast(p);
   let lit: Px | null = null;
   if (anyLit) {
     lit = new Px(w, h);
@@ -1433,7 +1480,6 @@ function maskPic(M: Mask, K: Kind, anim: string, f: number, d: number): Pic {
     for (const s of [-1, 1]) {
       const e0 = projM(X, s * 3.4, 0.2, 3.6);
       const x0 = e0[0];
-      const y0 = e0[1];
       const d0 = e0[2];
       for (let j = 0; j < 3; j++) {
         const e1 = projR(X, s * (3 - j * 0.6), -1 - f * 0.8 - j * 0.6, 5 + f * 4 - j * 2.2);
