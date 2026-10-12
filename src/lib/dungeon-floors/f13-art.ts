@@ -3579,7 +3579,7 @@ paintMob(
 // Балерина-волчок.
 // ---------------------------------------------------------------------------
 
-const BALL_BODY: Body = {
+export const BALL_BODY: Body = {
   hip: 9.5,
   torso: 6.5,
   waist: 1.6,
@@ -3609,79 +3609,7 @@ const BALL_BODY: Body = {
   torsoPat: bandPat(0.75, 1, P.porcelain),
 };
 
-paintMob(
-  'f13_ballerina',
-  puppetPainter('f13_ballerina', {
-    w: 40,
-    h: 44,
-    ax: 20,
-    ay: 38,
-    dirs: 8,
-    body: BALL_BODY,
-    shadow: 6,
-    pose: (c, q) => {
-      const { m } = c;
-      if (m.mode === 'dying' || m.data.crawl || m.mode === 'f13_reel' || m.mode === 'sleep')
-        return null;
-      if (m.mode === 'f13_plie' || m.mode === 'windup') {
-        const n = Math.min(7, Math.floor((m.t / 0.6) * 8));
-        const e = ease(n / 7);
-        q.sink = 3 * e;
-        q.lL = limb(0.3 * e, 0.5 * e, 0.8 * e);
-        q.lR = limb(0.3 * e, 0.5 * e, 0.8 * e);
-        q.aL = limb(0.6 + 1.6 * e, 0.9, 0.6);
-        q.aR = limb(0.6 + 1.6 * e, 0.9, 0.6);
-        return { q, key: `p${n}` };
-      }
-      if (m.mode === 'f13_spin') {
-        // Вращение на пуанте: тело — ось, руки над головой.
-        q.bob = 2.5;
-        q.lL = limb(0, 0, 0);
-        q.lR = limb(0.6, 0.6, 1.6);
-        q.aL = limb(2.9, 0.35, 0.7);
-        q.aR = limb(2.9, 0.35, 0.7);
-        q.hp = -0.1;
-        const n = Math.floor(c.now * 24) % 4;
-        return { q, key: `s${n}` };
-      }
-      const b = basePose(c);
-      if (b && (b.key.startsWith('idle') || b.key.startsWith('run'))) {
-        // Руки — «пятая позиция» овалом, шаг — на носочках.
-        b.q.aL = limb(0.9 + b.q.aL.sw * 0.3, 0.6, 1.1);
-        b.q.aR = limb(0.9 + b.q.aR.sw * 0.3, 0.6, 1.1);
-        b.q.bob += 1.2;
-      }
-      return b;
-    },
-    dress: (rig, j, c) => {
-      const R = BALL_BODY.head;
-      rig.dot(onHead(j, R, 0.95, -0.35, 0.1), INK, 1);
-      rig.dot(onHead(j, R, 0.95, 0.35, 0.1), INK, 1);
-      rig.dot(onHead(j, R, 0.98, -0.5, -0.3), P.pink[2], 1);
-      rig.dot(onHead(j, R, 0.98, 0.5, -0.3), P.pink[2], 1);
-      // Пучок волос.
-      rig.ball(onHead(j, R, -0.4, 0, 0.9), 1.6, P.wood);
-      rig.dot(onHead(j, R, 0.3, 0, 1.0), P.gold[3], 1);
-      // Пачка — пышный диск с оборками.
-      const tu = vadd(j.pelvis, vsc(j.up, 1.2));
-      rig.disc(tu, 7.2, 1.6, P.pink, (u, v, side) => {
-        if (side) return P.pink;
-        const a = Math.atan2(v, u);
-        const r = Math.hypot(u, v);
-        return (Math.floor(a * 4 + r * 3) % 2 === 0 ? P.pink : P.porcelain) as Tone;
-      });
-      void c;
-    },
-    keyX: (c) => (c.m.mode === 'f13_spin' ? `${dirOf(c.m.face + c.now * 22, 8)}` : ''),
-    frame: (c) =>
-      c.m.mode === 'f13_spin'
-        ? {
-            ghost: { every: 0.05, life: 0.18, tint: '#ffc8e0', alpha: 0.5 },
-            rot: Math.sin(c.now * 30) * 0.05,
-          }
-        : {},
-  }),
-);
+// Балерина рисуется в `f13-mob-ballerina.ts` (анимации мобов 13).
 
 // ---------------------------------------------------------------------------
 // Арлекин: ныряет в пол, выскакивает за спиной.
@@ -8110,7 +8038,6 @@ for (const k of [
   'f13_nutcracker',
   'f13_drummer',
   'f13_fiddler',
-  'f13_ballerina',
   'f13_harlequin',
   'f13_prompter',
   'f13_shade',

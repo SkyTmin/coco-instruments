@@ -38,6 +38,7 @@ import type { StringSeg } from './f13-brains';
 import { css, giantShoulderPx, hash, hx, INK, lordVagaPx, P, spiderLift, TAU } from './f13-art';
 import type { RGBA } from './f13-art';
 // Мобы 13 (анимации мобов 13): после `f13-art`, иначе круговой импорт.
+import './f13-mob-ballerina';
 import './f13-mob-knight';
 
 type G = CanvasRenderingContext2D;
