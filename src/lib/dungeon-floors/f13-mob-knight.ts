@@ -445,6 +445,9 @@ registerMobWarm('f13_knight', function* () {
       ['die', DIE_N],
       ['reel', 15],
       ['al', 9],
+      // Нити срезаны в бою — ползёт; в темноте — ищет героя.
+      ['crawl', 8],
+      ['lost', 12],
     ],
     kPic,
   );

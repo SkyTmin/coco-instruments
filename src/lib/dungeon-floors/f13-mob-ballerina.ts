@@ -558,6 +558,7 @@ registerMobWarm('f13_ballerina', function* () {
       ['die', DIE_N],
       ['reel', 15],
       ['al', 9],
+      ['lost', 12],
     ],
     bPic,
   );
