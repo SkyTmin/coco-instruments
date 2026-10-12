@@ -49,6 +49,7 @@ import './f11-mob-moss';
 import './f11-mob-drone';
 import './f11-mob-ray';
 import './f11-mob-guard';
+import './f11-mob-boarder';
 
 type RGBA = [number, number, number, number];
 
@@ -3290,48 +3291,6 @@ registerPropPainter('f11_vane', (_o, time) => {
   });
 });
 
-/** Планер абордажника — для зоны прилёта. */
-let gliderImg: HTMLCanvasElement | null = null;
-function gliderSprite(): HTMLCanvasElement {
-  if (gliderImg) return gliderImg;
-  const p = new Px(26, 14);
-  const sail = tn('#8a3a2a', '#c05a3a', '#e08a5a', '#f4b888');
-  polyShade(
-    p,
-    [
-      [1, 6],
-      [13, 1],
-      [25, 6],
-      [13, 4],
-    ],
-    sail,
-  );
-  for (let x = 2; x < 25; x += 4) stroke(p, 13, 2, x, 6, PLANK[0]);
-  // Человечек под крылом.
-  limb(p, 13, 6, 13, 10, 1.4, 1.2, tn('#3a2a22', '#5a4030', '#7a5a40', '#9a7a58'));
-  shadeEll(p, 13, 6, 1.8, 1.6, tn('#8a5a3a', '#c08a5a', '#e0b080', '#f4d0a0'));
-  gliderImg = ink(p).canvas();
-  return gliderImg;
-}
-
-registerZonePainter('f11_glider', (g, z, px, py) => {
-  const zz = z as Zone & { ang?: number };
-  const k = Math.min(1, z.t / 0.95);
-  if (k >= 1) return true;
-  const a = zz.ang ?? 0;
-  const d = (1 - k) * 70;
-  const x = px + Math.cos(a) * d;
-  const y = py + Math.sin(a) * d - 14 * (1 - k) - 6;
-  // Тень на земле — куда сядет.
-  g.fillStyle = `rgba(0,0,0,${0.15 + 0.2 * k})`;
-  g.beginPath();
-  g.ellipse(px, py + 1, 5 + 4 * k, 2, 0, 0, TAU);
-  g.fill();
-  const img = gliderSprite();
-  g.drawImage(img, Math.round(x - img.width / 2), Math.round(y - img.height / 2));
-  return true;
-});
-
 // ---------------------------------------------------------------------------
 // Монстры. Кадр собирается один раз на позу, сторону, вспышку и вид (элита,
 // альбинос) и лежит в кеше. Все смотрят вправо; влево — отражение.
@@ -3688,12 +3647,11 @@ function over(dst: Px, src: Px, ox = 0, oy = 0): void {
 }
 
 // --- Гарпия --------------------------------------------------------------------
-// Рисовальщик — `f11-mob-harpy.ts` (анимации мобов 11); палитра перьев и кожи
-// здесь — для абордажника и перьев-предметов.
+// Рисовальщик — `f11-mob-harpy.ts` (анимации мобов 11); палитра перьев здесь —
+// для перьев-предметов.
 
 const FEATH = tn('#4a2e22', '#7a4a30', '#a8703f', '#d49c62');
 const FEATH_TIP = tn('#1e5a5e', '#2c8088', '#48a8ac', '#7cd0cc');
-const SKIN = tn('#9a6248', '#c8866a', '#e8ae8e', '#f8d2b4');
 
 // --- Облачная медуза -------------------------------------------------------------
 
@@ -3777,241 +3735,8 @@ registerMobPainter('f11_jelly', (m: Mob, pose: MobPose) => {
   return mobFrame('jelly', pose, `idle${f}`, () => jellyPx(f, 0, false));
 });
 
-// --- Абордажник с крюком ----------------------------------------------------------
-
-const COAT = tn('#4a1e1e', '#7a2e28', '#a8443a', '#c8664e');
-const PANTS = tn('#2e2a26', '#4a4238', '#6a5e4e', '#8a7c66');
-const SCARF = tn('#a86a10', '#e0a020', '#f4c84a', '#ffe890');
-const LEATHER = tn('#3a2616', '#5a3a22', '#7a5230', '#9a6e44');
-
-interface BoarderPose {
-  legF: number;
-  legB: number;
-  lean: number;
-  armB: Arm;
-  armF: Arm;
-  hook: [number, number] | null;
-  /** Верёвка от руки к крюку / за край кадра. */
-  rope?: boolean;
-  blade?: 'up' | 'down' | null;
-  scarf: number;
-}
-
-function boarderPx(q: BoarderPose): Built {
-  const W = 30;
-  const H = 30;
-  const p = new Px(W, H);
-  const gy = 28;
-  const cx = 13 + q.lean;
-  // Шарф — за спиной, треплется по ветру.
-  for (let i = 0; i < 7; i++) {
-    const x = cx - 2 - i;
-    const y = 10 + Math.round(Math.sin(i * 0.9 + q.scarf) * 1.2) + i * 0.3;
-    p.set(x, y, SCARF[i < 3 ? 2 : 1]);
-    p.set(x, y + 1, SCARF[0]);
-  }
-  // Сложенный планер за спиной.
-  polyShade(
-    p,
-    [
-      [cx - 5, 9],
-      [cx - 2, 8],
-      [cx - 1, 17],
-      [cx - 4, 18],
-    ],
-    tn('#6a2a20', '#9a4430', '#c06a48', '#e09a70'),
-  );
-  armPx(p, q.armB, 1.1, COAT, -0.25);
-  // Ноги в сапогах.
-  limb(p, cx - 1, 19, cx - 1 + q.legB, gy - 2, 1.6, 1.3, PANTS, -0.15);
-  limb(p, cx + 2, 19, cx + 2 + q.legF, gy - 2, 1.6, 1.3, PANTS);
-  shadeEll(p, cx - 1 + q.legB, gy - 1, 2, 1.4, LEATHER, -0.1);
-  shadeEll(p, cx + 2.5 + q.legF, gy - 1, 2, 1.4, LEATHER);
-  // Куртка с полами, ремень.
-  polyShade(
-    p,
-    [
-      [cx - 3, 11],
-      [cx + 4, 11],
-      [cx + 5, 21],
-      [cx + 1, 20],
-      [cx - 4, 21],
-    ],
-    COAT,
-  );
-  p.rect(cx - 3, 17, cx + 4, 17, LEATHER[0]);
-  p.set(cx + 1, 17, GOLD[2]);
-  // Моток верёвки на поясе.
-  p.ell(cx - 2, 18.5, 1.6, 1.2, ROPE[2]);
-  p.set(cx - 2, 18, ROPE[0]);
-  // Голова: кожаный шлем и очки.
-  const hx0 = cx + 1.5;
-  const hy0 = 7;
-  shadeEll(p, hx0, hy0, 3.2, 3.2, SKIN, 0.05);
-  polyShade(
-    p,
-    [
-      [hx0 - 3.5, hy0],
-      [hx0 - 3, hy0 - 3.5],
-      [hx0 + 2, hy0 - 4],
-      [hx0 + 3.6, hy0 - 1.5],
-      [hx0 + 3.6, hy0 - 1],
-      [hx0 - 1, hy0 - 1],
-      [hx0 - 2, hy0 + 3],
-      [hx0 - 3.5, hy0 + 3],
-    ],
-    LEATHER,
-    0.1,
-  );
-  p.set(Math.round(hx0 + 2), Math.round(hy0 - 1), GOLD[2]);
-  p.set(Math.round(hx0 + 3), Math.round(hy0 - 1), CYAN);
-  p.set(Math.round(hx0 + 1), Math.round(hy0 - 1), CYAN);
-  p.set(Math.round(hx0 + 2), Math.round(hy0 + 1), INK);
-  p.set(Math.round(hx0 + 1), Math.round(hy0 + 2), SKIN[0]);
-  // Шарф на шее.
-  p.rect(Math.round(hx0 - 2), 10, Math.round(hx0 + 2), 11, SCARF[2]);
-  // Ближняя рука, сабля или крюк.
-  armPx(p, q.armF, 1.15, COAT, 0.05);
-  const hx1 = Math.round(q.armF[4]);
-  const hy1 = Math.round(q.armF[5]);
-  p.set(hx1, hy1, SKIN[2]);
-  if (q.blade === 'up') {
-    stroke(p, hx1, hy1, hx1 - 2, hy1 - 7, STEEL[3]);
-    stroke(p, hx1 + 1, hy1, hx1 - 1, hy1 - 7, STEEL[1]);
-    p.set(hx1, hy1 + 1, GOLD[2]);
-  } else if (q.blade === 'down') {
-    stroke(p, hx1, hy1, hx1 + 7, hy1 + 2, STEEL[3]);
-    stroke(p, hx1, hy1 + 1, hx1 + 6, hy1 + 3, STEEL[1]);
-    p.set(hx1 - 1, hy1, GOLD[2]);
-  }
-  if (q.hook) {
-    const [kx, ky] = q.hook;
-    if (q.rope) stroke(p, hx1, hy1, kx, ky, ROPE[1]);
-    p.set(kx, ky, IRON[3]);
-    p.set(kx + 1, ky, IRON[2]);
-    p.set(kx + 1, ky + 1, IRON[2]);
-    p.set(kx, ky + 2, IRON[2]);
-    p.set(kx - 1, ky + 1, IRON[1]);
-  }
-  return { p: ink(p), ax: 13, ay: gy, eye: [Math.round(hx0 + 2), Math.round(hy0 - 1)] };
-}
-
-const BLANK: Built = { p: new Px(1, 1), ax: 0, ay: 0, eye: null };
-
-registerMobPainter('f11_boarder', (m: Mob, pose: MobPose) => {
-  const base: BoarderPose = {
-    legF: 0,
-    legB: 0,
-    lean: 0,
-    armB: [11, 12, 10, 16, 10, 20],
-    armF: [16, 12, 18, 16, 18, 20],
-    hook: [18, 22],
-    scarf: 0,
-  };
-  // Подлёт рисует зона планера; сам он появляется, приземлившись.
-  if (pose.mode === 'f11_land') return mobFrame('board', pose, 'land', () => BLANK);
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('board', pose, 'dead', () =>
-      boarderPx({
-        ...base,
-        lean: -2,
-        legF: 4,
-        legB: 3,
-        armF: [16, 12, 20, 14, 23, 13],
-        hook: null,
-        scarf: 2,
-      }),
-    );
-  const f4 = ((pose.frame % 4) + 4) % 4;
-  switch (pose.mode) {
-    case 'f11_aimhook': {
-      const f = Math.floor(pose.t * 14) % 4;
-      const a = (f / 4) * TAU;
-      return mobFrame('board', pose, `aimhook${f}`, () =>
-        boarderPx({
-          ...base,
-          lean: -1,
-          armF: [16, 12, 18, 7, 17, 3],
-          hook: [Math.round(17 + Math.cos(a) * 5), Math.round(2 + Math.sin(a) * 2)],
-          rope: true,
-          scarf: f,
-        }),
-      );
-    }
-    case 'f11_throw':
-      return mobFrame('board', pose, 'throw', () =>
-        boarderPx({
-          ...base,
-          lean: 2,
-          legF: 2,
-          legB: -2,
-          armF: [16, 12, 20, 12, 24, 11],
-          hook: null,
-          scarf: 1,
-        }),
-      );
-    case 'f11_reel': {
-      const f = Math.floor(pose.t * 10) % 2;
-      return mobFrame('board', pose, `reel${f}`, () =>
-        boarderPx({
-          ...base,
-          lean: -2,
-          legF: 3,
-          legB: -1,
-          armB: [11, 12, 14, 14, 16 - f, 15],
-          armF: [16, 12, 19, 14, 21 - f * 2, 14],
-          hook: [29, 14],
-          rope: true,
-          scarf: f + 2,
-        }),
-      );
-    }
-    case 'f11_slash': {
-      const strike = pose.t > 0.35;
-      return mobFrame('board', pose, strike ? 'slashs' : 'slashw', () =>
-        strike
-          ? boarderPx({
-              ...base,
-              lean: 2,
-              legF: 3,
-              legB: -2,
-              armF: [16, 12, 20, 14, 22, 15],
-              hook: null,
-              blade: 'down',
-              scarf: 1,
-            })
-          : boarderPx({
-              ...base,
-              lean: -1,
-              armF: [16, 12, 17, 7, 15, 4],
-              hook: null,
-              blade: 'up',
-              scarf: 0,
-            }),
-      );
-    }
-  }
-  if (pose.anim === 'hurt')
-    return mobFrame('board', pose, 'hurt', () => boarderPx({ ...base, lean: -2, scarf: 3 }));
-  if (pose.anim === 'run') {
-    const sw = [-2, 0, 2, 0][f4];
-    return mobFrame('board', pose, `run${f4}`, () =>
-      boarderPx({
-        ...base,
-        legF: sw,
-        legB: -sw,
-        lean: 1,
-        armB: [11, 12, 10 + sw * 0.5, 16, 10 + sw, 20],
-        armF: [16, 12, 18 - sw * 0.5, 16, 18 - sw, 20],
-        hook: [Math.round(18 - sw), 22],
-        scarf: f4,
-      }),
-    );
-  }
-  const t = paintSim()?.time ?? 0;
-  const f = ((Math.floor(t * 3 + m.id) % 4) + 4) % 4;
-  return mobFrame('board', pose, `idle${f}`, () => boarderPx({ ...base, scarf: f }));
-});
+// --- Абордажник ------------------------------------------------------------------
+// Рисовальщик и подлёт на планере — `f11-mob-boarder.ts` (анимации мобов 11).
 
 // --- Мох-пружина -----------------------------------------------------------------
 // Рисовальщик — `f11-mob-moss.ts` (анимации мобов 11); латунь здесь — для предметов.
