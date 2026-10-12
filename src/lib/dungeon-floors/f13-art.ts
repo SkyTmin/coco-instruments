@@ -3309,115 +3309,7 @@ export const HARL_BODY: Body = {
 
 // Арлекин рисуется в `f13-mob-harlequin.ts` (анимации мобов 13).
 
-// ---------------------------------------------------------------------------
-// Суфлёр: колпак, очки, свиток.
-// ---------------------------------------------------------------------------
-
-const PROMPT_BODY: Body = {
-  hip: 6,
-  torso: 6,
-  waist: 3,
-  chest: 3.2,
-  neck: 0.4,
-  head: 3.3,
-  shW: 3,
-  upper: 3.2,
-  fore: 3,
-  armR: 1.1,
-  hand: 1.1,
-  hipW: 1.5,
-  thigh: 3.2,
-  shin: 3,
-  legR: 1.1,
-  foot: 1.8,
-  T: {
-    torso: P.wood,
-    arm: P.wood,
-    leg: P.black,
-    head: P.skin,
-    hand: P.skin,
-    foot: P.black,
-    joint: P.wood,
-    pelvis: P.wood,
-  },
-  joints: false,
-};
-
-paintMob(
-  'f13_prompter',
-  puppetPainter('f13_prompter', {
-    w: 36,
-    h: 40,
-    ax: 18,
-    ay: 34,
-    dirs: 8,
-    body: PROMPT_BODY,
-    shadow: 5,
-    pose: (c, q) => {
-      const { m } = c;
-      q.lean = 0.35;
-      q.hp = -0.25;
-      if (m.mode === 'f13_hide') {
-        q.sink = 9;
-        q.lean = 0.6;
-        q.hp = 0.3;
-        q.aL = limb(1.2, 0.2, 1.4);
-        q.aR = limb(1.2, 0.2, 1.4);
-        q.lL = limb(1.2, 0.3, 2);
-        q.lR = limb(1.2, 0.3, 2);
-        return { q, key: `hide${Math.floor(c.now * 2) % 2}` };
-      }
-      if (m.mode === 'f13_peek') {
-        const n = Math.floor(c.now * 4) % 4;
-        q.sink = 3;
-        q.hy = [0, 0.5, 0, -0.5][n];
-        q.aL = limb(1.3, 0.3, 1.1);
-        q.aR = limb(1.3, 0.3, 1.1);
-        return { q, key: `pk${n}` };
-      }
-      if (m.mode === 'aim') {
-        const n = Math.min(7, Math.floor((m.t / 0.55) * 8));
-        const e = ease(n / 7);
-        q.aR = limb(-0.4 + 2.6 * e, 0.3, 0.4);
-        q.aL = limb(1.2, 0.3, 1.1);
-        q.twist = -0.4 * e;
-        return { q, key: `a${n}` };
-      }
-      const b = basePose(c);
-      if (b) {
-        b.q.lean += 0.35;
-        b.q.hp -= 0.25;
-        b.q.aL = limb(1.2, 0.3, 1.1);
-      }
-      return b;
-    },
-    dress: (rig, j, c) => {
-      const R = PROMPT_BODY.head;
-      // Колпак, загнутый назад, с кисточкой.
-      const a = onHead(j, R, -0.1, 0, 0.7);
-      const b = vadd(a, vadd(vsc(j.hUp, 3), vsc(j.hFwd, -2.4)));
-      const tip = vadd(b, vadd(vsc(j.hUp, -1), vsc(j.hFwd, -2.4)));
-      rig.cap(a, b, 3.2, 1.6, P.cream);
-      rig.cap(b, tip, 1.6, 0.6, P.cream);
-      rig.ball(tip, 1, P.red);
-      // Очки и нос.
-      rig.dot(onHead(j, R, 0.95, -0.4, 0.1), P.gold[3], 2);
-      rig.dot(onHead(j, R, 0.95, 0.4, 0.1), P.gold[3], 2);
-      rig.ball(onHead(j, R, 1.05, 0, -0.15), 0.9, P.skin);
-      // Свиток роли в левой руке.
-      if (c.m.mode !== 'dying')
-        rig.cap(
-          vadd(j.haL, vsc(j.right, -1.5)),
-          vadd(j.haL, vsc(j.right, 1.5)),
-          1.2,
-          1.2,
-          P.cream,
-          (t) => (t < 0.15 || t > 0.85 ? P.wood : null),
-        );
-    },
-    frame: (c) => (c.m.mode === 'f13_hide' ? { alpha: 0.85 } : {}),
-  }),
-);
+// Суфлёр рисуется в `f13-mob-prompter.ts` (анимации мобов 13).
 
 // ---------------------------------------------------------------------------
 // Тень-актёр: есть только в луче софита.
@@ -7403,7 +7295,7 @@ export function lordVagaPx(m: Mob, _now: number): [number, number] {
 
 // ---- прогрев -----------------------------------------------------------------
 
-for (const k of ['f13_prompter', 'f13_shade', 'f13_cashier']) warmPuppet(k, 8);
+for (const k of ['f13_shade', 'f13_cashier']) warmPuppet(k, 8);
 
 /**
  * Кукловод: пробуждение, висение акта I в обе стороны с жестами ваги под
