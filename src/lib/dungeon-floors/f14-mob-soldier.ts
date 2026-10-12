@@ -58,7 +58,7 @@ import {
   warmGray,
   yawN,
 } from './f14-mobkit';
-import type { Mat, Pic, Proj2, RGBA, RigOut, Tones, V3 } from './f14-mobkit';
+import type { Mat, Pic, Proj2, RGBA, RigOut, V3 } from './f14-mobkit';
 
 const REDC = tn('#3a0a0c', '#6a1418', '#a42228', '#d8484a');
 const NAVY = tn('#10142a', '#1e2648', '#34406a', '#5a6aa0');
@@ -98,9 +98,9 @@ const lerpGun = (a: Gun, b: Gun, k: number): Gun => ({
 // У плеча (строевой шаг), наперевес, отведено назад, выпад, повисло, к ноге,
 // над головой и прикладом в пол (отголосок).
 const SHOULDER: Gun = { c: [1.5, 4.3, 7.4], wy: 0, wp: 1.42, hr: -6.4, hl: null };
-const PORT: Gun = { c: [3.4, 0.9, 4.2], wy: -0.06, wp: 0.07, hr: -4.8, hl: 1.6 };
+const PORT: Gun = { c: [3.4, 1.5, 4.2], wy: -0.08, wp: 0.07, hr: -4.8, hl: 1.6 };
 const BACK: Gun = { c: [0.4, 1.5, 4.8], wy: -0.04, wp: 0.12, hr: -4.8, hl: 1.6 };
-const LUNGE: Gun = { c: [8.6, 0.4, 3.2], wy: 0, wp: -0.05, hr: -4.8, hl: 1.6 };
+const LUNGE: Gun = { c: [8.6, 1.4, 3.2], wy: -0.06, wp: -0.05, hr: -4.8, hl: 1.6 };
 const DROOP: Gun = { c: [2.8, 3.8, 3.4], wy: 0.1, wp: 0.95, hr: -6.4, hl: null };
 const REST: Gun = { c: [1.6, 4.6, -2.4], wy: 0, wp: 1.5, hr: 5.2, hl: null };
 const RAISE: Gun = { c: [2.2, 0.5, 14.5], wy: 0, wp: 1.45, hr: -4.6, hl: -1.2 };
@@ -169,7 +169,17 @@ const LEG = 10.6;
 const STRIDE = 7;
 
 /** Призма (кивер): `n` граней от `z0` до `z1` по оси рамки, крышка сверху. */
-function prism(r: Rig, F: F3, z0: number, z1: number, r0: number, r1: number, n: number, m: Mat, top: Mat): void {
+function prism(
+  r: Rig,
+  F: F3,
+  z0: number,
+  z1: number,
+  r0: number,
+  r1: number,
+  n: number,
+  m: Mat,
+  top: Mat,
+): void {
   const ring = (z: number, rad: number) => {
     const out: V3[] = [];
     for (let i = 0; i < n; i++) {
@@ -199,7 +209,11 @@ interface Pts {
 function soldierRig(o: SoO, yaw: number, r: Rig): Pts {
   const B0 = F3.yaw(yaw);
   // Падение навзничь: всё тело — вокруг пяток.
-  const B = o.fall ? B0.at(-1.2, 0, 1.3 * Math.sin(o.fall)).pitch(-o.fall).at(1.2, 0, 0) : B0;
+  const B = o.fall
+    ? B0.at(-1.2, 0, 1.3 * Math.sin(o.fall))
+        .pitch(-o.fall)
+        .at(1.2, 0, 0)
+    : B0;
   const cs = camSide(yaw);
   // Таз: высота — по опорной ноге (шаг ножницами поднимает и опускает).
   const offs = [gait(o.ph)[0], gait(o.ph + 0.5)[0]];
@@ -219,11 +233,7 @@ function soldierRig(o: SoO, yaw: number, r: Rig): Pts {
     const hip = P.p(0, sd * 1.9, 0);
     const [off, rise] = gait(o.ph + (sd > 0 ? 0.5 : 0));
     const stanceF = sd < 0 ? o.wide : -o.wide * 0.8;
-    const foot = B.p(
-      o.fwd + off * STRIDE * o.step + stanceF,
-      sd * 2.1,
-      rise * 2.0 * o.step,
-    );
+    const foot = B.p(o.fwd + off * STRIDE * o.step + stanceF, sd * 2.1, rise * 2.0 * o.step);
     const knee = ik(hip, foot, 5.4, 5.5, B.v(1, sd * 0.1, 0));
     r.cap(hip, knee, 1.6, 1.35, navy);
     const shin = vlerp(knee, foot, 0.45);
@@ -266,16 +276,22 @@ function soldierRig(o: SoO, yaw: number, r: Rig): Pts {
   const Hd = T.at(0.3, 0, 11.6).turn(o.hturn).pitch(o.head);
   r.ball(Hd.p(0, 0, 0), 2.7, { T: SKIN });
   for (const sd of [-1, 1]) {
-    r.dot(Hd.p(2.35, sd * 0.95, 0.35), o.lit > 0.5 ? EYE : EYE_OFF, o.lit > 0.5 ? o.lit : 0, 1, 0.6);
+    r.dot(
+      Hd.p(2.45, sd * 0.95, -0.1),
+      o.lit > 0.5 ? EYE : EYE_OFF,
+      o.lit > 0.5 ? o.lit : 0,
+      1,
+      0.6,
+    );
     r.dot(Hd.p(2.1, sd * 1.75, -0.75), CHEEK, 0, 1, 0.5);
   }
   r.line(Hd.p(2.55, -0.9, -0.95), Hd.p(2.55, 0.9, -0.95), MOUS, 0, 0.4);
-  r.eye = o.lit > 0.5 ? Hd.p(2.35, cs * 0.95, 0.35) : null;
-  const Sh = Hd.at(-0.15, 0, 1.6).pitch(-0.06);
+  r.eye = o.lit > 0.5 ? Hd.p(2.45, cs * 0.95, -0.1) : null;
+  const Sh = Hd.at(-0.15, 0, 1.95).pitch(-0.06);
   prism(r, Sh, 0, 6.2, 2.75, 3.0, 8, { T: HAT }, { T: HAT, bias: 0.25 });
   r.ell(Sh, [2.85, 0, 3.3], [0.4, 1.1, 1.2], brass);
   // Козырёк.
-  r.poly([Sh.p(2.4, -2.2, 0.3), Sh.p(2.4, 2.2, 0.3), Sh.p(4.0, 1.6, -0.2), Sh.p(4.0, -1.6, -0.2)], {
+  r.poly([Sh.p(2.4, -2.2, 0.3), Sh.p(2.4, 2.2, 0.3), Sh.p(3.4, 1.6, 0.2), Sh.p(3.4, -1.6, 0.2)], {
     T: HAT,
     bias: 0.1,
   });
@@ -314,7 +330,11 @@ function soldierRig(o: SoO, yaw: number, r: Rig): Pts {
     for (let i = 1; i <= n; i++) {
       const u = i / n;
       const a = u * TAU * 2.2;
-      const p = kb.p(-u * 6 * o.spring, Math.cos(a) * 1.3, 1 + u * 3 * o.spring + Math.sin(a) * 1.3);
+      const p = kb.p(
+        -u * 6 * o.spring,
+        Math.cos(a) * 1.3,
+        1 + u * 3 * o.spring + Math.sin(a) * 1.3,
+      );
       r.cap(prev, p, 0.35, 0.35, brass);
       prev = p;
     }
@@ -361,11 +381,8 @@ function soldierRig(o: SoO, yaw: number, r: Rig): Pts {
 // ---- Треки ----------------------------------------------------------------
 
 const AIM_T = 0.7;
-const THRUST_T = 0.75;
 const SLAM_T = 0.9;
 const RUN_T = 0.6;
-const REWIND_T = 1.2;
-const WAKE_T = 0.8;
 const DIE_T = 0.85;
 const tf = (f: number) => (f + 0.5) / FPS;
 
@@ -403,9 +420,9 @@ function thrustO(T: number): SoO {
     wide: 4.6 * kL + 2.4 * (1 - kL) * (1 - kS),
     fwd: 2.2 * kL,
     crouch: 1.3 * kL + 0.4 * (1 - kL) * (1 - kS),
-    lean: 0.45 * kL + 0.1 * (1 - kL) * (1 - kS),
+    lean: 0.36 * kL + 0.1 * (1 - kL) * (1 - kS),
     twist: 0.08 * kL + 0.25 * (1 - kL) * (1 - kS),
-    head: 0.1 * kL,
+    head: -0.24 * kL,
     key: AIM_T * 15 + T * 6,
     plume: 0.7 * kL - 0.25 * Math.sin(PI * sstep(0.13, 0.5, T)),
     tails: 0.9 * kL,
@@ -521,7 +538,8 @@ function wakeO(T: number): SoO {
 function dieO(T: number): SoO {
   const hit = Math.sin(PI * sstep(0, 0.1, T));
   const top = easeIn(sstep(0.06, 0.42, T));
-  const bounce = 0.2 * Math.sin(PI * sstep(0.42, 0.56, T)) + 0.06 * Math.sin(PI * sstep(0.56, 0.64, T));
+  const bounce =
+    0.2 * Math.sin(PI * sstep(0.42, 0.56, T)) + 0.06 * Math.sin(PI * sstep(0.56, 0.64, T));
   return {
     ...S0,
     fall: (PI / 2) * top - bounce,
@@ -637,7 +655,16 @@ function soPose(anim: string, f: number): SoO {
       return { ...S0, plume: -0.6, tails: -0.6, armL: 0.9, lift: 0.4 };
     case 'land': {
       const s = Math.sin(PI * sstep(0, 0.2, T)) - 0.25 * Math.sin(PI * sstep(0.2, 0.33, T));
-      return { ...S0, crouch: 1.8 * s, lean: 0.12 * s, head: 0.2 * s, plume: 0.8 * s, tails: 0.5 * s, armL: 0.5 * s, key: T * 8 };
+      return {
+        ...S0,
+        crouch: 1.8 * s,
+        lean: 0.12 * s,
+        head: 0.2 * s,
+        plume: 0.8 * s,
+        tails: 0.5 * s,
+        armL: 0.5 * s,
+        key: T * 8,
+      };
     }
   }
   return { ...S0 };

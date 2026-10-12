@@ -529,8 +529,9 @@ function lookFrame(fr: MobFrame, look: MobPose['look'], gray: boolean): MobFrame
     for (let i = 0; i < d.length; i += 4) {
       if (!d[i + 3]) continue;
       if (look === 'albino') {
+        // Контур остаётся тёмным: бледный моб не теряет силуэт на тёмном полу.
         const l = (d[i] + d[i + 1] + d[i + 2]) / 3;
-        const q = mixc([l, l, l, 255], PALE, 0.45);
+        const q = mixc([l, l, l, 255], PALE, l < 40 ? 0.12 : 0.45);
         d[i] = q[0];
         d[i + 1] = q[1];
         d[i + 2] = q[2];
