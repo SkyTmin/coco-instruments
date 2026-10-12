@@ -682,7 +682,7 @@ function workPose(t: number): Pose {
     [0.8, 0, 's'],
   ]);
   o.bow = 0.08 * sneak;
-  o.nod = 0.12 * sneak;
+  o.nod = 0.03 * sneak;
   o.z = -0.5 * sneak;
   o.eye = sneak > 0.5 ? 'half' : 'open';
   o.earL = 0.3 * sneak;
@@ -793,7 +793,7 @@ function attackPose(t: number): Pose {
   o.sq = 0.16 * neg(l) - 0.05 * air + 0.08 * bump(t, 0.55, 0.7);
   o.z = -1.2 * neg(l) + 2.0 * air;
   o.bow = 0.16 * neg(l) + 0.06 * pos(l);
-  o.nod = 0.1 * neg(l) - 0.24 * pos(l);
+  o.nod = -0.16 * neg(l) - 0.24 * pos(l);
   o.hy = 1.0 * pos(l);
   o.hz = -1.0 * neg(l);
   o.x = 0.3 * Math.sin(t * TAU * 9) * bump(t, 0.04, 0.27);
@@ -2072,7 +2072,7 @@ function cap(out: PartF[], c: Ctx): void {
   const { o, h, lag } = c;
   const k = h.k;
   const capLag = Math.max(-0.12, Math.min(0.12, (lag.capX - c.S.head[0]) * 0.05));
-  const roll = -0.22 + o.capT - capLag;
+  const roll = -0.16 + o.capT - capLag;
   const pitch = 0.06 + 0.46 * o.capDn;
   const lift = -1.2 * o.capDn;
   const PV: V3 = [0, 0, 2.6];
@@ -2104,9 +2104,9 @@ function cap(out: PartF[], c: Ctx): void {
   });
   // Козырёк — короткий, чуть вниз; снизу темнее.
   out.push({
-    c: cp([-0.3, 6.6, 3.15]),
+    c: cp([-0.3, 6.3, 3.3]),
     ax: axes(cd([1, 0, 0]), cd(pitchX([0, 0, 1], 0.2))),
-    r: [4.2 * k, 1.9 * k, 0.5 * k],
+    r: [4.2 * k, 1.45 * k, 0.5 * k],
     pal: P_CAP,
     id: nid(),
     bias: -0.06,
