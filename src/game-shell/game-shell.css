@@ -1,0 +1,293 @@
+/* Каркас игры: форматы (data-ff), безопасные зоны, прокрутка, раскладка
+   GameScreen, рамка фокуса, подсказки мыши. Внешний вид кнопок и рамок —
+   набор U (src/ui-px); здесь — только места и поведение. */
+
+/* ---- Игровой маршрут: страница не прокручивается и не тянется ---------- */
+html[data-game] {
+  --gs-safe-top: calc(
+    var(--tg-viewport-safe-area-inset-top, env(safe-area-inset-top, 0px)) +
+      var(--tg-viewport-content-safe-area-inset-top, 0px)
+  );
+  --gs-safe-bottom: calc(
+    var(--tg-viewport-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) +
+      var(--tg-viewport-content-safe-area-inset-bottom, 0px)
+  );
+  --gs-safe-left: calc(
+    var(--tg-viewport-safe-area-inset-left, env(safe-area-inset-left, 0px)) +
+      var(--tg-viewport-content-safe-area-inset-left, 0px)
+  );
+  --gs-safe-right: calc(
+    var(--tg-viewport-safe-area-inset-right, env(safe-area-inset-right, 0px)) +
+      var(--tg-viewport-content-safe-area-inset-right, 0px)
+  );
+  --gs-gap: 8px;
+  --gs-rail: 76px;
+  --gs-side: minmax(300px, 38%);
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html[data-game] body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+/* Прокручивается #root — своя прокрутка, без «резинки» и pull-to-refresh. */
+html[data-game] #root {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+html[data-ff='tablet'] {
+  --gs-gap: 12px;
+  --gs-rail: 92px;
+}
+html[data-ff='desktop'] {
+  --gs-gap: 16px;
+  --gs-rail: 208px;
+  --gs-side: minmax(360px, 34%);
+}
+
+/* ---- GameScreen ---------------------------------------------------------- */
+.gs {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'top' 'body' 'bottom' 'nav';
+  gap: var(--gs-gap, 8px);
+  height: 100vh;
+  height: 100dvh;
+  padding: calc(var(--gs-safe-top, 0px) + 8px) calc(var(--gs-safe-right, 0px) + 10px)
+    calc(var(--gs-safe-bottom, 0px) + 8px) calc(var(--gs-safe-left, 0px) + 10px);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.gs__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.gs__top,
+.gs__nav,
+.gs__body,
+.gs__main,
+.gs__side,
+.gs__bottom {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.gs__top {
+  grid-area: top;
+}
+.gs__nav {
+  grid-area: nav;
+}
+.gs__bottom {
+  grid-area: bottom;
+}
+/* Телефон стоя: главное и панель — одной прокруткой. */
+.gs__body {
+  grid-area: body;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-gap, 8px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.gs[data-side-first] .gs__side {
+  order: -1;
+}
+.gs__main,
+.gs__side {
+  flex: none;
+}
+
+/* Альбомные форматы: панель — своя колонка, у каждой своя прокрутка. */
+html[data-ff='phone-landscape'] .gs,
+html[data-ff='tablet'] .gs,
+html[data-ff='desktop'] .gs {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'top' 'main' 'bottom';
+}
+html[data-ff='phone-landscape'] .gs[data-nav],
+html[data-ff='tablet'] .gs[data-nav],
+html[data-ff='desktop'] .gs[data-nav] {
+  grid-template-columns: var(--gs-rail) minmax(0, 1fr);
+  grid-template-areas: 'nav top' 'nav main' 'nav bottom';
+}
+html[data-ff='phone-landscape'] .gs[data-side],
+html[data-ff='tablet'] .gs[data-side],
+html[data-ff='desktop'] .gs[data-side] {
+  grid-template-columns: minmax(0, 1fr) var(--gs-side);
+  grid-template-areas: 'top side' 'main side' 'bottom side';
+}
+html[data-ff='phone-landscape'] .gs[data-nav][data-side],
+html[data-ff='tablet'] .gs[data-nav][data-side],
+html[data-ff='desktop'] .gs[data-nav][data-side] {
+  grid-template-columns: var(--gs-rail) minmax(0, 1fr) var(--gs-side);
+  grid-template-areas: 'nav top side' 'nav main side' 'nav bottom side';
+}
+/* Телефон лёжа: высоты мало — шапка только над главным, панель уже. */
+html[data-ff='phone-landscape'] .gs {
+  --gs-side: minmax(240px, 42%);
+  padding-top: calc(var(--gs-safe-top, 0px) + 6px);
+  padding-bottom: calc(var(--gs-safe-bottom, 0px) + 6px);
+}
+html[data-ff='phone-landscape'] .gs__body,
+html[data-ff='tablet'] .gs__body,
+html[data-ff='desktop'] .gs__body {
+  display: contents;
+}
+html[data-ff='phone-landscape'] .gs__main,
+html[data-ff='tablet'] .gs__main,
+html[data-ff='desktop'] .gs__main {
+  grid-area: main;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+html[data-ff='phone-landscape'] .gs__side,
+html[data-ff='tablet'] .gs__side,
+html[data-ff='desktop'] .gs__side {
+  grid-area: side;
+  order: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Компьютер: ширина ограничена, экран по центру. */
+html[data-ff='desktop'] .gs {
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+/* ---- GameNav ------------------------------------------------------------- */
+.gs-nav {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 4px;
+}
+.gs-nav__btn {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.gs-nav__btn[aria-current='page'] {
+  background: rgba(255, 255, 255, 0.14);
+}
+.gs-nav__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.gs-nav__icon {
+  display: grid;
+  place-items: center;
+  min-height: 26px;
+}
+.gs-nav__label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gs-nav__badge {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 22px);
+}
+.gs-nav__pad {
+  align-self: center;
+  flex: none;
+}
+html:not([data-input='gamepad']) .gs-nav__pad {
+  display: none;
+}
+html[data-ff='phone-landscape'] .gs-nav,
+html[data-ff='tablet'] .gs-nav,
+html[data-ff='desktop'] .gs-nav {
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
+  overflow-y: auto;
+}
+html[data-ff='phone-landscape'] .gs-nav__btn,
+html[data-ff='tablet'] .gs-nav__btn {
+  flex: none;
+  min-height: 56px;
+}
+html[data-ff='phone-landscape'] .gs-nav__btn {
+  min-height: 48px;
+  font-size: 10px;
+}
+html[data-ff='desktop'] .gs-nav__btn {
+  flex: none;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 12px;
+  font-size: 15px;
+}
+html[data-ff='desktop'] .gs-nav__badge {
+  position: static;
+  margin-left: auto;
+}
+
+/* ---- Фокус без мыши -------------------------------------------------------
+   :focus-visible — клавиатура; [data-focus] — фокус от навигации (геймпад:
+   браузер не считает его «клавиатурным»). Пиксельную рамку рисует набор U
+   поверх этих же селекторов. */
+html[data-game] :focus-visible,
+html[data-game][data-input='gamepad'] [data-focus],
+html[data-game][data-input='keyboard'] [data-focus] {
+  outline: calc(var(--ui-px, 2px) * 1) solid var(--gx-gold, #ffd257);
+  outline-offset: calc(var(--ui-px, 2px) * 1);
+}
+html[data-game][data-input='touch'] :focus-visible,
+html[data-game][data-input='touch'] [data-focus] {
+  outline: none;
+}
+
+/* ---- Подсказка мыши (TipHost) ------------------------------------------- */
+.gs-tip {
+  position: fixed;
+  z-index: 10000;
+  transform: translate(-50%, -100%);
+  max-width: min(260px, 80vw);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--gx-wood-dd, #3d2a16);
+  box-shadow: 0 0 0 2px var(--gx-wood-d, #6d4b27);
+  color: var(--gx-paper, #fff1d2);
+  font:
+    600 12px/1.25 'GxRubik',
+    system-ui,
+    sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.gs-tip.is-below {
+  transform: translate(-50%, 0);
+}
