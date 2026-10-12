@@ -2932,22 +2932,6 @@ interface Ctx {
   now: number;
 }
 
-const WIND: Record<string, number> = {
-  f13_knight: 0.72,
-  f13_harlequin: 0.55,
-  f13_prompter: 0.6,
-  f13_drummer: 0.75,
-  f13_fiddler: 0.7,
-  f13_comedy: 0.55,
-  f13_tragedy: 0.6,
-  f13_shade: 0.6,
-  f13_spider: 0.8,
-  f13_ballerina: 0.6,
-  f13_nutcracker: 0.85,
-  f13_giant: 0.9,
-  f13boss: 0.8,
-};
-
 /** Фаза шага и кадр из 8 по скорости. */
 const RUN_N = 8;
 const IDLE_N = 8;
@@ -3010,8 +2994,6 @@ function basePose(c: Ctx): { q: Pose; key: string } | null {
   const f = Math.floor(c.now * 5 + m.id * 0.37) % IDLE_N;
   return { q: dangle((f / IDLE_N) * TAU), key: `idle${f}` };
 }
-
-const windK = (m: Mob) => clamp01(m.t / (WIND[m.kind] ?? 0.7));
 
 // ---- кеш кадров мобов ----------------------------------------------------
 
@@ -3311,94 +3293,7 @@ export const HARL_BODY: Body = {
 
 // Суфлёр рисуется в `f13-mob-prompter.ts` (анимации мобов 13).
 
-// ---------------------------------------------------------------------------
-// Тень-актёр: есть только в луче софита.
-// ---------------------------------------------------------------------------
-
-const SHADE_BODY: Body = {
-  ...KNIGHT_BODY,
-  hip: 10,
-  torso: 8,
-  waist: 2.4,
-  chest: 3.4,
-  head: 3,
-  armR: 1.1,
-  legR: 1.2,
-  T: {
-    torso: P.shade,
-    arm: P.shade,
-    leg: P.shade,
-    head: P.shade,
-    hand: P.shade,
-    foot: P.shade,
-    joint: P.shade,
-    pelvis: P.shade,
-  },
-  joints: false,
-};
-
-paintMob(
-  'f13_shade',
-  puppetPainter('f13_shade', {
-    w: 44,
-    h: 48,
-    ax: 22,
-    ay: 42,
-    dirs: 8,
-    body: SHADE_BODY,
-    shadow: 0,
-    pose: (c, q) => {
-      const { m } = c;
-      if (m.mode === 'windup') {
-        const n = Math.min(11, Math.floor(windK(m) * 12));
-        const e = ease(n / 11);
-        // Плащ распахнут, когти вперёд.
-        q.aL = limb(1.6 * e, 0.9 * e, 0.3);
-        q.aR = limb(1.6 * e, 0.9 * e, 0.3);
-        q.lean = -0.2 * e;
-        q.bob = 2 * e;
-        return { q, key: `w${n}` };
-      }
-      if (m.mode === 'recover' && m.t < 0.3) {
-        const n = Math.min(5, Math.floor(m.t / 0.05));
-        const e = easeOut(n / 5);
-        q.aL = limb(1.6 - 0.6 * e, 0.9 - 0.7 * e, 0.3);
-        q.aR = limb(1.6 - 0.6 * e, 0.9 - 0.7 * e, 0.3);
-        q.lean = 0.45 * e;
-        return { q, key: `h${n}` };
-      }
-      return null;
-    },
-    dress: (rig, j, c) => {
-      const R = SHADE_BODY.head;
-      // Плащ: две полы от плеч до земли, развеваются.
-      const sway = Math.sin(c.now * 4 + c.m.id) * 0.8;
-      for (const s of [-1, 1]) {
-        const sh = s < 0 ? j.shL : j.shR;
-        const low = vadd(vadd(j.pelvis, vsc(j.right, s * 4)), v3(0, -8, -2 + sway));
-        rig.cap(sh, low, 2, 3.4, P.shade);
-      }
-      // Цилиндр-силуэт и горящие глаза.
-      const hb = onHead(j, R, 0, 0, 0.8);
-      rig.cap(hb, vadd(hb, vsc(j.hUp, 4)), 2.4, 2.6, P.black);
-      rig.disc(hb, 4, 0.5, P.black);
-      rig.dot(onHead(j, R, 0.98, -0.38, 0.05), hx('#e0d0ff'), 1, true);
-      rig.dot(onHead(j, R, 0.98, 0.38, 0.05), hx('#e0d0ff'), 1, true);
-    },
-    frame: (c) => {
-      const m = c.m;
-      const vis = m.data.ghost ? 0.12 + 0.08 * Math.sin(c.now * 6 + m.id) : 0.88;
-      return {
-        alpha: vis,
-        ghost:
-          m.mode === 'chase' && !m.data.ghost
-            ? { every: 0.08, life: 0.3, tint: '#3a2c50', alpha: 0.35 }
-            : null,
-      };
-    },
-    keyX: (c) => (c.m.data.ghost ? 'g' : ''),
-  }),
-);
+// Тень-актёр рисуется в `f13-mob-shade.ts` (анимации мобов 13).
 
 // ---------------------------------------------------------------------------
 // Кассир с выручкой: удирает, позвякивая мешком.
@@ -7295,7 +7190,7 @@ export function lordVagaPx(m: Mob, _now: number): [number, number] {
 
 // ---- прогрев -----------------------------------------------------------------
 
-for (const k of ['f13_shade', 'f13_cashier']) warmPuppet(k, 8);
+warmPuppet('f13_cashier', 8);
 
 /**
  * Кукловод: пробуждение, висение акта I в обе стороны с жестами ваги под

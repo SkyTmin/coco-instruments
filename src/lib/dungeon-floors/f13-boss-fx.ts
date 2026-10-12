@@ -46,6 +46,7 @@ import './f13-mob-knight';
 import './f13-mob-masks';
 import './f13-mob-nutcracker';
 import './f13-mob-prompter';
+import './f13-mob-shade';
 import './f13-mob-spider';
 
 type G = CanvasRenderingContext2D;
