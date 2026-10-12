@@ -92,7 +92,9 @@ describe('пиксельные сундуки', () => {
       const n = STRIPS[name].frames;
       const o = __test.poseOf(name, (n - 1) / STRIPS[name].fps);
       expect(o.lid).toBeCloseTo(LID_OPEN, 6);
-      expect([o.keyVis, o.beam, o.flash, o.leak, o.lift, o.shx, o.roll]).toEqual([0, 0, 0, 0, 0, 0, 0]);
+      expect([o.keyVis, o.beam, o.flash, o.leak, o.lift, o.shx, o.roll]).toEqual([
+        0, 0, 0, 0, 0, 0, 0,
+      ]);
       expect([o.sz, o.sxy]).toEqual([1, 1]);
       // Два последних кадра одинаковы: пыль, искры и монеты погасли раньше.
       for (const res of ['s', 'l'] as Res[])
@@ -135,9 +137,10 @@ describe('пиксельные сундуки', () => {
         for (let i = 0; i < n; i += 3) {
           const [x0, y0, x1, y1] = bbox(frame(name, i, res));
           if (x1 < 0) continue;
-          expect(x0 > 0 && y0 > 0 && x1 < RES[res].cw - 1 && y1 < RES[res].ch - 1, `${name}/${res} #${i}`).toBe(
-            true,
-          );
+          expect(
+            x0 > 0 && y0 > 0 && x1 < RES[res].cw - 1 && y1 < RES[res].ch - 1,
+            `${name}/${res} #${i}`,
+          ).toBe(true);
         }
       }
   });

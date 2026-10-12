@@ -127,7 +127,10 @@ function inv3(m: M3): M3 {
 }
 const xc = (a: Xf, b: Xf): Xf => ({ m: mm(a.m, b.m), o: add(a.o, mv(a.m, b.o)) });
 const xT = (x: number, y: number, z: number): Xf => ({ m: I3, o: [x, y, z] });
-const xS = (x: number, y: number, z: number): Xf => ({ m: [x, 0, 0, 0, y, 0, 0, 0, z], o: [0, 0, 0] });
+const xS = (x: number, y: number, z: number): Xf => ({
+  m: [x, 0, 0, 0, y, 0, 0, 0, z],
+  o: [0, 0, 0],
+});
 /** Вокруг x: +y (перёд) уходит к +z (вверх). */
 function xRx(a: number): Xf {
   const c = Math.cos(a);
@@ -764,7 +767,8 @@ function planks(u: number, z: number, z0: number, z1: number, n: number, sid: nu
   if (HI) {
     // Волокно: штрихи вдоль доски, у каждой доски своя высота и разрывы.
     const g = (0.3 + 0.45 * hash(pi, sid, 41)) * ph;
-    if (Math.abs(fr * ph - g) < PX * 0.55 && hash(Math.floor(u / 2.6), pi, sid + 7) > 0.35) off -= 1;
+    if (Math.abs(fr * ph - g) < PX * 0.55 && hash(Math.floor(u / 2.6), pi, sid + 7) > 0.35)
+      off -= 1;
     const g2 = (0.15 + 0.7 * hash(pi, sid, 43)) * ph;
     if (Math.abs(fr * ph - g2) < PX * 0.5 && hash(Math.floor(u / 1.9), pi, sid + 9) > 0.62)
       off -= 1;
@@ -972,10 +976,7 @@ const REST: Pose = {
 
 /** Сундук в мире (единицы модели, без масштаба полосы). */
 function chestXf(o: Pose): Xf {
-  return xc(
-    xc(xc(xT(o.shx, 0, o.lift), xRy(o.roll)), xRz(YAW0 + o.yaw)),
-    xS(o.sxy, o.sxy, o.sz),
-  );
+  return xc(xc(xc(xT(o.shx, 0, o.lift), xRy(o.roll)), xRz(YAW0 + o.yaw)), xS(o.sxy, o.sxy, o.sz));
 }
 function lidXf(o: Pose): Xf {
   return xc(xT(0, -D2, H), xRx(o.lid));
@@ -1121,10 +1122,22 @@ function build(o: Pose): Prim[] {
   for (const sx of [-1, 1]) {
     const hx0 = sx * 9;
     out.push(
-      boxP(C, hx0 - 1.8, hx0 + 1.8, -D2 - 0.9, -D2 + 0.2, H - 5.5, H - 0.1, P_METAL, bandId, M_METAL, {
-        gloss: 1,
-        sh: metalSh(0, 2, hx0, 2.6, true),
-      }),
+      boxP(
+        C,
+        hx0 - 1.8,
+        hx0 + 1.8,
+        -D2 - 0.9,
+        -D2 + 0.2,
+        H - 5.5,
+        H - 0.1,
+        P_METAL,
+        bandId,
+        M_METAL,
+        {
+          gloss: 1,
+          sh: metalSh(0, 2, hx0, 2.6, true),
+        },
+      ),
     );
     out.push(
       prim(
@@ -1210,10 +1223,10 @@ function build(o: Pose): Prim[] {
     ),
   );
   const lbId = nid();
-  for (const sx of [-1, 1])
-    out.push(lidBand(Lx, sx * LK.bandX, bw, P_METAL, lbId, riv));
+  for (const sx of [-1, 1]) out.push(lidBand(Lx, sx * LK.bandX, bw, P_METAL, lbId, riv));
   if (LK.corners)
-    for (const sx of [-1, 1]) out.push(lidBand(Lx, sx * (W2 + LO - 1.7), 1.5, P_METAL, lbId, false));
+    for (const sx of [-1, 1])
+      out.push(lidBand(Lx, sx * (W2 + LO - 1.7), 1.5, P_METAL, lbId, false));
   // Губа крышки спереди: полоса по нижнему краю дуги.
   out.push(
     prim(
@@ -1252,7 +1265,9 @@ function build(o: Pose): Prim[] {
         sh: (L) => (Math.hypot(L[0], L[2]) > 2.6 ? -1 : 0.5),
       }),
     );
-    out.push(ellP(sun, [0, 0.7, 0], [1.3, 0.7, 1.3], P_RUBY, nid(), M_GEM, { facet: true, gloss: 3 }));
+    out.push(
+      ellP(sun, [0, 0.7, 0], [1.3, 0.7, 1.3], P_RUBY, nid(), M_GEM, { facet: true, gloss: 3 }),
+    );
     for (let r = 0; r < 8; r++) {
       const a = (r / 8) * Math.PI * 2;
       const c: V3 = [Math.cos(a) * 4.6, -0.1, Math.sin(a) * 4.6];
@@ -1299,10 +1314,18 @@ function build(o: Pose): Prim[] {
         }),
       );
       out.push(
-        ellP(C, [sx * LK.bandX, D2 + 0.9, H - 1.1], [1.25, 0.6, 1.0], gemPal[gi++ % 3], nid(), M_GEM, {
-          facet: true,
-          gloss: 3,
-        }),
+        ellP(
+          C,
+          [sx * LK.bandX, D2 + 0.9, H - 1.1],
+          [1.25, 0.6, 1.0],
+          gemPal[gi++ % 3],
+          nid(),
+          M_GEM,
+          {
+            facet: true,
+            gloss: 3,
+          },
+        ),
       );
     }
   }
@@ -1333,9 +1356,16 @@ function loot(out: Prim[], C: Xf): void {
   };
   if (K === 'common') {
     out.push(
-      ellP(C, [-4, -1.5, T - 2], [11, 7, rz - 1], P_COIN, heapId, M_LOOT, { sh: heapSh, gloss: 1 }, [
-        floorCut,
-      ]),
+      ellP(
+        C,
+        [-4, -1.5, T - 2],
+        [11, 7, rz - 1],
+        P_COIN,
+        heapId,
+        M_LOOT,
+        { sh: heapSh, gloss: 1 },
+        [floorCut],
+      ),
     );
   } else {
     out.push(
@@ -1354,14 +1384,16 @@ function loot(out: Prim[], C: Xf): void {
   // Монеты на куче: наклонённые диски.
   const nCoins = K === 'common' ? 3 : K === 'rare' ? 4 : 5;
   for (let j = 0; j < nCoins; j++) {
-    const hx0 = (hash(j, 3, LK.seed) - 0.5) * (K === 'common' ? 16 : 26) + (K === 'common' ? -4 : 0);
+    const hx0 =
+      (hash(j, 3, LK.seed) - 0.5) * (K === 'common' ? 16 : 26) + (K === 'common' ? -4 : 0);
     const hy0 = (hash(j, 5, LK.seed) - 0.5) * 9 - 1;
     const z = top - 0.6 - Math.abs(hx0) * 0.06 - hash(j, 6) * 1.2;
     const cx = xc(C, xc(xT(hx0, hy0, z), xc(xRz(hash(j, 7) * 6), xRx(0.5 + hash(j, 8) * 0.6))));
     out.push(
       ellP(cx, [0, 0, 0], [2.1, 2.1, 0.55], P_COIN, nid(), M_LOOT, {
         gloss: 2,
-        sh: (L) => (Math.hypot(L[0], L[1]) > 1.5 ? -1 : HI && Math.hypot(L[0], L[1]) < 0.8 ? 0.6 : 0),
+        sh: (L) =>
+          Math.hypot(L[0], L[1]) > 1.5 ? -1 : HI && Math.hypot(L[0], L[1]) < 0.8 ? 0.6 : 0,
       }),
     );
   }
@@ -1642,7 +1674,11 @@ interface Parsed {
 function parse(name: string): Parsed {
   if (name === 'mystery-spin') return { kind: 'mystery', mode: 'spin' };
   const [m, k] = name.split('-');
-  if ((m !== 'idle' && m !== 'open') || !KINDS.includes(k as Kind) || (m === 'open' && k === 'mystery'))
+  if (
+    (m !== 'idle' && m !== 'open') ||
+    !KINDS.includes(k as Kind) ||
+    (m === 'open' && k === 'mystery')
+  )
     throw new Error(`нет полосы сундука ${name}`);
   return { kind: k as Kind, mode: m };
 }
@@ -1660,11 +1696,7 @@ export function poseOf(name: string, t: number): Pose {
 
 /** Точка мира модели → кадр (x, y, глубина) в пикселях полосы. */
 function sp(p: V3): [number, number, number] {
-  return [
-    OX + RR * p[0],
-    OY + RR * (p[1] * SE - p[2] * CE),
-    RR * (p[1] * CE + p[2] * SE),
-  ];
+  return [OX + RR * p[0], OY + RR * (p[1] * SE - p[2] * CE), RR * (p[1] * CE + p[2] * SE)];
 }
 
 let DZ: Float32Array = new Float32Array(0);
@@ -1768,7 +1800,16 @@ function ring(p: Px, o: Pose, r: number, vis: number, col: RGBA, thick: number):
  * прячет его основание, а откинутая крышка (она дальше) им подсвечена.
  * `hgt` — высота в единицах модели, `wid` — доля ширины проёма.
  */
-function beam(p: Px, o: Pose, t: number, k: number, col: RGBA, lite: RGBA, hgt: number, wid: number): void {
+function beam(
+  p: Px,
+  o: Pose,
+  t: number,
+  k: number,
+  col: RGBA,
+  lite: RGBA,
+  hgt: number,
+  wid: number,
+): void {
   if (k <= 0.01) return;
   const c = chestPt(o, [0, -1, H - 1]);
   const [cx, cy, cd] = sp(c);
@@ -1785,7 +1826,9 @@ function beam(p: Px, o: Pose, t: number, k: number, col: RGBA, lite: RGBA, hgt: 
       if (dx > 1) continue;
       // Штрихи: свой столбик, бегут вверх.
       const col0 = Math.floor((x - cx) / sw);
-      const run = frac((y / RR + t * (50 + 30 * hash(col0, 3))) / (7 + 5 * hash(col0, 4)) + hash(col0, 5));
+      const run = frac(
+        (y / RR + t * (50 + 30 * hash(col0, 3))) / (7 + 5 * hash(col0, 4)) + hash(col0, 5),
+      );
       const streak = hash(col0, 6) > 0.45 && run < 0.35;
       let a: number;
       let cc: RGBA;
@@ -1847,12 +1890,72 @@ function coinSpr(p: Px, x: number, y: number, d: number, spin: number, vis: numb
 
 /** Руны: 5×7 для крупной, 3×4 для малой. */
 const RUNES_L = [
-  ['x....x.', 'x...x..', 'x..x...', 'x.x....', 'xx.....', 'x.x....', 'x..x...', 'x...x..', 'x....x.'],
-  ['...x...', '..x.x..', '.x...x.', 'x.....x', '.x...x.', '..x.x..', '...x...', '...x...', '...x...'],
-  ['x.....x', 'xx...xx', 'x.x.x.x', 'x..x..x', 'x.x.x.x', 'xx...xx', 'x.....x', 'x.....x', 'x.....x'],
-  ['xxxx...', 'x...x..', 'x....x.', 'x...x..', 'xxxx...', 'x.x....', 'x..x...', 'x...x..', 'x....x.'],
-  ['x......', 'xx.....', 'x.x....', 'x..x...', 'x...x..', 'x..x...', 'x.x....', 'xx.....', 'x......'],
-  ['x..x..x', '.x.x.x.', '..xxx..', '...x...', '...x...', '...x...', '...x...', '...x...', '...x...'],
+  [
+    'x....x.',
+    'x...x..',
+    'x..x...',
+    'x.x....',
+    'xx.....',
+    'x.x....',
+    'x..x...',
+    'x...x..',
+    'x....x.',
+  ],
+  [
+    '...x...',
+    '..x.x..',
+    '.x...x.',
+    'x.....x',
+    '.x...x.',
+    '..x.x..',
+    '...x...',
+    '...x...',
+    '...x...',
+  ],
+  [
+    'x.....x',
+    'xx...xx',
+    'x.x.x.x',
+    'x..x..x',
+    'x.x.x.x',
+    'xx...xx',
+    'x.....x',
+    'x.....x',
+    'x.....x',
+  ],
+  [
+    'xxxx...',
+    'x...x..',
+    'x....x.',
+    'x...x..',
+    'xxxx...',
+    'x.x....',
+    'x..x...',
+    'x...x..',
+    'x....x.',
+  ],
+  [
+    'x......',
+    'xx.....',
+    'x.x....',
+    'x..x...',
+    'x...x..',
+    'x..x...',
+    'x.x....',
+    'xx.....',
+    'x......',
+  ],
+  [
+    'x..x..x',
+    '.x.x.x.',
+    '..xxx..',
+    '...x...',
+    '...x...',
+    '...x...',
+    '...x...',
+    '...x...',
+    '...x...',
+  ],
 ];
 const RUNES_S = [
   ['x.x', 'xx.', 'x.x', 'x..'],
@@ -1862,7 +1965,16 @@ const RUNES_S = [
   ['x..', 'xx.', 'x.x', 'xx.'],
   ['.x.', 'xxx', '.x.', '.x.'],
 ];
-function rune(p: Px, j: number, x: number, y: number, d: number, vis: number, col: RGBA, lite: RGBA): void {
+function rune(
+  p: Px,
+  j: number,
+  x: number,
+  y: number,
+  d: number,
+  vis: number,
+  col: RGBA,
+  lite: RGBA,
+): void {
   const g = (HI ? RUNES_L : RUNES_S)[j % 6];
   const x0 = Math.round(x - g[0].length / 2);
   const y0 = Math.round(y - g.length / 2);
@@ -1891,11 +2003,16 @@ function leakFx(p: Px, f: CFrame, k: number, col: RGBA, lite: RGBA): void {
   for (let i = 0; i < f.w * f.h; i++) {
     if (f.emi[i] !== 1) continue;
     const j = i * 4;
-    const c = mixc([p.data[j], p.data[j + 1], p.data[j + 2], 255], k > 0.6 ? lite : col, Math.min(1, k * 1.3));
+    const c = mixc(
+      [p.data[j], p.data[j + 1], p.data[j + 2], 255],
+      k > 0.6 ? lite : col,
+      Math.min(1, k * 1.3),
+    );
     p.data[j] = c[0];
     p.data[j + 1] = c[1];
     p.data[j + 2] = c[2];
-    for (const n of [i - w, i + w]) if (n >= 0 && n < f.w * f.h && f.emi[n] !== 1 && f.pal[n] >= 0) halo.push(n);
+    for (const n of [i - w, i + w])
+      if (n >= 0 && n < f.w * f.h && f.emi[n] !== 1 && f.pal[n] >= 0) halo.push(n);
   }
   const a = 0.5 * k;
   for (const n of halo) {
@@ -1966,8 +2083,14 @@ function keyShape(f: CFrame, o: Pose): void {
       // Капля: круг внизу + сужение кверху.
       const y = kv + len * 0.35;
       const r = y < 0 ? wid : wid * (1 - y / (len * 1.05));
-      if (y < -wid || y > len * 1.05 || Math.abs(ku) > Math.max(0, Math.sqrt(Math.max(0, r * r - (y < 0 ? y * y : 0))))) return -1;
-      if (o.keyVis < 1 && !dith(Math.floor(u * RR + 64), Math.floor(v * RR + 64), o.keyVis)) return -1;
+      if (
+        y < -wid ||
+        y > len * 1.05 ||
+        Math.abs(ku) > Math.max(0, Math.sqrt(Math.max(0, r * r - (y < 0 ? y * y : 0))))
+      )
+        return -1;
+      if (o.keyVis < 1 && !dith(Math.floor(u * RR + 64), Math.floor(v * RR + 64), o.keyVis))
+        return -1;
       // Блик слева-сверху, тень справа-снизу.
       const lit = -ku * 0.6 + kv * 0.25;
       return 3 + lit * 1.4 + (Math.abs(ku) > r - PX * 1.1 ? -1 : 0);
@@ -2060,8 +2183,12 @@ function glowFx(p: Px, f: CFrame, o: Pose): void {
         const j = y * f.w + x;
         if (f.emi[j] !== 2) {
           const near =
-            f.emi[j - 1] === 2 || f.emi[j + 1] === 2 || f.emi[j - f.w] === 2 || f.emi[j + f.w] === 2;
-          if (near && f.pal[j] >= 0 && dith(x, y, k * 0.9)) put(p, x, y, 1e9, withA(col, 0.5 * k), true);
+            f.emi[j - 1] === 2 ||
+            f.emi[j + 1] === 2 ||
+            f.emi[j - f.w] === 2 ||
+            f.emi[j + f.w] === 2;
+          if (near && f.pal[j] >= 0 && dith(x, y, k * 0.9))
+            put(p, x, y, 1e9, withA(col, 0.5 * k), true);
           continue;
         }
         const c = mixc(GLYPH[2], GLYPH[5], k);
@@ -2113,7 +2240,15 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
     const [x, y, d] = sp(kp);
     const life = 1 - o.keyVis;
     for (let j = 0; j < 3; j++)
-      sparkle(p, x + (rnd(j, 1) - 0.5) * 6 * RR, y - life * 4 * RR - rnd(j, 2) * 3 * RR, d + 2, life, KEY_P[3], WHITE);
+      sparkle(
+        p,
+        x + (rnd(j, 1) - 0.5) * 6 * RR,
+        y - life * 4 * RR - rnd(j, 2) * 3 * RR,
+        d + 2,
+        life,
+        KEY_P[3],
+        WHITE,
+      );
   }
   // Светлый «щелчок» в скважине на защёлке.
   const tl = M.latch / 24;
@@ -2158,7 +2293,19 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
   if (tier === 'rare') beam(p, o, t, o.beam, col, lite, 22, 0.62);
   if (tier === 'epic') beam(p, o, t, o.beam, col, lite, 58, 0.5);
   if (tier === 'legend') beam(p, o, t, o.beam, col, lite, 84, 0.66);
-  if (tier === 'legend') burst(p, o, kf(t, [[1.08, 0], [1.12, 1], [1.5, 0]]), t * 0.6, col, lite);
+  if (tier === 'legend')
+    burst(
+      p,
+      o,
+      kf(t, [
+        [1.08, 0],
+        [1.12, 1],
+        [1.5, 0],
+      ]),
+      t * 0.6,
+      col,
+      lite,
+    );
 
   // Кольцо света по полу (редкий — при открытии, эпик — на посадке).
   if (tier === 'rare') {
@@ -2173,7 +2320,11 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
       const v = (t - 0.91) / 0.3;
       if (v < 0 || v > 1) continue;
       const sx = j < 2 ? -1 : 1;
-      const pw = chestPt({ ...o, lift: 0 }, [sx * (16 + 6 * v + j * 2), (j % 2 ? 1 : -1) * 6, 1 + 2 * v]);
+      const pw = chestPt({ ...o, lift: 0 }, [
+        sx * (16 + 6 * v + j * 2),
+        (j % 2 ? 1 : -1) * 6,
+        1 + 2 * v,
+      ]);
       const [x, y, d] = sp(pw);
       puff(p, x, y, d + 1, 1.2 + 1.6 * v, 1 - v, hx('#8c7ea0'));
     }
@@ -2188,7 +2339,11 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
       const v = (t - 1.23) / 0.36;
       if (v < 0 || v > 1) continue;
       const a = (j / 6) * PI * 2 + 0.3;
-      const pw = chestPt({ ...o, lift: 0 }, [Math.cos(a) * (19 + 8 * v), Math.sin(a) * (12 + 5 * v), 1 + 3 * v]);
+      const pw = chestPt({ ...o, lift: 0 }, [
+        Math.cos(a) * (19 + 8 * v),
+        Math.sin(a) * (12 + 5 * v),
+        1 + 3 * v,
+      ]);
       const [x, y, d] = sp(pw);
       puff(p, x, y, d + 1, 1.4 + 2 * v, 1 - v, hx('#b09a70'));
     }
@@ -2309,7 +2464,7 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
       if (vis <= 0 || t > 2.12) continue;
       const base = chestPt({ ...o, lift: 0, shx: 0, roll: 0 }, [0, 0, 0]);
       const [x, y, d] = sp([base[0] + X, base[1] + Y, Math.max(0, Z) + (HI ? 0.7 : 0.6)]);
-      coinSpr(p, x, y, d, rest > 0 ? 0 : tau * (9 + j % 4), vis);
+      coinSpr(p, x, y, d, rest > 0 ? 0 : tau * (9 + (j % 4)), vis);
     }
   }
 }
@@ -2321,9 +2476,18 @@ function idleFx(p: Px, kind: Kind, t: number, o: Pose): void {
     const lp = kind === 'epic' ? [0, PLATE_Y + 2.4, H - 2.0] : [-LOOK.rare.bandX, D2 + 0.6, 13.3];
     const C = chestXf(o);
     // Камень epic — на накладке крышки.
-    const w = kind === 'epic' ? apply(xc(C, xc(lidXf(o), haspXf(o))), [0, 1.6, -2.4]) : apply(C, lp as V3);
+    const w =
+      kind === 'epic' ? apply(xc(C, xc(lidXf(o), haspXf(o))), [0, 1.6, -2.4]) : apply(C, lp as V3);
     const [x, y, d] = sp(w);
-    sparkle(p, x - RR * 0.6, y - RR * 0.6, d + 2, life, kind === 'epic' ? AMETH[5] : STEEL[6], WHITE);
+    sparkle(
+      p,
+      x - RR * 0.6,
+      y - RR * 0.6,
+      d + 2,
+      life,
+      kind === 'epic' ? AMETH[5] : STEEL[6],
+      WHITE,
+    );
   }
   if (kind === 'legend') {
     // Три искры в разных местах и в разное время.
