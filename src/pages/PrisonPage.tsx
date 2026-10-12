@@ -152,6 +152,8 @@ import {
   tapMedium,
 } from '@/lib/haptics';
 import { moneyText } from '@/lib/money';
+import { useAction, useHotkeys } from '@/input/hooks';
+import { inTopLayer } from '@/input/focus-nav';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 /** Коротко для узкой ячейки табло: 12 345 → «12,3к». */
@@ -307,6 +309,8 @@ export function PrisonPage() {
   const [forgeOpen, setForgeOpen] = useState(false);
   /** Инвентарь (v2.81): всё добро одним экраном. */
   const [invOpen, setInvOpen] = useState(false);
+  /** Нижняя панель — область горячих клавиш лагеря. */
+  const dockRef = useRef<HTMLElement>(null);
   const openScreen = (key: Screen, tab?: CampTab) => {
     tapLight();
     setScreen({ key, tab: tab ?? SCREENS[key].only[0] });
@@ -1593,6 +1597,44 @@ export function PrisonPage() {
     return cells;
   };
 
+  // Компьютер: горячие клавиши лагеря (слой действий src/input) — I рюкзак,
+  // P питомцы, F кузница, B книги, C сундуки, M этажи; работают, пока шахта
+  // на верхнем слое (под окном молчат). Tab/Shift+Tab (LB/RB) листают
+  // вкладки открытого экрана лагеря. Подсказки — по наведению мыши.
+  useHotkeys(
+    {
+      inventory: () => {
+        tapLight();
+        setInvOpen(true);
+      },
+      pets: () => openScreen('pets'),
+      forge: () => {
+        tapLight();
+        setForgeOpen(true);
+      },
+      books: () => openScreen('enchant'),
+      chests: () => openScreen('cases'),
+      mines: () => {
+        tapLight();
+        setSheet('mines');
+      },
+    },
+    { scope: dockRef },
+  );
+  useAction(
+    ['tabPrev', 'tabNext'],
+    (e) => {
+      if (!screen) return false;
+      const tabs = SCREENS[screen.key].only;
+      if (tabs.length < 2 || !inTopLayer(document.querySelector('.gx-camp'))) return false;
+      const i = Math.max(0, tabs.indexOf(screen.tab));
+      const next = tabs[(i + (e.action === 'tabNext' ? 1 : -1) + tabs.length) % tabs.length];
+      if (next) setScreen({ key: screen.key, tab: next });
+      return true;
+    },
+    { enabled: !!screen, phases: ['down', 'repeat'] },
+  );
+
   if (!hydrated) {
     return (
       <div className="gx pmx">
@@ -1666,6 +1708,8 @@ export function PrisonPage() {
           <button
             type="button"
             className="gx-chip pmx-chip--btn pmx-floor"
+            data-tip="Этажи"
+            data-tip-key="mines"
             aria-label={
               prison.zone.on
                 ? 'Особая шахта — этажи'
@@ -1692,6 +1736,8 @@ export function PrisonPage() {
             type="button"
             className="gx-round gx-round--dark pmx-top__btn"
             aria-label="Инвентарь"
+            data-tip="Инвентарь"
+            data-tip-key="inventory"
             onClick={() => {
               tapLight();
               setInvOpen(true);
@@ -2052,11 +2098,13 @@ export function PrisonPage() {
         {/* Нижняя панель (v2.67) вместо листа «Лагерь» с десятью вкладками:
             пять крупных кнопок, как в мобильных играх. Каждая открывает свой
             экран. Кузница показывает кирку в руке — в цвете её редкости. */}
-        <nav className="gx-panel gx-panel--wood pmx-dock" aria-label="Лагерь">
+        <nav ref={dockRef} className="gx-panel gx-panel--wood pmx-dock" aria-label="Лагерь">
           <button
             type="button"
             ref={forgeRef}
             className={`pmx-dock__btn${forgeReady ? ' is-ready' : ''}`}
+            data-tip="Кузница"
+            data-tip-key="forge"
             onClick={() => {
               tapLight();
               setForgeOpen(true);
@@ -2066,7 +2114,13 @@ export function PrisonPage() {
             <b>Кузница</b>
             {forgeReady && <i className="gx-badge gx-badge--gold">!</i>}
           </button>
-          <button type="button" className="pmx-dock__btn" onClick={() => openScreen('enchant')}>
+          <button
+            type="button"
+            className="pmx-dock__btn"
+            data-tip="Книги"
+            data-tip-key="books"
+            onClick={() => openScreen('enchant')}
+          >
             <GxIcon name="book" />
             <b>Книги</b>
             {enchReady && <i className="gx-badge">!</i>}
@@ -2075,6 +2129,8 @@ export function PrisonPage() {
             type="button"
             ref={chestRef}
             className="pmx-dock__btn"
+            data-tip="Сундуки"
+            data-tip-key="chests"
             onClick={() => openScreen('cases')}
           >
             <ChestIcon size={30} />
@@ -2086,7 +2142,13 @@ export function PrisonPage() {
               </i>
             )}
           </button>
-          <button type="button" className="pmx-dock__btn" onClick={() => openScreen('pets')}>
+          <button
+            type="button"
+            className="pmx-dock__btn"
+            data-tip="Питомцы"
+            data-tip-key="pets"
+            onClick={() => openScreen('pets')}
+          >
             <span className="pmx-dock__pets" ref={petRef}>
               {prison.squad[0] ? (
                 <PetArt

@@ -205,14 +205,30 @@ describe('ввод: геймпад (поддельный navigator.getGamepads)'
 
   it('крестовина — и движение, и меню; отключённый геймпад отпускает всё', () => {
     const p = new GamepadPoller();
-    btn(PAD.LEFT, true);
     p.step(0);
+    btn(PAD.LEFT, true);
+    p.step(16);
     expect(isHeld('moveLeft')).toBe(true);
     expect(getMoveAxis()).toEqual({ x: -1, y: 0 });
     pad.connected = false;
     p.reset();
     expect(isHeld('moveLeft')).toBe(false);
     expect(getMoveAxis()).toEqual({ x: 0, y: 0 });
+  });
+
+  it('кнопка, зажатая до первого опроса, — не нажатие', () => {
+    const seen: string[] = [];
+    onAction((e) => void seen.push(`${e.action}:${e.phase}`));
+    btn(PAD.B, true);
+    const p = new GamepadPoller();
+    p.step(0);
+    p.step(16);
+    expect(seen).toEqual([]);
+    btn(PAD.B, false);
+    p.step(32);
+    btn(PAD.B, true);
+    p.step(48);
+    expect(seen).toEqual(['back:down', 'dash:down']);
   });
 
   it('мёртвая зона пересчитывает ход от нуля', () => {
