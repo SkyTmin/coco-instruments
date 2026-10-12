@@ -243,7 +243,9 @@ function matsOf(st: OniStyle): OniMats {
     pants: {
       T: st.pants,
       // Складки хакама — тёмные полосы вдоль штанины.
-      pat: st.hakama ? (q, l) => (Math.abs(q[1]) < 0.16 && l < 0.6 ? st.pants[0] : null) : undefined,
+      pat: st.hakama
+        ? (q, l) => (Math.abs(q[1]) < 0.16 && l < 0.6 ? st.pants[0] : null)
+        : undefined,
     },
     hair: st.hair ? { T: st.hair } : null,
     horn: { T: st.horn, spec: true },
@@ -301,12 +303,20 @@ export function oniRig(r: Rig, o: OniO, st: OniStyle, yaw: number, opt: OniOpt =
   }
   // Корпус: грудь эллипсоидом, таз — меньший эллипсоид.
   r.ell(J.C, [0, 0, st.torso * 0.5], [st.chestD, st.chestW, st.torso * 0.56], M.top);
-  r.ell(J.C, [0, 0, 0.2], [st.chestD * 0.92, st.hipW * 1.05, st.torso * 0.28], st.hakama ? M.pants : M.top);
+  r.ell(
+    J.C,
+    [0, 0, 0.2],
+    [st.chestD * 0.92, st.hipW * 1.05, st.torso * 0.28],
+    st.hakama ? M.pants : M.top,
+  );
   if (st.belly) {
     const bR = st.belly;
     r.ell(J.C, [st.chestD * 0.55, 0, st.torso * 0.32], [bR * 0.85, bR, bR * 0.95], {
       T: st.skin,
-      pat: (q, l) => (Math.abs(q[1]) < 0.12 && Math.abs(q[2] + 0.1) < 0.12 && q[0] > 0.8 && l < 0.9 ? st.skin[0] : null),
+      pat: (q, l) =>
+        Math.abs(q[1]) < 0.12 && Math.abs(q[2] + 0.1) < 0.12 && q[0] > 0.8 && l < 0.9
+          ? st.skin[0]
+          : null,
     });
   }
 
@@ -389,10 +399,22 @@ function oniHead(
   // Рот: щель или открытая пасть, клыки.
   const mz = -R * 0.5;
   if (o.mouth > 0.25) {
-    r.ell(H, [R * 0.78, 0, mz - o.mouth * R * 0.12], [R * 0.2, R * 0.3, R * (0.12 + o.mouth * 0.2)], {
-      T: [hx2('#1a0608'), hx2('#3a0c10'), hx2('#5a1418'), hx2('#7a2020')],
-    });
-  } else r.line(H.p(R * 0.9, -R * 0.22, mz), H.p(R * 0.9, R * 0.22, mz), darker2(st.skin[0], 0.6), 0, 0.5);
+    r.ell(
+      H,
+      [R * 0.78, 0, mz - o.mouth * R * 0.12],
+      [R * 0.2, R * 0.3, R * (0.12 + o.mouth * 0.2)],
+      {
+        T: [hx2('#1a0608'), hx2('#3a0c10'), hx2('#5a1418'), hx2('#7a2020')],
+      },
+    );
+  } else
+    r.line(
+      H.p(R * 0.9, -R * 0.22, mz),
+      H.p(R * 0.9, R * 0.22, mz),
+      darker2(st.skin[0], 0.6),
+      0,
+      0.5,
+    );
   if (st.fang) {
     r.dot(H.p(R * 0.92, -R * 0.2, mz - 0.6 - o.mouth * 0.4), hx2('#f4ecd8'), 0, 1, 0.8);
     r.dot(H.p(R * 0.92, R * 0.2, mz - 0.6 - o.mouth * 0.4), hx2('#f4ecd8'), 0, 1, 0.8);
@@ -425,7 +447,13 @@ function oniHead(
   const drag = dl > R * 1.1 ? vmul(drag0, (R * 1.1) / dl) : drag0;
   if (st.hairKind === 'tail' || st.hairKind === 'knot') {
     // Макушка: шапка волос сверху и сзади, лицо открыто.
-    r.ell(H, [-R * 0.22, 0, R * 0.18], [R * 0.85, R * 0.96, R * 0.92], hairM, (q) => q[0] > 0.55 && q[2] < 0.45);
+    r.ell(
+      H,
+      [-R * 0.22, 0, R * 0.18],
+      [R * 0.85, R * 0.96, R * 0.92],
+      hairM,
+      (q) => q[0] > 0.55 && q[2] < 0.45,
+    );
     r.ball(H.p(-R * 0.25, 0, R * 1.05), R * 0.36, hairM);
     if (st.hairKind === 'tail') {
       // Тяжёлый хвост по спине — тянется за головой.
@@ -436,15 +464,30 @@ function oniHead(
       r.cap(b, c, R * 0.36, R * 0.12, hairM);
     }
   } else if (st.hairKind === 'wild') {
-    r.ell(H, [-R * 0.25, 0, R * 0.2], [R * 0.9, R * 1.02, R * 0.95], hairM, (q) => q[0] > 0.5 && q[2] < 0.5);
+    r.ell(
+      H,
+      [-R * 0.25, 0, R * 0.2],
+      [R * 0.9, R * 1.02, R * 0.95],
+      hairM,
+      (q) => q[0] > 0.5 && q[2] < 0.5,
+    );
     for (let i = 0; i < 5; i++) {
       const a = (i / 4 - 0.5) * 2.2;
       const b = H.p(-R * 0.3, Math.sin(a) * R * 0.8, R * 0.6 + Math.cos(a) * R * 0.3);
-      const tip = vadd(H.p(-R * 1.5, Math.sin(a) * R * 1.6, R * 0.9 + Math.cos(a) * R * 0.9), vmul(drag, 0.8));
+      const tip = vadd(
+        H.p(-R * 1.5, Math.sin(a) * R * 1.6, R * 0.9 + Math.cos(a) * R * 0.9),
+        vmul(drag, 0.8),
+      );
       r.cap(b, tip, R * 0.32, 0.2, hairM);
     }
   } else if (st.hairKind === 'long') {
-    r.ell(H, [-R * 0.1, 0, R * 0.15], [R * 1.0, R * 1.05, R * 1.02], hairM, (q) => q[0] > 0.62 && q[2] < 0.35 && Math.abs(q[1]) < 0.75);
+    r.ell(
+      H,
+      [-R * 0.1, 0, R * 0.15],
+      [R * 1.0, R * 1.05, R * 1.02],
+      hairM,
+      (q) => q[0] > 0.62 && q[2] < 0.35 && Math.abs(q[1]) < 0.75,
+    );
     const a = H.p(-R * 0.6, 0, R * 0.2);
     const b = vadd(H.p(-R * 1.0, 0, -R * 2.6), vmul(drag, 1.2));
     r.cap(a, b, R * 0.95, R * 0.8, hairM);

@@ -179,7 +179,15 @@ function poseAt(anim: string, f: number): [SpO, number] {
   switch (anim) {
     case 'idle': {
       const p = (f / IDLE_N) * TAU;
-      return [{ ...B0, bh: B0.bh + Math.sin(p) * 0.18, ab: B0.ab + Math.sin(p - 0.8) * 0.08, fang: 0.2 + Math.max(0, Math.sin(p * 2)) * 0.3 }, -1];
+      return [
+        {
+          ...B0,
+          bh: B0.bh + Math.sin(p) * 0.18,
+          ab: B0.ab + Math.sin(p - 0.8) * 0.08,
+          fang: 0.2 + Math.max(0, Math.sin(p * 2)) * 0.3,
+        },
+        -1,
+      ];
     }
     case 'run':
       return [{ ...B0, bh: 4.0, bp: -0.05 }, f / RUN_N];
@@ -205,13 +213,33 @@ function poseAt(anim: string, f: number): [SpO, number] {
     }
     case 'stun': {
       const p = (f / 6) * TAU;
-      return [{ ...B0, bh: 3.6 + Math.sin(p) * 0.3, bp: Math.cos(p) * 0.12, crouch: 1.12, fang: 0.6, ab: 0.05 }, -1];
+      return [
+        {
+          ...B0,
+          bh: 3.6 + Math.sin(p) * 0.3,
+          bp: Math.cos(p) * 0.12,
+          crouch: 1.12,
+          fang: 0.6,
+          ab: 0.05,
+        },
+        -1,
+      ];
     }
     case 'sleep':
       return [{ ...SLEEP, bh: SLEEP.bh + (f % 2 ? 0.2 : 0) }, -1];
     case 'alert': {
       const k = clamp01(t / 0.35);
-      return [sampleKeys(SLEEP, [[0, {}], [0.35, { ...B0, bh: 5.0, fr: 0.5, fang: 0.9, shut: 0 }, easeOut]], k * 0.35), -1];
+      return [
+        sampleKeys(
+          SLEEP,
+          [
+            [0, {}],
+            [0.35, { ...B0, bh: 5.0, fr: 0.5, fang: 0.9, shut: 0 }, easeOut],
+          ],
+          k * 0.35,
+        ),
+        -1,
+      ];
     }
     case 'drop': {
       const w = Math.sin((f / 4) * TAU);

@@ -145,7 +145,10 @@ const SIDEF: PKey<OniO>[] = carry<OniO>([
   [0, { ...SIDE[4][1] }],
   [0.03, { aL: SHOULDER_HAND(-1), aR: SHOULDER_HAND(1), hu: -1.1, mouth: 1 }, easeIn],
   [0.18, { aL: [0.8, -4.4, 2.0], aR: [0.8, 4.4, 2.0], hu: -0.9 }, easeOut],
-  [0.6, { aL: [1.6, -1.6, -5.2], aR: [1.6, 1.6, -5.2], lean: 0.25, hp: 0.3, mouth: 0.6, brow: 0.4 }],
+  [
+    0.6,
+    { aL: [1.6, -1.6, -5.2], aR: [1.6, 1.6, -5.2], lean: 0.25, hp: 0.3, mouth: 0.6, brow: 0.4 },
+  ],
   [1.2, { ...B0 }],
 ]);
 
@@ -166,10 +169,24 @@ function bellyKeys(): PKey<OniO>[] {
     const pre = big ? 0.17 : 0.11;
     const upL = h === 'R' ? mid(-1) : UP_HAND(-1, big ? 1.3 : 0.7);
     const upR = h === 'L' ? mid(1) : UP_HAND(1, big ? 1.3 : 0.7);
-    keys.push([tb - pre, { aL: upL, aR: upR, hu: big ? -0.3 : -0.6, lean: big ? -0.22 : -0.08, mouth: big ? 0.6 : 0.3 }, easeOut]);
+    keys.push([
+      tb - pre,
+      {
+        aL: upL,
+        aR: upR,
+        hu: big ? -0.3 : -0.6,
+        lean: big ? -0.22 : -0.08,
+        mouth: big ? 0.6 : 0.3,
+      },
+      easeOut,
+    ]);
     const dnL = h === 'R' ? mid(-1) : BELLY_HAND(-1);
     const dnR = h === 'L' ? mid(1) : BELLY_HAND(1);
-    keys.push([tb, { aL: dnL, aR: dnR, hu: big ? -1.6 : -1.0, lean: big ? 0.22 : 0.1, mouth: big ? 1 : 0.5 }, easeIn]);
+    keys.push([
+      tb,
+      { aL: dnL, aR: dnR, hu: big ? -1.6 : -1.0, lean: big ? 0.22 : 0.1, mouth: big ? 1 : 0.5 },
+      easeIn,
+    ]);
   }
   return carry<OniO>(keys);
 }
@@ -183,15 +200,52 @@ const BELLYF: PKey<OniO>[] = carry<OniO>([
 ]);
 const FLINCH: PKey<OniO>[] = [
   [0, {}],
-  [0.05, { lean: -0.3, hf: -0.8, hp: -0.4, aL: [0.6, -3.0, 0.4], aR: [0.6, 3.0, 0.8], squint: 1, mouth: 0.7 }, easeOut],
+  [
+    0.05,
+    {
+      lean: -0.3,
+      hf: -0.8,
+      hp: -0.4,
+      aL: [0.6, -3.0, 0.4],
+      aR: [0.6, 3.0, 0.8],
+      squint: 1,
+      mouth: 0.7,
+    },
+    easeOut,
+  ],
   [0.2, {}],
 ];
 /** Смерть 0,8: палки вылетают, оседает на колени, валится навзничь на брюшной барабан. */
 const DIE: PKey<OniO>[] = carry<OniO>([
   [0, { lean: -0.3, hp: -0.5, aL: [0.4, -3.4, 3.0], aR: [0.4, 3.4, 3.4], mouth: 1, squint: 1 }],
-  [0.2, { hu: -4.0, lean: 0.15, hp: 0.4, fL: [2.6, -2.0, 0], fR: [2.2, 2.0, 0], aL: [1.4, -2.6, -5.0], aR: [1.4, 2.6, -5.0] }, easeIn],
+  [
+    0.2,
+    {
+      hu: -4.0,
+      lean: 0.15,
+      hp: 0.4,
+      fL: [2.6, -2.0, 0],
+      fR: [2.2, 2.0, 0],
+      aL: [1.4, -2.6, -5.0],
+      aR: [1.4, 2.6, -5.0],
+    },
+    easeIn,
+  ],
   [0.36, { hu: -4.2, lean: 0.25 }],
-  [0.56, { hu: -6.0, lean: -1.35, hf: -2.2, hp: -0.3, fL: [3.0, -2.0, 1.4], fR: [2.6, 2.0, 1.8], aL: [0.4, -4.6, 0.6], aR: [0.4, 4.6, 0.8] }, easeIn],
+  [
+    0.56,
+    {
+      hu: -6.0,
+      lean: -1.35,
+      hf: -2.2,
+      hp: -0.3,
+      fL: [3.0, -2.0, 1.4],
+      fR: [2.6, 2.0, 1.8],
+      aL: [0.4, -4.6, 0.6],
+      aR: [0.4, 4.6, 0.8],
+    },
+    easeIn,
+  ],
   [0.64, { hu: -5.4 }, easeOut],
   [0.72, { hu: -6.1 }, easeIn],
   [0.8, { hu: -6.1 }],
@@ -268,7 +322,8 @@ function hitsOf(anim: string, f: number): [number, number, number] {
     const k = near(0.03);
     return [0, k, k];
   }
-  if (anim === 'belly') return [Math.max(...BEATS.map(([tb, h]) => near(tb) * (h === 'B' ? 1 : 0.7))), 0, 0];
+  if (anim === 'belly')
+    return [Math.max(...BEATS.map(([tb, h]) => near(tb) * (h === 'B' ? 1 : 0.7))), 0, 0];
   if (anim === 'bellyf') return [near(0), 0, 0];
   return [0, 0, 0];
 }
@@ -331,7 +386,11 @@ function drumPic(anim: string, f: number, d: number): Pic {
       for (const R of [2.5, 4.5]) {
         for (let k = 0; k < 14; k++) {
           const a = (k / 14) * TAU;
-          L.set(Math.floor(x + Math.cos(a) * R), Math.floor(y + Math.sin(a) * R * 0.75), alphaC(hx('#fff0c8'), h * (R < 3 ? 0.9 : 0.5)));
+          L.set(
+            Math.floor(x + Math.cos(a) * R),
+            Math.floor(y + Math.sin(a) * R * 0.75),
+            alphaC(hx('#fff0c8'), h * (R < 3 ? 0.9 : 0.5)),
+          );
         }
       }
     });
@@ -341,7 +400,8 @@ function drumPic(anim: string, f: number, d: number): Pic {
       for (const s of [-1, 1]) {
         const [x, y] = P(J.B.p(-2 * k, s * (4 + k * 8), 10 + k * 6 - k * k * 14));
         const a = f * 0.9 + s;
-        for (let i = -2; i <= 2; i++) p.set(Math.floor(x + Math.cos(a) * i), Math.floor(y + Math.sin(a) * i), STICK.T[2]);
+        for (let i = -2; i <= 2; i++)
+          p.set(Math.floor(x + Math.cos(a) * i), Math.floor(y + Math.sin(a) * i), STICK.T[2]);
       }
     }
     if (anim === 'die' && f >= 13 && f <= 17) {
@@ -351,7 +411,11 @@ function drumPic(anim: string, f: number, d: number): Pic {
       for (let i = 0; i < 10; i++) {
         const a = hash(i, 3) * TAU;
         const R = 2 + k * (4 + hash(i, 5) * 5);
-        p.set(Math.floor(x + Math.cos(a) * R), Math.floor(y + Math.sin(a) * R * 0.7 - k * 2), i % 2 ? RED[2] : HEAD_T[2]);
+        p.set(
+          Math.floor(x + Math.cos(a) * R),
+          Math.floor(y + Math.sin(a) * R * 0.7 - k * 2),
+          i % 2 ? RED[2] : HEAD_T[2],
+        );
       }
     }
     if (anim === 'stun') {

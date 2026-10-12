@@ -42,7 +42,12 @@ export const mixc = (a: RGBA, b: RGBA, k: number): RGBA => [
   Math.round(a[2] + (b[2] - a[2]) * k),
   Math.round(a[3] + (b[3] - a[3]) * k),
 ];
-export const alphaC = (c: RGBA, a: number): RGBA => [c[0], c[1], c[2], Math.round(clamp01(a) * 255)];
+export const alphaC = (c: RGBA, a: number): RGBA => [
+  c[0],
+  c[1],
+  c[2],
+  Math.round(clamp01(a) * 255),
+];
 export const darkT = (t: Tones, k: number): Tones =>
   t.map((c) => mixc(c, [8, 6, 10, c[3]], k)) as Tones;
 
@@ -231,7 +236,18 @@ let curFresh = false;
  * Прошлый режим для листа кадров: стенд рисует каждый кадр новым мобом и
  * передаёт его номером в `m.data.vSheetPrev` (в игре его помнит `Vis`).
  */
-const SHEET_PREV = ['', 'leap', 'lunge', 'drop', 'star', 'aim', 'belly', 'f8_gone', 'f8_thrust', 'f8_open'];
+const SHEET_PREV = [
+  '',
+  'leap',
+  'lunge',
+  'drop',
+  'star',
+  'aim',
+  'belly',
+  'f8_gone',
+  'f8_thrust',
+  'f8_open',
+];
 
 export const speedOf = (m: Mob) => Math.hypot(m.vx ?? 0, m.vy ?? 0);
 export const moving = (m: Mob, thr = 0.4) => speedOf(m) > thr;
@@ -584,7 +600,8 @@ export function frameOf(
     const pic = build();
     const t1 = performance.now();
     fr = K.frames.set(key, finishPic(pic, pose.look));
-    if (!F8_MOB_STAT.warming && F8_MOB_STAT.fin.length < 4000) F8_MOB_STAT.fin.push(performance.now() - t1);
+    if (!F8_MOB_STAT.warming && F8_MOB_STAT.fin.length < 4000)
+      F8_MOB_STAT.fin.push(performance.now() - t1);
     stat(K, performance.now() - t0, key);
     if (live) budSpent += performance.now() - t0;
     F8_MOB_STAT.px += fr.img.width * fr.img.height * (fr.lit ? 2 : 1);

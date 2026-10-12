@@ -52,7 +52,15 @@ import {
   type Pic,
   type V3,
 } from './f8-mobkit';
-import { gait, oniBase, oniJoints, oniRig, type OniJ, type OniO, type OniStyle } from './f8-mob-oni';
+import {
+  gait,
+  oniBase,
+  oniJoints,
+  oniRig,
+  type OniJ,
+  type OniO,
+  type OniStyle,
+} from './f8-mob-oni';
 
 const ST: OniStyle = {
   skin: tn('#4a4252', '#7a7084', '#aaa0b4', '#d8d0e0'),
@@ -123,7 +131,10 @@ const AIM: PKey<BladeO>[] = carry<BladeO>([
     },
     easeOut,
   ],
-  [0.5, { hu: -2.1, lean: 0.62, hf: -0.9, twist: -0.55, aR: [-2.3, 1.6, -2.3], aL: [3.9, -0.6, -0.5] }],
+  [
+    0.5,
+    { hu: -2.1, lean: 0.62, hf: -0.9, twist: -0.55, aR: [-2.3, 1.6, -2.3], aL: [3.9, -0.6, -0.5] },
+  ],
   [0.62, { hu: -2.2, lean: 0.64, mouth: 0.4 }],
 ]);
 
@@ -175,13 +186,21 @@ const CHOP: PKey<BladeO>[] = carry<BladeO>([
   ],
   [0.42, { lean: -0.32, hu: -0.7, aR: [-0.1, 0.4, 4.7], kd: [-0.92, 0, 0.38], mouth: 0.5 }],
   [0.47, { lean: 0.15, hu: -0.9, aR: [3.6, 0.3, 3.0], kd: [0.55, 0, 0.83] }, easeIn],
-  [0.5, { lean: 0.5, hu: -1.9, hf: 1.2, aR: [5.0, 0.2, -1.0], kd: [0.85, -0.05, -0.52], mouth: 1 }, easeIn],
+  [
+    0.5,
+    { lean: 0.5, hu: -1.9, hf: 1.2, aR: [5.0, 0.2, -1.0], kd: [0.85, -0.05, -0.52], mouth: 1 },
+    easeIn,
+  ],
 ]);
 
 /** Проводка после рубки 0,55: клинок в пол, задержка, возврат. */
 const CHOPF: PKey<BladeO>[] = carry<BladeO>([
   [0, { ...CHOP[4][1] }],
-  [0.08, { lean: 0.62, hu: -2.3, hf: 1.4, aR: [3.8, 0, -3.4], kd: [0.5, -0.25, -0.82], two: 1 }, easeOut],
+  [
+    0.08,
+    { lean: 0.62, hu: -2.3, hf: 1.4, aR: [3.8, 0, -3.4], kd: [0.5, -0.25, -0.82], two: 1 },
+    easeOut,
+  ],
   [0.3, { lean: 0.55, hu: -2.1, mouth: 0.3, two: 0.6 }],
   [0.55, { ...B0 }],
 ]);
@@ -232,7 +251,18 @@ const FLINCH: PKey<BladeO>[] = [
 
 /** Смерть 0,8: отпрянул, рухнул на колени, катана воткнута в пол, падает ничком. */
 const DIE: PKey<BladeO>[] = carry<BladeO>([
-  [0, { lean: -0.4, hp: -0.55, hf: -0.8, aR: [1.4, 2.3, -1.8], aL: [1.0, -2.2, -1.6], mouth: 1, squint: 1 }],
+  [
+    0,
+    {
+      lean: -0.4,
+      hp: -0.55,
+      hf: -0.8,
+      aR: [1.4, 2.3, -1.8],
+      aL: [1.0, -2.2, -1.6],
+      mouth: 1,
+      squint: 1,
+    },
+  ],
   [
     0.18,
     {
@@ -366,7 +396,14 @@ function poseAt(anim: string, f: number): [BladeO, BladeO, V3] {
         return [mk(p), mk(p - 0.8), [0, 0, 0]];
       }
       const k = (f - 15) / 5;
-      const o = sampleKeys(B0, [[0, at(TIRE, 0.3)], [1, {}, easeOut]], k);
+      const o = sampleKeys(
+        B0,
+        [
+          [0, at(TIRE, 0.3)],
+          [1, {}, easeOut],
+        ],
+        k,
+      );
       return [o, o, [0, 0, 0]];
     }
     case 'flinch':
@@ -398,7 +435,14 @@ function poseAt(anim: string, f: number): [BladeO, BladeO, V3] {
     }
     case 'alert': {
       const k = clamp01(t / 0.35);
-      const o = sampleKeys(SLEEP, [[0, {}], [0.35, { ...B0, mouth: 0.7, brow: 1, shut: 0 }, easeOut]], k * 0.35);
+      const o = sampleKeys(
+        SLEEP,
+        [
+          [0, {}],
+          [0.35, { ...B0, mouth: 0.7, brow: 1, shut: 0 }, easeOut],
+        ],
+        k * 0.35,
+      );
       return [o, o, [0, 0, 0]];
     }
     case 'drop': {
@@ -438,7 +482,11 @@ function solve(o: BladeO, yaw: number): BladeO {
   const k = o.two;
   return {
     ...o,
-    aL: [o.aL[0] + (loc[0] - o.aL[0]) * k, o.aL[1] + (loc[1] - o.aL[1]) * k, o.aL[2] + (loc[2] - o.aL[2]) * k],
+    aL: [
+      o.aL[0] + (loc[0] - o.aL[0]) * k,
+      o.aL[1] + (loc[1] - o.aL[1]) * k,
+      o.aL[2] + (loc[2] - o.aL[2]) * k,
+    ],
   };
 }
 
@@ -460,7 +508,11 @@ function katana(r: Rig, J: OniJ, o: BladeO): [V3, V3] {
   r.dot(guard, TSUBA, 0, 1, 0.8);
   // Клинок — узкая грань с режущей кромкой; изгиб — кончик чуть назад.
   const up = Math.abs(d[2]) < 0.9 ? J.B.u : J.B.f;
-  const e = vnorm([d[1] * up[2] - d[2] * up[1], d[2] * up[0] - d[0] * up[2], d[0] * up[1] - d[1] * up[0]]);
+  const e = vnorm([
+    d[1] * up[2] - d[2] * up[1],
+    d[2] * up[0] - d[0] * up[2],
+    d[0] * up[1] - d[1] * up[0],
+  ]);
   const base1 = vadd(guard, vmul(e, 0.5));
   const mid = vadd(vadd(guard, vmul(d, 6)), vmul(e, 0.35));
   r.poly([base1, mid, tip, vadd(guard, vmul(e, -0.3))], STEEL);
@@ -518,10 +570,16 @@ function bladePic(anim: string, f: number, d: number): Pic {
       // Росчерк выпада: светлая черта от острия назад вдоль пути.
       const [tx, ty] = P(tip);
       const [bx, by] = P(vadd(tip, J.B.v(-9, 0, 0)));
-      smear(lit(), [
-        [bx, by],
-        [tx, ty],
-      ], hx('#9cb8ff'), hx('#ffffff'), 1);
+      smear(
+        lit(),
+        [
+          [bx, by],
+          [tx, ty],
+        ],
+        hx('#9cb8ff'),
+        hx('#ffffff'),
+        1,
+      );
     }
     if (anim === 'stun') {
       const [hxp, hyp] = P(J.H.p(0, 0, ST.headR * 1.5));
@@ -537,7 +595,9 @@ function bladePic(anim: string, f: number, d: number): Pic {
       // Распадается чёрным пеплом с красными искрами — от тела вверх.
       const k = (f - 11) / 8;
       for (let i = 0; i < 9; i++) {
-        const [bx, by] = P(J.C.p((hash(i, 2) - 0.5) * 3, (hash(i, 3) - 0.5) * 6, 1 + hash(i, 5) * 5));
+        const [bx, by] = P(
+          J.C.p((hash(i, 2) - 0.5) * 3, (hash(i, 3) - 0.5) * 6, 1 + hash(i, 5) * 5),
+        );
         const x = Math.floor(bx + (hash(i, 9) - 0.5) * 4 + k * (hash(i, 4) - 0.3) * 6);
         const y = Math.floor(by - k * (5 + hash(i, 7) * 8));
         if (i % 3 === 0) lit().set(x, y, alphaC(hx('#ff5030'), 1 - k * 0.7));
@@ -587,7 +647,12 @@ registerMobPainter('f8_blade', (m: Mob, pose: MobPose) => {
     if (data.long) {
       anim = 'tire';
       const k = t * FPS;
-      f = k < 8 ? Math.floor(k) : t < 0.95 ? 8 + mod(k - 8, 8) : 16 + Math.min(4, Math.floor((t - 0.95) * FPS));
+      f =
+        k < 8
+          ? Math.floor(k)
+          : t < 0.95
+            ? 8 + mod(k - 8, 8)
+            : 16 + Math.min(4, Math.floor((t - 0.95) * FPS));
       if (f <= 1) {
         ex.sx = 1.1;
         ex.sy = 0.92;
@@ -657,4 +722,3 @@ registerMobWarm('f8_blade', function* () {
     bladePic,
   );
 });
-

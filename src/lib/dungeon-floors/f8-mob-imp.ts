@@ -48,7 +48,15 @@ import {
   type Pic,
   type V3,
 } from './f8-mobkit';
-import { gait, oniBase, oniJoints, oniRig, type OniJ, type OniO, type OniStyle } from './f8-mob-oni';
+import {
+  gait,
+  oniBase,
+  oniJoints,
+  oniRig,
+  type OniJ,
+  type OniO,
+  type OniStyle,
+} from './f8-mob-oni';
 
 const ST: OniStyle = {
   skin: tn('#5a1a14', '#8a2a1c', '#b8442a', '#e07048'),
@@ -141,7 +149,18 @@ const LEAP: PKey<ImpO>[] = carry<ImpO>([
     },
   ],
   [0.17, { lean: 1.1, fL: [-3.0, -1.1, 2.2], fR: [-3.6, 1.1, 2.6] }],
-  [0.29, { lean: 0.8, hu: -0.2, fL: [1.2, -1.4, 1.0], fR: [0.4, 1.4, 1.2], aL: [3.8, -1.4, -1.0], aR: [3.8, 1.4, -1.2] }, easeIn],
+  [
+    0.29,
+    {
+      lean: 0.8,
+      hu: -0.2,
+      fL: [1.2, -1.4, 1.0],
+      fR: [0.4, 1.4, 1.2],
+      aL: [3.8, -1.4, -1.0],
+      aR: [3.8, 1.4, -1.2],
+    },
+    easeIn,
+  ],
 ]);
 
 /** Приземление (отдых после прыжка, 0,55): сжался на четвереньки, встаёт. */
@@ -259,7 +278,19 @@ const FLINCH: PKey<ImpO>[] = [
 
 /** Смерть 0,8: отброшен, падает навзничь, отскок, хвост дёргается, тлеет. */
 const DIE: PKey<ImpO>[] = carry<ImpO>([
-  [0, { lean: -0.4, hf: -1.2, hp: -0.5, aL: [0.5, -2.4, 2.6], aR: [0.2, 2.4, 3.0], mouth: 1, squint: 1, tailUp: 1.4 }],
+  [
+    0,
+    {
+      lean: -0.4,
+      hf: -1.2,
+      hp: -0.5,
+      aL: [0.5, -2.4, 2.6],
+      aR: [0.2, 2.4, 3.0],
+      mouth: 1,
+      squint: 1,
+      tailUp: 1.4,
+    },
+  ],
   [
     0.32,
     {
@@ -392,7 +423,14 @@ function poseAt(anim: string, f: number): [ImpO, ImpO, V3] {
     }
     case 'alert': {
       const k = clamp01(t / 0.35);
-      const o = sampleKeys(SLEEP, [[0, {}], [0.35, { ...B0, mouth: 0.8, brow: 1, tailUp: 1.4 }, easeOut]], k * 0.35);
+      const o = sampleKeys(
+        SLEEP,
+        [
+          [0, {}],
+          [0.35, { ...B0, mouth: 0.8, brow: 1, tailUp: 1.4 }, easeOut],
+        ],
+        k * 0.35,
+      );
       return [o, o, [0, 0, 0]];
     }
     case 'drop': {
@@ -421,7 +459,10 @@ function tail(r: Rig, J: OniJ, L: OniJ, o: ImpO, lagO: ImpO, wind: V3): void {
   // вокруг вертикали; дальние звенья берут мах и подъём из позы в прошлом.
   const step = (from: V3, pitch: number, sw: number, len: number, k: number): V3 =>
     vadd(
-      vadd(from, J.B.v(-Math.cos(pitch) * Math.cos(sw) * len, Math.sin(sw) * len, Math.sin(pitch) * len)),
+      vadd(
+        from,
+        J.B.v(-Math.cos(pitch) * Math.cos(sw) * len, Math.sin(sw) * len, Math.sin(pitch) * len),
+      ),
       vmul(drag, k),
     );
   const up0 = o.tailUp;
@@ -496,7 +537,11 @@ function impPic(anim: string, f: number, d: number): Pic {
       for (let i = 0; i < 6; i++) {
         const [bx, by] = P(J.C.p(0, (hash(i, 3) - 0.5) * 6, 1 + hash(i, 5) * 4));
         const y = by - k * (4 + hash(i, 7) * 6);
-        lit().set(Math.floor(bx + (hash(i, 9) - 0.5) * 3), Math.floor(y), alphaC(hx(i % 2 ? '#ff8a30' : '#ffd060'), 1 - k * 0.6));
+        lit().set(
+          Math.floor(bx + (hash(i, 9) - 0.5) * 3),
+          Math.floor(y),
+          alphaC(hx(i % 2 ? '#ff8a30' : '#ffd060'), 1 - k * 0.6),
+        );
       }
     }
   });

@@ -203,7 +203,11 @@ const GRAB: PKey<ArmsO>[] = carry<ArmsO>([
 const GRABF: PKey<ArmsO>[] = carry<ArmsO>([
   [0, { ...GRAB[3][1] }],
   [0.06, { aR: [7.8, 0.6, -0.6] }],
-  [0.24, { twist: -0.45, lean: -0.25, hu: -0.5, hf: -0.6, aR: [0.6, 2.8, -1.8], mouth: 0.6 }, easeOut],
+  [
+    0.24,
+    { twist: -0.45, lean: -0.25, hu: -0.5, hf: -0.6, aR: [0.6, 2.8, -1.8], mouth: 0.6 },
+    easeOut,
+  ],
   [0.7, { ...B0 }],
 ]);
 const FLINCH: PKey<ArmsO>[] = [
@@ -242,7 +246,20 @@ const DIE: PKey<ArmsO>[] = carry<ArmsO>([
       squint: 1,
     },
   ],
-  [0.22, { hu: -4.4, lean: 0.25, hp: 0.4, fL: [3.0, -2.0, 0], fR: [2.4, 2.0, 0], aL: [2.0, -3.0, -6.0], aR: [2.0, 3.0, -6.0], mouth: 0.6 }, easeIn],
+  [
+    0.22,
+    {
+      hu: -4.4,
+      lean: 0.25,
+      hp: 0.4,
+      fL: [3.0, -2.0, 0],
+      fR: [2.4, 2.0, 0],
+      aL: [2.0, -3.0, -6.0],
+      aR: [2.0, 3.0, -6.0],
+      mouth: 0.6,
+    },
+    easeIn,
+  ],
   [
     0.48,
     {
@@ -375,12 +392,23 @@ function poseAt(anim: string, f: number): [ArmsO, ArmsO, V3] {
     }
     case 'alert': {
       const k = clamp01(t / 0.35);
-      const o = sampleKeys(SLEEP, [[0, {}], [0.35, { ...B0, mouth: 0.8, brow: 1, shut: 0 }, easeOut]], k * 0.35);
+      const o = sampleKeys(
+        SLEEP,
+        [
+          [0, {}],
+          [0.35, { ...B0, mouth: 0.8, brow: 1, shut: 0 }, easeOut],
+        ],
+        k * 0.35,
+      );
       return [o, o, [0, 0, 0]];
     }
     case 'drop': {
       const w = Math.sin((f / 4) * TAU);
-      const o: ArmsO = { ...FALL, mL: [FALL.mL[0], FALL.mL[1], FALL.mL[2] + w * 0.8], mR: [FALL.mR[0], FALL.mR[1], FALL.mR[2] - w * 0.8] };
+      const o: ArmsO = {
+        ...FALL,
+        mL: [FALL.mL[0], FALL.mL[1], FALL.mL[2] + w * 0.8],
+        mR: [FALL.mR[0], FALL.mR[1], FALL.mR[2] - w * 0.8],
+      };
       return [o, FALL, [0, 0, -2]];
     }
   }
@@ -441,7 +469,11 @@ function armsPic(anim: string, f: number, d: number): Pic {
         const R = 2 + k * 3;
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * TAU;
-          L.set(Math.floor(x + Math.cos(a) * R), Math.floor(y + Math.sin(a) * R * 0.7), alphaC(hx('#e8fbff'), 0.9 - k * 0.5));
+          L.set(
+            Math.floor(x + Math.cos(a) * R),
+            Math.floor(y + Math.sin(a) * R * 0.7),
+            alphaC(hx('#e8fbff'), 0.9 - k * 0.5),
+          );
         }
       }
     }
@@ -453,7 +485,11 @@ function armsPic(anim: string, f: number, d: number): Pic {
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * TAU + f * 0.4;
         const R = 3 - k * 1.5;
-        L.set(Math.floor(x + Math.cos(a) * R), Math.floor(y + Math.sin(a) * R), alphaC(hx('#a8f0ff'), 0.4 + 0.6 * k));
+        L.set(
+          Math.floor(x + Math.cos(a) * R),
+          Math.floor(y + Math.sin(a) * R),
+          alphaC(hx('#a8f0ff'), 0.4 + 0.6 * k),
+        );
       }
     }
     if (anim === 'stun') {
@@ -471,7 +507,9 @@ function armsPic(anim: string, f: number, d: number): Pic {
       const k = (f - 11) / 6;
       for (let i = 0; i < 10; i++) {
         const a = (i / 10) * TAU + hash(i, 2);
-        const [x, y] = P(J.B.p(4 + Math.cos(a) * (5 + k * 7), Math.sin(a) * (5 + k * 7), 0.5 + k * 1.5));
+        const [x, y] = P(
+          J.B.p(4 + Math.cos(a) * (5 + k * 7), Math.sin(a) * (5 + k * 7), 0.5 + k * 1.5),
+        );
         p.set(Math.floor(x), Math.floor(y), alphaC(hx('#8a7a68'), 0.8 - k * 0.6));
       }
     }
@@ -570,4 +608,3 @@ registerMobWarm('f8_arms', function* () {
     armsPic,
   );
 });
-

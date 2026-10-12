@@ -340,7 +340,13 @@ function solve(b: Bw, yaw: number): OniO {
   const lh = W.p(0.6, -0.4, 5.4);
   const e = W.p(...edgeAt(b.sp));
   const rh = vadd(e, W.v(0.8, 1.6, 1.5));
-  return { ...b.o, aL: toArm(J, J.shL, lh), aR: toArm(J, J.shR, rh), eL: [-1, -1, -0.2], eR: [-0.4, 1, -0.3] };
+  return {
+    ...b.o,
+    aL: toArm(J, J.shL, lh),
+    aR: toArm(J, J.shR, rh),
+    eL: [-1, -1, -0.2],
+    eR: [-0.4, 1, -0.3],
+  };
 }
 
 function biwa(r: Rig, W: F3, b: Bw): { strings: [V3, V3][]; bridge: V3 } {
@@ -356,7 +362,15 @@ function biwa(r: Rig, W: F3, b: Bw): { strings: [V3, V3][]; bridge: V3 } {
   // Гриф и заломленная колковая коробка с колками.
   r.cap(W.p(0.25, 0, 2.6), W.p(0.25, 0, 6.6), 0.66, 0.55, WOOD);
   r.cap(W.p(0.25, 0, 6.6), W.p(-1.7, 0, 7.5), 0.55, 0.42, DARKW);
-  for (const s of [-1, 1]) for (const k of [0.3, 0.75]) r.cap(W.p(lerp(-0.1, -1.4, k), s * 0.4, lerp(6.8, 7.3, k)), W.p(lerp(-0.1, -1.4, k), s * 1.3, lerp(6.8, 7.3, k)), 0.22, 0.2, PEG);
+  for (const s of [-1, 1])
+    for (const k of [0.3, 0.75])
+      r.cap(
+        W.p(lerp(-0.1, -1.4, k), s * 0.4, lerp(6.8, 7.3, k)),
+        W.p(lerp(-0.1, -1.4, k), s * 1.3, lerp(6.8, 7.3, k)),
+        0.22,
+        0.2,
+        PEG,
+      );
   const strings: [V3, V3][] = [];
   // Четыре струны в масштабе кадра — две линии (крайние пары).
   for (let i = 0; i < 2; i++) {
@@ -432,7 +446,15 @@ function curtain(r: Rig, J: OniJ, b: Bw): void {
 
 // ---- Кадр ---------------------------------------------------------------------------------------------
 
-function ringArc(p: Px, lit: () => Px, x: number, y: number, R: number, a: number, f: number): void {
+function ringArc(
+  p: Px,
+  lit: () => Px,
+  x: number,
+  y: number,
+  R: number,
+  a: number,
+  f: number,
+): void {
   for (let i = 0; i < 9; i++) {
     const th = -PI * 0.85 + (i / 8) * PI * 0.7 + f;
     const px = x + Math.cos(th) * R;
@@ -470,7 +492,15 @@ function biwaPic(anim: string, f: number, d: number): Pic {
     // Кольца звука от деки.
     for (const age of b.rings) {
       const k = clamp01(age / 0.45);
-      ringArc(p, lit, bx, by - 1, 3 + 9 * easeOut(k), 0.8 * (1 - k), hash(Math.round(age * 24), 3) * 0.3);
+      ringArc(
+        p,
+        lit,
+        bx,
+        by - 1,
+        3 + 9 * easeOut(k),
+        0.8 * (1 - k),
+        hash(Math.round(age * 24), 3) * 0.3,
+      );
     }
     // Лопнувшая струна: хлещет петлёй от подгрудника.
     if (b.snap) {

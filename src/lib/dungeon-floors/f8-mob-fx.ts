@@ -96,13 +96,23 @@ registerImpactPainter('f8_palm', {
     for (let i = -2; i <= 2; i++) {
       const fa = a + i * 0.38;
       const L = 3 + (i === 0 ? 2 : 1) + 3 * easeOut(k);
-      seg(g, cx + Math.cos(fa) * 2, cy + Math.sin(fa) * 2, cx + Math.cos(fa) * L, cy + Math.sin(fa) * L);
+      seg(
+        g,
+        cx + Math.cos(fa) * 2,
+        cy + Math.sin(fa) * 2,
+        cx + Math.cos(fa) * L,
+        cy + Math.sin(fa) * L,
+      );
     }
     g.fillStyle = rgba('#ff7a3a', 0.7 * (1 - k));
     const h = (rec.arc ?? 0.5) / 2;
     for (let i = 0; i <= 8; i++) {
       const t = a - h + (i / 8) * h * 2;
-      px1(g, px + Math.cos(t) * (R * 0.5 + R * 0.6 * easeOut(k)), py + Math.sin(t) * (R * 0.5 + R * 0.6 * easeOut(k)));
+      px1(
+        g,
+        px + Math.cos(t) * (R * 0.5 + R * 0.6 * easeOut(k)),
+        py + Math.sin(t) * (R * 0.5 + R * 0.6 * easeOut(k)),
+      );
     }
     return true;
   },
@@ -130,7 +140,13 @@ registerImpactPainter('f8_grab', {
     // Рука: тень, контур, тело, блик; локтевые бугры по длине.
     const line = (off: number, c: string) => {
       g.fillStyle = c;
-      seg(g, px + ux * r0 + nx * off, py + uy * r0 + ny * off + 2, px + ux * r1 + nx * off, py + uy * r1 + ny * off + 2);
+      seg(
+        g,
+        px + ux * r0 + nx * off,
+        py + uy * r0 + ny * off + 2,
+        px + ux * r1 + nx * off,
+        py + uy * r1 + ny * off + 2,
+      );
     };
     g.fillStyle = 'rgba(0,0,0,0.25)';
     seg(g, px + ux * r0, py + uy * r0 + 4, px + ux * r1, py + uy * r1 + 4);
@@ -153,7 +169,13 @@ registerImpactPainter('f8_grab', {
       const fa = a + i * (grip ? 0.25 : 0.5);
       const fl = grip ? 2 : 4;
       g.fillStyle = css(ARM_SKIN[3]);
-      seg(g, hx0 + Math.cos(fa) * 2, hy0 + Math.sin(fa) * 2, hx0 + Math.cos(fa) * (2 + fl), hy0 + Math.sin(fa) * (2 + fl));
+      seg(
+        g,
+        hx0 + Math.cos(fa) * 2,
+        hy0 + Math.sin(fa) * 2,
+        hx0 + Math.cos(fa) * (2 + fl),
+        hy0 + Math.sin(fa) * (2 + fl),
+      );
     }
     if (age < 0.07) {
       g.fillStyle = 'rgba(255,255,255,0.9)';
@@ -200,7 +222,11 @@ registerImpactPainter('f8_cut', {
     g.fillStyle = rgba('#ffffff', fade);
     for (let i = 0; i < 6; i++) {
       const d = L / 2 + (hash(i, rec.seed) - 0.5) * L * 0.5 * k;
-      px1(g, px + ux * d + nx * (hash(i, 7) - 0.5) * 8 * k, py + uy * d + ny * (hash(i, 9) - 0.5) * 8 * k - 6 * k);
+      px1(
+        g,
+        px + ux * d + nx * (hash(i, 7) - 0.5) * 8 * k,
+        py + uy * d + ny * (hash(i, 9) - 0.5) * 8 * k - 6 * k,
+      );
     }
     return true;
   },

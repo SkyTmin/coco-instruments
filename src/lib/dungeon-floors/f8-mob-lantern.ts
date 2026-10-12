@@ -80,7 +80,20 @@ interface LnO extends PoseO {
   crush: number;
 }
 
-const B0: LnO = { tilt: 0, sw: 0, sc: 0, mo: 0.25, lid: 0, glow: 0.75, tl: 1, tsw: 0, tb: 0, tup: 0, burn: 0, crush: 0 };
+const B0: LnO = {
+  tilt: 0,
+  sw: 0,
+  sc: 0,
+  mo: 0.25,
+  lid: 0,
+  glow: 0.75,
+  tl: 1,
+  tsw: 0,
+  tb: 0,
+  tup: 0,
+  burn: 0,
+  crush: 0,
+};
 
 /** Плевок 0,6: раздувается, язык втянут, пламя ярчает, прищур; конец — дрожь. */
 const AIM: PKey<LnO>[] = carry<LnO>([
@@ -105,7 +118,11 @@ const FLINCH: PKey<LnO>[] = [
 const DIE: PKey<LnO>[] = carry<LnO>([
   [0, { sc: 0.3, mo: 1, lid: 0, glow: 1, tilt: -0.3 }],
   [0.1, { sc: 0.4, burn: 0.15, tl: 0.8 }],
-  [0.42, { burn: 0.75, crush: 0.45, sc: 0, tilt: 0.35, sw: 0.3, tl: 0.5, glow: 0.6, mo: 0.6 }, easeIn],
+  [
+    0.42,
+    { burn: 0.75, crush: 0.45, sc: 0, tilt: 0.35, sw: 0.3, tl: 0.5, glow: 0.6, mo: 0.6 },
+    easeIn,
+  ],
   [0.6, { burn: 1, crush: 0.62, tilt: 0.6, sw: 0.45, tl: 0.3, glow: 0.2 }],
   [0.8, { crush: 0.68, glow: 0 }],
 ]);
@@ -159,14 +176,29 @@ function poseAt(anim: string, f: number): [LnO, LnO] {
         return [mk(q), mk(q - 0.8)];
       }
       const k = easeOut((f - 13) / 7);
-      const o = sampleKeys(GUT, [[0, {}], [1, { ...B0 }]], k);
+      const o = sampleKeys(
+        GUT,
+        [
+          [0, {}],
+          [1, { ...B0 }],
+        ],
+        k,
+      );
       return [o, o];
     }
     case 'flinch':
       return [at(FLINCH, t), at(FLINCH, lagT)];
     case 'stun': {
       const q = (f / 6) * TAU;
-      const o: LnO = { ...B0, sw: Math.sin(q) * 0.25, tilt: Math.cos(q) * 0.15, lid: 0.5, mo: 0.6, tsw: Math.sin(q - 1) * 1.2, glow: 0.5 };
+      const o: LnO = {
+        ...B0,
+        sw: Math.sin(q) * 0.25,
+        tilt: Math.cos(q) * 0.15,
+        lid: 0.5,
+        mo: 0.6,
+        tsw: Math.sin(q - 1) * 1.2,
+        glow: 0.5,
+      };
       return [o, { ...o, sw: Math.sin(q - 1) * 0.25 }];
     }
     case 'die': {
@@ -176,7 +208,14 @@ function poseAt(anim: string, f: number): [LnO, LnO] {
     case 'rise': {
       // Всплывает тёмным, к концу загорается и открывает глаз.
       const k = clamp01(t / 0.9);
-      const o: LnO = { ...B0, glow: 0.05 + 0.9 * sstep(0.45, 0.85, k), lid: 1 - sstep(0.6, 0.85, k), tb: -0.8 * (1 - k), tl: 0.7 + 0.3 * k, mo: 0.1 };
+      const o: LnO = {
+        ...B0,
+        glow: 0.05 + 0.9 * sstep(0.45, 0.85, k),
+        lid: 1 - sstep(0.6, 0.85, k),
+        tb: -0.8 * (1 - k),
+        tl: 0.7 + 0.3 * k,
+        mo: 0.1,
+      };
       return [o, { ...o, tb: -1 }];
     }
   }
@@ -242,7 +281,10 @@ function paperMat(o: LnO, dead: boolean) {
       if (fc === 5) return CHAR[0];
       // Прогорело: снизу вверх неровным краем — уголь, край тлеет.
       if (o.burn > 0) {
-        const edge = -1 + o.burn * 2.4 + (hash(Math.floor(q[0] * 5 + 9), Math.floor(q[1] * 5 + 9)) - 0.5) * 0.5;
+        const edge =
+          -1 +
+          o.burn * 2.4 +
+          (hash(Math.floor(q[0] * 5 + 9), Math.floor(q[1] * 5 + 9)) - 0.5) * 0.5;
         if (q[2] < edge - 0.25) return CHAR[1];
         if (q[2] < edge) return hx('#ff7a20');
       }
@@ -324,7 +366,11 @@ function lanternPic(anim: string, f: number, d: number): Pic {
       for (let i = 0; i < 5; i++) {
         const a = hash(i, 4) * TAU;
         const rr = (1 - k) * (6 + hash(i, 6) * 5) + 1;
-        L().set(Math.floor(mx + Math.cos(a) * rr), Math.floor(my + Math.sin(a) * rr * 0.7), alphaC(hx('#ffd060'), 0.5 + k * 0.5));
+        L().set(
+          Math.floor(mx + Math.cos(a) * rr),
+          Math.floor(my + Math.sin(a) * rr * 0.7),
+          alphaC(hx('#ffd060'), 0.5 + k * 0.5),
+        );
       }
     }
     if (anim === 'gut' && f <= 3) {
@@ -342,7 +388,7 @@ function lanternPic(anim: string, f: number, d: number): Pic {
       // Чад: серые клубы от шапки вверх.
       const [tx, ty] = P(J.top);
       for (let i = 0; i < 3; i++) {
-        const k = (((f - 4) / 8 + i / 3) % 1 + 1) % 1;
+        const k = ((((f - 4) / 8 + i / 3) % 1) + 1) % 1;
         const x = Math.floor(tx + Math.sin(k * 5 + i) * 1.5);
         const y = Math.floor(ty - k * 8);
         p.set(x, y, alphaC(hx('#5a5058'), 0.6 * (1 - k)));
@@ -400,7 +446,12 @@ registerMobPainter('f8_lantern', (m: Mob, pose: MobPose) => {
   } else if (md === 'gutter') {
     anim = 'gut';
     const k = t * FPS;
-    f = t < 0.25 ? Math.min(5, Math.floor(k)) : t < 1.2 ? 6 + mod(k - 6, 8) : 14 + Math.min(6, Math.floor((t - 1.2) * FPS * 0.9));
+    f =
+      t < 0.25
+        ? Math.min(5, Math.floor(k))
+        : t < 1.2
+          ? 6 + mod(k - 6, 8)
+          : 14 + Math.min(6, Math.floor((t - 1.2) * FPS * 0.9));
     // Опускается к герою (окно), в конце снова поднимается.
     ex.lift = lerp(7, 2.5, sstep(0.05, 0.5, t)) + lerp(0, 4.5, sstep(1.2, 1.5, t)) + bob * 0.4;
     if (f <= 1) ex.dx = -Math.cos(v.yaw) * (1.5 - f);
@@ -444,4 +495,3 @@ registerMobWarm('f8_lantern', function* () {
     lanternPic,
   );
 });
-

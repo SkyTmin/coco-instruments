@@ -47,7 +47,16 @@ import {
   type Pic,
   type V3,
 } from './f8-mobkit';
-import { atP, gait, oniBase, oniJoints, oniRig, type OniJ, type OniO, type OniStyle } from './f8-mob-oni';
+import {
+  atP,
+  gait,
+  oniBase,
+  oniJoints,
+  oniRig,
+  type OniJ,
+  type OniO,
+  type OniStyle,
+} from './f8-mob-oni';
 
 const ST: OniStyle = {
   skin: tn('#6a3a1a', '#a0582a', '#c8783a', '#eca058'),
@@ -101,8 +110,25 @@ const B0: MiO = {
 /** Нырок 0,35: присел, прыжок рыбкой вперёд (к двери). */
 const DIVE: PKey<MiO>[] = carry<MiO>([
   [0, {}],
-  [0.08, { hu: -1.4, lean: 0.5, aL: [-1.2, -1.6, -1.8], aR: [-1.2, 1.6, -1.8], mouth: 0.6 }, easeOut],
-  [0.25, { hu: 0.8, lean: 1.3, hf: 1.8, aL: [4.0, -0.6, 1.0], aR: [4.0, 0.6, 1.0], fL: [-3.0, -1.2, 1.6], fR: [-3.4, 1.2, 2.0], sb: 1.2 }, easeIn],
+  [
+    0.08,
+    { hu: -1.4, lean: 0.5, aL: [-1.2, -1.6, -1.8], aR: [-1.2, 1.6, -1.8], mouth: 0.6 },
+    easeOut,
+  ],
+  [
+    0.25,
+    {
+      hu: 0.8,
+      lean: 1.3,
+      hf: 1.8,
+      aL: [4.0, -0.6, 1.0],
+      aR: [4.0, 0.6, 1.0],
+      fL: [-3.0, -1.2, 1.6],
+      fR: [-3.4, 1.2, 2.0],
+      sb: 1.2,
+    },
+    easeIn,
+  ],
   [0.35, { hu: 0.4, lean: 1.45, hf: 2.4 }],
 ]);
 /** Выглянул из двери 0,5: шаг, оглядка вправо-влево. */
@@ -114,14 +140,51 @@ const PEEK: PKey<MiO>[] = carry<MiO>([
 ]);
 const FLINCH: PKey<MiO>[] = [
   [0, {}],
-  [0.05, { lean: -0.35, hf: -0.8, hp: -0.4, aL: [0.4, -2.0, 1.0], aR: [0.6, 2.2, 1.4], squint: 1, mouth: 1, sb: 1.4 }, easeOut],
+  [
+    0.05,
+    {
+      lean: -0.35,
+      hf: -0.8,
+      hp: -0.4,
+      aL: [0.4, -2.0, 1.0],
+      aR: [0.6, 2.2, 1.4],
+      squint: 1,
+      mouth: 1,
+      sb: 1.4,
+    },
+    easeOut,
+  ],
   [0.2, {}],
 ];
 /** Смерть 0,8: роняет мешок, отшатнулся, навзничь. */
 const DIE: PKey<MiO>[] = carry<MiO>([
-  [0, { lean: -0.3, hp: -0.4, aL: [0.6, -2.2, 1.8], aR: [0.8, 2.2, 2.0], mouth: 1, squint: 1, sb: 1.2 }],
+  [
+    0,
+    {
+      lean: -0.3,
+      hp: -0.4,
+      aL: [0.6, -2.2, 1.8],
+      aR: [0.8, 2.2, 2.0],
+      mouth: 1,
+      squint: 1,
+      sb: 1.2,
+    },
+  ],
   [0.14, { drop: 1, lean: -0.6, hf: -1.0 }, easeOut],
-  [0.36, { lean: -1.45, hf: -2.2, hu: -3.2, hp: -0.2, fL: [2.4, -1.4, 2.0], fR: [1.6, 1.4, 2.6], aL: [0.6, -3.0, 0.8], aR: [0.4, 3.0, 1.0] }, easeIn],
+  [
+    0.36,
+    {
+      lean: -1.45,
+      hf: -2.2,
+      hu: -3.2,
+      hp: -0.2,
+      fL: [2.4, -1.4, 2.0],
+      fR: [1.6, 1.4, 2.6],
+      aL: [0.6, -3.0, 0.8],
+      aR: [0.4, 3.0, 1.0],
+    },
+    easeIn,
+  ],
   [0.44, { hu: -2.7, fL: [2.6, -1.4, 2.6] }, easeOut],
   [0.54, { hu: -3.3, fL: [2.6, -1.4, 1.2], fR: [2.0, 1.4, 1.4], mouth: 0.5 }, easeIn],
   [0.8, { hu: -3.3 }],
@@ -201,7 +264,16 @@ function sack(r: Rig, J: OniJ, L: OniJ, o: MiO): V3 {
   else {
     const back = J.C.p(-ST.chestD - 2.2, 0, ST.torso * 0.55 + o.sb);
     // Отстаёт от спины: мешок догоняет корпус (поза в прошлом).
-    c = vadd(back, vmul(vsub(L.C.p(-ST.chestD - 2.2, 0, ST.torso * 0.55), J.C.p(-ST.chestD - 2.2, 0, ST.torso * 0.55)), 0.7));
+    c = vadd(
+      back,
+      vmul(
+        vsub(
+          L.C.p(-ST.chestD - 2.2, 0, ST.torso * 0.55),
+          J.C.p(-ST.chestD - 2.2, 0, ST.torso * 0.55),
+        ),
+        0.7,
+      ),
+    );
   }
   const F = atP(J.B, c);
   r.ell(F, [0, 0, 0], [2.6, 2.8, 3.0], {
@@ -209,7 +281,9 @@ function sack(r: Rig, J: OniJ, L: OniJ, o: MiO): V3 {
     pat: (q) => (q[0] < -0.55 && Math.abs(q[1]) < 0.35 && Math.abs(q[2]) < 0.35 ? COIN : null),
   });
   r.ell(F, [0, 0, 3.0], [1.4, 1.4, 0.6], GOLD);
-  r.cap(vadd(c, [0, 0, 2.6]), vadd(c, [0, 0, 3.4]), 0.55, 0.45, { T: tn('#2a1a0a', '#4a3018', '#6a4828', '#8a6038') });
+  r.cap(vadd(c, [0, 0, 2.6]), vadd(c, [0, 0, 3.4]), 0.55, 0.45, {
+    T: tn('#2a1a0a', '#4a3018', '#6a4828', '#8a6038'),
+  });
   if (o.drop <= 0.5) r.line(J.shL, vadd(c, J.B.v(0, -1.2, 1.8)), hx('#3a2a14'), 0, 0.4);
   return c;
 }
@@ -254,7 +328,9 @@ function miserPic(anim: string, f: number, d: number): Pic {
       for (let i = 0; i < 9; i++) {
         const a = hash(i, 2) * TAU;
         const R = (3 + hash(i, 4) * 8) * easeOut(k);
-        const [gx, gy] = P(vadd(sc, J.B.v(Math.cos(a) * R, Math.sin(a) * R, -2.2 + Math.sin(PI * k) * 3)));
+        const [gx, gy] = P(
+          vadd(sc, J.B.v(Math.cos(a) * R, Math.sin(a) * R, -2.2 + Math.sin(PI * k) * 3)),
+        );
         coin(gx, gy, i + f);
       }
     }
@@ -334,4 +410,3 @@ registerMobWarm('f8_miser', function* () {
     miserPic,
   );
 });
-

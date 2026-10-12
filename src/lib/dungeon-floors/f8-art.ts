@@ -1810,7 +1810,8 @@ registerZonePainter('f8_grab', (g, z0, px, py, S) => {
   // ударом, `f8-mob-fx.ts`), последние 0,2 с — белый.
   g.fillStyle = `rgba(230,190,255,${0.35 + 0.4 * k})`;
   for (let x = 4; x < L * k; x += 4) g.fillRect(Math.round(x), 0, 2, 1);
-  g.fillStyle = z.warn - z.t < 0.2 ? 'rgba(255,255,255,0.95)' : `rgba(230,190,255,${0.4 + 0.4 * k})`;
+  g.fillStyle =
+    z.warn - z.t < 0.2 ? 'rgba(255,255,255,0.95)' : `rgba(230,190,255,${0.4 + 0.4 * k})`;
   const hx0 = Math.round(L - 3);
   g.fillRect(hx0 - 2, -1, 3, 3);
   for (const dy of [-3, -1, 1, 3]) g.fillRect(hx0 + 1, dy, 2, 1);
@@ -1903,7 +1904,8 @@ registerZonePainter('f8_claws', (g, z0, px, py, S) => {
   g.fillStyle = `rgba(255,40,40,${0.14 + 0.32 * k})`;
   g.fillRect(0, -w, L, w * 2);
   // Метка цели — три насечки когтей на конце (сами руки рисует кадр моба).
-  g.fillStyle = k > 0.8 ? `rgba(255,255,255,${0.6 + 0.4 * k})` : `rgba(255,230,210,${0.3 + 0.5 * k})`;
+  g.fillStyle =
+    k > 0.8 ? `rgba(255,255,255,${0.6 + 0.4 * k})` : `rgba(255,230,210,${0.3 + 0.5 * k})`;
   for (const dy of [-3, 0, 3]) {
     g.fillRect(Math.round(L - 5), dy, 4, 1);
     g.fillRect(Math.round(L - 1), dy + 1, 1, 1);

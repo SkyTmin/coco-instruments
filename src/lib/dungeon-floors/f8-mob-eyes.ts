@@ -144,7 +144,8 @@ const ROAM: [number, number][][] = [
   ],
 ];
 
-const lattice = (u: number, v: number) => u % 5 === 0 || v === 3 || v === 7 || v === 11 || v < 3 || v > 11;
+const lattice = (u: number, v: number) =>
+  u % 5 === 0 || v === 3 || v === 7 || v === 11 || v < 3 || v > 11;
 
 // ---- Лицо стены: глаза, тени ладоней, дыры ------------------------------------------------------
 
@@ -260,7 +261,8 @@ function palmShadow(p: Px, hu: number, hv: number, s: number, a: number): void {
   for (let i = 0; i < 5; i++) {
     const ang = i < 4 ? -PI / 2 + (i - 1.5) * 0.42 : hu < 8 ? 0.2 : PI - 0.2;
     const L = (i < 4 ? 3.1 : 2.2) * s;
-    for (let k = 0.4; k <= L; k += 0.5) mark(hu + Math.cos(ang) * (1.2 * s + k), hv + Math.sin(ang) * (1 * s + k));
+    for (let k = 0.4; k <= L; k += 0.5)
+      mark(hu + Math.cos(ang) * (1.2 * s + k), hv + Math.sin(ang) * (1 * s + k));
   }
   for (const m of marks) p.set(X(m % 16), Y(Math.floor(m / 16)), c);
 }
@@ -291,7 +293,8 @@ function holeAt(p: Px, hu: number, hv: number, size: number, seed: number): void
 function paintFace(p: Px, lit: (() => Px) | null, F: Face): void {
   if (F.palm > 0.02) for (const [hu, hv] of HOLES) palmShadow(p, hu, hv, F.palmK, F.palm);
   if (F.hole > 0) {
-    for (let i = 0; i < HOLES.length; i++) holeAt(p, HOLES[i][0], HOLES[i][1], F.hole, F.seed + i * 5);
+    for (let i = 0; i < HOLES.length; i++)
+      holeAt(p, HOLES[i][0], HOLES[i][1], F.hole, F.seed + i * 5);
   }
   // Смерть: бумага рвётся полосами вниз — тёмные прорехи по панелям.
   if (F.fall > 0) {
@@ -302,7 +305,8 @@ function paintFace(p: Px, lit: (() => Px) | null, F: Face): void {
         const u0 = col * 5 + 1;
         const v0 = row * 4 + 4;
         const n = Math.round(k * 3);
-        for (let v = v0; v < v0 + n; v++) for (let u = u0; u < u0 + 4; u++) p.set(X(u), Y(v), HOLE2);
+        for (let v = v0; v < v0 + n; v++)
+          for (let u = u0; u < u0 + 4; u++) p.set(X(u), Y(v), HOLE2);
       }
   }
   for (let i = 0; i < EYES.length; i++) {
@@ -312,7 +316,8 @@ function paintFace(p: Px, lit: (() => Px) | null, F: Face): void {
     if (F.cry > 0) {
       const L = F.cry * (2 + hash(i, 5) * 4);
       const sx = X(u) + (hash(i, 9) - 0.5) * rw;
-      for (let k = 0; k < L; k++) p.set(sx, Y(v + rh + 0.5 + k), alphaC(INKT, 0.9 - (k / (L + 1)) * 0.5));
+      for (let k = 0; k < L; k++)
+        p.set(sx, Y(v + rh + 0.5 + k), alphaC(INKT, 0.9 - (k / (L + 1)) * 0.5));
     }
   }
 }
@@ -372,7 +377,11 @@ const DIEARM: PKey<ArmO>[] = carry<ArmO>([
   [0.27, { k: 0.02, hz: 8.5, ar: 2, bw: 0, wd: 0, sp: 0.2, cu: 1, fl: 0 }, easeIn],
 ]);
 
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const cross = (a: V3, b: V3): V3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
 
 /** Точки руки `s` (−1 левая, +1 правая) в осях рига: S-образная кривая из дыры к кисти. */
 function armPts(ang: number, o: ArmO, s: number) {
@@ -387,7 +396,10 @@ function armPts(ang: number, o: ArmO, s: number) {
   const W: V3 = [tx, ty / SE, o.hz];
   const lat: V3 = [lx, ly / SE, 0];
   const C1 = vadd(vadd(H, vmul(vsub(W, H), 0.33)), vadd(vmul(lat, o.bw), [0, 1.5, o.ar]));
-  const C2 = vadd(vadd(H, vmul(vsub(W, H), 0.66)), vadd(vmul(lat, -o.bw * 0.45), [0, 1, o.ar * 0.7]));
+  const C2 = vadd(
+    vadd(H, vmul(vsub(W, H), 0.66)),
+    vadd(vmul(lat, -o.bw * 0.45), [0, 1, o.ar * 0.7]),
+  );
   const bz = (t: number): V3 => {
     const a = (1 - t) ** 3;
     const b = 3 * (1 - t) ** 2 * t;
@@ -408,7 +420,11 @@ function arm(r: Rig, ang: number, o: ArmO, s: number): V3 {
   // Кисть: вперёд — по руке, на полу — вдоль линии удара.
   const fwArm = vnorm(vsub(W, J2));
   const fl: V3 = vnorm([Math.cos(ang), Math.sin(ang) / SE, -0.15]);
-  const fw = vnorm([lerp(fwArm[0], fl[0], o.fl), lerp(fwArm[1], fl[1], o.fl), lerp(fwArm[2], fl[2], o.fl)]);
+  const fw = vnorm([
+    lerp(fwArm[0], fl[0], o.fl),
+    lerp(fwArm[1], fl[1], o.fl),
+    lerp(fwArm[2], fl[2], o.fl),
+  ]);
   const up0: V3 = [0, 0, 1];
   const sd = vnorm(cross(up0, fw));
   const up = cross(fw, sd);
