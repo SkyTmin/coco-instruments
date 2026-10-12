@@ -17,6 +17,7 @@ import {
 } from './dragon';
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
+import { FPS as RAVEN_FPS, FRAMES as RAVEN_FRAMES, RES as RAVEN_RES, ravenFrame } from './raven';
 import { FPS as WOLF_FPS, FRAMES as WOLF_FRAMES, RES as WOLF_RES, wolfFrame } from './wolf';
 
 export type { Anim, Canvas, Res };
@@ -54,6 +55,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: WOLF_RES,
     anims: at24(WOLF_FRAMES, WOLF_FPS),
     frame: wolfFrame,
+    variants: [1],
+  },
+  // Ворон-ключник: свой золотой.
+  raven: {
+    res: RAVEN_RES,
+    anims: at24(RAVEN_FRAMES, RAVEN_FPS),
+    frame: ravenFrame,
     variants: [1],
   },
 };
