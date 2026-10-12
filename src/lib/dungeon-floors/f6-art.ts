@@ -32,6 +32,7 @@ import './f6-mob-bat';
 import './f6-mob-golem';
 import './f6-mob-ore';
 import './f6-mob-worm';
+import './f6-mob-imp';
 
 type RGBA = [number, number, number, number];
 
@@ -361,50 +362,7 @@ const SILVER: Tones = [hx('#5a6068'), hx('#98a2ac'), hx('#d0d8e0'), hx('#ffffff'
 
 // Магмовый червь — `f6-mob-worm.ts` (анимации мобов 6).
 
-// ---------------------------------------------------------------------------
-// Бесёнок-старьёвщик: бес из атласа 0x72 с мешком добычи за спиной.
-// ---------------------------------------------------------------------------
-
-const SACK: Tones = [hx('#4a2a14'), hx('#7a4a24'), hx('#a8703a'), hx('#d09a5a')];
-
-function paintImp(run: boolean, f: number, anim: string): Built | null {
-  const name = (run ? `imp_run_anim_f${f}` : `imp_idle_anim_f${f}`) as X72Name;
-  const base = x72(name);
-  if (!base) return null;
-  const p = new Px(26, 22);
-  // Мешок за спиной — с самого беса, на лямке через плечо, монеты в горловине.
-  const sx = 10;
-  const sy = 14 + (run && f % 2 ? 1 : 0);
-  shadeEll(p, sx, sy, 4.4, 4.2, SACK);
-  shadeEll(p, sx + 1.2, sy - 4.2, 1.8, 1.2, SACK);
-  p.outline(INK);
-  stroke(p, sx - 1, sy - 3, sx + 2, sy - 3, hx('#2a160a'));
-  for (const [x, y] of [
-    [sx + 1, sy - 6],
-    [sx + 2, sy - 6],
-    [sx - 1, sy + 1],
-  ])
-    p.set(x, y, GOLD);
-  p.set(sx + 3, sy + 2, hx('#fff4a0'));
-  let body = base;
-  if (anim === 'hurt') body = base.tint(WHITE, 0.25);
-  paste(p, body, 8, 6);
-  // Лямка поверх плеча беса.
-  stroke(p, sx + 2, sy - 3, sx + 7, sy + 1, hx('#5a3418'));
-  return { p, ax: 16, ay: 22, eye: null };
-}
-
-registerMobPainter('f6_imp', (m: Mob, pose: MobPose) => {
-  const speed = Math.hypot(m.vx, m.vy);
-  const run = speed > 0.4;
-  const f = ((Math.floor(pose.t * (run ? 12 : 6)) % 4) + 4) % 4;
-  const anim = pose.anim === 'hurt' ? 'hurt' : run ? 'run' : 'idle';
-  const k = `f6_imp|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = frames.get(k);
-  if (hit) return hit;
-  const b = paintImp(run, f, anim);
-  return b ? finish(k, b, pose.look, pose.flash, pose.left) : null;
-});
+// Бесёнок-старьёвщик — `f6-mob-imp.ts` (анимации мобов 6).
 
 // ---------------------------------------------------------------------------
 // Красный змей (v2.86 — анимации). Кадр — грудь, шея, рогатая голова,
