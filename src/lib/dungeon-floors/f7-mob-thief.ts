@@ -149,7 +149,7 @@ function thiefRig(o: TP, yaw: number): { r: Rig; B: F3; T: F3; Hd: F3; sackC: V3
   r.ell(new F3(sackC, T.f, T.s, T.u), [0, 0, 0], [2.2, 2.5, 2.6], SAM);
   const neck = T.p(-1.4 + o.sack[0] * 0.5, 1.2, 6.4 + o.sack[2] * 0.5);
   r.cap(vadd(sackC, T.v(0.3, 0.2, 1.8)), neck, 0.8 * SC, 0.5 * SC, SAM);
-  r.dot(vadd(sackC, T.v(-0.6, -0.8, 2.3)), GOLD, 0.35, 1, 0.9);
+  r.dot(vadd(sackC, T.v(-0.6, -0.8, 2.3)), GOLD, 0, 1, 0.9);
   // Голова: шар, уши-лопухи назад-вверх, нос, очки-зеркальца.
   const Hd = T.at(0.55, 0, 6.6).turn(o.look).pitch(o.nod);
   r.ell(Hd, [0, 0, 0], [2.4, 2.6, 2.2], SKM);
