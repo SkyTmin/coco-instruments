@@ -1361,35 +1361,23 @@ function chainParts(out: PartF[], c: Ctx): void {
   const sw = (lag.chX - S.bc[0]) * 1.2 + lag.lsw * 1.5;
   const sy = (lag.chY - S.bc[1]) * 0.8;
   const M = add(lerp3(top, F0, 0.5), [sw - 1.0 * k, 0.8 * k + sy, -0.6 * k]);
-  const path: V3[] = [];
+  // Звенья кладутся от точки касания пола в обе стороны: на полу они не ползут,
+  // а длина провиса меняется у кольца.
+  const hang: V3[] = [];
   const nh = 16;
   for (let i = 0; i <= nh; i++) {
-    const u = i / nh;
+    const u = 1 - i / nh;
     const v = 1 - u;
-    path.push(add(add(mul(top, v * v), mul(M, 2 * u * v)), mul(F0, u * u)));
+    hang.push(add(add(mul(top, v * v), mul(M, 2 * u * v)), mul(F0, u * u)));
   }
-  for (let i = 1; i <= 8; i++) path.push(lerp3(F0, F1, i / 8));
-  for (let i = 1; i <= 8; i++) path.push(lerp3(F1, F2, i / 8));
-  const cum = [0];
-  for (let i = 1; i < path.length; i++) {
-    const d = sub(path[i], path[i - 1]);
-    cum.push(cum[i - 1] + Math.hypot(d[0], d[1], d[2]));
-  }
-  const total = cum[cum.length - 1];
-  const at = (s: number): V3 => {
-    let i = 1;
-    while (i < cum.length - 1 && cum[i] < s) i++;
-    const u = clamp01((s - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]));
-    return lerp3(path[i - 1], path[i], u);
-  };
+  const floor: V3[] = [F0];
+  for (let i = 1; i <= 8; i++) floor.push(lerp3(F0, F1, i / 8));
+  for (let i = 1; i <= 8; i++) floor.push(lerp3(F1, F2, i / 8));
   const ll = (HI ? 1.5 : 1.8) * k;
-  const n = Math.floor(total / ll);
-  for (let j = 0; j < n; j++) {
-    const p0 = at(j * ll);
-    const p1 = at((j + 1) * ll);
+  const link = (p0: V3, p1: V3, face: boolean) => {
+    const L = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
     const d = norm(sub(p1, p0));
     const cc = mul(add(p0, p1), 0.5);
-    const face = j % 2 === 1;
     const flat = Math.abs(d[2]) < 0.5;
     // Плоскость звена: у «лицом» — поперёк взгляда (на полу — плашмя), у «ребром» — вдоль.
     const across: V3 = face
@@ -1404,16 +1392,16 @@ function chainParts(out: PartF[], c: Ctx): void {
       out.push({
         c: cc,
         ax: axes(d, across),
-        r: [ll * 0.62, (face ? 0.8 : 0.5) * k, (face ? 0.5 : 0.8) * k],
+        r: [L * 0.62, (face ? 0.8 : 0.5) * k, (face ? 0.5 : 0.8) * k],
         pal: P_STEEL,
         id: lid,
         bias: face ? 0.04 : -0.1,
         noSeam: true,
       });
-      continue;
+      return;
     }
     // Крупная: звено — овальное кольцо из долек.
-    const A = ll * 0.62;
+    const A = L * 0.62;
     const B = 0.85 * k;
     const segs = 10;
     for (let s = 0; s < segs; s++) {
@@ -1432,21 +1420,48 @@ function chainParts(out: PartF[], c: Ctx): void {
         noSeam: true,
       });
     }
-  }
-  // На конце — кожаная петля-ручка, лежит на полу.
+  };
+  const lay = (path: V3[], odd: number, toEnd: boolean) => {
+    const cum = [0];
+    for (let i = 1; i < path.length; i++) {
+      const d = sub(path[i], path[i - 1]);
+      cum.push(cum[i - 1] + Math.hypot(d[0], d[1], d[2]));
+    }
+    const total = cum[cum.length - 1];
+    const at = (s: number): V3 => {
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < s) i++;
+      const u = clamp01((s - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]));
+      return lerp3(path[i - 1], path[i], u);
+    };
+    const n = Math.floor(total / ll);
+    for (let j = 0; j < n; j++) link(at(j * ll), at((j + 1) * ll), (j + odd) % 2 === 1);
+    // Последнее неполное звено — у кольца: до самого верха.
+    if (toEnd && total - n * ll > ll * 0.35)
+      link(at(n * ll), path[path.length - 1], (n + odd) % 2 === 1);
+  };
+  lay(floor, 0, false);
+  lay(hang, 1, true);
+  // На конце — кожаная петля-ручка: лежит краем на полу, приподнята к зрителю.
   const hid = nid();
   const hr = 1.5 * k;
-  const hc = add(F2, [-hr * 0.9, 0.3 * k, 0]);
+  const tl = 0.75;
+  const hc = add(F2, [-hr * 1.1, 0.2 * k, hr * Math.sin(tl) * 0.9]);
   const nh2 = HI ? 12 : 7;
   for (let i = 0; i < nh2; i++) {
     const a = (i / nh2) * TAU;
     const a1 = ((i + 1) / nh2) * TAU;
-    const p0 = add(hc, [Math.cos(a) * hr * 1.2, Math.sin(a) * hr, 0]);
-    const p1 = add(hc, [Math.cos(a1) * hr * 1.2, Math.sin(a1) * hr, 0]);
+    const ring = (b: number): V3 => [
+      Math.cos(b) * hr * 1.2,
+      Math.sin(b) * hr * Math.cos(tl),
+      Math.sin(b) * hr * Math.sin(tl) * 0.9,
+    ];
+    const p0 = add(hc, ring(a));
+    const p1 = add(hc, ring(a1));
     const d = sub(p1, p0);
     out.push({
       c: mul(add(p0, p1), 0.5),
-      ax: axes(d, [0, 0, 1]),
+      ax: axes(d, [0, -Math.sin(tl), Math.cos(tl)]),
       r: [Math.hypot(d[0], d[1], d[2]) * 0.6 + 0.12, 0.6 * k, 0.45 * k],
       pal: P_LEATHER,
       id: hid,
