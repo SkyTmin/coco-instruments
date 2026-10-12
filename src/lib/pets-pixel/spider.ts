@@ -629,7 +629,7 @@ function attackPose(t: number): Pose {
   const o: Pose = { ...REST };
   o.pitch = kf(t, [
     [0, 0],
-    [0.27, -0.34, 'o'],
+    [0.27, -0.3, 'o'],
     [0.35, 0.14, 'i'],
     [0.5, 0.06],
     [0.72, 0],
@@ -642,7 +642,7 @@ function attackPose(t: number): Pose {
   ]);
   o.bz = kf(t, [
     [0, 0],
-    [0.27, 2.2, 'o'],
+    [0.27, 3.8, 'o'],
     [0.35, -1.2, 'i'],
     [0.5, -0.3],
     [0.7, 0],
@@ -776,9 +776,9 @@ const KNEE: V3[] = [
 ];
 const FOOT: V3[] = [
   [15.0, 11.0, 0],
-  [22.5, 5.0, 0],
-  [23.5, -5.0, 0],
-  [21.0, -14.0, 0],
+  [21.8, 5.0, 0],
+  [22.5, -5.0, 0],
+  [20.5, -14.0, 0],
 ];
 const TAR = 3.0;
 const UP: V3 = [0, 0, 1];
@@ -877,7 +877,7 @@ export function skel(o: Pose, lag: Lag): Skel {
       if (k === 0) {
         raised = s < 0 ? o.raiseL : o.raiseR;
         if (raised > 0) {
-          const tgt: V3 = [s * (15 + o.spread * 5), 9 + o.spread * 2, 36 - o.spread * 6];
+          const tgt: V3 = [s * (15 + o.spread * 4.5), 9 + o.spread * 2, 36 + o.spread];
           foot = lerp3(foot, tgt, raised);
         }
         foot = add(foot, s < 0 ? [o.fLx, 0, o.fLz] : [o.fRx, 0, o.fRz]);
