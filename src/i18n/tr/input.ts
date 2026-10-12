@@ -1,0 +1,47 @@
+import type { Translation } from '../types';
+import type { input as ru } from '../ru/input';
+
+export const input: Translation<typeof ru> = {
+  action: {
+    confirm: 'Seç',
+    back: 'Geri',
+    up: 'Yukarı',
+    down: 'Aşağı',
+    left: 'Sol',
+    right: 'Sağ',
+    tabPrev: 'Önceki sekme',
+    tabNext: 'Sonraki sekme',
+    inspect: 'İncele',
+    menu: 'Menü',
+    moveUp: 'Yukarı yürü',
+    moveDown: 'Aşağı yürü',
+    moveLeft: 'Sola yürü',
+    moveRight: 'Sağa yürü',
+    attack: 'Vuruş',
+    dash: 'Atılma',
+    skill: 'Kasırga',
+    eat: 'Ye',
+    interact: 'Etkileşim',
+    inventory: 'Envanter',
+    pets: 'Evcil hayvanlar',
+    forge: 'Demirhane',
+    books: 'Kitaplar',
+    chests: 'Sandıklar',
+    mines: 'Katlar',
+  },
+  group: {
+    ui: 'Menüler',
+    game: 'Dövüş ve yürüyüş',
+    hotkey: 'Kamp',
+  },
+  device: {
+    keys: 'Klavye',
+    pad: 'Oyun kolu',
+  },
+  press: 'Bir tuşa bas…',
+  pressPad: 'Bir düğmeye bas…',
+  cancel: 'Esc ile iptal',
+  reset: 'Varsayılan',
+  padNone: 'Oyun kolu yok — üstünde bir düğmeye bas',
+  space: 'Boşluk',
+};

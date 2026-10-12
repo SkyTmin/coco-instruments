@@ -1,0 +1,47 @@
+import type { Translation } from '../types';
+import type { input as ru } from '../ru/input';
+
+export const input: Translation<typeof ru> = {
+  action: {
+    confirm: 'Choisir',
+    back: 'Retour',
+    up: 'Haut',
+    down: 'Bas',
+    left: 'Gauche',
+    right: 'Droite',
+    tabPrev: 'Onglet précédent',
+    tabNext: 'Onglet suivant',
+    inspect: 'Examiner',
+    menu: 'Menu',
+    moveUp: 'Aller en haut',
+    moveDown: 'Aller en bas',
+    moveLeft: 'Aller à gauche',
+    moveRight: 'Aller à droite',
+    attack: 'Frapper',
+    dash: 'Ruée',
+    skill: 'Tourbillon',
+    eat: 'Manger',
+    interact: 'Interagir',
+    inventory: 'Inventaire',
+    pets: 'Familiers',
+    forge: 'Forge',
+    books: 'Livres',
+    chests: 'Coffres',
+    mines: 'Étages',
+  },
+  group: {
+    ui: 'Menus',
+    game: 'Combat et marche',
+    hotkey: 'Camp',
+  },
+  device: {
+    keys: 'Clavier',
+    pad: 'Manette',
+  },
+  press: 'Appuie sur une touche…',
+  pressPad: 'Appuie sur un bouton…',
+  cancel: 'Échap pour annuler',
+  reset: 'Par défaut',
+  padNone: 'Pas de manette — appuie sur un de ses boutons',
+  space: 'Espace',
+};

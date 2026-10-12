@@ -1710,7 +1710,7 @@ export function PrisonPage() {
           <button
             type="button"
             className="gx-chip pmx-chip--btn pmx-floor"
-            data-tip="Этажи"
+            data-tip={t('input.action.mines')}
             data-tip-key="mines"
             aria-label={
               prison.zone.on
@@ -1738,7 +1738,7 @@ export function PrisonPage() {
             type="button"
             className="gx-round gx-round--dark pmx-top__btn"
             aria-label="Инвентарь"
-            data-tip="Инвентарь"
+            data-tip={t('input.action.inventory')}
             data-tip-key="inventory"
             onClick={() => {
               tapLight();
@@ -2105,7 +2105,7 @@ export function PrisonPage() {
             type="button"
             ref={forgeRef}
             className={`pmx-dock__btn${forgeReady ? ' is-ready' : ''}`}
-            data-tip="Кузница"
+            data-tip={t('input.action.forge')}
             data-tip-key="forge"
             onClick={() => {
               tapLight();
@@ -2119,7 +2119,7 @@ export function PrisonPage() {
           <button
             type="button"
             className="pmx-dock__btn"
-            data-tip="Книги"
+            data-tip={t('input.action.books')}
             data-tip-key="books"
             onClick={() => openScreen('enchant')}
           >
@@ -2131,7 +2131,7 @@ export function PrisonPage() {
             type="button"
             ref={chestRef}
             className="pmx-dock__btn"
-            data-tip="Сундуки"
+            data-tip={t('input.action.chests')}
             data-tip-key="chests"
             onClick={() => openScreen('cases')}
           >
@@ -2147,7 +2147,7 @@ export function PrisonPage() {
           <button
             type="button"
             className="pmx-dock__btn"
-            data-tip="Питомцы"
+            data-tip={t('input.action.pets')}
             data-tip-key="pets"
             onClick={() => openScreen('pets')}
           >

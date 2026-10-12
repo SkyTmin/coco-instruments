@@ -2,6 +2,7 @@
 // пересчитывается на resize, поворот и события вьюпорта Telegram.
 
 import { useSyncExternalStore } from 'react';
+import { useSettings } from '@/settings/store';
 import { classifyFormFactor, uiScaleFor, type FormFactor, type UiScalePref } from './form-factor';
 
 export interface ShellState {
@@ -17,19 +18,15 @@ export interface ShellState {
   game: boolean;
 }
 
-const PREF_KEY = 'ui.scale.v1';
-
-function readPref(): UiScalePref {
-  try {
-    const v = localStorage.getItem(PREF_KEY);
-    const n = Number(v);
-    return v && Number.isInteger(n) && n >= 1 && n <= 6 ? (n as UiScalePref) : 'auto';
-  } catch {
-    return 'auto';
-  }
-}
-
-let pref: UiScalePref = typeof window === 'undefined' ? 'auto' : readPref();
+// Выбор игрока «размер интерфейса» живёт в общих настройках агента L
+// (`useSettings().uiScale`, localStorage `coco.settings.v1`): каркас только
+// читает его и пересчитывает масштаб при смене.
+let pref: UiScalePref = useSettings.getState().uiScale;
+useSettings.subscribe((st) => {
+  if (st.uiScale === pref) return;
+  pref = st.uiScale;
+  refreshShell();
+});
 let game = false;
 let state: ShellState = compute();
 const subs = new Set<() => void>();
@@ -87,20 +84,13 @@ export function subscribeShell(fn: () => void): () => void {
   return () => subs.delete(fn);
 }
 
-/** Выбор игрока «размер интерфейса» (для экрана настроек). */
+/** Выбор игрока «размер интерфейса» (общие настройки, `auto` — сам). */
 export function getUiScalePref(): UiScalePref {
   return pref;
 }
 
 export function setUiScalePref(p: UiScalePref): void {
-  pref = p;
-  try {
-    if (p === 'auto') localStorage.removeItem(PREF_KEY);
-    else localStorage.setItem(PREF_KEY, String(p));
-  } catch {
-    /* без сохранения */
-  }
-  refreshShell();
+  useSettings.getState().set({ uiScale: p });
 }
 
 /** Формат, размер и масштаб; перерисовка при смене. */

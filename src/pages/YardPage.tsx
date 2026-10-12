@@ -63,6 +63,7 @@ import { registerEscape } from '@/lib/escape-stack';
 import { useAction, useGameplayCapture, useHotkeys, useMoveAxis } from '@/input/hooks';
 import { inTopLayer } from '@/input/focus-nav';
 import { Prompt } from '@/input/Prompt';
+import { useT } from '@/i18n';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 const clock = (ms: number) => {
@@ -152,6 +153,7 @@ export function YardPage() {
 }
 
 function HubWorld() {
+  const t = useT();
   const nav = useNavigate();
   const owner = useOwner();
   const prison = useFinanceStore((s) => s.prison);
@@ -662,7 +664,7 @@ function HubWorld() {
           type="button"
           className="gx-round gx-round--dark hub-pad__map"
           aria-label="Инвентарь"
-          data-tip="Инвентарь"
+          data-tip={t('input.action.inventory')}
           data-tip-key="inventory"
           onClick={() => {
             tapLight();

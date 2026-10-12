@@ -146,18 +146,29 @@ export function installGamepad(): () => void {
   let raf = 0;
   let stopped = false;
   const prevButtons = new Set<number>();
+  let capFn: typeof capture = null;
   const loop = (t: number) => {
     raf = 0;
     if (stopped) return;
     if (capture) {
-      // Режим переназначения: первая новая кнопка уходит в перехват.
+      // Режим переназначения: первая НОВАЯ кнопка уходит в перехват. «A»,
+      // которой нажали саму ячейку, ещё зажата — её в первый кадр запоминаем.
       const pads = readPads();
       const now = new Set<number>();
       for (const p of pads) p.buttons.forEach((b, i) => b?.pressed && now.add(i));
-      for (const i of now) if (!prevButtons.has(i) && capture(i)) break;
+      const fresh = capFn !== capture;
+      capFn = capture;
+      if (!fresh) for (const i of now) if (!prevButtons.has(i) && capture(i)) break;
       prevButtons.clear();
       for (const i of now) prevButtons.add(i);
-    } else poller.step(t);
+    } else {
+      // Перехват кончился: зажатое сейчас — не новое нажатие.
+      if (capFn) {
+        capFn = null;
+        poller.reset();
+      }
+      poller.step(t);
+    }
     if (poller.connected() > 0 && !document.hidden) raf = requestAnimationFrame(loop);
     else poller.reset();
   };

@@ -1,6 +1,8 @@
 // Форматы экрана игры. Решает место, а не устройство: окно браузера 600×900
 // на ноутбуке получает раскладку планшета, и это правильно.
 
+import type { UiScalePref } from '@/settings/store';
+
 export type FormFactor = 'phone-portrait' | 'phone-landscape' | 'tablet' | 'desktop';
 
 export const FORM_FACTORS: readonly FormFactor[] = [
@@ -24,8 +26,8 @@ export function classifyFormFactor(w: number, h: number): FormFactor {
   return 'tablet';
 }
 
-/** Масштаб пиксель-арта, сколько CSS px в одной точке рисунка. */
-export type UiScalePref = 'auto' | 1 | 2 | 3 | 4 | 5 | 6;
+/** Выбор игрока «размер интерфейса» (общие настройки): auto или 1…3. */
+export type { UiScalePref };
 
 /**
  * Целый масштаб для пиксельной графики: точка рисунка = `--ui-scale` CSS px,
