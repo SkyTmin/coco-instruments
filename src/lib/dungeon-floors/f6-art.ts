@@ -21,8 +21,6 @@ import {
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Shot, Strike, Zone } from '../dungeon-sim';
-import { x72 } from '../dungeon-tiles';
-import type { X72Name } from '../dungeon-x72-frames';
 import { F6_GALLERY, F6_LAKES, F6_MARK, F6_NEST } from './f6';
 import { serpentView } from './f6-brains';
 import './f6-mob-sal';
@@ -230,73 +228,8 @@ const OBSID: Tones = [hx('#0e0a12'), hx('#1e1826'), hx('#3a3050'), hx('#8a7cb8')
 const ASH = { dk: hx('#3a3432'), mid: hx('#4e4744'), lt: hx('#6a625c'), hi: hx('#8a8078') };
 export const BONE: Tones = [hx('#6a5e50'), hx('#a8987e'), hx('#d4c8ae'), hx('#f2ead4')];
 
-/** Сколько летун «висит» над полом у движка: кадр опускаем на столько же. */
-const FLY = 6;
-
-// ---------------------------------------------------------------------------
-// Кадр монстра: общий конвейер (облик, вспышка, отражение, кеш).
-// ---------------------------------------------------------------------------
-
+// Кадры мобов — `f6-mob-*.ts` на наборе `f6-mobkit.ts` (анимации мобов 6).
 type Look = MobPose['look'];
-
-interface Built {
-  p: Px;
-  /** Середина тела и земля в кадре (смотрит вправо). */
-  ax: number;
-  ay: number;
-  eye: [number, number] | null;
-}
-
-const frames = new Map<string, MobFrame>();
-
-function pale(p: Px): Px {
-  const tint = hx('#f4ece4');
-  const q = new Px(p.w, p.h);
-  for (let i = 0; i < p.data.length; i += 4) {
-    if (!p.data[i + 3]) continue;
-    const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-    const c = mixc([l, l, l, 255], tint, 0.45);
-    q.data[i] = c[0];
-    q.data[i + 1] = c[1];
-    q.data[i + 2] = c[2];
-    q.data[i + 3] = p.data[i + 3];
-  }
-  return q;
-}
-
-/** Альбинос — белёсый, элита — золотой кант, удар — белым; смотрит влево — отражение. */
-function finish(
-  key: string,
-  b: Built,
-  look: Look,
-  flash: boolean,
-  left: boolean,
-  flip = true,
-): MobFrame {
-  let p = b.p;
-  if (look === 'albino') p = pale(p);
-  if (look === 'elite') p.outline(GOLD);
-  if (flash) p = p.tint(WHITE, 0.85);
-  const mirror = left && flip;
-  if (mirror) p = p.flipX();
-  const eye = b.eye
-    ? ([mirror ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number])
-    : null;
-  const out: MobFrame = { img: p.canvas(), ax: mirror ? p.w - b.ax : b.ax, ay: b.ay, eye };
-  frames.set(key, out);
-  return out;
-}
-
-function frameOf(
-  kind: string,
-  pose: MobPose,
-  anim: string,
-  f: number,
-  build: () => Built,
-): MobFrame {
-  const key = `${kind}|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  return frames.get(key) ?? finish(key, build(), pose.look, pose.flash, pose.left);
-}
 
 /** Язычок пламени высотой h (кадр f) с основанием в (x, y). */
 function flame(p: Px, x: number, y: number, h: number, f: number, w = 2.2): void {
@@ -314,30 +247,6 @@ function flame(p: Px, x: number, y: number, h: number, f: number, w = 2.2): void
     }
   }
   if (f % 2) p.set(x + sway, y - h - 1, FIRE[1]);
-}
-
-/** Круги лавы по поверхности (для ныряльщиков): кольцо с ярким краем. */
-function ripple(p: Px, cx: number, cy: number, rx: number, ry: number, f: number): void {
-  const k = 1 + (f % 4) * 0.12;
-  const R = rx * k;
-  const Q = ry * k;
-  for (let a = 0; a < TAU; a += 0.08) {
-    const x = Math.round(cx + Math.cos(a) * R);
-    const y = Math.round(cy + Math.sin(a) * Q);
-    const front = Math.sin(a) > 0;
-    p.set(x, y, front ? LAVA.bright : LAVA.hot);
-    if (front) p.set(x, y + 1, alpha(LAVA.dark, 0.8));
-  }
-}
-
-/** Вставить кадр в больший холст (x, y — левый верх). */
-function paste(dst: Px, src: Px, ox: number, oy: number): void {
-  for (let y = 0; y < src.h; y++)
-    for (let x = 0; x < src.w; x++) {
-      const i = (y * src.w + x) * 4;
-      if (!src.data[i + 3]) continue;
-      dst.set(ox + x, oy + y, [src.data[i], src.data[i + 1], src.data[i + 2], src.data[i + 3]]);
-    }
 }
 
 // Саламандра — `f6-mob-sal.ts` (анимации мобов 6); здесь — палитра иконок.
