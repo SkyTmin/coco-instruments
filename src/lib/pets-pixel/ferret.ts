@@ -653,7 +653,11 @@ function panelCorner(o: Pose, side: number): V3 {
   const th = -side * o.open * OPEN_A;
   const x = p[0] - hx0;
   const y = p[1] - YC;
-  return [hx0 + x * Math.cos(th) - y * Math.sin(th), YC + x * Math.sin(th) + y * Math.cos(th), p[2]];
+  return [
+    hx0 + x * Math.cos(th) - y * Math.sin(th),
+    YC + x * Math.sin(th) + y * Math.cos(th),
+    p[2],
+  ];
 }
 
 /**
@@ -1734,11 +1738,10 @@ function scarf(out: PartF[], c: Ctx): void {
       const z = sc[2] - 1.0 - len * u;
       const sway = u * u;
       pts.push(
-        add(S.up([sc[0] + dx * (1 + 0.8 * u) - 0.4 * u, sc[1] + 4.0 + 0.9 * u, z + 0.4 * swZ * sway]), [
-          swX * sway,
-          0,
-          0,
-        ]),
+        add(
+          S.up([sc[0] + dx * (1 + 0.8 * u) - 0.4 * u, sc[1] + 4.0 + 0.9 * u, z + 0.4 * swZ * sway]),
+          [swX * sway, 0, 0],
+        ),
       );
     }
     const eid = nid();
@@ -1814,7 +1817,8 @@ function tail(out: PartF[], c: Ctx): void {
       tube: true,
       bias: 0.06,
       tex: HI
-        ? (qx, qy, qz) => ((Math.atan2(qy, qz) * 4.5 + qx * 0.5 + i * 0.3 + 20) % 1 < 0.15 ? -0.08 : 0)
+        ? (qx, qy, qz) =>
+            (Math.atan2(qy, qz) * 4.5 + qx * 0.5 + i * 0.3 + 20) % 1 < 0.15 ? -0.08 : 0
         : undefined,
     });
   }
@@ -1829,7 +1833,17 @@ function tail(out: PartF[], c: Ctx): void {
       const side = outN[0] > 0 ? outN : mul(outN, -1);
       const dir = norm(add(tg, mul(side, 0.55)));
       const w = profile(wid, u) * k;
-      lock(out, add(p, mul(side, 0.5 * w)), dir, [0, 1, 0], 3.0 * k, w * 0.5, w * 0.42, P_DARK, 0.1);
+      lock(
+        out,
+        add(p, mul(side, 0.5 * w)),
+        dir,
+        [0, 1, 0],
+        3.0 * k,
+        w * 0.5,
+        w * 0.42,
+        P_DARK,
+        0.1,
+      );
     }
   }
 }
@@ -1869,7 +1883,8 @@ function facePick(X: number, Y: number, Z: number): number {
       return P_PALE;
     }
   }
-  PICK_T = -0.12 * clamp01((Z - 1.5) / 3) + (HI ? tufts(5, 4, 0.08, 1.02)(X / 6, Y / 5, Z / 4.8) : 0);
+  PICK_T =
+    -0.12 * clamp01((Z - 1.5) / 3) + (HI ? tufts(5, 4, 0.08, 1.02)(X / 6, Y / 5, Z / 4.8) : 0);
   return P_FUR;
 }
 
@@ -2158,7 +2173,7 @@ function stopwatch(out: PartF[], c: Ctx): void {
           const a = Math.atan2(qx, qz);
           const d = Math.sqrt(e);
           // Риски по кругу и стрелка.
-          if (d > 0.6 && (((a / TAU) * 12 + 120) % 1) < 0.14) {
+          if (d > 0.6 && ((a / TAU) * 12 + 120) % 1 < 0.14) {
             PICK_T = -0.4;
             return P_DIAL;
           }
