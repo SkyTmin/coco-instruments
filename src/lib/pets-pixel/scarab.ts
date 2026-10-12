@@ -376,9 +376,9 @@ const LEG: LegDef[] = [
   {
     hip: [4.0, 6.0, -2.6],
     home: [8.8, 12.0, 0],
-    hs: [8.4, 12.6, 0],
-    lf: 4.4,
-    lt: 4.6,
+    hs: [8.6, 12.4, 0],
+    lf: 5.0,
+    lt: 5.4,
     tar: 1.6,
     pole: [1, 0.4, 1.1],
   },
@@ -760,56 +760,93 @@ const YAW_P = YAW_G + Math.PI;
 const FG: V3 = [Math.sin(YAW_G), Math.cos(YAW_G), 0];
 /** Ось качения: шар катится по FG, верх уходит вперёд. */
 const AXR: V3 = norm(cross([0, 0, 1], FG));
-const D_PUSH = 6;
-const BALL_R = 8;
-const BALL_R0 = 2.2;
+const D_PUSH = 7;
+const BALL_R = 11;
+const BALL_R0 = 2.6;
 /** Кончик щитка от корня (по оси тела). */
 const TIP = (CLY_C[1] + CLY_R[1]) * KB;
-/** Где стоит, пока собирает шар (отступил, чтобы толчок вернул его на место). */
-const R_G: Root = { x: ROOT0.x - FG[0] * D_PUSH, y: ROOT0.y - FG[1] * D_PUSH, yaw: YAW_G };
+/** Стойка на голове: наклон (голова вниз), высота опоры, кивок. */
+const HS_P = 0.55;
+const HS_BZ = 5.0;
+const HS_NOD = -0.2;
+/** Как далеко от корня (по FG) должен стоять центр шара, чтобы тело в позе `o` его не задело. */
+function ballClear(o: Pose, gap: number): number {
+  const F = bodyFrame(o);
+  const pts: V3[] = [];
+  for (let a = 0; a < 32; a++)
+    for (let b = 0; b <= 16; b++) {
+      const th = (a / 32) * TAU;
+      const ph = (b / 16) * Math.PI - Math.PI / 2;
+      const d: V3 = [Math.cos(ph) * Math.cos(th), Math.cos(ph) * Math.sin(th), Math.sin(ph)];
+      pts.push(bodyAt(F, add(ELY_C, [ELY_R[0] * d[0], ELY_R[1] * d[1], ELY_R[2] * d[2]])));
+      pts.push(bodyAt(F, add(BELLY_C, [BELLY_R[0] * d[0], BELLY_R[1] * d[1], BELLY_R[2] * d[2]])));
+    }
+  for (let d = 0; d < 80; d += 0.1) {
+    const C: V3 = [FG[0] * d, FG[1] * d, BALL_R];
+    if (pts.every((q) => Math.hypot(q[0] - C[0], q[1] - C[1], q[2] - C[2]) >= BALL_R + gap)) return d;
+  }
+  return 40;
+}
+/** В стойке хвост — в 0.6 px от шара. */
+const BA_HS = ballClear(
+  { ...REST, rx: 0, ry: 0, yaw: YAW_P, pitch: HS_P, bz: HS_BZ, nod: HS_NOD },
+  0.6,
+);
+/** Стоя на лапах, тело дальше от шара — хвост ниже. */
+const BA_FLAT = ballClear({ ...REST, rx: 0, ry: 0, yaw: YAW_P }, 0.6);
+/** Корень по FG от покоя: где собирает шар, где встаёт на голову (толчок вернёт его в покой). */
+const S_H = -D_PUSH;
+/** Встав на лапы, отскакивает от шара: опущенный хвост не войдёт в половинку. */
+const S_HOP = Math.min(-1, BA_HS - 1.0 - BA_FLAT);
+const S_G = BA_HS - D_PUSH - (TIP + 0.6 + BALL_R);
+const R_G: Root = { x: ROOT0.x + FG[0] * S_G, y: ROOT0.y + FG[1] * S_G, yaw: YAW_G };
 const ballAtGather = (r: number): V3 => [
   R_G.x + FG[0] * (TIP + 0.6 + r),
   R_G.y + FG[1] * (TIP + 0.6 + r),
   r,
 ];
-const BALL_E: V3 = add(ballAtGather(BALL_R), mul(FG, D_PUSH));
+/** Шар в конце толчка — у камня. */
+const BALL_E: V3 = [ROOT0.x + FG[0] * BA_HS, ROOT0.y + FG[1] * BA_HS, BALL_R];
 /** Камень, о который бьётся шар: касание на высоте его середины. */
-const STONE_R: V3 = [4.4, 4.0, 5.0];
+const STONE_R: V3 = [5.0, 4.6, 5.6];
 const STONE_Z = STONE_R[2] * 0.88;
 const STONE_D = Math.sqrt(BALL_R * BALL_R - (BALL_R - STONE_Z) ** 2) + STONE_R[0] - 0.2;
 const STONE_C: V3 = [BALL_E[0] + FG[0] * STONE_D, BALL_E[1] + FG[1] * STONE_D, STONE_Z];
-/** Стойка на голове: наклон, подъём опоры, сдвиг тела назад (к шару). */
-const HS_P = 0.36;
-const HS_BZ = 2.2;
-const HS_BY = -2.2;
+const T_HS = 1.02;
 const T_BUMP = 1.44;
 const T_BURST = 1.52;
 
-/** Корень в трюке: поворот к месту сбора, отступ, разворот, толчок, поворот назад. */
+/** Корень в трюке: поворот и отход к месту сбора, разворот, пятится к шару, толчок, поворот назад. */
 function workRoot(t: number): Root {
   const yaw = kf(t, [
     [0, YAW0],
     [0.03, YAW0],
     [0.28, YAW_G, 'o'],
     [0.64, YAW_G],
-    [0.84, YAW_P],
+    [0.8, YAW_P],
     [1.62, YAW_P],
     [1.8, YAW0],
   ]);
-  const u = kf(t, [
+  const s = workS(t);
+  return { x: ROOT0.x + FG[0] * s, y: ROOT0.y + FG[1] * s, yaw };
+}
+function workS(t: number): number {
+  return kf(t, [
     [0, 0],
     [0.05, 0],
-    [0.3, 1],
-    [1.0, 1],
+    [0.3, S_G],
+    [0.78, S_G],
+    [0.95, S_H],
+    [T_HS, S_H],
     [T_BUMP, 0],
+    [1.5, 0],
+    [1.58, S_HOP, 'o'],
+    [1.62, S_HOP],
+    [1.8, 0],
   ]);
-  return { x: lerp(ROOT0.x, R_G.x, u), y: lerp(ROOT0.y, R_G.y, u), yaw };
 }
 /** Сколько шар прокатился к моменту `t`. */
-const rolled = (t: number) => {
-  const r = workRoot(t);
-  return D_PUSH - Math.hypot(r.x - ROOT0.x, r.y - ROOT0.y);
-};
+const rolled = (t: number) => (t < T_HS ? 0 : t > T_BUMP ? D_PUSH : Math.max(0, Math.min(D_PUSH, workS(t) - S_H)));
 
 interface Step {
   i: number;
@@ -821,6 +858,11 @@ interface Step {
 }
 const tri = (g: number[], a: number, b: number, h = 1.6): Step[] =>
   g.map((i) => ({ i, a, b, h }));
+/** Передняя (в стойке на голове) и средняя лапы — шаг вместе. */
+const pair = (f: number, m: number, a: number, b: number): Step[] => [
+  { i: f, a, b, h: 1.2, hs: true },
+  { i: m, a, b, h: 1.0 },
+];
 
 /** Блёстки: откуда летят, когда прилипают, что это (0 — монета, 1 — бирюза, 2 — рубин). */
 const GLINTS: { from: V3; arr: number; kind: number }[] = [
@@ -851,6 +893,7 @@ interface Tok {
   spin: number;
 }
 const TOK_P: V3 = add(homeW(0, ROOT0), [-4.4, 0.4, 0]);
+const KT = BALL_R / 8;
 const TOK_SPOTS: [number, number, number, number, number][] = [
   // смещение места касания и места покоя от центра шара (по x, y), наклон
   [6, 8, 7.5, 10, 0.95],
@@ -869,15 +912,15 @@ const TOKS: Tok[] = [
     spin: 15,
   },
   ...TOK_SPOTS.map(([x1, y1, x2, y2, tilt], j) => ({
-    l1: [BALL_E[0] + x1, BALL_E[1] + y1, 0] as V3,
+    l1: [BALL_E[0] + x1 * KT, BALL_E[1] + y1 * KT, 0] as V3,
     t1: 0.15 + 0.02 * j,
-    l2: [BALL_E[0] + x2, BALL_E[1] + y2, 0] as V3,
+    l2: [BALL_E[0] + x2 * KT, BALL_E[1] + y2 * KT, 0] as V3,
     t2: 0.08 + 0.01 * j,
     tilt,
     spin: 11 + 3 * j,
   })),
 ];
-const TOK_R = 2.4;
+const TOK_R = 3.0;
 const GRAV = 260;
 /** Жетон через `tt` с раскола: центр и нормаль. */
 function tokAt(k: Tok, tt: number): { p: V3; n: V3 } {
@@ -915,28 +958,35 @@ const WORK_STEPS: Step[] = [
   ...tri(TRI_A, 0.16, 0.23),
   ...tri(TRI_B, 0.23, 0.3),
   ...tri(TRI_A, 0.3, 0.36),
-  // Разворот спиной к шару.
-  ...tri(TRI_B, 0.64, 0.69),
-  ...tri(TRI_A, 0.69, 0.74),
-  ...tri(TRI_B, 0.74, 0.79),
-  ...tri(TRI_A, 0.79, 0.84),
+  // Разворот спиной к шару и пятится к нему.
+  ...tri(TRI_B, 0.64, 0.68),
+  ...tri(TRI_A, 0.68, 0.72),
+  ...tri(TRI_B, 0.72, 0.76),
+  ...tri(TRI_A, 0.76, 0.8),
+  ...tri(TRI_B, 0.8, 0.86),
+  ...tri(TRI_A, 0.86, 0.92),
   // Передние — в стойку на голове; средние и задние — на шар (поверх расписания).
-  { i: 1, a: 0.86, b: 0.93, h: 1.3, hs: true },
-  { i: 0, a: 0.9, b: 0.97, h: 1.3, hs: true },
-  ...[2, 3, 4, 5].map((i) => ({ i, a: 0.86, b: 1.6, h: 0 })),
-  // Пятится на передних.
-  { i: 0, a: 1.02, b: 1.09, h: 1.2, hs: true },
-  { i: 1, a: 1.09, b: 1.16, h: 1.2, hs: true },
-  { i: 0, a: 1.16, b: 1.23, h: 1.2, hs: true },
-  { i: 1, a: 1.23, b: 1.3, h: 1.2, hs: true },
-  { i: 0, a: 1.3, b: 1.37, h: 1.2, hs: true },
-  { i: 1, a: 1.37, b: 1.44, h: 1.2, hs: true },
-  { i: 0, a: 1.42, b: 1.48, h: 1.0, hs: true },
-  // Слез с головы.
-  { i: 1, a: 1.52, b: 1.58, h: 1.2 },
-  { i: 0, a: 1.55, b: 1.61, h: 1.2 },
+  { i: 1, a: 0.94, b: 0.99, h: 1.3, hs: true },
+  { i: 2, a: 0.94, b: 0.99, h: 1.3 },
+  { i: 0, a: 0.97, b: 1.02, h: 1.3, hs: true },
+  { i: 3, a: 0.97, b: 1.02, h: 1.3 },
+  ...[4, 5].map((i) => ({ i, a: 1.0, b: 1.6, h: 0 })),
+  // Пятится: передние в стойке и средние — парами накрест.
+  ...pair(1, 2, 1.04, 1.11),
+  ...pair(0, 3, 1.11, 1.18),
+  ...pair(1, 2, 1.18, 1.25),
+  ...pair(0, 3, 1.25, 1.32),
+  ...pair(1, 2, 1.32, 1.39),
+  ...pair(0, 3, 1.37, 1.44),
+  ...pair(1, 2, 1.42, 1.48),
+  // Встал на лапы и отскочил от шара.
+  { i: 1, a: 1.5, b: 1.57, h: 1.4 },
+  { i: 2, a: 1.5, b: 1.57, h: 1.4 },
+  { i: 0, a: 1.53, b: 1.6, h: 1.4 },
+  { i: 3, a: 1.53, b: 1.6, h: 1.4 },
   // Поворот к нам; Л1 — на жетон, потом домой.
   ...tri(TRI_B, 1.62, 1.68),
+  { i: 0, a: 1.62, b: 1.68, h: 1.4 },
   ...tri([3, 4], 1.66, 1.72),
   ...tri(TRI_B, 1.72, 1.78),
   { i: 0, a: 1.72, b: 1.79, h: 2.4, to: TOK_TOP },
@@ -963,11 +1013,16 @@ function planted(i: number, t: number): V3 {
 }
 
 /** Точка на шаре под лапой `i` (средние — ниже, задние — выше середины). */
+const BC_EL = [0, -0.05, 0.62];
+const BC_AZ = [0, 1.1, 0.62];
 function ballContact(i: number, C: V3): V3 {
   const side = yawZ([sideOf(i), 0, 0], YAW_P);
   const back: V3 = [-FG[0], -FG[1], 0];
   const k = kOf(i);
-  const n = norm(add(add(mul(back, 0.84), mul(side, k === 2 ? 0.42 : 0.55)), [0, 0, k === 2 ? 0.34 : -0.2]));
+  const el = BC_EL[k];
+  const az = BC_AZ[k];
+  const h = add(mul(back, Math.cos(az)), mul(side, Math.sin(az)));
+  const n = add(mul(h, Math.cos(el)), [0, 0, Math.sin(el)]);
   return add(C, mul(n, BALL_R));
 }
 
@@ -984,10 +1039,10 @@ function workPose(t: number): Pose {
     [0.3, 0.06],
     [0.62, 0.06],
     [0.7, 0],
-    [0.86, 0],
-    [1.0, HS_P, 'o'],
+    [0.8, 0],
+    [T_HS, HS_P, 'o'],
     [1.46, HS_P],
-    [T_BURST, HS_P + 0.05],
+    [T_BURST, HS_P],
     [1.6, -0.1, 'i'],
     [1.68, 0.04],
     [1.76, -0.07],
@@ -995,31 +1050,24 @@ function workPose(t: number): Pose {
   ]);
   o.bz = kf(t, [
     [0, 0],
-    [0.86, 0],
-    [1.0, HS_BZ, 'o'],
-    [1.48, HS_BZ],
+    [0.82, 0],
+    [T_HS, HS_BZ, 'o'],
+    [T_BURST, HS_BZ],
     [1.6, -0.6, 'i'],
     [1.7, 0],
   ]);
-  o.by = kf(t, [
-    [0, 0],
-    [0.86, 0],
-    [1.0, HS_BY],
-    [1.48, HS_BY],
-    [1.6, 0],
-  ]);
   // Толкает: тело подпрыгивает в такт шагам передних лап, покачивается.
-  const pw = clamp01((t - 1.0) / 0.04) * clamp01((T_BUMP - t) / 0.04);
-  o.bz += 0.28 * pw * Math.abs(Math.sin((TAU * (t - 1.02)) / 0.14));
-  o.lean = 0.05 * pw * Math.sin((TAU * (t - 1.02)) / 0.28);
+  const pw = clamp01((t - T_HS) / 0.04) * clamp01((T_BUMP - t) / 0.04);
+  o.bz += 0.28 * pw * Math.abs(Math.sin((TAU * (t - 1.04)) / 0.14));
+  o.lean = 0.05 * pw * Math.sin((TAU * (t - 1.04)) / 0.28);
   o.nod = kf(t, [
     [0, 0],
     [0.3, 0.14],
     [0.62, 0.14],
     [0.7, 0],
-    [0.86, 0],
-    [1.0, 0.18],
-    [1.46, 0.18],
+    [0.9, 0],
+    [T_HS, HS_NOD],
+    [1.46, HS_NOD],
     [1.6, 0],
     [1.76, -0.12],
     [1.92, 0],
@@ -1062,7 +1110,7 @@ function workPose(t: number): Pose {
   o.eye =
     t > 0.14 && t < 0.64
       ? 'wide'
-      : t >= 1.0 && t < 1.42
+      : t >= T_HS && t < 1.42
         ? 'angry'
         : t >= T_BUMP && t < 1.6
           ? 'wide'
@@ -1072,13 +1120,13 @@ function workPose(t: number): Pose {
   // Стопы: по расписанию; средние и задние в стойке — на шаре.
   const gr = gatherR(t);
   const C: V3 =
-    t < 1.0
+    t < T_HS
       ? ballAtGather(Math.max(gr, BALL_R0))
       : add(ballAtGather(BALL_R), mul(FG, Math.min(D_PUSH, rolled(t))));
-  const hb = smooth(clamp01((t - 0.86) / 0.11)) * smooth(clamp01((1.6 - t) / 0.1));
+  const hb = smooth(clamp01((t - 0.9) / 0.1)) * smooth(clamp01((1.6 - t) / 0.1));
   for (let i = 0; i < 6; i++) {
     let p = planted(i, t);
-    if (i >= 2 && hb > 0) {
+    if (i >= 4 && hb > 0) {
       const cp = ballContact(i, C);
       p = lerp3(p, cp, hb);
       p[2] += 1.2 * Math.sin(Math.PI * hb) * (t < 1.2 ? 1 : 0.6);
@@ -1087,7 +1135,7 @@ function workPose(t: number): Pose {
     if (i < 2 && gr > 0 && t < 0.64) {
       const pat = i === 0 ? bump(t, 0.3, 0.42) + bump(t, 0.52, 0.63) : bump(t, 0.41, 0.53);
       if (pat > 0) {
-        const n = norm(add(sub(p, C), [0, 0, gr * 1.4]));
+        const n = norm(add(sub(p, C), [0, 0, gr * 0.35]));
         p = lerp3(p, add(C, mul(n, gr + 0.2)), pat);
       }
     }
@@ -1095,10 +1143,10 @@ function workPose(t: number): Pose {
   }
   // Реквизит.
   if (t < 1.95) {
-    o.ballR = t < 1.0 ? gr : BALL_R;
+    o.ballR = t < T_HS ? gr : BALL_R;
     o.ballX = C[0];
     o.ballY = C[1];
-    o.ballRot = t < 1.0 ? 0 : rolled(t) / BALL_R;
+    o.ballRot = rolled(t) / BALL_R;
   }
   o.crack = t >= T_BURST && t < 1.95 ? clamp01((t - T_BURST) / 0.12) : 0;
   o.stone = kf(t, [
@@ -1762,7 +1810,7 @@ function ballParts(out: PartF[], c: Ctx): void {
     const id = nid();
     BALL_IDS.push(id);
     out.push({
-      c: add(C, add(mul(FG, s > 0 ? 0.5 * cr : -2.4 * cr), [0, 0, -0.6 * cr])),
+      c: add(C, add(mul(FG, s > 0 ? 0.5 * cr : -1.0 * cr), [0, 0, -0.6 * cr])),
       ax: [e1, e2, e3],
       r: [o.ballR, o.ballR, o.ballR],
       pal: P_GOLD,
@@ -2388,4 +2436,28 @@ export function DBG(o: Pose): Record<string, V3> {
   };
   for (const l of L) r['foot' + l.i] = l.foot;
   return r;
+}
+
+/** Отладка трюка: дотягиваются ли лапы, зазор стопа↔шар, голова против хода, шар перед хвостом. */
+export function CHK(t: number) {
+  const o = workPose(t);
+  const F = bodyFrame(o);
+  const L = legsOf(o, F);
+  const C: V3 = [o.ballX, o.ballY, o.ballR];
+  const reach = L.map((l) => Math.hypot(...(sub(l.foot, footOf(o, l.i)) as [number, number, number])));
+  const gap = L.map((l) => (o.ballR > 0 ? Math.hypot(...(sub(l.foot, C) as [number, number, number])) - o.ballR : -99));
+  const hd = F.HRd([0, 1, 0]);
+  const tail = bodyAt(F, [0, ELY_C[1] - ELY_R[1], ELY_C[2]]);
+  return {
+    reach,
+    gap,
+    headDotFG: dot(norm([hd[0], hd[1], 0]), FG),
+    ballAhead: dot(sub(C, [o.rx, o.ry, 0]), FG),
+    tailGap: Math.hypot(...(sub(tail, C) as [number, number, number])) - o.ballR,
+    pitch: o.pitch,
+    footZ: L.map((l) => l.foot[2]),
+    clyZ: headAt(F, [0, CLY_C[1] + CLY_R[1], CLY_C[2]])[2],
+    BA_HS,
+    S_G,
+  };
 }
