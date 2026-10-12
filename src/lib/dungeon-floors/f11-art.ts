@@ -22,7 +22,6 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
@@ -48,6 +47,7 @@ import {
 import type { F11State } from './f11-brains';
 import './f11-mob-harpy';
 import './f11-mob-moss';
+import './f11-mob-drone';
 
 type RGBA = [number, number, number, number];
 
@@ -4422,66 +4422,6 @@ registerMobPainter('f11_spirit', (m: Mob, pose: MobPose) => {
   return mobFrame('spirit', pose, `idle${f}${dim ? 'd' : ''}`, () => spiritPx(f, false, dim));
 });
 
-// --- Дрон-разведчик --------------------------------------------------------------
-
-const DRONE_T = tn('#5a4a2e', '#8a7244', '#b8985c', '#e0c486');
-
-function dronePx(f: number, lensC: RGBA, fire: boolean): Built {
-  const W = 20;
-  const H = 22;
-  const p = new Px(W, H);
-  const cx = 10;
-  const cy = 12;
-  // Плавники снизу.
-  limb(p, cx - 3, cy + 3, cx - 5, cy + 6, 1, 0.6, DRONE_T, -0.1);
-  limb(p, cx + 3, cy + 3, cx + 5, cy + 6, 1, 0.6, DRONE_T);
-  // Корпус-шар с поясом.
-  shadeEll(p, cx, cy, 5, 4.6, DRONE_T);
-  for (let x = cx - 5; x <= cx + 5; x++) if (p.solid(x, cy + 1)) p.set(x, cy + 1, IRON[1]);
-  // Мачта.
-  p.rect(cx, cy - 7, cx, cy - 4, IRON[2]);
-  // Ствол и линза.
-  p.rect(cx + 3, cy + 2, cx + 6, cy + 2, IRON[1]);
-  lens(p, cx + 2.5, cy - 1, 1.5, lensC, true);
-  const out = ink(p);
-  // Винт: мутный диск и одна лопасть.
-  for (let x = -7; x <= 7; x++)
-    for (let y = -2; y <= 2; y++)
-      if ((x * x) / 49 + (y * y) / 3 <= 1) out.set(cx + x, cy - 7 + y, alpha(WHITE, 0.18));
-  const a = (f / 6) * PI;
-  const bx = Math.cos(a) * 7;
-  const by = Math.sin(a) * 1.6;
-  stroke(out, cx - bx, cy - 7 - by, cx + bx, cy - 7 + by, alpha(IRON[3], 0.9));
-  if (fire) {
-    const fx = cx + 7;
-    const fy = cy + 2;
-    out.set(fx, fy, WHITE);
-    out.set(fx + 1, fy, ZAP);
-    out.set(fx, fy - 1, ZAP);
-    out.set(fx, fy + 1, ZAP);
-    out.set(fx + 2, fy, alpha(ZAP, 0.6));
-  }
-  return { p: out, ax: cx, ay: H - 2, eye: [cx + 3, cy - 1] };
-}
-
-registerMobPainter('f11_drone', (m: Mob, pose: MobPose) => {
-  const t = paintSim()?.time ?? 0;
-  const f = ((Math.floor(t * 24 + m.id) % 6) + 6) % 6;
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('drone', pose, 'dead', () => dronePx(0, EYE_OFF, false));
-  if (pose.mode === 'aim') {
-    const b = Math.floor(pose.t * 12) % 2;
-    return mobFrame('drone', pose, `aim${f}${b}`, () => dronePx(f, b ? WHITE : EYE_ANGRY, false));
-  }
-  if (pose.mode === 'f11_burst') {
-    const b = Math.floor(pose.t * 16) % 2;
-    return mobFrame('drone', pose, `burst${f}${b}`, () => dronePx(f, EYE_ANGRY, !!b));
-  }
-  return mobFrame('drone', pose, `idle${f}${pose.anim === 'hurt' ? 'h' : ''}`, () =>
-    dronePx(f, pose.anim === 'hurt' ? WHITE : EYE_CALM, false),
-  );
-});
-
 // --- Жук-копилка -----------------------------------------------------------------
 
 function beetlePx(f: number, fly: boolean): Built {
@@ -8254,25 +8194,6 @@ registerMobPainter('f11_pylon', (m: Mob, pose: MobPose) => {
     return pyFrame('sink', Math.min(Math.ceil(PY_SINK * GFPS) - 1, Math.floor(t * GFPS)), false);
   if (t < PY_RISE) return pyFrame('rise', Math.floor(t * GFPS), pose.flash);
   return pyFrame('hum', ((Math.floor(pose.now * 12 + (m.id ?? 0) * 3) % 12) + 12) % 12, pose.flash);
-});
-
-// --- Снаряды ----------------------------------------------------------------------
-
-registerShotPainter('f11_dart', (s, time) => {
-  const a = Math.atan2(s.vy, s.vx);
-  const q = ((Math.round((a / TAU) * 8) % 8) + 8) % 8;
-  const f = Math.floor(time * 20) % 2;
-  return sprite(`dart|${q}|${f}`, () => {
-    const p = new Px(12, 12);
-    const dx = Math.cos((q * TAU) / 8);
-    const dy = Math.sin((q * TAU) / 8);
-    for (let k = -4; k <= 2; k++) {
-      const c = k > 0 ? WHITE : k > -2 ? hx('#ffe080') : alpha(hx('#ffb040'), 0.5 + (k + 4) * 0.1);
-      p.set(Math.round(6 + dx * k), Math.round(6 + dy * k), c);
-    }
-    if (f) p.set(Math.round(6 + dx * 3), Math.round(6 + dy * 3), alpha(WHITE, 0.6));
-    return { p, ax: 6, ay: 6 };
-  });
 });
 
 // --- Иконки вещей этажа (10×10) ---------------------------------------------------
