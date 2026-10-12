@@ -225,7 +225,7 @@ const VIS = new WeakMap<Mob, Vis>();
  * Прошлый режим для листа кадров: стенд рисует каждый кадр новым мобом и
  * передаёт его номером в `m.data.vSheetPrev` (в игре его помнит `Vis`).
  */
-const SHEET_PREV = ['', 'leap', 'lunge', 'drop', 'star', 'aim', 'belly', 'f8_gone', 'f8_thrust'];
+const SHEET_PREV = ['', 'leap', 'lunge', 'drop', 'star', 'aim', 'belly', 'f8_gone', 'f8_thrust', 'f8_open'];
 
 export const speedOf = (m: Mob) => Math.hypot(m.vx ?? 0, m.vy ?? 0);
 export const moving = (m: Mob, thr = 0.4) => speedOf(m) > thr;

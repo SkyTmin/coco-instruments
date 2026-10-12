@@ -34,6 +34,7 @@ import './f8-mob-lantern';
 import './f8-mob-arms';
 import './f8-mob-miser';
 import './f8-mob-drum';
+import './f8-mob-eyes';
 
 type RGBA = [number, number, number, number];
 type V = [number, number];
@@ -2922,102 +2923,6 @@ function poseIn(pose: MobPose, runFrames = 6): PoseIn {
   f = mod(f, n);
   return { anim: pose.anim, f, mode: pose.mode, t: pose.t };
 }
-
-// ---------------------------------------------------------------------------
-// Глазастые сёдзи: глаза на бумаге, потом когтистые руки сквозь неё.
-// Кадр лежит на лице стены: земля кадра — у ног моба перед стеной.
-// ---------------------------------------------------------------------------
-
-const EYE_AY = 22;
-
-function eyesPx(anim: string, f: number): Built {
-  const W = 18;
-  const H = 38;
-  const p = new Px(W, H);
-  if (anim === 'hide') return { p: new Px(2, 2), ax: 1, ay: 1, eye: null };
-  // Глаза на бумаге (лицо стены — ряды 1…16 кадра).
-  const spots: [number, number, number][] = [
-    [4, 5, 1.6],
-    [11, 4, 2.1],
-    [7, 10, 1.4],
-    [13, 11, 1.7],
-    [3, 12, 1.2],
-  ];
-  const open = anim === 'peek' ? Math.min(1, (f + 1) / 4) : 1;
-  const dead = anim === 'dead';
-  if (anim === 'thrust' || anim === 'open' || dead) {
-    // Бумага прорвана посередине.
-    for (let y = 6; y < 15; y++)
-      for (let x = 5; x < 13; x++) {
-        const edge = Math.abs(x - 8.5) + Math.abs(y - 10) * 0.8;
-        if (edge < 4.2 + ((x * 7 + y * 3) % 3) * 0.4) p.set(x, y, hx('#0a0606'));
-      }
-  }
-  for (const [x, y, r] of spots) {
-    if (dead) {
-      stroke(p, x - r, y, x + r, y, hx('#3a1010'));
-      continue;
-    }
-    const ry = r * 0.75 * open;
-    if (ry < 0.4) {
-      stroke(p, x - r, y, x + r, y, hx('#5a1a14'));
-      continue;
-    }
-    p.ell(x, y, r + 0.5, ry + 0.5, hx('#5a1410'));
-    p.ell(x, y, r, ry, hx('#f4ece0'));
-    p.set(Math.round(x - r + 0.5), Math.round(y), hx('#e06060'));
-    p.ell(x + 0.3, y, Math.max(0.6, r * 0.5), Math.max(0.5, ry * 0.8), hx('#c81a1a'));
-    p.set(Math.round(x + 0.3), Math.round(y), INK);
-  }
-  if (anim === 'thrust' || anim === 'open') {
-    // Руки: из дыры вниз-вперёд, длинные пальцы.
-    const reach = anim === 'thrust' ? 0.5 + f * 0.25 : 1;
-    const wig = anim === 'open' ? (f ? 1 : -1) : 0;
-    const skin = tones('#3a2a34', '#5a4250', '#7e6272', '#a88a98');
-    for (const [sx, k] of [
-      [7, 0],
-      [10, 1],
-    ] as V[]) {
-      const hand: V = [sx + 4 * reach + k * 2, 14 + 16 * reach + wig * (k ? 1 : -1)];
-      const elbow: V = [sx + 1 + k, 14 + 8 * reach];
-      limb(p, sx, 12, elbow[0], elbow[1], 1.2, 1, skin);
-      limb(p, elbow[0], elbow[1], hand[0], hand[1], 1, 0.8, skin);
-      // Кисть и три когтя веером — рука, а не палка.
-      p.ell(hand[0], hand[1], 1.3, 1.1, skin[2]);
-      for (let i = -1; i <= 1; i++)
-        stroke(
-          p,
-          hand[0] + i * 0.8,
-          hand[1] + 0.5,
-          hand[0] + i * 1.8 + 0.6,
-          hand[1] + 3,
-          hx('#f0e8d8'),
-        );
-    }
-  }
-  p.outline(INK);
-  // Светится в темноте — средний глаз.
-  return { p, ax: 9, ay: EYE_AY, eye: dead ? null : [11, 4] };
-}
-
-registerMobPainter('f8_eyes', (m: Mob, pose: MobPose) => {
-  let anim = 'hide';
-  let f = 0;
-  const mode = pose.mode;
-  if (mode === 'f8_peek') {
-    anim = 'peek';
-    f = Math.min(3, Math.floor(pose.t * 8));
-  } else if (mode === 'f8_thrust') {
-    anim = 'thrust';
-    f = Math.min(2, Math.floor(pose.t * 5));
-  } else if (mode === 'f8_open' || mode === 'stun') {
-    anim = 'open';
-    f = mod(pose.t * 6, 2);
-  } else if (pose.anim === 'dead') anim = 'dead';
-  else if (pose.flash) anim = 'open';
-  void m;
-  return frameOf('f8_eyes', pose, anim, f, () => eyesPx(anim, f));
-});
 
 // ---------------------------------------------------------------------------
 // Бива-струнник: сидит в кимоно, волосы закрывают лицо (один глаз), лютня.
