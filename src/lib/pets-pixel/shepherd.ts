@@ -521,8 +521,8 @@ function workPose(t: number): Pose {
   const o: Pose = { ...REST };
   const flat = kf(t, [
     [0, 0],
-    [0.2, 1, 'o'],
-    [1.2, 1],
+    [0.2, 0.85, 'o'],
+    [1.2, 0.85],
     [1.42, 0, 's'],
   ]);
   o.earL = flat;
@@ -550,10 +550,11 @@ function workPose(t: number): Pose {
   ]);
   o.chest = 1.2 * inh + 0.2 * bk;
   o.sq = -0.05 * inh + 0.04 * crouch + 0.08 * bump(t, 0.78, 1.02);
-  o.nod = 0.1 * crouch - 0.3 * inh + 0.04 * bk;
-  o.hz = -0.5 * crouch + 0.9 * inh - 0.7 * bk;
-  o.hy = -0.3 * crouch - 0.5 * inh + 1.8 * bk;
-  o.bow = 0.04 * crouch - 0.05 * inh + 0.08 * bk;
+  // На лае голова вперёд и чуть вверх: открытая пасть смотрит на зрителя.
+  o.nod = 0.1 * crouch - 0.3 * inh - 0.14 * bk;
+  o.hz = -0.5 * crouch + 0.9 * inh - 0.25 * bk;
+  o.hy = -0.3 * crouch - 0.5 * inh + 1.6 * bk;
+  o.bow = 0.04 * crouch - 0.05 * inh + 0.04 * bk;
   o.y = 0.7 * bk;
   o.snarl = kf(t, [
     [0, 0],
@@ -692,8 +693,8 @@ function sleepPose(t: number): Pose {
   o.sq = -0.05 * br;
   o.tailSw = 0.05 * br;
   o.tailCurl = 0.1;
-  o.earL = 0.45;
-  o.earR = 0.45;
+  o.earL = 1.1;
+  o.earR = 1.1;
   // Во сне дёргает ушами — каждым в свою пору.
   o.flL = 0.7 * bump(t, 2.0, 2.14);
   o.flR = 0.5 * bump(t, 0.7, 0.82) + 0.4 * bump(t, 0.86, 0.96);
@@ -775,13 +776,13 @@ const STAND: Plan = {
   // Хвост поднят: назад-вверх и влево, кончик выглядывает над спиной.
   tail: [
     [0, -14.4, 13.6],
-    [-0.6, -16.0, 15.2],
-    [-1.4, -17.2, 16.8],
-    [-2.2, -18.0, 18.2],
-    [-3.0, -18.4, 19.4],
-    [-3.6, -18.4, 20.4],
-    [-4.0, -18.0, 21.2],
-    [-4.2, -17.4, 21.8],
+    [-2.2, -15.6, 14.8],
+    [-4.4, -16.0, 16.0],
+    [-6.4, -15.6, 17.0],
+    [-8.0, -14.6, 17.8],
+    [-9.2, -13.2, 18.4],
+    [-9.8, -11.6, 18.8],
+    [-10.0, -10.2, 19.0],
   ],
 };
 const LIE: Plan = {
@@ -1774,13 +1775,15 @@ function headParts(out: PartF[], flats: Flat[], c: Ctx): void {
 function ears(flats: Flat[], c: Ctx): void {
   const { o, h, lag } = c;
   for (const side of [-1, 1] as const) {
-    const back = (side < 0 ? o.earL : o.earR) + lag.earB;
+    const b0 = side < 0 ? o.earL : o.earR;
+    // Прижатые уши не подпрыгивают — пружина только у стоячих.
+    const back = b0 + lag.earB * (1 - clamp01(Math.abs(b0)));
     const fl = side < 0 ? o.flL : o.flR;
     const base: V3 = [side * 3.4, -0.4, 3.0];
     const rot = (p: V3): V3 => {
       let q = sub(p, base);
-      q = pitchX(q, -1.0 * back - 0.35 * fl);
-      q = rollY(q, side * (0.1 + 0.45 * fl + 0.55 * Math.max(0, back)));
+      q = pitchX(q, -1.25 * back - 0.35 * fl);
+      q = rollY(q, side * (0.1 + 0.45 * fl + 0.3 * Math.max(0, back)));
       return h.at(add(q, base));
     };
     const bin: V3 = [side * 1.3, -0.2, 4.0];
@@ -1832,13 +1835,13 @@ function ears(flats: Flat[], c: Ctx): void {
 /** Камешки трюка: подпрыгивают из трещины, падают, отскакивают, лежат. */
 const STONES: [number, number, number, number, number, number][] = [
   // x, y на полу; скорость вбок, вперёд, вверх; размер.
-  [-2.8, 11.8, -6, 2, 30, 1.1],
-  [2.4, 12.4, 7, 3, 34, 1.3],
-  [-7.2, 11.0, -4, 1, 24, 0.9],
-  [7.0, 11.2, 5, 1.5, 27, 1.0],
-  [0.4, 13.2, 1, 4, 38, 0.8],
+  [-2.6, 15.0, -8, 1, 54, 1.1],
+  [2.4, 15.6, 9, 2, 60, 1.3],
+  [-7.0, 14.6, -6, 0.5, 46, 0.9],
+  [6.8, 14.8, 7, 1, 50, 1.0],
+  [0.2, 16.4, 1, 2, 64, 0.8],
 ];
-const GRAV = 120;
+const GRAV = 210;
 
 function stoneParts(out: PartF[], c: Ctx): void {
   const { o } = c;
@@ -2175,7 +2178,8 @@ function rings(p: Px, mask: Uint8Array, c: Ctx): void {
   for (let j = 0; j < 3; j++) {
     const u = (o.bark - j * 0.1) / 0.62;
     if (u <= 0 || u >= 1) continue;
-    const R = (4 + 26 * u) * RR;
+    const R = (5 + 22 * u) * RR;
+    const span = 0.55 + 0.2 * u;
     const fade = u < 0.5 ? 1.1 : (1 - u) / 0.5;
     const step = 0.4 / R;
     const lines: [number, number][] = HI
@@ -2184,36 +2188,39 @@ function rings(p: Px, mask: Uint8Array, c: Ctx): void {
           [-1, 1],
         ]
       : [[0, 0]];
-    for (const [dr, col] of lines) {
-      for (let a = 0; a < TAU; a += step) {
-        const x = Math.round(mx + (R + dr) * Math.cos(a) - 0.5);
-        const y = Math.round(my + (R + dr) * 0.82 * Math.sin(a) - 0.5);
-        if (x < 0 || y < 0 || x >= p.w || y >= p.h || y > floorY) continue;
-        if (mask[y * p.w + x]) continue;
-        if (!dith(x, y, fade)) continue;
-        p.set(x, y, RING[col]);
+    // Звук лая — дуги по обе стороны пасти («(( ))»), шире к краю.
+    for (const dir of [0, Math.PI])
+      for (const [dr, col] of lines) {
+        for (let a = dir - span; a <= dir + span; a += step) {
+          const x = Math.round(mx + (R + dr) * Math.cos(a) - 0.5);
+          const y = Math.round(my + (R + dr) * Math.sin(a) - 0.5);
+          if (x < 0 || y < 0 || x >= p.w || y >= p.h || y > floorY) continue;
+          if (mask[y * p.w + x]) continue;
+          const edge = 1 - Math.abs(a - dir) / span;
+          if (!dith(x, y, fade * Math.min(1, edge * 3))) continue;
+          p.set(x, y, RING[col]);
+        }
       }
-    }
   }
 }
 
 /** Трещины в полу перед лапами: от точки удара лучами с изломами, на крупной — светлая кромка. */
 const CRACKS: [number, number][] = [
-  [0.05, 14],
-  [0.6, 8],
-  [1.2, 6],
-  [1.85, 7],
-  [2.5, 9],
-  [3.1, 15],
-  [-0.3, 7],
-  [3.45, 7],
+  [0.08, 17],
+  [0.55, 10],
+  [1.25, 7],
+  [1.9, 8],
+  [2.6, 10],
+  [3.08, 18],
+  [-0.3, 9],
+  [3.42, 8],
 ];
 const CRACK_CORE = [hx('#241a14'), hx('#2a1a0a')];
 const CRACK_LIP = [hx('#a89c8a'), hx('#c8b07a')];
 
 function cracks(p: Px, mask: Uint8Array, c: Ctx): void {
   const { o } = c;
-  const C: V3 = [0, 11.0 * G, 0];
+  const C: V3 = [0, 15.5 * G, 0];
   const core = CRACK_CORE[V];
   const lip = CRACK_LIP[V];
   const drawn = new Uint8Array(p.w * p.h);
@@ -2227,6 +2234,11 @@ function cracks(p: Px, mask: Uint8Array, c: Ctx): void {
     p.set(x, y, core);
     drawn[i] = 1;
     if (HI && !mask[i - p.w] && !drawn[i - p.w]) p.set(x, y - 1, lip);
+    // Крупная: щель неровной толщины — снизу ещё пиксель через раз.
+    if (HI && y + 1 < p.h && !mask[i + p.w] && hash(x, y, 3) < 0.45) {
+      p.set(x, y + 1, core);
+      drawn[i + p.w] = 1;
+    }
   };
   const branch = (from: V3, ang: number, len: number, seed: number, sub2: boolean) => {
     let q = from;

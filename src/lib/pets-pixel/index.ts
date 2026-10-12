@@ -19,6 +19,12 @@ import { FPS as FOX_FPS, FRAMES as FOX_FRAMES, foxFrame, RES as FOX_RES } from '
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
 import { FPS as RAVEN_FPS, FRAMES as RAVEN_FRAMES, RES as RAVEN_RES, ravenFrame } from './raven';
+import {
+  FPS as SHEPHERD_FPS,
+  FRAMES as SHEPHERD_FRAMES,
+  RES as SHEPHERD_RES,
+  shepherdFrame,
+} from './shepherd';
 import { FPS as WOLF_FPS, FRAMES as WOLF_FRAMES, RES as WOLF_RES, wolfFrame } from './wolf';
 
 export type { Anim, Canvas, Res };
@@ -70,6 +76,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: FOX_RES,
     anims: at24(FOX_FRAMES, FOX_FPS),
     frame: foxFrame,
+    variants: [1],
+  },
+  // Овчарка Верная: свой золотой.
+  shepherd: {
+    res: SHEPHERD_RES,
+    anims: at24(SHEPHERD_FRAMES, SHEPHERD_FPS),
+    frame: shepherdFrame,
     variants: [1],
   },
 };
