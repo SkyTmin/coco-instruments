@@ -62,6 +62,18 @@ def load(pid, res):
     return meta, frames
 
 
+def load_own(pid, res, meta):
+    """Золотой и радужный, нарисованные самим рисовальщиком (`variants` в meta): {v: {anim: кадры}}."""
+    d = os.path.join(TMP, pid, res)
+    own = {}
+    for v in meta.get('variants', []):
+        own[v] = {}
+        for a, m in meta['anims'].items():
+            raw = np.fromfile(os.path.join(d, f'{a}-v{v}.rgba'), dtype=np.uint8)
+            own[v][a] = raw.reshape(m['n'], meta['ch'], meta['cw'], 4)
+    return own
+
+
 def bbox(fr):
     a = fr[..., 3].max(axis=0) > 0
     ys, xs = np.nonzero(a)
@@ -120,13 +132,17 @@ def shift(m, dy, dx):
     return out
 
 
-def variant(fr, v):
+def variant(fr, v, own=None):
+    """Вариант v: цвет — матрицы фильтров, или готовый рисунок `own` от рисовальщика; ореол — общий."""
     chain, rings = VARIANTS[v]
-    rgb = fr[..., :3].astype(np.float64) / 255
-    for m in chain:
-        rgb = np.clip(rgb @ m.T, 0, 1)
-    out = fr.copy()
-    out[..., :3] = np.round(rgb * 255).astype(np.uint8)
+    if own is not None:
+        out = own.copy()
+    else:
+        rgb = fr[..., :3].astype(np.float64) / 255
+        for m in chain:
+            rgb = np.clip(rgb @ m.T, 0, 1)
+        out = fr.copy()
+        out[..., :3] = np.round(rgb * 255).astype(np.uint8)
     a = fr[..., 3] > 0
     # Ореол — от тела, а не от одиночных искр: у пикселя меньше двух соседей — не в счёт.
     nb = sum(shift(a, dy, dx).astype(np.uint8) for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx)
@@ -146,7 +162,7 @@ def save_webp(img, path):
     return os.path.getsize(path)
 
 
-def sheet(pid, res, a, fr, meta, box):
+def sheet(pid, res, a, fr, meta, box, suf=''):
     x0, y0, x1, y1 = box
     k = 4 if res == 's' else 1
     n = len(fr)
@@ -171,12 +187,13 @@ def sheet(pid, res, a, fr, meta, box):
                          outline=(90, 90, 120))
             dr.text((ox + 2, oy + h + 2), str(i), fill=(200, 190, 170) if not half else (90, 70, 50))
     os.makedirs(SHEET, exist_ok=True)
-    img.save(os.path.join(SHEET, f'{pid}-{res}-{a}.png'))
+    img.save(os.path.join(SHEET, f'{pid}-{res}-{a}{suf}.png'))
 
 
 def strips(pid, res, out_dir, sizes):
     """Strips of one resolution, all variants: {box, anims} for the manifest, meta and frames."""
     meta, frames = load(pid, res)
+    own = load_own(pid, res, meta)
     bx, by = meta['bx'], meta['by']
     suf = '-l' if res == 'l' else ''
     man = {'box': meta['box'], 'anims': {}}
@@ -184,7 +201,7 @@ def strips(pid, res, out_dir, sizes):
         if a not in frames:
             continue
         fr = frames[a]
-        x0, y0, x1, y1 = bbox(fr)
+        x0, y0, x1, y1 = bbox(fr if not own else np.concatenate([fr] + [own[v][a] for v in own]))
         # Поле: ореол вариантов (HALO) и пустой пиксель, чтобы выборка на краю
         # кадра не цепляла соседний кадр. Прямоугольник у трёх вариантов один.
         m = HALO + 1
@@ -193,19 +210,21 @@ def strips(pid, res, out_dir, sizes):
             raise SystemExit(f'{pid}/{res}/{a}: рисунок упёрся в край холста {x0, y0, x1, y1}')
         if SHEET:
             sheet(pid, res, a, fr, meta, (x0, y0, x1, y1))
+            for v in own:
+                sheet(pid, res, a, own[v][a], meta, (x0, y0, x1, y1), f'-v{v}')
         if not GAME:
             continue
         w, h = x1 - x0, y1 - y0
         n = len(fr)
         for v in (0, 1, 2):
-            fv = fr if not v else variant(fr, v)
+            fv = fr if not v else variant(fr, v, own[v][a] if v in own else None)
             strip = np.zeros((h, w * n, 4), np.uint8)
             for i in range(n):
                 strip[:, i * w:(i + 1) * w] = fv[i][y0:y1, x0:x1]
             name = a + suf + (f'-v{v}' if v else '')
             sizes[name] = save_webp(Image.fromarray(strip, 'RGBA'), os.path.join(out_dir, name + '.webp'))
         man['anims'][a] = {'n': n, 'fps': meta['anims'][a]['fps'], 'x': x0 - bx, 'y': y0 - by, 'w': w, 'h': h}
-    return man, meta, frames
+    return man, meta, frames, own
 
 
 def cut(pid):
@@ -219,7 +238,7 @@ def cut(pid):
     sets = {r: strips(pid, r, out_dir, sizes) for r in have}
     if not GAME:
         return None, 0
-    man, meta, frames = sets['s']
+    man, meta, frames, own = sets['s']
     if 'l' in sets:
         man['large'] = sets['l'][0]
     B, bx, by = meta['box'], meta['bx'], meta['by']
@@ -230,7 +249,7 @@ def cut(pid):
     if ix0 < bx or iy0 < by or ix1 > bx + B or iy1 > by + B:
         print(f'  ! {pid}: кадр 0 покоя вылезает из рамки тела {ix0 - bx, iy0 - by, ix1 - bx, iy1 - by} при {B}')
     for v in (0, 1, 2):
-        f0 = idle[0] if not v else variant(idle[:1], v)[0]
+        f0 = idle[0] if not v else variant(idle[:1], v, own[v]['idle'][:1] if v in own else None)[0]
         name = 'thumb' + (f'-v{v}' if v else '')
         sizes[name] = save_webp(Image.fromarray(f0[by:by + B, bx:bx + B], 'RGBA'), os.path.join(out_dir, name + '.webp'))
     h = hashlib.sha1()

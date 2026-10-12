@@ -5,6 +5,7 @@ import { PET_SPRITES } from './pet-sprites';
 import { PIXEL_PETS } from './pets-pixel/index';
 import type { Anim } from './pets-pixel/index';
 import { FPS, FRAMES, phoenixFrame, poseAt, RES } from './pets-pixel/phoenix';
+import * as Dragon from './pets-pixel/dragon';
 import pixelList from '../../scripts/pets-pixel/pets.json';
 
 const ANIMS: Anim[] = ['idle', 'walk', 'happy', 'work', 'attack', 'sleep'];
@@ -80,5 +81,56 @@ describe('пиксельные питомцы', () => {
   it('тушь не знает пиксельных: их нет в PET_SPRITES, список туши читает pets.json', () => {
     expect(pixelList).toEqual(Object.keys(PET_PX).sort());
     for (const id of pixelList) expect(PET_SPRITES[id]).toBeUndefined();
+  });
+});
+
+describe('пиксельный дракон', () => {
+  const D = Dragon;
+
+  it('рисунок детерминирован; золотой и радужный рисует сам, на том же холсте', () => {
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1, 2]) {
+        const a = D.dragonFrame('work', 30, r, v);
+        const b = D.dragonFrame('work', 30, r, v);
+        expect([a.w, a.h]).toEqual([D.RES[r].cw, D.RES[r].ch]);
+        expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
+      }
+    const plain = D.dragonFrame('idle', 0, 's', 0).data;
+    const rainbow = D.dragonFrame('idle', 0, 's', 2).data;
+    expect(Buffer.from(plain).equals(Buffer.from(rainbow))).toBe(false);
+  });
+
+  it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, варианты свои', () => {
+    const m = PET_PX.dragon;
+    expect(m.box).toBe(D.RES.s.box);
+    expect(m.large?.box).toBe(D.RES.l.box);
+    for (const a of ANIMS) {
+      for (const set of [m, m.large!]) {
+        expect(set.anims[a].n).toBe(D.FRAMES[a]);
+        expect(set.anims[a].fps).toBe(D.FPS);
+      }
+      expect(PIXEL_PETS.dragon.anims[a]).toEqual({ n: D.FRAMES[a], fps: D.FPS });
+    }
+    expect(PIXEL_PETS.dragon.variants).toEqual([1, 2]);
+    expect(PIXEL_PETS.phoenix.variants).toBeUndefined();
+    // Длительности по брифу: покой и сон ~3 с, ходьба 1 с, радость ~1,1, трюк 2, атака ~0,9.
+    const sec = (a: Anim) => D.FRAMES[a] / D.FPS;
+    expect([sec('idle'), sec('sleep'), sec('walk'), sec('work')]).toEqual([3, 3, 1, 2]);
+    expect(Math.abs(sec('happy') - 1.1)).toBeLessThan(0.05);
+    expect(Math.abs(sec('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {
+    const T = (a: Anim) => D.FRAMES[a] / D.FPS;
+    const rest = D.poseAt('idle', 0);
+    const lag0 = D.lagOf('idle', 0);
+    for (const a of ['happy', 'work', 'attack'] as Anim[]) {
+      expect([a, poseDiff(D.poseAt(a, T(a)), rest)]).toEqual([a, []]);
+      expect([a, poseDiff(D.lagOf(a, T(a)), lag0, 0.05)]).toEqual([a, []]);
+    }
+    for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
+      expect([a, poseDiff(D.poseAt(a, T(a)), D.poseAt(a, 0))]).toEqual([a, []]);
+      expect([a, poseDiff(D.lagOf(a, T(a)), D.lagOf(a, 0), 0.05)]).toEqual([a, []]);
+    }
   });
 });

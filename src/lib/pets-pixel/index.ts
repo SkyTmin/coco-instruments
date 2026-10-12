@@ -9,6 +9,12 @@
 // `scripts/pets-pixel/pets.json`, и тушь перестанет его выгружать.
 
 import type { Px } from '../dungeon-art';
+import {
+  dragonFrame,
+  FPS as DRAGON_FPS,
+  FRAMES as DRAGON_FRAMES,
+  RES as DRAGON_RES,
+} from './dragon';
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
 
@@ -18,7 +24,10 @@ export interface PixelPet {
   /** Холст и рамка тела у каждой полосы: малая обязательна, крупная — если есть. */
   res: { s: Canvas; l?: Canvas };
   anims: Record<Anim, { n: number; fps: number }>;
-  frame: (a: Anim, i: number, res: Res) => Px;
+  /** Кадр; `v` — золотой (1) или радужный (2), если рисовальщик рисует их сам. */
+  frame: (a: Anim, i: number, res: Res, v?: number) => Px;
+  /** Какие варианты рисует сам рисовальщик; остальные post.py делает матрицами фильтров. */
+  variants?: number[];
 }
 
 const at24 = (f: Record<Anim, number>, fps: number) =>
@@ -29,5 +38,11 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: RES,
     anims: at24(FRAMES, FPS),
     frame: phoenixFrame,
+  },
+  dragon: {
+    res: DRAGON_RES,
+    anims: at24(DRAGON_FRAMES, DRAGON_FPS),
+    frame: dragonFrame,
+    variants: [1, 2],
   },
 };
