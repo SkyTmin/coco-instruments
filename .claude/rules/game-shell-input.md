@@ -1,7 +1,7 @@
 ---
 paths:
-  - "src/game-shell/**"
-  - "src/input/**"
+  - 'src/game-shell/**'
+  - 'src/input/**'
 ---
 
 # Game shell (formats) and input layer
@@ -21,7 +21,7 @@ Mounted once in `App.tsx`: `<InputRoot/>`, `<GameShellRoot/>` inside `HashRouter
   (xbox | ps | nintendo, from the pad id; check xbox FIRST — «Xbox Wireless Controller» also
   matches the PS «wireless controller» pattern).
 - Game routes never scroll the document: html/body `overflow: hidden`, `overscroll-behavior:
-  none`; `#root` is the scroller. Pull-to-refresh/rubber band are therefore off.
+none`; `#root` is the scroller. Pull-to-refresh/rubber band are therefore off.
 - Telegram: safe areas from `--tg-viewport-(content-)safe-area-inset-*` → `--gs-safe-*`;
   orientation unlocked via `postEvent('web_app_toggle_orientation_lock', {locked:false})` only
   under `isTMA()`; vertical swipe is disabled by App already.
