@@ -1474,12 +1474,15 @@ brain('f14_double', {
         });
         m.face = s.ang;
         m.data.swing = sim.time;
+        m.data.vAng = s.ang; // анимации мобов 14 — только рисунок
+        m.data.vHeavy = s.heavy ? 1 : 0; // анимации мобов 14 — только рисунок
       }
     }
     // Топот: раз в 2,6 с — где стоит, там и бьёт (догнал — берегись).
     m.data.sCd = (m.data.sCd ?? DOUBLE.stomp) - dt;
     if (m.data.sCd <= 0) {
       m.data.sCd = DOUBLE.stomp;
+      m.data.vStomp = sim.time; // анимации мобов 14 — только рисунок
       api.strike(sim, {
         shape: 'circle',
         x: m.x,

@@ -308,7 +308,8 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   (`f8-mob-*.ts`, `f8-mobkit.ts`, `f8-mob-fx.ts`, brain `f8_snap`), v2.109 floor 10
   (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept);
   v2.118 floor 11 (`f11-mobkit.ts`, `f11-mob-*.ts`, section below);
-  v2.119 floor 12 (`f12-rig.ts`, `f12-mobkit.ts`, `f12-mob-*.ts`; section «Floor 12 mobs» above).
+  v2.119 floor 12 (`f12-rig.ts`, `f12-mobkit.ts`, `f12-mob-*.ts`; section «Floor 12 mobs» above);
+  v2.122 floor 14 (`f14-mobkit.ts` with the floor warm queue, `f14-mob-*.ts`; section below).
 
 ## Floor 11 mobs (`f11-mobkit.ts`, `f11-mob-<kind>.ts`)
 
@@ -332,3 +333,40 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   ignores `lift`; 2D effects after the rig cover the back on sides 5–7 (skip solid pixels).
   PIL `getbbox()` on an RGBA diff looks at alpha only — compare all channels
   (`getbbox(alpha_only=False)`), else opaque sheets read as equal.
+
+## Floor 14 mobs (`f14-mobkit.ts`, `f14-mob-<kind>.ts`)
+
+- Ten kinds, one file each; `f14-art.ts` keeps only props, zones, shots and `deathK`/`clear`/
+  `scatter`/`spring` (imported by the mob files lazily — circular import, never call f14-art at a
+  mob file's top level). Rigs with 8 honest sides (soldier, sand, rewinder, reaper, keeper,
+  beetle, smith); the double = the hero's own 4-side sheet in sepia («hero of the past»); the
+  cuckoo = 5 sides (the brain's `m.dir` is the south half only); the weight = a 2D cylinder.
+  Cuckoo and weight draw a per-mob composite canvas (spring / chain / shadow change every frame),
+  only the body and ground frames are cached.
+- Kit = f10 kit + `wnow`/`idlePh` (world time: the «ЧАС» stop freezes `m.t`, idle must freeze
+  too), `sideOf` (8 sides with hysteresis), `keyPose`/`mixPose`, `lookFrame` (elite, albino, gray
+  sepia = «frozen time» — statue, Stop-frame), `SHEET_PREV` (append-only), `F14_MOB_STAT` /
+  `window.__f14stat()` (`battle`, `sizes`, `wcost` per kind).
+- **Floor warm queue (`regWarm`, `demOf`).** The engine warms one kind at a time, in `sim.mobs`
+  order, only kinds already present: a kind arriving while another warms (sand and rewinder at a
+  clock while the reaper warms) built its frames in combat. Every kind registers through
+  `regWarm`: a live miss in `frameOf` queues the whole series (pose, side) from the next frame and
+  puts the kind into the shared queue, drained by whichever floor-14 generator the engine runs.
+  Late-arrival scenario (reaper, then 2 sands + 2 rewinders after 4 s): 580 → 73 frames built
+  during warm-up; after it 0. `__f14mob.sched = false` = old engine order (stand only).
+- Brain: 3 drawing-only lines for the double (`vAng`, `vHeavy`, `vStomp`). Soldier stays the
+  floor-15 echo source (`f15_echo` changed with its drawing in step 1, then pixel-equal).
+- Measured: whole floor 10 122 warmed frames + 61 gray, 17.4 MB (keeper 4.2, rewinder 3.0, reaper
+  2.6, soldier 2.4, sand 1.7, double 1.6, beetle 0.7, smith 0.5, cuckoo 0.4, weight 0.3), all under
+  caps; warm build p50 0.2–0.5 / p90 0.3–1.4 ms (crowd load). 0 frames built in 8 s of combat after
+  warm-up: 18-mob crowd, deaths (DMGK 5 and staged deaths of all ten kinds), sand/rewinder at a
+  clock. All-elite crowd: 137 recolours in 8 s after a 60 s wait, p50 0.2 / p90 0.4 ms (looks not
+  pre-warmed, as on 11/12). Crowd A/B vs v2.109, base → new, WAIT 90: p50 2.9→3.2, 2.7→2.6,
+  2.8→2.7, 2.6→2.7; p90 3.6→4.5 (10 mobs near vs 8), 3.7→3.7, 3.7→4.1, 3.4→3.8; p99 6.6→7.6,
+  7.4→7.9, 7.2→7.8, 5.9→6.7; WAIT 40 pair 2.6/3.8/5.4 → 2.6/3.7/6.1 ms. Mob draw calls ~0.35 ms
+  per frame in both; p99 sits +0.5…1.0 ms higher in every pair (not traced). Boss `f14boss`,
+  `boss-hour` pixel-equal to v2.109 (numpy, all channels).
+- Gotchas: a long `WAIT` without `s.god` set at once — floor events kill the hero and every mob
+  freezes (`heroDown` returns before the brain); the crowd thins out over 90 s (mobs near 3–10),
+  so A/B pairs differ in load; sheets assume frames above the anchor — a mob drawn below it
+  (cuckoo peck) needs a `strike` line; the double's sheet needs the hero sprites loaded.
