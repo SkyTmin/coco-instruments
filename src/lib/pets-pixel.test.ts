@@ -5,7 +5,7 @@ import { PET_PX } from './pet-pixel-sprites';
 import { PET_SPRITES } from './pet-sprites';
 import { PIXEL_PETS } from './pets-pixel/index';
 import type { Anim } from './pets-pixel/index';
-import { FPS, FRAMES, phoenixFrame, poseAt, RES } from './pets-pixel/phoenix';
+import { FPS, FRAMES, phoenixFrame, poseAt, RES, wingAt } from './pets-pixel/phoenix';
 import * as Badger from './pets-pixel/badger';
 import * as Bulldog from './pets-pixel/bulldog';
 import * as Cat from './pets-pixel/cat';
@@ -88,6 +88,23 @@ describe('пиксельные питомцы', () => {
     for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
       expect([a, poseDiff(poseAt(a, FRAMES[a] / FPS), poseAt(a, 0))]).toEqual([a, []]);
     }
+  });
+
+  it('атака: в проводке крылья запахнуты ВПЕРЁД и в стороны, а не за склонённую грудь', () => {
+    for (let f = 10; f <= 17; f++)
+      for (const side of [-1, 1] as const) {
+        const w = wingAt('attack', f / FPS, side);
+        // Корень крыла уходит вперёд с поклоном: перед грудью, пока крылья запахнуты.
+        if (f <= 14) expect([f, side, w.root[1] > w.chest[1]]).toEqual([f, side, true]);
+        // Крыло смотрит наружу, кончик — над полом и впереди груди.
+        expect([f, side, w.arm[0] * side > 0.2, w.tip[2] > 0, w.tip[1] > w.chest[1] + 5]).toEqual([
+          f,
+          side,
+          true,
+          true,
+          true,
+        ]);
+      }
   });
 
   it('тушь не знает пиксельных: их нет в PET_SPRITES, список туши читает pets.json', () => {
@@ -243,6 +260,45 @@ describe('пиксельный ворон', () => {
     expect([sec('idle'), sec('sleep'), sec('walk'), sec('work')]).toEqual([3, 3, 1, 2]);
     expect(Math.abs(sec('happy') - 1.1)).toBeLessThan(0.05);
     expect(Math.abs(sec('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('трюк: ключ в КЛЮВЕ (крыло не держит), бородка в скважине, потом ключ остаётся в замке', () => {
+    type V = [number, number, number];
+    const dist = (a: V, b: V) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    for (const res of ['s', 'l'] as const) {
+      let held = 0;
+      for (let f = 0; f < W.FRAMES.work; f++) {
+        const t = f / W.FPS;
+        const o = W.poseAt('work', t);
+        if (!o.hold) continue;
+        const g = W.keyAt(t, res)!;
+        held++;
+        // Кольцо ключа — в кончике клюва, клюв сомкнут на нём.
+        const ring = [0, 1, 2].map((i) => g.top[i] + g.d[i] * g.k) as V;
+        expect([f, dist(ring, g.grip) < 1e-6, o.beak]).toEqual([f, true, 0]);
+        // До скважины ключ продолжает клюв (перед лицом), в голову не входит.
+        if (o.keyIn === 0) expect([f, dot(g.d, g.beak) > 0.999]).toEqual([f, true]);
+      }
+      expect(held).toBeGreaterThan(20);
+      // Вставлен и повёрнут: бородка в скважине, ключ почти по линии клюва.
+      for (const t of [0.92, 1.0, 1.08]) {
+        const g = W.keyAt(t, res)!;
+        expect([res, t, dist(g.tip, g.hole) < 1.2, dot(g.d, g.beak) > Math.cos(0.3)]).toEqual([
+          res,
+          t,
+          true,
+          true,
+        ]);
+      }
+      // Щелчок — отпустил: ключ остался в скважине и ездит с замком.
+      for (const t of [1.17, 1.25, 1.5]) {
+        const g = W.keyAt(t, res)!;
+        const o = W.poseAt('work', t);
+        expect([res, t, o.hold, dist(g.tip, g.hole) < 1.2 * o.lock]).toEqual([res, t, 0, true]);
+      }
+      expect(W.keyAt(1.9, res)).toBeNull();
+    }
   });
 
   it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {

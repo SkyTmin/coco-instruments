@@ -185,13 +185,13 @@ export const PET_PX: Record<string, PetPx> = {
   },
   phoenix: {
     box: 48,
-    rev: '2349d493db',
+    rev: 'a12d50b413',
     anims: {
       idle: { n: 72, fps: 24, x: -2, y: -3, w: 53, h: 54 },
       walk: { n: 24, fps: 24, x: -4, y: -4, w: 56, h: 55 },
       happy: { n: 26, fps: 24, x: -4, y: -12, w: 56, h: 64 },
       work: { n: 48, fps: 24, x: -2, y: -9, w: 52, h: 66 },
-      attack: { n: 22, fps: 24, x: -4, y: -5, w: 56, h: 56 },
+      attack: { n: 22, fps: 24, x: -4, y: -5, w: 56, h: 57 },
       sleep: { n: 72, fps: 24, x: 4, y: 2, w: 39, h: 50 },
     },
     large: {
@@ -201,7 +201,7 @@ export const PET_PX: Record<string, PetPx> = {
         walk: { n: 24, fps: 24, x: -5, y: -4, w: 121, h: 118 },
         happy: { n: 26, fps: 24, x: -3, y: -19, w: 120, h: 134 },
         work: { n: 48, fps: 24, x: 1, y: -13, w: 111, h: 140 },
-        attack: { n: 22, fps: 24, x: -4, y: -3, w: 120, h: 116 },
+        attack: { n: 22, fps: 24, x: -4, y: -3, w: 120, h: 120 },
         sleep: { n: 72, fps: 24, x: 15, y: 9, w: 81, h: 108 },
       },
     },
@@ -231,12 +231,12 @@ export const PET_PX: Record<string, PetPx> = {
   },
   raven: {
     box: 48,
-    rev: 'dde083d6b0',
+    rev: '31bef5ce16',
     anims: {
       idle: { n: 72, fps: 24, x: 8, y: 1, w: 32, h: 50 },
       walk: { n: 24, fps: 24, x: 6, y: -1, w: 36, h: 52 },
       happy: { n: 26, fps: 24, x: -7, y: -6, w: 62, h: 57 },
-      work: { n: 48, fps: 24, x: 3, y: -4, w: 63, h: 55 },
+      work: { n: 48, fps: 24, x: -7, y: -4, w: 52, h: 56 },
       attack: { n: 22, fps: 24, x: -14, y: -5, w: 76, h: 56 },
       sleep: { n: 72, fps: 24, x: 8, y: 5, w: 36, h: 46 },
     },
@@ -246,7 +246,7 @@ export const PET_PX: Record<string, PetPx> = {
         idle: { n: 72, fps: 24, x: 25, y: 10, w: 64, h: 104 },
         walk: { n: 24, fps: 24, x: 19, y: 6, w: 77, h: 108 },
         happy: { n: 26, fps: 24, x: -12, y: -7, w: 136, h: 121 },
-        work: { n: 48, fps: 24, x: 13, y: -3, w: 137, h: 117 },
+        work: { n: 48, fps: 24, x: -10, y: -1, w: 110, h: 116 },
         attack: { n: 22, fps: 24, x: -27, y: -6, w: 166, h: 120 },
         sleep: { n: 72, fps: 24, x: 25, y: 19, w: 67, h: 95 },
       },
