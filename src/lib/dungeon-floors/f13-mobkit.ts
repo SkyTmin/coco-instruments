@@ -308,7 +308,7 @@ let curFresh = false;
  * Прошлый режим для листа кадров: стенд рисует каждый кадр новым мобом и
  * передаёт его номером в `m.data.vSheetPrev` (в игре его помнит `Vis`).
  */
-const SHEET_PREV = ['', 'windup', 'aim', 'f13_plie', 'f13_spin', 'f13_dive', 'f13_pop', 'stun'];
+const SHEET_PREV = ['', 'windup', 'aim', 'f13_plie', 'f13_spin', 'f13_dive', 'f13_pop', 'stun', 'drop'];
 
 export const speedOf = (m: Mob) => Math.hypot(m.vx ?? 0, m.vy ?? 0);
 export const moving = (m: Mob, thr = 0.4) => speedOf(m) > thr;

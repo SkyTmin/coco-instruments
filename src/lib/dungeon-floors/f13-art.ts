@@ -3011,30 +3011,6 @@ function basePose(c: Ctx): { q: Pose; key: string } | null {
   return { q: dangle((f / IDLE_N) * TAU), key: `idle${f}` };
 }
 
-/** Удар оружием в правой руке: замах над головой → рубка → проводка. */
-function chopPose(q: Pose, k: number, hit: number): void {
-  if (hit < 0) {
-    const e = ease(k);
-    q.aR = limb(-0.3 + 2.9 * e, 0.25 + 0.2 * e, 0.6 - 0.2 * e);
-    q.aL = limb(0.5 * e, 0.3, 0.6);
-    q.lean = -0.18 * e;
-    q.twist = -0.45 * e;
-    q.hp = -0.15 * e;
-    q.lL = limb(0.35 * e, 0.12, 0.25);
-    q.lR = limb(-0.3 * e, 0.12, 0.3);
-    q.sink = 1.2 * e;
-    return;
-  }
-  const e = easeOut(hit);
-  q.aR = limb(2.6 - 3.0 * e, 0.4 - 0.1 * e, 0.4 - 0.3 * e);
-  q.aL = limb(-0.3, 0.35, 0.5);
-  q.lean = -0.18 + 0.5 * e;
-  q.twist = -0.45 + 0.85 * e;
-  q.lL = limb(0.5, 0.12, 0.3);
-  q.lR = limb(-0.4, 0.12, 0.2);
-  q.sink = 1.5;
-}
-
 const windK = (m: Mob) => clamp01(m.t / (WIND[m.kind] ?? 0.7));
 
 // ---- кеш кадров мобов ----------------------------------------------------
@@ -3247,21 +3223,6 @@ const swordDir = (j: Joints, side: 'L' | 'R', up = 0.6): V3 => {
   const f = side === 'R' ? j.foreR : j.foreL;
   return vnorm(vadd(vsc(f, 1), vadd(vsc(j.fwd, 0.6), v3(0, up, 0))));
 };
-
-function knightPose(c: Ctx, q: Pose): { q: Pose; key: string } | null {
-  const { m } = c;
-  if (m.mode === 'windup' && !m.data.crawl) {
-    const n = Math.min(11, Math.floor(windK(m) * 12));
-    chopPose(q, n / 11, -1);
-    return { q, key: `w${n}` };
-  }
-  if (m.mode === 'recover' && m.t < 0.3 && !m.data.crawl) {
-    const n = Math.min(5, Math.floor(m.t / 0.05));
-    chopPose(q, 1, n / 5);
-    return { q, key: `h${n}` };
-  }
-  return null;
-}
 
 // Рыцарь рисуется в `f13-mob-knight.ts` (анимации мобов 13).
 
@@ -3615,7 +3576,7 @@ export const BALL_BODY: Body = {
 // Арлекин: ныряет в пол, выскакивает за спиной.
 // ---------------------------------------------------------------------------
 
-const HARL_BODY: Body = {
+export const HARL_BODY: Body = {
   ...KNIGHT_BODY,
   hip: 9,
   torso: 6.8,
@@ -3640,83 +3601,7 @@ const HARL_BODY: Body = {
   legPat: diamonds(P.gold, P.red, P.black),
 };
 
-paintMob(
-  'f13_harlequin',
-  puppetPainter('f13_harlequin', {
-    w: 40,
-    h: 46,
-    ax: 20,
-    ay: 40,
-    dirs: 8,
-    body: HARL_BODY,
-    shadow: 5,
-    pose: (c, q) => {
-      const { m } = c;
-      if (m.mode === 'f13_dive') {
-        // Присел и ушёл в люк головой вперёд.
-        const n = Math.min(7, Math.floor((m.t / 0.45) * 8));
-        const e = ease(n / 7);
-        q.sink = 2 + 6 * e;
-        q.lean = 0.9 * e;
-        q.aL = limb(2.8 * e, 0.2, 0.1);
-        q.aR = limb(2.8 * e, 0.2, 0.1);
-        q.lL = limb(-0.5 * e, 0.1, 1.2 * e);
-        q.lR = limb(-0.5 * e, 0.1, 1.2 * e);
-        return { q, key: `dv${n}` };
-      }
-      if (m.mode === 'f13_pop') {
-        // Выскочил: прыжок вверх, руки звездой.
-        const n = Math.min(7, Math.floor((m.t / 0.75) * 8));
-        const e = ease(n / 7);
-        q.bob = 6 * Math.sin(e * Math.PI);
-        q.aL = limb(1.8 * e, 1.4, 0.2);
-        q.aR = limb(1.8 * e, 1.4, 0.2);
-        q.lL = limb(0.2, 0.5 * e, 0.4);
-        q.lR = limb(0.2, 0.5 * e, 0.4);
-        q.hp = -0.3 * e;
-        return { q, key: `pp${n}` };
-      }
-      return knightPose(c, q);
-    },
-    dress: (rig, j, c) => {
-      const R = HARL_BODY.head;
-      // Чёрная полумаска, улыбка.
-      rig.cap(onHead(j, R, 0.92, -0.45, 0.15), onHead(j, R, 0.92, 0.45, 0.15), 0.9, 0.9, P.black);
-      rig.dot(onHead(j, R, 1, -0.35, 0.18), P.gold[3], 1);
-      rig.dot(onHead(j, R, 1, 0.35, 0.18), P.gold[3], 1);
-      rig.dot(onHead(j, R, 1, 0, -0.45), P.red[2], 1);
-      // Колпак с двумя рогами и бубенцами.
-      const top = onHead(j, R, 0, 0, 0.8);
-      for (const s of [-1, 1]) {
-        const mid = vadd(top, vadd(vsc(j.hRight, s * 3.2), vsc(j.hUp, 2.4)));
-        const tip = vadd(mid, vadd(vsc(j.hRight, s * 2), vsc(j.hUp, -2.2)));
-        rig.cap(top, mid, 2, 1.2, s < 0 ? P.red : P.black);
-        rig.cap(mid, tip, 1.2, 0.6, s < 0 ? P.red : P.black);
-        rig.ball(tip, 1.1, P.gold);
-      }
-      // Воротник-жабо.
-      rig.disc(vadd(j.neck, v3(0, -0.6, 0)), 3.4, 0.6, P.porcelain, (u, v) =>
-        Math.floor(Math.atan2(v, u) * 3) % 2 ? P.porcelain : P.cream,
-      );
-      // Деревянный шлепок-«батоккио».
-      if (c.m.mode !== 'f13_dive') {
-        const d = swordDir(j, 'R', 0.5);
-        rig.cap(j.haR, vadd(j.haR, vsc(d, 7)), 0.6, 1.1, P.wood);
-      }
-    },
-    frame: (c) => {
-      const m = c.m;
-      if (m.mode === 'f13_dive')
-        return { alpha: 1 - ease(clamp01((m.t - 0.2) / 0.25)), dy: ease(m.t / 0.45) * 6 };
-      if (m.mode === 'f13_pop')
-        return {
-          alpha: clamp01(m.t / 0.12),
-          ghost: { every: 0.04, life: 0.2, tint: '#ff7088', alpha: 0.4 },
-        };
-      return {};
-    },
-  }),
-);
+// Арлекин рисуется в `f13-mob-harlequin.ts` (анимации мобов 13).
 
 // ---------------------------------------------------------------------------
 // Суфлёр: колпак, очки, свиток.
@@ -8038,7 +7923,6 @@ for (const k of [
   'f13_nutcracker',
   'f13_drummer',
   'f13_fiddler',
-  'f13_harlequin',
   'f13_prompter',
   'f13_shade',
   'f13_cashier',
