@@ -37,7 +37,6 @@ import {
   gustWarn,
   JELLY,
   millDir,
-  SPIRIT,
   stormOn,
   towerTurn,
   valveShown,
@@ -50,6 +49,7 @@ import './f11-mob-drone';
 import './f11-mob-ray';
 import './f11-mob-guard';
 import './f11-mob-boarder';
+import './f11-mob-spirit';
 
 type RGBA = [number, number, number, number];
 
@@ -2125,32 +2125,6 @@ registerZonePainter('f11_mossland', (g, z, px, py) => {
   return true;
 });
 
-/** Смерч духа: закрученные витки, мусор по спирали. */
-registerZonePainter('f11_tornado', (g, _z, px, py, _s, time) => {
-  const H = 26;
-  for (let i = 0; i < 9; i++) {
-    const t = i / 8;
-    const r = 3 + t * 8;
-    const a = time * 9 + i * 0.7;
-    g.strokeStyle = `rgba(230,245,255,${0.35 + 0.35 * (1 - t)})`;
-    g.lineWidth = 1;
-    g.beginPath();
-    g.ellipse(px, py - t * H, r, r * 0.35, 0, a, a + 3.6);
-    g.stroke();
-  }
-  g.fillStyle = 'rgba(140,110,80,0.9)';
-  for (let i = 0; i < 5; i++) {
-    const a = time * 7 + i * 1.3;
-    const t = (time * 0.6 + i * 0.21) % 1;
-    g.fillRect(Math.round(px + Math.cos(a) * (3 + t * 7)), Math.round(py - t * H), 1, 1);
-  }
-  g.fillStyle = 'rgba(0,0,0,0.18)';
-  g.beginPath();
-  g.ellipse(px, py + 1, 8, 3, 0, 0, TAU);
-  g.fill();
-  return true;
-});
-
 /** Крюк абордажника: цепь от хозяина, крюк на конце. */
 registerZonePainter('f11_hook', (g, z, px, py) => {
   const zz = z as Zone & { mx?: number; my?: number };
@@ -3637,15 +3611,6 @@ registerMobPainter('f11_gardener', (m: Mob, pose: MobPose) => {
 
 // Робот-страж — `f11-mob-guard.ts` (анимации мобов 11).
 
-/** Наложить готовый (уже обведённый) рисунок поверх. */
-function over(dst: Px, src: Px, ox = 0, oy = 0): void {
-  for (let y = 0; y < src.h; y++)
-    for (let x = 0; x < src.w; x++) {
-      const c = src.get(x, y);
-      if (c[3]) dst.set(x + ox, y + oy, c);
-    }
-}
-
 // --- Гарпия --------------------------------------------------------------------
 // Рисовальщик — `f11-mob-harpy.ts` (анимации мобов 11); палитра перьев здесь —
 // для перьев-предметов.
@@ -3744,76 +3709,7 @@ registerMobPainter('f11_jelly', (m: Mob, pose: MobPose) => {
 const BRASS = tn('#6a4a1a', '#a07a30', '#d0a84a', '#f4d884');
 
 // --- Ветряной дух ----------------------------------------------------------------
-
-function spiritPx(f: number, cast: boolean, dim: boolean): Built {
-  const W = 30;
-  const H = 32;
-  const p = new Px(W, H);
-  const cx = 15;
-  const a = dim ? 0.45 : 0.85;
-  // Тело — прозрачная воронка: сверху шире (капюшон над маской), книзу —
-  // в нитку. Даёт духу вес на светлой траве, где белые ленты пропадают.
-  for (let y = 4; y < 29; y++) {
-    const k = (y - 4) / 25;
-    const w = (cast ? 8 : 6.2) * (1 - k * 0.85) + 0.6;
-    const sway = Math.sin(k * 5 + f * 0.9) * 2 * k;
-    for (let x = Math.floor(cx - w + sway); x <= cx + w + sway; x++) {
-      const e = Math.abs(x - cx - sway) / w;
-      p.set(
-        x,
-        y,
-        alpha(e > 0.75 ? hx('#3a8aa8') : hx('#9ad8ec'), (e > 0.75 ? 0.55 : 0.28) * (dim ? 0.6 : 1)),
-      );
-    }
-  }
-  // Вихрь: три ленты кругами вверх, в два пикселя у основания.
-  for (let r = 0; r < 3; r++)
-    for (let k = 0; k < 48; k++) {
-      const th = (k / 48) * 2.6 * PI;
-      const R = (cast ? 9 : 6.8) - th * (cast ? 0.9 : 0.72);
-      if (R < 0.6) continue;
-      const x = cx + Math.cos(th + f * 0.9 + (r * TAU) / 3) * R;
-      const y = 26 - th * 2.1 + Math.sin(th + f * 0.9 + (r * TAU) / 3) * R * 0.3;
-      const c = r === 0 ? hx('#2a86a8') : r === 1 ? WHITE : hx('#b8e8f4');
-      const al = a * (0.55 + 0.45 * (k / 48));
-      p.set(Math.round(x), Math.round(y), alpha(c, al));
-      if (k < 20) p.set(Math.round(x), Math.round(y) + 1, alpha(c, al * 0.7));
-    }
-  // Руки-ленты при заклинании.
-  if (cast)
-    for (const s of [-1, 1])
-      for (let k = 0; k < 10; k++) {
-        const x = cx + s * (4 + k);
-        const y = 13 + Math.sin(k * 0.8 + f) * 1.2;
-        p.set(Math.round(x), Math.round(y), alpha(WHITE, 0.8 - k * 0.05));
-      }
-  // Маска.
-  const m = new Px(W, H);
-  const my = 10 + Math.round(Math.sin(f * 0.8) * 0.6);
-  shadeEll(m, cx + 1, my, 3.6, 4.4, tn('#b8b4a8', '#e0dcd0', '#f4f2ea', '#ffffff'), 0.2);
-  const eye = cast ? CYAN : INK;
-  m.set(cx - 1, my - 1, eye);
-  m.set(cx, my - 1, eye);
-  m.set(cx + 2, my - 1, eye);
-  m.set(cx + 3, my - 1, eye);
-  m.set(cx + 1, my + 2, hx('#c83a4a'));
-  m.set(cx + 1, my - 3, hx('#2c8088'));
-  over(p, ink(m, hx('#3a5a78')));
-  return { p, ax: cx, ay: H - 2, eye: [cx + 3, my - 1] };
-}
-
-registerMobPainter('f11_spirit', (m: Mob, pose: MobPose) => {
-  const t = paintSim()?.time ?? 0;
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('spirit', pose, 'dead', () => spiritPx(0, false, true));
-  if (pose.mode === 'cast') {
-    const f = (Math.floor(pose.t * (pose.t > SPIRIT.cast - 0.3 ? 18 : 10)) % 6) + 6;
-    return mobFrame('spirit', pose, `cast${f % 6}`, () => spiritPx(f % 6, true, false));
-  }
-  const f = ((Math.floor(t * 7 + m.id) % 6) + 6) % 6;
-  const dim = pose.mode === 'recover' || pose.anim === 'hurt';
-  return mobFrame('spirit', pose, `idle${f}${dim ? 'd' : ''}`, () => spiritPx(f, false, dim));
-});
+// Рисовальщик и смерч (`f11_tornado`) — `f11-mob-spirit.ts` (анимации мобов 11).
 
 // --- Жук-копилка -----------------------------------------------------------------
 
