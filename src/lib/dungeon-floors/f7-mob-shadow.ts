@@ -79,13 +79,13 @@ interface SP {
   claws: number;
 }
 const REST: SP = {
-  lean: 0.32,
+  lean: 0.14,
   roll: 0,
   twist: 0,
   head: 0.1,
   z: 0,
-  lH: [1.4, -4.8, 3.2],
-  rH: [1.4, 4.8, 3.2],
+  lH: [1.6, -3.9, 3.2],
+  rH: [1.6, 3.9, 3.2],
   ph: 0,
   drag: 0.3,
   eyes: 0.8,
@@ -134,7 +134,7 @@ function shadowRig(o: SP, yaw: number): { r: Rig; B: F3; T: F3; Hd: F3 } {
   r.cap(T.p(0, 0, 0), T.p(0.4, 0, 7.6), 2.8, 3.4, BODY);
   r.ell(T, [0.3, 0, 8.4], [2.3, 4.2, 1.9], BODY);
   // Голова — маленькая, вперёд; глаза — белые точки.
-  const Hd = T.at(1.4, 0, 11.4).pitch(o.head);
+  const Hd = T.at(1.9 + o.head * 2, 0, 11.0 - o.head).pitch(o.head);
   r.ell(Hd, [0, 0, 0], [2.2, 2.0, 2.2], BODY);
   for (const sd of [-1, 1])
     r.dot(Hd.p(2.0, sd * 0.85, 0.3), alpha(WHITE, 0.4 + 0.6 * o.eyes), o.eyes, 1, 1);
@@ -152,7 +152,7 @@ function shadowRig(o: SP, yaw: number): { r: Rig; B: F3; T: F3; Hd: F3 } {
       B.p(Hn[0], Hn[1], Hn[2]),
       7.2,
       7.6,
-      vadd(T.v(-1, sd * 0.8, 0), [0, 0, -0.3]),
+      vadd(T.v(-1, sd * 0.45, 0), [0, 0, -0.3]),
     );
     r.cap(sh, el, 1.35, 1.1, BODY);
     r.cap(el, hd, 1.1, 0.85, BODY);
@@ -179,16 +179,22 @@ function shadowPic(o: SP, d: number): Pic {
       const c = u < 0.5 ? SHD[2] : SHD[1];
       out.p.set(x, y, alpha(c, 0.75 * (1 - u)));
     }
-    // Следы когтей: дуги от точки над головой к кистям, поверх темноты.
+    // Следы когтей: по три дуги на кисть — путь когтей вокруг плеча от
+    // точки над головой вниз-вперёд, к кисти ярче (поверх темноты).
     if (o.rake > 0) {
       const L = litOf(out);
       for (const Hn of [o.lH, o.rH]) {
-        const top: V3 = [Hn[0] - 4, Hn[1] * 0.8, 24];
-        for (let k = 0; k <= 12; k++) {
-          const q = vlerp(B.p(top[0], top[1], top[2]), B.p(Hn[0], Hn[1], Hn[2] + 1), k / 12);
-          const [x, y] = P(q);
-          L.set(x, y, alpha(VIO_L, (0.25 + 0.6 * (k / 12)) * o.rake));
-        }
+        const sy = Hn[1] * 0.9;
+        const r0 = 9.5;
+        for (let c = -1; c <= 1; c++)
+          for (let k = 0; k <= 16; k++) {
+            const u = k / 16;
+            const a = lerp(1.75, -0.55, u);
+            const q: V3 = B.p(0.4 + Math.cos(a) * r0, sy + c * 1.1, 16 + Math.sin(a) * r0);
+            const [x, y] = P(vlerp(q, B.p(Hn[0], Hn[1] + c, Hn[2] + 1), sstep(0.8, 1, u)));
+            const col = c === 0 ? WHITE : VIO_L;
+            L.set(x, y, alpha(col, (0.2 + 0.8 * u * u) * o.rake));
+          }
       }
     }
   });
@@ -203,11 +209,12 @@ function walkPose(i: number): SP {
   const c = Math.cos(ph);
   return {
     ...REST,
-    lean: 0.42,
+    lean: 0.24,
+    head: 0.2,
     roll: 0.05 * Math.sin(ph),
     z: 0.4 * Math.sin(2 * ph),
-    lH: [1.0 + 1.8 * c, -4.8, 3.4 + 0.5 * Math.max(0, c)],
-    rH: [1.0 - 1.8 * c, 4.8, 3.4 + 0.5 * Math.max(0, -c)],
+    lH: [1.0 + 1.8 * c, -3.9, 3.4 + 0.5 * Math.max(0, c)],
+    rH: [1.0 - 1.8 * c, 3.9, 3.4 + 0.5 * Math.max(0, -c)],
     ph,
     drag: 1,
   };
@@ -220,8 +227,8 @@ function idlePose(i: number): SP {
     ...REST,
     z: 0.3 * b,
     head: 0.1 + 0.06 * b,
-    lH: [1.4, -4.8, 3.2 + 0.4 * b],
-    rH: [1.4, 4.8, 3.2 - 0.4 * b],
+    lH: [1.6, -3.9, 3.2 + 0.4 * b],
+    rH: [1.6, 3.9, 3.2 - 0.4 * b],
     ph,
   };
 }
@@ -234,11 +241,11 @@ function windPose(f: number): SP {
   const tr = t > 0.32 && !go ? (f % 2 ? 0.3 : -0.3) : 0;
   return {
     ...REST,
-    lean: lerp(0.32, -0.12, k) + go * 0.4,
+    lean: lerp(REST.lean, -0.14, k) + go * 0.4,
     head: lerp(0.1, -0.2, k),
     z: 1.5 * k,
-    lH: go ? [5, -3, 14] : [lerp(1.4, -0.8, k), lerp(-4.8, -4.2, k), lerp(3.2, 26, k) + tr],
-    rH: go ? [5, 3, 14] : [lerp(1.4, -0.8, k), lerp(4.8, 4.2, k), lerp(3.2, 26, k) - tr],
+    lH: go ? [5, -3, 14] : [lerp(1.6, -0.8, k), lerp(-3.9, -4.2, k), lerp(3.2, 26, k) + tr],
+    rH: go ? [5, 3, 14] : [lerp(1.6, -0.8, k), lerp(3.9, 4.2, k), lerp(3.2, 26, k) - tr],
     ph: t * 9,
     eyes: 0.8 + 0.2 * k,
     claws: lerp(0.3, 1, k),
@@ -255,10 +262,10 @@ function windRec(f: number): SP {
   const k = smooth(clamp01((t - 0.1) / 0.45));
   const hit: SP = {
     ...REST,
-    lean: 0.7,
+    lean: 0.5,
     head: 0.3,
-    lH: [6.5, -2.0, 3.5],
-    rH: [6.5, 2.0, 3.5],
+    lH: [7.6, -2.4, 2.4],
+    rH: [7.6, 2.4, 2.4],
     claws: 1,
     rake: 1,
     ph: 4,
@@ -276,11 +283,11 @@ function grabPose(f: number): SP {
   const go = f === GRAB_N - 1;
   return {
     ...REST,
-    lean: go ? 0.4 : lerp(0.32, 0.05, k),
+    lean: go ? 0.4 : lerp(REST.lean, 0.0, k),
     twist: go ? 0.25 : -0.45 * k,
     head: 0.15,
-    lH: [lerp(1.4, 3.2, k), lerp(-4.8, -3.2, k), lerp(3.2, 9, k)],
-    rH: go ? [7, 2.6, 12] : [lerp(1.4, -4.2, k), lerp(4.8, 5.4, k), lerp(3.2, 14, k) + tr],
+    lH: [lerp(1.6, 3.2, k), lerp(-3.9, -3.2, k), lerp(3.2, 9, k)],
+    rH: go ? [7, 2.6, 12] : [lerp(1.6, -4.2, k), lerp(3.9, 5.4, k), lerp(3.2, 14, k) + tr],
     ph: t * 8,
     eyes: 0.8 + 0.2 * sstep(0.1, 0.5, t),
     claws: 1,
@@ -324,11 +331,11 @@ function stunPose(f: number): SP {
   const k = [1, 0.8, 0.55, 0.3, 0.1][Math.min(4, f)];
   return {
     ...REST,
-    lean: 0.32 - 0.5 * k,
+    lean: REST.lean - 0.45 * k,
     head: -0.3 * k,
     roll: 0.12 * k,
-    lH: [lerp(1.4, -1.5, k), -5.4, lerp(3.2, 9, k)],
-    rH: [lerp(1.4, -1, k), 5.6, lerp(3.2, 7, k)],
+    lH: [lerp(1.6, -1.5, k), -5.0, lerp(3.2, 9, k)],
+    rH: [lerp(1.6, -1, k), 5.2, lerp(3.2, 7, k)],
     ph: f,
     drag: -0.3 * k,
   };
