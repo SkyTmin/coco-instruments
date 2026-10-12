@@ -405,23 +405,23 @@ function walkPose(t: number): Pose {
   // Вразвалку на зрителя: пары накрест, лапа выносится дугой наружу (кривые лапы).
   const la = bump(h, 0.02, 0.48);
   const lb = bump(h, 0.52, 0.98);
-  o.fLz = 2.2 * la ** 0.8;
-  o.fLy = 1.4 * la;
-  o.fLx = -0.9 * la;
-  o.hRz = 1.6 * la ** 0.8;
-  o.fRz = 2.2 * lb ** 0.8;
-  o.fRy = 1.4 * lb;
-  o.fRx = 0.9 * lb;
-  o.hLz = 1.6 * lb ** 0.8;
+  o.fLz = 3.0 * la ** 0.8;
+  o.fLy = 1.6 * la;
+  o.fLx = -1.4 * la;
+  o.hRz = 1.8 * la ** 0.8;
+  o.fRz = 3.0 * lb ** 0.8;
+  o.fRy = 1.6 * lb;
+  o.fRx = 1.4 * lb;
+  o.hLz = 1.8 * lb ** 0.8;
   const sw = Math.sin((h / T) * TAU);
-  // Перекат с боку на бок — корпус валится на опорную пару.
-  o.x = 0.8 * sw;
-  o.lean = 0.09 * sw;
-  o.z = 0.35 * Math.abs(Math.cos((h / T) * TAU)) - 0.1;
+  // Перекат с боку на бок — корпус валится на опорную пару (вес на стоящую лапу).
+  o.x = -1.1 * sw;
+  o.lean = -0.13 * sw;
+  o.z = 0.5 * Math.abs(Math.cos((h / T) * TAU)) - 0.15;
   o.nod = 0.06 + 0.04 * Math.cos((h / T) * 2 * TAU);
-  o.tilt = -0.1 * sw;
-  o.hx = -0.5 * sw;
-  o.turn = -0.06 * sw;
+  o.tilt = 0.12 * sw;
+  o.hx = 0.6 * sw;
+  o.turn = 0.07 * sw;
   o.tailSw = 0.9 * Math.sin((h / T) * 2 * TAU);
   o.jaw = 0.2;
   o.tongue = 0.7;
@@ -518,17 +518,17 @@ function workPose(t: number): Pose {
     [1.76, 1],
     [1.96, 0, 's'],
   ]);
-  o.turn = 0.34 * aim + 0.18 * pn + 0.14 * adm;
-  o.look = Math.min(1, aim + pn + 0.8 * adm);
-  o.nod = 0.1 * aim - 0.08 * wind + 0.06 * pn + 0.16 * adm;
-  o.tilt = 0.08 * aim - 0.06 * wind + 0.1 * adm;
-  o.lean = -0.1 * wind + 0.13 * pn;
-  o.x = -0.9 * wind + 1.8 * pn;
+  o.turn = 0.34 * aim + 0.18 * pn + 0.04 * adm;
+  o.look = Math.min(1, aim + pn) + 0.3 * adm;
+  o.nod = 0.1 * aim - 0.08 * wind + 0.06 * pn + 0.2 * adm;
+  o.tilt = 0.08 * aim - 0.08 * wind + 0.14 * adm;
+  o.lean = -0.14 * wind + 0.13 * pn;
+  o.x = -1.4 * wind + 1.8 * pn;
   o.sq = 0.05 * wind - 0.03 * pn;
-  o.hx = -0.6 * wind + 1.2 * pn;
-  o.fRz = 4.2 * wind + 4.0 * pn + 9.0 * adm;
-  o.fRy = -2.6 * wind - 2.0 * pn + 2.4 * adm;
-  o.fRx = -1.0 * wind + 3.6 * pn - 3.4 * adm;
+  o.hx = -0.8 * wind + 1.2 * pn;
+  o.fRz = 9.0 * wind + 4.0 * pn + 11.0 * adm;
+  o.fRy = -1.4 * wind - 1.6 * pn + 2.6 * adm;
+  o.fRx = -4.6 * wind + 5.2 * pn - 5.0 * adm;
   o.fLy = 0.4 * pn;
   o.snarl = Math.max(0.6 * aim, wind, pn);
   o.jaw = 0.3 * pn + 0.3 * adm;
@@ -584,7 +584,7 @@ function attackPose(t: number): Pose {
   o.sq = 0.1 * neg(l) + 0.07 * bump(t, 0.55, 0.7);
   o.z = -0.5 * neg(l) + 0.8 * pos(l);
   o.bow = 0.12 * neg(l) + 0.04 * pos(l);
-  o.nod = 0.34 * neg(l) - 0.16 * pos(l);
+  o.nod = 0.2 * neg(l) - 0.16 * pos(l);
   o.hy = 1.4 * pos(l) - 0.5 * neg(l);
   o.hz = -1.2 * neg(l);
   o.jaw = kf(t, [
@@ -606,9 +606,9 @@ function attackPose(t: number): Pose {
   o.eye = t < 0.7 ? 'angry' : 'open';
   o.turn = 0.18 * Math.sin(((t - 0.52) / 0.16) * TAU) * bump(t, 0.52, 0.76);
   // Кулак с кастетом: назад в замахе, к зрителю на ударе.
-  o.fRz = 2.0 * neg(l) + 7.4 * fist;
-  o.fRy = -1.4 * neg(l) + 5.6 * fist;
-  o.fRx = -3.2 * fist;
+  o.fRz = 3.0 * neg(l) + 12.5 * fist;
+  o.fRy = -1.4 * neg(l) + 6.5 * fist;
+  o.fRx = -1.0 * neg(l) - 3.6 * fist;
   o.fLz = 0.6 * bump(t, 0.1, 0.3);
   o.tailSw = 0.6 * bump(t, 0.4, 0.86);
   o.punch = t >= 0.34 && t < 0.56 ? (t - 0.34) / 0.22 : -1;
@@ -1327,9 +1327,9 @@ function headParts(out: PartF[], flats: Flat[], c: Ctx): void {
   if (o.tongue > 0.05) {
     const tg = o.tongue;
     out.push({
-      c: h.at(jd([0.3, 7.9, -6.6 - 1.5 * tg])),
+      c: h.at(jd([0.8, 9.5, -6.4 - 1.5 * tg])),
       ax: axes(h.dir(pitchX([1, 0, 0], ja)), h.dir(pitchX([0, 0.5, 1], ja))),
-      r: [1.4 * k, 0.9 * k, (0.5 + 1.0 * tg) * k],
+      r: [1.5 * k, 0.9 * k, (0.5 + 1.0 * tg) * k],
       pal: P_TONGUE,
       id: nid(),
       bias: 0.12,
@@ -1400,7 +1400,7 @@ function ears(flats: Flat[], c: Ctx): void {
 // Трюк: каменный блок и щебень.
 // ---------------------------------------------------------------------------
 
-const BLK = { x0: 12.2, x1: 19.4, yb: 0.4, yf: 6.4, zt: 7.2 };
+const BLK = { x0: 13.4, x1: 23.4, yb: -1.0, yf: 7.0, zt: 10.6 };
 /** Палитра, которую выбирает тон грани (`quadP`). */
 let QPAL = P_STONE;
 
@@ -1513,14 +1513,15 @@ function blockDraw(f: Frame, o: Pose): void {
 /** Куски блока: разлетаются из блока, падают, отскакивают, лежат щебнем. */
 const STONES: [number, number, number, number, number, number, number, number][] = [
   // x, y, z начала; скорость вбок, вперёд, вверх; размер; руда (1).
-  [14.0, 3.4, 4.6, -9, 6, 44, 1.5, 0],
-  [17.4, 3.8, 5.4, 10, 3, 52, 1.7, 0],
-  [15.6, 4.6, 2.4, 2, 12, 30, 1.6, 1],
-  [18.6, 2.8, 2.6, 16, -2, 34, 1.3, 0],
-  [13.2, 5.0, 2.0, -5, 9, 24, 1.2, 0],
-  [16.4, 2.0, 6.4, 5, -4, 58, 1.1, 0],
-  [15.2, 4.2, 1.2, 0, 2, 0, 2.2, 0],
-  [17.8, 4.6, 1.0, 1, 1, 0, 1.9, 0],
+  [15.0, 3.6, 6.0, -10, 6, 46, 1.8, 0],
+  [19.6, 4.0, 7.0, 10, 3, 54, 2.0, 0],
+  [17.6, 5.0, 3.0, 2, 12, 30, 1.8, 1],
+  [21.6, 2.8, 3.2, 16, -2, 36, 1.6, 0],
+  [14.4, 5.4, 2.4, -6, 9, 26, 1.4, 0],
+  [18.4, 2.0, 8.4, 5, -4, 60, 1.3, 0],
+  [16.8, 4.4, 1.4, 0, 2, 0, 2.5, 0],
+  [20.4, 4.8, 1.2, 1, 1, 0, 2.2, 0],
+  [22.6, 1.0, 5.0, 12, -6, 40, 1.2, 0],
 ];
 const GRAV = 210;
 
@@ -1951,11 +1952,11 @@ function flash(p: Px, c: Ctx): void {
 const DUST = [hx('#ddd6c8'), hx('#aaa294'), hx('#7c766c')];
 const PUFFS: [number, number, number, number][] = [
   // x, y, z, задержка
-  [12.6, 6.4, 0.8, 0],
-  [15.4, 7.6, 1.2, 0.04],
-  [19.0, 6.0, 1.0, 0.08],
-  [16.6, 2.6, 3.4, 0.02],
-  [11.0, 4.0, 2.2, 0.1],
+  [13.4, 6.8, 0.8, 0],
+  [17.0, 8.0, 1.2, 0.04],
+  [21.6, 6.4, 1.0, 0.08],
+  [18.6, 2.6, 4.0, 0.02],
+  [12.0, 4.2, 2.4, 0.1],
 ];
 
 /** Пыль от раскола: клубы растут и тают, только по фону и камню (питомца не пачкает). */
@@ -1979,7 +1980,7 @@ function dust(p: Px, f: Frame, mask: Uint8Array, c: Ctx): void {
         if (d > 1) continue;
         const i = py * p.w + px;
         if (mask[i] && f.pal[i] !== P_STONE) continue;
-        if (!dith(px, py, vis * (1.15 - d * 0.5))) continue;
+        if (!dith(px, py, vis * (1.7 - d * 1.1))) continue;
         const lit = -dx - dy;
         p.set(px, py, DUST[lit > R * 0.3 ? 0 : lit > -R * 0.4 ? 1 : 2]);
       }
@@ -2010,10 +2011,10 @@ function puff(p: Px, c: Ctx): void {
 /** Сон: пузырь из левой ноздри растёт на вдохе и опадает. */
 function bubble(p: Px, c: Ctx): void {
   const { o, h } = c;
-  const r = (0.9 + 2.4 * o.bubble) * RR;
-  const [sx, sy] = project(mul(h.at([-1.4, 9.4, -1.0]), RR));
-  const cx = OX + sx - r * 0.55;
-  const cy = OY + sy + r * 0.5;
+  const r = (0.8 + 1.7 * o.bubble) * RR;
+  const [sx, sy] = project(mul(h.at([-1.6, 9.0, -1.2]), RR));
+  const cx = OX + sx - r * 0.9;
+  const cy = OY + sy + r * 0.25;
   const rim = hx('#cfe6ef');
   const fill = hx('#e6f2f6');
   const W = hx('#ffffff');
@@ -2023,7 +2024,7 @@ function bubble(p: Px, c: Ctx): void {
       const d = Math.hypot(px + 0.5 - cx, py + 0.5 - cy);
       if (d > r + 0.5) continue;
       if (d > r - (HI ? 1.2 : 0.8)) p.set(px, py, rim);
-      else if (dith(px, py, 0.22)) p.set(px, py, fill);
+      else if (d > r - (HI ? 2.4 : 1.2) && px + py < cx + cy - r * 0.6) p.set(px, py, fill);
     }
   const hlx = Math.round(cx - r * 0.45);
   const hly = Math.round(cy - r * 0.45);
@@ -2045,9 +2046,9 @@ function punchRays(p: Px, mask: Uint8Array, c: Ctx): void {
   const col = hx('#fff4dc');
   const dim = hx('#f0c070');
   const vis = u < 0.6 ? 1.1 : (1 - u) / 0.4;
-  const r0 = (HI ? 9 : 4.5) + u * (HI ? 8 : 4);
-  const L = HI ? 7 : 3.5;
-  for (const a of [-2.7, -2.1, -1.57, -1.0, -0.4, 0.3, 0.9, 2.5]) {
+  const r0 = (HI ? 14 : 7) + u * (HI ? 9 : 4.5);
+  const L = HI ? 8 : 4;
+  for (const a of [-2.4, -1.57, -1.0, -0.45, 0.1, 0.6, 1.1]) {
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     for (let d = 0; d <= L; d += 0.5) {
@@ -2058,6 +2059,8 @@ function punchRays(p: Px, mask: Uint8Array, c: Ctx): void {
       p.set(x, y, d < L * 0.5 ? col : dim);
     }
   }
+  // Вспышка на кастете — поверх всего: удар читается и на груди.
+  if (u < 0.55) sparkle(p, Math.round(mx), Math.round(my), Math.round((HI ? 9 : 4) * (1 - u)), u);
 }
 
 // ---------------------------------------------------------------------------
