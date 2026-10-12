@@ -45,41 +45,26 @@ import {
   wrap,
 } from '../pets-pixel/rig';
 import type { Frame, Part, RGBA, V3 } from '../pets-pixel/rig';
+import { bookIdleBob } from './books-idle';
+import type { BookTier } from './books-idle';
+import type { Canvas, Res, StripDef } from './types';
 
 // ---------------------------------------------------------------------------
 // Холсты, ярусы, полосы.
 // ---------------------------------------------------------------------------
 
-export type Res = 's' | 'l';
-export interface Canvas {
-  /** Рамка предмета (сторона квадрата в пикселях рисунка): по ней игра ставит книгу. */
-  box: number;
-  /** Холст кадра: рамка в середине, сверху место для падения и столба света, снизу — для лучей к кирке. */
-  cw: number;
-  ch: number;
-  /** Левый верхний угол рамки на холсте. */
-  bx: number;
-  by: number;
-}
+/** Холст: рамка в середине, сверху место для падения и столба света, снизу — для лучей к кирке. */
 export const RES: Record<Res, Canvas> = {
   s: { box: 48, cw: 120, ch: 172, bx: 36, by: 64 },
   l: { box: 112, cw: 280, ch: 400, bx: 84, by: 149 },
 };
 
-export const TIERS = ['simple', 'rare', 'epic', 'legend'] as const;
-export type Tier = (typeof TIERS)[number];
+export const TIERS: readonly BookTier[] = ['simple', 'rare', 'epic', 'legend'];
+export type Tier = BookTier;
 /** Ярус → ступень редкости (как `TIER_RARITY` в BooksTab). */
 const TIER_R: Record<Tier, number> = { simple: 0, rare: 2, epic: 3, legend: 4 };
 
 export const FPS = 24;
-
-export interface Strip {
-  frames: number;
-  fps: number;
-  loop: boolean;
-  /** Именованные кадры: сцена по ним ставит звук, дрожь и знак чары. */
-  marks?: Record<string, number>;
-}
 
 /** Секунды → номер кадра. */
 const fr = (s: number) => Math.round(s * FPS);
@@ -96,11 +81,12 @@ const BURN_T: Record<Tier, number> = { simple: 1.6, rare: 1.6, epic: 1.7, legend
 /** Покой: петля, секунды. */
 const IDLE_T: Record<Tier, number> = { simple: 2, rare: 2, epic: 2, legend: 3 };
 
-function buildStrips(): Record<string, Strip> {
-  const s: Record<string, Strip> = {};
+function buildStrips(): Record<string, StripDef> {
+  const s: Record<string, StripDef> = {};
   for (const t of TIERS) {
-    s[`still-${t}`] = { frames: 1, fps: FPS, loop: false };
-    s[`idle-${t}`] = { frames: fr(IDLE_T[t]), fps: FPS, loop: true };
+    const glyph = glyphAnchors();
+    s[`still-${t}`] = { frames: 1, fps: FPS, loop: false, anchors: glyph };
+    s[`idle-${t}`] = { frames: fr(IDLE_T[t]), fps: FPS, loop: true, anchors: glyph };
     const r = REVEAL[t];
     s[`reveal-${t}`] = {
       frames: fr(r.T),
@@ -114,6 +100,7 @@ function buildStrips(): Record<string, Strip> {
         close: fr(r.close),
         lock: fr(r.lock),
       },
+      anchors: { ...glyph, rise: riseAnchor(t) },
     };
     const A = APPLY_T[t];
     s[`apply-ok-${t}`] = {
@@ -121,6 +108,7 @@ function buildStrips(): Record<string, Strip> {
       fps: FPS,
       loop: false,
       marks: { open: fr(0.36), hit: fr(applyHit(t)), gone: fr(A - 0.12) },
+      anchors: { to: boxFrac(APPLY_TO) },
     };
     s[`apply-burn-${t}`] = {
       frames: fr(BURN_T[t]),
@@ -132,17 +120,9 @@ function buildStrips(): Record<string, Strip> {
   return s;
 }
 
-/**
- * Покачивание покоя: на сколько пикселей рисунка книга поднята в кадре i
- * (вверх — минус). Та же формула у знака чары поверх обложки — он едет с
- * книгой (`BOOK_IDLE_BOB` в манифесте сцены).
- */
+/** Покачивание покоя в кадре i (вверх — минус); формула общая с игрой (`books-idle.ts`). */
 export function idleBob(tier: Tier, i: number, res: Res): number {
-  const n = fr(IDLE_T[tier]);
-  const A = tier === 'legend' ? 3 : 2;
-  const u = (wrap(i, n) / n) * Math.PI * 2;
-  const RR = RES[res].box / RES.s.box;
-  return -Math.round(((A * (1 - Math.cos(u))) / 2) * RR);
+  return bookIdleBob(tier, i, fr(IDLE_T[tier]), RES[res].box / RES.s.box);
 }
 
 // ---------------------------------------------------------------------------
@@ -1355,7 +1335,7 @@ function revealPose(tier: Tier, t: number): Pose {
     const u = t / R.land;
     o.z = Z_DROP * (1 - u * u);
     o.yaw = YAW0 + TURNS[tier] * Math.PI * 2 * (1 - u) * (1 - u);
-    o.alpha = clamp01(t / 0.12 + 0.05);
+    o.alpha = clamp01(t / 0.1 + 0.3);
     o.roll = 0.1 * Math.sin(u * Math.PI * 2) * (1 - u);
   } else {
     o.yaw = kf(t, [
@@ -1390,7 +1370,7 @@ function revealPose(tier: Tier, t: number): Pose {
   ]);
   if (air > 0) {
     // Взлёт, наклон назад (разворот смотрит вверх-вперёд), висит, опускается.
-    o.z = kf(t, [
+    o.z += kf(t, [
       [R.snap - 0.05, 0],
       [R.open + 0.05, air, 'o'],
       [R.close + 0.1, air],
@@ -2219,4 +2199,33 @@ function burnFx(sc: Scene, t: number, T0: number, crumble: number): void {
 }
 
 // В конце файла: полосам нужны константы сцен выше.
-export const STRIPS: Record<string, Strip> = buildStrips();
+/** Точка мира → доли рамки (как якоря манифеста). */
+function boxFrac(v: V3): [number, number] {
+  const [x, y] = project(v);
+  const B = RES.s.box;
+  const q = (n: number) => Math.round(n * 1000) / 1000;
+  return [q(0.5 + x / B), q((GROUND + y) / B)];
+}
+
+/**
+ * Медальон на лицевой крышке в позе покоя: `glyph` — середина, `glyphX` — край по
+ * оси крышки вправо, `glyphY` — край вверх (на радиус медальона). Игра строит по ним
+ * матрицу знака чары — он лежит в медальоне с тем же поворотом крышки.
+ */
+function glyphAnchors(): Record<string, [number, number]> {
+  const xf = bookXf(REST);
+  const c: V3 = [MED_X - W / 2, T / 2, MED_Z];
+  return {
+    glyph: boxFrac(xf.p(c)),
+    glyphX: boxFrac(xf.p([c[0] + MED_R, c[1], c[2]])),
+    glyphY: boxFrac(xf.p([c[0], c[1], c[2] + MED_R])),
+  };
+}
+
+/** Над разворотом в кадре `peak`: здесь сцена зажигает знак чары. */
+function riseAnchor(t: Tier): [number, number] {
+  const sp = spreadOf(revealPose(t, REVEAL[t].peak));
+  return boxFrac(add(sp.c, [0, 0, 11]));
+}
+
+export const STRIPS: Record<string, StripDef> = buildStrips();
