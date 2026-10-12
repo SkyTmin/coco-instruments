@@ -7,198 +7,208 @@ paths:
   - "src/components/{Inventory,CreativePanel,DungeonRun,DungeonCamp}.tsx"
 ---
 
-<!-- Рабочая выжимка (v2.103). История выпусков, балансы ботов по зёрнам, подробности
-     этажей — `.claude/archive/dungeon-floors-history.md` (сама не грузится, grep по версии или id). -->
+<!-- Working summary (v2.103). Release history, seeded bot balances, floor details —
+     `.claude/archive/dungeon-floors-history.md` (not auto-loaded; grep by version or id). -->
 
-# Подземелье: этажи 1–15, движок этажей, инвентарь, креатив
+# Dungeon: floors 1–15, floor engine, inventory, creative mode
 
-## Устройство
+## Structure
 
-- **Этаж — данные, движок один.** `FloorDef` (`dungeon-floors/types.ts`), реестр `FLOORS`
-  (`dungeon-floors/index.ts`). Этаж N: `fN.ts` (районы, монстры, босс, шахты, мясо,
-  материалы), `fN-brains.ts` (ИИ, сценарий босса, правила этажа), `fN-art.ts`
-  (рисовальщики; ещё бывают `fN-mobs.ts`, `fN-boss-fx.ts`), `fN-map.ts` (выгрузка
-  `scripts/dungeon/fN.py` — руками не править), `fN.test.ts`.
-- **Договор — библия `scripts/dungeon/README.md`** (§12б мотивы 6–10, §12в «Движок 3»
-  E1–E19 и замыслы 11–15, §14 анимации). Нужна функция движка — её добавляет сводящий;
-  этаж движок не правит.
-- **id — с приставкой `fN`**; 1-й держит прежние (`rat`, `king`, `skin`, `mouth`…) — на них
-  сохранения. Не менять id входного района `fN`, босса `fNboss`, материала `fNmat`.
-- **Реестры.** ИИ — `registerBrain(id, {step, onWall, onDeath, onHit, raw})`, босс —
-  `registerBoss(id, {start, step, onPartDown, bar, notches, reset})`, правила этажа —
-  `registerFloor(n, {start, step})` (`dungeon-ai.ts`); рисовка — `registerMobPainter`,
+- **A floor is data; the engine is one.** `FloorDef` (`dungeon-floors/types.ts`), registry
+  `FLOORS` (`dungeon-floors/index.ts`). Floor N: `fN.ts` (areas, monsters, boss, mines,
+  meat, materials), `fN-brains.ts` (AI, boss script, floor rules), `fN-art.ts` (painters;
+  there may also be `fN-mobs.ts`, `fN-boss-fx.ts`), `fN-map.ts` (export of
+  `scripts/dungeon/fN.py` — don't edit by hand), `fN.test.ts`.
+- **The contract is the bible `scripts/dungeon/README.md`** (§12б motifs 6–10, §12в
+  «Движок 3» (Engine 3) E1–E19 and designs 11–15, §14 animations). Need an engine function —
+  the integrator adds it; a floor doesn't edit the engine.
+- **ids carry the `fN` prefix**; floor 1 keeps the old ones (`rat`, `king`, `skin`,
+  `mouth`…) — saves rely on them. Don't change the ids of the entry area `fN`, the boss
+  `fNboss`, the material `fNmat`.
+- **Registries.** AI — `registerBrain(id, {step, onWall, onDeath, onHit, raw})`, boss —
+  `registerBoss(id, {start, step, onPartDown, bar, notches, reset})`, floor rules —
+  `registerFloor(n, {start, step})` (`dungeon-ai.ts`); drawing — `registerMobPainter`,
   `registerShotPainter`, `registerZonePainter`, `registerPropPainter`,
-  `registerCellPainter`, `registerItemArt` (`dungeon-paint.ts`). Агрегаторы
-  `dungeon-floors/brains.ts` и `art.ts`; **`art.ts` обязан быть импортирован в рендере,
-  лагере и инвентаре** — иначе рисовальщики не регистрируются и монстры рисуются
-  запасными кругами.
-- **Готовность.** Заготовка — `FloorDef.draft` (ставит `stubFloor`); настоящий `fN.ts`
-  `draft` не ставит — этаж появляется сам, как только влит. Игрок видит готовые подряд с
-  первого (`OPEN_FLOORS`), креатив — все готовые (`READY_FLOORS`); лестница с последнего
-  готового закрыта («этаж достраивают», `floorReady`). С v2.84 готовы все 15.
+  `registerCellPainter`, `registerItemArt` (`dungeon-paint.ts`). Aggregators
+  `dungeon-floors/brains.ts` and `art.ts`; **`art.ts` must be imported in the renderer,
+  camp and inventory** — otherwise painters don't register and monsters are drawn as
+  fallback circles.
+- **Readiness.** A placeholder is `FloorDef.draft` (set by `stubFloor`); a real `fN.ts`
+  doesn't set `draft` — the floor appears by itself once merged. The player sees ready
+  floors consecutively from the first (`OPEN_FLOORS`), creative mode — all ready ones
+  (`READY_FLOORS`); the stairs from the last ready floor are closed («этаж достраивают»,
+  `floorReady`). Since v2.84 all 15 are ready.
 
-## API движка этажей
+## Floor engine API
 
-- `Brain.onHit` — множитель урона ДО удара (щит спереди, «бей только отражение», 0 —
-  отбил со звоном). `api.setTile` — клетка меняется на ходу, рендер перерисовывает куски
-  сам (`sim.retiled`); у каждой вылазки своя копия `mark`. `api.moveHero` — телепорт с
-  мгновенной камерой (`sim.warps`). `notches` — засечки фаз на полосе босса. Статус
-  `charm` — джойстик и прицел наоборот. Тест «движок для этажей» в
-  `dungeon-floors.test.ts`.
-- **«Движок 3» (v2.82.2)** — список с сигнатурами в библии §12в, тесты — блок «движок 3»
-  в `dungeon-floors.test.ts`: `hurtHero`, `api.hurtEnv` (доля здоровья, без брони), время
-  мира и героя раздельно (`api.timeScale`), своё замедление, тяга героя, камера к точке,
-  падение моба в пропасть в зачёт убийств, удар по своим (`mobDmg`), дуга кольца и `los`,
-  навес с лужей (`onLand`), действия этажа («Действие» с подписью этажа), рисунок поверх
-  темноты, события `shake`/`flash`, `paintSim()`, `paintAll`, плоские предметы, `flowR`,
-  `reset` с `api`, финальная церемония `boss/finale`.
-- **Звуки** событий этажа — таблица `FLOOR_SOUND` и окончания
-  `_call/_trap/_wall/_dive/_splash/_fall/_stone` в `DungeonRun`. `laserHum` — петля
-  вкл/выкл, разовым событием не звать; `castWhoosh` — заброс удочки с бульком, не магия.
-  `boom`, `deepRumble`, `softChime` на событиях — временные, ухом не проверены.
-- **Высокие предметы просвечивают** (v2.83, рендер): предмет выше полутора клеток, герой
-  севернее его подножия и внутри картинки.
-- **Нет в движке** (просьбы этажей): слой «за мобами, но поверх темноты» (12, 13); тихое
-  убийство моба без стоп-кадра (12); предметы на ходу (12); `api.zone` не возвращает зону,
-  нет `api.hurtMob` (11, 15); нет внешней силы `api.push` — ветер 11-го двигает `h.x` сам;
-  `pullHero` без `over: true` над глубиной (13 — трос свой); прозрачности больших мобов
-  (13, 15); «мягкой стены» и `nearestOpen`/`unstick` в api (15); локального времени
-  `api.timeZone` (14); висящего снаряда `Shot.hold` и угла снаряда для рисовальщика (14);
-  остановки времени по мобам (14); `hitstop` растягивает отсчёты этажа (14 — в тестах
-  давали неуязвимость); события `f11_spin_end`; ледяных затворов состоянием двери, хука
-  скорости героя (12 — скольжение сделано обходом); тихого запасного вида зоны без
-  рисовальщика (сейчас красный круг); `vNoTele` после засады не снимается.
+- `Brain.onHit` — damage multiplier BEFORE the hit (front shield, "hit only the
+  reflection", 0 — parried with a clang). `api.setTile` — a cell changes on the fly, the
+  renderer redraws chunks itself (`sim.retiled`); each run has its own copy of `mark`.
+  `api.moveHero` — teleport with an instant camera (`sim.warps`). `notches` — phase
+  notches on the boss bar. Status `charm` — joystick and aim inverted. Test «движок для
+  этажей» in `dungeon-floors.test.ts`.
+- **«Движок 3» (Engine 3, v2.82.2)** — list with signatures in bible §12в, tests — the
+  «движок 3» block in `dungeon-floors.test.ts`: `hurtHero`, `api.hurtEnv` (share of
+  health, ignores armour), separate world and hero time (`api.timeScale`), custom
+  slow-mo, hero pull, camera to a point, a mob falling into a chasm counts as a kill,
+  friendly fire (`mobDmg`), ring arc and `los`, a lob with a puddle (`onLand`), floor
+  actions («Действие» with a floor-specific caption), drawing above darkness,
+  `shake`/`flash` events, `paintSim()`, `paintAll`, flat items, `flowR`, `reset` with
+  `api`, the final ceremony `boss/finale`.
+- **Sounds** of floor events — the `FLOOR_SOUND` table and suffixes
+  `_call/_trap/_wall/_dive/_splash/_fall/_stone` in `DungeonRun`. `laserHum` is an on/off
+  loop, don't call it as a one-shot event; `castWhoosh` is a fishing-rod cast with a plop,
+  not magic. `boom`, `deepRumble`, `softChime` on events are temporary, not checked by ear.
+- **Tall items become see-through** (v2.83, renderer): item taller than one and a half
+  cells, hero north of its base and inside the image.
+- **Missing from the engine** (floor requests): a "behind mobs but above darkness" layer
+  (12, 13); a silent mob kill without hitstop (12); items on the fly (12); `api.zone`
+  doesn't return the zone, no `api.hurtMob` (11, 15); no external force `api.push` —
+  floor 11's wind moves `h.x` itself; `pullHero` without `over: true` over deep tiles (13 —
+  its own rope); transparency of large mobs (13, 15); a "soft wall" and
+  `nearestOpen`/`unstick` in the api (15); local time `api.timeZone` (14); a hanging
+  projectile `Shot.hold` and projectile angle for the painter (14); per-mob time stop (14);
+  `hitstop` stretches floor timers (14 — in tests this gave invulnerability); an
+  `f11_spin_end` event; ice gates as door state, a hero speed hook (12 — sliding is done
+  via a workaround); a quiet fallback look for a zone without a painter (now a red circle);
+  `vNoTele` isn't cleared after an ambush.
 
-## Грабли
+## Pitfalls
 
-- **Здоровье героя меняет только движок**: `hurtHero`, `api.hurtEnv`, статусы и опасные
-  клетки сходятся в `heroDown`, который знает бессмертие креатива и сброс боя. Прилив 9-го
-  писал `hero.hp` сам и убивал сквозь бессмертие.
-- **У вылазки СВОИ копии `mark`, `haz`/`hazards`, `lights`**: этаж, дописывавший в
-  `world.lights`, копил свет в общем мире между вылазками.
-- **`setTile` выталкивает из новой СТЕНЫ, но не из новой глубины** — мост 8-го сам
-  проверяет «кто стоит», автовыталкивание отменило бы ловушку.
-- **Механика, ищущая клетки карты, — проверить, что клетки есть там, где их ждут**: мозг
-  стража 11-го искал `MK.vent` рядом, а все решётки лежали дальше 220 клеток — пар не шёл
-  ни разу (v2.87: 8 решёток кольцом в `scripts/dungeon/f11.py`). Бот на заглушке не ловит.
-- **`useObject` — не хук React**, но `react-hooks/rules-of-hooks` видит приставку `use`; в
-  тестах этажей импортировать как `useObject as operate`, иначе красный CI «Lint».
-- **Тест пути бота** на изменённой карте: хаотичный бот уходит другой дорогой — порог
-  «3 из 4 зёрен», не «все».
-- **Стенд нескольких агентов**: общий `node_modules/.vite` через ссылку даёт две копии
-  React — агенту свой `cacheDir` (обёртка конфига). Порт Vite после убийства
-  освобождается не сразу — новый на соседнем порту.
+- **Only the engine changes hero health**: `hurtHero`, `api.hurtEnv`, statuses and
+  hazardous cells converge in `heroDown`, which knows about creative immortality and fight
+  reset. Floor 9's tide wrote `hero.hp` itself and killed through immortality.
+- **A run has ITS OWN copies of `mark`, `haz`/`hazards`, `lights`**: a floor that appended
+  to `world.lights` accumulated light in the shared world across runs.
+- **`setTile` pushes out of a new WALL, but not out of new deep tiles** — floor 8's bridge
+  checks "who's standing" itself; auto-push would cancel the trap.
+- **Mechanics that look for map cells — check the cells are where they're expected**:
+  floor 11's guardian brain looked for `MK.vent` nearby, but all grates lay farther than
+  220 cells — steam never fired once (v2.87: 8 grates in a ring in
+  `scripts/dungeon/f11.py`). A bot on a stub won't catch it.
+- **`useObject` is not a React hook**, but `react-hooks/rules-of-hooks` sees the `use`
+  prefix; in floor tests import it as `useObject as operate`, otherwise CI «Lint» goes red.
+- **Bot path test** on a changed map: the chaotic bot takes another route — threshold
+  "3 of 4 seeds", not "all".
+- **Multi-agent rig**: a shared `node_modules/.vite` via symlink gives two React copies —
+  each agent gets its own `cacheDir` (config wrapper). A killed Vite doesn't free its port
+  at once — start the new one on a neighbouring port.
 
-## Спуск, шахты, уровни, лифт
+## Descent, mines, levels, lift
 
-- **Спуск:** лестница `>` за печатью `S`, босс жив — стена. Победа поднимает
-  `DungeonState.reached` и открывает лифт входа следующего этажа (`applyDelta`);
-  `descendRun` переносит вылазку с рюкзаком и здоровьем. Старое сохранение с убитым
-  королём получает `reached: 2`.
-- **Шахта на каждом этаже:** руды 2N−2 и 2N−1 каторги; редкие цельные блоки (`block:N`) и
-  руда (`ore:N`) падают в рюкзак подземелья.
-- **Ремонт лифта** `liftCost`: монеты `LIFT_PRICE × (1 + уровень−1)`, материал — ходовой
-  СВОЕГО этажа (прежняя формула на 9-м просила 2 млн монет — тест «без миллионов»).
-- **Уровни:** этаж N ≈ уровни 2N−2…2N−1, но снаряжение кончается на Т8+5 — с 6-го все
-  на уровне 9 и растут базовыми `hp`/`dmg` монстров (+15% за этаж). Появятся ступени 9–13
-  — раздать уровни. Баланс этажей 2+ — по ботам (Т8+5 с едой проходит, босс 2–4 мин;
-  Т8+0 без еды гибнет), владелец: «подкрутим потом».
+- **Descent:** stairs `>` behind seal `S`; boss alive — wall. Victory raises
+  `DungeonState.reached` and opens the next floor's entry lift (`applyDelta`);
+  `descendRun` carries the run over with backpack and health. An old save with the king
+  killed gets `reached: 2`.
+- **A mine on every floor:** «Каторга» ores 2N−2 and 2N−1; rare whole blocks (`block:N`)
+  and ore (`ore:N`) drop into the dungeon backpack.
+- **Lift repair** `liftCost`: coins `LIFT_PRICE × (1 + уровень−1)` (уровень = level),
+  material — the common one of ITS OWN floor (the old formula asked 2M coins on floor 9 —
+  test «без миллионов»).
+- **Levels:** floor N ≈ levels 2N−2…2N−1, but gear ends at T8+5 — from floor 6 everyone is
+  level 9 and monsters grow via base `hp`/`dmg` (+15% per floor). When tiers 9–13 appear —
+  assign levels. Balance of floors 2+ is by bots (T8+5 with food passes, boss 2–4 min;
+  T8+0 without food dies), owner (quote): «подкрутим потом».
 
-## Этажи (замыслы — библия §12в; итоги ботов — архив)
+## Floors (designs — bible §12в; bot results — archive)
 
-- 1 «Крысиные норы» (крысолюды, шаман, капканы, Король 2.0); 2 «Грибной грот» (Живые
-  доспехи); 3 «Затопленная бездна» (проклятие подъёма, Алая пасть); 4 «Двойная крипта»
-  (некромант, статуи, Каменный идол); 5 «Лабиринт» (живые стены, Минотавр).
-- 6 «Огненный разлом» (лава, рушащийся мост `setTile`, Красный змей); 7 «Зеркальный
-  лабиринт» (зеркала-переходы `moveHero`, Отражение из листа героя — в фазе теней
-  настоящий тот, кто отбрасывает тень, остальные `onHit` → 0); 8 «Бесконечный замок»
-  (фусума сдвигаются `setTile` с предупреждением, Демон семи лун); 9 «Лабиринт гидры»
-  (круги-телепорты, обрубок отрастает двумя, если не прижечь огнём жаровни); 10 «Трон
-  демона» (горгульи `ghost`, суккубы `charm`, край арены уходит в пропасть).
-- 11 «Небесный архипелаг» — ВЕТЕР (поле ветра двигает героя, мобов, снаряды, добычу;
-  «СДУЛО» — 12% и возврат на твёрдое; Древний страж, купол — урон ×0).
-- 12 «Полярная ночь» (v2.91) — ЛЁД: скольжение обходом, тонкий лёд в три стадии, мороз;
-  мамонт с шаманкой, 4 фазы.
-- 13 «Театр марионеток» (v2.90) — НИТИ И СЦЕНА: Кукловод в четыре акта, вага — слабое
-  место. Известное: в акте II у южного края он уходит под полосу интерфейса (висит на
-  y 8,6, камера держит героя) — лечится только сдвигом камеры этажа; маятники ~12 кл/с.
-- 14 «Часовая башня» — ВРЕМЯ: «ЧАС» раз в 50–70 с (предупреждение за 3 с, «вдох» за 2 под
-  `timeStop`, который бьёт через 2 с после вызова), мир стоит 2–2,4 с. Кольцо ножей
-  «ОСТАНОВКИ» — со СКВОЗНЫМ проёмом (иначе нож с дальней стороны бил в спину). «ПОЛНОЧЬ»:
-  сильный бот добивает раньше — нужен гарантированный финал, удар укоротить до ~2 с.
-- 15 «Ядро подземелья» (v2.93) — ГРАВИТАЦИЯ, `mapVer: 3`, музыка
-  `{ explore: 'depths', boss: 'finale' }`. Бот гибнет в залах 77 (под тягой колодца не
-  ест), 81, 82 — механику под бота не правили.
+- 1 «Крысиные норы» (ratmen, shaman, traps, Король 2.0); 2 «Грибной грот» (Живые
+  доспехи); 3 «Затопленная бездна» (curse of ascent, Алая пасть); 4 «Двойная крипта»
+  (necromancer, statues, Каменный идол); 5 «Лабиринт» (living walls, Минотавр).
+- 6 «Огненный разлом» (lava, collapsing bridge `setTile`, Красный змей); 7 «Зеркальный
+  лабиринт» (mirror portals `moveHero`, Отражение built from the hero's sheet — in the
+  shadow phase the real one is the one casting a shadow, the rest `onHit` → 0); 8
+  «Бесконечный замок» (fusuma slide via `setTile` with a warning, Демон семи лун); 9
+  «Лабиринт гидры» (teleport circles, a stump regrows as two unless cauterized with
+  brazier fire); 10 «Трон демона» (gargoyles `ghost`, succubi `charm`, the arena edge
+  falls away into the abyss).
+- 11 «Небесный архипелаг» — WIND (the wind field moves hero, mobs, projectiles, loot;
+  «СДУЛО» — 12% and return to solid ground; Древний страж, dome — damage ×0).
+- 12 «Полярная ночь» (v2.91) — ICE: sliding via a workaround, thin ice in three stages,
+  frost; mammoth with a shamaness, 4 phases.
+- 13 «Театр марионеток» (v2.90) — STRINGS AND STAGE: Кукловод in four acts, the control bar
+  (вага) is the weak spot. Known: in act II at the south edge he goes under the UI strip
+  (hangs at y 8.6, the camera holds the hero) — only a per-floor camera offset fixes it;
+  pendulums ~12 cells/s.
+- 14 «Часовая башня» — TIME: «ЧАС» every 50–70 s (warning 3 s ahead, an "inhale" 2 s ahead
+  under `timeStop`, which strikes 2 s after the call), the world stands still for 2–2.4 s.
+  The «ОСТАНОВКИ» knife ring has a THROUGH gap (otherwise a knife from the far side hit the
+  back). «ПОЛНОЧЬ»: a strong bot finishes the boss earlier — needs a guaranteed finale,
+  shorten the strike to ~2 s.
+- 15 «Ядро подземелья» (v2.93) — GRAVITY, `mapVer: 3`, music
+  `{ explore: 'depths', boss: 'finale' }`. The bot dies in halls 77 (doesn't eat under the
+  well's pull), 81, 82 — mechanics were not tuned for the bot.
 
-## 15-й — две половины, договор держит тест
+## Floor 15 — two halves, a test holds the contract
 
-- «Мир» — `f15.ts` (собирает `FloorDef`), `f15-brains.ts`, `f15-art.ts`, `f15-map.ts`
-  (`scripts/dungeon/f15.py`); районы `f15` → `f15gut` → `f15veins` (id старые).
-  `registerFloor(15)`: колодцы (тяга героя, мобов, снарядов, добычи; снаряды гнутся),
-  рычаг «тянет/толкает», острова на орбитах, невесомость и тяжесть, телескоп и звёздная
-  дверь, шесть залов-событий.
-- «Сердце» — `f15-boss*.ts` (`scripts/dungeon/f15_boss.py`), район `f15heart`. Фазы:
-  ОТГОЛОСКИ (пять эхо, спит неуязвимым) → ПРОБУЖДЕНИЕ → ГРАВИТАЦИЯ → ПОДЗЕМЕЛЬЕ ПОМНИТ
-  (четверти — лава, бездна, зеркала, круги гидры) → ЗАТМЕНИЕ → СВЕРХНОВАЯ → `finale`.
-  Стенду — `f15bForce(sim, API, фаза)`: здоровьем пролог не сдвинуть.
-- Стык — столбцы `F15_JOIN` 28–35, верхние ряды «Пояса» сводит к ночи «Ядра» `seamBlend`
-  (`f15-art.ts`).
-- Звуки — `f15_*`, `f15b_*` (четверти шлют `f15b_<kind>_trap`, гидра — `f15b_warp_call`).
-- Известное: в фазе 3 пики от `retiled`; смерть Хозяина ускорена ×2,3 — финал через 1,5 с
-  (нужен финал после `linger`).
+- «Мир» (World) — `f15.ts` (assembles the `FloorDef`), `f15-brains.ts`, `f15-art.ts`,
+  `f15-map.ts` (`scripts/dungeon/f15.py`); areas `f15` → `f15gut` → `f15veins` (old ids).
+  `registerFloor(15)`: wells (pull on hero, mobs, projectiles, loot; projectiles bend), a
+  "pull/push" lever, islands on orbits, weightlessness and heaviness, the telescope and
+  the star door, six event halls.
+- «Сердце» (Heart) — `f15-boss*.ts` (`scripts/dungeon/f15_boss.py`), area `f15heart`.
+  Phases: ОТГОЛОСКИ (five echoes, sleeps invulnerable) → ПРОБУЖДЕНИЕ → ГРАВИТАЦИЯ →
+  ПОДЗЕМЕЛЬЕ ПОМНИТ (quarters — lava, abyss, mirrors, hydra circles) → ЗАТМЕНИЕ →
+  СВЕРХНОВАЯ → `finale`. For the rig — `f15bForce(sim, API, фаза)` (фаза = phase): the
+  prologue can't be advanced via health.
+- Seam — columns `F15_JOIN` 28–35; `seamBlend` (`f15-art.ts`) blends the top rows of
+  «Пояс» into the night of «Ядро».
+- Sounds — `f15_*`, `f15b_*` (quarters send `f15b_<kind>_trap`, the hydra —
+  `f15b_warp_call`).
+- Known: in phase 3 frame spikes from `retiled`; Хозяин's death is sped up ×2.3 — finale
+  after 1.5 s (a finale after `linger` is needed).
 
-## Инвентарь и сундук у койки (`lib/inventory.ts`, `components/Inventory.tsx`)
+## Inventory and bunk chest (`lib/inventory.ts`, `components/Inventory.tsx`)
 
-Один экран со всем имуществом по разделам, лимиты прежние; сундук у койки в Бараке 1
-(27 ячеек, двойной — 54), вещь возвращается туда, откуда пришла. **Руда рюкзака шахты в
-сундук не кладётся нарочно** — иначе «Получка» (×2) стала бы копилкой на тысячи блоков.
-Владелец знает.
+One screen with all belongings by section, limits unchanged; the bunk chest in Барак 1
+(27 slots, double — 54), an item returns where it came from. **Mine-backpack ore
+deliberately can't go into the chest** — otherwise «Получка» (×2) would become a piggy bank
+for thousands of blocks. The owner knows.
 
-## Креатив владельца (`lib/creative.ts`, `components/CreativePanel.tsx`)
+## Owner's creative mode (`lib/creative.ts`, `components/CreativePanel.tsx`)
 
-- Отдельное сохранение-песочница: пока включён, игровые ключи (слоты, каторга, лес,
-  подземелье, рыбалка, сундук) пишутся и читаются с приставкой `creative.` (`gameKey` в
-  `makePersister` — ключ считается В МОМЕНТ ЗАПИСИ); настоящие лежат нетронутыми.
-- **Вход:** сбросить отложенные записи в настоящие ключи → переключить → песочница
-  (100 млн монет, 10 млн токенов, 999 ключей, яйца, все этажи, лифты и боссы, склад) →
-  записать всё → только потом флаг `creative.state`. **Выход:** дописать песочницу →
-  прочитать настоящие → ещё раз дописать песочницу → переключить и поставить настоящее
-  одним `set`. **Между сбросом и переключением не должно быть await** — иначе отложенная
-  запись песочницы уйдёт в настоящее сохранение.
-- Бессмертие — `SimOptions.god` (смертельный удар оставляет 1 здоровья, с новой вылазки).
-  Вход — «Касса» и кнопка с палочкой во дворе, только владельцу (в разработке — всем);
-  включён — справа посередине плашка «КРЕАТИВ». Проверка на стенде: вход, смена ранга,
-  перезагрузка держит песочницу, бессмертие стоит; выход и перезагрузка возвращают
-  настоящее (ранг, монеты, токены).
-- **ТП** (v2.88, `creativeWarp` в `dungeon-sim.ts`): «ТП к боссу» — снаружи у ворот, ближних
-  к K (в бой входишь сам); отдыхающий босс просыпается; в бою — рядом с боссом. «ТП к
-  лифту» — ближайший лифт, идущий бой сбрасывается (`resetBoss`), иначе ворота остались бы
-  закрыты. Тест на всех этажах.
+- A separate sandbox save: while it's on, game keys (slots, «Каторга», forest, dungeon,
+  fishing, chest) are written and read with the `creative.` prefix (`gameKey` in
+  `makePersister` — the key is computed AT WRITE TIME); the real ones stay untouched.
+- **Enter:** flush pending writes to the real keys → switch → sandbox (100M coins, 10M
+  tokens, 999 keys, eggs, all floors, lifts and bosses, storage) → write everything → only
+  then the `creative.state` flag. **Exit:** flush the sandbox → read the real ones → flush
+  the sandbox again → switch and set the real state in one `set`. **No await between the
+  flush and the switch** — otherwise a pending sandbox write lands in the real save.
+- Immortality — `SimOptions.god` (a lethal hit leaves 1 health; from the next run). Entry —
+  «Касса» and the wand button in the yard, owner only (in dev — everyone); when on, a
+  «КРЕАТИВ» plaque mid-right. Rig check: enter, change rank, reload keeps the sandbox,
+  immortality is on; exit and reload bring back the real state (rank, coins, tokens).
+- **TP** (v2.88, `creativeWarp` in `dungeon-sim.ts`): «ТП к боссу» — outside at the gate
+  nearest to K (you enter the fight yourself); a resting boss wakes up; during a fight —
+  next to the boss. «ТП к лифту» — the nearest lift, an ongoing fight is reset
+  (`resetBoss`), otherwise the gates would stay closed. Tested on all floors.
 
-## Сброс подземелья (v2.89)
+## Dungeon reset (v2.89)
 
-- Владелец: «сбрасывай все подземелья. Играю только я один… просто тест провожу».
-- `DUNGEON_SAVE_VER` (`dungeon.ts`): сохранение с меньшей версией → `DUNGEON_START`.
-  `BUNK_MATS_VER` (`inventory.ts`): сундук с меньшей версией теряет все `{t:'mat'}`, вещи,
-  яйца, книги и руны остаются. Метки независимы — каждый блоб решает сам, сброс
-  повторяется на каждой загрузке, пока блоб не перезаписан; `persistBunk` пишет метку
-  всегда. Кошелёк, каторга, автоматы, питомцы не тронуты; восстановленная из
-  `/var/lib/coco/backups` старая копия сбросится той же проверкой.
-- **Всегда** `normalizeDungeon` выкидывает неизвестные id из `kills`, `stash`, сидора
-  (`knownMat`, `isMeat`), сундук — неизвестные материалы: переделанный этаж может убирать
-  свои старые id.
-- **Ещё раз сбросить — поднять ОБЕ метки.**
+- Owner (quote): «сбрасывай все подземелья. Играю только я один… просто тест провожу».
+- `DUNGEON_SAVE_VER` (`dungeon.ts`): a save with a lower version → `DUNGEON_START`.
+  `BUNK_MATS_VER` (`inventory.ts`): a chest with a lower version loses all `{t:'mat'}`;
+  items, eggs, books and runes stay. The markers are independent — each blob decides on its
+  own, the reset repeats on every load until the blob is rewritten; `persistBunk` always
+  writes the marker. Wallet, «Каторга», slots, pets are untouched; an old copy restored
+  from `/var/lib/coco/backups` is reset by the same check.
+- **Always**: `normalizeDungeon` drops unknown ids from `kills`, `stash`, the sack
+  (`knownMat`, `isMeat`); the chest drops unknown materials: a reworked floor may remove
+  its old ids.
+- **To reset again — raise BOTH markers.**
 
-## Не проверено
+## Not verified
 
-На телефоне — этажи, креатив, все бои (только стенд 390×844); ухом — звуки этажей.
+On a phone — floors, creative mode, all fights (rig 390×844 only); by ear — floor sounds.
 
-## Указатель выпусков (grep по `.claude/archive/dungeon-floors-history.md`)
+## Release index (grep `.claude/archive/dungeon-floors-history.md`)
 
-- v2.81 этажи 1–5, инвентарь, креатив; v2.81.1 заготовки спрятаны (`draft`); v2.82.0/.1
-  этажи 6–10; v2.82.2 «Движок 3» (`heroDown`); v2.83–v2.84 этажи 11–15, просвечивание
-  предметов; v2.87 решётки пара 11-го; v2.88 ТП креатива; v2.89 сброс подземелья.
-- Переделки: v2.90 13-й (Театр, было «Город за стенами»), v2.91 12-й (Полярная ночь, было
-  «Проклятая станция»), v2.93 15-й (Ядро, было «Сердце» со львом), v2.95 `seamBlend`.
-- Анимации: боссы v2.85–v2.97, мобы 2/3/5/4/1/7 — v2.98/99/100/101/103/105
+- v2.81 floors 1–5, inventory, creative; v2.81.1 placeholders hidden (`draft`);
+  v2.82.0/.1 floors 6–10; v2.82.2 «Движок 3» (`heroDown`); v2.83–v2.84 floors 11–15,
+  see-through items; v2.87 floor 11 steam grates; v2.88 creative TP; v2.89 dungeon reset.
+- Reworks: v2.90 floor 13 (Театр, was «Город за стенами»), v2.91 floor 12 (Полярная ночь,
+  was «Проклятая станция»), v2.93 floor 15 (Ядро, was «Сердце» with the lion), v2.95
+  `seamBlend`.
+- Animations: bosses v2.85–v2.97, mobs 2/3/5/4/1/7 — v2.98/99/100/101/103/105
   (`dungeon-boss-anim.md`).
