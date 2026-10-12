@@ -720,7 +720,7 @@ const SWING: [number, number, number, number, number, number, ('i' | 'o' | 'l' |
   [1.22, 9.0, 5.4, 11.6, STRIKE_A, STRIKE_F],
   [CATCH, 8.8, 5.6, 13.2, STRIKE_A, STRIKE_F, 'o'],
   [1.52, 9.6, 1.8, 26.0, STRIKE_A, STRIKE_F, 'o'],
-  [1.76, 9.6, 1.8, 26.2, STRIKE_A, STRIKE_F],
+  [1.7, 9.6, 1.8, 26.2, STRIKE_A, STRIKE_F],
   [2.0, PAW0[0], PAW0[1], PAW0[2], STRIKE_A, STRIKE_F, 's'],
 ];
 function swingAt(t: number): { p: V3; A: number; F: number } {
@@ -828,7 +828,13 @@ function workPose(t: number): Pose {
   o.tilt = 0.08 * hold;
   const imp = (t >= HIT1 - 0.03 && t < HIT1 + 0.08) || (t >= HIT2 - 0.03 && t < HIT2 + 0.08);
   o.eye =
-    t >= 1.4 && t < 1.82 ? 'happy' : t >= POP && t < CATCH + 0.02 ? 'wide' : imp ? 'squint' : 'open';
+    t >= 1.4 && t < 1.82
+      ? 'happy'
+      : t >= POP && t < CATCH + 0.02
+        ? 'wide'
+        : imp
+          ? 'squint'
+          : 'open';
   o.jaw = 0.4 * bump(t, POP, CATCH + 0.04) + 0.3 * bump(t, 1.44, 1.84);
   o.grin = REST.grin + 0.7 * bump(t, 1.38, 1.9);
   o.chest = 0.6 * hold;
@@ -1421,7 +1427,9 @@ function arms(out: PartF[], rods: Rod[], c: Ctx): void {
       id: aid,
       bias: 0.04,
     });
-    const ft = HI ? (qx: number, _qy: number, qz: number) => furTicks(qz * 0.6, qx * 0.9) : undefined;
+    const ft = HI
+      ? (qx: number, _qy: number, qz: number) => furTicks(qz * 0.6, qx * 0.9)
+      : undefined;
     limb(out, sh, el, 2.2 * k, 2.3 * k, P_BLK, aid, { bias: 0.04, tex: ft });
     limb(out, el, paw, 2.0 * k, 2.1 * k, P_BLK, aid, { bias: 0.06, tex: ft });
     const fd = norm(sub(paw, el));
@@ -1446,8 +1454,14 @@ function arms(out: PartF[], rods: Rod[], c: Ctx): void {
     // Когти: три длинных костяных, загнуты к зрителю.
     for (const u of HI ? [-1.15, 0, 1.15] : [-1.0, 0, 1.0]) {
       const b = add(pc, add(mul(fd, 1.7 * k), add(mul(lat, u * sp * k), mul(fw, 0.5 * k))));
-      const m = add(b, add(mul(fd, 1.4 * cl * k), add(mul(lat, u * 0.3 * o.claw * k), mul(fw, 0.3 * k))));
-      const e = add(m, add(mul(fd, 1.0 * cl * k), add(mul(lat, u * 0.3 * o.claw * k), mul(fw, 0.7 * cl * k))));
+      const m = add(
+        b,
+        add(mul(fd, 1.4 * cl * k), add(mul(lat, u * 0.3 * o.claw * k), mul(fw, 0.3 * k))),
+      );
+      const e = add(
+        m,
+        add(mul(fd, 1.0 * cl * k), add(mul(lat, u * 0.3 * o.claw * k), mul(fw, 0.7 * cl * k))),
+      );
       rods.push({ a: b, b: m, w: HI ? 0.9 : 0.5, pal: P_CLAW, tone: 4 });
       rods.push({ a: m, b: e, w: HI ? 0.7 : 0.5, pal: P_CLAW, tone: 5 });
     }
@@ -2022,7 +2036,13 @@ function face(p: Px, f: Frame, c: Ctx): void {
   }
   if (HI)
     for (const side of [-1, 1]) {
-      const at = seen(f, mul(h.at([side * 0.65, 9.0, -2.45 + 0.32 * o.sniff]), RR), OX, OY, 1.6 * RR);
+      const at = seen(
+        f,
+        mul(h.at([side * 0.65, 9.0, -2.45 + 0.32 * o.sniff]), RR),
+        OX,
+        OY,
+        1.6 * RR,
+      );
       if (at) p.set(at[0], at[1], INK_V[V]);
     }
   if (!HI) return;
