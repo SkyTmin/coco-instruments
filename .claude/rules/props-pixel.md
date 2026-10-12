@@ -31,7 +31,10 @@ onMark, onEnd, label`): one shared rAF clock, only `transform` per frame; 'once'
   decode (shows `poster` frame 0 until then), fires marks when their frame is SHOWN, `onEnd`
   after the last frame (+ guard timer). Reduced motion: loop → frame 0; once → last frame, all
   marks + onEnd at once (callers that play sounds on marks should skip the strip instead).
-  `preloadPx(set, name, size)` — call on the tap that will show a 'once' strip.
+  `preloadPx(set, name, size)` — call on the tap that will show a 'once' strip. **Bug fixed in the
+  eggs round**: marks were fired by `cb.current.onMark?.(marks[next++][0])` — with no `onMark`
+  optional chaining skips the arguments, `next++` never ran and the page FROZE on the first
+  mark (`BatchEgg` passes no `onMark`). Never put side effects in the arguments of `?.()`.
 - **SW**: `**/ui/px/**` out of the precache, runtime CacheFirst `coco-px`. After `npm run
 build`, `grep -c "ui/px/" dist/sw.js` → 1.
 - **Tests** use `testkit.ts`: `manifestProblems(mod, PX, ROOT)` (names, n/fps/loop, marks,
@@ -66,8 +69,9 @@ build`, `grep -c "ui/px/" dist/sw.js` → 1.
 - **Effects language (after the owner rejected the books' epic/legend: «недоработано, эффекты не
   проработаны»)** — no checkerboard dither anywhere in effects; everything fades by palette
   STEPS (`GLOW[r]`: dark, dark-colour, colour, lighter, light, white), shrinking or narrowing.
-  Burst light never covers the egg/shards: the halo (hollow ring, 2–3 frames) and rays draw only
-  on empty pixels. Beam (`beam`): white core + light + colour bands + 1-px dark edge, width
+  Burst light never covers the egg/shards: the impact flash (10-point jagged star, long/short
+  teeth, 2–3 frames white → light → colour) and rays draw only on empty pixels (a filled disc
+  read as a pale blob, a hollow ring as a hoop). Beam (`beam`): white core + light + colour bands + 1-px dark edge, width
   constant per 2·S-row block and the blocks flow up (stepped edges), base flare, rounded cap,
   grows with overshoot (`easeBack`), narrows to nothing while its base lifts off — never pops;
   rising 2×2 motes. Floor rings (`floorRing`): band in the floor plane + a glowing wall above it
@@ -95,11 +99,11 @@ build`, `grep -c "ui/px/" dist/sw.js` → 1.
   strip draws them); CSS rays/burst glow stay behind the pet. `HatchBatch`: `BatchEgg` breathes
   the idle frame with the CSS wobble, at `i × step` plays `pop-<egg>` once (burst at +250 ms,
   the pet tile appears at `--i × --step + 250ms`), pop strips preloaded on mount.
-- **Weight** (lossless WebP): idle s 3–7 KB, l 17–50 KB; hatch 64 (moss r0) … 247 KB (dragon
-  r5, the brief's cap is 250 — r5 was 306 KB at 3.2 + 1.35 s; trimmed to 2.9 + 1.05 s, smoke
-  fades after crack1, pillar and sunburst fade earlier); pop 4–5 KB; set total ≈ 1.6 MB, a
-  player loads idle + one hatch strip per hatch. Post-burst frames cost ~2× pre-burst ones
-  (pieces, dither, pillar stripes) — trim the post first.
+- **Weight** (lossless WebP): idle s 3–7 KB, l 17–50 KB; hatch 59 (moss r0) … 247 KB (dragon
+  r5; the brief's cap is 250 — r5 was 306 KB at 3.2 + 1.35 s, now 2.7 + 1.2 s; smoke fades after
+  crack1); pop 4–5 KB; set total ≈ 1.58 MB, a player loads idle + one hatch strip per hatch.
+  Post-burst frames cost ~2× pre-burst ones (pieces, beam, rings) — trim the post first. Stepped
+  effects instead of dither cost about the same (the bigger beam and thick rings ate the saving).
 - **Stand** (not committed): `px-stand.html?scene=pets&nest=dragon,crystal&eggs=moss:3&rnd=0.999`
   renders the real `PetsTab` with a patched store and a fixed `Math.random` (rarity), so the
   hatch scene and «Вылупить все» run for real. Screenshots at DPR 3 are slow (~0.5 s each) —

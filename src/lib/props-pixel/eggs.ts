@@ -2166,24 +2166,34 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
   const floorY = oy;
   const ramp = glowR(r);
   const R0 = SHAPE[kind].R * S;
-  // Вспышка разлома — ЗА кусками (по пустому): ореол из-за силуэта, кольцом расходится
-  // и истончается, гаснет ступенями; середину и куски не заливает.
+  // Вспышка разлома — ЗА кусками (по пустому): зубчатая звезда удара из-за силуэта
+  // (длинные и короткие зубцы), 2–3 кадра: белая → светлая → цветная, растёт и гаснет
+  // ступенями; яйцо и куски не заливает.
   const fu = tau / (r >= 4 ? 0.12 : 0.1);
   if (fu < 1) {
-    const fl = r >= 4 ? 1.25 : r >= 2 ? 1.05 : 0.8;
+    const fl = r >= 4 ? 1.35 : r >= 2 ? 1.15 : 0.85;
     const e = easeOut(fu);
-    const rr = (0.95 + e * 0.75) * fl * R0 + 2 * S;
-    const hole = rr * (0.55 + e * 0.35);
+    const rr = (1 + e * 0.5) * fl * R0 + 2 * S;
+    const NP = 10;
     const s0 = Math.floor(fu * 3);
-    for (let yy = Math.floor(cy - rr); yy <= cy + rr; yy++)
-      for (let xx = Math.floor(cx - rr); xx <= cx + rr; xx++) {
-        const D = Math.hypot(xx + 0.5 - cx, (yy + 0.5 - cy) * 1.1);
-        if (D > rr || D < hole) continue;
-        const d = (D - hole) / Math.max(1, rr - hole);
-        const k = (d < 0.4 ? 5 : d < 0.75 ? 4 : 2) - s0 - (r < 2 ? 1 : 0);
+    const lim = rr * 1.45;
+    for (let yy = Math.floor(cy - lim); yy <= cy + lim; yy++)
+      for (let xx = Math.floor(cx - lim); xx <= cx + lim; xx++) {
+        const dx = xx + 0.5 - cx;
+        const dy = (yy + 0.5 - cy) * 1.1;
+        const th = Math.atan2(dy, dx) + 0.3;
+        // Зубцы: треугольная волна по углу, чётные длиннее.
+        const q = wrap((th / (Math.PI * 2)) * NP, 1);
+        const tooth = 1 - Math.abs(q - 0.5) * 2;
+        const long = Math.floor(wrap(th / (Math.PI * 2), 1) * NP) % 2 ? 0.25 : 0.45;
+        const lim2 = rr * (0.8 + long * tooth);
+        const d = Math.hypot(dx, dy) / lim2;
+        if (d > 1) continue;
+        const k = (d < 0.62 ? 5 : d < 0.84 ? 4 : 2) - s0 - (r < 2 ? 1 : 0);
         if (k >= 0) onEmpty(p, xx, yy, toneC(ramp, k));
       }
   }
+
   // Столб света (r ≥ 3): из места яйца вверх; ближние куски его закрывают.
   if (r >= 3) beam(p, f, cx, cy + 6 * S, C[1] * CE + C[2] * SE, tau, pl, S, r);
   // Лучи: у r2–r4 втягиваются те, что выросли до разлома; у r5 — вращающееся солнце.

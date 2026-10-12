@@ -46,7 +46,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 9, w2: 10, crack2: 16, w3: 17, crack3: 23, burst: 26, clear: 31 },
       l: { x: -42, y: -18, w: 179, h: 141, cols: 46 },
-      rev: '5c2b5e62',
+      rev: '5002e43d',
     },
     'hatch-moss-r1': {
       n: 52,
@@ -54,7 +54,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 11, w2: 12, crack2: 19, w3: 20, crack3: 27, burst: 31, clear: 36 },
       l: { x: -47, y: -33, w: 189, h: 167, cols: 52 },
-      rev: 'e27ca641',
+      rev: '7eca7bf2',
     },
     'hatch-moss-r2': {
       n: 61,
@@ -62,7 +62,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 13, w2: 14, crack2: 24, w3: 25, crack3: 33, burst: 38, clear: 43 },
       l: { x: -52, y: -42, w: 214, h: 197, cols: 61 },
-      rev: 'be0433db',
+      rev: 'a5e0d9db',
     },
     'hatch-stone-r1': {
       n: 52,
@@ -70,7 +70,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 11, w2: 12, crack2: 19, w3: 20, crack3: 27, burst: 31, clear: 36 },
       l: { x: -30, y: -34, w: 172, h: 169, cols: 52 },
-      rev: '51c953f4',
+      rev: 'ecadb823',
     },
     'hatch-stone-r2': {
       n: 61,
@@ -78,7 +78,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 13, w2: 14, crack2: 24, w3: 25, crack3: 33, burst: 38, clear: 43 },
       l: { x: -53, y: -42, w: 216, h: 198, cols: 61 },
-      rev: '1eef3c9c',
+      rev: '415a686a',
     },
     'hatch-stone-r3': {
       n: 80,
@@ -86,7 +86,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 17, w2: 18, crack2: 31, w3: 32, crack3: 43, burst: 50, clear: 55 },
       l: { x: -61, y: -141, w: 235, h: 297, cols: 68 },
-      rev: 'e08f8000',
+      rev: '53675557',
     },
     'hatch-crystal-r2': {
       n: 61,
@@ -94,7 +94,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 13, w2: 14, crack2: 24, w3: 25, crack3: 33, burst: 38, clear: 43 },
       l: { x: -51, y: -41, w: 212, h: 194, cols: 61 },
-      rev: '126f5978',
+      rev: 'a6d588d6',
     },
     'hatch-crystal-r3': {
       n: 80,
@@ -102,7 +102,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 17, w2: 18, crack2: 31, w3: 32, crack3: 43, burst: 50, clear: 55 },
       l: { x: -59, y: -143, w: 230, h: 296, cols: 69 },
-      rev: '759f9da4',
+      rev: 'bd22ba1f',
     },
     'hatch-crystal-r4': {
       n: 97,
@@ -110,7 +110,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 22, w2: 23, crack2: 40, w3: 41, crack3: 56, burst: 65, clear: 70 },
       l: { x: -84, y: -156, w: 280, h: 313, cols: 57 },
-      rev: '297f0f28',
+      rev: 'a24f9bd2',
     },
     'hatch-dragon-r3': {
       n: 80,
@@ -118,7 +118,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 17, w2: 18, crack2: 31, w3: 32, crack3: 43, burst: 50, clear: 55 },
       l: { x: -60, y: -142, w: 232, h: 296, cols: 68 },
-      rev: '59fd7761',
+      rev: '087049f1',
     },
     'hatch-dragon-r4': {
       n: 97,
@@ -126,7 +126,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 22, w2: 23, crack2: 40, w3: 41, crack3: 56, burst: 65, clear: 70 },
       l: { x: -84, y: -156, w: 280, h: 314, cols: 57 },
-      rev: 'f47881b0',
+      rev: '953942a8',
     },
     'hatch-dragon-r5': {
       n: 94,
@@ -134,7 +134,7 @@ export const PX: PxManifest = {
       loop: false,
       marks: { w1: 0, crack1: 22, w2: 23, crack2: 40, w3: 41, crack3: 56, burst: 65, clear: 70 },
       l: { x: -82, y: -178, w: 283, h: 332, cols: 56 },
-      rev: '6488d902',
+      rev: '11c8d681',
     },
     'pop-moss': {
       n: 15,
