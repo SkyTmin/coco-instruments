@@ -34,6 +34,7 @@ import { MAP_F14_DIAL, MAP_F14_SAND } from './f14-map';
 import { F14_FX, KNIFE_ANG, LORD, NOON, REAPER, rewindTrail, worldStopped } from './f14-brains';
 import './f14-mob-beetle';
 import './f14-mob-soldier';
+import './f14-mob-sand';
 
 type RGBA = [number, number, number, number];
 
@@ -681,136 +682,6 @@ registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
   const out: MobFrame = { img: q.canvas(), ax: c, ay: c + 4, eye: null };
   frames.set(key, out);
   return out;
-});
-
-// ---------------------------------------------------------------------------
-// Песочный призрак: фигура из текущего песка — капюшон, светящиеся глаза,
-// руки-струи, хвост до земли. Рассыпается бугром и собирается обратно.
-// Кадр 24×27, земля 25.
-// ---------------------------------------------------------------------------
-
-const GHOST = {
-  sand: tn('#5a3c1c', '#9a7440', '#d0ac6c', '#f4e2b0'),
-  core: tn('#24140a', '#4a3018', '#6a4a24', '#8a6a3a'),
-  eye: hx('#ffcf5a'),
-};
-
-type GhostArms = 'down' | 'up' | 'claw' | 'blast';
-interface GhostPose {
-  f: number;
-  rise: number;
-  arms: GhostArms;
-  mound?: boolean;
-}
-
-function drawSandGhost(o: GhostPose): Built {
-  const p = new Px(24, 27);
-  const G = 25;
-  const cx = 10;
-  if (o.mound || o.rise <= 0.05) {
-    // Бугор песка с рябью — бежит под полом.
-    for (let x = 3; x <= 17; x++) {
-      const u = (x - 10) / 7;
-      const hgt = Math.max(0, Math.round((1 - u * u) * 4 + Math.sin(x * 1.3 + o.f) * 0.6));
-      for (let y = 0; y < hgt; y++)
-        p.set(
-          x,
-          G - 1 - y,
-          y === hgt - 1 ? GHOST.sand[3] : y > hgt - 3 ? GHOST.sand[2] : GHOST.sand[1],
-        );
-    }
-    for (let i = 0; i < 4; i++)
-      p.set(5 + Math.floor(hash(i, o.f) * 12), G - 5 - Math.floor(hash(o.f, i) * 3), GHOST.sand[3]);
-    p.outline(alpha(INK, 0.6));
-    return { p, ax: cx, ay: G, eye: null };
-  }
-  const top = G - Math.round(21 * o.rise);
-  // Хвост-струя до земли.
-  for (let y = top + 10; y < G; y++) {
-    const k = (y - top - 10) / Math.max(1, G - top - 10);
-    const w = 3.5 - k * 1.5 + Math.sin(y * 0.9 + o.f * 1.7) * 0.6;
-    for (let x = Math.floor(cx - w); x <= Math.ceil(cx + w - 1); x++) {
-      const n = hash(x, y, o.f);
-      if (n < 0.1 + k * 0.4) continue;
-      p.set(x, y, n > 0.8 ? GHOST.sand[3] : n > 0.45 ? GHOST.sand[2] : GHOST.sand[1]);
-    }
-  }
-  // Тело и капюшон.
-  shadeEll(p, cx, top + 9, 5, 5.5, GHOST.sand, 0.05);
-  shadeEll(p, cx + 0.5, top + 4.5, 3.9, 3.9, GHOST.sand, 0.12);
-  // Тёмное лицо под капюшоном.
-  shadeEll(p, cx + 1.6, top + 5.2, 2.3, 2.1, GHOST.core, -0.2);
-  const arm = (x0: number, y0: number, x1: number, y1: number) => {
-    limb(p, x0, y0, x1, y1, 1.4, 0.8, GHOST.sand, 0.1);
-    for (let i = 0; i < 3; i++)
-      p.set(Math.round(x1 + (hash(i, o.f, 5) - 0.5) * 2), Math.round(y1 + 1 + i), GHOST.sand[2]);
-  };
-  if (o.arms === 'up') {
-    arm(cx - 3, top + 9, cx - 8, top + 3);
-    arm(cx + 4, top + 9, cx + 9, top + 3);
-  } else if (o.arms === 'claw') {
-    arm(cx + 2, top + 8, cx + 9, top + 8);
-    arm(cx - 1, top + 9, cx + 7, top + 11);
-  } else if (o.arms === 'blast') {
-    arm(cx + 2, top + 7, cx + 9, top + 6);
-    for (let i = 0; i < 6; i++)
-      p.set(cx + 10 + i, top + 5 + Math.floor(hash(i, o.f, 9) * 3), GHOST.sand[3]);
-  } else {
-    arm(cx - 3, top + 8, cx - 5, top + 13);
-    arm(cx + 3, top + 8, cx + 5, top + 13);
-  }
-  // Песок осыпается с краёв — кадр живёт.
-  for (let i = 0; i < 6; i++) {
-    const x = cx - 5 + Math.floor(hash(i, o.f, 1) * 11);
-    const y = top + 3 + Math.floor((hash(i, 2) * 10 + o.f * 2) % 14);
-    p.set(x, y, GHOST.sand[3]);
-  }
-  p.outline(INK);
-  p.set(cx + 1, top + 5, GHOST.eye);
-  p.set(cx + 3, top + 5, GHOST.eye);
-  return { p, ax: cx, ay: G, eye: [cx + 3, top + 5] };
-}
-
-registerMobPainter('f14_sand', (_m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame % 4;
-  let anim = 'idle';
-  let fr = f;
-  let o: GhostPose = { f, rise: 1, arms: 'down' };
-  const gray = mode === 'f14_frozen';
-  if (gray) {
-    anim = 'tableau';
-    fr = 0;
-    o = { f: 1, rise: 1, arms: 'claw' };
-  } else if (mode === 'f14_under') {
-    anim = 'under';
-    o = { f, rise: 0, arms: 'down', mound: true };
-  } else if (mode === 'f14_sink') {
-    anim = 'sink';
-    fr = Math.min(3, Math.floor(pose.t / 0.09));
-    o = { f: fr, rise: 1 - fr / 3.5, arms: 'up' };
-  } else if (mode === 'f14_rise') {
-    anim = 'rise';
-    fr = Math.min(3, Math.floor(pose.t / 0.13));
-    o = { f: fr, rise: 0.15 + fr / 3.4, arms: 'up' };
-  } else if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-    o = { f: fr, rise: Math.max(0, 1 - fr / 3), arms: 'up' };
-  } else if (mode === 'windup' || mode === 'f14_blast') {
-    anim = mode;
-    fr = f % 2;
-    o = { f: fr, rise: 1, arms: mode === 'windup' ? 'up' : 'blast' };
-  } else if (mode === 'recover' && pose.t < 0.2) {
-    anim = 'claw';
-    fr = 0;
-    o = { f: 0, rise: 1, arms: 'claw' };
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    fr = 0;
-    o = { f: 1, rise: 0.92, arms: 'up' };
-  }
-  return frameOf('f14_sand', pose, anim, fr, () => drawSandGhost(o), gray);
 });
 
 // ---------------------------------------------------------------------------
