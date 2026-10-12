@@ -8,52 +8,487 @@
    "fps": 24,
    "loop": true,
    "s": {
-    "x": 5,
+    "x": 4,
+    "y": -3,
+    "w": 28,
+    "h": 39,
+    "cols": 48
+   },
+   "l": {
+    "x": 16,
+    "y": -4,
+    "w": 80,
+    "h": 113,
+    "cols": 48
+   },
+   "rev": "b4ec7e55",
+   "bytes": {
+    "s": 3832,
+    "l": 29302
+   }
+  },
+  "idle-stone": {
+   "n": 48,
+   "fps": 24,
+   "loop": true,
+   "s": {
+    "x": 3,
     "y": 2,
-    "w": 26,
+    "w": 30,
+    "h": 34,
+    "cols": 48
+   },
+   "l": {
+    "x": 14,
+    "y": 12,
+    "w": 84,
+    "h": 97,
+    "cols": 48
+   },
+   "rev": "dfeee1d7",
+   "bytes": {
+    "s": 3086,
+    "l": 22608
+   }
+  },
+  "idle-crystal": {
+   "n": 48,
+   "fps": 24,
+   "loop": true,
+   "s": {
+    "x": 4,
+    "y": 1,
+    "w": 28,
     "h": 35,
     "cols": 48
    },
    "l": {
-    "x": 20,
-    "y": 11,
-    "w": 72,
-    "h": 99,
+    "x": 17,
+    "y": 9,
+    "w": 78,
+    "h": 100,
     "cols": 48
    },
-   "rev": "20c78b82",
+   "rev": "4ff49ec6",
    "bytes": {
-    "s": 836,
-    "l": 3728
+    "s": 2820,
+    "l": 17778
+   }
+  },
+  "idle-dragon": {
+   "n": 48,
+   "fps": 24,
+   "loop": true,
+   "s": {
+    "x": 4,
+    "y": -10,
+    "w": 28,
+    "h": 46,
+    "cols": 48
+   },
+   "l": {
+    "x": 16,
+    "y": -30,
+    "w": 80,
+    "h": 139,
+    "cols": 48
+   },
+   "rev": "134594cc",
+   "bytes": {
+    "s": 7294,
+    "l": 50786
    }
   },
   "hatch-moss-r0": {
-   "n": 24,
+   "n": 46,
    "fps": 24,
    "loop": false,
    "marks": {
-    "crack1": 8,
-    "burst": 16,
-    "clear": 23
-   },
-   "s": {
-    "x": 5,
-    "y": -3,
-    "w": 26,
-    "h": 39,
-    "cols": 24
+    "w1": 0,
+    "crack1": 9,
+    "w2": 10,
+    "crack2": 16,
+    "w3": 17,
+    "crack3": 23,
+    "burst": 26,
+    "clear": 31
    },
    "l": {
-    "x": 20,
-    "y": -5,
-    "w": 72,
-    "h": 114,
-    "cols": 24
+    "x": -42,
+    "y": -18,
+    "w": 179,
+    "h": 138,
+    "cols": 46
    },
-   "rev": "5dd47311",
+   "rev": "f6d4ab66",
    "bytes": {
-    "s": 910,
-    "l": 3060
+    "l": 66032
+   }
+  },
+  "hatch-moss-r1": {
+   "n": 52,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 11,
+    "w2": 12,
+    "crack2": 19,
+    "w3": 20,
+    "crack3": 27,
+    "burst": 31,
+    "clear": 36
+   },
+   "l": {
+    "x": -47,
+    "y": -33,
+    "w": 189,
+    "h": 155,
+    "cols": 52
+   },
+   "rev": "17a93051",
+   "bytes": {
+    "l": 80716
+   }
+  },
+  "hatch-moss-r2": {
+   "n": 61,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 13,
+    "w2": 14,
+    "crack2": 24,
+    "w3": 25,
+    "crack3": 33,
+    "burst": 38,
+    "clear": 43
+   },
+   "l": {
+    "x": -68,
+    "y": -42,
+    "w": 226,
+    "h": 190,
+    "cols": 61
+   },
+   "rev": "c99ecaba",
+   "bytes": {
+    "l": 99718
+   }
+  },
+  "hatch-stone-r1": {
+   "n": 52,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 11,
+    "w2": 12,
+    "crack2": 19,
+    "w3": 20,
+    "crack3": 27,
+    "burst": 31,
+    "clear": 36
+   },
+   "l": {
+    "x": -42,
+    "y": -34,
+    "w": 184,
+    "h": 157,
+    "cols": 52
+   },
+   "rev": "e4242bd4",
+   "bytes": {
+    "l": 69470
+   }
+  },
+  "hatch-stone-r2": {
+   "n": 61,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 13,
+    "w2": 14,
+    "crack2": 24,
+    "w3": 25,
+    "crack3": 33,
+    "burst": 38,
+    "clear": 43
+   },
+   "l": {
+    "x": -68,
+    "y": -42,
+    "w": 226,
+    "h": 194,
+    "cols": 61
+   },
+   "rev": "80b83aa5",
+   "bytes": {
+    "l": 87998
+   }
+  },
+  "hatch-stone-r3": {
+   "n": 73,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 16,
+    "w2": 17,
+    "crack2": 30,
+    "w3": 31,
+    "crack3": 41,
+    "burst": 48,
+    "clear": 53
+   },
+   "l": {
+    "x": -60,
+    "y": -139,
+    "w": 231,
+    "h": 291,
+    "cols": 69
+   },
+   "rev": "0f2d3fe4",
+   "bytes": {
+    "l": 119752
+   }
+  },
+  "hatch-crystal-r2": {
+   "n": 61,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 13,
+    "w2": 14,
+    "crack2": 24,
+    "w3": 25,
+    "crack3": 33,
+    "burst": 38,
+    "clear": 43
+   },
+   "l": {
+    "x": -66,
+    "y": -41,
+    "w": 224,
+    "h": 185,
+    "cols": 61
+   },
+   "rev": "8921ee22",
+   "bytes": {
+    "l": 72368
+   }
+  },
+  "hatch-crystal-r3": {
+   "n": 73,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 16,
+    "w2": 17,
+    "crack2": 30,
+    "w3": 31,
+    "crack3": 41,
+    "burst": 48,
+    "clear": 53
+   },
+   "l": {
+    "x": -58,
+    "y": -141,
+    "w": 229,
+    "h": 289,
+    "cols": 69
+   },
+   "rev": "c23defbd",
+   "bytes": {
+    "l": 102590
+   }
+  },
+  "hatch-crystal-r4": {
+   "n": 90,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 21,
+    "w2": 22,
+    "crack2": 39,
+    "w3": 40,
+    "crack3": 54,
+    "burst": 62,
+    "clear": 67
+   },
+   "l": {
+    "x": -82,
+    "y": -157,
+    "w": 262,
+    "h": 305,
+    "cols": 61
+   },
+   "rev": "f6939901",
+   "bytes": {
+    "l": 132354
+   }
+  },
+  "hatch-dragon-r3": {
+   "n": 73,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 16,
+    "w2": 17,
+    "crack2": 30,
+    "w3": 31,
+    "crack3": 41,
+    "burst": 48,
+    "clear": 53
+   },
+   "l": {
+    "x": -60,
+    "y": -141,
+    "w": 231,
+    "h": 289,
+    "cols": 69
+   },
+   "rev": "aa6b9f2a",
+   "bytes": {
+    "l": 163280
+   }
+  },
+  "hatch-dragon-r4": {
+   "n": 90,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 21,
+    "w2": 22,
+    "crack2": 39,
+    "w3": 40,
+    "crack3": 54,
+    "burst": 62,
+    "clear": 67
+   },
+   "l": {
+    "x": -86,
+    "y": -157,
+    "w": 266,
+    "h": 309,
+    "cols": 60
+   },
+   "rev": "173eecce",
+   "bytes": {
+    "l": 205354
+   }
+  },
+  "hatch-dragon-r5": {
+   "n": 95,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "w1": 0,
+    "crack1": 24,
+    "w2": 25,
+    "crack2": 43,
+    "w3": 44,
+    "crack3": 60,
+    "burst": 70,
+    "clear": 75
+   },
+   "l": {
+    "x": -75,
+    "y": -179,
+    "w": 268,
+    "h": 335,
+    "cols": 59
+   },
+   "rev": "b1b134b1",
+   "bytes": {
+    "l": 252306
+   }
+  },
+  "pop-moss": {
+   "n": 15,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "burst": 6,
+    "clear": 8
+   },
+   "s": {
+    "x": -6,
+    "y": -12,
+    "w": 50,
+    "h": 49,
+    "cols": 15
+   },
+   "rev": "da97456f",
+   "bytes": {
+    "s": 4704
+   }
+  },
+  "pop-stone": {
+   "n": 15,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "burst": 6,
+    "clear": 8
+   },
+   "s": {
+    "x": -6,
+    "y": -12,
+    "w": 50,
+    "h": 49,
+    "cols": 15
+   },
+   "rev": "0912d34e",
+   "bytes": {
+    "s": 4364
+   }
+  },
+  "pop-crystal": {
+   "n": 15,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "burst": 6,
+    "clear": 8
+   },
+   "s": {
+    "x": -6,
+    "y": -12,
+    "w": 50,
+    "h": 49,
+    "cols": 15
+   },
+   "rev": "1c76023a",
+   "bytes": {
+    "s": 3970
+   }
+  },
+  "pop-dragon": {
+   "n": 15,
+   "fps": 24,
+   "loop": false,
+   "marks": {
+    "burst": 6,
+    "clear": 8
+   },
+   "s": {
+    "x": -6,
+    "y": -12,
+    "w": 50,
+    "h": 49,
+    "cols": 15
+   },
+   "rev": "c2e8f77e",
+   "bytes": {
+    "s": 5500
    }
   }
  }

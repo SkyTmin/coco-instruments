@@ -63,12 +63,16 @@ describe('пиксельные яйца', () => {
   });
 
   it('вылупление начинается кадром покоя и кончается пустым кадром', () => {
-    const empty = (p: { data: Uint8ClampedArray | Uint8Array }) => p.data.every((v, i) => i % 4 !== 3 || v === 0);
+    const empty = (p: { data: Uint8ClampedArray | Uint8Array }) =>
+      p.data.every((v, i) => i % 4 !== 3 || v === 0);
     for (const [name, d] of Object.entries(eggs.STRIPS)) {
       if (d.loop) continue;
       const res = d.res![0];
       const kind = name.split('-')[1];
-      expect([name, sameBytes(eggs.frame(name, 0, res), eggs.frame(`idle-${kind}`, 0, res))]).toEqual([name, true]);
+      expect([
+        name,
+        sameBytes(eggs.frame(name, 0, res), eggs.frame(`idle-${kind}`, 0, res)),
+      ]).toEqual([name, true]);
       expect([name, empty(eggs.frame(name, d.frames - 1, res))]).toEqual([name, true]);
       expect([name, empty(eggs.frame(name, d.marks!.burst - 1, res))]).toEqual([name, false]);
     }

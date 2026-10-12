@@ -40,7 +40,7 @@ import {
   toPx,
   wrap,
 } from '../pets-pixel/rig';
-import type { Frame, Key, Part, RGBA, V3 } from '../pets-pixel/rig';
+import type { Frame, Part, RGBA, V3 } from '../pets-pixel/rig';
 import { RARITIES } from '../rarity';
 import type { Canvas, Res, StripDef } from './types';
 
@@ -56,14 +56,14 @@ export const EGG_RARITIES: Record<EggKind, number[]> = {
 
 export const RES: { s: Canvas; l: Canvas } = {
   s: { box: 36, cw: 112, ch: 112, bx: 38, by: 66 },
-  l: { box: 112, cw: 360, ch: 372, bx: 124, by: 206 },
+  l: { box: 112, cw: 360, ch: 384, bx: 124, by: 206 },
 };
 
 export const FPS = 24;
 /** До разлома (с), по редкости: чем реже, тем дольше вопрос. */
-export const HATCH_WOB = [1.1, 1.3, 1.6, 2.0, 2.6, 3.2];
+export const HATCH_WOB = [1.1, 1.3, 1.6, 2.0, 2.6, 2.9];
 /** После разлома до конца полосы (куски падают и тают). */
-export const HATCH_POST = [0.8, 0.85, 0.95, 1.05, 1.15, 1.35];
+export const HATCH_POST = [0.8, 0.85, 0.95, 1.05, 1.15, 1.05];
 const IDLE_N = 48;
 const POP_N = 15;
 
@@ -132,18 +132,30 @@ const HV = norm(add(LIGHT, VIEW));
 
 const PALS: RGBA[][] = [];
 const pal = (p: RGBA[]) => PALS.push(p) - 1;
-const MOSS_SHELL = pal(ramp('#1f150d', '#362618', '#523b24', '#6f5432', '#8d6d42', '#ab8a58', '#c9aa74'));
+const MOSS_SHELL = pal(
+  ramp('#1f150d', '#362618', '#523b24', '#6f5432', '#8d6d42', '#ab8a58', '#c9aa74'),
+);
 const MOSS = pal(ramp('#0f1f0c', '#173512', '#215016', '#2e6c1a', '#40891f', '#5ea828', '#8ccc3a'));
-const SPROUT = pal(ramp('#173018', '#225020', '#2f7428', '#46982f', '#69b83a', '#97d652', '#c8f080'));
-const STONE = pal(ramp('#17181d', '#25272d', '#373941', '#4c4e57', '#666871', '#84868e', '#a7a8ae'));
-const FRESH = pal(ramp('#2c2a2c', '#433f40', '#5d5857', '#7a7471', '#99928c', '#b8b0a8', '#d6cec4'));
+const SPROUT = pal(
+  ramp('#173018', '#225020', '#2f7428', '#46982f', '#69b83a', '#97d652', '#c8f080'),
+);
+const STONE = pal(
+  ramp('#17181d', '#25272d', '#373941', '#4c4e57', '#666871', '#84868e', '#a7a8ae'),
+);
+const FRESH = pal(
+  ramp('#2c2a2c', '#433f40', '#5d5857', '#7a7471', '#99928c', '#b8b0a8', '#d6cec4'),
+);
 const RUNE = pal(ramp('#0d2426', '#14403f', '#1d6460', '#2c8d81', '#47b8a2', '#7fe0c8', '#cffff0'));
 const CRYS = pal(ramp('#10243e', '#173e60', '#1f5d84', '#2f84a8', '#53acc8', '#8cd6e6', '#d4f7fc'));
 const CORE = pal(ramp('#3d8fb4', '#62b5d2', '#8fd6e8', '#bdeef6', '#e6fbfd', '#ffffff'));
 const DRAG = pal(ramp('#0d0508', '#1d0a0f', '#32101a', '#4d1820', '#6b2226', '#8c302e', '#ad453a'));
 const HOT = pal(ramp('#24090a', '#3c110d', '#5a1a10', '#7c2714', '#a23a18', '#c6541e', '#e2742a'));
-const EMBER = pal(ramp('#3a0a04', '#6e1606', '#a8300a', '#d85a12', '#f48a22', '#ffb84a', '#ffe8a0'));
-const INNER = pal(ramp('#3e3428', '#5e5242', '#827562', '#a89a82', '#cbbfa4', '#e8dfc8', '#fbf6ea'));
+const EMBER = pal(
+  ramp('#3a0a04', '#6e1606', '#a8300a', '#d85a12', '#f48a22', '#ffb84a', '#ffe8a0'),
+);
+const INNER = pal(
+  ramp('#3e3428', '#5e5242', '#827562', '#a89a82', '#cbbfa4', '#e8dfc8', '#fbf6ea'),
+);
 /** Свет редкости: из тёмного через основной к белому. */
 const GLOW: number[] = RARITIES.slice(0, 6).map((q) => {
   const d = hx(q.dark);
@@ -231,7 +243,11 @@ function rotV(v: V3, ax: V3, an: number): V3 {
   const s = Math.sin(an);
   const k = dot(ax, v) * (1 - c);
   const cr = cross(ax, v);
-  return [v[0] * c + cr[0] * s + ax[0] * k, v[1] * c + cr[1] * s + ax[1] * k, v[2] * c + cr[2] * s + ax[2] * k];
+  return [
+    v[0] * c + cr[0] * s + ax[0] * k,
+    v[1] * c + cr[1] * s + ax[1] * k,
+    v[2] * c + cr[2] * s + ax[2] * k,
+  ];
 }
 
 interface PoseIn {
@@ -273,8 +289,9 @@ function makePose(kind: EggKind, res: Res, q: PoseIn): Pose {
   let minZ = 0;
   const dz = -1 + A[2] * A[2];
   const pz = Math.abs(dz) > 1e-9 ? dz / Math.hypot(A[0] * A[2], A[1] * A[2], dz) : 0;
-  for (let j = 0; j <= 64; j++) {
-    const s = -1 + j / 32;
+  for (let j = 0; j <= 128; j++) {
+    // Ровный шаг по дуге профиля: у полюса шаг по s слишком груб.
+    const s = -Math.cos((Math.PI * j) / 128);
     const z = (A[2] * (s + 1) * H) / 2 + pz * prof(H, R, sh.a, s);
     if (z < minZ) minZ = z;
   }
@@ -487,7 +504,7 @@ function mossAt(phi: number, s: number, l: V3): number {
  * Материал по (φ, s) и местной точке `l`; `hi` — крупная полоса (мельче узор, больше деталей).
  * Свет здесь не считается — только палитра, сдвиг тона, «светится сам» (`emis`) и грань.
  */
-function material(kind: EggKind, phi: number, s: number, l: V3, hi: boolean, t: number): void {
+function material(kind: EggKind, phi: number, s: number, l: V3, hi: boolean): void {
   M.pal = SHELL[kind];
   M.dt = 0;
   M.emis = -1;
@@ -657,7 +674,11 @@ interface Net {
   /** Разрезы колпака и низа: φ(s) — ломаные (s по убыванию). */
   up: [number, number][][];
   lo: [number, number][][];
+  /** r5: второй пояс разрезов (s колпака, s низа) — осколков вдвое больше и они мельче. */
+  band?: [number, number];
 }
+/** Зигзаг второго пояса по φ. */
+const bandZ = (phi: number) => 0.05 * Math.sin(phi * 9 + 1);
 
 const ZIG = 20;
 function ringAt(net: Net, phi: number): number {
@@ -726,7 +747,12 @@ function crackNet(kind: EggKind, r: number, pop = false): Net {
   net.cracks.push({ pts: ringPts(1.5, Math.PI), at: c3, run, edge: true });
   net.cracks.push({ pts: ringPts(-1.55, -Math.PI), at: c3, run, edge: true });
   // Разрезы низа: лепестки.
-  const loPhi = r >= 5 ? [0.72, 2.05, -2.85, -1.7, -0.5] : r >= 3 ? [0.78, -0.98, 2.3, -2.55] : [0.8, -1.02, 2.85];
+  const loPhi =
+    r >= 5
+      ? [0.72, 2.05, -2.85, -1.7, -0.5]
+      : r >= 3
+        ? [0.78, -0.98, 2.3, -2.55]
+        : [0.8, -1.02, 2.85];
   loPhi.forEach((ph, j) => {
     const pl = vert(ph, -1, 10 + j);
     net.lo.push(pl);
@@ -752,6 +778,16 @@ function crackNet(kind: EggKind, r: number, pop = false): Net {
         pts.push([ph0 + (hash(j, q, seed + 9) - 0.5) * 0.5, s0 + (j % 2 ? -1 : 1) * q * 0.09]);
       net.cracks.push({ pts, at: lerp(c2, c3, j / 9), run: 4 / FPS, edge: false });
     }
+    // Второй пояс: колпак и низ колются ещё раз — на орбиту уходят мелкие осколки.
+    net.band = [0.62, -0.42];
+    for (const sb of net.band) {
+      const pts: [number, number][] = [];
+      for (let j = 0; j <= 36; j++) {
+        const phi = -Math.PI + (j / 36) * Math.PI * 2;
+        pts.push([phi, sb + bandZ(phi)]);
+      }
+      net.cracks.push({ pts, at: c3 + 2 / FPS, run: 3 / FPS, edge: true });
+    }
   }
   netCache.set(key, net);
   return net;
@@ -769,10 +805,13 @@ function pieceOf(net: Net, phi: number, s: number): number {
     for (let i = 0; i < order.length; i++) if (p >= order[i][0]) k = i;
     return base + order[k][1];
   };
-  if (s >= ring) return sector(net.up, 0);
-  return sector(net.lo, Math.max(1, net.up.length));
+  const base = Math.max(1, net.up.length) + Math.max(1, net.lo.length);
+  const b = net.band;
+  if (s >= ring) return sector(net.up, 0) + (b && s > b[0] + bandZ(phi) ? base : 0);
+  return sector(net.lo, Math.max(1, net.up.length)) + (b && s < b[1] + bandZ(phi) ? base : 0);
 }
-const nPieces = (net: Net) => Math.max(1, net.up.length) + Math.max(1, net.lo.length);
+const nPieces = (net: Net) =>
+  (Math.max(1, net.up.length) + Math.max(1, net.lo.length)) * (net.band ? 2 : 1);
 
 /** Расстояние (пиксели малой) от точки (φ, s) до видимых к моменту `t` трещин. */
 function crackDist(net: Net, kind: EggKind, phi: number, s: number, t: number, edgeOnly = false) {
@@ -887,7 +926,7 @@ function shadePx(
       return;
     }
   }
-  material(L.kind, phi, s, l, hi, L.t);
+  material(L.kind, phi, s, l, hi);
   const pl = M.pal;
   const N = PALS[pl].length;
   let tone: number;
@@ -1115,7 +1154,10 @@ function shellOf(kind: EggKind, r: number, res: Res, pop: boolean): Shell {
   const ext = cen.map(() => 0);
   for (const sm0 of samples) {
     const c = cen[sm0.piece];
-    ext[sm0.piece] = Math.max(ext[sm0.piece], Math.hypot(sm0.l[0] - c[0], sm0.l[1] - c[1], sm0.l[2] - c[2]));
+    ext[sm0.piece] = Math.max(
+      ext[sm0.piece],
+      Math.hypot(sm0.l[0] - c[0], sm0.l[1] - c[1], sm0.l[2] - c[2]),
+    );
   }
   const out = { samples, cen, ext, n };
   shellCache.set(key, out);
@@ -1181,11 +1223,14 @@ function splatShell(
     shadePx(f, i, L, sm0.phi, sm0.s, sm0.l, nW, null, inside, sm0.edge && !inside);
     if (!inside && L.kind === 'crystal' && f.pal[i] === CRYS) {
       // Грань куска: нормаль середины грани (как у целого).
-      material('crystal', sm0.phi, sm0.s, sm0.l, L.res === 'l', L.t);
+      material('crystal', sm0.phi, sm0.s, sm0.l, L.res === 'l');
       if (M.fn) {
         const nn = norm(rotV(dirWorld(P, M.fn), S0.ax, S0.an));
         const sp = dot(nn, HV);
-        f.tone[i] = Math.max(0, Math.min(6, Math.round(litTone(nn, 7) + M.dt + (sp > 0.9 ? 2 : 0))));
+        f.tone[i] = Math.max(
+          0,
+          Math.min(6, Math.round(litTone(nn, 7) + M.dt + (sp > 0.9 ? 2 : 0))),
+        );
       }
     }
   }
@@ -1211,7 +1256,8 @@ function onEmpty(p: Px, x: number, y: number, c: RGBA): void {
 
 /** Искра-звёздочка: крест с белой серединой (крупная — с длинными лучами). */
 function star(p: Px, x: number, y: number, sz: number, c: RGBA, empty = false): void {
-  const put = (xx: number, yy: number, cc: RGBA) => (empty ? onEmpty(p, xx, yy, cc) : p.set(xx, yy, cc));
+  const put = (xx: number, yy: number, cc: RGBA) =>
+    empty ? onEmpty(p, xx, yy, cc) : p.set(xx, yy, cc);
   const X = Math.round(x);
   const Y = Math.round(y);
   const n = Math.max(0, Math.round(sz));
@@ -1324,7 +1370,14 @@ function hatchPose(kind: EggKind, r: number, t: number): PoseIn {
   let x = 0;
   if (r >= 3) {
     // Подъём над гнездом в третьей качке; качка идёт по кругу (видно верх и бока).
-    const hov = r >= 5 ? 0 : kf(t, [[p.c2, 0], [p.c2 + 0.3, r >= 4 ? 4.5 : 3.2, 'o'], [p.b, r >= 4 ? 5 : 3.6]]);
+    const hov =
+      r >= 5
+        ? 0
+        : kf(t, [
+            [p.c2, 0],
+            [p.c2 + 0.3, r >= 4 ? 4.5 : 3.2, 'o'],
+            [p.b, r >= 4 ? 5 : 3.6],
+          ]);
     lift = hov + (hov > 0 ? Math.sin(Math.PI * 4 * t) * 0.5 * (hov / 4) : 0);
     if (t > p.c2) beta = (t - p.c2) * 9;
   }
@@ -1335,7 +1388,12 @@ function hatchPose(kind: EggKind, r: number, t: number): PoseIn {
   }
   if (r >= 5) {
     // Взлёт и вращение вокруг своей оси с разгоном.
-    lift = kf(t, [[p.c1, 0], [p.c2, 9, 'o'], [p.c3, 13], [p.b, 14]]);
+    lift = kf(t, [
+      [p.c1, 0],
+      [p.c2, 7, 'o'],
+      [p.c3, 9.5],
+      [p.b, 10],
+    ]);
     lift += t > p.c1 ? Math.sin(Math.PI * 3 * (t - p.c1)) * 0.8 : 0;
     const a = t > p.c1 ? t - p.c1 : 0;
     const acc = 13 / (p.b - p.c1);
@@ -1365,7 +1423,12 @@ function innerAt(r: number, t: number): number {
 // ---------------------------------------------------------------------------
 
 const ID_TUFT = 3;
-function mossParts(P: Pose, t: number, hi: boolean, pieceXf?: (phi: number, s: number) => ((v: V3) => V3) | null): Part[] {
+function mossParts(
+  P: Pose,
+  t: number,
+  hi: boolean,
+  pieceXf?: (phi: number, s: number) => ((v: V3) => V3) | null,
+): Part[] {
   const parts: Part[] = [];
   const S = P.S;
   const same = (v: V3) => v;
@@ -1401,13 +1464,26 @@ function mossParts(P: Pose, t: number, hi: boolean, pieceXf?: (phi: number, s: n
     const sway = Math.sin(Math.PI * t) * 0.16;
     const up = norm(add(P.A, mul(P.E2, sway)));
     const stem = add(top, mul(up, 1.6 * S));
-    parts.push({ c: T(stem), ax: axes(sub(T(add(stem, up)), T(stem)), [0, 1, 0]), r: [1.7 * S, 0.55 * S, 0.55 * S], pal: SPROUT, id: 7 });
+    parts.push({
+      c: T(stem),
+      ax: axes(sub(T(add(stem, up)), T(stem)), [0, 1, 0]),
+      r: [1.7 * S, 0.55 * S, 0.55 * S],
+      pal: SPROUT,
+      id: 7,
+    });
     const tip = add(top, mul(up, 3.2 * S));
     for (const sd of [-1, 1]) {
       const fl = Math.sin(Math.PI * 2 * t + sd) * 0.12;
       const d = norm(add(mul(P.E2, sd), mul(up, 0.55 + fl)));
       const c = add(tip, mul(d, 1.9 * S));
-      parts.push({ c: T(c), ax: axes(sub(T(add(c, d)), T(c)), dirWorld(P, [0, 1, 0])), r: [2.2 * S, 1.15 * S, 0.45 * S], pal: SPROUT, id: 8, bias: sd < 0 ? 0.12 : 0 });
+      parts.push({
+        c: T(c),
+        ax: axes(sub(T(add(c, d)), T(c)), dirWorld(P, [0, 1, 0])),
+        r: [2.2 * S, 1.15 * S, 0.45 * S],
+        pal: SPROUT,
+        id: 8,
+        bias: sd < 0 ? 0.12 : 0,
+      });
     }
   }
   return parts;
@@ -1465,7 +1541,16 @@ function finish(f: Frame): Px {
 
 function idleFrame(kind: EggKind, i: number, res: Res): Px {
   const t = i / FPS;
-  const L: Look = { kind, res, t, r: -1, net: null, inner: 0, pulse: pulseAt(kind, t), glint: kind === 'crystal' ? glintAt(t) : -1 };
+  const L: Look = {
+    kind,
+    res,
+    t,
+    r: -1,
+    net: null,
+    inner: 0,
+    pulse: pulseAt(kind, t),
+    glint: kind === 'crystal' ? glintAt(t) : -1,
+  };
   const { f, P } = eggFrame(kind, res, t, breathe(t), L);
   const p = finish(f);
   overIdle(p, kind, res, t, P, L);
@@ -1490,9 +1575,10 @@ function overIdle(p: Px, kind: EggKind, res: Res, t: number, P: Pose, L: Look, k
 export function lowestZ(kind: EggKind, r: number, t: number, res: Res = 'l'): number {
   const P = makePose(kind, res, hatchPose(kind, r, t));
   let m = Infinity;
-  for (let j = 0; j <= 80; j++)
+  for (let j = 0; j <= 160; j++)
     for (let k = 0; k < 96; k++) {
-      const z = toWorld(P, surfLocal(kind, (k / 96) * Math.PI * 2 - Math.PI, -1 + j / 80))[2];
+      const s = -Math.cos((Math.PI * j) / 160);
+      const z = toWorld(P, surfLocal(kind, (k / 96) * Math.PI * 2 - Math.PI, s))[2];
       if (z < m) m = z;
     }
   return m;
@@ -1568,13 +1654,30 @@ function bitsFor(kind: EggKind, r: number, cen: V3, pop: boolean): Bit[] {
   for (let j = 0; j < n; j++) {
     const a = hash(j, 1, seed) * Math.PI * 2;
     const up = 0.5 + hash(j, 2, seed) * 0.8;
-    const sp = (pop ? 40 : 45 + r * 9) * (0.6 + hash(j, 3, seed) * 0.7);
+    // По полу недалеко (≈1,5 ширины яйца), вверх — по редкости.
+    const sp = (pop ? 26 : 22 + r * 4) * (0.6 + hash(j, 3, seed) * 0.7);
+    const vz = (pop ? 50 : 52 + r * 8) * up;
     const ember = kind === 'dragon' && j % 2 === 0;
     out.push({
-      pos: [cen[0] + Math.sin(a) * 4, cen[1] + Math.cos(a) * 4, cen[2] + (hash(j, 4, seed) - 0.3) * 8],
-      vel: [Math.sin(a) * sp, Math.cos(a) * sp * 0.5, sp * up * (ember ? 0.4 : 1)],
+      pos: [
+        cen[0] + Math.sin(a) * 4,
+        cen[1] + Math.cos(a) * 4,
+        cen[2] + (hash(j, 4, seed) - 0.3) * 8,
+      ],
+      vel: [Math.sin(a) * sp, Math.cos(a) * sp * 0.5, ember ? vz * 0.4 : vz],
       r: (0.55 + hash(j, 5, seed) * 0.6) * (kind === 'stone' ? 1.15 : 1),
-      pal: kind === 'moss' ? (j % 3 ? MOSS : MOSS_SHELL) : kind === 'stone' ? (j % 3 ? STONE : FRESH) : kind === 'crystal' ? CRYS : DRAG,
+      pal:
+        kind === 'moss'
+          ? j % 3
+            ? MOSS
+            : MOSS_SHELL
+          : kind === 'stone'
+            ? j % 3
+              ? STONE
+              : FRESH
+            : kind === 'crystal'
+              ? CRYS
+              : DRAG,
       t0: 0,
       life: 0.5 + hash(j, 6, seed) * 0.4,
       ember,
@@ -1600,11 +1703,19 @@ function hatchFrame(kind: EggKind, r: number, i: number, res: Res): Px {
   const rc = RARITIES[r];
   const RC = hx(rc.color);
   const RL = hx(rc.light);
-  const W = hx('#ffffff');
   const pulse = pulseAt(kind, t);
   if (t < pl.b) {
     const inner = innerAt(r, t);
-    const L: Look = { kind, res, t, r, net, inner, pulse: Math.max(pulse, kind === 'dragon' ? inner * 0.6 : 0), glint: kind === 'crystal' ? glintAt(t) : -1 };
+    const L: Look = {
+      kind,
+      res,
+      t,
+      r,
+      net,
+      inner,
+      pulse: Math.max(pulse, kind === 'dragon' ? inner * 0.6 : 0),
+      glint: kind === 'crystal' ? glintAt(t) : -1,
+    };
     const q = hatchPose(kind, r, t);
     const cv = RES[res];
     const f = newFrame(cv.cw, cv.ch);
@@ -1617,7 +1728,7 @@ function hatchFrame(kind: EggKind, r: number, i: number, res: Res): Px {
     // Отсвет трещин на скорлупу (r ≥ 2): соседи светящейся трещины на ступень светлее.
     if (r >= 2) spill(f, GLOW[r], res === 'l' ? 2 : 1);
     const p = finish(f);
-    overIdle(p, kind, res, t, P, L);
+    overIdle(p, kind, res, t, P, L, 1 - clamp01((t - pl.c1) / 0.3));
     const C = toWorld(P, [0, 0, SHAPE[kind].H * 0.5]);
     const cx = ox + C[0];
     const cy = oy + C[1] * SE - C[2] * CE;
@@ -1634,7 +1745,13 @@ function hatchFrame(kind: EggKind, r: number, i: number, res: Res): Px {
         for (let j = 0; j < 1 + Math.floor(r / 2); j++) {
           const a = hash(j, Math.round(c * 100), 5) * Math.PI * 2;
           const d = (SHAPE[kind].R * 0.9 + u * 6) * S;
-          star(p, cx + Math.sin(a) * d, cy - 2 * S + Math.cos(a) * d * 0.7 - u * 3 * S, Math.round(Math.sin(u * Math.PI) * (res === 'l' ? 3 : 1.4)), RL);
+          star(
+            p,
+            cx + Math.sin(a) * d,
+            cy - 2 * S + Math.cos(a) * d * 0.7 - u * 3 * S,
+            Math.round(Math.sin(u * Math.PI) * (res === 'l' ? 3 : 1.4)),
+            RL,
+          );
         }
       }
     for (const ru of runes) drawRune(p, f, ru, RC, RL, S, ox, oy);
@@ -1716,12 +1833,25 @@ function orbitRunes(r: number, t: number, P: Pose, S: number): RuneAt[] {
   for (let j = 0; j < n; j++) {
     const a = (j / n) * Math.PI * 2 + sp * a0;
     const R0 = (SHAPE.crystal.R * 1.9 + Math.sin(a0 * 3 + j) * 1.2) * S * shrink;
-    const pos: V3 = [C[0] + Math.cos(a) * R0, C[1] + Math.sin(a) * R0, C[2] + Math.sin(a * 2 + j) * 2.5 * S - 3 * S];
+    const pos: V3 = [
+      C[0] + Math.cos(a) * R0,
+      C[1] + Math.sin(a) * R0,
+      C[2] + Math.sin(a * 2 + j) * 2.5 * S - 3 * S,
+    ];
     out.push({ pos, g: j % GLYPHS.length, vis: clamp01(a0 / 0.3) * (shrink > 0.05 ? 1 : 0) });
   }
   return out;
 }
-function drawRune(p: Px, f: Frame, ru: RuneAt, c: RGBA, l: RGBA, S: number, ox: number, oy: number): void {
+function drawRune(
+  p: Px,
+  f: Frame,
+  ru: RuneAt,
+  c: RGBA,
+  l: RGBA,
+  S: number,
+  ox: number,
+  oy: number,
+): void {
   if (ru.vis <= 0) return;
   const sx = ox + ru.pos[0];
   const sy = oy + ru.pos[1] * SE - ru.pos[2] * CE;
@@ -1739,10 +1869,14 @@ function drawRune(p: Px, f: Frame, ru: RuneAt, c: RGBA, l: RGBA, S: number, ox: 
       if (!dith(x, y, ru.vis)) continue;
       p.set(x, y, S >= 2 ? l : c);
       if (S >= 2) {
-        for (const [dx, dy] of [[1, 0], [0, 1]] as const) {
+        for (const [dx, dy] of [
+          [1, 0],
+          [0, 1],
+        ] as const) {
           const xx = x + dx;
           const yy = y + dy;
-          if (xx < f.w && yy < f.h && !(f.pal[yy * f.w + xx] >= 0 && f.zb[yy * f.w + xx] > dz)) p.set(xx, yy, c);
+          if (xx < f.w && yy < f.h && !(f.pal[yy * f.w + xx] >= 0 && f.zb[yy * f.w + xx] > dz))
+            p.set(xx, yy, c);
         }
       }
     }
@@ -1753,12 +1887,26 @@ function drawRune(p: Px, f: Frame, ru: RuneAt, c: RGBA, l: RGBA, S: number, ox: 
  * Лепесток низа: подскок и заваливание наружу на бок (≈80°) с отскоком; середина падает
  * с высоты (яйцо могло висеть), пол держит самую низкую точку (`splatShell`).
  */
-function petal(k: number, r: number, cw: V3, dirH: V3, tip: V3, tau: number, dist: number, vz: number, S: number, vis: number): PieceAt {
+function petal(
+  k: number,
+  r: number,
+  cw: V3,
+  dirH: V3,
+  tip: V3,
+  tau: number,
+  dist: number,
+  vz: number,
+  S: number,
+  vis: number,
+): PieceAt {
   const sd = hash(k, 7, r) - 0.5;
   const T = 0.17 + (hash(k, 3, r) - 0.5) * 0.05 - r * 0.01;
   const th = 1.32 + sd * 0.3;
   const u = tau / T;
-  const an = u < 1 ? th * u * u : th - th * 0.16 * Math.sin(Math.PI * clamp01((u - 1) / 0.7)) * (u < 1.7 ? 1 : 0);
+  const an =
+    u < 1
+      ? th * u * u
+      : th - th * 0.16 * Math.sin(Math.PI * clamp01((u - 1) / 0.7)) * (u < 1.7 ? 1 : 0);
   const z = cw[2] + vz * tau - (GRAV * S * tau * tau) / 2;
   const d = dist * (1 - Math.exp(-tau / 0.1));
   return { pos: [cw[0] + dirH[0] * d, cw[1] + dirH[1] * d * 0.6, z], ax: tip, an, vis };
@@ -1796,30 +1944,59 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
       const T1 = 0.5;
       const a0 = Math.atan2(cw[1] - C[1], cw[0] - C[0]);
       const rad0 = Math.hypot(cw[0] - C[0], cw[1] - C[1]);
-      const ro = (SHAPE[kind].R * 2.1 + (k % 3) * 2.2) * S;
+      const ro = (SHAPE[kind].R * 1.8 + (k % 3) * 1.8) * S;
       const orb = (u: number): V3 => {
         const e = 1 - (1 - clamp01(u / 0.2)) ** 3;
         const a = a0 + 7 * u;
         const rr = lerp(rad0, ro, e);
-        return [C[0] + Math.cos(a) * rr, C[1] + Math.sin(a) * rr, lerp(cw[2], C[2] + ((k % 4) - 1.5) * 3 * S, e)];
+        return [
+          C[0] + Math.cos(a) * rr,
+          C[1] + Math.sin(a) * rr * lerp(1, 0.6, e),
+          lerp(cw[2], C[2] + ((k % 4) - 1.5) * 3 * S, e),
+        ];
       };
       if (tau < T1) return { pos: orb(tau), ax: norm([sd, 0.4, 1]), an: tau * (9 + k), vis };
       const p0 = orb(T1);
       const p1 = orb(T1 - 0.01);
-      const v: V3 = mul(sub(p0, p1), 100 * 0.55);
-      const b = fly({ pos: p0, vel: [v[0], v[1], v[2] + 40 * S], ax: [0, 0, 1], w: 6, rest: sh.ext[k] * 0.25 * S }, tau - T1, GRAV * S);
+      const v: V3 = mul(sub(p0, p1), 100 * 0.3);
+      const b = fly(
+        {
+          pos: p0,
+          vel: [v[0], v[1], v[2] + 40 * S],
+          ax: [0, 0, 1],
+          w: 6,
+          rest: sh.ext[k] * 0.25 * S,
+        },
+        tau - T1,
+        GRAV * S,
+      );
       return { pos: b.pos, ax: norm([sd, 0.4, 1]), an: T1 * (9 + k) + b.an, vis };
     }
     const dirH: V3 = cap && nUp === 1 ? [-0.8, 0.15, 0] : out;
     const tip = norm(cross([0, 0, 1], dirH[0] || dirH[1] ? dirH : [1, 0, 0]));
     if (cap) {
       const vz = (62 + r * 12) * (0.9 + sd * 0.3);
-      const vh = nUp > 1 ? 28 + r * 5 : 34 + r * 4;
+      const vh = nUp > 1 ? 20 + r * 3 : 34 + r * 4;
       const vel: V3 = [dirH[0] * vh * S, dirH[1] * vh * S * 0.6, vz * S];
-      const b = fly({ pos: cw, vel, ax: tip, w: -(7 + r), rest: sh.ext[k] * 0.3 * S }, tau, GRAV * S);
+      const b = fly(
+        { pos: cw, vel, ax: tip, w: -(7 + r), rest: sh.ext[k] * 0.3 * S },
+        tau,
+        GRAV * S,
+      );
       return { pos: b.pos, ax: tip, an: b.an, vis, ground: b.floor };
     }
-    return petal(k, r, cw, dirH, tip, tau, (SHAPE[kind].R * 0.55 + r * 1.6) * S, (14 + r * 7) * S, S, vis);
+    return petal(
+      k,
+      r,
+      cw,
+      dirH,
+      tip,
+      tau,
+      (SHAPE[kind].R * 0.55 + r * 1.6) * S,
+      (14 + r * 7) * S,
+      S,
+      vis,
+    );
   };
   const sp = splatShell(f, P, sh, L, at, ox, oy);
   // Частицы материала: мох, сколы, осколки, чешуйки.
@@ -1827,7 +2004,11 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
   const parts: Part[] = [];
   bits.forEach((b, j) => {
     if (b.ember) return;
-    const q = fly({ pos: mul(b.pos, S), vel: mul(b.vel, S), ax: [0, 0, 1], w: 0, rest: b.r * S }, tau, GRAV * S);
+    const q = fly(
+      { pos: mul(b.pos, S), vel: mul(b.vel, S), ax: [0, 0, 1], w: 0, rest: b.r * S },
+      tau,
+      GRAV * S,
+    );
     const life = 1 - clamp01((tau - b.life) / 0.2);
     if (life <= 0 || vis <= 0) return;
     parts.push({
@@ -1865,38 +2046,77 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
   // Столб света (r ≥ 3): из места яйца вверх; ближние куски его закрывают.
   if (r >= 3) pillar(p, f, cx, cy + 6 * S, C[1] * CE + C[2] * SE, tau, pl, S, RC, RL, r);
   // Солнце (r5): вращающиеся лучи за всем.
-  if (r >= 5) rays(p, cx, cy, (34 + Math.min(1, tau / 0.2) * 22) * S * 0.6, 14, tau * 1.2, 1 - clamp01((tau - 0.7) / 0.35), RC, hx('#ffe0a0'), S);
+  if (r >= 5)
+    rays(
+      p,
+      cx,
+      cy,
+      (34 + Math.min(1, tau / 0.2) * 22) * S * 0.6,
+      14,
+      tau * 1.2,
+      1 - clamp01((tau - 0.5) / 0.3),
+      RC,
+      hx('#ffe0a0'),
+      S,
+    );
   else if (r >= 2) rays(p, cx, cy, (20 + r * 5) * S * 0.6, 7 + r, pl.b * 0.4, k0, RC, RL, S);
   // Кольцо света на полу (r ≥ 2) и ударная волна (r ≥ 4).
   if (r >= 2) {
     const u = clamp01(tau / 0.45);
     const fr0 = (10 + u * (18 + r * 3)) * S;
-    ellipseRing(p, cx, floorY, fr0, fr0 * SE * 1.1, Math.max(1, S * 1.2 * (1 - u) + 0.6), u < 0.5 ? RL : RC, 1 - u);
+    ellipseRing(
+      p,
+      cx,
+      floorY,
+      fr0,
+      fr0 * SE * 1.1,
+      Math.max(1, S * 1.2 * (1 - u) + 0.6),
+      u < 0.5 ? RL : RC,
+      1 - u,
+    );
   }
   if (r >= 4) {
     const u = clamp01(tau / 0.32);
-    ellipseRing(p, cx, cy, (8 + u * 46) * S, (8 + u * 46) * S * 0.9, Math.max(1, 2.2 * S * (1 - u)), u < 0.4 ? WH : RL, 1 - u * u);
+    // Ударная волна — кольцо в плоскости пола через середину яйца (сплюснуто взглядом сверху).
+    ellipseRing(
+      p,
+      cx,
+      cy,
+      (8 + u * 36) * S,
+      (8 + u * 36) * S * 0.5,
+      Math.max(1, 2.2 * S * (1 - u)),
+      u < 0.4 ? WH : RL,
+      1 - u * u,
+    );
   }
   // Пыль у основания.
-  const nPuff = 3 + Math.min(4, r);
+  // Пыль с пола — только если яйцо разбилось на полу (парящее бьётся в воздухе).
+  const nPuff = P.B[2] > 2 * S ? 0 : 3 + Math.min(4, r);
   for (let j = 0; j < nPuff; j++) {
     const sd = j % 2 ? 1 : -1;
     const u = clamp01(tau / (0.5 + hash(j, 2, 4) * 0.2));
     const x = cx + sd * (4 + u * (10 + j * 2.2)) * S;
     const y = floorY - (1.5 + u * 2 + (j % 3)) * S;
-    puff(p, x, y, (1.6 + u * 3.2) * S * (0.8 + hash(j, 1, 4) * 0.4), DUST[kind], (1 - u) * 0.95 * (tau < 0.02 ? 0 : 1));
+    puff(
+      p,
+      x,
+      y,
+      (1.6 + u * 3.2) * S * (0.8 + hash(j, 1, 4) * 0.4),
+      DUST[kind],
+      (1 - u) * 0.95 * (tau < 0.02 ? 0 : 1),
+    );
   }
   // Угольки дракона: поднимаются, мерцают.
   if (kind === 'dragon')
     bits.forEach((b, j) => {
       if (!b.ember) return;
       const u = tau / (b.life + 0.3);
-      if (u > 1) return;
+      if (u > 1 || vis <= 0) return;
       const x = ox + (b.pos[0] + b.vel[0] * tau * 0.8) * S;
       const z = (b.pos[2] + b.vel[2] * 0.6 * tau + 18 * tau * tau) * S;
       const y = oy + b.pos[1] * S * SE - z * CE;
       const c = (Math.floor(tau * 24) + j) % 3 ? hx('#ffb84a') : hx('#ffe8a0');
-      if (dith(Math.round(x), Math.round(y), 1 - u)) {
+      if (dith(Math.round(x), Math.round(y), (1 - u) * Math.min(1, vis * 2))) {
         p.set(x, y, c);
         if (S >= 2) {
           p.set(x + 1, y, hx('#f48a22'));
@@ -1913,7 +2133,13 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
       if (u >= 1) continue;
       const d = (8 + u * (18 + r * 4)) * S;
       const sz = Math.sin(u * Math.PI) * (S >= 2 ? 3.5 : 1.6) * (j % 3 ? 1 : 1.3);
-      star(p, cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.75 - u * 6 * S, Math.round(sz), u < 0.5 ? RL : RC);
+      star(
+        p,
+        cx + Math.cos(a) * d,
+        cy + Math.sin(a) * d * 0.75 - u * 6 * S,
+        Math.round(sz),
+        u < 0.5 ? RL : RC,
+      );
     }
   }
   // Вспышка разлома: белая середина, кайма редкости, тает шахматкой.
@@ -1946,7 +2172,7 @@ function pillar(
 ): void {
   const dur = pl.end - pl.b - 0.15;
   const grow = clamp01(tau / 0.12);
-  const fade = 1 - clamp01((tau - dur * 0.55) / (dur * 0.4));
+  const fade = 1 - clamp01((tau - dur * 0.4) / (dur * 0.35));
   if (fade <= 0) return;
   const half = (r >= 5 ? 9 : 7) * S * (0.6 + 0.4 * grow) * (0.7 + 0.3 * fade);
   const top = cy - (70 + r * 4) * S * 0.8 * grow;
@@ -1981,8 +2207,18 @@ function popFrame(kind: EggKind, i: number, res: Res): Px {
   const tb = 6 / FPS;
   const cv = RES[res];
   if (t < tb) {
-    const tilt = kf(t, [[0, 0], [1 / FPS, -0.2, 'o'], [2.5 / FPS, 0.2], [4 / FPS, -0.1], [5 / FPS, 0]]);
-    const st = kf(t, [[3 / FPS, 0], [4.5 / FPS, -0.1, 'o'], [5.5 / FPS, 0.06, 'i']]);
+    const tilt = kf(t, [
+      [0, 0],
+      [1 / FPS, -0.2, 'o'],
+      [2.5 / FPS, 0.2],
+      [4 / FPS, -0.1],
+      [5 / FPS, 0],
+    ]);
+    const st = kf(t, [
+      [3 / FPS, 0],
+      [4.5 / FPS, -0.1, 'o'],
+      [5.5 / FPS, 0.06, 'i'],
+    ]);
     const q = { ...breathe(t), tilt: breathe(t).tilt + tilt, st: breathe(t).st + st };
     const L: Look = { kind, res, t, r: 0, net, inner: 0, pulse: pulseAt(kind, t), glint: -1 };
     const f = newFrame(cv.cw, cv.ch);
@@ -2018,9 +2254,19 @@ function popFrame(kind: EggKind, i: number, res: Res): Px {
   const parts: Part[] = [];
   bitsFor(kind, 0, [C[0] / S, C[1] / S, C[2] / S], true).forEach((b, j) => {
     if (b.ember) return;
-    const q = fly({ pos: mul(b.pos, S), vel: mul(b.vel, S), ax: [0, 0, 1], w: 0, rest: b.r * S }, tau, GRAV * S);
+    const q = fly(
+      { pos: mul(b.pos, S), vel: mul(b.vel, S), ax: [0, 0, 1], w: 0, rest: b.r * S },
+      tau,
+      GRAV * S,
+    );
     if (vis <= 0) return;
-    parts.push({ c: q.pos, ax: axes([1, 0, 0.3], [0, 0, 1]), r: [b.r * S * 1.2, b.r * S, b.r * S * 0.8], pal: b.pal, id: 40 + j });
+    parts.push({
+      c: q.pos,
+      ax: axes([1, 0, 0.3], [0, 0, 1]),
+      r: [b.r * S * 1.2, b.r * S, b.r * S * 0.8],
+      pal: b.pal,
+      id: 40 + j,
+    });
   });
   drawParts(f, parts, PALS, ox, oy);
   const p = finish(f);
@@ -2028,7 +2274,14 @@ function popFrame(kind: EggKind, i: number, res: Res): Px {
   const cy = oy + C[1] * SE - C[2] * CE;
   for (let j = 0; j < 3; j++) {
     const u = clamp01(tau / 0.32);
-    puff(p, cx + (j - 1) * (3 + u * 7) * S, oy - (1.5 + u * 1.5) * S, (1.4 + u * 2.4) * S, DUST[kind], (1 - u) * 0.9);
+    puff(
+      p,
+      cx + (j - 1) * (3 + u * 7) * S,
+      oy - (1.5 + u * 1.5) * S,
+      (1.4 + u * 2.4) * S,
+      DUST[kind],
+      (1 - u) * 0.9,
+    );
   }
   if (tau < 0.09) star(p, cx, cy - 3 * S, 2, hx('#fff6dc'));
   return p;
