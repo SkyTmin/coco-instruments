@@ -507,6 +507,58 @@ describe('пиксельный барсук', () => {
     expect(held.glint).toBeGreaterThan(0);
   });
 
+  it('трюк: кайло в двух лапах, замах над плечом, удар боком с наклоном, остриё в верх камня', () => {
+    type V = [number, number, number];
+    const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    // Расстояние ближней лапы от прямой рукояти через дальнюю — обе лапы на рукояти.
+    const offHandle = (t: number) => {
+      const o = W.poseAt('work', t);
+      const S = W.skel(o);
+      const d: V = [o.pdx, o.pdy, o.pdz];
+      const q = sub(S.paw[0], S.paw[1]);
+      const u = dot(q, d);
+      return { o, S, u, perp: Math.hypot(...sub(q, [d[0] * u, d[1] * u, d[2] * u])) };
+    };
+    for (let t = 0.2; t <= 1.08; t += 0.04) {
+      const h = offHandle(t);
+      expect([t, h.perp < 0.6]).toEqual([t, true]);
+      // ближняя — выше по рукояти, к головке
+      expect(h.u).toBeGreaterThan(0.5);
+    }
+    // Верх замаха: кайло над плечами, корпус откинут назад; ближняя лапа сдвинулась к головке.
+    const top = offHandle(0.42);
+    expect(top.o.pdz).toBeGreaterThan(0.3);
+    expect(top.o.bow).toBeLessThan(0);
+    expect(top.u).toBeGreaterThan(offHandle(0.5).u + 2);
+    // Удар: боком, наклон в поясе, присед; рукоять к земле 30–50°.
+    for (const t of [0.5, 1.0]) {
+      const o = W.poseAt('work', t);
+      expect(o.yaw).toBeGreaterThan(1.1);
+      expect(o.bow).toBeGreaterThan(0.4);
+      expect(o.cz).toBeGreaterThan(1);
+      const ang = (-Math.asin(o.pdz) * 180) / Math.PI;
+      expect(ang).toBeGreaterThan(30);
+      expect(ang).toBeLessThan(50);
+    }
+    // Остриё — в верхушке камня; камень дальше вытянутой лапы, справа.
+    const H = W.hitGeo();
+    expect(H.T[2]).toBeGreaterThan(H.rc[2] + 0.7 * H.rr[2]);
+    expect(Math.hypot(H.T[0] - H.rc[0], H.T[1] - H.rc[1])).toBeLessThan(0.6 * H.rr[0]);
+    expect(H.rc[0] - H.rr[0]).toBeGreaterThan(14);
+    // Ноги стоят, пока он бьёт и ловит.
+    for (let t = 0.26; t <= 1.42; t += 0.04) {
+      const o = W.poseAt('work', t);
+      expect([t, o.fLz, o.fRz]).toEqual([t, 0, 0]);
+    }
+    // Кристалл — в дальней лапе с поимки до конца.
+    for (const t of [1.34, 1.5, 1.7]) {
+      const o = W.poseAt('work', t);
+      const p = W.skel(o).paw[1];
+      expect(Math.hypot(o.gx - p[0], o.gy - p[1], o.gz - p[2])).toBeLessThan(3.5);
+    }
+  });
+
   it('атака: в кадре удара пасть открыта, когти растопырены; сон — каска на глазах', () => {
     const strike = W.poseAt('attack', 0.42);
     expect(strike.jaw).toBeGreaterThan(0.9);
