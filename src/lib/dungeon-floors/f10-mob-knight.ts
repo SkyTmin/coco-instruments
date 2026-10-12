@@ -61,7 +61,7 @@ import {
 import type { Pic, RGBA, V3 } from './f10-mobs';
 import type { Mat } from './f15-rig';
 
-const HORSE = tn('#0a080c', '#1a161e', '#2e2834', '#4a4250');
+const HORSE = tn('#0c0a0e', '#211b25', '#383040', '#5c5266');
 const FIRE = tn('#8a1a06', '#e05010', '#ffa030', '#fff0a0');
 const ARMOR = tn('#16121a', '#2e2636', '#4c4256', '#786a84');
 const GOLD = tn('#5e3a10', '#9a6a1c', '#d8a23a', '#ffe28a');
@@ -76,7 +76,7 @@ const DUST: RGBA[] = [hx('#6a5a50'), hx('#8a7a70'), hx('#4a3e38')];
 const EMBER: RGBA[] = [hx('#ffa030'), hx('#e05010'), hx('#fff0a0')];
 const SMOKE: RGBA[] = [hx('#3a3238'), hx('#4a4048'), hx('#2a2428')];
 
-const SK = 1.05;
+const SK = 1.32;
 const LANCE_L = 28;
 
 interface KnO {
@@ -190,18 +190,25 @@ function knightRig(o: KnO, yaw: number): KRig {
   r.ell(C, [-0.4, 0, 3.4], [2.5, 2.7, 0.8], { T: LEATHER });
   r.cap(C.p(3.2, -3.0, 2.4), C.p(3.2, 3.0, 2.4), 0.35, 0.35, { T: GOLD });
   // Шея и голова.
-  const nb = C.p(6.4, 0, 2.6);
-  const N = C.at(9.0, 0, 7.4 - o.head * 2.0).turn(o.shake * 0.35);
-  r.cap(nb, N.p(0, 0, 0), 2.3, 1.5, hm);
-  const Hh = N.pitch(0.7 + o.head * 0.5);
-  r.ell(Hh, [1.6, 0, -0.2], [2.6, 1.3, 1.4], hm);
-  r.ell(Hh, [3.6, 0, -0.5], [1.2, 1.1, 1.0], { T: HORSE, bias: -0.1 });
+  const nb = C.p(6.0, 0, 2.4);
+  const N = C.at(9.6, 0, 6.8 - o.head * 2.0).turn(o.shake * 0.35);
+  r.cap(nb, N.p(0, 0, 0), 2.5, 1.6, hm);
+  const Hh = N.pitch(0.85 + o.head * 0.5);
+  r.ell(Hh, [1.9, 0, -0.2], [3.0, 1.4, 1.5], hm);
+  r.ell(Hh, [4.3, 0, -0.45], [1.5, 1.2, 1.1], { T: HORSE, bias: -0.1 });
   for (const sd of [-1, 1]) {
     r.spike(Hh.p(0.2, sd * 0.8, 1.0), Hh.v(-0.4, sd * 0.2, 1), 1.5, 0.45, hm, 3);
     if (fire > 0.3) r.dot(Hh.p(1.4, sd * 1.15, 0.4), alpha(EYE, fire), fire, 1, 0.6);
   }
   if (o.snort > 0)
-    r.spike(Hh.p(4.4, 0, -0.7), Hh.v(1, 0, -0.4), 1.5 + 2.5 * o.snort, 0.8, { ...fm, glow: 0.9 * o.snort }, 4);
+    r.spike(
+      Hh.p(5.6, 0, -0.7),
+      Hh.v(1, 0, -0.4),
+      1.5 + 2.5 * o.snort,
+      0.8,
+      { ...fm, glow: 0.9 * o.snort },
+      4,
+    );
   // Грива: языки огня вдоль шеи, отстают назад.
   for (let i = 0; i < 5; i++) {
     const k = i / 4;
@@ -210,7 +217,14 @@ function knightRig(o: KnO, yaw: number): KRig {
     r.spike(base, dir, (2.0 + 0.8 * (i % 2)) * (0.4 + 0.6 * fire), 0.9, fm, 4);
   }
   // Хвост — пламя.
-  r.spike(C.p(-8.0, 0, 1.6), C.v(-1, 0.1 * Math.sin(o.ph * TAU), 0.5 - o.drag * 0.5), (4.0 + o.drag * 2) * (0.4 + 0.6 * fire), 1.2, fm, 5);
+  r.spike(
+    C.p(-8.0, 0, 1.6),
+    C.v(-1, 0.1 * Math.sin(o.ph * TAU), 0.5 - o.drag * 0.5),
+    (4.0 + o.drag * 2) * (0.4 + 0.6 * fire),
+    1.2,
+    fm,
+    5,
+  );
   // Ноги: передние и задние, шаг или галоп; дыбы, присед, упор, удар копытом.
   const legs: [number, number, number, boolean][] = [
     [5.0, 0.0, 0.25, true],
@@ -236,10 +250,13 @@ function knightRig(o: KnO, yaw: number): KRig {
       if (front && sd > 0 && o.paw > 0)
         foot = vlerp(foot, B.p(o.fwd + hx0 + 2.4, sd * 2.3, 3.4), o.paw);
       if (front && o.rear > 0)
-        foot = vlerp(foot, C.p(hx0 + 3.0 + sd * 0.8, sd * 2.2, -4.2 + Math.sin(o.ph * TAU + sd) * 1.2), o.rear);
+        foot = vlerp(
+          foot,
+          C.p(hx0 + 3.0 + sd * 0.8, sd * 2.2, -4.2 + Math.sin(o.ph * TAU + sd) * 1.2),
+          o.rear,
+        );
       if (o.dive > 0 && front) foot = vlerp(foot, C.p(hx0 + 4.0, sd * 2.0, -6.0), o.dive);
-      if (o.lie > 0)
-        foot = vlerp(foot, C.p(hx0 + (front ? 3 : -2), sd * 2.5 + 3.5, -5.5), o.lie);
+      if (o.lie > 0) foot = vlerp(foot, C.p(hx0 + (front ? 3 : -2), sd * 2.5 + 3.5, -5.5), o.lie);
       const mid = vlerp(hip, foot, 0.5);
       let hoof: V3;
       if (front) {
@@ -291,7 +308,13 @@ function knightRig(o: KnO, yaw: number): KRig {
   arm(r, R.p(0, -2.7, 5.0), hL, 3.2 * SK, 3.2 * SK, R.v(-1, -0.4, -0.4), [1.0, 0.85, 0.8], am);
   r.ball(hR, 0.9, gold);
   r.cap(L.butt, L.tip, 0.5, 0.4, { T: WOOD });
-  r.cap(vadd(L.butt, vmul(L.d, (o.grip - 1.2) * SK)), vadd(L.butt, vmul(L.d, (o.grip + 1.0) * SK)), 1.0, 0.6, { T: STEEL });
+  r.cap(
+    vadd(L.butt, vmul(L.d, (o.grip - 1.2) * SK)),
+    vadd(L.butt, vmul(L.d, (o.grip + 1.0) * SK)),
+    1.0,
+    0.6,
+    { T: STEEL },
+  );
   r.spike(L.tip, L.d, 3.4, 0.7, { T: STEEL, spec: true }, 4);
   // Вымпел у острия — отстаёт по ходу.
   const pb = vadd(L.tip, vmul(L.d, -2.0 * SK));
@@ -306,7 +329,7 @@ function knightRig(o: KnO, yaw: number): KRig {
 const AIM_T = 0.95;
 const LANCE_T = 0.55;
 
-const COUCH = { ly: 0.04, lp: 0.08, grip: 12 };
+const COUCH = { ly: 0.04, lp: 0.08, grip: 9 };
 
 function aimO(T: number): KnO {
   const o: KnO = { ...K0 };
@@ -316,7 +339,10 @@ function aimO(T: number): KnO {
   o.grip = 10 + (COUCH.grip - 10) * k;
   o.lean = 0.35 * sstep(0.3, 0.8, T);
   // Конь бьёт копытом дважды (0,05–0,25 и 0,3–0,5).
-  o.paw = Math.max(Math.sin(PI * clamp01((T - 0.05) / 0.2)), Math.sin(PI * clamp01((T - 0.3) / 0.2)));
+  o.paw = Math.max(
+    Math.sin(PI * clamp01((T - 0.05) / 0.2)),
+    Math.sin(PI * clamp01((T - 0.3) / 0.2)),
+  );
   o.head = trk(T, [
     [0, 0],
     [0.15, 0.6],
@@ -449,14 +475,20 @@ function fallO(T: number): KnO {
 }
 
 function knPose(anim: string, f: number): KnO {
-  const t = (f + 0.5) / FPS;
+  let t = (f + 0.5) / FPS;
   switch (anim) {
     case 'stand': {
       const a = (f / 8) * TAU;
       return { ...K0, head: 0.15 + 0.15 * Math.sin(a), ph: f / 8, shake: f === 5 ? 0.4 : 0 };
     }
     case 'walk':
-      return { ...K0, ph: f / 8, step: 1, head: 0.2 + 0.1 * Math.sin((f / 8) * TAU * 2), drag: 0.35 };
+      return {
+        ...K0,
+        ph: f / 8,
+        step: 1,
+        head: 0.2 + 0.1 * Math.sin((f / 8) * TAU * 2),
+        drag: 0.35,
+      };
     case 'gallop': {
       const a = (f / 8) * TAU;
       return {
@@ -496,12 +528,21 @@ function knPose(anim: string, f: number): KnO {
     case 'flinch': {
       const k = f / 4;
       const b = Math.sin(PI * Math.min(1, k * 1.25)) * (1 - k * 0.5);
-      return { ...K0, lean: -0.45 * b, head: -0.6 * b, fwd: -1.2 * b, rear: 0.25 * b, lp: 1.05 + 0.3 * b };
+      return {
+        ...K0,
+        lean: -0.45 * b,
+        head: -0.6 * b,
+        fwd: -1.2 * b,
+        rear: 0.25 * b,
+        lp: 1.05 + 0.3 * b,
+      };
     }
     case 'die': {
-      // 24 кадра (1,0 с): передние подломились (0–0,3), валится на бок
-      // (0,3–0,6), всадник слетает (0,2–0,55), огонь гаснет дымом.
+      // 22 кадра (0,9 с; дорожка — в долях секунды): передние подломились
+      // (0–0,3), валится на бок (0,3–0,6), всадник слетает (0,2–0,55),
+      // огонь гаснет дымом.
       const o: KnO = { ...K0 };
+      t /= 0.9;
       o.dive = trk(t, [
         [0, 0],
         [0.3, 0.7, easeIn],
@@ -533,7 +574,7 @@ function knPose(anim: string, f: number): KnO {
 
 // ---- Кадр -----------------------------------------------------------------
 
-const KN = kindOf('knight', 90, 84, 45, 64, 1500);
+const KN = kindOf('knight', 116, 104, 58, 78, 1500);
 
 const knPic = (anim: string, f: number, d: number): Pic => {
   const o0 = knPose(anim, f);
@@ -562,10 +603,19 @@ const knPic = (anim: string, f: number, d: number): Pic => {
     }
     if ((anim === 'lancef' && f <= 2) || (anim === 'lance' && f >= 13)) {
       const L0 = lanceOf(R, o0);
-      const prev = knPose(anim === 'lancef' && f === 0 ? 'lance' : anim, anim === 'lancef' && f === 0 ? 13 : Math.max(0, f - 1));
+      const prev = knPose(
+        anim === 'lancef' && f === 0 ? 'lance' : anim,
+        anim === 'lancef' && f === 0 ? 13 : Math.max(0, f - 1),
+      );
       const Rp = riderOf(bodyOf(B, prev), prev);
       const L1 = lanceOf(Rp, prev);
-      smear(o, [P(L1.tip), P(L0.tip)], [P(vadd(L1.tip, vmul(L1.d, -6))), P(vadd(L0.tip, vmul(L0.d, -6)))], hx('#e8e4f4', 200), 0.5);
+      smear(
+        o,
+        [P(L1.tip), P(L0.tip)],
+        [P(vadd(L1.tip, vmul(L1.d, -6))), P(vadd(L0.tip, vmul(L0.d, -6)))],
+        hx('#e8e4f4', 200),
+        0.5,
+      );
       if (anim === 'lancef' && f === 0) {
         const [x, y] = P(vadd(L0.tip, vmul(L0.d, 3.4)));
         spark2(o, x, y, hx('#ffffff'));
@@ -584,24 +634,36 @@ const knPic = (anim: string, f: number, d: number): Pic => {
   });
 };
 
-const TECH = new Set(['aim', 'charge', 'skid', 'dizzy', 'lance', 'recover', 'f10_fall', 'f10_patrol']);
+const TECH = new Set([
+  'aim',
+  'charge',
+  'skid',
+  'dizzy',
+  'lance',
+  'recover',
+  'f10_fall',
+  'f10_patrol',
+]);
 
 registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = pose.t;
   const now = pose.now || 0;
-  const want = md === 'f10_patrol' ? (m.data?.look ?? m.face ?? 0) : TECH.has(md) ? (m.face ?? 0) : headOf(m);
+  const want =
+    md === 'f10_patrol' ? (m.data?.look ?? m.face ?? 0) : TECH.has(md) ? (m.face ?? 0) : headOf(m);
   const v = visOf(m, pose, want, md === 'charge' ? 20 : 5);
   const d = dirN(v.yaw);
-  const ex: Partial<MobFrame> = { shadow: 11 };
+  const ex: Partial<MobFrame> = { shadow: 13 };
   let anim = 'stand';
   let f = 0;
+  let dark = 0;
   const id = m.id ?? 0;
   if (md === 'dying') {
-    f = fi(t, 23);
+    f = fi(t, 21);
     anim = 'die';
-    ex.linger = 1.0;
-    ex.alpha = 1 - sstep(0.85, 1.0, t);
+    ex.linger = 0.9;
+    ex.alpha = 1 - sstep(0.76, 0.9, t);
+    ex.shadow = 13 * (1 - sstep(0.6, 0.9, t));
     ex.still = true;
   } else if (md === 'f10_fall' || md === 'escape') {
     // В бездну: уходит вниз, уменьшаясь; тени нет — под ним пропасть.
@@ -646,6 +708,11 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
     f = fi(t, 14);
     anim = 'lancef';
     ex.still = true;
+  } else if (md === 'emerge') {
+    // Из темноты прохода: проявляется шагом.
+    f = Math.floor(t * 16) % 8;
+    anim = 'walk';
+    dark = 3 - Math.min(3, Math.floor(clamp01(t / 0.45) * 4));
   } else if (md === 'stun' || hurtAge(v, now) < 0.2) {
     f = fi(md === 'stun' ? t : hurtAge(v, now), 4);
     anim = 'flinch';
@@ -653,11 +720,12 @@ registerMobPainter('f10_knight', (m: Mob, pose: MobPose) => {
     f = Math.floor((v.dist / 1.8) * 8) % 8;
     anim = 'walk';
   } else {
-    f = Math.floor((now + hash(id, 7) * 4) * 4) % 8;
+    f = Math.floor((now + hash(id, 7) * 4) * (md === 'sleep' ? 1.5 : 4)) % 8;
     anim = 'stand';
+    if (md === 'alert') ex.dy = -Math.sin(PI * clamp01(t / 0.35)) * 2;
   }
   if (md !== 'dying' && md !== 'f10_fall' && md !== 'escape') hurtFx(v, now, 1.0, ex);
-  return { ...frameOf(KN, anim, f, d, pose, () => knPic(anim, f, d)), ...ex };
+  return { ...frameOf(KN, anim, f, d, pose, () => knPic(anim, f, d), dark), ...ex };
 });
 
 registerMobWarm('f10_knight', function* () {
@@ -675,7 +743,7 @@ registerMobWarm('f10_knight', function* () {
       ['daze', 8],
       ['fall', 22],
       ['flinch', 5],
-      ['die', 24],
+      ['die', 22],
     ],
     knPic,
   );
