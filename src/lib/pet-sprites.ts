@@ -15,58 +15,6 @@ export const PET_LARGE = ['idle', 'happy', 'work'] as const;
 export const PET_REV = '6f34e6e036';
 
 export const PET_SPRITES: Record<string, { anims: Record<string, PetStrip> }> = {
-  bulldog: {
-    anims: {
-      attack: {
-        fps: 14,
-        h: 0.9883,
-        n: 12,
-        w: 0.8601,
-        x: 0.0839,
-        y: 0.028,
-      },
-      happy: {
-        fps: 14,
-        h: 1.1072,
-        n: 16,
-        w: 0.8182,
-        x: 0.0839,
-        y: -0.1305,
-      },
-      idle: {
-        fps: 6,
-        h: 0.8462,
-        n: 18,
-        w: 0.7203,
-        x: 0.1305,
-        y: 0.1329,
-      },
-      sleep: {
-        fps: 6,
-        h: 1.035,
-        n: 18,
-        w: 0.7436,
-        x: 0.1399,
-        y: -0.0117,
-      },
-      walk: {
-        fps: 12,
-        h: 0.8485,
-        n: 12,
-        w: 0.7506,
-        x: 0.1166,
-        y: 0.1305,
-      },
-      work: {
-        fps: 8,
-        h: 0.8998,
-        n: 16,
-        w: 1.1189,
-        x: 0.0233,
-        y: 0.1002,
-      },
-    },
-  },
   cat: {
     anims: {
       attack: {

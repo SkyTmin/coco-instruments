@@ -16,6 +16,12 @@ import {
   RES as BADGER_RES,
 } from './badger';
 import {
+  bulldogFrame,
+  FPS as BULLDOG_FPS,
+  FRAMES as BULLDOG_FRAMES,
+  RES as BULLDOG_RES,
+} from './bulldog';
+import {
   dragonFrame,
   FPS as DRAGON_FPS,
   FRAMES as DRAGON_FRAMES,
@@ -130,6 +136,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: OWL_RES,
     anims: at24(OWL_FRAMES, OWL_FPS),
     frame: owlFrame,
+    variants: [1],
+  },
+  // Бульдог Кастет: свой золотой.
+  bulldog: {
+    res: BULLDOG_RES,
+    anims: at24(BULLDOG_FRAMES, BULLDOG_FPS),
+    frame: bulldogFrame,
     variants: [1],
   },
 };
