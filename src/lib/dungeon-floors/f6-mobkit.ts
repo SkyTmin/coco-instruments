@@ -313,7 +313,11 @@ export const F6_MOB_STAT = {
   maxKey: '',
   keys: [] as string[],
   warm: 0,
+  /** Точек в построенных кадрах (холст + `lit`), без учёта вытеснения — оценка памяти. */
+  px: 0,
+  /** Сумма мс и число кадров по «вид|поза» — где дорого. */
   by: {} as Record<string, number>,
+  byN: {} as Record<string, number>,
   clear: () => {
     for (const K of KINDS) {
       K.pics.clear();
@@ -325,6 +329,9 @@ export const F6_MOB_STAT = {
 let warming = false;
 function stat(ms: number, key: string): void {
   const S = F6_MOB_STAT;
+  const ak = key.split('|', 2).join('|');
+  S.by[ak] = (S.by[ak] ?? 0) + ms;
+  S.byN[ak] = (S.byN[ak] ?? 0) + 1;
   S.n++;
   if (S.ms.length < 4000) S.ms.push(ms);
   if (ms > S.max) {
@@ -509,6 +516,7 @@ export function frameOf(
     let pic = K.pics.get(key);
     if (!pic) pic = K.pics.set(key, build());
     fr = K.frames.set(fk, finish(pic, pose.look, dark));
+    F6_MOB_STAT.px += fr.img.width * fr.img.height * (fr.lit ? 2 : 1);
     stat(performance.now() - t0, `${K.name}|${fk}`);
   }
   return pose.flash ? { ...fr, img: flashImg(fr.img) } : fr;
