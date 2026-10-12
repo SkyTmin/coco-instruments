@@ -279,6 +279,33 @@ Owner: «добавь возможность выбирать скин у пит
   and arms dark YELLOW bronze (red-brown read as chocolate), white → pale gold, hat redder.
   Hatch plays `happy`. Weight 528 KB v0+v1 (small 56 / 62,
   large 197 / 211, thumbs 1 KB; ink was 1.64 MB). Tests «пиксельный барсук» in `pets-pixel.test.ts`.
+- **Bulldog** (`pets-pixel/bulldog.ts`, `bulldogFrame(a, i, res, v)`, `variants: [1]`): «Бульдог
+  Кастет», a stocky fawn-and-white English bulldog sitting square to us (shepherd's `drawPartsF` +
+  `pick` + `drawFlats`, plus own `vis` dither fade and `floor` clip on parts). 44-px read: head
+  WIDER than the chest and widening downward (skull 10.2 wide + cheeks + heavy white jowls), two
+  ivory lower fangs, black spiked collar with a steel ring and tag «17», brass knuckle-duster
+  on the viewer's-right paw. Off the shepherd/teddy: small ROSE ears = flats folded at the top
+  corners (round ears on top read as a teddy), white blaze + white lower face (`skullPick`),
+  frown wrinkles and brow arcs (large only), thick nose roll over a wide black nose, underbite
+  (chin pivots down from behind the jowls), bowed forelegs set wide (elbow offset sideways),
+  white socks, leather cuffs with studs and spikes, two crossed plasters on the forehead. Closed
+  mouth gap is NOSE-dark, red only when the jaw opens (red read as an open mouth all the time);
+  small strip draws the fang tips as overlay pixels (the parts vanished at 48). Jowls hang on
+  their own spring lag (`lagOf().jowl` from head height) — they sway in breath, hop and the
+  punch. Work (2 s): stone block (`quadP` top + front faces, grain, brass ore flecks) fades in →
+  sizes it up (turn, look) → wind-up with the fist back → punch at 0.98 s (flash, cracks) → at
+  1.06 s the block is replaced by 9 stones (GRAV 210, one bounce, `floor`, `vis` fade) + solid
+  dust puffs over empty/stone pixels → admires the knuckles at the face, smug eyes, glint
+  1.44–1.78 s → props fade by 1.92 s and reset to REST (test). Attack: crouch head-down →
+  headbutt-lunge at the viewer (scale 1.16, jaw open 0.36–0.48 s, fangs out) with the knuckle
+  fist thrown up beside the face (lower it hid in the chest) → rays over EMPTY pixels + a
+  sparkle on the fist (inside the silhouette the rays drew nothing) → settle. Idle: 3 heavy
+  breaths, snort with steam puff, tongue tip, look aside, blinks, stub-tail wag. Walk: standing
+  bowlegged waddle, paws alternate, body sways. Sleep: flopped, jowls on the paws, snot bubble
+  from the left nostril (smaller and off to the side — over the face it hid the jowls). Gold:
+  gold fur with bronze depth, white → pale gold, dark bronze ears and leather, brass knuckles
+  brighter to white. Hatch plays `happy`. Weight 535 KB v0+v1 (small 56 / 61, large 201 / 215,
+  thumbs 1 KB; ink was 1.81 MB). Tests «пиксельный бульдог» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;

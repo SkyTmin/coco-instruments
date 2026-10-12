@@ -38,7 +38,6 @@ import {
   lerp,
   lerp3,
   LIGHT,
-  mixc,
   mul,
   newFrame,
   norm,
@@ -368,14 +367,16 @@ function idlePose(t: number): Pose {
   o.snort = t >= 1.44 && t < 1.92 ? (t - 1.44) / 0.48 : -1;
   o.hz += 0.5 * sn;
   // Кончик языка — облизнулся.
-  o.tongue = 0.32 * kf(t, [
-    [0, 0],
-    [2.1, 0],
-    [2.24, 1, 'o'],
-    [2.5, 1],
-    [2.64, 0, 'i'],
-  ]);
-  o.jaw = 0.12 * o.tongue / 0.32;
+  o.tongue =
+    0.32 *
+    kf(t, [
+      [0, 0],
+      [2.1, 0],
+      [2.24, 1, 'o'],
+      [2.5, 1],
+      [2.64, 0, 'i'],
+    ]);
+  o.jaw = (0.12 * o.tongue) / 0.32;
   // Оглядывается вправо и обратно.
   const lk = loopK(t, T, [
     [0, 0],
@@ -533,8 +534,7 @@ function workPose(t: number): Pose {
   o.snarl = Math.max(0.6 * aim, wind, pn);
   o.jaw = 0.3 * pn + 0.3 * adm;
   o.tongue = 0.3 * adm;
-  o.eye =
-    t < 0.16 ? 'open' : t < 1.3 ? 'angry' : t < 1.84 ? 'smug' : 'open';
+  o.eye = t < 0.16 ? 'open' : t < 1.3 ? 'angry' : t < 1.84 ? 'smug' : 'open';
   o.earL = 0.4 * wind;
   o.earR = 0.4 * wind;
   o.tailSw = 0.9 * Math.sin(TAU * 3 * (t - 1.3)) * adm;
@@ -787,16 +787,6 @@ function skel(o: Pose): Skel {
   };
 }
 
-/** Точка на поверхности туловища спереди: qx вправо, qz вверх (доли радиусов). */
-function torsoAt(S: Skel, qx: number, qz: number, out = 1): V3 {
-  const qy = Math.sqrt(Math.max(0, 1 - qx * qx - qz * qz));
-  const [e1, e2, e3] = S.bax;
-  return add(
-    S.bc,
-    add(mul(e1, S.br[0] * qx * out), add(mul(e2, S.br[1] * qy * out), mul(e3, S.br[2] * qz * out))),
-  );
-}
-
 interface HeadF {
   at: (p: V3) => V3;
   dir: (v: V3) => V3;
@@ -886,34 +876,6 @@ interface Flat {
 let NEXT_ID = 0;
 const nid = () => ++NEXT_ID;
 
-function profile(wid: number[], u: number): number {
-  const wf = wid.length - 1;
-  const wi = Math.min(wf - 1, Math.floor(u * wf));
-  return lerp(wid[wi], wid[wi + 1], u * wf - wi);
-}
-
-function catmull(pts: V3[], u: number): V3 {
-  const n = pts.length;
-  const f = clamp01(u) * (n - 1);
-  const i = Math.min(n - 2, Math.floor(f));
-  const t = f - i;
-  const p0 = pts[Math.max(0, i - 1)];
-  const p1 = pts[i];
-  const p2 = pts[i + 1];
-  const p3 = pts[Math.min(n - 1, i + 2)];
-  const t2 = t * t;
-  const t3 = t2 * t;
-  const r: V3 = [0, 0, 0];
-  for (let a = 0; a < 3; a++)
-    r[a] =
-      0.5 *
-      (2 * p1[a] +
-        (p2[a] - p0[a]) * t +
-        (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2 +
-        (3 * p1[a] - p0[a] - 3 * p2[a] + p3[a]) * t3);
-  return r;
-}
-
 /** Колонна из двух точек: одна часть вдоль отрезка. */
 function limb(
   out: PartF[],
@@ -934,41 +896,6 @@ function limb(
     id,
     ...op,
   });
-}
-
-/**
- * Прядь — капля остриём к кончику: три эллипсоида убывают от основания
- * (одна деталь, без швов внутри).
- */
-function lock(
-  out: PartF[],
-  base: V3,
-  dir: V3,
-  nrm: V3,
-  len: number,
-  wid: number,
-  th: number,
-  pal: number,
-  bias: number,
-  op: Partial<PartF> = {},
-  id = nid(),
-): void {
-  const ax = axes(dir, nrm);
-  for (const [u, rl, rw, db] of [
-    [0.3, 0.4, 1, 0.05],
-    [0.62, 0.28, 0.68, -0.02],
-    [0.86, 0.17, 0.36, -0.1],
-  ] as [number, number, number, number][]) {
-    out.push({
-      c: add(base, mul(dir, len * u)),
-      ax,
-      r: [len * rl, wid * rw, th * Math.max(0.5, rw)],
-      pal,
-      id,
-      bias: bias + db,
-      ...op,
-    });
-  }
 }
 
 /** Точки для значков поверх кадра: напульсники, кастет, ошейник. */
@@ -1262,7 +1189,13 @@ function headParts(out: PartF[], flats: Flat[], c: Ctx): void {
         // Верх брылей снаружи — палевый (как скулы).
         if (side * qx > 0.5 && qz > 0.15) return P_FUR;
         // Складка от носа вниз мимо углов пасти.
-        if (HI && qy > 0.45 && Math.abs(side * qx + 0.2 - 0.42 * qz) < 0.07 && qz > -0.55 && qz < 0.7)
+        if (
+          HI &&
+          qy > 0.45 &&
+          Math.abs(side * qx + 0.2 - 0.42 * qz) < 0.07 &&
+          qz > -0.55 &&
+          qz < 0.7
+        )
           PICK_T = -0.2;
         return P_WHITE;
       },
@@ -1557,7 +1490,8 @@ function stoneParts(out: PartF[], c: Ctx): void {
       bias: ore ? 0.06 : 0.02,
       floor: true,
       vis: o.prop,
-      tex: (qx, qy, qz) => (qx + qz > 0.9 ? 0.12 : qy < -0.2 ? -0.08 : hash(j, 0, 3) > 0.5 && qx < -0.6 ? -0.1 : 0),
+      tex: (qx, qy, qz) =>
+        qx + qz > 0.9 ? 0.12 : qy < -0.2 ? -0.08 : hash(j, 0, 3) > 0.5 && qx < -0.6 ? -0.1 : 0,
     });
   });
 }
@@ -1932,7 +1866,9 @@ function gear(p: Px, f: Frame, c: Ctx): void {
       else stamp(p, KN_S, kp, at[0] - 2, at[1] - 1);
       if (o.glint >= 0) {
         const u = o.glint;
-        const R = Math.round((HI ? 6 : 2.4) * Math.sin(Math.PI * clamp01(u * 2 - (u > 0.5 ? 1 : 0))));
+        const R = Math.round(
+          (HI ? 6 : 2.4) * Math.sin(Math.PI * clamp01(u * 2 - (u > 0.5 ? 1 : 0))),
+        );
         if (R > 0) sparkle(p, at[0] + (HI ? 6 : 2), at[1] - (HI ? 3 : 1), R, 0.3);
       }
     }
