@@ -37,6 +37,17 @@ import { BOSS, F13_FX, F13_SCENERY, SPOT, stringsOf } from './f13-brains';
 import type { StringSeg } from './f13-brains';
 import { css, giantShoulderPx, hash, hx, INK, lordVagaPx, P, spiderLift, TAU } from './f13-art';
 import type { RGBA } from './f13-art';
+// Мобы 13 (анимации мобов 13): после `f13-art`, иначе круговой импорт.
+import './f13-mob-ballerina';
+import './f13-mob-drummer';
+import './f13-mob-fiddler';
+import './f13-mob-harlequin';
+import './f13-mob-knight';
+import './f13-mob-masks';
+import './f13-mob-nutcracker';
+import './f13-mob-prompter';
+import './f13-mob-shade';
+import './f13-mob-spider';
 
 type G = CanvasRenderingContext2D;
 const TS = 16;
