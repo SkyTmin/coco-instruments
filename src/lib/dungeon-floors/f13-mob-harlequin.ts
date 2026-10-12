@@ -158,7 +158,16 @@ const A2 = hp(
 );
 /** Пик: дотягивает шлепок назад, бубенцы успокаиваются. */
 const A3 = hp(
-  { twist: -0.7, lean: -0.24, bob: 2.6, aR: limb(2.85, 0.6, 0.8), sf: -0.6, hy: 0.5, hb: 0.3, hu: 0.1 },
+  {
+    twist: -0.7,
+    lean: -0.24,
+    bob: 2.6,
+    aR: limb(2.85, 0.6, 0.8),
+    sf: -0.6,
+    hy: 0.5,
+    hb: 0.3,
+    hu: 0.1,
+  },
   A2,
 );
 /** Контакт: выпад, шлепок наискось вниз через цель. */
@@ -772,11 +781,7 @@ registerMobPainter('f13_harlequin', (m: Mob, pose: MobPose): MobFrame => {
   const hy2 = md === 'f13_dive' ? (m.data?.hy2 ?? m.y ?? 0) - (m.y ?? 0) : 0;
   const far = Math.hypot(hx2, hy2) > 0.3;
   const want =
-    md === 'f13_dive' && far
-      ? Math.atan2(hy2, hx2)
-      : TECH.has(md)
-        ? (m.face ?? 0)
-        : headOf(m);
+    md === 'f13_dive' && far ? Math.atan2(hy2, hx2) : TECH.has(md) ? (m.face ?? 0) : headOf(m);
   const v = visOf(m, pose, want, md === 'windup' ? 6 : 10);
   // В люке разворачивается невидимо — выглядывает уже к герою.
   if (md === 'f13_pop' && t < 0.3) v.yaw = want;
