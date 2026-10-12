@@ -13,7 +13,7 @@ import { CREW_ON } from '@/lib/features';
 import { useFinanceStore } from '@/store';
 import { BeastTab, GearTab, StashTab } from '@/components/DungeonCamp';
 import { RodsTab, TrophiesTab } from '@/components/FishingCamp';
-import { pickSrc } from '@/components/PickArt';
+import { PickPx } from '@/components/PickArt';
 import { BookArt, BooksTab } from '@/components/BooksTab';
 import { ChestTab } from '@/components/ChestTab';
 import { EggArt, PetArt } from '@/components/PetArt';
@@ -143,9 +143,8 @@ const pct = (x: number) =>
 // ---------------------------------------------------------------------------
 
 /**
- * Кирка — готовая картинка Kenney (CC0) с перекрашенной головкой
- * (`scripts/picks-assets.py`). С золотой и выше головка светится: дорогую
- * кирку видно издалека. `sharp` — заточка уголком.
+ * Кирка — пиксельный значок (`PickPx`, полоса `icon-<i>` набора «picks»). С редкой и выше
+ * ореол цвета ступени (CSS): дорогую кирку видно издалека.
  */
 export function PickIcon({ pick, size = 30 }: { pick: number; size?: number }) {
   const i = Math.max(0, Math.min(PICKS.length - 1, pick));
@@ -156,7 +155,7 @@ export function PickIcon({ pick, size = 30 }: { pick: number; size?: number }) {
       style={{ width: size, height: size, '--rc': rarityOf(rar).color } as CSSProperties}
       aria-hidden="true"
     >
-      <img src={pickSrc(i)} alt="" draggable={false} />
+      <PickPx pick={i} size={size} />
     </span>
   );
 }

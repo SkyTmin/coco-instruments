@@ -2,8 +2,6 @@
 paths:
   - "src/components/{ForgeScreen,PickArt,MineField}.tsx"
   - "src/lib/{crack-stages,rarity}.ts"
-  - "scripts/picks-render/**"
-  - "public/ui/picks/**"
 ---
 
 <!-- Перенесено из CLAUDE.md дословно (v2.87): грузится, только когда
@@ -101,17 +99,10 @@ paths:
 4К», «чем отличается ржавая кирка от железной?», «добавь возможность
 переключаться между кирками».
 
-- **Картинки кирок — рендер 3D-моделей, а не иконки** (`public/ui/picks/v2/
-  p0…p16.webp`, 640 px, ~430 КБ на все). Прежние 64 px из Kenney Voxel
-  Pack на пьедестале растягивались вдесятеро и были одной формы на все 17.
-  Готовых HD-кирок под нашу лицензию достать не удалось: Poly Pizza,
-  OpenGameArt, itch.io, Sketchfab закрыты сетью, в зеркалах Kenney и KayKit
-  на GitHub кирки нет, единственная найденная 3D-кирка (voxel-wilds) — под
-  MIT. Поэтому модель собрана кодом (`scripts/picks-render/render.js`,
-  three.js с npm): головка — брус по дуге, сходящийся в острия, обух,
-  рукоять с кожаной обмоткой, навершие. Физические материалы и студийный
-  свет (RoomEnvironment), рендер 1280 → 640 со сглаживанием и тёмной
-  обводкой по силуэту (`post.py`).
+- **Pick images are code-drawn pixel strips since the pixel-props round** (set `picks`:
+  `icon-<i>`, `spin-<i>`, `forge-r<r>`; drawer `src/lib/props-pixel/picks.ts`). The v2.69 3D
+  renders (`public/ui/picks/v2`, `scripts/picks-render`) were removed. Details, API, pitfalls —
+  `.claude/rules/props-picks.md`.
 - **Каждая кирка — свой материал, а форма растёт с редкостью.** Ржавая —
   изъеденное железо с рыжими пятнами и сбитыми остриями; Каменная —
   кремень со сколами на верёвочной обвязке; Кованая — тёмная сталь во
@@ -123,12 +114,6 @@ paths:
   с эпической — самоцвет на обухе, с легендарной — самоцвет в навершии;
   рукоять темнеет от сосны к чёрному дереву. Самоцветам слабый лак:
   сильный белил их до пастели.
-- **Новые картинки лежат в новом каталоге и в прекеше**: `webp` добавлен в
-  `globPatterns` (кроме кирок, webp в проекте нет). Старые PNG кирок сидели
-  в прекеше service worker — у владельца Железная так и оставалась
-  оранжевой после перекраски в v2.67.2. Перерисовка: `npm i --no-save
-  three@0.170.0`, `PLAYWRIGHT=… node scripts/picks-render/run.mjs`,
-  `python3 scripts/picks-render/post.py …/out public/ui/picks/v2`.
 - **Кирка в руке и лучшая выкованная — разные поля** (`pick`, `pickMax`).
   Любую выкованную можно взять в руку тапом по ней на лестнице кузницы
   (`prisonEquip`), у той, что в руке, метка «в руке». От ЛУЧШЕЙ — кузница
