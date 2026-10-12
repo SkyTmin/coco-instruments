@@ -1335,11 +1335,13 @@ function tail(out: Part[], flats: Flat[], c: Ctx): void {
     [lerp(10.5, 9, cu) * k + o.x * 0.5, lerp(-5.2, -2, cu) * k, 1.9 * k],
     [lerp(15.6, 12.5, cu) * k + o.x * 0.25, lerp(-0.8, 4.5, cu) * k, 1.6 * k],
     [lerp(16.6, 8.5, cu) * k + sw * 0.6, lerp(4.0, 10.2, cu) * k, 1.6 * k],
-    [lerp(14.2, 1.5, cu) * k + sw * 1.3, lerp(7.4, 11.4, cu) * k, (1.9 + lift * 0.8) * k],
+    [lerp(14.2, 0.5, cu) * k + sw * 1.3, lerp(7.4, 11.6, cu) * k, (1.9 + lift * 0.8) * k],
+    // Во сне хвост обнимает лапы спереди, пика ложится слева от левой лапы:
+    // перед лапами она пряталась за ними и читалась красной коробкой.
     [
-      lerp(13.4, -2.5, cu) * k + sw * 2.0,
-      lerp(7.8, 11.0, cu) * k,
-      (lerp(5.6, 2.2, cu) + lift * 2.2) * k,
+      lerp(13.4, -8.6, cu) * k + sw * 2.0,
+      lerp(7.8, 10.4, cu) * k,
+      (lerp(5.6, 3.0, cu) + lift * 2.2) * k,
     ],
   ];
   // В прыжке хвост поднимается с телом, кончик отстаёт.
@@ -1816,7 +1818,8 @@ function crownStamp(p: Px, f: Frame): void {
   const tilt = Math.max(-1, Math.min(1, Math.round(CROWN.swing)));
   const W = rows[0].length;
   const H = rows.length;
-  const x0 = at[0] - Math.floor(W / 2) - (HI ? 1 : 0);
+  // Корона надета на рог: рог виден по обе стороны (левее она висела сбоку).
+  const x0 = at[0] - Math.floor(W / 2) + (HI ? 1 : 0);
   const y0 = at[1] - (HI ? 3 : 1);
   const mask = new Set<number>();
   const cells: [number, number, RGBA][] = [];
@@ -2329,16 +2332,40 @@ const EYES_S: Record<string, string[]> = {
   sleep: ['...', 'l.l', '.l.'],
   angry: ['oo.', 'bKW', 'cKc'],
 };
-// Крупная: глаз 6×5 — тёмный ободок, радужка светлее книзу, щель зрачка, блик.
+// Крупная: глаз 9×7 — тёмный ободок, радужка светлее к середине, щель зрачка по центру,
+// блик. 7×6 читался «жёлтыми очками»: туша держит морду крупными золотыми глазами.
 const EYES_L: Record<string, string[]> = {
-  // 7×6: зрачок по центру, радужка в три ступени — глаз держит морду, как у туши.
-  open: ['.ooooo.', 'obbKWbo', 'oaaKaao', 'oaaKaao', 'occKcco', '.oddoo.'],
-  wide: ['.ooooo.', 'obbKWbo', 'oaaKaao', 'oaaKaao', 'oaaKaao', '.occco.'],
-  half: ['.......', 'ooooooo', 'oaaKaao', 'oaaKaao', 'occKcco', '.oddoo.'],
-  shut: ['.......', '.......', 'ollllll', '.ooooo.', '.......', '.......'],
-  happy: ['.......', '.lllll.', 'lo...ol', 'o.....o', '.......', '.......'],
-  sleep: ['.......', '.......', 'o.....o', 'lo...ol', '.lllll.', '.ooooo.'],
-  angry: ['ooo....', 'ooooooo', 'obbKWbo', 'oaaKaao', 'occKcco', '.ooooo.'],
+  open: ['..ooooo..', '.obbKWbo.', 'obaaKWaao', 'oaaaKaaao', 'occcKccco', '.occKcco.', '..oddoo..'],
+  wide: ['..ooooo..', '.obbKWbo.', 'oaaaKWaao', 'oaaaKaaao', 'oaaaKaaao', '.occKcco.', '..ooooo..'],
+  half: ['.........', '..ooooo..', 'ooooooooo', 'oaaaKaaao', 'occcKccco', '.occKcco.', '..oddoo..'],
+  shut: ['.........', '.........', '.........', 'ollllllll', '.ooooooo.', '.........', '.........'],
+  happy: [
+    '.........',
+    '..lllll..',
+    '.lo...ol.',
+    'lo.....ol',
+    'o.......o',
+    '.........',
+    '.........',
+  ],
+  sleep: [
+    '.........',
+    '.........',
+    '.........',
+    'o.......o',
+    'lo.....ol',
+    '.lllllll.',
+    '..ooooo..',
+  ],
+  angry: [
+    'oooo.....',
+    'ooooooooo',
+    'obbbKWbbo',
+    'oaaaKaaao',
+    'occcKccco',
+    '.occKcco.',
+    '..ooooo..',
+  ],
 };
 
 function eyes(p: Px, f: Frame, c: Ctx): void {
@@ -2353,7 +2380,7 @@ function eyes(p: Px, f: Frame, c: Ctx): void {
       else if (o.blink > 0.3) key = 'half';
     }
     const flip = side > 0;
-    if (HI) stamp(p, EYES_L[key], ep, at[0] - 3, at[1] - 2, flip);
+    if (HI) stamp(p, EYES_L[key], ep, at[0] - 4, at[1] - 3, flip);
     else stamp(p, EYES_S[key], ep, at[0] - 1, at[1] - 1, flip);
   }
   // Ноздри: тёмные, на вдохе внутри тлеет.
@@ -2399,17 +2426,21 @@ function smoke(p: Px, c: Ctx, amt: number): void {
       const [sx, sy] = project(mul(pt, RR));
       const cx = OX + sx;
       const cy = OY + sy;
-      // Клуб растёт и светлеет к краю силуэта головы: серый на сером не читался (2–6 пикселей на малой).
-      const rad = (1.0 + 2.1 * u) * RR * (HI ? 0.85 : 1);
-      const dens = amt * (1 - 0.85 * u);
-      const tone = Math.max(0, Math.min(4, Math.round(4.2 - u * 2.6)));
+      // Клуб — сплошной шарик со светом сверху-слева: растёт, темнеет и к концу
+      // сжимается. Редкая шахматка читалась решёткой точек, а не дымом.
+      const grow = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
+      const rad = (0.9 + 1.9 * u) * grow * RR * (HI ? 0.8 : 1) * Math.sqrt(Math.min(1, amt));
+      if (rad < 0.6) continue;
+      const tone = Math.max(1, Math.min(4, Math.round(4.3 - u * 2.4)));
       for (let y = Math.floor(cy - rad); y <= Math.ceil(cy + rad); y++)
         for (let x = Math.floor(cx - rad); x <= Math.ceil(cx + rad); x++) {
-          const dd = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / rad;
+          const dx = (x + 0.5 - cx) / rad;
+          const dy = (y + 0.5 - cy) / rad;
+          const dd = Math.hypot(dx, dy);
           if (dd > 1) continue;
-          if (!dith(x, y, dens * (1.1 - dd * 0.6))) continue;
           if (u > 0.16 && x >= 0 && y >= 0 && x < p.w && y < p.h && mask[y * p.w + x]) continue;
-          p.set(x, y, SMOKE[dd < 0.5 ? tone : Math.max(0, tone - 1)]);
+          const lit = dx + dy < -0.55 ? 1 : dx + dy > 0.6 || dd > 0.85 ? -1 : 0;
+          p.set(x, y, SMOKE[Math.max(0, Math.min(4, tone + lit))]);
         }
     }
   }
@@ -2544,9 +2575,10 @@ export function dragonFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   const p = toPx(f, PAL);
   if (v === 2) rainbow(p, f, o);
   selOutline(p, INK_V[v], 0.8);
+  // Дым до глаз и короны: клуб у ноздри не закрывает глаз.
+  smoke(p, c, o.smoke);
   eyes(p, f, c);
   crownStamp(p, f);
-  smoke(p, c, o.smoke);
   // Угольки: с плеч и спины, гуще при накале.
   const lava = PAL[P_LAVA];
   const nsp = a === 'sleep' ? 1 : a === 'walk' ? 2 : 3;

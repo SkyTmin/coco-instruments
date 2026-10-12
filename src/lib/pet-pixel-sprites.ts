@@ -24,14 +24,14 @@ export interface PetPx extends PetPxSet {
 export const PET_PX: Record<string, PetPx> = {
   dragon: {
     box: 48,
-    rev: 'c69457fa3c',
+    rev: 'fc3b9fa1e8',
     anims: {
       idle: { n: 72, fps: 24, x: 1, y: -1, w: 46, h: 52 },
       walk: { n: 24, fps: 24, x: -2, y: -2, w: 52, h: 53 },
       happy: { n: 26, fps: 24, x: -1, y: -9, w: 50, h: 60 },
       work: { n: 48, fps: 24, x: 1, y: -3, w: 46, h: 54 },
       attack: { n: 22, fps: 24, x: -2, y: -5, w: 52, h: 56 },
-      sleep: { n: 72, fps: 24, x: 5, y: 8, w: 37, h: 43 },
+      sleep: { n: 72, fps: 24, x: 7, y: 8, w: 35, h: 43 },
     },
     large: {
       box: 112,
@@ -41,7 +41,7 @@ export const PET_PX: Record<string, PetPx> = {
         happy: { n: 26, fps: 24, x: 2, y: -12, w: 108, h: 125 },
         work: { n: 48, fps: 24, x: 7, y: 2, w: 98, h: 111 },
         attack: { n: 22, fps: 24, x: 1, y: -3, w: 110, h: 117 },
-        sleep: { n: 72, fps: 24, x: 19, y: 27, w: 74, h: 86 },
+        sleep: { n: 72, fps: 24, x: 22, y: 27, w: 71, h: 86 },
       },
     },
   },
