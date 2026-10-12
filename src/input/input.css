@@ -58,7 +58,7 @@
   fill: #2b2f34;
 }
 .ip__hot {
-  fill: #fff1d2;
+  fill: #f2b736;
 }
 .ip--xb-a {
   color: #6fd36a;
@@ -89,4 +89,130 @@
 }
 .ip-prompt__label {
   white-space: nowrap;
+}
+
+/* Экран клавиш: настройки → «Управление» (BindingsPanel). Действие и три
+   ячейки — две клавиши и кнопка геймпада. */
+.ibind {
+  --ibind-cell: 50px;
+  display: flex;
+  flex-direction: column;
+  color: var(--gx-ink, #3b2a1a);
+  font:
+    600 1em/1.2 'GxRubik',
+    system-ui,
+    sans-serif;
+}
+@container (min-width: 520px) {
+  .ibind {
+    --ibind-cell: 64px;
+  }
+}
+.ibind__cols,
+.ibind__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, var(--ibind-cell));
+  align-items: center;
+  gap: 6px;
+}
+.ibind__cols {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  padding: 4px 0 6px;
+  background: var(--gx-paper, #f4e7c9);
+  font-size: 0.72em;
+  font-weight: 800;
+  color: var(--gx-ink-soft, #7a6650);
+  text-align: center;
+}
+.ibind__col--keys {
+  grid-column: span 2;
+}
+.ibind__h {
+  margin: 12px 0 4px;
+  font-size: 0.78em;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gx-wood-dd, #4a2e17);
+}
+.ibind__row {
+  min-height: 42px;
+  border-bottom: 1px dashed rgba(90, 60, 30, 0.2);
+}
+.ibind__name {
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+.ibind__cell {
+  height: 34px;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 2px;
+  border: 2px solid var(--gx-paper-2, #e3cfa6);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.ibind__cell .ip {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.72em;
+  white-space: nowrap;
+}
+html[data-input='mouse'] .ibind__cell:hover {
+  border-color: var(--gx-wood-2, #b07a45);
+}
+.ibind__cell.is-wait {
+  border-color: var(--gx-gold-d, #b8860b);
+  background: #fff3c4;
+  animation: ibind-wait 0.8s steps(2) infinite;
+}
+@keyframes ibind-wait {
+  50% {
+    border-color: var(--gx-paper-2, #e3cfa6);
+  }
+}
+.ibind__none {
+  color: var(--gx-ink-soft, #7a6650);
+  opacity: 0.6;
+}
+.ibind__dots {
+  font-weight: 800;
+}
+.ibind__foot {
+  position: sticky;
+  bottom: -12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 0 4px;
+  background: var(--gx-paper, #f4e7c9);
+}
+.ibind__hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8em;
+  color: var(--gx-ink-soft, #7a6650);
+}
+.ibind__hint.is-wait {
+  color: var(--gx-wood-dd, #4a2e17);
+  font-weight: 800;
+}
+.ibind__reset {
+  flex: none;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 2px solid var(--gx-wood-d, #6b4423);
+  border-radius: 8px;
+  background: var(--gx-wood, #9a6434);
+  color: #fff8ea;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
 }

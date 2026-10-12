@@ -25,12 +25,15 @@ export function setKeyCapture(fn: ((e: KeyboardEvent) => boolean) | null): void 
 }
 
 export function installKeyboard(): () => void {
-  const down = (e: KeyboardEvent) => {
+  // Перехват — на фазе погружения: клавиша не дойдёт ни до кнопки в фокусе
+  // (Пробел на ней не «нажмёт» ячейку снова), ни до обработчиков экранов.
+  const grab = (e: KeyboardEvent) => {
     if (capture && capture(e)) {
       e.preventDefault();
       e.stopPropagation();
-      return;
     }
+  };
+  const down = (e: KeyboardEvent) => {
     if (e.isComposing) return;
     setInputDevice('keyboard');
     if (isTypingTarget(e.target) && e.code !== 'Escape') return;
@@ -49,6 +52,8 @@ export function installKeyboard(): () => void {
       emitAction(a, 'up', 'keyboard', e, `key:${e.code}`);
   };
   const blur = () => releaseAll('keyboard');
+  window.addEventListener('keydown', grab, true);
+  window.addEventListener('keyup', grab, true);
   window.addEventListener('keydown', down);
   window.addEventListener('keyup', up);
   window.addEventListener('blur', blur);

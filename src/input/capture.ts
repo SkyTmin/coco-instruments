@@ -1,5 +1,5 @@
 // Переназначение: «нажмите клавишу» — ждём следующую клавишу или кнопку
-// геймпада. Esc (или «B»/○ — кнопка 1, если ждём только геймпад) отменяет.
+// геймпада. Esc отменяет, через 10 с без нажатия — тоже.
 
 import { chordOf } from './actions';
 import { setPadCapture } from './gamepad';
@@ -35,26 +35,37 @@ export function captureNextBinding(device: 'keys' | 'pad' | 'any' = 'any'): {
     setPadCapture(null);
     done(v);
   };
+  // Отпускание пойманной клавиши тоже съедаем: иначе Escape/Пробел/Enter
+  // долетят до экрана уже после перехвата.
+  const finishKey = (code: string, v: Captured | null) => {
+    finish(v);
+    setKeyCapture((e) => {
+      if (e.code !== code) return false;
+      if (e.type === 'keydown' && e.repeat) return true;
+      setKeyCapture(null); // отпустили (или окно теряло фокус и это новое нажатие)
+      return e.type === 'keyup';
+    });
+  };
   if (device !== 'pad')
     setKeyCapture((e) => {
       if (e.type !== 'keydown' || e.repeat) return true;
       if (e.code === 'Escape') {
-        finish(null);
+        finishKey(e.code, null);
         return true;
       }
       // Одиночный Shift — тоже клавиша (рывок), а Shift с буквой — сочетание.
       if (MODIFIERS.includes(e.code)) {
         if (!e.code.startsWith('Shift')) return true;
-        finish({ device: 'keys', chord: e.code });
+        finishKey(e.code, { device: 'keys', chord: e.code });
         return true;
       }
       if (e.ctrlKey || e.altKey || e.metaKey) return true;
-      finish({ device: 'keys', chord: chordOf(e) });
+      finishKey(e.code, { device: 'keys', chord: chordOf(e) });
       return true;
     });
   else
     setKeyCapture((e) => {
-      if (e.code === 'Escape') finish(null);
+      if (e.code === 'Escape' && e.type === 'keydown') finishKey(e.code, null);
       return true;
     });
   if (device !== 'keys')

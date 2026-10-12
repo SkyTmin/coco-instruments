@@ -13,6 +13,7 @@ import { installDeviceTracking } from './device';
 import { activateFocused, moveFocus, type Dir } from './focus-nav';
 import { installGamepad } from './gamepad';
 import { installKeyboard, isTypingTarget } from './keyboard';
+import './BindingsPanel'; // вкладка «Управление» в настройках игры
 
 const NATIVE = ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'SUMMARY'];
 

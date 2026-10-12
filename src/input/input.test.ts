@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   actionsForButton,
+  assignBinding,
   actionsForCode,
   actionsForKey,
   DEFAULT_BINDINGS,
@@ -76,6 +77,16 @@ describe('ввод: переназначение', () => {
     const b = rebind(B, 'skill', 'pad', PAD.RB);
     expect(b.pad.skill[0]).toBe(PAD.RB);
     expect(b.pad.tabNext).toContain(PAD.RB); // меню — другая группа
+  });
+  it('ячейка экрана клавиш: новое вместо старого, обмен с соседом, null стирает', () => {
+    const b = assignBinding(B, 'up', 'keys', 'KeyU', 1); // было ArrowUp, KeyW
+    expect(b.keys.up).toEqual(['ArrowUp', 'KeyU']);
+    const c = assignBinding(b, 'up', 'keys', null, 0);
+    expect(c.keys.up).toEqual(['KeyU']);
+    const d = assignBinding(B, 'attack', 'pad', PAD.X, 0); // X был у «действия»
+    expect(d.pad.attack[0]).toBe(PAD.X);
+    expect(d.pad.attack).not.toContain(PAD.A);
+    expect(d.pad.interact).toEqual([PAD.A]); // поменялись: «действию» — бывшая A удара
   });
   it('старое сохранение без нового действия получает значение по умолчанию; мусор выброшен', () => {
     const b = normalizeBindings({ keys: { up: ['KeyU', 5, ''] }, pad: { up: [3, -1, 'x', 99] } });

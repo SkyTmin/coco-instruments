@@ -42,4 +42,5 @@ export const input = {
   reset: 'Как было',
   padNone: 'Геймпада нет — нажми на нём любую кнопку',
   space: 'Пробел',
+  clear: 'Backspace — стереть',
 } as const;

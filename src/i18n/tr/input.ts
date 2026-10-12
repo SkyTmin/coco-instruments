@@ -44,4 +44,5 @@ export const input: Translation<typeof ru> = {
   reset: 'Varsayılan',
   padNone: 'Oyun kolu yok — üstünde bir düğmeye bas',
   space: 'Boşluk',
+  clear: 'Backspace — sil',
 };

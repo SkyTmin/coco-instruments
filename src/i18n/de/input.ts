@@ -44,4 +44,5 @@ export const input: Translation<typeof ru> = {
   reset: 'Standard',
   padNone: 'Kein Controller — drück einen Knopf darauf',
   space: 'Leertaste',
+  clear: 'Rücktaste — löschen',
 };
