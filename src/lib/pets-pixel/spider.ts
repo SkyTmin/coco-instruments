@@ -601,6 +601,13 @@ function workPose(t: number): Pose {
   o.tok = t < 1.02 || t >= 1.97 ? -1 : clamp01((t - 1.02) / (STICK_T - 1.02));
   o.wob = t >= STICK_T && t < 1.97 ? 1 : 0;
   o.prop = t < 0.3 ? 0 : t < 1.68 ? 1 : t < 1.97 ? clamp01((1.94 - t) / 0.26) : 0;
+  // Остальные лапы шире и ниже: упор, и поднятые лапы не тонут в их коленях.
+  o.splay = kf(t, [
+    [0, 0],
+    [0.3, 0.75],
+    [1.62, 0.75],
+    [1.95, 0],
+  ]);
   // Пляска: подскоки, крен, лапы переступают.
   const d = clamp01((t - 1.36) / 0.06) * clamp01((1.72 - t) / 0.06);
   const u = (t - 1.36) / 0.36;
@@ -712,7 +719,7 @@ function sleepPose(t: number): Pose {
   const o: Pose = { ...REST };
   const br = (TAU * t) / T;
   o.tuck = 1;
-  o.bz = -3.6 + 0.22 * Math.sin(br);
+  o.bz = -4.2 + 0.22 * Math.sin(br);
   o.abd = 0.04 * Math.sin(br);
   o.pitch = 0.08;
   o.nod = 0.06;
@@ -762,16 +769,16 @@ const HIP: V3[] = [
   [4.6, -4.2, 9.6],
 ];
 const KNEE: V3[] = [
-  [10.5, 8.0, 15.0],
-  [15.5, 3.5, 19.0],
-  [17.0, -3.0, 19.5],
-  [15.0, -10.0, 18.0],
+  [10.5, 8.0, 15.5],
+  [14.5, 3.5, 19.5],
+  [16.0, -3.0, 20.0],
+  [14.5, -10.0, 18.5],
 ];
 const FOOT: V3[] = [
-  [14.5, 10.5, 0],
-  [21.5, 4.5, 0],
-  [23.0, -5.5, 0],
-  [20.0, -14.5, 0],
+  [15.0, 11.0, 0],
+  [22.5, 5.0, 0],
+  [23.5, -5.0, 0],
+  [21.0, -14.0, 0],
 ];
 const TAR = 3.0;
 const UP: V3 = [0, 0, 1];
@@ -840,7 +847,7 @@ interface Lag {
 
 const bodyAt = (o: Pose): V3 => [B0[0] + o.bx + o.gx, B0[1] + o.by + o.gy, B0[2] + o.bz + o.air];
 
-function skel(o: Pose, lag: Lag): Skel {
+export function skel(o: Pose, lag: Lag): Skel {
   const B = bodyAt(o);
   const sqv = (v: V3): V3 => [v[0] * (1 + o.sq * 0.4), v[1] * (1 + o.sq * 0.3), v[2] * (1 - o.sq)];
   const rot = (v: V3): V3 => yawZ(rollY(pitchX(sqv(v), o.pitch), o.lean), o.turn);
@@ -860,7 +867,7 @@ function skel(o: Pose, lag: Lag): Skel {
       const hip = add(B, rot(sub([H[0] * s, H[1], H[2]], B0)));
       const F = FOOT[k];
       const dir = norm([F[0] - H[0], F[1] - H[1], 0]);
-      const out = o.splay * 3.5 - o.tuck * 8.5;
+      const out = o.splay * 3.5 - o.tuck * 5;
       let foot: V3 = [
         F[0] * s + dir[0] * s * out,
         F[1] + dir[1] * out + o[strideKey(s, k)],
@@ -870,7 +877,7 @@ function skel(o: Pose, lag: Lag): Skel {
       if (k === 0) {
         raised = s < 0 ? o.raiseL : o.raiseR;
         if (raised > 0) {
-          const tgt: V3 = [s * (12.5 + o.spread * 5.5), 9.5 + o.spread * 1.5, 29 - o.spread * 7];
+          const tgt: V3 = [s * (15 + o.spread * 4), 9 + o.spread * 2, 36 - o.spread * 13];
           foot = lerp3(foot, tgt, raised);
         }
         foot = add(foot, s < 0 ? [o.fLx, 0, o.fLz] : [o.fRx, 0, o.fRz]);
@@ -879,9 +886,12 @@ function skel(o: Pose, lag: Lag): Skel {
       foot = add(foot, [o.gx, o.gy, o.air * 0.82]);
       const ankle0 = ankleOf(hip, foot, raised);
       let pole: V3 = [POLE[k][0] * s, POLE[k][1], POLE[k][2]];
-      pole = lerp3(pole, [s, 0.5, -0.35], raised);
-      pole = lerp3(pole, [s * 0.9, 0.1, 0.7], o.tuck * 0.6);
-      const [knee, ankle] = ik(hip, ankle0, LF[k], LT[k], norm(pole));
+      pole = lerp3(pole, [s, 0.15, -0.2], raised);
+      // Поджатая: колено в сторону и назад, низко — не «клетка» вокруг тела.
+      pole = lerp3(pole, [s, -0.75, 0.15], o.tuck);
+      // Поднятая лапа чуть тянется (мультяшно): иначе кончик не выходит из-за брюшка.
+      const st = 1 + 0.12 * raised;
+      const [knee, ankle] = ik(hip, ankle0, LF[k] * st, LT[k] * st, norm(pole));
       foot = add(ankle, sub(foot, ankle0));
       legs.push({ s, k, hip, knee, ankle, foot, raised });
     }
@@ -1016,7 +1026,7 @@ const HEAD_HAIR = {
 
 function abdPick(qx: number, qy: number, qz: number): number {
   PICK_T = 0;
-  const e = qz * 0.9 + qy * 0.4 - Math.abs(qx) * 0.55;
+  const e = qz * 0.9 + qy * 0.4 - qx * qx * 0.9;
   const n = (hash(Math.floor(qx * 9 + 20), Math.floor(qy * 9 + 20), 17) - 0.5) * 0.1;
   if (e + n > 0.8) {
     PICK_T = e > 0.93 ? 0.04 : -0.06;
@@ -1129,9 +1139,12 @@ function legParts(out: PartF[], c: Ctx): void {
     const fr = L.k === 0 ? 1.55 : L.k === 3 ? 1.35 : 1.45;
     const tr = fr * 0.86;
     const idF = nid();
-    limb(out, L.hip, L.knee, fr, fr * 0.92, P_LEG, idF, { tube: true, bias: -0.02 });
+    // Поднятая лапа ближе к нам — на ступень светлее, не тонет в коленях соседей.
+    const lb = L.raised * 0.08;
+    limb(out, L.hip, L.knee, fr, fr * 0.92, P_LEG, idF, { tube: true, bias: -0.02 + lb });
     limb(out, L.knee, L.ankle, tr, tr * 0.92, P_LEG, nid(), {
       tube: true,
+      bias: lb,
       pick: (qx) => shinPick(qx),
     });
     limb(out, L.ankle, L.foot, tr * 0.72, tr * 0.7, P_LEG, nid(), { tube: true, bias: -0.06 });
@@ -1531,7 +1544,7 @@ function face(p: Px, f: Frame, c: Ctx): void {
 }
 
 /** Паутина между поднятыми лапами: спицы, потом спираль от середины. */
-const WEB_L: V3 = [0, 10.5, 15.5];
+const WEB_L: V3 = [0, 11.5, 17];
 const WEB_RX = 11;
 function webCenter(c: Ctx): V3 {
   const { S, lag } = c;
@@ -1551,10 +1564,10 @@ function web(p: Px, f: Frame, c: Ctx): void {
   for (let j = 0; j < NS; j++) {
     const a = (j / NS) * TAU;
     const rr = WEB_RX * (0.9 + 0.14 * hash(j, 1, 31));
-    ends.push(add(C, S.rot([Math.cos(a) * rr, 0, Math.sin(a) * rr * 0.62])));
+    ends.push(add(C, S.rot([Math.cos(a) * rr, 0, Math.sin(a) * rr * 0.86])));
   }
-  ends[0] = lerp3(ends[0], R.foot, R.raised);
-  ends[4] = lerp3(ends[4], L.foot, L.raised);
+  ends[1] = lerp3(ends[1], R.foot, R.raised);
+  ends[3] = lerp3(ends[3], L.foot, L.raised);
   const line = (a: V3, b: V3, col: RGBA) => {
     const A = project(mul(a, K));
     const B = project(mul(b, K));
