@@ -18,6 +18,9 @@ import { PETS } from '@/lib/pets';
 import * as P from '@/lib/prison';
 import { PICKS } from '@/lib/economy';
 import { RARITIES } from '@/lib/rarity';
+import { WIN_TIERS } from '@/lib/rollup';
+import { ORB_TIERS } from '@/lib/orb-rarity';
+import { PAYLINES } from '@/lib/slots';
 
 const CATALOGS = { en, fr, tr, de, es, it: it_ } as const;
 
@@ -171,8 +174,6 @@ const NOT_YET_TRANSLATED = [
   'src/pages/FishingPage.tsx',
   'src/pages/ForestPage.tsx',
   'src/pages/PrisonPage.tsx',
-  'src/pages/ScatterPage.tsx',
-  'src/pages/SlotsPage.tsx',
   'src/pages/YardPage.tsx',
 ];
 /** The list as it was on 12.10.2026 — never extend, only the list above shrinks. */
@@ -234,6 +235,42 @@ describe('data areas match src/lib', () => {
       expect([c.name, c.hint, c.title, c.subtitle]).toEqual([s.name, s.hint, s.title, s.subtitle]);
     }
     expect(Object.keys(ru.skins).sort()).toEqual(SKINS.map((s) => s.id).sort());
+  });
+
+  it('slots (win steps, orb tiers, paylines)', () => {
+    const by = <T extends { id: string | number }>(
+      a: T[],
+      key: (x: T) => string,
+      f: (x: T) => string,
+    ) => Object.fromEntries(a.map((x) => [key(x), f(x)]));
+    expect(ru.slots.step).toEqual(
+      by(
+        WIN_TIERS,
+        (w) => w.id,
+        (w) => w.name,
+      ),
+    );
+    expect(ru.slots.orb).toEqual(
+      by(
+        ORB_TIERS,
+        (o) => o.id,
+        (o) => o.name,
+      ),
+    );
+    expect(ru.slots.line).toEqual(
+      by(
+        PAYLINES,
+        (l) => `l${l.id}`,
+        (l) => l.name,
+      ),
+    );
+    expect(ru.slots.lineIn).toEqual(
+      by(
+        PAYLINES,
+        (l) => `l${l.id}`,
+        (l) => l.name.toLowerCase(),
+      ),
+    );
   });
 
   it('pets', () => {

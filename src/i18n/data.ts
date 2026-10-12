@@ -26,6 +26,11 @@ export const crewText = (id: string) => t(k(`mine.crew.${id}.text`));
 export const perkName = (id: string) => t(k(`mine.perk.${id}.name`));
 export const perkText = (id: string) => t(k(`mine.perk.${id}.per`));
 export const horizonName = (i: number) => t(k(`mine.horizon.${i}`));
+export const orbName = (id: string) => t(k(`slots.orb.${id}`));
+export const lineName = (i: number) => t(k(`slots.line.l${i}`));
+/** Line name inside a sentence («три в ряд — центр!», «tres en raya en el centro»). */
+export const lineIn = (i: number) => t(k(`slots.lineIn.l${i}`));
+export const winStepName = (id: string) => t(k(`slots.step.${id}`));
 export const petName = (id: PetId) => t(`pets.${id}.name`);
 export const petLore = (id: PetId) => t(`pets.${id}.lore`);
 export const skinText = (id: SkinId, field: 'name' | 'hint' | 'title' | 'subtitle') =>
