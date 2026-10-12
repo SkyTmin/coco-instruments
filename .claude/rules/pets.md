@@ -255,6 +255,30 @@ Owner: «добавь возможность выбирать скин у пит
   copper bands darker and redder. Hatch plays `happy`. Weight 818 KB v0+v1 (small 72 / 81, large
   319 / 344, thumbs 1 KB; ink was 1.69 MB) — heavier than the others because of the strands. Released in v2.117.
   Tests «пиксельный паук» in `pets-pixel.test.ts`.
+- **Badger** (`pets-pixel/badger.ts`, `badgerFrame(a, i, res, v)`, `variants: [1]`):
+  «Барсук-проходчик», a stocky grey badger STANDING on two legs facing us (fox's `drawPartsF` +
+  `pick`, plus own `vis` dither fade, `cut` and `floor` on parts). 44-px read: white face with
+  a blaze, black bands from the nose over the eyes to the ears (`headPick`, wider toward the
+  crown), orange hard hat, canvas vest block, ivory claws. Ears sit OUTSIDE the head ellipsoid
+  (±8.5, −0.8, 2.3) with a white rim — inside it they were swallowed. Hat: dome (`cut` lower
+  half) + brim + goggles pushed up; the hat pivot is raised (4.5) so the brim doesn't hide the
+  eyes on the small strip; goggle glass is dark teal with a small glint — bright cream lenses
+  read as a second pair of eyes. Vest = ONE torso part (`vestPick`): open front with the grey
+  belly in the gap, lit stitched edges, patch pockets with a flap + brass button, breast pocket
+  with a pencil (`rodF`). All-grey tail (a white tip read as a snowball). Claws, pick, pencil =
+  `rodF` (spider's rod with palette and fade). Work (pick, 2 s): rock + pick fade in → two
+  swings (wind-up over the hat, strike at 0.5 / 1.0 s: star + chips, squint) → the second
+  stroke leaves the pick STUCK in the rock, crack glows → crystal (`gemDraw`, flat faceted
+  polygon with depth) pops out in an arc into the right paw → held up high, crystal and goggle
+  glints, happy eyes, grin → props fade 1.72–1.92 s and reset to REST (test). Pick head is 2 px
+  and lighter on the small strip, else it vanished against the rock. Attack: crouch → lunge
+  (scale 1.18, jaws open 0.36–0.47 s) with paws high, `claw` spreads and lengthens the claws ×1.55
+  → slash down across the vest, white-amber arcs over EMPTY pixels → head shake. Sleep: sits
+  slumped, hat tipped over the eyes (head nod only 0.06 — a nodded head showed just the hat
+  dome), mouth and cheeks visible under the brim, zzz. Gold: fur gold with bronze depth, bands
+  and arms dark YELLOW bronze (red-brown read as chocolate), white → pale gold, hat redder.
+  Hatch plays `happy`. Weight 528 KB v0+v1 (small 56 / 62,
+  large 197 / 211, thumbs 1 KB; ink was 1.64 MB). Tests «пиксельный барсук» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;

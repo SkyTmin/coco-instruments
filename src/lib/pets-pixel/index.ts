@@ -10,6 +10,12 @@
 
 import type { Px } from '../dungeon-art';
 import {
+  badgerFrame,
+  FPS as BADGER_FPS,
+  FRAMES as BADGER_FRAMES,
+  RES as BADGER_RES,
+} from './badger';
+import {
   dragonFrame,
   FPS as DRAGON_FPS,
   FRAMES as DRAGON_FRAMES,
@@ -96,6 +102,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: SPIDER_RES,
     anims: at24(SPIDER_FRAMES, SPIDER_FPS),
     frame: spiderFrame,
+    variants: [1],
+  },
+  // Барсук-проходчик: свой золотой.
+  badger: {
+    res: BADGER_RES,
+    anims: at24(BADGER_FRAMES, BADGER_FPS),
+    frame: badgerFrame,
     variants: [1],
   },
 };
