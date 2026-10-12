@@ -25,6 +25,12 @@ import {
   RES as SHEPHERD_RES,
   shepherdFrame,
 } from './shepherd';
+import {
+  FPS as SPIDER_FPS,
+  FRAMES as SPIDER_FRAMES,
+  RES as SPIDER_RES,
+  spiderFrame,
+} from './spider';
 import { FPS as WOLF_FPS, FRAMES as WOLF_FRAMES, RES as WOLF_RES, wolfFrame } from './wolf';
 
 export type { Anim, Canvas, Res };
@@ -83,6 +89,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: SHEPHERD_RES,
     anims: at24(SHEPHERD_FRAMES, SHEPHERD_FPS),
     frame: shepherdFrame,
+    variants: [1],
+  },
+  // Паук-отмычка: свой золотой.
+  spider: {
+    res: SPIDER_RES,
+    anims: at24(SPIDER_FRAMES, SPIDER_FPS),
+    frame: spiderFrame,
     variants: [1],
   },
 };
