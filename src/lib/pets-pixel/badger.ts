@@ -825,7 +825,11 @@ const SLIDE: Key[] = [
   [HIT2, 1.3, 'i'],
 ];
 function swingAt(t: number): { B: V3; d: V3; slide: number } {
-  const ch = (f: (r: SwingKey) => number) => kf(t, SWING.map((r) => [r[0], f(r), r[3]] as Key));
+  const ch = (f: (r: SwingKey) => number) =>
+    kf(
+      t,
+      SWING.map((r) => [r[0], f(r), r[3]] as Key),
+    );
   return {
     B: add(hitGeo().B, sw3([ch((r) => r[1][0]), ch((r) => r[1][1]), ch((r) => r[1][2])])),
     d: norm(sw3([ch((r) => r[2][0]), ch((r) => r[2][1]), ch((r) => r[2][2])])),
@@ -1970,7 +1974,7 @@ function rockParts(out: PartF[], c: Ctx): void {
     },
   });
   out.push({
-    c: add(H.rc, mul([-4.4, 2.6, -0.4 * H.rr[2] / G + 0.2], G)),
+    c: add(H.rc, mul([-4.4, 2.6, (-0.4 * H.rr[2]) / G + 0.2], G)),
     ax: axes([1, -0.3, 0], [0.2, 0, 1]),
     r: mul([2.4, 2.2, 2.1], G),
     pal: P_ROCK,
