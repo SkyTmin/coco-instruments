@@ -3213,105 +3213,7 @@ export const KNIGHT_BODY: Body = {
 
 // Щелкунчик-гвардеец рисуется в `f13-mob-nutcracker.ts` (анимации мобов 13).
 
-// ---------------------------------------------------------------------------
-// Барабанщик: кольцо на сильную долю.
-// ---------------------------------------------------------------------------
-
-const DRUM_BODY: Body = {
-  ...KNIGHT_BODY,
-  hip: 8,
-  torso: 7,
-  waist: 3,
-  chest: 3.4,
-  head: 3.3,
-  T: {
-    torso: P.blue,
-    arm: P.blue,
-    leg: P.cream,
-    head: P.skin,
-    hand: P.cream,
-    foot: P.black,
-    joint: P.gold,
-    pelvis: P.cream,
-  },
-  torsoPat: (t, nx) => (Math.abs(nx) < 0.15 && t > 0.2 ? P.gold : null),
-  legPat: bandPat(0.6, 1, P.black),
-  armPat: bandPat(0.85, 1, P.gold),
-};
-
-paintMob(
-  'f13_drummer',
-  puppetPainter('f13_drummer', {
-    w: 40,
-    h: 44,
-    ax: 20,
-    ay: 38,
-    dirs: 8,
-    body: DRUM_BODY,
-    shadow: 7,
-    pose: (c, q) => {
-      const { m } = c;
-      // Палочки вверх на подготовке, удар — на долю.
-      if (m.mode === 'f13_drum' || m.mode === 'windup') {
-        const T = m.mode === 'windup' ? WIND.f13_drummer : 0.7;
-        const n = Math.min(9, Math.floor((m.t / T) * 10));
-        const e = ease(n / 9);
-        q.aL = limb(0.6 + 1.8 * e, 0.3, 1.2 - 0.6 * e);
-        q.aR = limb(0.6 + 1.8 * e, 0.3, 1.2 - 0.6 * e);
-        q.hp = -0.2 * e;
-        q.lean = -0.1 * e;
-        q.bob = 1.5 * e;
-        return { q, key: `d${n}` };
-      }
-      if (m.mode === 'recover' && m.t < 0.3) {
-        const n = Math.min(5, Math.floor(m.t / 0.05));
-        const e = easeOut(n / 5);
-        q.aL = limb(2.4 - 1.9 * e, 0.3, 0.6 + 0.6 * e);
-        q.aR = limb(2.4 - 1.9 * e, 0.3, 0.6 + 0.6 * e);
-        q.lean = 0.2 * e;
-        q.sink = 1.5 * e;
-        return { q, key: `h${n}` };
-      }
-      const b = basePose(c);
-      if (b && (b.key.startsWith('run') || b.key.startsWith('idle'))) {
-        // Палочки всегда над барабаном.
-        b.q.aL = limb(0.9 + b.q.aL.sw * 0.3, 0.3, 1.2);
-        b.q.aR = limb(0.9 + b.q.aR.sw * 0.3, 0.3, 1.2);
-      }
-      return b;
-    },
-    dress: (rig, j) => {
-      const R = DRUM_BODY.head;
-      rig.dot(onHead(j, R, 0.95, -0.35, 0.1), INK, 1);
-      rig.dot(onHead(j, R, 0.95, 0.35, 0.1), INK, 1);
-      rig.dot(onHead(j, R, 0.98, -0.55, -0.25), P.red[2], 1);
-      rig.dot(onHead(j, R, 0.98, 0.55, -0.25), P.red[2], 1);
-      // Кивер.
-      const hb = onHead(j, R, 0, 0, 0.7);
-      rig.cap(hb, vadd(hb, vsc(j.hUp, 3.4)), 2.8, 3, P.red, bandPat(0, 0.25, P.gold));
-      // Барабан на поясе.
-      const dc = vadd(vadd(j.pelvis, vsc(j.up, 2.2)), vsc(j.fwd, 4));
-      rig.disc(dc, 4.6, 3.6, P.red, (u, v, side) =>
-        side
-          ? Math.floor((u + 1) * 5) % 2
-            ? P.gold
-            : P.red
-          : u * u + v * v > 0.8
-            ? P.gold
-            : P.cream,
-      );
-      // Палочки.
-      for (const [ha, fo] of [
-        [j.haL, j.foreL],
-        [j.haR, j.foreR],
-      ] as const) {
-        const d = vnorm(vadd(fo, vsc(j.fwd, 0.8)));
-        rig.cap(ha, vadd(ha, vsc(d, 6)), 0.5, 0.45, P.cream);
-        rig.ball(vadd(ha, vsc(d, 6)), 0.9, P.cream);
-      }
-    },
-  }),
-);
+// Барабанщик рисуется в `f13-mob-drummer.ts` (анимации мобов 13).
 
 // ---------------------------------------------------------------------------
 // Скрипач.
@@ -7501,7 +7403,7 @@ export function lordVagaPx(m: Mob, _now: number): [number, number] {
 
 // ---- прогрев -----------------------------------------------------------------
 
-for (const k of ['f13_drummer', 'f13_prompter', 'f13_shade', 'f13_cashier']) warmPuppet(k, 8);
+for (const k of ['f13_prompter', 'f13_shade', 'f13_cashier']) warmPuppet(k, 8);
 
 /**
  * Кукловод: пробуждение, висение акта I в обе стороны с жестами ваги под
