@@ -18,6 +18,7 @@ export {
   savedLang,
   detectLang,
   autoLang,
+  AUTO_DETECT,
   matchLang,
   loadLang,
   subscribeLang,

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { flatten, matchLang, tIn, fmtNum, upper } from './core';
+import { AUTO_DETECT, flatten, matchLang, tIn, fmtNum, upper } from './core';
 import { ru } from './ru';
 import en from './en';
 import fr from './fr';
@@ -194,6 +194,11 @@ function isInstrument(f: string): boolean {
 
 describe('game files (b): no hard-coded Cyrillic text', () => {
   const files = GAME_DIRS.flatMap(walk).filter((f) => !isInstrument(f));
+
+  it('auto-detect waits for the whole game to be translated', () => {
+    // A non-Russian Telegram must not get a half-Russian game.
+    expect(AUTO_DETECT && NOT_YET_TRANSLATED.length > 0).toBe(false);
+  });
 
   it('the not-yet-translated list only shrinks', () => {
     expect(NOT_YET_TRANSLATED.length).toBeLessThanOrEqual(ORIGINAL_COUNT);
