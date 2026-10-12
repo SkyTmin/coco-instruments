@@ -494,6 +494,34 @@ Owner: «добавь возможность выбирать скин у пит
   depth, pale-gold belly, bronze legs, copper goggle rims. Hatch plays `happy`. Weight 571 KB
   v0+v1 (small 58 / 66, large 212 / 233, thumbs 1 KB; ink was 1.73 MB). Tests «пиксельный
   таракан» in `pets-pixel.test.ts` (incl. work story, attack swipe, walk feet planted).
+- **Pigeon** (`pets-pixel/pigeon.ts`, `pigeonFrame(a, i, res, v)`, `variants: [1]`):
+  «Голубь-почтальон», a plump blue-grey city pigeon standing square to us (fox's `drawPartsF` +
+  `pick`, own `quadF` flats with depth: shade < −5 = hole, ≥ 50 = second palette). 44-px read:
+  leather flying cap with ear flaps and brass goggles ON THE CAP, blue-grey round body, green /
+  violet neck, satchel on the viewer's-left hip with a letter + red seal, pink feet, rolled note
+  with a red string on the viewer's-right leg. Off the raven/owl: small dark beak with a white
+  cere, orange eye, pale breast oval, two dark bars on each folded wing (lobe + dark primaries).
+  Neck sheen: dark-slate throat (green flashes only as the moving glint), green above / violet
+  below on the sides, top edge dithered into the head — a pastel uniform band read as a scarf.
+  Satchel = a box of quads (front with strap + brass buckle + stitched edge, dark open top,
+  side), drawn after `drawPartsF`; an ellipsoid bag read as a bun. Work (note → clover, 2 s):
+  lifts and shakes the right leg, string pops 0.22 s → note arcs up into both wings 0.48 →
+  unrolled (left wing holds the edge, right carries the roll), eyes run along the lines → «!»
+  right of the head over EMPTY pixels (vanishes whole: a dithered fade left dirt pixels) →
+  four-leaf clover (leaves split by a dark seam cross, else a green ball) starts on the reading
+  side hidden by the sheet, jumps over the top edge IN FRONT of the paper, past the cheek and
+  drops into the satchel (hidden by the bag front by depth) → re-rolls; the right wing alone
+  carries the roll to the lifted right leg, weight on the left foot, bow, string re-ties 1.72 →
+  REST (tests: tied at start/end, wings hold, «!» after reading, clover while the sheet is open,
+  props reset). `shim` (collar phase) is wrapped with `frac` in `poseAt`. Walk: feet planted
+  (`fz` 0), head holds its WORLD x while the body sways, then thrusts forward (test). Attack:
+  puff up → lunge (scale 1.18, head up so the open beak faces us, wings spread, rays over empty
+  pixels); feet move only while airborne (second small hop back — they slid, test). Sleep:
+  fluffed, head in the viewer's-left shoulder, cap tipped only 0.16 (at 0.4 the goggles slid
+  over the eyes and read as open blue eyes), closed eye shows, zzz. Gold: gold plumage with
+  bronze depth, emerald + rose-gold neck, leather stays, copper goggles/buckle, green clover.
+  Hatch plays `happy`. Weight 467 KB v0+v1 (small 51 / 57, large 172 / 185, thumbs 1 KB; ink was 1.59 MB).
+  Tests «пиксельный голубь» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;

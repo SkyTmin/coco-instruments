@@ -1325,8 +1325,18 @@ describe('пиксельный голубь', () => {
     expect(strike.hy).toBeGreaterThan(2);
     expect(strike.strike).toBeGreaterThanOrEqual(0);
     expect(strike.eye).toBe('angry');
+    // Лапки переступают только в воздухе: на земле они не едут.
+    let prev = W.poseAt('attack', 0);
+    for (let i = 1; i < W.FRAMES.attack; i++) {
+      const o = W.poseAt('attack', i / W.FPS);
+      if (o.z === 0 && prev.z === 0) expect([i, o.fLy]).toEqual([i, prev.fLy]);
+      prev = o;
+    }
     const sleep = W.poseAt('sleep', 1.5);
-    expect([sleep.tuck, sleep.eye, sleep.capTip > 0.3]).toEqual([1, 'sleep', true]);
+    // Шлем съехал, но очки остаются на козырьке (на 0,4 они ложились на глаза).
+    expect([sleep.tuck, sleep.eye]).toEqual([1, 'sleep']);
+    expect(sleep.capTip).toBeGreaterThan(0.1);
+    expect(sleep.capTip).toBeLessThan(0.25);
   });
 
   it('ходьба: лапки по очереди, опорная стоит; голова держится на месте и догоняет тело рывком', () => {

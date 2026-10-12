@@ -231,7 +231,7 @@ export const PET_PX: Record<string, PetPx> = {
   },
   pigeon: {
     box: 48,
-    rev: '4135e15ea4',
+    rev: '0970a82f56',
     anims: {
       idle: { n: 72, fps: 24, x: 7, y: 2, w: 34, h: 49 },
       walk: { n: 24, fps: 24, x: 6, y: 2, w: 36, h: 49 },
