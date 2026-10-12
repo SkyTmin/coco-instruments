@@ -777,3 +777,28 @@ export function stars(p: Px, scr: Scr, z: number, ph: number, cx = 0, cy = 0, r 
     p.set(x, y - 1, STAR_A);
   }
 }
+
+/** Свет луны по кромке (тот же, что у мамонта): тёмный силуэт не тонет в ночном полу. */
+export const RIM_C = hx('#a9c8f2');
+/** Кромка сверху-слева светлеет к `c` на долю `k` (контур — нет). */
+export function rimLight(p: Px, c: RGBA, k: number): void {
+  const { w, h, data } = p;
+  const dark = (i: number) =>
+    data[i + 3] === 0 || (data[i] === INK[0] && data[i + 1] === INK[1] && data[i + 2] === INK[2]);
+  const hits: number[] = [];
+  for (let y = 1; y < h; y++)
+    for (let x = 1; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (data[i + 3] < 255 || dark(i)) continue;
+      const up = dark(i - w * 4);
+      const lf = dark(i - 4);
+      if (up || lf) hits.push(i, up ? (lf ? 1 : 0.8) : 0.45);
+    }
+  for (let j = 0; j < hits.length; j += 2) {
+    const i = hits[j];
+    const a = hits[j + 1] * k;
+    data[i] += (c[0] - data[i]) * a;
+    data[i + 1] += (c[1] - data[i + 1]) * a;
+    data[i + 2] += (c[2] - data[i + 2]) * a;
+  }
+}
