@@ -16,6 +16,7 @@ import * as Mole from './pets-pixel/mole';
 import * as Owl from './pets-pixel/owl';
 import * as Raccoon from './pets-pixel/raccoon';
 import * as Raven from './pets-pixel/raven';
+import * as Roach from './pets-pixel/roach';
 import * as Shepherd from './pets-pixel/shepherd';
 import * as Spider from './pets-pixel/spider';
 import * as Wolf from './pets-pixel/wolf';
@@ -1112,5 +1113,120 @@ describe('пиксельный крот', () => {
     const b = W.poseAt('walk', 0.75);
     expect(b.fRz).toBeGreaterThan(1);
     expect(b.fLz).toBe(0);
+  });
+});
+
+describe('пиксельный таракан', () => {
+  const W = Roach;
+
+  it('рисунок детерминирован; золотой рисует сам, на том же холсте', () => {
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1]) {
+        const a = W.roachFrame('work', 30, r, v);
+        const b = W.roachFrame('work', 30, r, v);
+        expect([a.w, a.h]).toEqual([W.RES[r].cw, W.RES[r].ch]);
+        expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
+      }
+    const plain = W.roachFrame('idle', 0, 's', 0).data;
+    const gold = W.roachFrame('idle', 0, 's', 1).data;
+    expect(Buffer.from(plain).equals(Buffer.from(gold))).toBe(false);
+  });
+
+  it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, только свой золотой', () => {
+    const m = PET_PX.roach;
+    expect(m.box).toBe(W.RES.s.box);
+    expect(m.large?.box).toBe(W.RES.l.box);
+    for (const a of ANIMS) {
+      for (const set of [m, m.large!]) {
+        expect(set.anims[a].n).toBe(W.FRAMES[a]);
+        expect(set.anims[a].fps).toBe(W.FPS);
+      }
+      expect(PIXEL_PETS.roach.anims[a]).toEqual({ n: W.FRAMES[a], fps: W.FPS });
+    }
+    expect(PIXEL_PETS.roach.variants).toEqual([1]);
+    expect(PET_SPRITES.roach).toBeUndefined();
+    expect(pixelList).toContain('roach');
+    const sec = (a: Anim) => W.FRAMES[a] / W.FPS;
+    expect([sec('idle'), sec('sleep'), sec('walk'), sec('work')]).toEqual([3, 3, 1, 2]);
+    expect(Math.abs(sec('happy') - 1.1)).toBeLessThan(0.05);
+    expect(Math.abs(sec('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {
+    const T = (a: Anim) => W.FRAMES[a] / W.FPS;
+    const rest = W.poseAt('idle', 0);
+    const lag0 = W.lagOf('idle', 0);
+    for (const a of ['happy', 'work', 'attack'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), rest)]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), lag0, 0.05)]).toEqual([a, []]);
+    }
+    for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), W.poseAt(a, 0))]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), W.lagOf(a, 0), 0.05)]).toEqual([a, []]);
+    }
+  });
+
+  it('трюк: очки опускает рукой, забег за край и обратно с другой стороны, юз, палец вверх — к концу всё убрано', () => {
+    const P = (t: number) => W.poseAt('work', t);
+    expect(P(0.2).grab).toBeGreaterThan(0.9);
+    expect(P(0.2).gog).toBeGreaterThan(0.2);
+    expect(P(0.4).gog).toBe(1);
+    // Убегает вправо, лицом вправо, сзади — пыль старта.
+    expect(P(0.8).x).toBeGreaterThan(40);
+    expect(P(0.8).yaw).toBeGreaterThan(0.5);
+    expect(P(0.8).dust1).toBeGreaterThanOrEqual(0);
+    // Возвращается слева, бежит туда же (вправо).
+    expect(P(0.86).x).toBeLessThan(-40);
+    expect(P(0.95).x).toBeGreaterThan(P(0.86).x);
+    // Юз: откинулся назад, ступни впереди, пыль из-под ног.
+    const sk = P(1.3);
+    expect(sk.lean).toBeLessThan(-0.1);
+    expect(sk.fLx).toBeGreaterThan(1);
+    expect(sk.dust2).toBeGreaterThanOrEqual(0);
+    const th = P(1.55);
+    expect(th.thumb).toBeGreaterThan(0.9);
+    expect(th.glint).toBeGreaterThanOrEqual(0);
+    expect(th.gog).toBe(1);
+    // Очки поднимает той же рукой.
+    expect(P(1.8).grab).toBeGreaterThan(0.9);
+    expect(P(1.8).gog).toBeLessThan(0.5);
+    const end = P(2);
+    expect([
+      end.gog,
+      end.grab,
+      end.thumb,
+      end.glint,
+      end.dust1,
+      end.dust2,
+      end.speed,
+      end.x,
+    ]).toEqual([0, 0, 0, -1, -1, -1, 0, 0]);
+  });
+
+  it('атака: замах руками вверх, удар — кисти впереди, жвалы открыты; сон — сидя, очки на глазах', () => {
+    const wind = W.poseAt('attack', 0.25);
+    expect(wind.aRz).toBeGreaterThan(23);
+    expect(wind.aLz).toBeGreaterThan(23);
+    const strike = W.poseAt('attack', 0.42);
+    expect(strike.jaw).toBeGreaterThan(0.5);
+    expect(strike.bite).toBeGreaterThanOrEqual(0);
+    expect(strike.scale).toBeGreaterThan(1.1);
+    expect(strike.aRy).toBeGreaterThan(6);
+    expect(strike.bLy).toBeGreaterThan(6);
+    const sleep = W.poseAt('sleep', 1.5);
+    expect([sleep.sit, sleep.gog, sleep.droop]).toEqual([1, 1, 1]);
+  });
+
+  it('ходьба: ноги по очереди, опорная стоит на полу и не едет за телом', () => {
+    const a = W.poseAt('walk', 0.125);
+    expect(a.fLz).toBeGreaterThan(1);
+    expect(a.fRz).toBe(0);
+    const b = W.poseAt('walk', 0.375);
+    expect(b.fRz).toBeGreaterThan(1);
+    expect(b.fLz).toBe(0);
+    for (let i = 0; i < W.FRAMES.walk; i++) {
+      const o = W.poseAt('walk', i / W.FPS);
+      expect([o.carry, o.fLx, o.fRx]).toEqual([0, 0, 0]);
+    }
   });
 });

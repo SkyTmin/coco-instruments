@@ -46,6 +46,7 @@ import {
   RES as RACCOON_RES,
 } from './raccoon';
 import { FPS as RAVEN_FPS, FRAMES as RAVEN_FRAMES, RES as RAVEN_RES, ravenFrame } from './raven';
+import { FPS as ROACH_FPS, FRAMES as ROACH_FRAMES, RES as ROACH_RES, roachFrame } from './roach';
 import {
   FPS as SHEPHERD_FPS,
   FRAMES as SHEPHERD_FRAMES,
@@ -172,6 +173,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: MOLE_RES,
     anims: at24(MOLE_FRAMES, MOLE_FPS),
     frame: moleFrame,
+    variants: [1],
+  },
+  // Таракан-бегун: свой золотой.
+  roach: {
+    res: ROACH_RES,
+    anims: at24(ROACH_FRAMES, ROACH_FPS),
+    frame: roachFrame,
     variants: [1],
   },
 };
