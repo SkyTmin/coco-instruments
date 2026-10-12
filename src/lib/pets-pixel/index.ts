@@ -24,6 +24,12 @@ import {
 import { FPS as FOX_FPS, FRAMES as FOX_FRAMES, foxFrame, RES as FOX_RES } from './fox';
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
+import {
+  FPS as RACCOON_FPS,
+  FRAMES as RACCOON_FRAMES,
+  raccoonFrame,
+  RES as RACCOON_RES,
+} from './raccoon';
 import { FPS as RAVEN_FPS, FRAMES as RAVEN_FRAMES, RES as RAVEN_RES, ravenFrame } from './raven';
 import {
   FPS as SHEPHERD_FPS,
@@ -109,6 +115,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: BADGER_RES,
     anims: at24(BADGER_FRAMES, BADGER_FPS),
     frame: badgerFrame,
+    variants: [1],
+  },
+  // Енот-медвежатник: свой золотой.
+  raccoon: {
+    res: RACCOON_RES,
+    anims: at24(RACCOON_FRAMES, RACCOON_FPS),
+    frame: raccoonFrame,
     variants: [1],
   },
 };
