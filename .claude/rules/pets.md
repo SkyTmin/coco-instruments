@@ -419,6 +419,28 @@ Owner: «добавь возможность выбирать скин у пит
   legs/tail, dark-bronze mask, COOLER grey-green coat (olive sank into gold). Hatch plays
   `happy`. Weight 451 KB v0+v1 (small 42 / 47, large 173 / 187, thumbs 1 KB; ink was 1.65 MB).
   Tests «пиксельный хорёк» in `pets-pixel.test.ts`.
+- **Mole** (`pets-pixel/mole.ts`, `moleFrame(a, i, res, v)`, `variants: [1]`): «Крот-забойщик»,
+  a plump charcoal mole STANDING facing us (badger's `drawPartsF` + `pick` + `vis`/`floor`, plus
+  a `gloss` term = velvet sheen). 44-px read: dark pear (belly + chest + head share `BODY_ID` —
+  no neck seam; a waist crease read as a snowman, so the belly is one egg), big pink snout as
+  the brightest spot, yellow helmet with a brass lamp + glass glint, two big pink spade paws.
+  Spades hang DOWN with the palm to us (`palm`/`pray` blend the paw direction + normal), 3 (small)
+  / 5 (large) ivory claws curling toward the palm; bead eyes are stamps under the brim. Belt +
+  brass buckle + pouch on a spring (viewer's right), rubbed patch on the belly. Helmet dent is
+  subtle (a deep one read as a second lamp). Work (2 s): lamp clicks on 0.08 s → bows (0.28) +
+  crouches + head nods 0.26 so the lamp aims at the heap; six strokes alternate R/L with WORLD
+  wrist targets (`wk`; short arms can't reach otherwise), clods spawn at `digSpot(side)` and fly
+  to that side, land and lie; beam from the glass centre to the heap top drawn OVER body pixels
+  (blended), light pool on the dirt → ore glints in the heap 1.04 s → both paws scoop 1.14 s →
+  hop 1.32 s holding it palms-up before the chest (claws-up read as a cage), glint, happy eyes →
+  ore fades while held, lamp off 1.6 s, heap fades by 1.9 s, props reset (test). Attack: crouch →
+  lunge (scale 1.18), both spades swipe with claws spread, snout up, mouth open, arcs over empty
+  pixels. Happy: hop + two claps in a V below the face. Sleep: sits, helmet tipped over the eyes
+  (`hatNod`; flat it was a disc over everything), lamp dim, zzz. Helmet spring `hatZ` capped at
+  0.9 (it left the head in the hop). Gold: gold fur, rosy-gold snout/paws, WHITE enamel helmet
+  (a gold helmet vanished on gold fur), copper lamp/buckle, dark bronze leather. Hatch plays
+  `happy`. Weight 520 KB v0+v1 (small 52 / 59, large 196 / 211, thumbs 1 KB; ink was 1.60 MB).
+  Tests «пиксельный крот» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
