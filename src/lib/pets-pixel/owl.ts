@@ -36,7 +36,6 @@ import {
   LIGHT,
   lerp,
   lerp3,
-  mixc,
   mul,
   newFrame,
   norm,
@@ -728,11 +727,14 @@ function workPose(t: number): Pose {
     [1.58, -0.06],
     [1.68, 0],
   ]);
-  o.held = t >= T_GRAB ? kf(t, [
-    [T_GRAB, 1],
-    [1.54, 1],
-    [1.64, 0, 'l'],
-  ]) : 0;
+  o.held =
+    t >= T_GRAB
+      ? kf(t, [
+          [T_GRAB, 1],
+          [1.54, 1],
+          [1.64, 0, 'l'],
+        ])
+      : 0;
   if (t >= T_GRAB) o.gem = 0;
   o.beak = 0.35 * bump(t, 1.44, 1.6);
   return o;
@@ -1196,21 +1198,11 @@ function lock(
 const dirFront = (th: number, side: number, fwd = 0): V3 =>
   norm([side * Math.sin(th), fwd, -Math.cos(th)]);
 
-// Перо крыла: маховые в широких полосах, кроющие с круглым светлым пятном.
+// Перо крыла: маховые в широких полосах (кроющие с пятнами — на лопасти, `wing`).
 const barU = (u: number, qy: number): number =>
   (qy < -0.45 ? -0.14 : qy > 0.55 && u > 0.15 ? 0.08 : 0) +
   (Math.floor(u * (HI ? 6 : 3.5) + 0.3) & 1 ? -0.1 : 0.03) +
   (u > 0.94 ? -0.05 : 0);
-const covertPick = (u: number, qy: number): number => {
-  PICK_T = u > 0.84 || Math.abs(qy) > 0.8 ? -0.12 : 0.02;
-  if (u > 0.36 && u < 0.7 && Math.abs(qy) < (HI ? 0.34 : 0.42)) {
-    PICK_T = -0.16;
-    return P_CREAM;
-  }
-  return P_WING;
-};
-
-const COVERT_W = [1.6, 2.3, 2.6, 2.5, 1.8];
 const SEC_W = [1.5, 2.1, 2.3, 2.3, 2.2, 1.7, 0.9];
 const PRIM_W = [1.2, 1.8, 2.0, 2.05, 2.0, 1.8, 1.3, 0.6];
 const TAIL_W = [1.0, 1.5, 1.8, 1.9, 1.8, 1.2];
@@ -1289,7 +1281,10 @@ function wing(out: PartF[], c: Ctx, side: -1 | 1): void {
         const col = Math.floor(w);
         const fw = w - col - 0.5;
         if (fv > 0.82 - fw * fw * 1.2) PICK_T -= 0.1;
-        else if (fw * fw + (fv - 0.45) ** 2 < (HI ? 0.06 : 0.09) && hash(col, row, side + 7) < 0.85) {
+        else if (
+          fw * fw + (fv - 0.45) ** 2 < (HI ? 0.06 : 0.09) &&
+          hash(col, row, side + 7) < 0.85
+        ) {
           PICK_T = -0.14;
           return P_CREAM;
         }
@@ -1411,10 +1406,15 @@ function legs(out: PartF[], c: Ctx): void {
       bias: -0.06,
       tex: HI ? (qx, qy) => (Math.floor((qx + 1) * 4 + qy * 1.4) & 1 ? -0.05 : 0.02) : undefined,
     });
-    // Пальцы в пуху: три вперёд; когти — тёмный рог, крючком вниз (растопырены в ударе).
+    // Пальцы в пуху: три вперёд; когти — тёмный рог, крючком вниз. В хватке
+    // (удар, кристалл) пальцы граблями вниз-в-стороны, когти загнуты внутрь:
+    // вытянутые к зрителю, они сжимались в серые чёрточки.
     for (const a0 of [-0.55, 0.05, 0.62]) {
-      const a = a0 * (1 + 0.5 * g) * side;
-      const dir = norm([Math.sin(a), Math.cos(a), -0.1 + 0.5 * g]);
+      const a = a0 * side;
+      const b = a0 * 1.2 * side;
+      const dir = norm(
+        lerp3([Math.sin(a), Math.cos(a), -0.1], [Math.sin(b) * 0.9, 0.45, -Math.cos(b)], g),
+      );
       out.push({
         c: add(foot, mul(dir, 1.3 * k)),
         ax: axes(dir, [0, 0, 1]),
@@ -1423,7 +1423,7 @@ function legs(out: PartF[], c: Ctx): void {
         id,
         bias: -0.02 - 0.16 * g,
       });
-      const cd = norm(add(dir, [0, 0, -0.9 + 0.6 * g]));
+      const cd = norm(add(dir, [-Math.sin(b) * 0.8 * g, 0.5 * g, -0.9 + 0.3 * g]));
       out.push({
         c: add(add(foot, mul(dir, 2.7 * k)), mul(cd, (0.5 + 0.4 * g) * k)),
         ax: axes(cd, [0, 1, 0]),
@@ -1609,10 +1609,11 @@ function tufts(out: PartF[], c: Ctx): void {
   for (const side of [-1, 1]) {
     const base = h.at([side * 0.6 * HRX, -0.8, 0.74 * HRZ]);
     const d = norm(
-      add(
-        h.dir(norm([side * (0.4 - 0.12 * pe + 0.7 * ne) + sw, -0.2 - 0.8 * ne, 1 - 0.55 * ne])),
-        [0, 0, dz],
-      ),
+      add(h.dir(norm([side * (0.4 - 0.12 * pe + 0.7 * ne) + sw, -0.2 - 0.8 * ne, 1 - 0.55 * ne])), [
+        0,
+        0,
+        dz,
+      ]),
     );
     const n = h.dir([0, 1, 0]);
     lock(out, base, d, n, 7.4 * k * (1 + 0.12 * pe), 2.4 * k, 1.4 * k, P_FUR, -0.06, tex);
@@ -1746,7 +1747,11 @@ function eyes(p: Px, f: Frame, c: Ctx): void {
         }
         const gx = -0.42 * R;
         const gy = -0.42 * R;
-        if (HI ? Math.abs(px - gx) < 1.1 && Math.abs(py - gy) < 1.1 : px > gx - 0.8 && px < gx + 0.7 && py > gy - 0.8 && py < gy + 0.7)
+        if (
+          HI
+            ? Math.abs(px - gx) < 1.1 && Math.abs(py - gy) < 1.1
+            : px > gx - 0.8 && px < gx + 0.7 && py > gy - 0.8 && py < gy + 0.7
+        )
           p.set(X, Y, WHITE);
         if (HI && Math.abs(px - 0.36 * R) < 0.6 && Math.abs(py - 0.3 * R) < 0.6) p.set(X, Y, ir[5]);
       }
@@ -1793,8 +1798,16 @@ const CHEV_L: [number, number, number][] = [
   [-0.12, -0.46, 1],
   [0.2, -0.45, 1],
 ];
-const V_S = [['x.x', '.x.'], ['x.x', '.x.'], ['x', 'x']];
-const V_L = [['x...x', 'xx.xx', '.xxx.', '..x..'], ['x.x', '.x.'], ['x', 'x', 'x']];
+const V_S = [
+  ['x.x', '.x.'],
+  ['x.x', '.x.'],
+  ['x', 'x'],
+];
+const V_L = [
+  ['x...x', 'xx.xx', '.xxx.', '..x..'],
+  ['x.x', '.x.'],
+  ['x', 'x', 'x'],
+];
 function chevrons(p: Px, f: Frame, c: Ctx): void {
   const { S } = c;
   const [e1, e2, e3] = BODY_AX;
@@ -1894,8 +1907,7 @@ function gemAt(p: Px, cx: number, cy: number, vis: number): void {
         if (HI && Math.abs(x + 0.9 * s) < 0.5 && y > -2.8 * s && y < -0.8 * s) tone = 7;
         p.set(X0 + dx, Y0 + dy, GEM[Math.min(7, tone)]);
       } else {
-        const near =
-          inside(x - 1, y) || inside(x + 1, y) || inside(x, y - 1) || inside(x, y + 1);
+        const near = inside(x - 1, y) || inside(x + 1, y) || inside(x, y - 1) || inside(x, y + 1);
         if (near) p.set(X0 + dx, Y0 + dy, GEM[0]);
       }
     }
@@ -1908,7 +1920,14 @@ function gemFx(p: Px, c: Ctx): void {
     gemAt(p, x, y, o.gem);
     if (o.glint > 0.3) {
       const [gx, gy] = scr([GEM_X + 0.6, GEM_Y, 5.6]);
-      star(p, Math.round(gx), Math.round(gy), HI ? Math.round(1 + 3 * o.glint) : o.glint > 0.6 ? 2 : 1, WHITE, GEM[6]);
+      star(
+        p,
+        Math.round(gx),
+        Math.round(gy),
+        HI ? Math.round(1 + 3 * o.glint) : o.glint > 0.6 ? 2 : 1,
+        WHITE,
+        GEM[6],
+      );
     }
   }
   if (o.held > 0.02) {
@@ -1917,7 +1936,14 @@ function gemFx(p: Px, c: Ctx): void {
     gemAt(p, x, y, o.held);
     if (o.glint > 0.3) {
       const [gx, gy] = scr(add(q, [0.8, 0, 5.4 * S.k]));
-      star(p, Math.round(gx), Math.round(gy), HI ? Math.round(1 + 3 * o.glint) : o.glint > 0.6 ? 2 : 1, WHITE, GEM[6]);
+      star(
+        p,
+        Math.round(gx),
+        Math.round(gy),
+        HI ? Math.round(1 + 3 * o.glint) : o.glint > 0.6 ? 2 : 1,
+        WHITE,
+        GEM[6],
+      );
     }
   }
 }

@@ -255,6 +255,29 @@ Owner: «добавь возможность выбирать скин у пит
   copper bands darker and redder. Hatch plays `happy`. Weight 818 KB v0+v1 (small 72 / 81, large
   319 / 344, thumbs 1 KB; ink was 1.69 MB) — heavier than the others because of the strands. Released in v2.117.
   Tests «пиксельный паук» in `pets-pixel.test.ts`.
+- **Owl** (`pets-pixel/owl.ts`, `owlFrame(a, i, res, v)`, `variants: [1]`): «Сова-фонарщица», a
+  round eagle-owl facing us (fox's `drawPartsF` + `pick`), head straight on the body. Head = ONE
+  part with `headPick`: pale two-ring disc, dark rim only on the outer/lower side (a full rim
+  merged with the strap), pale brow V, leather strap band; tufts = two `lock`s (main + shorter
+  inner) on springs from turn/tilt/head lag. Eyes = procedural overlay over `HEAD_ID` pixels only
+  (orange iris, pupil, glint, per-eye lid; «^» happy, «‿» sleep, angry, wide), squashed by
+  facing; head turn capped at ±0.48 — wider, the far eye was cut in half by the head edge. Brass
+  lamp on the strap: glass warm grey when off (bluish read as a gem), lit + glow when on; gold uses
+  a COPPER housing (brass vanished on gold plumage). Breast = cream oval on the body (`bodyPick`,
+  jagged cell edge) + sparse chevron STAMPS in body-local coords (8 small, 23 large, darker at the
+  top), only over cream body pixels. Wing = a folded LOBE along the side (cream spot rows on the
+  top half, barred flight feathers below, dark split lines); secondaries/primaries only when open
+  (arm-shaped wings without the lobe hid behind the body). Legs: cream feathered columns, 3 toes,
+  dark talons; under `grip` toes rake down-and-out and claws hook inward (thrust at the viewer
+  they foreshortened into grey dashes). Work (lantern): lamp clicks on 0.26 s → beam cone + floor
+  spot over EMPTY pixels sweeps left→right 0.3–1.0 s, head leads it → crystal glints in the beam
+  ~0.9 s (wide eyes, tufts up) → hop to it → right foot up holding it before the breast, happy
+  eyes, 1.36–1.6 s → lamp off, hop back 1.66–1.84 s; props AND `beamX` reset to REST (seam
+  test; ending the hop at 1.94 left the last frame mid-landing). Attack: wings up in a V → swoop
+  at the viewer f9 (scale 1.18, head up, beak open with red gape, talons forward) → rays round the
+  body over empty pixels → settle. Idle: breath, head swivel + tilt with the body still, blink
+  left then right, tuft springs, a shake. Sleep: fluffed, head sunk, tufts back, lamp off, zzz.
+  Hatch plays `happy`. Weight OWL_WEIGHT. Tests «пиксельная сова» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
