@@ -166,6 +166,26 @@ Owner: «добавь возможность выбирать скин у пит
   `chomp` lens of two toothed arcs f9–12 → shake → idle. Weight 516 KB v0+v1 (small 51 / 56,
   large 197 / 210, thumbs 1 KB; ink was 1.93 MB). Released in v2.112;
   its −v2 strips (written by the pre-v2.111 pipeline) were deleted at merge. Tests «пиксельный волк» in `pets-pixel.test.ts`.
+- **Raven** (`pets-pixel/raven.ts`, `ravenFrame(a, i, res, v)`, `variants: [1]`): big blue-black
+  raven facing us — indigo body ramp with a lilac sheen, blue-steel wing/tail ramp. Sheen on
+  black = `gloss()` (stepped specular by the LIGHT+VIEW half-vector) on head, chest, belly,
+  shoulder pads; belly = sparse `ticks()` (full-width scallop rows read as a striped sweater);
+  hackles = teardrop `plume`s with a sheen centre in FRONT of the chest; heavy dark beak, light
+  ridge; crest = swept-back ragged tuft (a symmetric fan of spikes read as a mohawk); gold eye;
+  gold-rimmed monocle on the viewer's right eye + chain to the cord (drawn even when the eye
+  hides behind a turned beak, not in sleep); key ring (iron, brass, gold) on a red cord; gold
+  rings on the viewer's-left leg. Tail goes back-down-RIGHT, tip by the right foot (straight back
+  it hides: the camera looks from above). Folded wing plane turned to the side (`N0` lerps by
+  `open`; facing the viewer it read as a blue cloak), staggered primaries; `coolRim()` (v0
+  only): steel-blue 1-px rim on the bottom/right plumage contour, else the black body sinks into
+  the mine's dark band. Happy: wings HALF open (th ≤ 1.12), gold «^» eyes (dark arcs vanish on
+  black). Attack: strike f9 with the head UP (nod −0.46 against bow 0.42) so the beak points at
+  the viewer, the upper mandible lifts, the red gape shows (a nodded head showed only the crown).
+  Work: padlock falls → key raised in the right wing (glint) → hop → key in, turn → flash,
+  shackle springs → token + coin jump into the key ring → lock vanishes; trick props reset to
+  REST once the lock is gone (seam test). Hatch plays `happy`. Weight 697 KB v0+v1 (small
+  68 / 79, large 260 / 288, thumbs 1 KB; ink was 1.6 MB). Tests «пиксельный ворон» in
+  `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
