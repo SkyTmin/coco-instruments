@@ -8,7 +8,8 @@ import type { Res } from './props-pixel/types';
 
 const ROOT = path.resolve(__dirname, '../..');
 const RES: Res[] = ['s', 'l'];
-const empty = (p: { data: Uint8ClampedArray | Uint8Array }) => p.data.every((v, i) => i % 4 !== 3 || v === 0);
+const empty = (p: { data: Uint8ClampedArray | Uint8Array }) =>
+  p.data.every((v, i) => i % 4 !== 3 || v === 0);
 
 describe('пиксельные книги', () => {
   it('рисунок детерминирован, у каждой полосы свой холст', () => {
@@ -40,7 +41,8 @@ describe('пиксельные книги', () => {
         expect(pxDiff(books.frame(name, 0, r), books.frame(`still-${t}`, 0, r))).toBe(0);
         const n = books.STRIPS[name].frames;
         const scale = books.RES[r].box / books.RES.s.box;
-        for (let i = 0; i < n; i++) expect(books.idleBob(t, i, r)).toBe(bookIdleBob(t, i, n, scale));
+        for (let i = 0; i < n; i++)
+          expect(books.idleBob(t, i, r)).toBe(bookIdleBob(t, i, n, scale));
       }
   }, 60_000);
 
@@ -52,7 +54,9 @@ describe('пиксельные книги', () => {
       expect(order).toEqual([...order].sort((a, b) => a - b));
       expect(order[order.length - 1]).toBeLessThan(d.frames - 1);
       for (const r of RES)
-        expect(pxDiff(books.frame(`reveal-${t}`, d.frames - 1, r), books.frame(`still-${t}`, 0, r))).toBe(0);
+        expect(
+          pxDiff(books.frame(`reveal-${t}`, d.frames - 1, r), books.frame(`still-${t}`, 0, r)),
+        ).toBe(0);
       // Знак загорается над разворотом, медальон — в рамке.
       const a = d.anchors!;
       expect(a.rise[1]).toBeLessThan(a.glyph[1]);

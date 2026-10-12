@@ -40,5 +40,16 @@ agent — `.claude/rules/props-pixel.md`; don't edit it from here.
   reads). For air tiers the takeoff `kf` must ADD to the drop height (`o.z +=`), or the
   drop vanishes. Nothing may touch the canvas edge (post.py fails) — the pillar top
   dithers out below y=0.
+- **Scenes**: reveal glyph sits on a dark radial disc (`.pbks__sigil::before`) — a light glyph
+  vanished in the white pages and pillar. The result text is rendered from the first frame,
+  hidden (`.pbks:not(.is-show) .pbks__text`), so the stage doesn't jump up at the strip→`BookArt`
+  swap; `.pbka__text` min-height 124 for the same reason at `hit`. Preload: tier card
+  `pointerdown`, buy/anvil/apply handlers, scene mount.
+- **Weights** (s / l KB): reveal 11/32, 18/45, 26/73, 39/108 (simple→legend); apply-ok ≤10/26;
+  burn ≤11/35; idle ≤5/18; still ≤1. Set total ≈ 680 KB.
+- **Stand shots**: scenes are fast and a DPR 3 screenshot takes ~0.8 s on the shared box, so
+  shots were taken with a slowed clock (init script scales `Performance.prototype.now`, rAF
+  timestamps = that `now`, `setTimeout`; CDP `Animation.setPlaybackRate`). Patching only
+  `performance.now` on the instance silently failed and the strip started seconds late.
 - Preview without baking: scratch `preview.ts`/`sheet.py` pattern — `frame(name,i,res)` →
   RGBA → PIL sheet. Bake: `npx vite-node scripts/props-pixel/bake.ts -- --set books`.

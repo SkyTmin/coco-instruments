@@ -70,7 +70,10 @@ export const FPS = 24;
 const fr = (s: number) => Math.round(s * FPS);
 
 /** Длительности сцен по ярусам (секунды) и ключевые моменты. */
-const REVEAL: Record<Tier, { T: number; land: number; snap: number; open: number; peak: number; close: number; lock: number }> = {
+const REVEAL: Record<
+  Tier,
+  { T: number; land: number; snap: number; open: number; peak: number; close: number; lock: number }
+> = {
   simple: { T: 1.75, land: 0.5, snap: 0.72, open: 0.8, peak: 1.2, close: 1.38, lock: 1.56 },
   rare: { T: 2.25, land: 0.55, snap: 0.96, open: 1.04, peak: 1.58, close: 1.8, lock: 2.0 },
   epic: { T: 2.9, land: 0.6, snap: 1.24, open: 1.46, peak: 2.02, close: 2.3, lock: 2.5 },
@@ -189,7 +192,16 @@ const STRAP: Record<Tier, string[]> = {
   epic: ['#0e0612', '#1e0e26', '#30183c', '#442454', '#5a346c'],
   legend: ['#1a0c04', '#3a1e08', '#62380e', '#8c561a', '#b47a2a', '#d6a044', '#f0cc72'],
 };
-const GEM = ['#22062e', '#4a0f5e', '#7e1e96', '#b23cc4', '#e070e0', '#f8b0f2', '#ffe8fc', '#ffffff'];
+const GEM = [
+  '#22062e',
+  '#4a0f5e',
+  '#7e1e96',
+  '#b23cc4',
+  '#e070e0',
+  '#f8b0f2',
+  '#ffe8fc',
+  '#ffffff',
+];
 const GLOW: Record<Tier, string[]> = {
   simple: ['#4a4036', '#8a7c66', '#c8baa0', '#ece2cc', '#fffaf0'],
   rare: ['#0e2c62', '#1d58b0', '#3a8cf0', '#7ec0ff', '#cfe8ff', '#ffffff'],
@@ -202,7 +214,9 @@ const DUST = ['#4a403a', '#6e6458', '#948a78', '#b8ad98', '#d8cfbc', '#eee8da'];
 
 function palsOf(tier: Tier): RGBA[][] {
   const metal = tier === 'rare' ? SILVER : tier === 'simple' ? BRASS : GOLD;
-  const pglow = PAPER.map((c, k) => mixc(hx(c), hx(GLOW[tier][Math.min(GLOW[tier].length - 1, k)]), 0.55));
+  const pglow = PAPER.map((c, k) =>
+    mixc(hx(c), hx(GLOW[tier][Math.min(GLOW[tier].length - 1, k)]), 0.55),
+  );
   return [
     ramp(...COVER[tier]),
     ramp(...COVER2[tier]),
@@ -471,7 +485,11 @@ function place(s: Solid, xf: Xf): Solid {
 }
 
 function scaleSolid(s: Solid, RR: number): Solid {
-  return { ...s, c: [s.c[0] * RR, s.c[1] * RR, s.c[2] * RR], r: [s.r[0] * RR, s.r[1] * RR, s.r[2] * RR] };
+  return {
+    ...s,
+    c: [s.c[0] * RR, s.c[1] * RR, s.c[2] * RR],
+    r: [s.r[0] * RR, s.r[1] * RR, s.r[2] * RR],
+  };
 }
 
 const AXB: [V3, V3, V3] = [
@@ -593,7 +611,14 @@ function frameDist(X: number, Z: number, insL: number, ins: number): number {
  * Обложка. `front` — лицевая сторона передней крышки (медальон), иначе задняя.
  * X — от корешка, Z — от низа, единицы модели.
  */
-function paintCover(c: Ctx, X: number, Z: number, k: number, n: V3, front: boolean): number | [number, number] {
+function paintCover(
+  c: Ctx,
+  X: number,
+  Z: number,
+  k: number,
+  n: V3,
+  front: boolean,
+): number | [number, number] {
   const { tier, pxu } = c;
   const lw = c.hi ? 1.8 * pxu : pxu;
   // Мягкий перелив по крышке: светлее к верхнему левому углу (ступенями палитры).
@@ -615,7 +640,10 @@ function paintCover(c: Ctx, X: number, Z: number, k: number, n: V3, front: boole
     if (dm < MED_R + ring) {
       // Металлическое кольцо — выпуклое: свет сверху-слева.
       const up = (-dxm + dzm) / (dm || 1);
-      return [P.metal, 0.5 + up * 0.28 + shine(n, 0.2) + (c.pose.sheen !== null ? sheenK(c, X, Z) * 1.5 : 0)];
+      return [
+        P.metal,
+        0.5 + up * 0.28 + shine(n, 0.2) + (c.pose.sheen !== null ? sheenK(c, X, Z) * 1.5 : 0),
+      ];
     }
     // Светящийся знак легендарной — кольцо из рун вокруг медальона.
     const a = Math.atan2(dzm, dxm);
@@ -710,10 +738,12 @@ function cornerSolids(c: Ctx, yc: number, front: boolean): Solid[] {
             // Литая накладка: свет по грани, кант у подреза, заклёпка в углу.
             let kk = k * 0.72 + 0.04 + shine(n, 0.3);
             if (face >= 7) kk -= 0.12;
-            if (c.pose.sheen !== null && (face === 2 || face === 3)) kk += front ? 0.18 * bump(c.pose.sheen, 0.0, 1.0) : 0;
+            if (c.pose.sheen !== null && (face === 2 || face === 3))
+              kk += front ? 0.18 * bump(c.pose.sheen, 0.0, 1.0) : 0;
             const rx = q[0] * sx;
             const rz = q[2] * sz;
-            if ((face === 2 || face === 3) && rx > 0.35 && rz > 0.35 && rx < 0.75 && rz < 0.75) kk += 0.18;
+            if ((face === 2 || face === 3) && rx > 0.35 && rz > 0.35 && rx < 0.75 && rz < 0.75)
+              kk += 0.18;
             return kk;
           },
         }),
@@ -776,7 +806,10 @@ function bookSolids(c: Ctx): Solid[] {
           const Z = (q[2] + 1) * (H / 2);
           for (const zb of SPINE_BANDS) {
             const dz = Z - zb * H;
-            if (Math.abs(dz) < 1.2) return tier === 'legend' ? [P.gold, 0.5 + (dz > 0 ? 0.15 : -0.1)] : k + (dz > 0 ? 0.14 : -0.14);
+            if (Math.abs(dz) < 1.2)
+              return tier === 'legend'
+                ? [P.gold, 0.5 + (dz > 0 ? 0.15 : -0.1)]
+                : k + (dz > 0 ? 0.14 : -0.14);
           }
           return k;
         },
@@ -824,11 +857,22 @@ function bookSolids(c: Ctx): Solid[] {
       return paintPage(c, face === 2 ? qx : -qx, q[2], k2);
     };
     out.push(
-      place(box([-W / 2 + inner / 2, ys, H / 2], [inner / 2, 0.22, zr], P.paper, ID.sheet + k, { paint: pagePaint(0, inner) }), xfI),
       place(
-        box([-W / 2 + inner + (pw - inner) / 2, ys, H / 2], [(pw - inner) / 2, 0.22, zr], P.paper, ID.sheet + k, {
-          paint: pagePaint(inner, pw - inner),
+        box([-W / 2 + inner / 2, ys, H / 2], [inner / 2, 0.22, zr], P.paper, ID.sheet + k, {
+          paint: pagePaint(0, inner),
         }),
+        xfI,
+      ),
+      place(
+        box(
+          [-W / 2 + inner + (pw - inner) / 2, ys, H / 2],
+          [(pw - inner) / 2, 0.22, zr],
+          P.paper,
+          ID.sheet + k,
+          {
+            paint: pagePaint(inner, pw - inner),
+          },
+        ),
         xfO,
       ),
     );
@@ -849,7 +893,13 @@ function bookSolids(c: Ctx): Solid[] {
       ),
       place(
         box([gx, T / 2 + 0.95, gz], [1.9, 0.9, 2.2], P.gem, ID.gem, {
-          cuts: [...octo(1.45), [1, 1.3, 0, 1.55], [-1, 1.3, 0, 1.55], [0, 1.3, 1, 1.55], [0, 1.3, -1, 1.55]],
+          cuts: [
+            ...octo(1.45),
+            [1, 1.3, 0, 1.55],
+            [-1, 1.3, 0, 1.55],
+            [0, 1.3, 1, 1.55],
+            [0, 1.3, -1, 1.55],
+          ],
           noSeam: true,
           paint: (face, q, k, n) => {
             // Свет проходит камень насквозь: грани от света — с внутренним жаром.
@@ -922,7 +972,10 @@ function paintPage(c: Ctx, qx: number, qz: number, k: number): number | [number,
   // Строки: тонкие, через 2,4 пикселя, с полями.
   const lineStep = 2.4;
   const inText = X > 3.2 && X < W - OV - 2.6 && Z > 3.2 && Z < H - 2 * OV - 3.4;
-  const onLine = inText && Z % lineStep < pxu * (c.hi ? 1.3 : 1) && hash(Math.floor(Z / lineStep), Math.floor(X / 3), 5) > 0.12;
+  const onLine =
+    inText &&
+    Z % lineStep < pxu * (c.hi ? 1.3 : 1) &&
+    hash(Math.floor(Z / lineStep), Math.floor(X / 3), 5) > 0.12;
   if (onLine) kk -= 0.22;
   if (pose.glow > 0) {
     // Страницы светятся цветом яруса: светлее к середине разворота.
@@ -960,13 +1013,25 @@ function strapSolids(c: Ctx, xfB: Xf, xfF: Xf): Solid[] {
       return k + (tw ? 0.08 : -0.06);
     };
     out.push(
-      place(box([xE, 0, zc], [0.5, T / 2 + 0.55, 0.6], P.strap, ID.strap, { paint: cord, noSeam: true }), xfB),
-      place(box([xE - 4.2, yF, zc], [4.2, 0.45, 0.6], P.strap, ID.strap, { paint: cord, noSeam: true }), xfS),
-      place(box([xE - 8.2, yF - 0.05, zc], [1.3, 0.55, 1.3], P.metal, ID.hasp, {
-        round: 1,
-        noSeam: true,
-        paint: (_f, _q, k, n) => k * 0.8 + 0.22 + shine(n, 0.35),
-      }), xfF),
+      place(
+        box([xE, 0, zc], [0.5, T / 2 + 0.55, 0.6], P.strap, ID.strap, {
+          paint: cord,
+          noSeam: true,
+        }),
+        xfB,
+      ),
+      place(
+        box([xE - 4.2, yF, zc], [4.2, 0.45, 0.6], P.strap, ID.strap, { paint: cord, noSeam: true }),
+        xfS,
+      ),
+      place(
+        box([xE - 8.2, yF - 0.05, zc], [1.3, 0.55, 1.3], P.metal, ID.hasp, {
+          round: 1,
+          noSeam: true,
+          paint: (_f, _q, k, n) => k * 0.8 + 0.22 + shine(n, 0.35),
+        }),
+        xfF,
+      ),
     );
     return out;
   }
@@ -975,19 +1040,22 @@ function strapSolids(c: Ctx, xfB: Xf, xfF: Xf): Solid[] {
     if (o.chains >= 1) return out;
     for (const zc of CHAIN_Z) {
       out.push(
-        place(box([xE - 4.6, yF + 0.15, zc * H], [2.6, 0.6, 1.7], P.gold, ID.hasp, {
-          cuts: [
-            [-1, 0, 1, 1.5],
-            [-1, 0, -1, 1.5],
-          ],
-          noSeam: true,
-          paint: (face, q, k, n) => {
-            let kk = k * 0.75 + 0.06 + shine(n, 0.3);
-            // Скоба под звено цепи — тёмная щель у обреза.
-            if (face === 2 && q[0] > 0.3 && q[0] < 0.7 && Math.abs(q[2]) < 0.35) kk = 0.08;
-            return kk;
-          },
-        }), xfS),
+        place(
+          box([xE - 4.6, yF + 0.15, zc * H], [2.6, 0.6, 1.7], P.gold, ID.hasp, {
+            cuts: [
+              [-1, 0, 1, 1.5],
+              [-1, 0, -1, 1.5],
+            ],
+            noSeam: true,
+            paint: (face, q, k, n) => {
+              let kk = k * 0.75 + 0.06 + shine(n, 0.3);
+              // Скоба под звено цепи — тёмная щель у обреза.
+              if (face === 2 && q[0] > 0.3 && q[0] < 0.7 && Math.abs(q[2]) < 0.35) kk = 0.08;
+              return kk;
+            },
+          }),
+          xfS,
+        ),
       );
     }
     return out;
@@ -997,12 +1065,22 @@ function strapSolids(c: Ctx, xfB: Xf, xfF: Xf): Solid[] {
   const sh = 2.3;
   const leather = (face: number, q: V3, k: number) => {
     // Строчка вдоль кромки ремешка.
-    if ((face === 2 || face === 0) && Math.abs(q[2]) > 0.62 && Math.abs(q[2]) < 0.8) return k + 0.14;
+    if ((face === 2 || face === 0) && Math.abs(q[2]) > 0.62 && Math.abs(q[2]) < 0.8)
+      return k + 0.14;
     return k;
   };
   out.push(
-    place(box([xE, 0, zc], [0.5, T / 2 + 0.55, sh], P.strap, ID.strap, { paint: leather, noSeam: true }), xfB),
-    place(box([xE - 3.6, yF, zc], [3.6, 0.45, sh], P.strap, ID.strap, { paint: leather, noSeam: true }), xfS),
+    place(
+      box([xE, 0, zc], [0.5, T / 2 + 0.55, sh], P.strap, ID.strap, {
+        paint: leather,
+        noSeam: true,
+      }),
+      xfB,
+    ),
+    place(
+      box([xE - 3.6, yF, zc], [3.6, 0.45, sh], P.strap, ID.strap, { paint: leather, noSeam: true }),
+      xfS,
+    ),
     place(
       box([xE - 7.4, yF + 0.2, zc], [1.8, 0.65, sh + 0.9], P.metal, ID.hasp, {
         noSeam: true,
@@ -1081,11 +1159,24 @@ function render(
   const oy = cv.by + Math.round(GROUND * RR);
   const solids = bookSolids(c).map((s) => scaleSolid(s, RR));
   drawSolids(f, solids, pals, ox, oy);
-  if (parts?.length) drawParts(f, parts.map((pt) => ({ ...pt, c: [pt.c[0] * RR, pt.c[1] * RR, pt.c[2] * RR], r: [pt.r[0] * RR, pt.r[1] * RR, pt.r[2] * RR] })), pals, ox, oy);
+  if (parts?.length)
+    drawParts(
+      f,
+      parts.map((pt) => ({
+        ...pt,
+        c: [pt.c[0] * RR, pt.c[1] * RR, pt.c[2] * RR],
+        r: [pt.r[0] * RR, pt.r[1] * RR, pt.r[2] * RR],
+      })),
+      pals,
+      ox,
+      oy,
+    );
   seams(f, 1.6 * RR, 1);
   rimLight(f, pals, (pl) => pl !== P.glow && pl !== P.pglow);
   if (pose.flash > 0) {
-    for (let i = 0; i < f.w * f.h; i++) if (f.pal[i] >= 0) f.tone[i] = Math.min(pals[f.pal[i]].length - 1, f.tone[i] + Math.round(pose.flash * 3));
+    for (let i = 0; i < f.w * f.h; i++)
+      if (f.pal[i] >= 0)
+        f.tone[i] = Math.min(pals[f.pal[i]].length - 1, f.tone[i] + Math.round(pose.flash * 3));
   }
   const p = toPx(f, pals);
   const ol = new Uint8Array(f.w * f.h);
@@ -1165,7 +1256,6 @@ function dissolve(sc: Scene, k: number): void {
 // Кадр по имени полосы.
 // ---------------------------------------------------------------------------
 
-
 function parse(name: string): { kind: string; tier: Tier } {
   const tier = TIERS.find((t) => name.endsWith(`-${t}`));
   if (!tier) throw new Error(`книги: нет яруса в имени ${name}`);
@@ -1180,7 +1270,8 @@ export function frame(name: string, i: number, res: Res, _v = 0): Px {
   if (kind === 'still') return idleFrame(tier, 0, res);
   if (kind === 'idle') return idleFrame(tier, i, res);
   // Последний кадр открытия — книга на полке, как кадр 0 покоя: сцена меняет полосу без скачка.
-  if (kind === 'reveal') return i >= st.frames - 1 ? idleFrame(tier, 0, res) : revealFrame(tier, t, res);
+  if (kind === 'reveal')
+    return i >= st.frames - 1 ? idleFrame(tier, 0, res) : revealFrame(tier, t, res);
   if (kind === 'apply-ok') return applyFrame(tier, t, res);
   if (kind === 'apply-burn') return burnFrame(tier, t, res);
   throw new Error(`книги: неизвестная полоса ${name}`);
@@ -1275,7 +1366,14 @@ function mote(sc: Scene, p: V3, ramp: string[], size: number, alpha = 255): void
   const core = hx(ramp[ramp.length - 1], alpha);
   const rim = hx(ramp[Math.max(0, ramp.length - 3)], alpha);
   for (let yy = 0; yy < s; yy++)
-    for (let xx = 0; xx < s; xx++) put(sc, x + xx - (s >> 1), y + yy - (s >> 1), s > 2 && (xx === 0 || yy === 0 || xx === s - 1 || yy === s - 1) ? rim : core, d);
+    for (let xx = 0; xx < s; xx++)
+      put(
+        sc,
+        x + xx - (s >> 1),
+        y + yy - (s >> 1),
+        s > 2 && (xx === 0 || yy === 0 || xx === s - 1 || yy === s - 1) ? rim : core,
+        d,
+      );
 }
 
 /** Звено цепи: кольцо (лицом) или планка (ребром), золото, свет сверху-слева. */
@@ -1441,19 +1539,28 @@ function revealPose(tier: Tier, t: number): Pose {
     [R.close, gMax * 0.75],
     [R.close + 0.14, 0],
   ]);
-  if (tier === 'epic') o.gem = clamp01(bump(t, R.land + 0.2, R.snap + 0.2) * 1.2) * (0.6 + 0.4 * Math.sin(t * 40));
+  if (tier === 'epic')
+    o.gem = clamp01(bump(t, R.land + 0.2, R.snap + 0.2) * 1.2) * (0.6 + 0.4 * Math.sin(t * 40));
   if (tier === 'legend')
     o.sigil = Math.max(
       bump(t, R.land + 0.2, R.snap + 0.1) * (0.7 + 0.3 * Math.sin(t * 38)),
       // На замке знак вспыхивает и садится к свечению покоя.
-      t > R.lock - 0.1 ? kf(t, [[R.lock - 0.1, 0], [R.lock + 0.1, 0.85], [T0, 0.5]]) : 0,
+      t > R.lock - 0.1
+        ? kf(t, [
+            [R.lock - 0.1, 0],
+            [R.lock + 0.1, 0.85],
+            [T0, 0.5],
+          ])
+        : 0,
     );
   const fl = tier === 'legend' ? 1 : tier === 'epic' ? 0.7 : tier === 'rare' ? 0.5 : 0.25;
-  o.flash = fl * kf(t, [
-    [R.peak - 0.05, 0],
-    [R.peak, 1],
-    [R.peak + 0.13, 0],
-  ]);
+  o.flash =
+    fl *
+    kf(t, [
+      [R.peak - 0.05, 0],
+      [R.peak, 1],
+      [R.peak + 0.13, 0],
+    ]);
   if (t >= T0 - 1e-6) return { ...REST, sheets: o.sheets.map(() => 0) };
   return o;
 }
@@ -1476,56 +1583,71 @@ function revealFrame(tier: Tier, t: number, res: Res): Px {
     o,
     res,
     (sc) => {
-    // Тень на полу, пока книга в воздухе (только по пустому).
-    if (o.z > 0.6) shadow(sc, o);
-    // Пыль от посадки (у простой — больше), у взлетающих — и от второй посадки.
-    dust(sc, o, t - R.land, tier === 'simple' ? 1.25 : 1);
-    if (AIR[tier] > 0) dust(sc, o, t - (R.T - 0.28), 0.7);
-    // Искры посадки и щелчка застёжки (от редкой).
-    if (rr >= 2) {
-      const n = rr === 2 ? 4 : rr === 3 ? 6 : 8;
-      for (let j = 0; j < n; j++) {
-        const t0 = R.land + j * 0.035;
-        const k = bump(t, t0, t0 + 0.3);
-        if (k <= 0) continue;
-        const a = hash(j, 3, rr) * Math.PI * 2;
-        const rad = W * (0.55 + 0.35 * hash(j, 4, rr));
-        star(sc, [o.x + Math.cos(a) * rad, Math.sin(a) * rad * 0.5, 4 + hash(j, 5, rr) * H], k, glow);
+      // Тень на полу, пока книга в воздухе (только по пустому).
+      if (o.z > 0.6) shadow(sc, o);
+      // Пыль от посадки (у простой — больше), у взлетающих — и от второй посадки.
+      dust(sc, o, t - R.land, tier === 'simple' ? 1.25 : 1);
+      if (AIR[tier] > 0) dust(sc, o, t - (R.T - 0.28), 0.7);
+      // Искры посадки и щелчка застёжки (от редкой).
+      if (rr >= 2) {
+        const n = rr === 2 ? 4 : rr === 3 ? 6 : 8;
+        for (let j = 0; j < n; j++) {
+          const t0 = R.land + j * 0.035;
+          const k = bump(t, t0, t0 + 0.3);
+          if (k <= 0) continue;
+          const a = hash(j, 3, rr) * Math.PI * 2;
+          const rad = W * (0.55 + 0.35 * hash(j, 4, rr));
+          star(
+            sc,
+            [o.x + Math.cos(a) * rad, Math.sin(a) * rad * 0.5, 4 + hash(j, 5, rr) * H],
+            k,
+            glow,
+          );
+        }
+        const ks = bump(t, R.snap - 0.02, R.snap + 0.2);
+        if (ks > 0 && tier !== 'legend')
+          star(sc, bookXf(o).p([W / 2 - 4, T / 2 + 1.5, H / 2 + 2]), ks, [
+            '#ffffff',
+            ...glow.slice(-3).reverse(),
+          ]);
       }
-      const ks = bump(t, R.snap - 0.02, R.snap + 0.2);
-      if (ks > 0 && tier !== 'legend') star(sc, bookXf(o).p([W / 2 - 4, T / 2 + 1.5, H / 2 + 2]), ks, ['#ffffff', ...glow.slice(-3).reverse()]);
-    }
-    // Ударная волна легендарной при посадке.
-    if (tier === 'legend') ring(sc, o.x, t - R.land, 0.42, W * 1.6, glow);
-    // Свет из страниц: огоньки поднимаются с разворота.
-    risingMotes(sc, tier, o, t, R.open + 0.08, R.close + 0.1);
-    // Столб света (эпическая, легендарная).
-    if (rr >= 3) pillar(sc, tier, o, t, R.peak - 0.28, R.close + 0.08);
-    // Кольцо света по полу в пик (от редкой), у легендарной ещё и вспышка-кольцо.
-    if (rr >= 2) ring(sc, spreadOf(o).c[0], t - R.peak + 0.04, 0.5, W * (rr === 2 ? 1.3 : 1.7), glow);
-    if (tier === 'legend') {
-      sunburst(sc, o, t - R.peak + 0.06, 0.55);
-      flashRing(sc, o, t - R.peak + 0.02);
-    }
-    // Брызги звёзд из разворота в пик.
-    if (rr >= 2) {
-      const n = rr === 2 ? 6 : rr === 3 ? 10 : 16;
-      const sp = spreadOf(o);
-      for (let j = 0; j < n; j++) {
-        const u = (t - R.peak + 0.02) / 0.5;
-        if (u <= 0 || u >= 1) continue;
-        const a = (j / n) * Math.PI * 2 + hash(j, 9, rr) * 0.5;
-        const rad = (6 + 26 * (1 - (1 - u) ** 2)) * (0.7 + 0.5 * hash(j, 8, rr));
-        const p: V3 = [sp.c[0] + Math.cos(a) * rad, sp.c[1] + 3, sp.c[2] + Math.sin(a) * rad * 0.8 + 4];
-        star(sc, p, (1 - u) * 0.9, glow, false);
+      // Ударная волна легендарной при посадке.
+      if (tier === 'legend') ring(sc, o.x, t - R.land, 0.42, W * 1.6, glow);
+      // Свет из страниц: огоньки поднимаются с разворота.
+      risingMotes(sc, tier, o, t, R.open + 0.08, R.close + 0.1);
+      // Столб света (эпическая, легендарная).
+      if (rr >= 3) pillar(sc, tier, o, t, R.peak - 0.28, R.close + 0.08);
+      // Кольцо света по полу в пик (от редкой), у легендарной ещё и вспышка-кольцо.
+      if (rr >= 2)
+        ring(sc, spreadOf(o).c[0], t - R.peak + 0.04, 0.5, W * (rr === 2 ? 1.3 : 1.7), glow);
+      if (tier === 'legend') {
+        sunburst(sc, o, t - R.peak + 0.06, 0.55);
+        flashRing(sc, o, t - R.peak + 0.02);
       }
-    }
-    if (tier === 'legend') {
-      runes(sc, o, t, R.snap + 0.12, R.lock + 0.05);
-      legendChains(sc, o, t);
-      // Огоньки покоя зажигаются к концу: последний кадр — кадр 0 петли покоя.
-      if (t > R.T - 0.35) legendMotes(sc, o, (t - R.T) / IDLE_T.legend, (t - (R.T - 0.35)) / 0.35);
-    }
+      // Брызги звёзд из разворота в пик.
+      if (rr >= 2) {
+        const n = rr === 2 ? 6 : rr === 3 ? 10 : 16;
+        const sp = spreadOf(o);
+        for (let j = 0; j < n; j++) {
+          const u = (t - R.peak + 0.02) / 0.5;
+          if (u <= 0 || u >= 1) continue;
+          const a = (j / n) * Math.PI * 2 + hash(j, 9, rr) * 0.5;
+          const rad = (6 + 26 * (1 - (1 - u) ** 2)) * (0.7 + 0.5 * hash(j, 8, rr));
+          const p: V3 = [
+            sp.c[0] + Math.cos(a) * rad,
+            sp.c[1] + 3,
+            sp.c[2] + Math.sin(a) * rad * 0.8 + 4,
+          ];
+          star(sc, p, (1 - u) * 0.9, glow, false);
+        }
+      }
+      if (tier === 'legend') {
+        runes(sc, o, t, R.snap + 0.12, R.lock + 0.05);
+        legendChains(sc, o, t);
+        // Огоньки покоя зажигаются к концу: последний кадр — кадр 0 петли покоя.
+        if (t > R.T - 0.35)
+          legendMotes(sc, o, (t - R.T) / IDLE_T.legend, (t - (R.T - 0.35)) / 0.35);
+      }
     },
     { chains: false },
   );
@@ -1568,7 +1690,8 @@ function dust(sc: Scene, o: Pose, dt: number, amt: number): void {
         const e = 1 - (1 - u) ** 2;
         const cx = base[0] + side * (2 + 6 * e * (1 + j * 0.5)) * amt;
         const cz = 0.8 + (1.2 + j * 0.8) * e;
-        const rr = (1.2 + 2.2 * Math.sin(Math.min(1, u * 1.4) * Math.PI * 0.5)) * (1 - j * 0.25) * amt;
+        const rr =
+          (1.2 + 2.2 * Math.sin(Math.min(1, u * 1.4) * Math.PI * 0.5)) * (1 - j * 0.25) * amt;
         // Клуб — три пузыря: большой и два поменьше по бокам.
         const blobs: [number, number, number][] = [
           [0, 0, rr],
@@ -1631,7 +1754,8 @@ function risingMotes(sc: Scene, tier: Tier, o: Pose, t: number, a: number, b: nu
     // Точка на развороте: левая страница (на крышке) или правая (блок).
     const lx = -W / 2 + (hash(j, 2, 7) * 2 - 1) * W * 0.85;
     const lz = 4 + hash(j, 3, 7) * (H - 8);
-    const lp = lx < -W / 2 ? rotZ([lx, T / 2 - CB / 2, lz], o.open, HINGE) : ([lx, T / 2 - CB, lz] as V3);
+    const lp =
+      lx < -W / 2 ? rotZ([lx, T / 2 - CB / 2, lz], o.open, HINGE) : ([lx, T / 2 - CB, lz] as V3);
     const p0 = xf.p(lp);
     const rise = 6 + 26 * u;
     const p: V3 = [p0[0] + Math.sin(u * 5 + j) * 2, p0[1] + 4 + 6 * u, p0[2] + rise];
@@ -1656,7 +1780,7 @@ function pillar(sc: Scene, tier: Tier, o: Pose, t: number, a: number, b: number)
   for (let y = 0; y <= bot; y++) {
     const up = (cy - y) / (cy || 1);
     // Ядро дышит: ширина гуляет на пиксель вдоль столба.
-    const wob = Math.sin(y * 0.35 / R + t * 22) * 0.08;
+    const wob = Math.sin((y * 0.35) / R + t * 22) * 0.08;
     for (let x = Math.floor(cx - hw - 1); x <= Math.ceil(cx + hw + 1); x++) {
       if (x < 0 || x >= sc.f.w) continue;
       const e = Math.abs(x + 0.5 - cx) / (hw || 1);
@@ -1669,7 +1793,8 @@ function pillar(sc: Scene, tier: Tier, o: Pose, t: number, a: number, b: number)
       if (sc.p.data[i * 4 + 3] > 0) {
         // По страницам — подсветка (свет идёт из них), по крышке и контуру — нет.
         const pl = sc.f.pal[i];
-        if (pl === P.pglow || pl === P.paper || pl === P.glow) sc.p.set(x, y, [c[0], c[1], c[2], 140]);
+        if (pl === P.pglow || pl === P.paper || pl === P.glow)
+          sc.p.set(x, y, [c[0], c[1], c[2], 140]);
         continue;
       }
       sc.p.set(x, y, c);
@@ -1682,11 +1807,12 @@ function pillar(sc: Scene, tier: Tier, o: Pose, t: number, a: number, b: number)
     const xx = cx + Math.sin(j * 2.3 + t * 6) * hw * 0.5;
     if (u > 0.8) continue;
     const s = R > 1 ? 2 : 1;
-    for (let q = 0; q < s; q++) for (let w = 0; w < s; w++) {
-      const i = Math.floor(yy + q) * sc.f.w + Math.floor(xx + w);
-      if (sc.p.data[i * 4 + 3] > 0 && sc.f.pal[i] >= 0) continue;
-      sc.p.set(xx + w, yy + q, hx('#ffffff'));
-    }
+    for (let q = 0; q < s; q++)
+      for (let w = 0; w < s; w++) {
+        const i = Math.floor(yy + q) * sc.f.w + Math.floor(xx + w);
+        if (sc.p.data[i * 4 + 3] > 0 && sc.f.pal[i] >= 0) continue;
+        sc.p.set(xx + w, yy + q, hx('#ffffff'));
+      }
   }
 }
 
@@ -1710,13 +1836,18 @@ function sunburst(sc: Scene, o: Pose, dt: number, life: number): void {
       const v = s / L;
       const px = Math.floor(x);
       const py = Math.floor(y);
-      if ((v > 0.5 || u > 0.6) && dith(px, py, Math.max((v - 0.5) / 0.5, (u - 0.6) / 0.4))) continue;
+      if ((v > 0.5 || u > 0.6) && dith(px, py, Math.max((v - 0.5) / 0.5, (u - 0.6) / 0.4)))
+        continue;
       for (let w = 0; w < wv; w++) {
         const qx = px + (Math.abs(Math.sin(a)) > 0.7 ? w : 0);
         const qy = py + (Math.abs(Math.sin(a)) > 0.7 ? 0 : w);
         const i = qy * sc.f.w + qx;
         if (qx < 0 || qy < 0 || qx >= sc.f.w || qy >= sc.f.h || sc.p.data[i * 4 + 3] > 0) continue;
-        sc.p.set(qx, qy, ramp[v < 0.3 ? ramp.length - 1 : v < 0.6 ? ramp.length - 2 : ramp.length - 3]);
+        sc.p.set(
+          qx,
+          qy,
+          ramp[v < 0.3 ? ramp.length - 1 : v < 0.6 ? ramp.length - 2 : ramp.length - 3],
+        );
       }
     }
   }
@@ -1786,7 +1917,11 @@ const RUNES: [number, number, number, number][][] = [
 function orbitAt(o: Pose, t: number, j: number, n: number, rk = 1): V3 {
   const sp = spreadOf(o);
   const a = t * 1.9 + (j / n) * Math.PI * 2;
-  return [sp.c[0] + Math.cos(a) * W * 1.05 * rk, Math.sin(a) * W * 0.62 * rk, sp.c[2] + 2 + Math.sin(a * 2 + j) * 2.5];
+  return [
+    sp.c[0] + Math.cos(a) * W * 1.05 * rk,
+    Math.sin(a) * W * 0.62 * rk,
+    sp.c[2] + 2 + Math.sin(a * 2 + j) * 2.5,
+  ];
 }
 
 function runes(sc: Scene, o: Pose, t: number, a: number, b: number): void {
@@ -1805,8 +1940,8 @@ function runes(sc: Scene, o: Pose, t: number, a: number, b: number): void {
     for (const [x0, y0, x1, y1] of RUNES[j]) {
       const n = Math.max(Math.abs(x1 - x0) * sx, Math.abs(y1 - y0) * sy, 1) * 2;
       for (let s = 0; s <= n; s++) {
-        const px = Math.round(x - sx + ((x0 + ((x1 - x0) * s) / n) * sx));
-        const py = Math.round(y - 2 * sy + ((y0 + ((y1 - y0) * s) / n) * sy));
+        const px = Math.round(x - sx + (x0 + ((x1 - x0) * s) / n) * sx);
+        const py = Math.round(y - 2 * sy + (y0 + ((y1 - y0) * s) / n) * sy);
         if (k < 1 && !dith(px, py, k)) continue;
         for (let q = 0; q < thick; q++) put(sc, px + q + 1, py + 1, edge, d);
         for (let q = 0; q < thick; q++) put(sc, px + q, py, back ? edge : core, d);
@@ -1824,7 +1959,11 @@ function chainRest(o: Pose): { p: V3; face: boolean }[] {
   for (const zc of CHAIN_Z) {
     const z = zc * H;
     // Три звена по крышке от скобы к обрезу, одно — на обрезе.
-    for (let k = 0; k < 3; k++) out.push({ p: xfS.p([xE - 1.7 + k * 0.0 - (2 - k) * 0 + (k - 1) * 0, T / 2 + 0.9, z]), face: k % 2 === 0 });
+    for (let k = 0; k < 3; k++)
+      out.push({
+        p: xfS.p([xE - 1.7 + k * 0.0 - (2 - k) * 0 + (k - 1) * 0, T / 2 + 0.9, z]),
+        face: k % 2 === 0,
+      });
     out.push({ p: xfB.p([xE + 0.7, 0, z]), face: false });
   }
   // Разнести звенья по крышке: шаг 1,8.
@@ -1866,7 +2005,11 @@ function legendChains(sc: Scene, o: Pose, t: number): void {
     const u = clamp01((t - R.close) / (R.lock - R.close));
     const e = u * u * (3 - 2 * u);
     const tgt = now[j];
-    const p: V3 = [lerp(slot[0], tgt.p[0], e), lerp(slot[1], tgt.p[1], e), lerp(slot[2], tgt.p[2], e)];
+    const p: V3 = [
+      lerp(slot[0], tgt.p[0], e),
+      lerp(slot[1], tgt.p[1], e),
+      lerp(slot[2], tgt.p[2], e),
+    ];
     if (u < 1) link(sc, p, u > 0.7 ? tgt.face : j % 2 === 0, (1 - e) * (t * 14 + j));
   }
   if (t >= R.lock || t < R.snap) {
@@ -1876,10 +2019,12 @@ function legendChains(sc: Scene, o: Pose, t: number): void {
   // Вспышка на сорванных скобах.
   const kb = bump(t, R.snap - 0.02, R.snap + 0.22);
   if (kb > 0)
-    for (const zc of CHAIN_Z) star(sc, bookXf(o).p([W / 2 - 4, T / 2 + 1.5, zc * H]), kb * 1.2, GLOW.legend, false);
+    for (const zc of CHAIN_Z)
+      star(sc, bookXf(o).p([W / 2 - 4, T / 2 + 1.5, zc * H]), kb * 1.2, GLOW.legend, false);
   const kl = bump(t, R.lock - 0.04, R.lock + 0.2);
   if (kl > 0)
-    for (const zc of CHAIN_Z) star(sc, bookXf(o).p([W / 2 - 4, T / 2 + 1.5, zc * H]), kl, GLOW.legend, false);
+    for (const zc of CHAIN_Z)
+      star(sc, bookXf(o).p([W / 2 - 4, T / 2 + 1.5, zc * H]), kl, GLOW.legend, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -1962,7 +2107,13 @@ function applyFrame(tier: Tier, t: number, res: Res): Px {
     // Блик щелчка застёжки.
     const ks = bump(t, 0.26, 0.46);
     if (ks > 0 && tier !== 'legend')
-      star(sc, bookXf(o).p([W / 2 - 4, T / 2 + 1.5, H / 2 + 2]), ks, ['#ffffff', ...ramp.slice(-3).reverse()], false);
+      star(
+        sc,
+        bookXf(o).p([W / 2 - 4, T / 2 + 1.5, H / 2 + 2]),
+        ks,
+        ['#ffffff', ...ramp.slice(-3).reverse()],
+        false,
+      );
     // Звенья легендарной осыпаются вниз и тают.
     if (tier === 'legend' && t >= 0.3) {
       const rest = chainRest(applyPose('legend', 0.299));
@@ -1970,7 +2121,11 @@ function applyFrame(tier: Tier, t: number, res: Res): Px {
       if (dt < 0.4)
         rest.forEach((L, j) => {
           const ang = hash(j, 21, 5) * Math.PI * 2;
-          const p: V3 = [L.p[0] + Math.cos(ang) * 22 * dt, L.p[1] + 8 * dt, L.p[2] + 14 * dt - 80 * dt * dt];
+          const p: V3 = [
+            L.p[0] + Math.cos(ang) * 22 * dt,
+            L.p[1] + 8 * dt,
+            L.p[2] + 14 * dt - 80 * dt * dt,
+          ];
           link(sc, p, j % 2 === 0, dt * 16 + j, 1 - dt / 0.4);
         });
     }
@@ -1982,9 +2137,17 @@ function applyFrame(tier: Tier, t: number, res: Res): Px {
       const u = (t - t0) / FLY;
       if (u <= 0 || u > 1.25) continue;
       const pos = applyPose(tier, t0 - 0.001);
-      const from = chain(hingeZ(1.25, HINGE), bookXf(pos)).p([W / 2 - 3, T / 2 - CB - 0.3, H * (0.35 + 0.3 * hash(k, 2, 9))]);
+      const from = chain(hingeZ(1.25, HINGE), bookXf(pos)).p([
+        W / 2 - 3,
+        T / 2 - CB - 0.3,
+        H * (0.35 + 0.3 * hash(k, 2, 9)),
+      ]);
       const side = (k % 2 ? 1 : -1) * (6 + 10 * hash(k, 3, 9));
-      const ctrl: V3 = [lerp(from[0], APPLY_TO[0], 0.3) + side, from[1] + 6, lerp(from[2], APPLY_TO[2], 0.25) + 8];
+      const ctrl: V3 = [
+        lerp(from[0], APPLY_TO[0], 0.3) + side,
+        from[1] + 6,
+        lerp(from[2], APPLY_TO[2], 0.25) + 8,
+      ];
       streak(sc, from, ctrl, APPLY_TO, u, ramp);
       // От редкой — второй, тоньше и с другим изгибом: лист рвётся светом на полосы.
       if (tier !== 'simple' && u > 0.1) {
@@ -2031,7 +2194,8 @@ function streak(sc: Scene, a: V3, b: V3, c: V3, u: number, ramp: string[]): void
     if (v < 0.35 && dith(px, py, 1 - v / 0.35)) continue;
     const core = v > 0.7 ? col[N - 1] : col[N - 2];
     const rim = v > 0.7 ? col[N - 2] : col[N - 3];
-    for (let q = -wd; q <= wd; q++) sc.p.set(px + q, py, Math.abs(q) < wd || v < 0.5 ? (Math.abs(q) === 0 ? core : rim) : rim);
+    for (let q = -wd; q <= wd; q++)
+      sc.p.set(px + q, py, Math.abs(q) < wd || v < 0.5 ? (Math.abs(q) === 0 ? core : rim) : rim);
   }
   if (u < 1) {
     const [x, y] = scr(sc, bezQ3(a, b, c, head));
@@ -2039,7 +2203,8 @@ function streak(sc: Scene, a: V3, b: V3, c: V3, u: number, ramp: string[]): void
     for (let yy = -s; yy <= s; yy++)
       for (let xx = -s; xx <= s; xx++) {
         const m = Math.abs(xx) + Math.abs(yy);
-        if (m <= s) sc.p.set(x + xx, y + yy, m < s - 1 ? col[N - 1] : m < s ? col[N - 2] : col[N - 3]);
+        if (m <= s)
+          sc.p.set(x + xx, y + yy, m < s - 1 ? col[N - 1] : m < s ? col[N - 2] : col[N - 3]);
       }
   }
 }
@@ -2128,7 +2293,8 @@ function burnFx(sc: Scene, t: number, T0: number, crumble: number): void {
       const lum = (orig[i * 4] * 0.3 + orig[i * 4 + 1] * 0.55 + orig[i * 4 + 2] * 0.15) / 255;
       c = charC[Math.min(charC.length - 1, Math.floor(lum * 3.2))];
       // Тлеющие трещины: остывают от жёлтого к тёмно-красному.
-      const crack = hash(Math.floor(x / (2 * R)), Math.floor(y / (3 * R)), 11) > 0.82 && hash(x, y, 12) > 0.3;
+      const crack =
+        hash(Math.floor(x / (2 * R)), Math.floor(y / (3 * R)), 11) > 0.82 && hash(x, y, 12) > 0.3;
       if (crack) {
         const cool = clamp01((since - 1) / 6);
         c = ember[Math.max(0, 3 - Math.floor(cool * 4))];
@@ -2205,7 +2371,11 @@ function burnFx(sc: Scene, t: number, T0: number, crumble: number): void {
           if (fade >= 1 || (fade > 0 && dith(nx, ny, fade))) continue;
           // Хлопья гаснут: жар уходит в серый пепел.
           const c: RGBA =
-            dt > 0.15 ? (hash(nx, ny, 9) > 0.8 ? hx('#5a4a40') : hx('#2a2220')) : [snap[si], snap[si + 1], snap[si + 2], 255];
+            dt > 0.15
+              ? hash(nx, ny, 9) > 0.8
+                ? hx('#5a4a40')
+                : hx('#2a2220')
+              : [snap[si], snap[si + 1], snap[si + 2], 255];
           p.set(nx, ny, c);
         }
     }
@@ -2254,7 +2424,7 @@ function glyphAnchors(): Record<string, [number, number]> {
 /** Над разворотом в кадре `peak`: здесь сцена зажигает знак чары. */
 function riseAnchor(t: Tier): [number, number] {
   const sp = spreadOf(revealPose(t, REVEAL[t].peak));
-  return boxFrac(add(sp.c, [0, 0, 11]));
+  return boxFrac(add(sp.c, [0, 0, 16]));
 }
 
 export const STRIPS: Record<string, StripDef> = buildStrips();

@@ -901,14 +901,13 @@ function RevealScene({
           </span>
         )}
       </div>
-      {shown && (
-        <div className="pbks__text">
-          <RarityName rarity={r}>{bookTitle(b)}</RarityName>
-          <span className="pbks__fx">{effectOf(b.id, b.lvl, p.pickStars)}</span>
-          <span className={`pbks__ch is-${chanceTone(b.chance)}`}>шанс вписать {b.chance}%</span>
-          <span className="fgr__cta">На полку</span>
-        </div>
-      )}
+      {/* Подпись занимает место с первого кадра: иначе на смене полосы книга прыгнула бы вверх. */}
+      <div className="pbks__text" aria-hidden={!shown}>
+        <RarityName rarity={r}>{bookTitle(b)}</RarityName>
+        <span className="pbks__fx">{effectOf(b.id, b.lvl, p.pickStars)}</span>
+        <span className={`pbks__ch is-${chanceTone(b.chance)}`}>шанс вписать {b.chance}%</span>
+        <span className="fgr__cta">На полку</span>
+      </div>
     </div>
   );
 }

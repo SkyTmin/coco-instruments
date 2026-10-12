@@ -5875,7 +5875,7 @@ button.fg-slot {
   background: linear-gradient(180deg, #fff3c4, #f0b83c 55%, #9a6412);
 }
 .pbook.t-simple .pbook__glyph {
-  background: linear-gradient(180deg, #f6d2a0, #c0833e 60%, #6e4418);
+  background: linear-gradient(180deg, #ffe8bc, #dba05a 60%, #8a5522);
 }
 .pbook.t-rare .pbook__glyph {
   background: linear-gradient(180deg, #ffffff, #c9d6e4 55%, #6d7f94);
@@ -6655,14 +6655,23 @@ button.fg-slot {
 /* Знак над разворотом (якорь `rise`): вспыхивает на `peak`, на `close` уходит в страницы. */
 .pbks__sigil {
   position: absolute;
-  width: 34%;
+  width: 36%;
   aspect-ratio: 1;
   display: grid;
   place-items: center;
   transform: translate(-50%, -50%);
-  filter: drop-shadow(0 0 5px var(--rc)) drop-shadow(0 0 14px var(--rc));
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 6px var(--rc));
   pointer-events: none;
   animation: pbk-sigil 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+/* Тёмный круг под знаком: иначе светлый знак тонет в столбе света и белых страницах. */
+.pbks__sigil::before {
+  content: '';
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(14, 6, 22, 0.88) 55%, rgba(14, 6, 22, 0) 100%);
 }
 .pbks__sigil .pbook__glyph {
   -webkit-mask-size: 100%;
@@ -6710,6 +6719,15 @@ button.fg-slot {
   padding: 0 16px;
   text-align: center;
   animation: fgr-text 380ms 120ms ease-out both;
+}
+/* Подпись вписывания меняется на метке `hit` — места под самую длинную хватает сразу. */
+.pbka__text {
+  min-height: 124px;
+}
+/* Подпись итога ждёт своей фазы невидимой (место под неё занято сразу). */
+.pbks:not(.is-show) .pbks__text {
+  visibility: hidden;
+  animation: none;
 }
 .pbks__text .rname,
 .pbka__text .rname {
