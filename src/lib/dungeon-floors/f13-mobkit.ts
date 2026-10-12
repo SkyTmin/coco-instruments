@@ -436,6 +436,9 @@ export interface Kind {
   frames: FrameLRU<MobFrame>;
   /** Облики (элита, альбинос) — свой кеш, чтобы не вытеснять прогретое. */
   looks: FrameLRU<MobFrame>;
+  /** Замер памяти (стенд): точек в построенных кадрах и обликах. */
+  px: number;
+  lpx: number;
 }
 
 const KINDS: Kind[] = [];
@@ -449,6 +452,8 @@ export function kindOf(name: string, w: number, h: number, ax: number, ay: numbe
     limit,
     frames: frameLRU<MobFrame>(limit),
     looks: frameLRU<MobFrame>(Math.ceil(limit * 0.35)),
+    px: 0,
+    lpx: 0,
   };
   KINDS.push(K);
   return K;
@@ -476,6 +481,8 @@ export const F13_MOB_STAT = {
     for (const K of KINDS) {
       K.frames.clear();
       K.looks.clear();
+      K.px = 0;
+      K.lpx = 0;
     }
   },
   reset: () => {
@@ -487,6 +494,11 @@ export const F13_MOB_STAT = {
     F13_MOB_STAT.battle.clear();
   },
   sizes: () => KINDS.map((K) => `${K.name} ${K.frames.size}/${K.limit}+${K.looks.size}`).join(', '),
+  /** Память кадров по видам, МБ (RGBA; `lit` — второй холст): кадры + облики. */
+  mem: () =>
+    KINDS.map(
+      (K) => `${K.name} ${((K.px * 4) / 2 ** 20).toFixed(1)}+${((K.lpx * 4) / 2 ** 20).toFixed(1)}`,
+    ).join(', '),
 };
 function stat(ms: number, K: Kind, key: string): void {
   if (F13_MOB_STAT.warming) {
@@ -519,6 +531,7 @@ if (import.meta.env?.DEV && typeof window !== 'undefined') {
       max: +F13_MOB_STAT.max.toFixed(2),
       maxKey: F13_MOB_STAT.maxKey,
       sizes: F13_MOB_STAT.sizes(),
+      mem: F13_MOB_STAT.mem(),
       litShare: +(F13_MOB_STAT.lit / Math.max(1, F13_MOB_STAT.built)).toFixed(2),
       kbPerFrame: +((F13_MOB_STAT.px * 4) / 1024 / Math.max(1, F13_MOB_STAT.built)).toFixed(1),
       battle: [...F13_MOB_STAT.battle.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14),
@@ -721,7 +734,9 @@ export function frameOf(
     if (live) budSpent += ms;
     F13_MOB_STAT.built++;
     if (fr.lit) F13_MOB_STAT.lit++;
-    F13_MOB_STAT.px += fr.img.width * fr.img.height * (fr.lit ? 2 : 1);
+    const px = fr.img.width * fr.img.height * (fr.lit ? 2 : 1);
+    F13_MOB_STAT.px += px;
+    K.px += px;
   }
   if (pose.look !== 'normal') {
     const lk = `${key}|${pose.look}`;
@@ -730,6 +745,7 @@ export function frameOf(
       const t0 = performance.now();
       lf = K.looks.set(lk, lookOf(fr, pose.look));
       stat(performance.now() - t0, K, lk);
+      K.lpx += lf.img.width * lf.img.height * (lf.lit ? 2 : 1);
     }
     fr = lf;
   }

@@ -273,4 +273,45 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   v2.106 floor 6 (`f6-mob-*.ts`, `f6-mobkit.ts`, `f6-mob-fx.ts`), v2.107 floor 9 (`f9-mob-*.ts`,
   `f9-mobkit.ts`; `f9_body`/`f9_head` stay registered for floor 15), v2.108 floor 8
   (`f8-mob-*.ts`, `f8-mobkit.ts`, `f8-mob-fx.ts`, brain `f8_snap`), v2.109 floor 10
-  (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept).
+  (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept);
+  floor 13 (`f13-mobkit.ts`, `f13-mob-*.ts`; section below).
+
+## Floor 13 mobs (`f13-mobkit.ts`, `f13-mob-<kind>.ts`)
+
+- Eleven fighting kinds, ten files (comedy and tragedy share `f13-mob-masks.ts`): knight,
+  ballerina, harlequin, fiddler, masks, nutcracker, spider, drummer, prompter, shade. Puppets use
+  the `f13-art.ts` rig (`twist` + turns the chest to the puppet's RIGHT, `hp` + = head down);
+  masks are a sampled 3D shell z-buffered into the oblique projection. 24 fps tracks; contact =
+  `recover` f0 after `windup`/`aim` (`def.windup`), own timers for plié/spin, dive/pop, drum ring
+  (`drumLen` 0.75 / 0.5), spider drop, nutcracker charge, prompter hide/peek. Sides: 8 honest
+  (puppets, drummer, prompter) or 5 drawn + mirror (masks, spider, shade).
+- Kit = f10 kit: `visOf` (turn-limited yaw, prev mode, hero-hit time), `hurtFx`, `kindOf`
+  (frameLRU + looks LRU 35%), `frameOf` (crop, new-frame budget 0.5 ms, flash ring, looks
+  recolour), `warmAll(K, list, pic, sides?)`, `SHEET_PREV` (append-only; sheets pass
+  `data.vSheetPrev`), `F13_MOB_STAT` / `window.__f13stat()` (`battle`, `sizes`, `mem` per kind).
+- Untouched: `f13boss` and `f13_giant` (sheets pixel-equal to v2.109, numpy all channels),
+  `f13_cashier` (old `puppetPainter`, doesn't fight). Brain, engine and floor tests: diff vs base
+  empty (no `v…` fields needed). No floor-15 echo of floor-13 mobs.
+- Measured (stand, `__f13stat`): warm-up 12 504 frames, 31.2 MB (nutcracker 6.5, tragedy 3.5, comedy 3.3, drummer 3.2,
+  harlequin 2.9, ballerina / fiddler / knight 2.4, prompter 1.7, spider 1.6, shade 1.3), every kind
+  under its cap (800–1900); new frame p50 0.2–0.3 / p90 0.4–0.7 ms (shade dearest). 0 frames built in
+  combat: 18-mob crowd in the open, the same crowd on a lit spotlight (shades fighting), deaths
+  (DMGK 5). All-elite crowd: 171 recolours in 10 s, p50 0.2 / p90 0.3 ms (+6.4 MB of looks over a
+  100 s run; not pre-warmed, as on 11/12). Painter JS per frame (18 mobs): 0.45 → 0.25 ms.
+- Crowd A/B (18 mobs, WAIT 90), 6 pairs base → new, load 0.8–8: p50 3.0→3.1, 3.2→3.5, 3.6→3.3,
+  3.1→2.8, 3.0→3.0, 3.0→3.3; p90 4.0→4.2, 5.6→4.8, 5.7→6.4, 4.5→4.2, 4.4→5.9, 4.9→5.0; p99
+  6.1→9.3, 10.9→9.0, 13→11.8, 8.2→7.9, 6.6→9.9, 9.1→9.3 ms. On a lit spotlight (crowd teleported in,
+  stage retiles) frame p90 is noisier and higher on new (base 6.8–10.9, new 7.4–23.2 ms over 3 + 9
+  runs): mob drawing is equal (`drawMob` 0.7–1.0 vs 0.8–1.0 ms/frame), the excess is map chunk
+  redraw (`chunk` + `prefetch` 3–9 vs 3–3.7 ms/frame) and stays with all floor-13 caches cleared
+  — not traced.
+- Gotchas: mob files import `f13-art` and are imported from `f13-boss-fx.ts` right after its
+  `./f13-art` import (circular otherwise; vite-node can't SSR f13-art). Strings (`f13_strings`)
+  attach at world shoulder height 18 px (nutcracker 24, prompter 12, spider 8 + `spiderLift`) —
+  keep shoulders there, bob ≤ 3 px. The oblique projection flattens pitch (screen height ≈
+  cos p + 0.56 sin p): keep contact pitch ≥ −0.12, sell lunges with scale. Shades are visible only
+  near an ON spotlight (`F13_FX.spots`) — test them by teleporting the crowd there in `SETUP`;
+  their sheet rows need `data {vSheetPrev: 7}` (else a fresh `chase` shows the spawn rise) and a
+  lit cell background. Drummers tap on `F13_FX.beat` in sync on purpose. Fiddler notes cut strings
+  and kill one-string ballerinas — in a mixed crowd ballerinas may die before their warm-up turn;
+  the next ballerina to appear warms then (1041 frames, ~0.3 s of builds at ≤ 3 ms per frame).
