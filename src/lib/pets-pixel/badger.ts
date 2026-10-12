@@ -221,15 +221,15 @@ const PAL_V: RGBA[][][] = [
     ),
     // Чёрные полосы — тёмная бронза.
     ramp(
-      '#140a04',
-      '#1e0f05',
-      '#2a1607',
-      '#381e0a',
-      '#46280e',
-      '#563212',
-      '#683e18',
-      '#7a4c1e',
-      '#8e5c26',
+      '#1a0f04',
+      '#28180a',
+      '#38230e',
+      '#4a3012',
+      '#5c3e16',
+      '#704e1c',
+      '#866024',
+      '#9c742e',
+      '#b2883a',
     ),
     // Белое — бледное золото.
     ramp(
@@ -401,6 +401,8 @@ export interface Pose {
   hit: number;
   /** Атака: следы когтей (0…1), −1 — нет. */
   swipe: number;
+  /** Когти растопырены и вытянуты (атака). */
+  claw: number;
 }
 
 const REST: Pose = {
@@ -456,6 +458,7 @@ const REST: Pose = {
   gog: 0,
   hit: -1,
   swipe: -1,
+  claw: 0,
 };
 
 const loopK = (t: number, T: number, keys: Key[]) => kf(wrap(t, T), keys);
@@ -896,7 +899,7 @@ function attackPose(t: number): Pose {
   o.grin = REST.grin * (1 - bump(t, 0, T));
   // Лапы: вверх-назад-наружу → вперёд-вниз с когтями → накрест внизу → на место.
   const W: V3 = [1.8, -3.6, 14.6];
-  const S: V3 = [-0.2, 5.4, 8.4];
+  const S: V3 = [0.8, 6.8, 11.6];
   const F: V3 = [-5.4, 4.2, 1.6];
   const arm = (j: number, d: number): number =>
     kf(t - d, [
@@ -904,8 +907,8 @@ function attackPose(t: number): Pose {
       [0.22, W[j], 'o'],
       [0.3, W[j]],
       [0.37, S[j], 'i'],
-      [0.44, S[j]],
-      [0.58, F[j], 'o'],
+      [0.41, S[j]],
+      [0.54, F[j], 'o'],
       [0.7, F[j] * 0.5],
       [T - 0.04, 0, 's'],
     ]);
@@ -916,6 +919,13 @@ function attackPose(t: number): Pose {
   o.aLy = arm(1, 0.03);
   o.aLz = arm(2, 0.03);
   o.swipe = t >= 0.33 && t < 0.58 ? (t - 0.33) / 0.25 : -1;
+  o.claw = kf(t, [
+    [0, 0],
+    [0.2, 0.5],
+    [0.34, 1, 'o'],
+    [0.56, 1],
+    [0.74, 0, 's'],
+  ]);
   // Встряхнулся после удара.
   o.turn = 0.16 * Math.sin(((t - 0.52) / 0.16) * TAU) * bump(t, 0.52, 0.76);
   o.tailSw = 0.6 * bump(t, 0.3, 0.8);
@@ -940,7 +950,7 @@ function sleepPose(t: number): Pose {
   ]);
   o.chest = br;
   o.cz = -0.25 * br;
-  o.nod = 0.4 + 0.05 * br;
+  o.nod = 0.06 + 0.04 * br;
   o.tilt = 0.14 - 0.02 * br;
   o.hz = 0.15 * br;
   o.hatNod = 0.4;
@@ -1394,8 +1404,10 @@ function torso(out: PartF[], rods: Rod[], c: Ctx): void {
 }
 
 function arms(out: PartF[], rods: Rod[], c: Ctx): void {
-  const { S } = c;
+  const { S, o } = c;
   const k = S.k;
+  const cl = 1 + 0.55 * o.claw;
+  const sp = 1 + 0.35 * o.claw;
   for (const j of [0, 1]) {
     const sh = S.sh[j];
     const el = S.el[j];
@@ -1433,9 +1445,9 @@ function arms(out: PartF[], rods: Rod[], c: Ctx): void {
     });
     // Когти: три длинных костяных, загнуты к зрителю.
     for (const u of HI ? [-1.15, 0, 1.15] : [-1.0, 0, 1.0]) {
-      const b = add(pc, add(mul(fd, 1.7 * k), add(mul(lat, u * k), mul(fw, 0.5 * k))));
-      const m = add(b, add(mul(fd, 1.4 * k), mul(fw, 0.3 * k)));
-      const e = add(m, add(mul(fd, 1.0 * k), mul(fw, 0.7 * k)));
+      const b = add(pc, add(mul(fd, 1.7 * k), add(mul(lat, u * sp * k), mul(fw, 0.5 * k))));
+      const m = add(b, add(mul(fd, 1.4 * cl * k), add(mul(lat, u * 0.3 * o.claw * k), mul(fw, 0.3 * k))));
+      const e = add(m, add(mul(fd, 1.0 * cl * k), add(mul(lat, u * 0.3 * o.claw * k), mul(fw, 0.7 * cl * k))));
       rods.push({ a: b, b: m, w: HI ? 0.9 : 0.5, pal: P_CLAW, tone: 4 });
       rods.push({ a: m, b: e, w: HI ? 0.7 : 0.5, pal: P_CLAW, tone: 5 });
     }
@@ -1727,14 +1739,14 @@ function pickRods(rods: Rod[], c: Ctx): void {
     b: end,
     w: HI ? 1.1 : 0.5,
     pal: P_WOOD,
-    tone: 4,
+    tone: HI ? 4 : 6,
     vis,
   });
   for (const s of [-1, 1]) {
     const mid = add(end, add(mul(n, s * HEAD_W * 0.55 * k), mul(d, 0.25 * k)));
     const tip = add(end, add(mul(n, s * HEAD_W * k), mul(d, -0.7 * k)));
-    rods.push({ a: end, b: mid, w: HI ? 1.3 : 0.6, pal: P_STEEL, tone: 5, vis });
-    rods.push({ a: mid, b: tip, w: HI ? 0.9 : 0.5, pal: P_STEEL, tone: 6, vis });
+    rods.push({ a: end, b: mid, w: HI ? 1.3 : 1.9, pal: P_STEEL, tone: HI ? 5 : 6, vis });
+    rods.push({ a: mid, b: tip, w: HI ? 0.9 : 0.5, pal: P_STEEL, tone: HI ? 6 : 7, vis });
   }
   rods.push({
     a: sub(end, mul(d, 0.6 * k)),
