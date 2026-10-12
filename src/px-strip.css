@@ -1,0 +1,30 @@
+/* Пиксельные предметы — проигрыватель полос `components/PxStrip.tsx`.
+   Рамка подогнана к целому числу точек экрана на пиксель рисунка, окно на кадр с клипом,
+   кадр меняет transform картинки (без фильтров: клип ничего не растеризует заново). */
+.pxs {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+}
+.pxs__box,
+.pxs__win {
+  position: absolute;
+  pointer-events: none;
+}
+.pxs__win {
+  overflow: hidden;
+}
+.pxs__img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.pxs.is-px .pxs__img {
+  image-rendering: pixelated;
+}

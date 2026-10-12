@@ -57,6 +57,7 @@ export default defineConfig({
           '**/pdf-*.js',
           '**/pdf.worker*',
           '**/ui/pets/**',
+          '**/ui/px/**',
           '**/hub/**',
         ],
         // Общий кусок с рисовальщиками пятнадцати этажей подземелья (боссы
@@ -93,6 +94,17 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'coco-pets',
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 90 },
+            },
+          },
+          {
+            // Пиксельные предметы (яйца, сундуки, книги, кирки — `ui/px/<набор>/`):
+            // полосы кадров по требованию, как питомцы. В адресе ?v=<метка полосы>
+            // (lib/props-pixel/sprites-<набор>.ts) — перерисованная не отдастся из кеша.
+            urlPattern: ({ url }) => url.pathname.startsWith('/ui/px/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'coco-px',
               expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 90 },
             },
           },
