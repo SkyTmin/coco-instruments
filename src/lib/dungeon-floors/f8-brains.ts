@@ -1408,6 +1408,7 @@ registerBrain('f8_biwa', {
         m.tele = { shape: 'ring', r: 1.2, w: 0.2, k: Math.min(1, m.t / 0.5) };
         if (m.t > 0.35) m.danger = 1.8;
         if (m.t >= 0.5) {
+          api.vfx(sim, { x: m.x, y: m.y, r: 1.8, life: 0.5, art: 'f8_snap' }); // анимации мобов 8 — только рисунок
           // Волна от струны — отталкивает, бьёт слабо.
           if (dist < 1.8 && canHit(sim))
             api.hurtHero(sim, m.dmg + rawShare(sim, 0.04), m.x, m.y, 7);

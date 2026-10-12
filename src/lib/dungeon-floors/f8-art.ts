@@ -20,7 +20,6 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
@@ -36,6 +35,7 @@ import './f8-mob-miser';
 import './f8-mob-drum';
 import './f8-mob-eyes';
 import './f8-mob-biwa';
+import './f8-mob-fx';
 
 type RGBA = [number, number, number, number];
 type V = [number, number];
@@ -1806,12 +1806,15 @@ registerZonePainter('f8_grab', (g, z0, px, py, S) => {
   g.rotate(a);
   g.fillStyle = `rgba(200,140,255,${0.14 + 0.3 * k})`;
   g.fillRect(0, -(z.w ?? 0.4) * S, L, (z.w ?? 0.4) * S * 2);
-  g.fillStyle = `rgba(230,190,255,${0.5 + 0.4 * k})`;
-  const hx0 = L * k;
-  g.fillRect(Math.round(hx0 - 3), -2, 4, 4);
-  g.fillRect(Math.round(hx0 + 1), -3, 2, 1);
-  g.fillRect(Math.round(hx0 + 1), 2, 2, 1);
-  g.fillRect(Math.round(hx0 + 1), 0, 2, 1);
+  // Пунктир наливается к концу; на конце — отпечаток пятерни (рука вылетит
+  // ударом, `f8-mob-fx.ts`), последние 0,2 с — белый.
+  g.fillStyle = `rgba(230,190,255,${0.35 + 0.4 * k})`;
+  for (let x = 4; x < L * k; x += 4) g.fillRect(Math.round(x), 0, 2, 1);
+  g.fillStyle = z.warn - z.t < 0.2 ? 'rgba(255,255,255,0.95)' : `rgba(230,190,255,${0.4 + 0.4 * k})`;
+  const hx0 = Math.round(L - 3);
+  g.fillRect(hx0 - 2, -1, 3, 3);
+  for (const dy of [-3, -1, 1, 3]) g.fillRect(hx0 + 1, dy, 2, 1);
+  g.fillRect(hx0 - 1, -3, 1, 1);
   g.restore();
   return true;
 });
@@ -1899,11 +1902,11 @@ registerZonePainter('f8_claws', (g, z0, px, py, S) => {
   const w = (z.w ?? 0.4) * S;
   g.fillStyle = `rgba(255,40,40,${0.14 + 0.32 * k})`;
   g.fillRect(0, -w, L, w * 2);
-  g.fillStyle = `rgba(255,230,210,${0.5 + 0.5 * k})`;
-  const tip = L * (0.3 + 0.7 * k);
+  // Метка цели — три насечки когтей на конце (сами руки рисует кадр моба).
+  g.fillStyle = k > 0.8 ? `rgba(255,255,255,${0.6 + 0.4 * k})` : `rgba(255,230,210,${0.3 + 0.5 * k})`;
   for (const dy of [-3, 0, 3]) {
-    g.fillRect(Math.round(tip - 4), dy, 4, 1);
-    g.fillRect(Math.round(tip), dy + 1, 1, 1);
+    g.fillRect(Math.round(L - 5), dy, 4, 1);
+    g.fillRect(Math.round(L - 1), dy + 1, 1, 1);
   }
   g.restore();
   return true;
@@ -2182,21 +2185,6 @@ registerZonePainter('f8_land', (g, z0, px, py, S) => {
   g.arc(px, py, z.r * S * 0.6, 0, TAU);
   g.fill();
   return true;
-});
-
-// ---------------------------------------------------------------------------
-// Снаряды.
-// ---------------------------------------------------------------------------
-
-/** Огонёк фонарного духа: язычок, три кадра. */
-registerShotPainter('f8_wisp', (s, time) => {
-  const f = Math.floor(time * 14 + s.id) % 3;
-  return cached(`wisp|${f}`, () => {
-    const p = new Px(9, 11);
-    shadeEll(p, 4.5, 7, 2.8, 2.6, tones('#c83a14', '#ff8a30', '#ffcc60', '#fff8d0'), 0.3);
-    flame(p, 4, 5, 4 + (f === 1 ? 1 : 0), f);
-    return spr(p, 4.5, 8);
-  });
 });
 
 // ---------------------------------------------------------------------------
