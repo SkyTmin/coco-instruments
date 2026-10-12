@@ -353,6 +353,39 @@ Owner: «добавь возможность выбирать скин у пит
   gold fur with bronze depth, white → pale gold, dark bronze ears and leather, brass knuckles
   brighter to white. Hatch plays `happy`. Weight 535 KB v0+v1 (small 56 / 61, large 201 / 215,
   thumbs 1 KB; ink was 1.81 MB). Tests «пиксельный бульдог» in `pets-pixel.test.ts`.
+- **Roach** (`pets-pixel/roach.ts`, `roachFrame(a, i, res, v)`, `variants: [1]`): «Таракан-бегун»,
+  chestnut cartoon roach racer standing upright, facing us (raccoon's `drawPartsF` + `pick` +
+  `tube` + `vis`, two-bone `ik`, `toBody`). 44-px read: glossy chestnut shield + HUGE eyes +
+  two long antennae (left one kinked) + white «7» bib. Parts: wing cases behind the back with
+  veins and a painted specular streak; pronotum shield behind the head with a thin pale rim
+  (a wide pale rim read as a hood/ears) and painted arc highlights; round head with a white
+  racing stripe, pale muzzle, two dark mandibles at the mouth corners (P_SHELL ones vanished);
+  flying goggles on a strap ring (`lensAt`, `gogTheta`: forehead 0.95 → eyes 0.1); pale
+  segmented belly; FOUR thin arms (upper 4.6/4.4, lower 4.2/4.0; rest = akimbo, it kept the
+  arms off the wing cases) with `limbEdge` (far pixels next to limbs darkened 2 steps — arms
+  sank into the wings); two spiny legs (spine rods on shins). Antennae = catmull `rod`s
+  (z-buffered) with spring lag on the tips (`lagOf`, from the head path). Work (2 s): right
+  upper hand grabs the right lens rim (target = real rim point via `toBody`; head nods to meet
+  the hand — the arm can't reach the forehead) and pulls goggles down → crouch → dash right
+  (yaw 0.75, run legs 7 Hz + ghost-leg blur, start dust left, speed lines + smear over EMPTY
+  pixels behind) → fades out in a dither window (`windowClip` WIN0 25 → WIN1 33 small px; a hard
+  cut looked broken) → x wraps by 160 → re-enters from the LEFT still running right → skid (lean
+  back, feet ahead, dust from the feet forward) → thumbs-up with a glint at the thumb tip →
+  same hand pushes the goggles up → REST (springs use continuous `runV`, not the wrapped x).
+  Attack: crouch with all arms raised → lunge (scale 1.18) → upper hands swipe along a Bezier
+  arc (`swipePath`, right first, left +0.045 s) with claw-slash trails drawn OVER the body
+  (`slashFx`, from the ik claw tips), lower hands thrust forward, mandibles wide → settle; arms
+  return to the hips in an arc in front of the belly (a straight lerp cut through it). Idle:
+  2 breaths, upper hands rub before the chest, lower hands drum on the belly, look aside,
+  blinks, antennae sway (phases zeroed at frame 0 so one-shots end exactly on REST), shine
+  sweep. Walk: 4 steps/s, `carry` 0 (planted foot never follows the body sway), back-swinging
+  hand goes OUT past the flank. Happy: two hops, upper hands in a V past the shield (short arms
+  can't go over the head), lower hands raised, «^» eyes. Sleep: sitting slumped, goggles on the
+  eyes, antennae drooping, hands on the belly rising with breath, «z» from above the head in
+  WORLD up (head-local up pointed at the viewer after the nod). Gold: gold shell with bronze
+  depth, pale-gold belly, bronze legs, copper goggle rims. Hatch plays `happy`. Weight 571 KB
+  v0+v1 (small 58 / 66, large 212 / 233, thumbs 1 KB; ink was 1.73 MB). Tests «пиксельный
+  таракан» in `pets-pixel.test.ts` (incl. work story, attack swipe, walk feet planted).
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
