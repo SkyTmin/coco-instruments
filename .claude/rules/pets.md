@@ -273,17 +273,45 @@ Owner: «добавь возможность выбирать скин у пит
   Питомник, карточку (обычный и золотой через 0,3 / 1 / 2 с после
   показа — птица на месте), листы всех кадров обеих полос.
 
+## Hatch all and the 5k dragon egg (v2.121) — `hatchAllPlan` in `lib/pets.ts`, `prisonHatchAll`, `HatchBatch`
+
+Owner: «добавь возможность открыть все яйца разом за деньги и токены; уменьши цену драконьего
+яйца до 5к и открытия яйца тоже за 5к токенов — по одному открывать очень долго».
+
+- **Dragon egg = 5 000 tokens** (was 30 000), and its hatch-now follows (`hatchNowCost` reads
+  `EggDef.tokens`). A perfect player earns ~13k tokens per A→Z circle, so the dragon egg is no
+  longer a post-prestige goal. The pace test doesn't buy dragon eggs — nothing there moved.
+- **«Вылупить все (N)»** — a red button under the nests/basket, shown when nests + basket hold
+  ≥ 2 eggs. Plan (`hatchAllPlan(nest, eggs, heat, coins, tokens)`, pure): nests first, then the
+  basket rarest first; a ready nest egg is free, a basket egg whose kind has saved heat ≥ a whole
+  egg is free (it would lie down ready) and spends that heat; partial heat is never spent; the
+  rest costs the hatch-now price. Unaffordable eggs are SKIPPED, not a stop: coins and tokens are
+  separate wallets, and cheap moss still hatches when crystal doesn't fit. Label «N из M» when
+  not everything fits; nothing fits → grey with the full price, tap says what's missing. Paid →
+  two taps («Точно?», shared `arm`); free → one tap.
+- **Store `prisonHatchAll`**: rolls one by one like `prisonHatch` (pity threads through, the
+  second copy of a pet in the same batch is a `dup`), new pets join the squad while there's
+  room, unpicked nest eggs stay, then `refillNest` from what's left; one persist + flush.
+- **`HatchBatch`** (portal): eggs wobble out of phase and pop into pet thumbs in a wave (`--i` ×
+  `--step`, ≤24 tiles, «+N»), tap skips; then the best pet big and alive (`intro="happy"`, rays),
+  a list grouped by pet, rarest first (NEW badge; copies/treats, else the pet's bonus line), new
+  / copies / treats count, coins and tokens spent, the pity note, and a «!»-to-merge hint. One
+  egg in the batch → the regular `HatchScene` instead.
+- Tests: «вылупить все: …» (three) in `pets.test.ts`. Stand: 11 eggs (460k + 10k), partial
+  (100k → 8 of 11, 2 nests refilled), nothing affordable (only the free ready one). **Not checked
+  on a phone.**
+
 ## Гнёзда и драконье яйцо v2.76 — `pullEgg`, `placeEgg`, `hatchNowCost` в `lib/pets.ts`
 
 Владелец: «покупать за 30 000 токенов яйцо драконов; вылупить яйца драконов
 за те же суммы; выбирать, какое яйцо вылупляется — убрать яйцо, добавить».
 
-- **Драконье продаётся за токены** (`EggDef.tokens` = 30 000, `price`
-  монет у него 0). Для масштаба: идеальный игрок за весь круг A→Z
-  получает ~13 тыс. токенов, так что это цель после престижа.
+- **Драконье продаётся за токены** (`EggDef.tokens` = 30 000, с v2.121 —
+  5 000, см. выше; `price` монет у него 0). Для масштаба: идеальный игрок за
+  весь круг A→Z получает ~13 тыс. токенов.
 - **Вылупить сразу можно ЛЮБОЕ яйцо за его цену в Питомнике (v2.79)**:
   мшистое 8 000, каменное 60 000, кристальное 300 000 монет, драконье —
-  30 000 токенов (`hatchNowCost` → `{coins, tokens}`, `prisonHatchNow`:
+  5 000 токенов (до v2.121 — 30 000) (`hatchNowCost` → `{coins, tokens}`, `prisonHatchNow`:
   гнездо становится готовым, дальше обычная сцена). В v2.76 я сделал это
   только драконьему, опасаясь, что за монеты гнёзда перестанут держать
   поток питомцев, — владелец имел в виду все яйца. Опасение проверено

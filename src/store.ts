@@ -305,6 +305,7 @@ import {
   canPat,
   eggOf,
   FISH_WARMTH,
+  hatchAllPlan,
   hatchNowCost,
   hatchRoll,
   placeEgg,
@@ -1475,6 +1476,11 @@ interface FinanceState {
   prisonEggPlace: (egg: EggId, swap?: number) => boolean;
   /** Вылупить сразу за цену яйца (монеты или токены), не грея: гнездо готово. */
   prisonHatchNow: (i: number) => boolean;
+  /**
+   * Вылупить все яйца разом — гнёзда и корзину (v2.121): созревшие даром,
+   * остальные за цену «вылупить сразу», сколько хватит денег. null — нечего.
+   */
+  prisonHatchAll: () => HatchResult[] | null;
   /** Слить копии: пять одинаковых — золотой. */
   prisonPetMerge: (id: PetId) => boolean;
   /** Скин питомца: 0 — обычный, 1 — золотой (не выше ступени); сила не меняется. */
@@ -4685,6 +4691,51 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     // Цена списана — на диск сразу, до сцены вылупления.
     flushers.forEach((f) => f());
     return true;
+  },
+
+  prisonHatchAll: () => {
+    const s = get();
+    const p = s.prison;
+    const plan = hatchAllPlan(p.nest, p.eggs, p.eggHeat, s.slotsBalance, p.tokens);
+    if (!plan.picks.length) return null;
+    const room = squadSlots(p.rank, p.prestige);
+    let pets = p.pets;
+    let pity = p.eggPity;
+    let squad = p.squad;
+    let tricks = p.tricks;
+    const out: HatchResult[] = [];
+    // По одному подряд, как в `prisonHatch`: гарантия и «новый/копия» от
+    // прошлого яйца переходят к следующему.
+    for (const k of plan.picks) {
+      const h = hatchRoll(k.egg, pity, Math.random);
+      pity = h.pity;
+      const a = addPetRec(pets, h.id);
+      pets = a.pets;
+      if (a.kind === 'new' && squad.length < room) {
+        squad = [...squad, h.id];
+        tricks = [...tricks, p.mined];
+      }
+      out.push({ egg: k.egg, id: h.id, rarity: h.rarity, kind: a.kind, forced: h.forced });
+    }
+    const re = refillNest(plan.nest, plan.eggs, plan.heat);
+    const prison: PrisonState = {
+      ...p,
+      pets,
+      squad,
+      tricks,
+      nest: re.nest,
+      eggs: re.eggs,
+      eggHeat: re.heat,
+      eggPity: pity,
+      hatched: p.hatched + out.length,
+      tokens: p.tokens - plan.tokens,
+    };
+    set({ prison, slotsBalance: s.slotsBalance - plan.coins });
+    persistPrison(prison);
+    if (plan.coins) persistSlots(get());
+    // Цена списана и броски сделаны — на диск сразу, до экрана итога.
+    flushers.forEach((f) => f());
+    return out;
   },
 
   prisonPetMerge: (id) => {

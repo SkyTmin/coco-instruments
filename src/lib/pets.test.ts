@@ -8,6 +8,7 @@ import {
   eggOf,
   EGGS,
   EGG_BASKET,
+  hatchAllPlan,
   hatchNowCost,
   EGG_PITY,
   hatchRoll,
@@ -290,12 +291,75 @@ describe('питомцы (v2.72–v2.73)', () => {
   });
 
   it('вылупить сразу — за цену яйца: драконье за токены, остальные за монеты', () => {
-    expect(eggOf('dragon').tokens).toBe(30_000);
+    // v2.121, владелец: драконье за 5 000 токенов, и вылупить его — тоже 5 000.
+    expect(eggOf('dragon').tokens).toBe(5_000);
     expect(eggOf('dragon').price).toBe(0);
-    expect(hatchNowCost('dragon')).toEqual({ coins: 0, tokens: 30_000 });
+    expect(hatchNowCost('dragon')).toEqual({ coins: 0, tokens: 5_000 });
     // v2.79: остальные — за свою цену в Питомнике, монетами.
     for (const id of ['moss', 'stone', 'crystal'] as EggId[])
       expect(hatchNowCost(id)).toEqual({ coins: eggOf(id).price, tokens: 0 });
+  });
+
+  it('вылупить все: созревшее даром, остальное по цене яйца, гнёзда и корзина', () => {
+    const moss = eggOf('moss').price;
+    const nest = [
+      { egg: 'stone' as EggId, left: 0 },
+      { egg: 'moss' as EggId, left: 100 },
+    ];
+    const eggs = { ...NO_EGGS, moss: 2, dragon: 1 };
+    const r = hatchAllPlan(nest, eggs, NO_EGGS, 10 * moss, 10_000);
+    // Гнёзда первыми, потом корзина от старших: драконье, мшистые.
+    expect(r.picks.map((x) => [x.egg, x.nest])).toEqual([
+      ['stone', 0],
+      ['moss', 1],
+      ['dragon', undefined],
+      ['moss', undefined],
+      ['moss', undefined],
+    ]);
+    expect(r.picks[0]).toMatchObject({ coins: 0, tokens: 0 });
+    expect(r.coins).toBe(3 * moss);
+    expect(r.tokens).toBe(5_000);
+    expect(r.nest).toEqual([]);
+    expect(r.eggs).toEqual(NO_EGGS);
+  });
+
+  it('вылупить все: не по карману — пропускаем, но дешёвое всё равно вылупится', () => {
+    const crystal = eggOf('crystal').price;
+    const moss = eggOf('moss').price;
+    const eggs = { ...NO_EGGS, crystal: 1, moss: 3, dragon: 2 };
+    // Монет — на кристальное и одно мшистое; токенов — на одно драконье.
+    const r = hatchAllPlan([], eggs, NO_EGGS, crystal + moss + 10, 7_000);
+    expect(r.picks.map((x) => x.egg)).toEqual(['dragon', 'crystal', 'moss']);
+    expect(r.coins).toBe(crystal + moss);
+    expect(r.tokens).toBe(5_000);
+    expect(r.eggs).toEqual({ ...NO_EGGS, moss: 2, dragon: 1 });
+    // Мало монет на кристальное — вылупятся мшистые, кристальное ждёт.
+    const r2 = hatchAllPlan([], eggs, NO_EGGS, 2 * moss, 0);
+    expect(r2.picks.map((x) => x.egg)).toEqual(['moss', 'moss']);
+    expect(r2.eggs).toEqual({ ...NO_EGGS, crystal: 1, moss: 1, dragon: 2 });
+    // Незрелое в гнезде, на которое не хватает, остаётся в гнезде как было.
+    const nest = [{ egg: 'crystal' as EggId, left: 50 }];
+    const r3 = hatchAllPlan(nest, NO_EGGS, NO_EGGS, 0, 0);
+    expect(r3.picks).toEqual([]);
+    expect(r3.nest).toEqual(nest);
+  });
+
+  it('вылупить все: сбережённое тепло на целое яйцо — даром, неполное не тратится', () => {
+    const need = eggOf('stone').need;
+    const eggs = { ...NO_EGGS, stone: 3 };
+    const heat = { ...NO_EGGS, stone: need + 500 };
+    const r = hatchAllPlan([], eggs, heat, 0, 0);
+    // Тепла хватило ровно на одно, денег нет — остальные ждут, остаток тепла цел.
+    expect(r.picks).toEqual([{ egg: 'stone', coins: 0, tokens: 0 }]);
+    expect(r.heat.stone).toBe(500);
+    expect(r.eggs.stone).toBe(2);
+    const rich = hatchAllPlan([], eggs, heat, 10 * eggOf('stone').price, 0);
+    expect(rich.picks).toHaveLength(3);
+    expect(rich.coins).toBe(2 * eggOf('stone').price);
+    expect(rich.heat.stone).toBe(500);
+    // Старое не меняется на месте.
+    expect(heat.stone).toBe(need + 500);
+    expect(eggs.stone).toBe(3);
   });
 
   it('коллекция: +1% за вид, весь зоопарк — ещё +10%', () => {

@@ -300,7 +300,7 @@ export const EGGS: EggDef[] = [
     odds: [0, 0, 0, 70, 29.5, 0.5],
     need: 15_000,
     price: 0,
-    tokens: 30_000,
+    tokens: 5_000,
     from: 0,
     overflow: 400,
   },
@@ -472,7 +472,6 @@ export function placeEgg(
   return { nest: out, eggs: { ...base.eggs, [egg]: base.eggs[egg] - 1 }, heat: w.heat };
 }
 
-/** Вылупить сразу, не грея: цена в токенах, 0 — так нельзя. */
 /**
  * Вылупить сразу, не грея (v2.79: любое яйцо) — за ту же цену, что оно
  * стоит в Питомнике: мшистое, каменное, кристальное — монетами, драконье —
@@ -484,6 +483,63 @@ export function placeEgg(
 export function hatchNowCost(egg: EggId): { coins: number; tokens: number } {
   const e = eggOf(egg);
   return e.tokens ? { coins: 0, tokens: e.tokens } : { coins: e.price, tokens: 0 };
+}
+
+/** Яйцо в «вылупить все»: гнездо (нет — корзина) и что оно стоит. */
+export interface HatchPick {
+  egg: EggId;
+  nest?: number;
+  coins: number;
+  tokens: number;
+}
+
+/**
+ * «Вылупить все разом» (v2.121). Владелец: «открыть все яйца разом за деньги
+ * и токены… по одному открывать очень долго». Созревшее в гнезде — даром,
+ * остальное — по цене «вылупить сразу»; яйцу из корзины, чьему виду хватает
+ * сбережённого тепла на целое яйцо, тоже даром (в гнезде оно легло бы
+ * готовым), неполное тепло не тратится и ждёт следующего такого же.
+ * Порядок: гнёзда, потом корзина от старших. Что не по карману —
+ * пропускаем и берём следующее: монеты и токены — разные кошельки, и
+ * дешёвое мшистое вылупится, даже если на кристальное не хватило.
+ * `nest`, `eggs`, `heat` — что останется после (гнёзда ещё не дозаполнены).
+ */
+export function hatchAllPlan(
+  nest: Nest[],
+  eggs: Eggs,
+  heat: Eggs,
+  coins: number,
+  tokens: number,
+): { picks: HatchPick[]; coins: number; tokens: number; nest: Nest[]; eggs: Eggs; heat: Eggs } {
+  const picks: HatchPick[] = [];
+  let c = 0;
+  let t = 0;
+  const pay = (cost: { coins: number; tokens: number }) => {
+    if (c + cost.coins > coins || t + cost.tokens > tokens) return false;
+    c += cost.coins;
+    t += cost.tokens;
+    return true;
+  };
+  const keep: Nest[] = [];
+  nest.forEach((n, i) => {
+    const cost = n.left <= 0 ? { coins: 0, tokens: 0 } : hatchNowCost(n.egg);
+    if (pay(cost)) picks.push({ egg: n.egg, nest: i, ...cost });
+    else keep.push(n);
+  });
+  const left = { ...eggs };
+  const h = { ...heat };
+  for (const id of [...EGG_IDS].reverse()) {
+    const need = eggOf(id).need;
+    for (let k = eggs[id]; k > 0; k--) {
+      const warm = (h[id] ?? 0) >= need;
+      const cost = warm ? { coins: 0, tokens: 0 } : hatchNowCost(id);
+      if (!pay(cost)) continue;
+      if (warm) h[id] -= need;
+      left[id] -= 1;
+      picks.push({ egg: id, ...cost });
+    }
+  }
+  return { picks, coins: c, tokens: t, nest: keep, eggs: left, heat: h };
 }
 
 /** Работа греет все яйца в гнёздах. `ready` — сколько созрело этим шагом. */

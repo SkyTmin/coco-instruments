@@ -1,6 +1,6 @@
 // Питомник (v2.72): отряд, гнёзда, яйца, коллекция, карточка питомца и
-// сцена вылупления. Правила — lib/pets.ts, стор — prisonHatch, prisonEggBuy,
-// prisonSquadSet, prisonPetMerge, prisonPetPat.
+// сцена вылупления. Правила — lib/pets.ts, стор — prisonHatch, prisonHatchAll,
+// prisonEggBuy, prisonSquadSet, prisonPetMerge, prisonPetPat.
 //
 // Исход вылупления решает стор в обработчике тапа (как у сундука: StrictMode
 // в разработке гоняет эффекты дважды), сцена его только показывает. Трещины
@@ -29,6 +29,7 @@ import {
   EGGS,
   EGG_BASKET,
   EGG_IDS,
+  hatchAllPlan,
   hatchNowCost,
   MERGE_NEED,
   NEST_SLOTS,
@@ -116,7 +117,14 @@ export function PetsTab() {
     return false;
   };
   const place = useFinanceStore((s) => s.prisonEggPlace);
+  const hatchAll = useFinanceStore((s) => s.prisonHatchAll);
   const [scene, setScene] = useState<{ res: HatchResult; key: number } | null>(null);
+  const [batch, setBatch] = useState<{
+    list: HatchResult[];
+    coins: number;
+    tokens: number;
+    key: number;
+  } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const noteT = useRef<ReturnType<typeof setTimeout>>();
   const say = (t: string) => {
@@ -134,6 +142,12 @@ export function PetsTab() {
   const slots = squadSlots(p.rank, p.prestige);
   const owned = PETS.filter((d) => p.pets[d.id]).length;
   const zoo = zooMult(p.pets) - 1;
+  const eggsAll = p.nest.length + eggCount(p.eggs);
+  const plan = hatchAllPlan(p.nest, p.eggs, p.eggHeat, balance, p.tokens);
+  // Не хватает ни на одно — кнопка серая, но цена всего видна.
+  const price = plan.picks.length
+    ? plan
+    : hatchAllPlan(p.nest, p.eggs, p.eggHeat, Infinity, Infinity);
 
   const doHatch = (i: number) => {
     primeAudio();
@@ -141,6 +155,36 @@ export function PetsTab() {
     if (!res) return;
     tapMedium();
     setScene({ res, key: Date.now() });
+  };
+
+  /** «Вылупить все» (v2.121): созревшие даром, остальные за цену яйца. */
+  const doHatchAll = () => {
+    primeAudio();
+    if (!plan.picks.length) {
+      uiError();
+      notifyWarning();
+      // Чего не хватает на самое дешёвое яйцо — монет или токенов.
+      const have = EGG_IDS.filter((id) => p.eggs[id] > 0 || p.nest.some((n) => n.egg === id));
+      const coin = have.filter((id) => !eggOf(id).tokens).map((id) => eggOf(id).price);
+      const tok = have.filter((id) => eggOf(id).tokens).map((id) => eggOf(id).tokens ?? 0);
+      const miss: string[] = [];
+      if (coin.length) miss.push(`${shortMoney(Math.min(...coin) - balance)} монет`);
+      if (tok.length) miss.push(`${fmt(Math.min(...tok) - p.tokens)} токенов`);
+      say(`Не хватает ${miss.join(' или ')}`);
+      return;
+    }
+    if ((plan.coins || plan.tokens) && !arm('all')) {
+      tapLight();
+      say('Нажми ещё раз — вылупятся все сразу');
+      return;
+    }
+    setArmed(null);
+    const list = hatchAll();
+    if (!list) return;
+    tapMedium();
+    // Одно яйцо — обычная сцена вылупления, итог нужен только пачке.
+    if (list.length === 1) setScene({ res: list[0], key: Date.now() });
+    else setBatch({ list, coins: plan.coins, tokens: plan.tokens, key: Date.now() });
   };
 
   const squadBonus: Partial<Record<PetStat, number>> = {};
@@ -281,6 +325,31 @@ export function PetsTab() {
           ))}
         </div>
       )}
+      {eggsAll >= 2 && (
+        <button
+          type="button"
+          className={`gx-btn gx-btn--red ppn__all${armed === 'all' ? ' is-armed' : ''}`}
+          aria-disabled={!plan.picks.length}
+          onClick={doHatchAll}
+        >
+          <span>
+            {armed === 'all' ? 'Точно? ' : 'Вылупить все '}
+            {plan.picks.length && plan.picks.length < eggsAll
+              ? `${plan.picks.length} из ${eggsAll}`
+              : `(${eggsAll})`}
+          </span>
+          {price.coins > 0 && (
+            <span className="ppn__price">
+              <CoinIcon size={14} /> {shortMoney(price.coins)}
+            </span>
+          )}
+          {price.tokens > 0 && (
+            <span className="ppn__price">
+              <TokenIcon size={14} /> {fmt(price.tokens)}
+            </span>
+          )}
+        </button>
+      )}
 
       <h4 className="ppn__h">Яйца</h4>
       <div className="ppn__shop">
@@ -402,6 +471,17 @@ export function PetsTab() {
               else doHatch(i);
             }}
             onClose={() => setScene(null)}
+          />,
+          document.body,
+        )}
+      {batch &&
+        createPortal(
+          <HatchBatch
+            key={batch.key}
+            list={batch.list}
+            coins={batch.coins}
+            tokens={batch.tokens}
+            onClose={() => setBatch(null)}
           />,
           document.body,
         )}
@@ -950,6 +1030,200 @@ function HatchScene({
       ) : (
         <div className="phs__btns" />
       )}
+    </div>
+  );
+}
+
+// ---- «Вылупить все» (v2.121) ---------------------------------------------------
+
+/** Сколько яиц показать волной; остальные — «+N». */
+const BATCH_TILES = 24;
+
+const petsWord = (n: number) =>
+  n % 10 === 1 && n % 100 !== 11
+    ? 'питомец'
+    : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)
+      ? 'питомца'
+      : 'питомцев';
+
+/**
+ * Итог «вылупить все»: яйца волной лопаются в питомцев, потом лучший —
+ * крупно и живой, остальные списком по редкости (одинаковые сложены).
+ * Броски уже сделал стор; экран только показывает. Тап — сразу итог.
+ */
+function HatchBatch({
+  list,
+  coins,
+  tokens,
+  onClose,
+}: {
+  list: HatchResult[];
+  coins: number;
+  tokens: number;
+  onClose: () => void;
+}) {
+  const p = useFinanceStore((s) => s.prison);
+  const [done, setDone] = useState(false);
+  const shown = list.slice(0, BATCH_TILES);
+  const best = list.reduce((a, b) => (b.rarity > a.rarity ? b : a), list[0]);
+  const step = Math.min(110, 1800 / Math.max(1, shown.length));
+  const total = step * shown.length + 500;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => registerEscape(() => closeRef.current()), []);
+
+  useEffect(() => {
+    if (reduceMotion()) {
+      setDone(true);
+      return undefined;
+    }
+    eggWobble(0);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const ticks = Math.min(12, shown.length);
+    for (let i = 0; i < ticks; i++)
+      timers.push(setTimeout(() => eggCrack(i % 3), 180 + (i * (total - 500)) / ticks));
+    timers.push(setTimeout(() => setDone(true), total));
+    return () => timers.forEach(clearTimeout);
+    // Волна играет один раз (новый итог — новый ключ компонента).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!done) return;
+    const r = best.rarity;
+    eggHatch(r);
+    flashFrame(r >= 4 ? 'mega' : r >= 2 ? 'big' : 'small');
+    notifySuccess();
+    if (r >= 3) burstConfetti(40 + 30 * (r - 2), [rarityOf(r).color, rarityOf(r).light, '#ffffff']);
+  }, [done, best.rarity]);
+
+  // Одинаковых складываем: «Кот Шрам ×3 · новый».
+  const rows: {
+    id: PetId;
+    rarity: number;
+    n: number;
+    fresh: boolean;
+    dup: number;
+    treat: number;
+  }[] = [];
+  for (const r of list) {
+    let row = rows.find((x) => x.id === r.id);
+    if (!row) {
+      row = { id: r.id, rarity: r.rarity, n: 0, fresh: false, dup: 0, treat: 0 };
+      rows.push(row);
+    }
+    row.n += 1;
+    if (r.kind === 'new') row.fresh = true;
+    else if (r.kind === 'dup') row.dup += 1;
+    else row.treat += 1;
+  }
+  rows.sort((a, b) => b.rarity - a.rarity || b.n - a.n);
+  const fresh = rows.filter((x) => x.fresh).length;
+  const dups = rows.reduce((a, x) => a + x.dup, 0);
+  const treats = rows.reduce((a, x) => a + x.treat, 0);
+  const merge = rows.some((x) => canMerge(p.pets[x.id]));
+  const forced = list.some((x) => x.forced);
+  const bestRec = p.pets[best.id];
+
+  return (
+    <div
+      className={`phb${done ? ' is-done' : ''}`}
+      style={{ ...rarityVars(best.rarity), '--step': `${step}ms` } as CSSProperties}
+      onClick={() => {
+        if (!done) setDone(true);
+      }}
+    >
+      <div className="phb__card" onClick={(e) => done && e.stopPropagation()}>
+        <span className="phb__title">
+          Вылупилось {fmt(list.length)} {petsWord(list.length)}
+        </span>
+        {!done && (
+          <div className="phb__grid">
+            {shown.map((r, i) => (
+              <span
+                key={i}
+                className="phb__tile"
+                style={{ ...rarityVars(r.rarity), '--i': i } as CSSProperties}
+              >
+                <span className="phb__egg">
+                  <EggArt egg={r.egg} size={40} />
+                </span>
+                <span className="phb__pet">
+                  <PetArt id={r.id} size={40} v={petLook(p.pets[r.id])} still />
+                </span>
+              </span>
+            ))}
+            {list.length > shown.length && (
+              <span className="phb__more">+{list.length - shown.length}</span>
+            )}
+          </div>
+        )}
+        {done && (
+          <>
+            <div className="phb__best" style={rarityVars(best.rarity)}>
+              <i className="phb__rays" aria-hidden="true" />
+              <PetArt id={best.id} size={150} v={petLook(bestRec)} intro="happy" />
+              <RarityName rarity={best.rarity}>{PET_RARITY_NAME[best.rarity]}</RarityName>
+              <b>{petOf(best.id).name}</b>
+            </div>
+            <div className="phb__list">
+              {rows.map((x) => (
+                <span key={x.id} className="phb__row" style={rarityVars(x.rarity)}>
+                  <PetArt id={x.id} size={44} v={petLook(p.pets[x.id])} still />
+                  <span>
+                    <b>
+                      {petOf(x.id).name}
+                      {x.n > 1 && <em> ×{x.n}</em>}
+                    </b>
+                    <i>
+                      {[
+                        x.dup > 0 && (x.dup > 1 ? `копии ×${x.dup}` : 'копия'),
+                        x.treat > 0 && (x.treat > 1 ? `лакомства ×${x.treat}` : 'лакомство'),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || (p.pets[x.id] ? petLine(x.id, p.pets[x.id]!) : '')}
+                    </i>
+                  </span>
+                  {x.fresh && <i className="phb__new">NEW</i>}
+                </span>
+              ))}
+            </div>
+            <span className="phb__note">
+              {[
+                fresh > 0 && `новых ${fresh}`,
+                dups > 0 && `копий ${dups}`,
+                treats > 0 && `лакомств ${treats}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+            {(coins > 0 || tokens > 0) && (
+              <span className="phb__note">
+                Потрачено:{' '}
+                {coins > 0 && (
+                  <>
+                    {shortMoney(coins)} <CoinIcon size={12} />
+                  </>
+                )}
+                {coins > 0 && tokens > 0 && ' · '}
+                {tokens > 0 && (
+                  <>
+                    {fmt(tokens)} <TokenIcon size={12} />
+                  </>
+                )}
+              </span>
+            )}
+            {forced && <span className="phb__note">Сработала гарантия: двадцать пятое яйцо</span>}
+            {merge && (
+              <span className="phb__note">Есть кого слить в золотого — «!» в коллекции</span>
+            )}
+            <button type="button" className="gx-btn gx-btn--red gx-btn--big" onClick={onClose}>
+              Готово
+            </button>
+          </>
+        )}
+        {!done && <span className="phb__skip">тап — показать итог</span>}
+      </div>
     </div>
   );
 }
