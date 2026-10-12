@@ -123,10 +123,10 @@ const E0: ExO = {
   hturn: 0,
   fR: [0.3, 2.3, 0],
   fL: [0.3, -2.3, 0],
-  aH: [1.6, 4.2, 9.6],
-  aPhi: 2.0,
-  aPsi: 0.15,
-  aGrip: 4,
+  aH: [2.2, 3.6, 7.2],
+  aPhi: 1.15,
+  aPsi: -0.25,
+  aGrip: 3,
   both: 0,
   bothAt: 2,
   fH: [1.8, -4.2, 8.6],
@@ -195,8 +195,8 @@ function execRig(o: ExO, yaw: number): KRig {
     r.ell(B.at(f[0] + 0.6, f[1], f[2] + 0.9), [0, 0, 0], [1.9, 1.2, 1.0], { T: BELT });
   }
   // Пузо, грудь, плечи, пояс.
-  r.ell(P, [0.5, 0, 1.6], [3.3, 3.7, 3.1], skin);
-  r.ell(T, [0.2, 0, 5.2], [3.0, 4.2, 3.2], skin);
+  r.ell(P, [0.9, 0, 1.6], [3.9, 3.9, 3.2], skin);
+  r.ell(T, [0.4, 0, 5.2], [3.4, 4.3, 3.3], skin);
   for (const sd of [-1, 1]) r.ball(T.p(0, sd * 3.9, 7.0), 2.0, skin);
   r.ell(P, [0.1, 0, 1.4], [3.5, 3.9, 0.7], { T: BELT });
   r.ball(P.p(3.4, 0, 1.4), 0.7, iron);
@@ -304,7 +304,7 @@ function idleO(f: number): ExO {
   o.bob = 0.25 * Math.sin(a);
   o.lean = 0.05 * Math.sin(a);
   o.head = 0.06 * Math.sin(a - 0.7);
-  o.aH = [1.6, 4.2, 9.6 + 0.25 * Math.sin(a)];
+  o.aH = [2.2, 3.6, 7.2 + 0.25 * Math.sin(a)];
   o.fH = [1.8, -4.2, 8.6 + 0.2 * Math.sin(a)];
   o.fB = hang(o.fH, 0.18 * Math.sin(a - 1.2), 0.08 * Math.sin(a * 0.5));
   return o;
@@ -330,7 +330,8 @@ function walkO(f: number): ExO {
   o.roll = 0.07 * Math.sin(a);
   o.twist = -0.12 * Math.sin(a);
   o.lean = 0.12;
-  o.aH = [1.6, 4.2, 9.6 + 0.4 * Math.abs(Math.cos(a))];
+  o.aH = [2.2 + 0.4 * Math.sin(a), 3.6, 7.2 + 0.4 * Math.abs(Math.cos(a))];
+  o.aPhi = E0.aPhi + 0.08 * Math.sin(a);
   o.fH = [1.8 - 1.0 * Math.sin(a), -4.2, 8.4];
   // Шар отстаёт от руки.
   o.fB = hang(o.fH, -0.35 - 0.3 * Math.sin(a - 1.1), 0.1 * Math.sin(a));
@@ -394,7 +395,7 @@ function flailO(T: number): ExO {
   o.fB = vlerpA(swing, ring, sstep(0.05, 0.25, T));
   o.sag = 0.4 * (1 - up);
   // Секира — к себе, на плечо.
-  o.aH = [1.4, 4.0, 9.2];
+  o.aH = [1.9, 3.8, 7.6];
   if (T > 0.85) {
     const j = Math.floor(T * FPS) % 2 ? 0.2 : -0.2;
     o.fwd += j;
@@ -410,7 +411,7 @@ function flailfO(T: number, f: number): ExO {
   o.crouch = 0.6 - 0.2 * k - 0.4 * ret;
   o.lean = 0.2 * (1 - ret);
   o.twist = -0.35 * (1 - ret);
-  o.aH = [1.4, 4.0, 9.2];
+  o.aH = [1.9, 3.8, 7.6];
   if (f <= 3) {
     // Цепь вытянута до кольца (r 2,35 клетки ≈ 25 единиц), шар у пола обходит круг.
     const a = spinA(FLAIL_T) + f * 1.3;
@@ -442,9 +443,9 @@ function chopO(T: number): ExO {
   o.head = -0.2 * k;
   o.crouch = 0.15 * step;
   o.aH = vlerpA(E0.aH, [-0.4, 1.0, 17.2], easeOut(k));
-  o.aPhi = 2.0 + 0.55 * k;
-  o.aPsi = 0.15 - 0.15 * k;
-  o.aGrip = 4 - 2.8 * k;
+  o.aPhi = E0.aPhi + (2.55 - E0.aPhi) * k;
+  o.aPsi = E0.aPsi * (1 - k);
+  o.aGrip = E0.aGrip + (1.2 - E0.aGrip) * k;
   o.both = sstep(0.05, 0.35, T);
   o.bothAt = 2.6;
   o.fB = hang(o.fH, -0.3 * k, 0);
@@ -532,7 +533,8 @@ function exPose(anim: string, f: number): ExO {
       o.lean = -0.35 * b;
       o.head = -0.5 * b;
       o.twist = 0.2 * b;
-      o.aH = [1.2, 4.4, 10.2 + 0.6 * b];
+      o.aH = [1.8, 3.8, 7.6 + 0.6 * b];
+      o.aPhi = E0.aPhi + 0.25 * b;
       o.fB = hang(o.fH, -0.7 * b, 0.2 * b);
       return o;
     }
@@ -563,8 +565,8 @@ function exPose(anim: string, f: number): ExO {
       // Секира падает плашмя вправо, цеп — влево.
       const ax = easeIn(sstep(0, 0.3, t));
       o.aH = vlerpA(E0.aH, [3.0, 7.0, 0.8], ax);
-      o.aPhi = 2.0 + (0.02 - 2.0) * ax;
-      o.aPsi = 0.15 + 1.2 * ax;
+      o.aPhi = E0.aPhi + (0.02 - E0.aPhi) * ax;
+      o.aPsi = E0.aPsi + 1.5 * ax;
       o.fH = vlerpA(E0.fH, [3.6, -4.6, 1.8 + 3.0 * (1 - fall)], sstep(0.15, 0.6, t));
       o.fB = vlerpA(hang(E0.fH, -0.3, 0), [6.0, -7.0, 1.2], sstep(0.1, 0.55, t));
       o.dust = t > 0.66 ? (t - 0.66) / 0.24 : 0;
