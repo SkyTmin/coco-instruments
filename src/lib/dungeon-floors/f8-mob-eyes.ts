@@ -348,26 +348,26 @@ const THRUST: PKey<ArmO>[] = carry<ArmO>([
   [0.2, { k: 0.2, hz: 17, ar: 6, bw: 5, wd: 9, sp: 1, cu: 0.1 }, easeOut],
   [0.33, { k: 0.12, hz: 22, ar: 8, bw: 6, wd: 12, sp: 1.15, cu: 0.3 }, smooth],
   [0.42, { k: 0.1, hz: 23, ar: 8.5, bw: 6.5, wd: 12.5, sp: 1.2, cu: 0.35 }],
-  [0.55, { k: 1, hz: 1, ar: 3, bw: 2, wd: 0, sp: 0.9, cu: 0.5, fl: 1 }, easeIn],
+  [0.55, { k: 1, hz: 1, ar: 3, bw: 4.5, wd: 0, sp: 0.9, cu: 0.5, fl: 1 }, easeIn],
 ]);
 // Открыт 1,1 с: отскок от удара, когти в полу, скребёт назад, дёргается,
 // руки поднимаются.
 const OPEN: PKey<ArmO>[] = carry<ArmO>([
-  [0, { k: 1, hz: 1, ar: 3, bw: 2, wd: 0, sp: 0.9, cu: 0.5, fl: 1 }],
+  [0, { k: 1, hz: 1, ar: 3, bw: 4.5, wd: 0, sp: 0.9, cu: 0.5, fl: 1 }],
   [0.06, { k: 1.02, hz: 2.4, cu: 0.3 }, easeOut],
-  [0.14, { k: 1, hz: 0.6, cu: 0.85, bw: 3 }, easeIn],
-  [0.55, { k: 0.87, hz: 0.6, cu: 1, ar: 4, bw: 4 }, smooth],
+  [0.14, { k: 1, hz: 0.6, cu: 0.85, bw: 6 }, easeIn],
+  [0.55, { k: 0.87, hz: 0.6, cu: 1, ar: 4, bw: 7 }, smooth],
   [0.9, { k: 0.85, hz: 1, cu: 0.75 }],
-  [1.1, { k: 0.76, hz: 4, cu: 0.4, ar: 6, bw: 5, wd: 2, fl: 0.6 }, easeIn],
+  [1.1, { k: 0.76, hz: 4, cu: 0.4, ar: 6, bw: 6, wd: 2, fl: 0.6 }, easeIn],
 ]);
 // Втягивает руки в дыры (начало `f8_hide` после `f8_open`).
 const BACK: PKey<ArmO>[] = carry<ArmO>([
-  [0, { k: 0.76, hz: 4, ar: 6, bw: 5, wd: 2, sp: 0.4, cu: 0.4, fl: 0.6 }],
+  [0, { k: 0.76, hz: 4, ar: 6, bw: 6, wd: 2, sp: 0.4, cu: 0.4, fl: 0.6 }],
   [0.2, { k: 0.02, hz: 8.5, ar: 2, bw: 0, wd: 0, sp: 0, cu: 1, fl: 0 }, easeIn],
 ]);
 // Смерть: руки отдёргивает судорогой в стороны и всасывает в стену.
 const DIEARM: PKey<ArmO>[] = carry<ArmO>([
-  [0, { k: 0.9, hz: 1.5, ar: 4, bw: 4, wd: 0, sp: 0.8, cu: 0.6, fl: 0.9 }],
+  [0, { k: 0.9, hz: 1.5, ar: 4, bw: 6.5, wd: 0, sp: 0.8, cu: 0.6, fl: 0.9 }],
   [0.08, { k: 0.6, hz: 9, ar: 8, bw: 7, wd: 9, sp: 1.35, cu: 0, fl: 0.4 }, easeOut],
   [0.27, { k: 0.02, hz: 8.5, ar: 2, bw: 0, wd: 0, sp: 0.2, cu: 1, fl: 0 }, easeIn],
 ]);
@@ -403,8 +403,8 @@ function arm(r: Rig, ang: number, o: ArmO, s: number): V3 {
   r.cap(H, J1, 1.15, 1.0, SKIN);
   r.cap(J1, J2, 1.0, 0.9, SKIN);
   r.cap(J2, W, 0.9, 0.85, SKIN);
-  r.ball(J1, 1.35, KNUCK);
-  r.ball(J2, 1.2, KNUCK);
+  r.ball(J1, 1.3, KNUCK);
+  r.ball(J2, 1.05, KNUCK);
   // Кисть: вперёд — по руке, на полу — вдоль линии удара.
   const fwArm = vnorm(vsub(W, J2));
   const fl: V3 = vnorm([Math.cos(ang), Math.sin(ang) / SE, -0.15]);
@@ -559,7 +559,7 @@ function shot(anim: string, f: number, d: number): Shot {
     F.hole = 1.15;
     F.seed = 1;
     F.glow = 0.6;
-    const a = { ...ARM0, k: 0.92, hz: 0.4, ar: 2.5, bw: 3, sp: 0.4, cu: 0.15, fl: 1 };
+    const a = { ...ARM0, k: 0.92, hz: 0.4, ar: 2.5, bw: 6.5, sp: 0.4, cu: 0.15, fl: 1 };
     out.arms = [a, { ...a, k: 0.9 }];
     return out;
   }
