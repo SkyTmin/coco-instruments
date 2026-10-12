@@ -7,9 +7,9 @@
 //     с героя, босс — вдвое крупнее (Scale2x, затем трещины, грани и блики
 //     в полный пиксель, чтобы не было «крупного пикселя»). Перекраска —
 //     холодное стекло, лицо — светящиеся прорези;
-//   • стеклянный голем — тайл DCSS `crystal_guardian` (CC0), перекрашен в
-//     стекло этажа и разрезан на части для кадров (`scripts/dungeon/f7.py
-//     --sprites` → `public/dungeon/f7/golem.png`), трещины рисует код;
+//   • мобы этажа — свои файлы `f7-mob-*.ts` (анимации мобов 7: мини-3D риг
+//     `f15-rig.ts`, Отражение — из листа героя); тайл голема
+//     `public/dungeon/f7/golem.png` больше не рисуется;
 //   • остальное рисует код: пиксели 16 на клетку, свет сверху-слева, контур
 //     тёмный. Палитра — камень 0x72 + холодное стекло + фиолетовый акцент;
 //     позолота рам — приглушённая, это материал дворца, а не акцент.
@@ -36,6 +36,14 @@ import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Sim, Strike, Zone } from '../dungeon-sim';
 import { F7_CRYSTAL, F7_GALLERY, F7_HALL, F7_MARK } from './f7';
 import { BOSS, F7_VIEW } from './f7-brains';
+import './f7-mob-echo';
+import './f7-mob-phantom';
+import './f7-mob-golem';
+import './f7-mob-spider';
+import './f7-mob-moth';
+import './f7-mob-prism';
+import './f7-mob-shadow';
+import './f7-mob-thief';
 
 type RGBA = [number, number, number, number];
 
@@ -254,88 +262,10 @@ const dirOf = (face: number): Dir4 => {
 };
 
 // ---------------------------------------------------------------------------
-// Кадр монстра: общий конвейер (облик, вспышка, отражение, кеш).
+// Облик кадра. Мобы — `f7-mob-*.ts`, их конвейер кадров — `f7-mobkit.ts`.
 // ---------------------------------------------------------------------------
 
 type Look = MobPose['look'];
-
-interface Built {
-  p: Px;
-  ax: number;
-  ay: number;
-  eye: [number, number] | null;
-}
-
-const frames = new Map<string, MobFrame>();
-
-function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean): MobFrame {
-  let p = b.p;
-  if (look === 'albino') {
-    const pale = hx('#f4f2ff');
-    const q = new Px(p.w, p.h);
-    for (let i = 0; i < p.data.length; i += 4) {
-      if (!p.data[i + 3]) continue;
-      const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-      const c = mixc([l, l, l, 255], pale, 0.45);
-      q.data[i] = c[0];
-      q.data[i + 1] = c[1];
-      q.data[i + 2] = c[2];
-      q.data[i + 3] = p.data[i + 3];
-    }
-    p = q;
-  }
-  if (look === 'elite') p.outline(GOLD);
-  if (flash) p = p.tint(WHITE, 0.85);
-  if (left) p = p.flipX();
-  const eye = b.eye ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
-  const out: MobFrame = { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye };
-  frames.set(key, out);
-  return out;
-}
-
-function frameOf(
-  kind: string,
-  pose: MobPose,
-  anim: string,
-  f: number,
-  build: () => Built | null,
-  mirror = true,
-): MobFrame | null {
-  const left = mirror && pose.left;
-  const key = `${kind}|${anim}|${f}|${left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  const b = build();
-  if (!b) return null;
-  return finish(key, b, pose.look, pose.flash, left);
-}
-
-/** Разлёт осколками: кадр `p`, разрезанный клиньями, разлетается от середины (k 0…1). */
-function shatter(p: Px, cx: number, cy: number, k: number, seed: number): Px {
-  const o = new Px(p.w, p.h);
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      const i = (y * p.w + x) * 4;
-      if (!p.data[i + 3]) continue;
-      // Осколок — клин вокруг середины (по углу), свой сдвиг и падение.
-      const a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx);
-      const wedge = Math.floor(((a + Math.PI) / TAU) * 7 + hash(seed, Math.floor(y / 4)) * 0.8) % 7;
-      const wa = ((wedge + 0.5) / 7) * TAU - Math.PI;
-      const sp = 3 + hash(seed, wedge) * 5;
-      const nx = Math.round(x + Math.cos(wa) * sp * k);
-      const ny = Math.round(y + Math.sin(wa) * sp * k + k * k * 6);
-      if (nx < 0 || ny < 0 || nx >= o.w || ny >= o.h) continue;
-      const c: RGBA = [
-        p.data[i],
-        p.data[i + 1],
-        p.data[i + 2],
-        Math.round(p.data[i + 3] * (1 - k * 0.8)),
-      ];
-      // Грань осколка светлеет: стекло ловит свет, падая.
-      o.set(nx, ny, (x + y + wedge) % 5 === 0 ? mixc(c, alpha(CYAN_HOT, c[3] / 255), 0.6) : c);
-    }
-  return o;
-}
 
 // ---------------------------------------------------------------------------
 // Перекраска листа героя в холодное стекло.
@@ -344,9 +274,6 @@ function shatter(p: Px, cx: number, cy: number, k: number, seed: number): Px {
 /** Лестница зеркального серебра (отражение — светлее и прозрачнее, босс —
  *  глубже, с фиолетом в тени). Первый заход клал героя в тёмно-синее, и на
  *  тёмном полу он читался звёздным пятном, а не рыцарем. */
-const ECHO_RAMP = ['#223258', '#3a5a8e', '#5e88bc', '#90b8e0', '#c6e2f6', '#f0faff'].map((c) =>
-  hx(c),
-);
 const BOSS_RAMP = ['#262a5c', '#3e5298', '#6488c8', '#9cc2ea', '#d0e8fa', '#f8fdff'].map((c) =>
   hx(c),
 );
@@ -426,23 +353,6 @@ function heroPx(tier: number, dir: Dir4, row: number): Px | null {
   return c ? fromCanvas(c) : null;
 }
 
-/** Трещины отражения: ломаные поверх стекла (тёмная черта, светлый край). */
-function crackLines(p: Px, lines: [number, number][][], dark: RGBA, lit: RGBA): void {
-  for (const ln of lines)
-    for (let i = 0; i + 1 < ln.length; i++) {
-      const [x0, y0] = ln[i];
-      const [x1, y1] = ln[i + 1];
-      const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
-      for (let k = 0; k <= n; k++) {
-        const x = Math.round(x0 + ((x1 - x0) * k) / n);
-        const y = Math.round(y0 + ((y1 - y0) * k) / n);
-        if (!p.solid(x, y)) continue;
-        p.set(x, y, dark);
-        if (p.solid(x - 1, y - 1)) p.set(x - 1, y - 1, lit);
-      }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Отражение: сам герой в его снаряжении, из тёмного стекла, ростом с героя.
 // Повторяет взмах — в руке стеклянный клинок.
@@ -479,109 +389,6 @@ function glassBlade(
   );
   stroke(p, x - ux * 2, y - uy * 2, x, y, GILT[0]);
 }
-
-/** Одна короткая трещина сбоку — забрало (Т-прорезь) должно читаться. */
-const ECHO_CRACK: [number, number][][] = [
-  [
-    [12, 9],
-    [11, 11],
-    [12, 13],
-  ],
-];
-
-function paintEcho(
-  tier: number,
-  dir: Dir4,
-  row: number,
-  blade: number,
-  step: number,
-): Built | null {
-  const src = heroPx(tier, dir, row);
-  if (!src) return null;
-  const body = glassify(src, ECHO_RAMP, INK, 1.6, 0.9, 0.95);
-  crackLines(body, ECHO_CRACK, hx('#16203a'), hx('#e8f8ff'));
-  // Прорези лица светятся (как глаза отражения в темноте).
-  const eyes = dir === 'down' ? [6, 9] : dir === 'left' ? [5] : dir === 'right' ? [10] : [];
-  for (const ex of eyes) body.set(ex, 7, CYAN_HOT);
-  const p = new Px(26, 22);
-  // Клинок: за спиной, если смотрит вверх.
-  const ang =
-    dir === 'down' ? Math.PI / 2 : dir === 'up' ? -Math.PI / 2 : dir === 'left' ? Math.PI : 0;
-  const hand: [number, number] =
-    dir === 'down' ? [16, 17] : dir === 'up' ? [10, 12] : dir === 'left' ? [8, 14] : [17, 14];
-  if (blade && dir === 'up')
-    glassBlade(p, hand[0], hand[1], ang + (blade > 1 ? 0 : -0.9), 8, 1.1, blade > 1 ? 1 : 0);
-  over(p, body, 5, 5);
-  if (blade && dir !== 'up')
-    glassBlade(p, hand[0], hand[1], ang + (blade > 1 ? 0 : -0.9), 8, 1.1, blade > 1 ? 1 : 0);
-  p.outline(alpha(INK, 0.55));
-  // Отражение чуть прозрачно: сквозь него угадывается пол.
-  for (let i = 3; i < p.data.length; i += 4) if (p.data[i] === 255) p.data[i] = 232;
-  // Выход из зеркала: проявляется снизу вверх рябью.
-  let q = p;
-  if (step < 4) {
-    q = new Px(p.w, p.h);
-    const cut = Math.round(p.h * (1 - (step + 1) / 5));
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (!p.data[i + 3]) continue;
-        if (y < cut && (x + y + step) % 3) continue;
-        const c: RGBA = [p.data[i], p.data[i + 1], p.data[i + 2], y < cut ? 110 : 255];
-        q.set(x, y, c);
-      }
-  }
-  return {
-    p: q,
-    ax: 13,
-    ay: 21,
-    eye: dir === 'up' ? null : [dir === 'down' ? 11 : dir === 'left' ? 10 : 15, 12],
-  };
-}
-
-registerMobPainter('f7_echo', (m: Mob, pose: MobPose) => {
-  const tier = heroGear().robe;
-  const dir = dirOf(m.face);
-  let row = 0;
-  let blade = 0;
-  let anim: string = pose.anim;
-  let step = 4;
-  if (pose.mode === 'f7_step') {
-    step = Math.min(3, Math.floor((pose.t / 0.5) * 4));
-    anim = `step${step}`;
-  } else if (pose.mode === 'copy') {
-    row = 4;
-    blade = pose.t > 0.28 ? 2 : 1;
-    anim = `copy${blade}`;
-  } else if (pose.anim === 'run') row = pose.frame % 4;
-  else if (pose.anim === 'wind' || pose.anim === 'bite') {
-    row = 4;
-    blade = pose.anim === 'bite' ? 2 : 1;
-  } else if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.16));
-    return frameOf(
-      `f7_echo${tier}${dir}`,
-      pose,
-      'dead',
-      k,
-      () => {
-        const b = paintEcho(tier, dir, 0, 0, 4);
-        if (!b) return null;
-        return { ...b, p: shatter(b.p, 13, 13, (k + 1) / 4, 7) };
-      },
-      false,
-    );
-  } else if (pose.anim === 'sleep') row = 0;
-  else row = Math.floor(pose.frame / 3) % 2 ? 2 : 0;
-  return frameOf(
-    `f7_echo${tier}${dir}`,
-    pose,
-    anim,
-    row * 10 + blade,
-    () => paintEcho(tier, dir, row, blade, step),
-    false,
-  );
-});
 
 // ---------------------------------------------------------------------------
 // Отражение героя (босс), v2.86 — движение. Облик прежний: лист героя ×2
@@ -2449,28 +2256,6 @@ function bossFrame(q: BReq, left: boolean, flash: boolean): BFrame | null {
   });
 }
 
-/** Сквозь зеркало: фигура распадается полосами-осколками (k 0…1). */
-function slices(p: Px, k: number, out: boolean): Px {
-  const o = new Px(p.w, p.h);
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      const i = (y * p.w + x) * 4;
-      if (!p.data[i + 3]) continue;
-      const band = Math.floor(x / 3);
-      const th = hash(band, 3);
-      const vis = out ? th > k : th < k;
-      if (!vis) continue;
-      const lift = out ? Math.round(k * 5 * hash(band, 9)) : 0;
-      o.set(x, y - lift, [
-        p.data[i],
-        p.data[i + 1],
-        p.data[i + 2],
-        Math.round(p.data[i + 3] * (out ? 1 - k * 0.5 : 0.5 + k * 0.5)),
-      ]);
-    }
-  return o;
-}
-
 // ---- Всё, что светится вокруг тела ------------------------------------------
 
 /**
@@ -3182,682 +2967,15 @@ registerMobWarm('f7_boss', function* () {
 });
 
 // ---------------------------------------------------------------------------
-// Стеклянный голем: лист из тайла DCSS (`golem.png`, кадры 40×40): покой ×2,
-// шаг ×4, замах, удар, боль. Трещины — кодом, по числу принятых трещин.
-// ---------------------------------------------------------------------------
-
-const sheets = new Map<string, Px | null>();
-
-/** Картинка этажа пикселями; пока не пришла — null (движок нарисует запасной вид). */
-function sheet(name: string): Px | null {
-  if (sheets.has(name)) return sheets.get(name) ?? null;
-  sheets.set(name, null);
-  if (typeof Image === 'undefined') return null;
-  const img = new Image();
-  img.onload = () => {
-    const c = document.createElement('canvas');
-    c.width = img.width;
-    c.height = img.height;
-    const g = c.getContext('2d');
-    if (!g) return;
-    g.drawImage(img, 0, 0);
-    const p = new Px(img.width, img.height);
-    p.data.set(g.getImageData(0, 0, img.width, img.height).data);
-    sheets.set(name, p);
-  };
-  img.src = `${import.meta.env.BASE_URL}dungeon/f7/${name}.png`;
-  return null;
-}
-
-function cut(src: Px, i: number, w: number, h: number): Px {
-  const o = new Px(w, h);
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const s = (y * src.w + i * w + x) * 4;
-      const d = (y * w + x) * 4;
-      for (let k = 0; k < 4; k++) o.data[d + k] = src.data[s + k];
-    }
-  return o;
-}
-
-const GOLEM_CRACK: [number, number][][][] = [
-  [
-    [
-      [17, 17],
-      [20, 21],
-      [19, 25],
-    ],
-    [
-      [26, 18],
-      [29, 23],
-    ],
-  ],
-  [
-    [
-      [12, 12],
-      [15, 15],
-      [13, 19],
-    ],
-    [
-      [22, 30],
-      [24, 35],
-    ],
-    [
-      [8, 20],
-      [10, 23],
-    ],
-  ],
-];
-
-function paintGolem(i: number, cracks: number, glow: number, sleep: boolean): Built | null {
-  const sh = sheet('golem');
-  if (!sh) return null;
-  const p = cut(sh, i, 40, 40);
-  for (let c = 0; c < Math.min(2, cracks); c++)
-    crackLines(p, GOLEM_CRACK[c], hx('#0a0e1a'), hx('#e8faff'));
-  // Сердцевина светится: у треснувшего — ярче (стекло тоньше).
-  const core: [number, number] = [19, 18];
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++)
-      if (p.solid(core[0] + dx, core[1] + dy) && (dx === 0 || dy === 0))
-        p.set(core[0] + dx, core[1] + dy, cracks >= 2 ? VIO[3] : cracks === 1 ? VIO[2] : VIO[1]);
-  if (glow) {
-    // Перед разрывом: стекло вспыхивает изнутри.
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        if (!p.solid(x, y)) continue;
-        p.set(x, y, mixc(p.get(x, y), CYAN_HOT, 0.2 * glow));
-      }
-  }
-  if (sleep) {
-    // Стоит статуей: тусклее, без сердцевины.
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++)
-        if (p.solid(x, y)) p.set(x, y, mixc(p.get(x, y), SILV[0], 0.35));
-  }
-  return { p, ax: 20, ay: 39, eye: sleep ? null : [19, 10] };
-}
-
-registerMobPainter('f7_golem', (m: Mob, pose: MobPose) => {
-  const cracks = m.data.cracks ?? 0;
-  const mode = pose.mode;
-  let i = Math.floor(pose.frame / 3) % 2;
-  let glow = 0;
-  let a = 'idle';
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_golem', pose, `dead${cracks}`, k, () => {
-      const b = paintGolem(0, cracks, 0, false);
-      if (!b) return null;
-      return { ...b, p: shatter(b.p, 20, 20, (k + 1) / 4, 3) };
-    });
-  }
-  if (mode === 'slam') {
-    i = pose.t < 0.8 ? 6 : 7;
-    a = 'slam';
-  } else if (mode === 'rupture') {
-    i = 6;
-    glow = 1 + Math.min(2, Math.floor(pose.t / 0.2));
-    a = 'rup';
-  } else if (pose.anim === 'run') {
-    i = 2 + (Math.floor(pose.frame / 2) % 4);
-    a = 'run';
-  } else if (pose.anim === 'hurt') {
-    i = 8;
-    a = 'hurt';
-  } else if (mode === 'recover' && pose.t < 0.25) {
-    i = 7;
-    a = 'after';
-  }
-  const sleep = pose.anim === 'sleep';
-  return frameOf('f7_golem', pose, `${a}${cracks}${sleep ? 's' : ''}`, i * 10 + glow, () =>
-    paintGolem(i, cracks, glow, sleep),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Призрачная копия: бледная фигура в капюшоне без ног, вместо лица —
-// гладкое зеркало. Не видят — почти прозрачна, только мерцает кант.
-// ---------------------------------------------------------------------------
-
-const PH: Tones = [hx('#5a6c98'), hx('#98aed8'), hx('#cfe0f6'), hx('#f6fbff')];
-
-function paintPhantom(anim: string, f: number, hidden: boolean): Built {
-  const p = new Px(22, 26);
-  const sway = Math.sin((f / 4) * TAU);
-  const lean = anim === 'run' ? 2 : anim === 'bite' ? 3 : 0;
-  // Хвост — лентами вниз, колышется.
-  for (let i = 0; i < 3; i++) {
-    const x0 = 9 + i * 2;
-    const pts = spline(
-      [
-        [x0, 14],
-        [x0 - lean * 0.5 + sway * (i - 1), 19],
-        [x0 - lean + sway * 1.5 * (i === 1 ? -1 : 1), 24],
-      ],
-      5,
-    );
-    pts.forEach(([x, y], j) => {
-      const w = 2.4 - j * 0.16;
-      p.ell(x, y, Math.max(0.5, w), 0.8, alpha(PH[j < 5 ? 1 : 0], 0.85 - j * 0.06));
-    });
-  }
-  // Тело-балахон.
-  poly(
-    p,
-    [
-      [6 + lean * 0.3, 8],
-      [15 + lean * 0.3, 8],
-      [16, 16],
-      [5, 16],
-    ],
-    (x, y) => tone(PH, (x < 10 ? 0.6 : 0.3) - (y - 8) * 0.04),
-  );
-  // Руки: в замахе подняты, в ударе вперёд.
-  const up = anim === 'wind';
-  const fw = anim === 'bite';
-  const lh: [number, number] = [up ? 3 : fw ? 2 : 4, up ? 3 : fw ? 11 : 14 + sway];
-  const rh: [number, number] = [up ? 19 : fw ? 21 : 17, up ? 3 : fw ? 10 : 14 - sway];
-  limb(p, 7, 10, lh[0], lh[1], 1.2, 0.8, PH, 0.1);
-  limb(p, 15, 10, rh[0], rh[1], 1.2, 0.8, PH, -0.1);
-  // Когти-льдинки.
-  p.set(lh[0], lh[1] + 1, CYAN_HOT);
-  p.set(rh[0], rh[1] + 1, CYAN_HOT);
-  // Капюшон и лицо-зеркало.
-  shadeEll(p, 10.5 + lean * 0.4, 5.5, 4.6, 4.8, PH, 0.1);
-  const fx = 10.5 + lean * 0.5;
-  p.ell(fx, 6.4, 2.6, 3, SILV[1]);
-  p.ell(fx - 0.6, 5.8, 1.6, 2, SILV[2]);
-  stroke(p, fx - 1.6, 4.6, fx + 0.4, 8.2, SILV[3]);
-  if (up || fw) {
-    p.set(Math.round(fx - 1), 6, VIO[3]);
-    p.set(Math.round(fx + 1), 6, VIO[3]);
-  }
-  p.outline(alpha(hx('#2a3456'), 0.8));
-  let out = fade(p, 0.82);
-  if (hidden) {
-    // Не видят: только мерцающий кант.
-    out = new Px(p.w, p.h);
-    for (let y = 0; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (!p.data[i + 3]) continue;
-        const edge = !p.solid(x - 1, y) || !p.solid(x + 1, y) || !p.solid(x, y - 1);
-        if (edge && (x + y + f) % 3 === 0) out.set(x, y, alpha(PH[3], 0.35));
-      }
-  }
-  return { p: out, ax: 11, ay: 25, eye: hidden ? null : [Math.round(fx), 6] };
-}
-
-registerMobPainter('f7_phantom', (m: Mob, pose: MobPose) => {
-  const hidden = (m.data.ghost ?? 0) > 0 && pose.mode !== 'f7_step';
-  let anim: string = pose.anim;
-  if (anim === 'sleep') anim = 'idle';
-  const f = anim === 'wind' || anim === 'bite' ? pose.frame % 2 : pose.frame % 4;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_phantom', pose, 'dead', k, () => {
-      const b = paintPhantom('idle', 0, false);
-      return { ...b, p: slices(b.p, (k + 1) / 4, true) };
-    });
-  }
-  return frameOf('f7_phantom', pose, `${anim}${hidden ? 'h' : ''}`, f, () =>
-    paintPhantom(anim, f, hidden),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Тень из рамы: высокая сутулая фигура из фиолетового мрака, белые глаза,
-// длинные руки до пола; на плечах — щепки позолоты от рамы.
+// Радуга призмы (иконка ядра; сама призма — `f7-mob-prism.ts`) и мрак теней
+// (реквизит, иконки; сама тень — `f7-mob-shadow.ts`).
 // ---------------------------------------------------------------------------
 
 const SHD: Tones = [hx('#0e0a1a'), hx('#261c44'), hx('#43346e'), hx('#6c5aa8')];
 
-function paintShadow(anim: string, f: number, grab: boolean, step: number): Built {
-  const p = new Px(28, 30);
-  const sway = Math.sin((f / 4) * TAU) * (anim === 'run' ? 1.5 : 0.8);
-  const hunch = anim === 'bite' ? 3 : anim === 'run' ? 2 : 0;
-  // Ноги-подтёки: не ступни, а дым к полу.
-  for (let i = 0; i < 4; i++) {
-    const x = 10 + i * 2 + (i % 2 ? sway : -sway) * 0.5;
-    stroke(p, x, 20, x + (i - 1.5) * 0.8, 28, alpha(SHD[1], 0.9), 2);
-  }
-  // Туловище.
-  limb(p, 13, 20, 13 + hunch, 9, 3.6, 3, SHD, 0);
-  // Голова — маленькая, вперёд.
-  shadeEll(p, 13 + hunch * 1.2, 6.5, 3.2, 3, SHD, 0.15);
-  // Руки: длинные, пальцы-когти.
-  const upA = anim === 'wind';
-  const reachF = anim === 'bite' ? 7 : 0;
-  const la: [number, number] = upA ? [5, 2] : [6 - reachF * 0.2, 25 + sway];
-  const ra: [number, number] = grab
-    ? [26, 12]
-    : upA
-      ? [21, 2]
-      : [19 + reachF, 24 - sway - reachF * 0.8];
-  limb(p, 11, 11, la[0], la[1], 1.3, 0.8, SHD, 0.1);
-  limb(p, 16, 11, ra[0], ra[1], 1.3, 0.8, SHD, 0.1);
-  for (const [x, y] of [la, ra]) for (let c = -1; c <= 1; c++) p.set(x + c, y + 1, hx('#8c7ad8'));
-  // Позолота рамы на плече.
-  p.set(10, 9, GILT[2]);
-  p.set(9, 10, GILT[1]);
-  p.set(17, 9, GILT[1]);
-  p.outline(alpha(INK, 0.9));
-  // Глаза — белые, пустые.
-  const ex = 12 + hunch * 1.2;
-  p.set(Math.round(ex), 6, WHITE);
-  p.set(Math.round(ex + 2), 6, WHITE);
-  let q = p;
-  if (step < 4) {
-    // Выход из рамы: проявляется снизу вверх.
-    q = new Px(p.w, p.h);
-    const top = Math.round(p.h * (1 - (step + 1) / 4));
-    for (let y = top; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (p.data[i + 3]) q.set(x, y, [p.data[i], p.data[i + 1], p.data[i + 2], p.data[i + 3]]);
-      }
-  }
-  return { p: q, ax: 13, ay: 29, eye: [Math.round(ex + 1), 6] };
-}
-
-registerMobPainter('f7_shadow', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim;
-  const grab = pose.mode === 'grab';
-  if (grab) anim = pose.t > 0.4 ? 'bite' : 'wind';
-  const step = pose.mode === 'f7_step' ? Math.min(3, Math.floor((pose.t / 0.5) * 4)) : 4;
-  const f = anim === 'run' || anim === 'idle' ? pose.frame % 4 : pose.frame % 2;
-  if (pose.anim === 'dead' || pose.mode === 'f7_back') {
-    const back = pose.mode === 'f7_back';
-    const k = Math.min(3, Math.floor(pose.t / (back ? 0.3 : 0.15)));
-    return frameOf('f7_shadow', pose, back ? 'back' : 'dead', k, () => {
-      const b = paintShadow('idle', 0, false, 4);
-      return { ...b, p: slices(b.p, (k + 1) / 4, true) };
-    });
-  }
-  return frameOf('f7_shadow', pose, `${anim}${grab ? 'g' : ''}${step}`, f, () =>
-    paintShadow(anim, f, grab, step),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Зеркальная бабочка: четыре крыла-зеркальца в тонкой оправе, фиолетовое
-// тельце. Вспышка — крылья раскрыты и раскалены добела.
-// ---------------------------------------------------------------------------
-
-function mothWing(p: Px, pts: [number, number][], hot: number): void {
-  const base: Tones = hot
-    ? [hx('#a8c8ec'), hx('#dcecff'), hx('#f6fbff'), WHITE]
-    : [hx('#3a4a6c'), hx('#6c86ae'), hx('#b0c8e4'), hx('#eef6ff')];
-  // Стекло с отражением: свет сверху-слева по плоскости крыла.
-  const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length;
-  const cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
-  poly(p, pts, (x, y) => tone(base, 0.5 - (x - cx) * 0.08 - (y - cy) * 0.1));
-  // Оправа — тонкий кант.
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i];
-    const b = pts[(i + 1) % pts.length];
-    stroke(p, a[0], a[1], b[0], b[1], hot ? CYAN_HOT : SILV[1]);
-  }
-  // Блик по диагонали.
-  stroke(p, cx - 1.5, cy - 1, cx + 0.5, cy + 1, base[3]);
-}
-
-function paintMoth(f: number, hot: number): Built {
-  const p = new Px(22, 16);
-  // Взмах: раскрыто, полураскрыто, сложено, полураскрыто.
-  const open = hot ? 1 : [1, 0.55, 0.15, 0.55][f % 4];
-  const cx = 11;
-  const cy = 8;
-  const wy = (1 - open) * 3;
-  for (const s of [-1, 1]) {
-    const W1 = 2 + 7 * open;
-    mothWing(
-      p,
-      [
-        [cx + s * 1, cy - 1],
-        [cx + s * W1, cy - 6 + wy],
-        [cx + s * (W1 + 1), cy - 1],
-        [cx + s * 1.5, cy + 0.5],
-      ],
-      hot,
-    );
-    mothWing(
-      p,
-      [
-        [cx + s * 1, cy + 1],
-        [cx + s * (1 + 5 * open), cy + 1],
-        [cx + s * (1 + 4 * open), cy + 5 - wy * 0.5],
-        [cx + s * 1, cy + 3],
-      ],
-      hot,
-    );
-  }
-  // Тельце и усики.
-  limb(p, cx, cy - 2, cx, cy + 4, 1.1, 0.7, VIO, 0.2);
-  stroke(p, cx - 0.5, cy - 3, cx - 2.5, cy - 6, VIO[2]);
-  stroke(p, cx + 0.5, cy - 3, cx + 2.5, cy - 6, VIO[2]);
-  p.set(cx - 3, cy - 7, hx('#fff4b8'));
-  p.set(cx + 3, cy - 7, hx('#fff4b8'));
-  p.outline(alpha(INK, 0.85));
-  return { p, ax: 11, ay: 15, eye: [cx, cy - 2] };
-}
-
-registerMobPainter('f7_moth', (m: Mob, pose: MobPose) => {
-  const hot = pose.mode === 'flash' ? Math.min(2, Math.floor(pose.t / 0.35)) : 0;
-  const f = pose.mode === 'flash' ? 0 : Math.floor(pose.frame * 1.5) % 4;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_moth', pose, 'dead', k, () => {
-      const b = paintMoth(0, 0);
-      return { ...b, p: shatter(b.p, 11, 8, (k + 1) / 4, 5) };
-    });
-  }
-  return frameOf('f7_moth', pose, `fly${hot}`, f, () => paintMoth(f, hot ? 1 : 0));
-});
-
-// ---------------------------------------------------------------------------
-// Осколочный паук: стеклянное брюшко с розовым сердцем, ноги-дуги, на спине
-// шипы-осколки. В прыжке — поджат и поднят над своей тенью.
-// ---------------------------------------------------------------------------
-
-const SPG: Tones = [hx('#2c4a60'), hx('#5a8aa6'), hx('#9cd0e4'), hx('#e6faff')];
-const PINK = hx('#ff6a98');
-
-function paintSpider(anim: string, f: number, lift: number): Built {
-  const H0 = 28;
-  const p = new Px(26, H0);
-  const gy = H0 - 4 - lift;
-  const cx = 12;
-  // Вид сбоку в три четверти: голова слева, брюшко справа. Ноги — ломаные
-  // с коленом ВЫШЕ спины, стопы далеко по земле; дальние — темнее и позади
-  // тела. Первый заход раскинул ноги дугами в стороны, и паук читался
-  // летучей мышью.
-  const tuck = anim === 'leap' ? 0.55 : anim === 'aim' ? 1.15 : 1;
-  const legs = (far: boolean) => {
-    for (let i = 0; i < 4; i++) {
-      // Походка «четвёрками»: 0 и 2 ближние идут с 1 и 3 дальними.
-      const grp = (i + (far ? 1 : 0)) % 2;
-      const ph = anim === 'run' ? (f + grp * 2) % 4 : 0;
-      const swing = anim === 'run' ? [1.5, 0.5, -1.5, -0.5][ph] : 0;
-      const up = anim === 'run' && (ph === 0 || ph === 1) ? 1 : 0;
-      const hx0 = cx - 2 + i * 1.3 + (far ? 1 : 0);
-      const hy0 = gy - 5 - (far ? 1 : 0);
-      const fx = cx + (-9.5 + i * 6.2) * tuck + swing + (far ? 1.5 : 0);
-      const fy = gy - (far ? 2 : 0) - up - (anim === 'leap' ? 2 : 0);
-      const kx = hx0 + (fx - hx0) * 0.42 + (i < 2 ? -1 : 1);
-      const ky = gy - 10.5 - (far ? 1 : 0) + (anim === 'aim' ? -1 : 0) + (anim === 'leap' ? 2 : 0);
-      const upper = far ? SPG[0] : SPG[2];
-      const lower = far ? SPG[0] : SPG[1];
-      stroke(p, hx0, hy0, kx, ky, upper);
-      stroke(p, kx, ky, fx, fy, lower);
-      // Коготок — светлая точка стопы (ближние).
-      if (!far) p.set(Math.round(fx), Math.round(fy), SPG[3]);
-      else p.set(Math.round(kx), Math.round(ky), SPG[1]);
-    }
-  };
-  legs(true);
-  // Брюшко — стекло, внутри розовое сердце.
-  shadeEll(p, cx + 4, gy - 6, 4.6, 3.6, SPG, 0.05);
-  p.ell(cx + 4.4, gy - 5.6, 1.6, 1.2, PINK);
-  p.set(cx + 3, gy - 8, SPG[3]);
-  // Шипы-осколки на спине.
-  poly(
-    p,
-    [
-      [cx + 2, gy - 8],
-      [cx + 3, gy - 13],
-      [cx + 4, gy - 8],
-    ],
-    (x) => (x < cx + 3 ? SPG[3] : SPG[2]),
-  );
-  poly(
-    p,
-    [
-      [cx + 5, gy - 8],
-      [cx + 7.5, gy - 12],
-      [cx + 7, gy - 6],
-    ],
-    SPG[2],
-  );
-  // Головогрудь и глаза гроздью.
-  shadeEll(p, cx - 1.5, gy - 5.5, 2.9, 2.5, [
-    hx('#1c2c3c'),
-    hx('#34506a'),
-    hx('#5a86a6'),
-    hx('#a8d4ec'),
-  ]);
-  p.set(cx - 3.5, gy - 7, PINK);
-  p.set(cx - 2.5, gy - 7, PINK);
-  p.set(cx - 3.5, gy - 6, hx('#ffb8d0'));
-  p.set(cx - 2, gy - 8, hx('#ff9ab8'));
-  // Хелицеры.
-  p.set(cx - 4, gy - 4, anim === 'bite' ? WHITE : SPG[2]);
-  p.set(cx - 4, gy - 3, anim === 'bite' ? WHITE : SPG[1]);
-  legs(false);
-  p.outline(alpha(INK, 0.9));
-  return { p, ax: 12, ay: H0 - 3, eye: [cx - 3, gy - 7] };
-}
-
-registerMobPainter('f7_spider', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim === 'run' ? 'run' : pose.anim === 'bite' ? 'bite' : 'idle';
-  let lift = 0;
-  if (pose.mode === 'aim') anim = 'aim';
-  if (pose.mode === 'leap') {
-    anim = 'leap';
-    const k = Math.min(1, pose.t / 0.36);
-    lift = Math.round(Math.sin(k * Math.PI) * 9);
-  }
-  const f = anim === 'run' ? pose.frame % 4 : pose.frame % 2;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_spider', pose, 'dead', k, () => {
-      const b = paintSpider('idle', 0, 0);
-      return { ...b, p: shatter(b.p, 12, 18, (k + 1) / 4, 9) };
-    });
-  }
-  return frameOf('f7_spider', pose, `${anim}${lift}`, f, () => paintSpider(anim, f, lift));
-});
-
-// ---------------------------------------------------------------------------
-// Призма: парящая трёхгранная призма; вращается (кадры — поворот модели),
-// внутри радуга. В прицеле сердцевина раскаляется.
-// ---------------------------------------------------------------------------
-
 const RAINBOW = ['#ff5a7a', '#ffb050', '#fff080', '#80f0a0', '#70c8ff', '#b890ff'].map((c) =>
   hx(c),
 );
-
-function paintPrism(f: number, hot: number, rise: number): Built {
-  const p = new Px(20, 26);
-  const cx = 10;
-  const top = 3;
-  const bot = 20;
-  const a0 = (f / 6) * (TAU / 3);
-  // Три ребра на окружности: видимые грани — между соседними рёбрами.
-  const R = 6;
-  const edges = [0, 1, 2].map((i) => {
-    const a = a0 + (i / 3) * TAU;
-    return { x: cx + Math.cos(a) * R, z: Math.sin(a) };
-  });
-  const faces = [0, 1, 2]
-    .map((i) => {
-      const e0 = edges[i];
-      const e1 = edges[(i + 1) % 3];
-      return { e0, e1, zm: (e0.z + e1.z) / 2 };
-    })
-    .sort((a, b) => a.zm - b.zm);
-  const t: Tones = [hx('#3c2a70'), hx('#6a58b4'), hx('#a8a0ec'), hx('#eee8ff')];
-  for (const fc of faces) {
-    if (fc.zm < -0.3) continue;
-    const l = 0.35 + fc.zm * 0.3 + (fc.e0.x < fc.e1.x ? 0.1 : -0.1) + hot * 0.15;
-    poly(
-      p,
-      [
-        [fc.e0.x, top + 3 - fc.e0.z],
-        [fc.e1.x, top + 3 - fc.e1.z],
-        [fc.e1.x, bot - 3 - fc.e1.z],
-        [fc.e0.x, bot - 3 - fc.e0.z],
-      ],
-      () => tone(t, l),
-    );
-  }
-  // Верх и низ — острия.
-  poly(
-    p,
-    [
-      [cx - 5, top + 3],
-      [cx, top - 2],
-      [cx + 5, top + 3],
-    ],
-    VIO[2],
-  );
-  poly(
-    p,
-    [
-      [cx - 5, bot - 3],
-      [cx, bot + 3],
-      [cx + 5, bot - 3],
-    ],
-    VIO[0],
-  );
-  // Радуга внутри: полоска, сдвигается с поворотом.
-  for (let y = top + 4; y < bot - 3; y++) {
-    const c = RAINBOW[(y + f) % RAINBOW.length];
-    p.set(cx + Math.round(Math.sin(a0 * 3) * 1.5), y, alpha(c, 0.8));
-  }
-  if (hot)
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU + f;
-      p.set(
-        Math.round(cx + Math.cos(a) * 8),
-        Math.round(12 + Math.sin(a) * 9),
-        alpha(RAINBOW[i], 0.8),
-      );
-    }
-  p.set(cx - 2, top + 5, WHITE);
-  p.outline(alpha(INK, 0.85));
-  let q = p;
-  if (rise < 4) {
-    // Поднимается из подставки: сперва видна верхушка.
-    q = new Px(p.w, p.h);
-    const topCut = Math.round(p.h * (1 - (rise + 1) / 4));
-    for (let y = 0; y < p.h - topCut; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (p.data[i + 3])
-          q.set(x, y + topCut, [p.data[i], p.data[i + 1], p.data[i + 2], p.data[i + 3]]);
-      }
-  }
-  return { p: q, ax: 10, ay: 25, eye: [cx, 12] };
-}
-
-registerMobPainter('f7_prism', (m: Mob, pose: MobPose) => {
-  const f = Math.floor(pose.t * 5 + m.id) % 6;
-  const hot = pose.mode === 'aim' ? 1 : 0;
-  const rise = pose.mode === 'f7_rise' ? Math.min(3, Math.floor(pose.t / 0.25)) : 4;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf(
-      'f7_prism',
-      pose,
-      'dead',
-      k,
-      () => {
-        const b = paintPrism(0, 1, 4);
-        return { ...b, p: shatter(b.p, 10, 12, (k + 1) / 4, 13) };
-      },
-      false,
-    );
-  }
-  return frameOf('f7_prism', pose, `p${hot}${rise}`, f, () => paintPrism(f, hot, rise), false);
-});
-
-// ---------------------------------------------------------------------------
-// Стекольщик-воришка: бесёнок в фартуке и зеркальных очках, за спиной мешок
-// с монетами. Ныряет в зеркало — пропадает.
-// ---------------------------------------------------------------------------
-
-const LEATHER: Tones = [hx('#3a2a1e'), hx('#5a4430'), hx('#7a6044'), hx('#9a7c5a')];
-const SACK: Tones = [hx('#4a3418'), hx('#86683a'), hx('#b89a5c'), hx('#e0c890')];
-
-function paintThief(anim: string, f: number): Built {
-  const p = new Px(22, 22);
-  const hop = anim === 'run' ? [0, -1, -2, -1][f % 4] : 0;
-  const cx = 10;
-  const gy = 20;
-  const st = anim === 'run' ? [1, 0, -1, 0][f % 4] : 0;
-  // Ноги.
-  limb(p, cx - 1, gy - 5 + hop, cx - 2 - st, gy, 0.8, 0.7, LEATHER);
-  limb(p, cx + 2, gy - 5 + hop, cx + 3 + st, gy, 0.8, 0.7, LEATHER);
-  // Мешок за спиной.
-  shadeEll(p, cx - 4, gy - 9 + hop, 4, 4.4, SACK);
-  p.set(cx - 5, gy - 12 + hop, GOLD);
-  p.set(cx - 3, gy - 7 + hop, hx('#fff0a0'));
-  stroke(p, cx - 4, gy - 13 + hop, cx - 3, gy - 14 + hop, hx('#5a3a1a'));
-  // Тело в фартуке.
-  shadeEll(p, cx + 1, gy - 8 + hop, 3.2, 3.6, GL, 0.1);
-  poly(
-    p,
-    [
-      [cx - 1, gy - 9 + hop],
-      [cx + 4, gy - 9 + hop],
-      [cx + 4, gy - 4 + hop],
-      [cx - 1, gy - 4 + hop],
-    ],
-    hx('#6a4a2c'),
-  );
-  stroke(p, cx - 1, gy - 9 + hop, cx + 4, gy - 9 + hop, hx('#8a6a42'));
-  // Голова, уши, очки-зеркальца.
-  shadeEll(p, cx + 2, gy - 14 + hop, 3.6, 3.2, GL, 0.15);
-  poly(
-    p,
-    [
-      [cx - 1, gy - 16 + hop],
-      [cx - 3, gy - 19 + hop],
-      [cx, gy - 17 + hop],
-    ],
-    GL[1],
-  );
-  poly(
-    p,
-    [
-      [cx + 5, gy - 16 + hop],
-      [cx + 7, gy - 19 + hop],
-      [cx + 4, gy - 17 + hop],
-    ],
-    GL[1],
-  );
-  p.ell(cx + 1, gy - 14 + hop, 1.2, 1.2, SILV[2]);
-  p.ell(cx + 4, gy - 14 + hop, 1.2, 1.2, SILV[2]);
-  p.set(cx + 1, gy - 15 + hop, WHITE);
-  p.set(cx + 4, gy - 15 + hop, WHITE);
-  stroke(p, cx + 2, gy - 12 + hop, cx + 3, gy - 12 + hop, INK);
-  p.outline(alpha(INK, 0.9));
-  return { p, ax: 10, ay: 21, eye: [cx + 3, gy - 14 + hop] };
-}
-
-registerMobPainter('f7_thief', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'f7_dive') {
-    // Ныряет в зеркало: распадается полосами, как отражение, уходящее в стекло.
-    const k = Math.min(3, Math.floor(pose.t / 0.1));
-    return frameOf('f7_thief', pose, 'dive', k, () => {
-      if (k >= 3) return { p: new Px(2, 2), ax: 1, ay: 1, eye: null };
-      const b = paintThief('run', 1);
-      return { ...b, p: slices(b.p, (k + 1) / 4, true), eye: null };
-    });
-  }
-  const anim = pose.anim === 'run' ? 'run' : 'idle';
-  const f = anim === 'run' ? pose.frame % 4 : 0;
-  if (pose.anim === 'dead') {
-    const k = Math.min(3, Math.floor(pose.t / 0.15));
-    return frameOf('f7_thief', pose, 'dead', k, () => {
-      const b = paintThief('idle', 0);
-      return { ...b, p: shatter(b.p, 10, 12, (k + 1) / 4, 17) };
-    });
-  }
-  return frameOf('f7_thief', pose, anim, f, () => paintThief(anim, f));
-});
 
 // ---------------------------------------------------------------------------
 // Реквизит. Живые (кадрами): блик по зеркалу, колонна со светом внутри,
@@ -5854,20 +4972,49 @@ registerZonePainter('f7_flash', (g, z0, px, py, S) => {
 registerZonePainter('f7_grab', (g, z0, px, py, S) => {
   const z = z0 as ZoneX;
   const a = (z.ang as number) ?? 0;
-  const len = ((z.len as number) ?? 1) * S;
+  const full = ((z.len as number) ?? 1) * S;
   const k = zk(z);
-  g.fillStyle = `rgba(40,28,70,${0.9 - k * 0.6})`;
-  for (let i = 0; i < len; i += 1) {
-    const w = Math.sin(i * 0.5) * 1.2;
-    g.fillRect(
-      Math.round(px + Math.cos(a) * i - Math.sin(a) * w),
-      Math.round(py - 6 + Math.sin(a) * i + Math.cos(a) * w),
-      2,
-      2,
-    );
+  // Анимации мобов 7: дымная рука вылетает из плеча (0,06 с), держит,
+  // когти смыкаются — и рука уходит обратно в тень.
+  const out = k < 0.18 ? 1 - (1 - k / 0.18) ** 3 : k > 0.55 ? 1 - ((k - 0.55) / 0.45) ** 2 : 1;
+  const len = full * Math.max(0, out);
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const y0 = py - 7;
+  const at = (i: number): [number, number] => {
+    const w = Math.sin(i * 0.45 + k * 20) * 1.1 * (1 - (0.5 * i) / Math.max(1, full));
+    return [px + ca * i - sa * w, y0 + sa * i + ca * w];
+  };
+  for (const [col, grow] of [
+    ['rgba(8,5,16,0.95)', 1],
+    ['rgba(38,28,68,1)', 0],
+    ['rgba(108,90,168,1)', -1],
+  ] as [string, number][]) {
+    g.fillStyle = col;
+    for (let i = 4; i < len; i++) {
+      const [x, y] = at(i);
+      const r = Math.max(0, 1.2 - (0.6 * i) / Math.max(1, full) + grow * 0.6);
+      const s = Math.max(1, Math.round(r * 2));
+      g.fillRect(
+        Math.round(x - r - (grow < 0 ? 0.6 : 0)),
+        Math.round(y - r - (grow < 0 ? 0.6 : 0)),
+        grow < 0 ? 1 : s,
+        grow < 0 ? 1 : s,
+      );
+    }
   }
-  g.fillStyle = 'rgba(160,140,230,0.9)';
-  g.fillRect(Math.round(px + Math.cos(a) * len), Math.round(py - 6 + Math.sin(a) * len), 2, 2);
+  // Когти на конце: раскрыты в броске, сомкнуты, пока держит.
+  if (len > 4) {
+    const [tx, ty] = at(len);
+    const open = k < 0.3 ? 1 : 0.25;
+    for (let c = -1; c <= 1; c++) {
+      const b = a + c * 0.55 * open;
+      for (let s = 0; s < 4; s++) {
+        g.fillStyle = s === 3 ? '#d8ccff' : '#8c7ad8';
+        g.fillRect(Math.round(tx + Math.cos(b) * s), Math.round(ty + Math.sin(b) * s), 1, 1);
+      }
+    }
+  }
   return true;
 });
 
@@ -6104,6 +5251,25 @@ registerItemArt('f7_core', () => {
   p.outline(INK);
   return p;
 });
+
+/** Крыло-зеркальце в оправе (иконка крыла; бабочка — в `f7-mob-moth.ts`). */
+function mothWing(p: Px, pts: [number, number][], hot: number): void {
+  const base: Tones = hot
+    ? [hx('#a8c8ec'), hx('#dcecff'), hx('#f6fbff'), WHITE]
+    : [hx('#3a4a6c'), hx('#6c86ae'), hx('#b0c8e4'), hx('#eef6ff')];
+  // Стекло с отражением: свет сверху-слева по плоскости крыла.
+  const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length;
+  const cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
+  poly(p, pts, (x, y) => tone(base, 0.5 - (x - cx) * 0.08 - (y - cy) * 0.1));
+  // Оправа — тонкий кант.
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    stroke(p, a[0], a[1], b[0], b[1], hot ? CYAN_HOT : SILV[1]);
+  }
+  // Блик по диагонали.
+  stroke(p, cx - 1.5, cy - 1, cx + 0.5, cy + 1, base[3]);
+}
 
 registerItemArt('f7_wing', () => {
   const p = new Px(10, 10);
