@@ -31,11 +31,12 @@ import { heroSprite } from '../dungeon-sprites';
 import type { Dir4 } from '../dungeon-sprites';
 import { F14_DIAL, F14_GEO, F14_MARK, F14_MECH, F14_SAND, F14_TOP } from './f14';
 import { MAP_F14_DIAL, MAP_F14_SAND } from './f14-map';
-import { F14_FX, KNIFE_ANG, LORD, NOON, REAPER, rewindTrail, worldStopped } from './f14-brains';
+import { F14_FX, KNIFE_ANG, LORD, NOON, rewindTrail, worldStopped } from './f14-brains';
 import './f14-mob-beetle';
 import './f14-mob-soldier';
 import './f14-mob-sand';
 import './f14-mob-rewinder';
+import './f14-mob-reaper';
 
 type RGBA = [number, number, number, number];
 
@@ -669,139 +670,6 @@ registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
   const out: MobFrame = { img: q.canvas(), ax: c, ay: c + 4, eye: null };
   frames.set(key, out);
   return out;
-});
-
-// ---------------------------------------------------------------------------
-// Маятниковый жнец: высокий, в тёмном балахоне с латунной каймой; вместо
-// лица в капюшоне — циферблат. Коса — маятник: латунный стержень с грузом
-// и лезвие-полумесяц. Кадр 40×34, земля 32.
-// ---------------------------------------------------------------------------
-
-const REAP = {
-  robe: tn('#08070c', '#16131e', '#282232', '#403850'),
-  blade: tn('#3a4250', '#7a8898', '#c0ccd8', '#f4faff'),
-  bone: hx('#d8ccb0'),
-};
-
-interface ReapPose {
-  f: number;
-  blade: number;
-  hem: number;
-  bow: number;
-}
-
-function drawReaper(o: ReapPose): Built {
-  const p = new Px(40, 34);
-  const G = 32;
-  const cx = 17;
-  // Балахон: трапеция с рваным подолом.
-  const top = 10 + o.bow;
-  polyShade(
-    p,
-    [
-      [cx - 3, top],
-      [cx + 3, top],
-      [cx + 6, G - 1],
-      [cx - 6, G - 1],
-    ],
-    REAP.robe,
-    0.05,
-  );
-  for (let x = cx - 6; x <= cx + 6; x++) {
-    const d = (hash(x, o.hem) > 0.5 ? 1 : 0) + ((x + o.hem) % 3 === 0 ? 1 : 0);
-    for (let y = G - d; y < G; y++) clear(p, x, y);
-  }
-  // Латунная кайма по подолу и полам.
-  for (let x = cx - 5; x <= cx + 5; x++) if ((x + o.hem) % 2) p.set(x, G - 3, BRASS[2]);
-  for (let y = top + 3; y < G - 3; y++) p.set(cx + 1 + Math.floor((y - top) * 0.18), y, BRASS[1]);
-  // Капюшон и циферблат вместо лица.
-  shadeEll(p, cx + 1, top - 2, 4.4, 4.6, REAP.robe, 0.12);
-  dialFace(p, cx + 2, top - 1.5, 3.2, (o.f / 4) * TAU, 1.2, {
-    rim: tn('#2a1c0c', '#5a3c18', '#8a6424', '#c89a48'),
-  });
-  // Коса: стержень от рук к лезвию; угол — такт маятника.
-  const hxp = cx + 4;
-  const hyp = top + 6;
-  const a = o.blade;
-  const ang = -Math.PI / 2 + a * 1.25;
-  const L = 13;
-  const bx = hxp + Math.cos(ang) * L;
-  const by = hyp + Math.sin(ang) * L * 0.8;
-  stroke(p, hxp, hyp + 2, bx, by, BRASS[1], 1);
-  stroke(p, hxp + 0.6, hyp + 1.5, bx + 0.6, by - 0.5, BRASS[3], 1);
-  // Лезвие-полумесяц, изогнуто против хода.
-  const perp = ang + (Math.PI / 2) * (a >= 0 ? 1 : -1);
-  for (let i = 0; i <= 12; i++) {
-    const k = i / 12;
-    const r = 7.5 * (1 - k * 0.15);
-    const aa = perp + (k - 0.2) * 2;
-    const x = bx + Math.cos(aa) * r * 0.9;
-    const y = by + Math.sin(aa) * r * 0.9;
-    const w = 1.7 * (1 - Math.abs(k - 0.35) * 1.4);
-    if (w > 0.3)
-      p.ell(x, y, Math.max(0.5, w), Math.max(0.5, w), k < 0.5 ? REAP.blade[3] : REAP.blade[2]);
-  }
-  // Груз маятника на стержне.
-  shadeEll(p, (hxp + bx) / 2, (hyp + by) / 2, 1.7, 1.7, BRASS, 0.2);
-  // Руки — рукава и костяные кисти.
-  limb(p, cx + 2, top + 4, hxp, hyp, 1.2, 0.9, REAP.robe);
-  p.set(Math.round(hxp), Math.round(hyp), REAP.bone);
-  p.set(Math.round(hxp + 1), Math.round(hyp), REAP.bone);
-  p.outline(INK);
-  return { p, ax: cx, ay: G, eye: null };
-}
-
-registerMobPainter('f14_reaper', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame % 4;
-  let anim = 'idle';
-  let fr = f;
-  let o: ReapPose = { f, blade: 0, hem: f, bow: 0 };
-  const gray = mode === 'f14_frozen';
-  if (gray) {
-    anim = 'tableau';
-    fr = 0;
-    o = { f: 1, blade: 0.75, hem: 1, bow: 1 };
-  } else if (mode === 'f14_swing') {
-    // Лезвие в сторону такта: пока метка горит — занесено, потом — пролёт.
-    const side = m.data.swSide ?? 1;
-    const since = pose.t - (m.data.swAt ?? 0);
-    const k = Math.min(1, Math.max(0, since / REAPER.warn));
-    const pos = k < 0.8 ? -side * (0.4 + k * 0.5) : side * 0.9;
-    anim = 'swing';
-    fr = Math.round(pos * 4) + 4;
-    o = { f: 0, blade: fr / 4 - 1, hem: 0, bow: 1 };
-  } else if (mode === 'recover') {
-    anim = 'rest';
-    fr = 0;
-    o = { f: 0, blade: 0.9, hem: 1, bow: 2 };
-  } else if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-    o = { f: 0, blade: 0.8, hem: 0, bow: 3 };
-  } else if (pose.anim === 'run') {
-    anim = 'run';
-    o = { f, blade: Math.sin((f / 4) * TAU) * 0.15, hem: f, bow: 0 };
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    fr = 0;
-    o = { f: 0, blade: -0.3, hem: 2, bow: -1 };
-  } else {
-    // Покой: коса за спиной качается, как маятник.
-    o = { f, blade: Math.sin((f / 4) * TAU) * 0.18, hem: 0, bow: 0 };
-  }
-  return frameOf(
-    'f14_reaper',
-    pose,
-    anim,
-    fr,
-    () => {
-      const b = drawReaper(o);
-      if (anim === 'dead') b.p = scatter(b.p, fr, 9, [BRASS[3], ENAMEL[2], REAP.robe[2]]);
-      return b;
-    },
-    gray,
-  );
 });
 
 // ---------------------------------------------------------------------------

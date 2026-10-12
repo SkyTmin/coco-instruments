@@ -331,6 +331,8 @@ export interface Kind {
   /** Облик и серый — из готового кадра, свой кеш (~35 % предела вида). */
   looks: FrameLRU<MobFrame>;
   limit: number;
+  /** Точек в построенных кадрах вида (замер памяти). */
+  px: number;
 }
 
 const KINDS: Kind[] = [];
@@ -351,6 +353,7 @@ export const kindOf = (
     frames: frameLRU<MobFrame>(limit),
     looks: frameLRU<MobFrame>(Math.ceil(limit * 0.35)),
     limit,
+    px: 0,
   };
   KINDS.push(K);
   return K;
@@ -388,7 +391,11 @@ export const F14_MOB_STAT = {
     F14_MOB_STAT.maxKey = '';
     F14_MOB_STAT.battle.clear();
   },
-  sizes: () => KINDS.map((K) => `${K.name} ${K.frames.size}+${K.looks.size}/${K.limit}`),
+  sizes: () =>
+    KINDS.map(
+      (K) =>
+        `${K.name} ${K.frames.size}+${K.looks.size}/${K.limit} ${((K.px * 4) / 1048576).toFixed(1)}MB`,
+    ),
 };
 function stat(ms: number, K: Kind, key: string): void {
   if (F14_MOB_STAT.warming) {
@@ -667,7 +674,9 @@ export function frameOf(
     if (live) budSpent += ms;
     F14_MOB_STAT.built++;
     if (fr.lit) F14_MOB_STAT.lit++;
-    F14_MOB_STAT.px += fr.img.width * fr.img.height * (fr.lit ? 2 : 1);
+    const px = fr.img.width * fr.img.height * (fr.lit ? 2 : 1);
+    F14_MOB_STAT.px += px;
+    K.px += px;
   }
   if (pose.look !== 'normal' || gray) {
     const lk = `${key}|${pose.look}|${gray ? 1 : 0}`;
