@@ -194,16 +194,7 @@ const PAL_V: RGBA[][][] = [
     // Ворот: фиолетовый отлив.
     ramp('#181026', '#221836', '#2e2248', '#3c2c5a', '#4c376c', '#5e4480', '#735496', '#8c68ac'),
     // Лапки: розовые.
-    ramp(
-      '#3e1418',
-      '#5e2026',
-      '#823036',
-      '#a4444a',
-      '#c45a5e',
-      '#dc7478',
-      '#ec9294',
-      '#f6b4b4',
-    ),
+    ramp('#3e1418', '#5e2026', '#823036', '#a4444a', '#c45a5e', '#dc7478', '#ec9294', '#f6b4b4'),
     // Клюв и когти: тёмный рог.
     ramp('#0f0c0e', '#1c181b', '#2a2428', '#3a3237', '#4b4248', '#5e555b', '#766c72'),
     // Восковица: белая.
@@ -256,16 +247,7 @@ const PAL_V: RGBA[][][] = [
     // Ворот золотого: изумруд и розовое золото.
     ramp('#06221a', '#0a3426', '#0e4834', '#145e44', '#1c7654', '#269066', '#36aa7a', '#58c494'),
     ramp('#34120e', '#521e16', '#702c20', '#8e3e2c', '#aa543a', '#c46c4c', '#d88a64', '#eaa882'),
-    ramp(
-      '#3e1a14',
-      '#5e2a20',
-      '#82402e',
-      '#a4583c',
-      '#c4724c',
-      '#dc8e62',
-      '#eeac80',
-      '#f8cca4',
-    ),
+    ramp('#3e1a14', '#5e2a20', '#82402e', '#a4583c', '#c4724c', '#dc8e62', '#eeac80', '#f8cca4'),
     ramp('#140e08', '#241a10', '#36281a', '#4a3a26', '#604e34', '#7a6646', '#968260'),
     ramp('#7a6a48', '#9c8a62', '#bcaa7e', '#d6c69a', '#e8dab4', '#f4ead0', '#fcf6e8'),
     LEATHER,
@@ -742,6 +724,9 @@ function workPose(t: number): Pose {
   o.tie = kf(t, [
     [1.5, 0],
     [T_TIE, 1, 's'],
+    // Крыло уже отпустило (holdR 0) — сброс к покою не виден.
+    [1.9, 1],
+    [1.91, 0],
   ]);
   o.bow = kf(t, [
     [0, 0],
@@ -964,21 +949,20 @@ function sleepPose(t: number): Pose {
   return o;
 }
 
+const POSES: Record<Anim, (t: number) => Pose> = {
+  idle: idlePose,
+  walk: walkPose,
+  happy: happyPose,
+  work: workPose,
+  attack: attackPose,
+  sleep: sleepPose,
+};
+
 export function poseAt(a: Anim, t: number): Pose {
-  switch (a) {
-    case 'idle':
-      return idlePose(t);
-    case 'walk':
-      return walkPose(t);
-    case 'happy':
-      return happyPose(t);
-    case 'work':
-      return workPose(t);
-    case 'attack':
-      return attackPose(t);
-    case 'sleep':
-      return sleepPose(t);
-  }
+  const o = POSES[a](t);
+  // Отлив — фаза круга: целое число кругов = ноль (стык с покоем без шва).
+  o.shim = frac(o.shim);
+  return o;
 }
 
 // ---------------------------------------------------------------------------
@@ -1516,7 +1500,11 @@ function cap(out: PartF[], c: Ctx): void {
   for (const side of [-1, 1]) {
     const top = cf.at([side * (HRX + 0.05), -0.4, 0.3 * HRZ]);
     const d = norm(
-      add(cf.dir(norm([side * (0.12 + Math.max(0, -dz) * 0.4), 0.05, -1])), [sw, 0, Math.max(0, dz)]),
+      add(cf.dir(norm([side * (0.12 + Math.max(0, -dz) * 0.4), 0.05, -1])), [
+        sw,
+        0,
+        Math.max(0, dz),
+      ]),
     );
     const L = 4.4 * k;
     out.push({
@@ -1526,7 +1514,8 @@ function cap(out: PartF[], c: Ctx): void {
       pal: P_LEATHER,
       id: nid(),
       bias: -0.04,
-      tex: (qx, qy) => (Math.abs(qy) > 0.78 || qx > 0.82 ? 0.08 : HI && Math.abs(qy) > 0.62 ? -0.06 : 0),
+      tex: (qx, qy) =>
+        Math.abs(qy) > 0.78 || qx > 0.82 ? 0.08 : HI && Math.abs(qy) > 0.62 ? -0.06 : 0,
     });
   }
   // Очки на лбу шлема: латунная оправа, тёмное стекло с бликом (светлое
@@ -2192,7 +2181,7 @@ function cloverAt(c: Ctx, s: number): { p: V3; spin: number; roll: number; sz: n
   } else p = lerp3(P3, P4, (s - 0.88) / 0.12);
   return {
     p,
-    spin: s * Math.PI * 3,
+    spin: s * Math.PI * 2,
     roll: -s * Math.PI * 1.2,
     sz: s < 0.14 ? 0.5 + 0.5 * (s / 0.14) : 1,
   };
@@ -2249,11 +2238,13 @@ function eyes(p: Px, f: Frame, c: Ctx): void {
         const py = Y + 0.5 - cy;
         const d = Math.hypot(px, py);
         if (o.eye === 'happy') {
-          if (Math.abs(d - R * 0.8) < (HI ? 0.75 : 0.62) && py < (HI ? -0.2 : 0.3)) p.set(X, Y, ink);
+          if (Math.abs(d - R * 0.8) < (HI ? 0.75 : 0.62) && py < (HI ? -0.2 : 0.3))
+            p.set(X, Y, ink);
           continue;
         }
         if (o.eye === 'sleep') {
-          if (Math.abs(d - R * 0.8) < (HI ? 0.75 : 0.62) && py > (HI ? 0.3 : -0.3)) p.set(X, Y, ink);
+          if (Math.abs(d - R * 0.8) < (HI ? 0.75 : 0.62) && py > (HI ? 0.3 : -0.3))
+            p.set(X, Y, ink);
           continue;
         }
         const ring = HI ? 1.0 : 0.6;
@@ -2302,12 +2293,13 @@ function clover(p: Px, f: Frame, c: Ctx): void {
   const { p: q, spin, roll, sz } = cloverAt(c, o.clover);
   const [cx, cy] = scr(q);
   const dep = project(mul(q, RR))[2];
-  const s = (HI ? 2.5 : 1.12) * sz;
-  const sxk = Math.max(0.3, Math.abs(Math.cos(spin)));
+  const s = (HI ? 3.0 : 1.25) * sz;
+  // Поворот вокруг стебля — лёгкий: ребром клевер превращался в огурец.
+  const sxk = 0.68 + 0.32 * Math.abs(Math.cos(spin));
   const cr = Math.cos(roll);
   const sr = Math.sin(roll);
   const leaf = (x: number, y: number): number => {
-    // 0 — мимо, 1 — лист, 2 — жилка.
+    // −1 — мимо, иначе 2·номер листа (+1 — жилка).
     for (let j = 0; j < 4; j++) {
       const a = Math.PI / 4 + (j * Math.PI) / 2;
       const ux = Math.cos(a);
@@ -2318,10 +2310,12 @@ function clover(p: Px, f: Frame, c: Ctx): void {
       const r = 0.82 * s;
       const c1 = Math.hypot(along - 1.45 * s, across - 0.5 * s);
       const c2 = Math.hypot(along - 1.45 * s, across + 0.5 * s);
-      const wedge = along > 0.15 * s && along < 1.5 * s && Math.abs(across) < (along / (1.5 * s)) * 1.05 * s;
-      if (c1 < r || c2 < r || wedge) return HI && Math.abs(across) < 0.35 && along > 0.5 * s ? 2 : 1;
+      const wedge =
+        along > 0.15 * s && along < 1.5 * s && Math.abs(across) < (along / (1.5 * s)) * 1.05 * s;
+      if (c1 < r || c2 < r || wedge)
+        return j * 2 + (HI && Math.abs(across) < 0.35 && along > 0.9 * s ? 1 : 0);
     }
-    return 0;
+    return -1;
   };
   const stem = (x: number, y: number) =>
     x > -0.2 * s && x < 2.2 * s && Math.abs(y - x * 0.9) < (HI ? 0.55 : 0.5) && y > 0;
@@ -2334,7 +2328,8 @@ function clover(p: Px, f: Frame, c: Ctx): void {
     const ly = Y + 0.5 - cy;
     const x = lx * cr + ly * sr;
     const y = -lx * sr + ly * cr;
-    return leaf(x, y) || (stem(lx, ly) ? 3 : 0);
+    const l = leaf(x, y);
+    return l >= 0 ? l : stem(lx, ly) ? 8 : -1;
   };
   const G = CLOVER;
   for (let dy = -n; dy <= n; dy++)
@@ -2345,17 +2340,38 @@ function clover(p: Px, f: Frame, c: Ctx): void {
       const i = Y * f.w + X;
       if (f.pal[i] >= 0 && f.zb[i] > dep + tol) continue;
       const kind = inside(X, Y);
-      if (kind) {
+      if (kind >= 0) {
         const lx = X + 0.5 - cx;
         const ly = Y + 0.5 - cy;
-        let tone = kind === 3 ? 3 : kind === 2 ? 4 : lx + ly < -0.5 * s ? 7 : lx + ly < 1.2 * s ? 6 : 5;
-        if (sxk < 0.55) tone -= 1;
+        // Шов между листьями — тёмный крест: без него четыре листа сливались в шар.
+        let seam = false;
+        if (kind < 8)
+          for (const [ax, ay] of [
+            [1, 0],
+            [0, 1],
+          ]) {
+            const nb = inside(X + ax, Y + ay);
+            if (nb >= 0 && nb < 8 && nb >> 1 !== kind >> 1) seam = true;
+          }
+        let tone =
+          kind === 8
+            ? 3
+            : seam
+              ? 2
+              : kind & 1
+                ? 4
+                : lx + ly < -0.5 * s
+                  ? 7
+                  : lx + ly < 1.2 * s
+                    ? 6
+                    : 5;
+        if (sxk < 0.75 && tone > 4) tone -= 1;
         p.set(X, Y, G[tone]);
       } else if (
-        inside(X - 1, Y) ||
-        inside(X + 1, Y) ||
-        inside(X, Y - 1) ||
-        inside(X, Y + 1)
+        inside(X - 1, Y) >= 0 ||
+        inside(X + 1, Y) >= 0 ||
+        inside(X, Y - 1) >= 0 ||
+        inside(X, Y + 1) >= 0
       )
         p.set(X, Y, G[1]);
     }
@@ -2379,7 +2395,14 @@ function glints(p: Px, c: Ctx): void {
   if (o.glint < 0.3) return;
   if (a === 'work' && t > 1.4) {
     const [x, y] = scr(add(BAG_C, [0.5, 0, (BAG_R[2] + 1.6) * c.S.k]));
-    star(p, Math.round(x), Math.round(y), HI ? Math.round(1 + 3 * o.glint) : o.glint > 0.6 ? 2 : 1, WHITE, CLOVER[7]);
+    star(
+      p,
+      Math.round(x),
+      Math.round(y),
+      HI ? Math.round(1 + 3 * o.glint) : o.glint > 0.6 ? 2 : 1,
+      WHITE,
+      CLOVER[7],
+    );
     return;
   }
   if (a === 'work') return;
@@ -2387,7 +2410,14 @@ function glints(p: Px, c: Ctx): void {
   if (!g) return;
   const [x, y] = scr(g);
   const L = HI ? Math.round(1 + 2 * o.glint) : o.glint > 0.6 ? 1 : 0;
-  star(p, Math.round(x - (HI ? 1.5 : 0.5)), Math.round(y - (HI ? 1.5 : 0.5)), L, WHITE, PAL[P_GLASS][8]);
+  star(
+    p,
+    Math.round(x - (HI ? 1.5 : 0.5)),
+    Math.round(y - (HI ? 1.5 : 0.5)),
+    L,
+    WHITE,
+    PAL[P_GLASS][8],
+  );
 }
 
 /** «!» над головой справа — только по пустому фону, с тёмной обводкой. */
@@ -2395,7 +2425,8 @@ const BANG_S = ['x', 'x', 'x', '.', 'x'];
 const BANG_L = ['xxx', 'xxx', 'xxx', 'xxx', 'xxx', '.x.', '...', 'xxx', 'xxx'];
 function bang(p: Px, mask: Uint8Array, c: Ctx): void {
   const { o, h } = c;
-  if (o.bang <= 0.02) return;
+  // Шахматкой «!» гас грязными точками контура — исчезает целиком.
+  if (o.bang < 0.4) return;
   const [hxp, hyp] = scr(h.at([HRX * 0.95, 0, HRZ * 1.05]));
   const rows = HI ? BANG_L : BANG_S;
   const x0 = Math.round(hxp + (HI ? 4 : 2));
@@ -2408,7 +2439,6 @@ function bang(p: Px, mask: Uint8Array, c: Ctx): void {
       const X = x0 + x;
       const Y = y0 + y;
       if (X < 0 || Y < 0 || X >= p.w || Y >= p.h || mask[Y * p.w + X]) continue;
-      if (!dith(X, Y, o.bang * 1.1)) continue;
       if (on(x, y)) p.set(X, Y, BANG);
       else if (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1)) p.set(X, Y, ink);
     }

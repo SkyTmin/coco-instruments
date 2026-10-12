@@ -14,6 +14,7 @@ import * as Ferret from './pets-pixel/ferret';
 import * as Fox from './pets-pixel/fox';
 import * as Mole from './pets-pixel/mole';
 import * as Owl from './pets-pixel/owl';
+import * as Pigeon from './pets-pixel/pigeon';
 import * as Raccoon from './pets-pixel/raccoon';
 import * as Raven from './pets-pixel/raven';
 import * as Roach from './pets-pixel/roach';
@@ -1228,5 +1229,122 @@ describe('пиксельный таракан', () => {
       const o = W.poseAt('walk', i / W.FPS);
       expect([o.carry, o.fLx, o.fRx]).toEqual([0, 0, 0]);
     }
+  });
+});
+
+describe('пиксельный голубь', () => {
+  const W = Pigeon;
+
+  it('рисунок детерминирован; золотой рисует сам, на том же холсте', () => {
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1]) {
+        const a = W.pigeonFrame('work', 26, r, v);
+        const b = W.pigeonFrame('work', 26, r, v);
+        expect([a.w, a.h]).toEqual([W.RES[r].cw, W.RES[r].ch]);
+        expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
+      }
+    const plain = W.pigeonFrame('idle', 0, 's', 0).data;
+    const gold = W.pigeonFrame('idle', 0, 's', 1).data;
+    expect(Buffer.from(plain).equals(Buffer.from(gold))).toBe(false);
+  });
+
+  it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, только свой золотой', () => {
+    const m = PET_PX.pigeon;
+    expect(m.box).toBe(W.RES.s.box);
+    expect(m.large?.box).toBe(W.RES.l.box);
+    for (const a of ANIMS) {
+      for (const set of [m, m.large!]) {
+        expect(set.anims[a].n).toBe(W.FRAMES[a]);
+        expect(set.anims[a].fps).toBe(W.FPS);
+      }
+      expect(PIXEL_PETS.pigeon.anims[a]).toEqual({ n: W.FRAMES[a], fps: W.FPS });
+    }
+    expect(PIXEL_PETS.pigeon.variants).toEqual([1]);
+    expect(PET_SPRITES.pigeon).toBeUndefined();
+    expect(pixelList).toContain('pigeon');
+    const sec = (a: Anim) => W.FRAMES[a] / W.FPS;
+    expect([sec('idle'), sec('sleep'), sec('walk'), sec('work')]).toEqual([3, 3, 1, 2]);
+    expect(Math.abs(sec('happy') - 1.1)).toBeLessThan(0.05);
+    expect(Math.abs(sec('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {
+    const T = (a: Anim) => W.FRAMES[a] / W.FPS;
+    const rest = W.poseAt('idle', 0);
+    const lag0 = W.lagOf('idle', 0);
+    for (const a of ['happy', 'work', 'attack'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), rest)]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), lag0, 0.05)]).toEqual([a, []]);
+    }
+    for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), W.poseAt(a, 0))]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), W.lagOf(a, 0), 0.05)]).toEqual([a, []]);
+    }
+  });
+
+  it('трюк: записка слетает с лапки в крылья, разворачивается, «!», клевер выпрыгивает, записка снова на лапке', () => {
+    const P = (t: number) => W.poseAt('work', t);
+    // Начинает привязанной; лапку поднял и трясёт.
+    expect(P(0).tied).toBe(1);
+    expect(P(0.18).tied).toBe(1);
+    expect(P(0.18).fRz).toBeGreaterThan(1);
+    // Нитка лопнула — записка в полёте, ещё не в крыльях.
+    const pop = P(0.26);
+    expect([pop.tied, pop.pop >= 0, pop.fly > 0, pop.holdL < 1]).toEqual([0, true, true, true]);
+    // Поймал обоими крыльями, развернул, читает.
+    const c = P(0.5);
+    expect([c.fly, c.holdL, c.holdR]).toEqual([-1, 1, 1]);
+    const r = P(0.9);
+    expect([r.spread, r.holdL, r.holdR]).toEqual([1, 1, 1]);
+    expect(r.lookY).toBeGreaterThan(0);
+    // «!» — после чтения; клевер выпрыгивает из листа, пока лист развёрнут.
+    expect(P(0.95).bang).toBe(0);
+    const b = P(1.1);
+    expect(b.bang).toBe(1);
+    expect(b.clover).toBeGreaterThan(0);
+    expect(b.spread).toBe(1);
+    expect(P(1.0).clover).toBe(-1);
+    // Свёрток несёт одно правое крыло к поднятой лапке, вес на левой, привязывает.
+    const tie = P(1.68);
+    expect([tie.tied, tie.holdL, tie.holdR]).toEqual([0, 0, 1]);
+    expect(tie.fRz).toBeGreaterThan(2);
+    expect(tie.x).toBeLessThan(0);
+    expect(P(1.76).tied).toBe(1);
+    const end = P(2);
+    expect([end.tied, end.fly, end.pop, end.bang, end.clover, end.holdL, end.holdR]).toEqual([
+      1, -1, -1, 0, -1, 0, 0,
+    ]);
+    expect([end.spread, end.tie, end.fRz, end.x]).toEqual([0, 0, 0, 0]);
+  });
+
+  it('атака: в кадре удара крылья распахнуты, клюв раскрыт, голова к зрителю; сон — голова в пере', () => {
+    const strike = W.poseAt('attack', 9 / 24);
+    expect(strike.scale).toBeGreaterThan(1.1);
+    expect(strike.beak).toBeGreaterThan(0.8);
+    expect(Math.min(strike.thL, strike.thR)).toBeGreaterThan(1.4);
+    expect(strike.hy).toBeGreaterThan(2);
+    expect(strike.strike).toBeGreaterThanOrEqual(0);
+    expect(strike.eye).toBe('angry');
+    const sleep = W.poseAt('sleep', 1.5);
+    expect([sleep.tuck, sleep.eye, sleep.capTip > 0.3]).toEqual([1, 'sleep', true]);
+  });
+
+  it('ходьба: лапки по очереди, опорная стоит; голова держится на месте и догоняет тело рывком', () => {
+    const a = W.poseAt('walk', 0.25);
+    expect(a.fLz).toBeGreaterThan(1);
+    expect([a.fRz, a.fRy]).toEqual([0, 0]);
+    const b = W.poseAt('walk', 0.75);
+    expect(b.fRz).toBeGreaterThan(1);
+    expect([b.fLz, b.fLy]).toEqual([0, 0]);
+    for (let i = 0; i < W.FRAMES.walk; i++) {
+      const o = W.poseAt('walk', i / W.FPS);
+      expect([o.fz, o.fLx, o.fRx]).toEqual([0, 0, 0]);
+    }
+    // Тело качается, а голова в мире стоит, пока не пришёл рывок.
+    const h0 = W.poseAt('walk', 0.0);
+    const h1 = W.poseAt('walk', 0.1);
+    expect(Math.abs(h0.x - h1.x)).toBeGreaterThan(0.05);
+    expect(Math.abs(h0.x + h0.hx - (h1.x + h1.hx))).toBeLessThan(1e-9);
+    expect(W.poseAt('walk', 0.17).hy).toBeGreaterThan(h1.hy + 1);
   });
 });
