@@ -353,6 +353,37 @@ Owner: «добавь возможность выбирать скин у пит
   gold fur with bronze depth, white → pale gold, dark bronze ears and leather, brass knuckles
   brighter to white. Hatch plays `happy`. Weight 535 KB v0+v1 (small 56 / 61, large 201 / 215,
   thumbs 1 KB; ink was 1.81 MB). Tests «пиксельный бульдог» in `pets-pixel.test.ts`.
+- **Cat** (`pets-pixel/cat.ts`, `catFrame(a, i, res, v)`, `variants: [1]`): «Кот Шрам», a big
+  grey-brown tabby tom SITTING facing us (fox's `drawPartsF` + `pick`/`tube`, badger's `vis`,
+  `cut`, `floor` and `rodF` claws, `drawFlats` ears). 44-px read: dark stripes, green slit eyes
+  under half-lowered lids (stamps: `lid` > 0.3 → smug, > 0.75 → shut), prison-striped kerchief
+  (band + triangle flap, `clothPick`), pink scar. Off the fox/wolf: grey-brown ramp (a pale ramp
+  read as a white plush), NARROW pale bib, no pale jowls (a white muzzle read as a bulldog),
+  tabby «M» on the forehead in skull lon/lat (`skullPick`, polyline distance — in x/z it smeared
+  into a blob), striped cheeks, legs, tail (rings by arc length, dark tip, hook + tip flick on
+  springs). Scar on the viewer's right: 1-px core + darker edge + 4 stitches (large), EVERY point
+  depth-checked with `seen` — drawn as a plain line it showed through the tail in sleep. Notch in
+  the viewer's-left ear, bandage (`bandTex`) on the viewer's-left foreleg, kerchief knot on the
+  viewer's left kept small and black-dominant (`clothPick(n, round, blk)`) — a big white knot
+  with tails read as a white glove. Whiskers blended 0.55 into what's under them, on the small
+  strip only outside the silhouette. Mouth «ω» corners lift only 0.12 with `grin` (0.35 made
+  two dots by the nose read as a tiny second face). Plans SIT / STAND (walk) / CURL (sleep),
+  front legs = two-bone `elbowOf` (pole back). Paw offsets (`fRz`…) are NOT multiplied by the
+  body scale (~1.32 in the pounce): the swipe wind-up needs `fRz` 29 to reach the cheek, 5 left
+  the paw behind the kerchief. Work (fish → coin, 2 s): fish in the paws → flipped at 0.46 s,
+  spins in the x-z plane on a parabola with a SIDEWAYS arc (`ix` = 6.5·sin) to apex 47 at 0.8 s
+  (straight up it crossed the face) → flash star + dot ring 0.74–0.98 s, it is a coin spinning
+  about the vertical → caught at 1.14 s with the paws BESIDE and in front of it (behind it they
+  vanished), lids down to 0.6, grin, glint 1.36–1.6 s → coin fades, props reset to REST (test).
+  Attack: crouch with rump wiggle → pounce (scale 1.18), right paw raised by the cheek with
+  claws out, jaw open with fangs 0.36–0.47 s, ears flat → swipe down-across, 3 arcs over EMPTY
+  pixels → settle. Walk: standing on four, lateral sequence (front R 0, hind L 0.25, front L
+  0.5, hind R 0.75), planted paws keep their own x/y (no sliding), tail up with a hook. Happy:
+  «^» eyes, hop + kneading, purr 6 Hz. Sleep: loaf, paws tucked, tail wrapped in front over the
+  nose (CURL tail z up to 7.6), ear/tail/whisker twitches, zzz. Gold: gold fur, yellow-bronze
+  stripes, emerald eyes, warm cloth; the gold coin is weak on the gold chest. Hatch plays
+  `happy`. Weight 490 KB v0+v1 (small 48 / 53, large 186 / 200, thumbs 1 KB; ink was 1.89 MB).
+  Tests «пиксельный кот» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
