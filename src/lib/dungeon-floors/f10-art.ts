@@ -38,6 +38,7 @@ import './f10-mob-mage';
 import './f10-mob-knight';
 import { gargStatuePic } from './f10-mob-gargoyle';
 import './f10-mob-exec';
+import './f10-mob-imp';
 
 type RGBA = [number, number, number, number];
 
@@ -60,7 +61,6 @@ const alpha = (c: RGBA, a: number): RGBA => [
 
 const INK = hx('#150f0b');
 export const WHITE = hx('#ffffff');
-const GOLDK = hx('#ffcc40');
 export const TAU = Math.PI * 2;
 
 /** Четыре тона формы: тень, основа, свет, блик. */
@@ -301,89 +301,6 @@ function sheetPx(name: string): Px | null {
 }
 
 // ---------------------------------------------------------------------------
-// Кадр монстра: облик, вспышка, отражение, кеш.
-// ---------------------------------------------------------------------------
-
-type Look = MobPose['look'];
-
-interface Built {
-  p: Px;
-  /** Середина тела и земля в кадре (смотрит вправо). */
-  ax: number;
-  ay: number;
-  eye: [number, number] | null;
-}
-
-const frames = new Map<string, MobFrame>();
-
-/** Альбинос — белёсый, элита — золотой кант, удар — белым. */
-function finish(key: string, b: Built, look: Look, flash: boolean, left: boolean): MobFrame {
-  let p = b.p;
-  if (look === 'albino') {
-    const pale = hx('#f4ece4');
-    const q = new Px(p.w, p.h);
-    for (let i = 0; i < p.data.length; i += 4) {
-      if (!p.data[i + 3]) continue;
-      const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-      const c = mixc([l, l, l, 255], pale, 0.45);
-      q.data[i] = c[0];
-      q.data[i + 1] = c[1];
-      q.data[i + 2] = c[2];
-      q.data[i + 3] = p.data[i + 3];
-    }
-    p = q;
-  }
-  if (look === 'elite') p.outline(GOLDK);
-  if (flash) p = p.tint(WHITE, 0.85);
-  if (left) p = p.flipX();
-  const eye = b.eye ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
-  const out: MobFrame = { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye };
-  frames.set(key, out);
-  return out;
-}
-
-function frameOf(
-  kind: string,
-  pose: MobPose,
-  anim: string,
-  f: number,
-  build: () => Built,
-): MobFrame {
-  const key = `${kind}|${anim}|${f}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  return finish(key, build(), pose.look, pose.flash, pose.left);
-}
-
-/** Смерть: тело оседает и рассыпается пеплом — кадр k 0…3. */
-function ashen(p: Px, k: number, seed: number): Px {
-  if (k <= 0) return p;
-  const o = new Px(p.w, p.h);
-  const ember = hx('#ff6a2a');
-  const ash = hx('#3a2a28');
-  for (let y = 0; y < p.h; y++)
-    for (let x = 0; x < p.w; x++) {
-      const i = (y * p.w + x) * 4;
-      if (!p.data[i + 3]) continue;
-      const r = hash(x, y, seed);
-      if (r < k * 0.26) continue;
-      const ty = Math.min(p.h - 1, y + Math.floor(k * k * 2 * r));
-      const j = (ty * p.w + x) * 4;
-      const c: RGBA =
-        r < k * 0.34 ? ember : r < k * 0.5 ? ash : [p.data[i], p.data[i + 1], p.data[i + 2], 255];
-      o.data[j] = c[0];
-      o.data[j + 1] = c[1];
-      o.data[j + 2] = c[2];
-      o.data[j + 3] = 255;
-    }
-  return o;
-}
-
-/** Номер кадра смерти по времени режима. */
-const deathK = (pose: MobPose) =>
-  pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
-
-// ---------------------------------------------------------------------------
 // Палитры.
 // ---------------------------------------------------------------------------
 
@@ -391,86 +308,6 @@ export const GOLD = tn('#5e3a10', '#9a6a1c', '#d8a23a', '#ffe28a');
 const RED = tn('#34070b', '#641015', '#9e1e26', '#d8424a');
 const HORN = tn('#2a221c', '#5e5040', '#a09076', '#e2d6bc');
 export const FIRE = [hx('#8a1a06'), hx('#e05010'), hx('#ffa030'), hx('#fff0a0')];
-
-// ---------------------------------------------------------------------------
-// Имп-носильщик: красный бес с мешком золота за плечом. Кадр 22×20,
-// земля — ряд 18.
-// ---------------------------------------------------------------------------
-
-const IMP = {
-  skin: tn('#3a0808', '#7a1814', '#b8322a', '#e8664a'),
-  sack: tn('#2a1c0e', '#5a3e1e', '#8a6232', '#b8904e'),
-  gold: [hx('#8a5a10'), hx('#e0a830'), hx('#fff0a0')],
-};
-
-function drawImp(bob: number, legs: number, coin: number, dead: boolean): Built {
-  const p = new Px(22, 22);
-  const G = 19;
-  if (dead) {
-    shadeEll(p, 10, G - 2, 5, 2, IMP.skin);
-    shadeEll(p, 15, G - 3, 4, 3, IMP.sack);
-    p.outline(INK);
-    for (let i = 0; i < 4; i++) p.set(8 + i * 3, G - (i % 2), IMP.gold[1]);
-    return { p, ax: 10, ay: G, eye: null };
-  }
-  const cy = G - 6 + bob;
-  // Мешок за плечом — больше самого беса.
-  shadeEll(p, 7, cy - 3, 5, 4.4, IMP.sack, 0.05);
-  p.set(4, cy - 6, IMP.sack[3]);
-  // Ноги, хвост.
-  limb(p, 10, cy + 2, 9 - legs, G - 1, 1.1, 0.9, IMP.skin);
-  limb(p, 12, cy + 2, 13 + legs, G - 1, 1.1, 0.9, IMP.skin);
-  limb(p, 9, cy + 1, 5, cy + 4, 0.7, 0.5, IMP.skin);
-  // Тело и голова.
-  shadeEll(p, 11, cy, 2.8, 3, IMP.skin, 0.05);
-  shadeEll(p, 13, cy - 4, 3.4, 3, IMP.skin, 0.1);
-  // Рожки и уши.
-  limb(p, 12, cy - 6.5, 10.5, cy - 9, 0.7, 0.3, HORN);
-  limb(p, 14.5, cy - 6.5, 15.5, cy - 9, 0.7, 0.3, HORN);
-  poly(
-    p,
-    [
-      [16, cy - 5],
-      [19, cy - 7],
-      [16.5, cy - 3],
-    ],
-    IMP.skin[2],
-  );
-  // Рука на горловине мешка.
-  limb(p, 11, cy - 1, 8, cy - 6, 0.8, 0.6, IMP.skin);
-  p.outline(INK);
-  // Ухмылка, глаз, монеты сыплются.
-  p.set(15, cy - 5, hx('#ffd040'));
-  for (let x = 13; x <= 16; x++) p.set(x, cy - 3, hx('#1a0404'));
-  p.set(14, cy - 3, WHITE);
-  p.set(16, cy - 3, WHITE);
-  const cyy = Math.round(cy - 8 + coin);
-  p.set(4, cyy, IMP.gold[1]);
-  p.set(5, cyy, IMP.gold[2]);
-  p.set(3, Math.round(cy - 1 + coin * 0.5), IMP.gold[1]);
-  return { p, ax: 11, ay: G, eye: [15, cy - 5] };
-}
-
-registerMobPainter('f10_imp', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  if (mode === 'f10_puff') return null;
-  let anim = 'run';
-  let fr = pose.frame % 4;
-  if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-  } else if (pose.anim === 'idle') {
-    anim = 'idle';
-  }
-  return frameOf('f10_imp', pose, anim, fr, () => {
-    const b =
-      anim === 'dead'
-        ? drawImp(0, 0, 0, true)
-        : drawImp([0, -1, 0, -1][fr], anim === 'run' ? [1, 0, -1, 0][fr] : 0, fr, false);
-    if (anim === 'dead') b.p = ashen(b.p, fr, m.id % 5);
-    return b;
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Король демонов (v2.86 — анимация тела). Облик прежний: чёрные латы с
