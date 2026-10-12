@@ -36,6 +36,7 @@ import './f10-mob-guard';
 import './f10-mob-succubus';
 import './f10-mob-mage';
 import './f10-mob-knight';
+import { gargStatuePic } from './f10-mob-gargoyle';
 
 type RGBA = [number, number, number, number];
 
@@ -229,47 +230,6 @@ function flame(p: Px, cx: number, by: number, w: number, h: number, f: number, s
   }
   // Искры над языком.
   if (hash(f, seed, 3) > 0.4) p.set(Math.round(cx + (hash(f, seed) - 0.5) * w), by - h - 1, F[2]);
-}
-
-/** Сдвинуть полосу рядов [y0, y1) по x (для качаний и шага). */
-function shiftRows(p: Px, y0: number, y1: number, dx: number): void {
-  if (!dx) return;
-  const row = new Uint8ClampedArray(p.w * 4);
-  for (let y = Math.max(0, y0); y < Math.min(p.h, y1); y++) {
-    const o = y * p.w * 4;
-    row.set(p.data.subarray(o, o + p.w * 4));
-    for (let x = 0; x < p.w; x++) {
-      const sx = x - dx;
-      const d = o + x * 4;
-      if (sx < 0 || sx >= p.w) {
-        p.data[d + 3] = 0;
-        continue;
-      }
-      p.data[d] = row[sx * 4];
-      p.data[d + 1] = row[sx * 4 + 1];
-      p.data[d + 2] = row[sx * 4 + 2];
-      p.data[d + 3] = row[sx * 4 + 3];
-    }
-  }
-}
-
-/** Скопировать пиксели в новый холст со сдвигом. */
-function copyAt(src: Px, w: number, h: number, ox: number, oy: number): Px {
-  const o = new Px(w, h);
-  for (let y = 0; y < src.h; y++)
-    for (let x = 0; x < src.w; x++) {
-      const i = (y * src.w + x) * 4;
-      if (!src.data[i + 3]) continue;
-      const tx = x + ox;
-      const ty = y + oy;
-      if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-      const j = (ty * w + tx) * 4;
-      o.data[j] = src.data[i];
-      o.data[j + 1] = src.data[i + 1];
-      o.data[j + 2] = src.data[i + 2];
-      o.data[j + 3] = src.data[i + 3];
-    }
-  return o;
 }
 
 // ---------------------------------------------------------------------------
@@ -758,324 +718,6 @@ registerMobPainter('f10_imp', (m: Mob, pose: MobPose) => {
     if (anim === 'dead') b.p = ashen(b.p, fr, m.id % 5);
     return b;
   });
-});
-
-// ---------------------------------------------------------------------------
-// Горгулья — нарисована кодом (тайл DCSS war_gargoyle — неясной лицензии). Статуя
-// и живая — одна картинка: каменная стоит на постаменте с тёмными
-// глазами; живая дышит, глаза горят, крылья ходят. Кадр 36×64 (запас на
-// прыжок), земля — ряд 60.
-// ---------------------------------------------------------------------------
-
-/** Глаза горгульи — две точки (для света в темноте и тления у статуи). */
-const gargEyes: [number, number][] = [
-  [14, 9],
-  [18, 9],
-];
-
-let gargCache: Px | null = null;
-
-/**
- * Горгулья 32×32 анфас, как сидит на карнизе: рога, уши, клыкастая пасть,
- * сгорбленные плечи, крылья летучей мыши подняты и раскрыты (столбцы
- * x < 9 и x > 23 — крылья, их двигает `wingShift`), лапы с когтями
- * держат край постамента, ноги поджаты, хвост обвивает. Свет слева-сверху.
- */
-function gargBase(): Px {
-  if (gargCache) return gargCache;
-  const p = new Px(32, 32);
-  const SKIN = tn('#141016', '#2a2430', '#453c4c', '#6c6074');
-  const DARK = tn('#0e0b10', '#1c1720', '#2e2634', '#453c4c');
-  const MEMB = tn('#1a0e14', '#2e1820', '#46242e', '#643844');
-  const CLAW = tn('#3a3026', '#6a5c48', '#a8987a', '#dcd0b4');
-  // Крылья: кость от плеча к запястью, пальцы веером вниз, перепонка
-  // между пальцами с зубчатым краем.
-  for (const s of [-1, 1]) {
-    const cx = 16;
-    const sh: [number, number] = [cx + s * 5, 12];
-    const wr: [number, number] = [cx + s * 13, 2];
-    const tips: [number, number][] = [
-      [cx + s * 15.5, 10],
-      [cx + s * 14, 17],
-      [cx + s * 10.5, 21],
-      [cx + s * 7, 19],
-    ];
-    // Перепонка: веер от запястья по кончикам, край — дугами внутрь.
-    for (let k = 0; k < tips.length; k++) {
-      const a = k === 0 ? wr : tips[k - 1];
-      const b = tips[k];
-      poly(p, [wr, a, [(a[0] + b[0]) / 2 - s * 0.9, (a[1] + b[1]) / 2 - 1.2], b], (x, y) =>
-        tone(MEMB, 0.5 - (y - 2) * 0.02 + (s < 0 ? 0.12 : -0.12) + ((x + y) % 5 === 0 ? -0.2 : 0)),
-      );
-    }
-    poly(p, [sh, wr, tips[tips.length - 1], [cx + s * 5, 18]], (x, y) =>
-      tone(MEMB, 0.45 - (y - 2) * 0.02 + (s < 0 ? 0.12 : -0.12)),
-    );
-    // Кость крыла и пальцы — светлые рёбра.
-    limb(p, sh[0], sh[1], wr[0], wr[1], 1.3, 0.8, SKIN, 0.1);
-    for (const t of tips) limb(p, wr[0], wr[1], t[0], t[1], 0.55, 0.35, DARK, 0.25);
-    // Коготь на запястье.
-    p.set(Math.round(wr[0] + s * 0.6), wr[1] - 1, CLAW[2]);
-  }
-  // Хвост: из-за спины направо, кончик — наконечник.
-  const tail = spline(
-    [
-      [19, 26],
-      [24, 29],
-      [27, 27],
-      [28, 23],
-    ],
-    4,
-  );
-  tail.forEach(([x, y], n) => {
-    const r = 1.3 - (n / tail.length) * 0.8;
-    shadeEll(p, x, y, r, r, DARK, 0.1);
-  });
-  poly(
-    p,
-    [
-      [27, 23],
-      [29.5, 20.5],
-      [29, 24],
-    ],
-    DARK[2],
-  );
-  // Ноги поджаты: бёдра по бокам, ступни с когтями у края.
-  for (const s of [-1, 1]) {
-    shadeEll(p, 16 + s * 5.5, 24, 3.2, 3.6, SKIN, s < 0 ? 0.05 : -0.1);
-    limb(p, 16 + s * 6, 26, 16 + s * 5, 29.5, 1.6, 1.3, SKIN, -0.05);
-    for (const dx of [-1, 0, 1]) p.set(16 + s * 5 + dx, 31, CLAW[dx === 0 ? 2 : 1]);
-  }
-  // Торс: сгорбленный, грудь широкая, живот ребристый.
-  shadeEll(p, 16, 18, 5.4, 6, SKIN, 0.05);
-  for (const y of [21, 23]) for (let x = 14; x <= 18; x++) if (p.get(x, y)[3]) p.set(x, y, SKIN[1]);
-  // Плечи горбом над головой.
-  for (const s of [-1, 1]) shadeEll(p, 16 + s * 4.6, 13, 2.8, 2.4, SKIN, s < 0 ? 0.1 : -0.05);
-  // Руки: от плеч вниз, лапы держат край постамента.
-  for (const s of [-1, 1]) {
-    limb(p, 16 + s * 5.5, 14, 16 + s * 4.5, 22, 1.5, 1.2, SKIN, s < 0 ? 0.05 : -0.1);
-    limb(p, 16 + s * 4.5, 22, 16 + s * 2.5, 27, 1.2, 1.1, SKIN, -0.05);
-    for (const dx of [-1, 0, 1]) {
-      p.set(16 + s * 2.5 + dx, 28, CLAW[1]);
-      p.set(16 + s * 2.5 + dx, 29, dx ? CLAW[2] : CLAW[3]);
-    }
-  }
-  // Голова: вытянутая морда вниз, уши торчком, рога назад-вверх.
-  for (const s of [-1, 1]) {
-    // Рог — дугой наружу и вверх.
-    const horn = spline(
-      [
-        [16 + s * 2.5, 6],
-        [16 + s * 4.5, 3.5],
-        [16 + s * 5, 1],
-        [16 + s * 4, -0.5],
-      ],
-      4,
-    );
-    horn.forEach(([x, y], n) => {
-      const r = 1.2 - (n / horn.length) * 0.8;
-      shadeEll(p, x, y, r, r, HORN, s < 0 ? 0.1 : -0.1);
-    });
-    // Ухо — острый треугольник.
-    poly(
-      p,
-      [
-        [16 + s * 3.5, 7],
-        [16 + s * 7, 5],
-        [16 + s * 4.5, 9],
-      ],
-      s < 0 ? SKIN[2] : SKIN[1],
-    );
-  }
-  shadeEll(p, 16, 9, 4, 3.6, SKIN, 0.08);
-  // Морда и пасть с клыками.
-  shadeEll(p, 16, 11.5, 2.8, 2, SKIN, 0.02);
-  for (let x = 14; x <= 18; x++) p.set(x, 12, hx('#1a0608'));
-  p.set(14, 13, CLAW[3]);
-  p.set(18, 13, CLAW[3]);
-  p.set(15, 12, CLAW[2]);
-  p.set(17, 12, CLAW[2]);
-  // Надбровье и ноздри.
-  for (let x = 13; x <= 19; x++) if (x !== 16) p.set(x, 8, SKIN[x < 16 ? 3 : 2]);
-  p.set(15, 11, INK);
-  p.set(17, 11, INK);
-  p.outline(INK);
-  // Глаза поверх контура — красные угли.
-  for (const [x, y] of gargEyes) p.set(x, y, EYE);
-  gargCache = p;
-  return p;
-}
-
-/** Камень: глаза погасли, кожа серее. */
-function stoneOf(p: Px, k: number): Px {
-  const o = new Px(p.w, p.h);
-  for (let i = 0; i < p.data.length; i += 4) {
-    if (!p.data[i + 3]) continue;
-    const r = p.data[i];
-    const g = p.data[i + 1];
-    const b = p.data[i + 2];
-    const l = r * 0.3 + g * 0.55 + b * 0.15;
-    const red = r > 120 && r > g * 2;
-    const t = red ? [l * 0.5, l * 0.5, l * 0.55] : [l * 1.05, l * 1.02, l * 0.98];
-    o.data[i] = r + (t[0] - r) * k;
-    o.data[i + 1] = g + (t[1] - g) * k;
-    o.data[i + 2] = b + (t[2] - b) * k;
-    o.data[i + 3] = 255;
-  }
-  return o;
-}
-
-/** Сдвинуть столбцы крыльев по вертикали (взмах). */
-function wingShift(p: Px, dy: number): Px {
-  if (!dy) return p;
-  const o = new Px(p.w, p.h);
-  o.data.set(p.data);
-  const cols = (x: number) => x < 9 || x > 23;
-  for (let x = 0; x < p.w; x++) {
-    if (!cols(x)) continue;
-    for (let y = 0; y < p.h; y++) o.data[(y * p.w + x) * 4 + 3] = 0;
-    for (let y = 0; y < 22; y++) {
-      const sy = y - dy;
-      if (sy < 0 || sy >= p.h) continue;
-      const i = (sy * p.w + x) * 4;
-      if (!p.data[i + 3]) continue;
-      const j = (y * p.w + x) * 4;
-      o.data[j] = p.data[i];
-      o.data[j + 1] = p.data[i + 1];
-      o.data[j + 2] = p.data[i + 2];
-      o.data[j + 3] = 255;
-    }
-    for (let y = 22; y < p.h; y++) {
-      const i = (y * p.w + x) * 4;
-      if (!p.data[i + 3]) continue;
-      o.data[i] = p.data[i];
-      o.data[i + 1] = p.data[i + 1];
-      o.data[i + 2] = p.data[i + 2];
-      o.data[i + 3] = 255;
-    }
-  }
-  return o;
-}
-
-/** Трещины с жаром по камню (оживает): доля k 0…1. */
-function gargCracks(p: Px, k: number, seed: number): void {
-  const hot = [hx('#8a1a06'), hx('#e05010'), hx('#ffa030')];
-  for (let n = 0; n < 5; n++) {
-    let x = 10 + Math.floor(hash(n, seed) * 12);
-    let y = 6 + Math.floor(hash(n, seed, 2) * 18);
-    const len = Math.floor(3 + hash(n, seed, 3) * 6 * k);
-    for (let i = 0; i < len; i++) {
-      if (p.get(x, y)[3]) p.set(x, y, hot[Math.min(2, Math.floor(k * 3))]);
-      x += hash(n, i, seed) > 0.5 ? 1 : -1;
-      y += hash(i, n, seed) > 0.4 ? 1 : 0;
-    }
-  }
-}
-
-interface GargPose {
-  stone: number;
-  wing: number;
-  bob: number;
-  lean: number;
-  z: number;
-  cracks: number;
-  eyes: boolean;
-  plinth: boolean;
-  dead?: number;
-}
-
-function drawGarg(gp: GargPose, seed: number): Built {
-  let p = gargBase();
-  if (gp.stone > 0) p = stoneOf(p, gp.stone);
-  p = wingShift(p, gp.wing);
-  if (gp.cracks > 0) gargCracks(p, gp.cracks, seed);
-  if (gp.eyes)
-    for (const [x, y] of gargEyes) p.set(x, y, gp.stone > 0.5 ? hx('#ff6a3a') : hx('#ff3a2a'));
-  else if (gp.stone > 0) for (const [x, y] of gargEyes) p.set(x, y, hx('#1a1418'));
-  if (gp.lean) {
-    // Наклон вперёд или назад: ряды сверху сдвинуты сильнее.
-    for (let y = 0; y < 24; y++) shiftRows(p, y, y + 1, Math.round((gp.lean * (24 - y)) / 24));
-  }
-  const W = 36;
-  const H = 64;
-  const G = 60;
-  const lift = gp.plinth ? 4 : 0;
-  const oy = G - 32 + gp.bob - lift - Math.round(gp.z);
-  let out = copyAt(p, W, H, 2, oy);
-  if (gp.dead) out = ashen(out, gp.dead, seed);
-  const e = gargEyes[0];
-  return { p: out, ax: 18, ay: G, eye: gp.eyes ? [e[0] + 3, e[1] + oy] : null };
-}
-
-registerMobPainter('f10_gargoyle', (m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame;
-  let anim = 'idle';
-  let fr = 0;
-  const base: GargPose = {
-    stone: 0,
-    wing: 0,
-    bob: 0,
-    lean: 0,
-    z: 0,
-    cracks: 0,
-    eyes: true,
-    plinth: false,
-  };
-  let gp = base;
-  if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-    gp = { ...base, stone: 0.6, dead: fr, eyes: false };
-  } else if (mode === 'f10_stone') {
-    anim = 'stone';
-    // Живая выдаёт себя: раз в несколько секунд глаза тлеют.
-    fr = Math.floor(f / 3) % 7 === 0 ? 1 : 0;
-    gp = { ...base, stone: 1, eyes: fr === 1, plinth: true };
-  } else if (mode === 'f10_wake') {
-    anim = 'wake';
-    fr = Math.min(3, Math.floor(pose.t / 0.21));
-    gp = {
-      ...base,
-      stone: 1 - fr * 0.25,
-      cracks: (fr + 1) / 4,
-      eyes: fr >= 1,
-      plinth: fr < 3,
-      wing: fr === 3 ? -1 : 0,
-    };
-  } else if (mode === 'f10_petrify') {
-    anim = 'petrify';
-    fr = Math.min(3, Math.floor(pose.t / 0.4));
-    gp = { ...base, stone: 0.4 + fr * 0.2, cracks: 1 - fr * 0.3, eyes: true };
-  } else if (mode === 'leap') {
-    anim = 'leap';
-    const z = Math.round((m.data.z ?? 0) * 8);
-    fr = z;
-    gp = { ...base, z: z, wing: -2, lean: 1 };
-  } else if (mode === 'claw') {
-    anim = 'claw';
-    fr = pose.t < 0.3 ? 0 : 1;
-    gp = { ...base, lean: fr ? 3 : -2, wing: fr ? 1 : -1 };
-  } else if (mode === 'recover' && pose.t < 0.25) {
-    anim = 'strike';
-    gp = { ...base, lean: 3, bob: 1, wing: 2 };
-  } else if (pose.anim === 'run') {
-    anim = 'run';
-    fr = f % 4;
-    gp = { ...base, bob: [0, -1, 0, 1][fr], wing: [0, -1, 0, 1][fr], lean: 1 };
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    gp = { ...base, lean: -2, wing: 1 };
-  } else {
-    anim = 'idle';
-    fr = f % 4;
-    gp = { ...base, wing: [0, -1, -1, 0][fr], bob: fr === 2 ? 1 : 0 };
-  }
-  const key = `f10_gargoyle|${anim}|${fr}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  const hit = frames.get(key);
-  if (hit) return hit;
-  const b = drawGarg(gp, m.id % 7);
-  return finish(key, b, pose.look, pose.flash, pose.left);
 });
 
 // ---------------------------------------------------------------------------
@@ -4340,20 +3982,31 @@ registerPropPainter('f10_plinth', () =>
 
 registerPropPainter('f10_gargstatue', () =>
   sprite('gargstatue', () => {
-    const s = stoneOf(gargBase(), 1);
-    for (const [x, y] of gargEyes) s.set(x, y, hx('#1a1418'));
-    const p = new Px(36, 46);
-    plinthPx(p, 18, 45);
-    const top = copyAt(s, 36, 46, 2, 45 - 32 - 4 - 2);
-    for (let i = 0; i < top.data.length; i += 4)
-      if (top.data[i + 3]) {
-        p.data[i] = top.data[i];
-        p.data[i + 1] = top.data[i + 1];
-        p.data[i + 2] = top.data[i + 2];
-        p.data[i + 3] = 255;
-      }
+    // Та же горгулья, что и живая на постаменте (анимации мобов 10): отличить
+    // их можно только по тлеющим глазам.
+    const g = gargStatuePic();
+    const W = Math.max(36, g.p.w);
+    const p = new Px(W, 46 + Math.max(0, g.ay - 45));
+    const cx = W >> 1;
+    const G = p.h - 1;
+    plinthPx(p, cx, G);
     p.outline(INK);
-    return { p, ax: 18, ay: 45 };
+    const ox = cx - g.ax;
+    const oy = G - g.ay;
+    for (let y = 0; y < g.p.h; y++)
+      for (let x = 0; x < g.p.w; x++) {
+        const i = (y * g.p.w + x) * 4;
+        if (!g.p.data[i + 3]) continue;
+        const X = x + ox;
+        const Y = y + oy;
+        if (X < 0 || Y < 0 || X >= p.w || Y >= p.h) continue;
+        const j = (Y * p.w + X) * 4;
+        p.data[j] = g.p.data[i];
+        p.data[j + 1] = g.p.data[i + 1];
+        p.data[j + 2] = g.p.data[i + 2];
+        p.data[j + 3] = 255;
+      }
+    return { p, ax: cx, ay: G };
   }),
 );
 
