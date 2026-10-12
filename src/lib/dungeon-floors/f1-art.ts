@@ -31,6 +31,7 @@ import { KING_PAL, PALS, shadeOf, spline } from '../dungeon-rats';
 import type { Ell } from '../dungeon-rats';
 import {
   frameLRU,
+  onFrameReset,
   paintSim,
   registerCellPainter,
   registerItemArt,
@@ -1194,6 +1195,7 @@ function croppedFrame(c: Cropped): MobFrame {
  */
 const PEND = new Map<string, Cropped>();
 const PEND_MAX = 4000;
+onFrameReset(() => PEND.clear());
 /** Прогрев сейчас кладёт кадр в `PEND`, а не в кеш (см. `deferWarm`). */
 let WARM_DEFER = false;
 /**

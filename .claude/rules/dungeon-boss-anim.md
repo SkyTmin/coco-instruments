@@ -56,8 +56,11 @@ projectiles, contact (`fN-boss-fx.ts`); floor 15 also has «Мир» (World) (`f
   `dx/dy/sx/sy/rot/still/shadow/lift`, not `lit/ghost/linger`. Editing one — check the echo
   on a sheet.
 - **Caches:** ≤400 frames per boss, `frameLRU(900)` on 14, mobs 1200–3420 per floor (cache
-  per kind), floor-15 world 2400 (~24 KB per frame, ~58 MB). Floor caches are not cleared on
-  descent — don't raise the caps. Repeating images (moon, clouds) also go in `frameLRU`.
+  per kind), floor-15 world 2400 (~24 KB per frame, ~58 MB). Since v2.110 every `frameLRU` is
+  cleared when the world changes floor (`resetFrameCaches` in `dungeon-paint.ts`, called by
+  `DungeonRenderer` before the new floor's warm-up; same floor again keeps them); register any
+  other frame cache with `onFrameReset`; `frameCacheSize()` for the stand. Still don't raise the
+  caps (a floor's warmed frames ≤ ~35 MB). Repeating images (moon, clouds) also go in `frameLRU`.
 
 ## The brain is the metronome («Мозг — метроном», hard rule)
 

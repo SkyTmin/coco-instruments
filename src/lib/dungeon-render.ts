@@ -49,6 +49,7 @@ import {
   MOB_PAINTERS,
   MOB_WARM,
   PROP_PAINTERS,
+  resetFrameCaches,
   SHOT_PAINTERS,
   setPaintSim,
   ZONE_PAINTERS,
@@ -272,6 +273,9 @@ function tintCell(buf: Px, px: number, py: number, area: string): void {
       d[o + 2] = d[o + 2] * mb * (1 - k) + cb * k;
     }
 }
+
+/** Этаж, чьи кадры сейчас в кешах (`resetFrameCaches`); общий на все рендеры. */
+let cacheFloor: number | null = null;
 
 export class DungeonRenderer {
   readonly view: HTMLCanvasElement;
@@ -927,6 +931,11 @@ export class DungeonRenderer {
       this.warmQueue = [];
       this.warmDone.clear();
       this.remainsOf = sim;
+      // Другой этаж — кадры прошлого не нужны (v2.110); тот же этаж заново — кеш живёт.
+      if (cacheFloor !== sim.floor) {
+        if (cacheFloor !== null) resetFrameCaches();
+        cacheFloor = sim.floor;
+      }
     }
     for (const [id, r] of this.remains) {
       const live = sim.mobs.find((m) => m.id === id);

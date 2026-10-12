@@ -223,9 +223,25 @@ export interface FrameLRU<V> {
   clear(): void;
 }
 
+/**
+ * Сброс кешей кадров этажей (v2.110): за спуск кеши копились (26–33 МБ на
+ * этаж), на iPhone у холстов есть предел памяти. Каждый `frameLRU` встаёт
+ * сюда сам; другие кеши этажа — через `onFrameReset`. Зовёт движок, когда
+ * мир сменил этаж (`DungeonRenderer`), до прогрева нового.
+ */
+const FRAME_RESETS: (() => void)[] = [];
+export const onFrameReset = (fn: () => void): void => void FRAME_RESETS.push(fn);
+export function resetFrameCaches(): void {
+  for (const fn of FRAME_RESETS) fn();
+}
+const FRAME_LRUS: { readonly size: number }[] = [];
+/** Стенд: сколько кадров сейчас во всех `frameLRU`. */
+export const frameCacheSize = (): number => FRAME_LRUS.reduce((a, l) => a + l.size, 0);
+
 export function frameLRU<V>(limit: number): FrameLRU<V> {
   const m = new Map<string, V>();
-  return {
+  onFrameReset(() => m.clear());
+  const lru: FrameLRU<V> = {
     get(key) {
       const v = m.get(key);
       if (v !== undefined) {
@@ -247,4 +263,6 @@ export function frameLRU<V>(limit: number): FrameLRU<V> {
       m.clear();
     },
   };
+  FRAME_LRUS.push(lru);
+  return lru;
 }
