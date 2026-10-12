@@ -347,7 +347,7 @@ export interface Pose {
 /** Где лапы держат рыбку у груди (пиксели малой полосы, до масштаба). */
 const HOLD: V3 = [0, 9.8, 13.0];
 /** Верх полёта рыбки — над ушами. */
-const APEX = 40;
+const APEX = 47;
 
 const REST: Pose = {
   x: 0,
@@ -606,9 +606,9 @@ function workPose(t: number): Pose {
     [T_CATCH + 0.04, 0, 'i'],
   ]);
   for (const side of [-1, 1] as const) {
-    const tx = side * (1.7 + 1.3 * open);
-    const ty = HOLD[1] - 0.8;
-    const tz = holdZ - 0.6 - 1.4 * open;
+    const tx = side * (2.5 + 1.2 * open);
+    const ty = HOLD[1] + 0.4;
+    const tz = holdZ - 0.3 - 1.6 * open;
     const dx = (tx - side * PAW0[0]) * G * reach;
     const dy = (ty - PAW0[1]) * G * reach;
     const dz = (tz - PAW0[2]) * G * reach;
@@ -624,13 +624,13 @@ function workPose(t: number): Pose {
   }
   // Предмет: на лапах → полёт по параболе → в лапах.
   const z0 = HOLD[2] + 1.3 + 0.9;
-  const zc = HOLD[2] - 1.04 + 0.7;
+  const zc = HOLD[2] - 1.04 + 1.2;
   if (t < T_LAUNCH) o.iz = holdZ + 0.9;
   else if (t < T_APEX) o.iz = APEX - (APEX - z0) * ((T_APEX - t) / (T_APEX - T_LAUNCH)) ** 2;
   else if (t < T_CATCH) o.iz = APEX - (APEX - zc) * ((t - T_APEX) / (T_CATCH - T_APEX)) ** 2;
-  else o.iz = holdZ + 0.7;
+  else o.iz = holdZ + 1.2;
   const fl = clamp01((t - T_LAUNCH) / (T_CATCH - T_LAUNCH));
-  o.ix = 2.0 * Math.sin(Math.PI * fl);
+  o.ix = 6.5 * Math.sin(Math.PI * fl);
   o.iy = HOLD[1] - 0.6 * Math.sin(Math.PI * fl);
   // Рыбка: два кувырка вверх; монета вертится на ребре и встаёт лицом к зрителю.
   if (t < T_APEX) o.spin = TAU * 2 * clamp01((t - T_LAUNCH) / (T_APEX - T_LAUNCH)) ** 0.8;
@@ -771,9 +771,9 @@ function attackPose(t: number): Pose {
     [0.56, -0.8],
     [0.82, 0, 's'],
   ]);
-  o.fRz = 2.6 * air + 5.0 * pos(sw) + 1.6 * neg(sw);
-  o.fRx = 1.6 * pos(sw) - 3.6 * neg(sw);
-  o.fRy = 1.6 * air + 1.6 * neg(sw) + 0.8 * pos(sw);
+  o.fRz = 2.6 * air + 29 * pos(sw) + 6 * neg(sw);
+  o.fRx = 7 * pos(sw) - 3.4 * neg(sw);
+  o.fRy = 1.6 * air + 3.2 * neg(sw) + 2.0 * pos(sw);
   o.fLz = 2.6 * air + 0.6 * bump(t, 0.1, 0.28);
   o.fLy = 2.4 * air;
   o.fLx = -0.5 * air;
@@ -1213,12 +1213,12 @@ function neckPick(qx: number, qy: number, qz: number): number {
 }
 
 /** Платок: арестантские полосы — по углу (повязка) или поперёк ширины (треугольник). */
-function clothPick(n: number, round: boolean) {
+function clothPick(n: number, round: boolean, blk = HI ? 0.38 : 0.45) {
   return (qx: number, qy: number, qz: number) => {
     PICK_T = 0;
     const v = round ? (Math.atan2(qx, qy) / Math.PI) * n * 0.5 : (qx + 1) * 0.5 * n;
     const f = frac(v + 0.5);
-    if (f < (HI ? 0.38 : 0.45)) return P_CBLK;
+    if (f < blk) return P_CBLK;
     if (HI && f > 0.9) PICK_T = -0.06;
     return P_CLOTH;
   };
@@ -1449,19 +1449,19 @@ function kerchief(out: PartF[], c: Ctx): void {
   out.push({
     c: kn,
     ax: S.bax,
-    r: [1.5 * k, 1.2 * k, 1.3 * k],
+    r: [1.3 * k, 1.05 * k, 1.15 * k],
     pal: P_CLOTH,
     id: kid,
     bias: 0.1,
-    pick: clothPick(HI ? 4 : 2, false),
+    pick: clothPick(HI ? 3 : 2, false, 0.5),
   });
   for (const [dx, dz, len] of [
-    [-0.7, -1, 3.4],
-    [0.05, -1, 2.8],
+    [-0.7, -1, 2.7],
+    [0.05, -1, 2.2],
   ]) {
     const d = norm([dx + lag.knot * 0.6, 0.35, dz]);
-    lockF(out, add(kn, mul(d, 0.5 * k)), d, [0, 1, 0], len * k, 1.2 * k, 0.6 * k, P_CLOTH, 0.08, {
-      pick: clothPick(HI ? 3 : 1.5, false),
+    lockF(out, add(kn, mul(d, 0.4 * k)), d, [0, 1, 0], len * k, 1.0 * k, 0.55 * k, P_CLOTH, 0.08, {
+      pick: clothPick(HI ? 2 : 1, false, 0.55),
     });
   }
 }
@@ -2112,10 +2112,10 @@ function face(p: Px, f: Frame, c: Ctx): void {
       [0, 4.9, -1.55],
       [-0.45, 4.9, -1.85],
       [0.45, 4.9, -1.85],
-      [-0.9, 4.8, -1.95 + 0.1 * gr],
-      [0.9, 4.8, -1.95 + 0.1 * gr],
-      [-1.35, 4.6, -1.8 + 0.35 * gr],
-      [1.35, 4.6, -1.8 + 0.35 * gr],
+      [-0.9, 4.8, -1.95 + 0.05 * gr],
+      [0.9, 4.8, -1.95 + 0.05 * gr],
+      [-1.35 - 0.15 * gr, 4.6, -1.82 + 0.12 * gr],
+      [1.35 + 0.15 * gr, 4.6, -1.82 + 0.12 * gr],
     ];
     for (const q of pts) {
       const at = seen(f, mul(h.at(q), RR), OX, OY, 1.8 * RR);
