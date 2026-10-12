@@ -42,6 +42,7 @@ import './f7-mob-golem';
 import './f7-mob-spider';
 import './f7-mob-moth';
 import './f7-mob-prism';
+import './f7-mob-shadow';
 
 type RGBA = [number, number, number, number];
 
@@ -3065,82 +3066,11 @@ registerMobWarm('f7_boss', function* () {
 });
 
 // ---------------------------------------------------------------------------
-// Тень из рамы: высокая сутулая фигура из фиолетового мрака, белые глаза,
-// длинные руки до пола; на плечах — щепки позолоты от рамы.
+// Радуга призмы (иконка ядра; сама призма — `f7-mob-prism.ts`) и мрак теней
+// (реквизит, иконки; сама тень — `f7-mob-shadow.ts`).
 // ---------------------------------------------------------------------------
 
 const SHD: Tones = [hx('#0e0a1a'), hx('#261c44'), hx('#43346e'), hx('#6c5aa8')];
-
-function paintShadow(anim: string, f: number, grab: boolean, step: number): Built {
-  const p = new Px(28, 30);
-  const sway = Math.sin((f / 4) * TAU) * (anim === 'run' ? 1.5 : 0.8);
-  const hunch = anim === 'bite' ? 3 : anim === 'run' ? 2 : 0;
-  // Ноги-подтёки: не ступни, а дым к полу.
-  for (let i = 0; i < 4; i++) {
-    const x = 10 + i * 2 + (i % 2 ? sway : -sway) * 0.5;
-    stroke(p, x, 20, x + (i - 1.5) * 0.8, 28, alpha(SHD[1], 0.9), 2);
-  }
-  // Туловище.
-  limb(p, 13, 20, 13 + hunch, 9, 3.6, 3, SHD, 0);
-  // Голова — маленькая, вперёд.
-  shadeEll(p, 13 + hunch * 1.2, 6.5, 3.2, 3, SHD, 0.15);
-  // Руки: длинные, пальцы-когти.
-  const upA = anim === 'wind';
-  const reachF = anim === 'bite' ? 7 : 0;
-  const la: [number, number] = upA ? [5, 2] : [6 - reachF * 0.2, 25 + sway];
-  const ra: [number, number] = grab
-    ? [26, 12]
-    : upA
-      ? [21, 2]
-      : [19 + reachF, 24 - sway - reachF * 0.8];
-  limb(p, 11, 11, la[0], la[1], 1.3, 0.8, SHD, 0.1);
-  limb(p, 16, 11, ra[0], ra[1], 1.3, 0.8, SHD, 0.1);
-  for (const [x, y] of [la, ra]) for (let c = -1; c <= 1; c++) p.set(x + c, y + 1, hx('#8c7ad8'));
-  // Позолота рамы на плече.
-  p.set(10, 9, GILT[2]);
-  p.set(9, 10, GILT[1]);
-  p.set(17, 9, GILT[1]);
-  p.outline(alpha(INK, 0.9));
-  // Глаза — белые, пустые.
-  const ex = 12 + hunch * 1.2;
-  p.set(Math.round(ex), 6, WHITE);
-  p.set(Math.round(ex + 2), 6, WHITE);
-  let q = p;
-  if (step < 4) {
-    // Выход из рамы: проявляется снизу вверх.
-    q = new Px(p.w, p.h);
-    const top = Math.round(p.h * (1 - (step + 1) / 4));
-    for (let y = top; y < p.h; y++)
-      for (let x = 0; x < p.w; x++) {
-        const i = (y * p.w + x) * 4;
-        if (p.data[i + 3]) q.set(x, y, [p.data[i], p.data[i + 1], p.data[i + 2], p.data[i + 3]]);
-      }
-  }
-  return { p: q, ax: 13, ay: 29, eye: [Math.round(ex + 1), 6] };
-}
-
-registerMobPainter('f7_shadow', (m: Mob, pose: MobPose) => {
-  let anim: string = pose.anim;
-  const grab = pose.mode === 'grab';
-  if (grab) anim = pose.t > 0.4 ? 'bite' : 'wind';
-  const step = pose.mode === 'f7_step' ? Math.min(3, Math.floor((pose.t / 0.5) * 4)) : 4;
-  const f = anim === 'run' || anim === 'idle' ? pose.frame % 4 : pose.frame % 2;
-  if (pose.anim === 'dead' || pose.mode === 'f7_back') {
-    const back = pose.mode === 'f7_back';
-    const k = Math.min(3, Math.floor(pose.t / (back ? 0.3 : 0.15)));
-    return frameOf('f7_shadow', pose, back ? 'back' : 'dead', k, () => {
-      const b = paintShadow('idle', 0, false, 4);
-      return { ...b, p: slices(b.p, (k + 1) / 4, true) };
-    });
-  }
-  return frameOf('f7_shadow', pose, `${anim}${grab ? 'g' : ''}${step}`, f, () =>
-    paintShadow(anim, f, grab, step),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Радуга призмы (иконка ядра; сама призма — `f7-mob-prism.ts`).
-// ---------------------------------------------------------------------------
 
 const RAINBOW = ['#ff5a7a', '#ffb050', '#fff080', '#80f0a0', '#70c8ff', '#b890ff'].map((c) =>
   hx(c),
@@ -5227,20 +5157,49 @@ registerZonePainter('f7_flash', (g, z0, px, py, S) => {
 registerZonePainter('f7_grab', (g, z0, px, py, S) => {
   const z = z0 as ZoneX;
   const a = (z.ang as number) ?? 0;
-  const len = ((z.len as number) ?? 1) * S;
+  const full = ((z.len as number) ?? 1) * S;
   const k = zk(z);
-  g.fillStyle = `rgba(40,28,70,${0.9 - k * 0.6})`;
-  for (let i = 0; i < len; i += 1) {
-    const w = Math.sin(i * 0.5) * 1.2;
-    g.fillRect(
-      Math.round(px + Math.cos(a) * i - Math.sin(a) * w),
-      Math.round(py - 6 + Math.sin(a) * i + Math.cos(a) * w),
-      2,
-      2,
-    );
+  // Анимации мобов 7: дымная рука вылетает из плеча (0,06 с), держит,
+  // когти смыкаются — и рука уходит обратно в тень.
+  const out = k < 0.18 ? 1 - (1 - k / 0.18) ** 3 : k > 0.55 ? 1 - ((k - 0.55) / 0.45) ** 2 : 1;
+  const len = full * Math.max(0, out);
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const y0 = py - 7;
+  const at = (i: number): [number, number] => {
+    const w = Math.sin(i * 0.45 + k * 20) * 1.1 * (1 - (0.5 * i) / Math.max(1, full));
+    return [px + ca * i - sa * w, y0 + sa * i + ca * w];
+  };
+  for (const [col, grow] of [
+    ['rgba(8,5,16,0.95)', 1],
+    ['rgba(38,28,68,1)', 0],
+    ['rgba(108,90,168,1)', -1],
+  ] as [string, number][]) {
+    g.fillStyle = col;
+    for (let i = 4; i < len; i++) {
+      const [x, y] = at(i);
+      const r = Math.max(0, 1.2 - (0.6 * i) / Math.max(1, full) + grow * 0.6);
+      const s = Math.max(1, Math.round(r * 2));
+      g.fillRect(
+        Math.round(x - r - (grow < 0 ? 0.6 : 0)),
+        Math.round(y - r - (grow < 0 ? 0.6 : 0)),
+        grow < 0 ? 1 : s,
+        grow < 0 ? 1 : s,
+      );
+    }
   }
-  g.fillStyle = 'rgba(160,140,230,0.9)';
-  g.fillRect(Math.round(px + Math.cos(a) * len), Math.round(py - 6 + Math.sin(a) * len), 2, 2);
+  // Когти на конце: раскрыты в броске, сомкнуты, пока держит.
+  if (len > 4) {
+    const [tx, ty] = at(len);
+    const open = k < 0.3 ? 1 : 0.25;
+    for (let c = -1; c <= 1; c++) {
+      const b = a + c * 0.55 * open;
+      for (let s = 0; s < 4; s++) {
+        g.fillStyle = s === 3 ? '#d8ccff' : '#8c7ad8';
+        g.fillRect(Math.round(tx + Math.cos(b) * s), Math.round(ty + Math.sin(b) * s), 1, 1);
+      }
+    }
+  }
   return true;
 });
 
