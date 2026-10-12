@@ -317,15 +317,28 @@ Owner: «добавь возможность выбирать скин у пит
   (arm-shaped wings without the lobe hid behind the body). Legs: cream feathered columns, 3 toes,
   dark talons; under `grip` toes rake down-and-out and claws hook inward (thrust at the viewer
   they foreshortened into grey dashes). Work (lantern): lamp clicks on 0.26 s → beam cone + floor
-  spot over EMPTY pixels sweeps left→right 0.3–1.0 s, head leads it → crystal glints in the beam
-  ~0.9 s (wide eyes, tufts up) → hop to it → right foot up holding it before the breast, happy
-  eyes, 1.36–1.6 s → lamp off, hop back 1.66–1.84 s; props AND `beamX` reset to REST (seam
-  test; ending the hop at 1.94 left the last frame mid-landing). Attack: wings up in a V → swoop
+  spot sweeps left→right 0.3–1.0 s, head leads it → crystal glints in the beam ~0.9 s (wide eyes,
+  tufts up) → hop to it, the right foot reaches forward in the air and lands ON the crystal,
+  talons close (`T_GRAB` 1.34; the held gem's offset ramps with `fRz`) → foot up holding it
+  before the breast, happy eyes → lamp off, hop back 1.66–1.84 s; props AND `beamX` reset to REST
+  (seam test; ending the hop at 1.94 left the last frame mid-landing). **The lamp is on the FRONT
+  of the head, so the beam and the glow are drawn OVER body pixels** (owner: «лучи
+  светят за её спиной»): body pixels get warm light `c·(1 + k·LAMP_L)` (opaque stays opaque,
+  outline stays dark; core 0.55 / edge 0.34 — over the cream breast a mixed-alpha veil was
+  invisible), the background keeps the translucent cone; each body pixel is depth-tested against
+  the cone's near side (`f.zb` vs `lerp(lamp, spot)` depth) or, for the spot, the floor — a wing
+  or toe in front hides the light. The spot runs on an ARC round her (`spotAt`, centre under the
+  head, through the crystal) in front of the toes: on the old straight line at y 3.4 the beam
+  from the forehead went THROUGH the breast. Crystal at y 6.4 (at 3.4 she landed on it). The
+  beam is drawn after the eyes (it passes in front of the face). Test «луч фонаря идёт СПЕРЕДИ». Attack: wings up in a V → swoop
   at the viewer f9 (scale 1.18, head up, beak open with red gape, talons forward) → rays round the
   body over empty pixels → settle. Idle: breath, head swivel + tilt with the body still, blink
   left then right, tuft springs, a shake. Sleep: fluffed, head sunk, tufts back, lamp off, zzz.
-  Hatch plays `happy`. Weight 611 KB v0+v1 (small 65 / 73, large 227 / 244, thumbs 1 KB; ink was
-  1.86 MB). Tests «пиксельная сова» in `pets-pixel.test.ts`.
+  Hatch plays `happy`. Weight 639 KB v0+v1 (small 70 / 77, large 237 / 254, thumbs 1 KB; ink was
+  1.86 MB; 611 before the beam fix — lit body pixels add colours). Open logic note: in `walk` the
+  body sways and leans TOWARD the lifted foot (`o.x = -0.8·sway`, `lean = -0.1·sway` while
+  `liftL` is up) — weight should go over the stance foot; left as is (scope of the beam fix).
+  Tests «пиксельная сова» in `pets-pixel.test.ts`.
 - **Bulldog** (`pets-pixel/bulldog.ts`, `bulldogFrame(a, i, res, v)`, `variants: [1]`): «Бульдог
   Кастет», a stocky fawn-and-white English bulldog sitting square to us (shepherd's `drawPartsF` +
   `pick` + `drawFlats`, plus own `vis` dither fade and `floor` clip on parts). 44-px read: head

@@ -652,6 +652,27 @@ describe('пиксельная сова', () => {
     const held = W.poseAt('work', 1.5);
     expect([held.gem, held.held, held.lamp]).toEqual([0, 1, 1]);
     expect(held.fRz).toBeGreaterThan(8);
+    // Лапа садится НА кристалл и только потом поднимает его (не прыгает с пола в лапу).
+    const grab = W.poseAt('work', 1.34);
+    expect([grab.fRz, grab.held]).toEqual([0, 1]);
+    expect(grab.grip).toBeGreaterThan(0.9);
+  });
+
+  it('луч фонаря идёт СПЕРЕДИ: светом по груди, пиксели не просвечивают', () => {
+    // Фонарь на лбу, луч к полу перед лапами: середина прохода (кадр 17) — луч
+    // по груди под фонарём; фонарь ещё не горит — кадр 4. Колонка середины груди.
+    for (const r of ['s', 'l'] as const) {
+      const cv = W.RES[r];
+      const x = Math.floor(cv.bx + cv.box / 2);
+      const lit = W.owlFrame('work', 17, r, 0).data;
+      const off = W.owlFrame('work', 4, r, 0).data;
+      for (let y = Math.round(cv.by + 0.65 * cv.box); y <= Math.round(cv.by + 0.8 * cv.box); y++) {
+        const i = (y * cv.cw + x) * 4;
+        const sum = (d: Uint8ClampedArray) => d[i] + d[i + 1] + d[i + 2];
+        expect([r, y, lit[i + 3]]).toEqual([r, y, 255]);
+        expect(sum(lit) - sum(off)).toBeGreaterThan(30);
+      }
+    }
   });
 
   it('покой: голова вертится, тело стоит; моргает сначала один глаз, потом другой', () => {
