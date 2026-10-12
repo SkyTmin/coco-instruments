@@ -584,10 +584,11 @@ function happyPose(t: number): Pose {
     [1.04, 0, 's'],
   ]);
   const wv = Math.sin(TAU * 3 * t) * env;
-  setH(o, 'aL', [-9.2, 2.8, 28.0 + 0.6 * wv], arms);
-  setH(o, 'aR', [9.2, 2.8, 28.0 - 0.6 * wv], arms);
-  setH(o, 'bL', [-12.6, 2.6, 15.4 - 0.5 * wv], arms);
-  setH(o, 'bR', [12.6, 2.6, 15.4 + 0.5 * wv], arms);
+  // Верхние — «V» вверх-наружу мимо щитка (рука короткая: выше ушей не дотянуть).
+  setH(o, 'aL', [-11.0 - 0.4 * wv, 3.6, 25.4 + 0.5 * wv], arms);
+  setH(o, 'aR', [11.0 - 0.4 * wv, 3.6, 25.4 - 0.5 * wv], arms);
+  setH(o, 'bL', [-13.2, 3.0, 17.2 - 0.6 * wv], arms);
+  setH(o, 'bR', [13.2, 3.0, 17.2 + 0.6 * wv], arms);
   o.nod = -0.1 * up;
   o.tilt = 0.12 * Math.sin((t / T) * TAU) * env;
   o.eye = t < 0.9 ? 'happy' : 'open';
@@ -761,6 +762,23 @@ function workPose(t: number): Pose {
   return o;
 }
 
+/** Взмах верхней руки в броске (0 — замах, 1 — у середины живота); `j` — 0 правая, 1 левая. */
+function swipeU(t: number, j: number): number {
+  const d = 0.045 * j;
+  return kf(t, [
+    [0.3 + d, 0],
+    [0.42 + d, 1, 'o'],
+  ]);
+}
+/** Путь кисти при взмахе (координаты тела): дуга сверху-снаружи вперёд и вниз к середине. */
+function swipePath(side: number, u: number): V3 {
+  const a: V3 = [side * 10.6, 0.8, 25.2];
+  const b: V3 = [side * 7.8, 8.6, 22.4];
+  const e: V3 = [side * 1.6, 7.2, 15.0];
+  const v = 1 - u;
+  return [0, 1, 2].map((i) => v * v * a[i] + 2 * v * u * b[i] + u * u * e[i]) as V3;
+}
+
 function attackPose(t: number): Pose {
   const T = dur('attack');
   const o: Pose = { ...REST };
@@ -792,15 +810,24 @@ function attackPose(t: number): Pose {
   o.x = 0.3 * Math.sin(t * TAU * 9) * bump(t, 0.04, 0.27);
   const crouch = neg(l);
   const strike = pos(l);
-  setH(o, 'aL', [-9.2, 1.4, 25.0], crouch);
-  setH(o, 'aR', [9.2, 1.4, 25.0], crouch);
-  setH(o, 'bL', [-12.8, 0.4, 13.4], crouch);
-  setH(o, 'bR', [12.8, 0.4, 13.4], crouch);
-  // Удар: верхние сверху вниз к середине, нижние — вперёд и в стороны.
-  setH(o, 'aL', [-4.6, 10.8, 16.4], strike);
-  setH(o, 'aR', [4.6, 10.8, 16.4], strike);
-  setH(o, 'bL', [-11.2, 9.2, 11.6], strike);
-  setH(o, 'bR', [11.2, 9.2, 11.6], strike);
+  // Руки: подняты в замах → верхние режут сверху-снаружи вниз к середине (правая
+  // первой), нижние выбрасываются вперёд → возврат в покой.
+  const eng = kf(t, [
+    [0, 0],
+    [0.2, 1, 'o'],
+    [0.56, 1],
+    [0.84, 0, 's'],
+  ]);
+  const uR = swipeU(t, 0);
+  const uL = swipeU(t, 1);
+  setH(o, 'aR', swipePath(1, uR), eng);
+  setH(o, 'aL', swipePath(-1, uL), eng);
+  const ub = kf(t, [
+    [0.33, 0],
+    [0.43, 1, 'o'],
+  ]);
+  setH(o, 'bL', lerp3([-12.8, 0.4, 13.4], [-10.6, 8.8, 11.2], ub), eng);
+  setH(o, 'bR', lerp3([12.8, 0.4, 13.4], [10.6, 8.8, 11.2], ub), eng);
   o.jaw = kf(t, [
     [0, 0],
     [0.24, 0.1],
@@ -1373,7 +1400,8 @@ function thumbTip(c: Ctx): V3 {
   const { o, S } = c;
   const k = S.k;
   const sh = S.sh[1];
-  const [elb, wr] = ik(sh, S.hand[1], 4.6 * k, 4.4 * k, norm([0.8, -0.45, -0.4]));
+  const pole = norm(lerp3([1, -0.5, 0.1], [0.6, 0.2, -1], o.sit));
+  const [elb, wr] = ik(sh, S.hand[1], 4.6 * k, 4.4 * k, pole);
   const d = norm(sub(wr, elb));
   const hc = add(wr, mul(d, 0.7 * k));
   return add(hc, [0.2 * k, 0.3 * k, 2.7 * k * o.thumb]);
@@ -1451,7 +1479,7 @@ function headParts(out: PartF[], c: Ctx): void {
     out.push({
       c: h.at([0, 7.0, -5.0 - 0.3 * jw]),
       ax: hax,
-      r: [1.9 * k, 1.0 * k, (0.5 + 1.2 * jw) * k],
+      r: [2.2 * k, 1.0 * k, (0.5 + 1.5 * jw) * k],
       pal: P_MOUTH,
       id: nid(),
       bias: -0.05,
@@ -1460,25 +1488,25 @@ function headParts(out: PartF[], c: Ctx): void {
   }
   // Жвалы: два крючка под мордочкой, расходятся наружу.
   for (const side of [-1, 1]) {
-    const base: V3 = [side * 1.9, 6.2, -5.1];
-    const d = norm(lerp3([-side * 0.35, 0.4, -1], [side * 0.75, 0.45, -0.6], jw));
+    const base: V3 = [side * 2.1, 7.5, -5.4];
+    const d = norm(lerp3([-side * 0.35, 0.4, -1], [side * 1.0, 0.45, -0.4], jw));
     const inw: V3 = [-side * 0.6, 0.2, 0];
     const id = nid();
     out.push({
       c: h.at(add(base, mul(d, 0.8))),
       ax: axes(h.dir(d), h.dir([0, 1, 0])),
-      r: [1.15 * k, 0.75 * k, 0.75 * k],
-      pal: P_SHELL,
+      r: [(1.15 + 0.35 * jw) * k, 0.8 * k, 0.8 * k],
+      pal: P_LEG,
       id,
-      bias: -0.06,
+      bias: -0.22,
     });
     out.push({
-      c: h.at(add(add(base, mul(d, 1.9)), mul(inw, 0.5))),
+      c: h.at(add(add(base, mul(d, 1.9 + 0.5 * jw)), mul(inw, 0.5 + 0.4 * jw))),
       ax: axes(h.dir(norm(add(d, inw))), h.dir([0, 1, 0])),
-      r: [0.85 * k, 0.45 * k, 0.45 * k],
-      pal: P_SHELL,
+      r: [(0.85 + 0.3 * jw) * k, 0.5 * k, 0.5 * k],
+      pal: P_LEG,
       id,
-      bias: -0.12,
+      bias: -0.3,
     });
   }
 }
@@ -2102,25 +2130,67 @@ function snap(p: Px, mask: Uint8Array, c: Ctx): void {
   }
 }
 
+/** Следы когтей: светлая дуга по пути кончиков верхних кистей за последние ~0,07 с.
+ * Кисти впереди тела — след рисуется поверх тела; хвост дуги тает шахматкой. */
+function slashFx(p: Px, c: Ctx): void {
+  const { S, t } = c;
+  const col = hx('#fff4dc');
+  const dim = hx('#f0c070');
+  const k = S.k;
+  for (let j = 0; j < 2; j++) {
+    const side = j === 0 ? 1 : -1;
+    const u1 = swipeU(t, j);
+    const u0 = swipeU(t - 0.07, j);
+    if (u1 - u0 < 0.04) continue;
+    const sh = S.sh[j === 0 ? 1 : 0];
+    const pole = norm([side, -0.5, 0.1]);
+    const N = HI ? 16 : 9;
+    let prev: [number, number] | null = null;
+    for (let n = 0; n <= N; n++) {
+      const hand = S.up(swipePath(side, lerp(u0, u1, n / N)));
+      const [elb, wr] = ik(sh, hand, 4.6 * k, 4.4 * k, pole);
+      const tip = add(wr, mul(norm(sub(wr, elb)), 2.2 * k));
+      const [sx, sy] = project(mul(tip, RR));
+      const cur: [number, number] = [OX + sx, OY + sy];
+      if (prev) {
+        const steps = Math.ceil(Math.max(Math.abs(cur[0] - prev[0]), Math.abs(cur[1] - prev[1])) * 2) + 1;
+        for (let q = 0; q <= steps; q++) {
+          const f = (n - 1 + q / steps) / N;
+          const x = Math.round(lerp(prev[0], cur[0], q / steps) - 0.5);
+          const y = Math.round(lerp(prev[1], cur[1], q / steps) - 0.5);
+          if (x < 0 || y < 0 || x >= p.w || y >= p.h || !dith(x, y, 0.2 + 0.95 * f)) continue;
+          const cc = f > 0.55 ? col : dim;
+          p.set(x, y, cc);
+          if (HI && f > 0.3 && y + 1 < p.h) p.set(x, y + 1, f > 0.7 ? col : dim);
+        }
+      }
+      prev = cur;
+    }
+  }
+}
+
 /** Сон: буквы «z» поднимаются над головой и тают. */
 const Z_S = ['zzz', '.z.', 'zzz'];
-const Z_L = ['zzzz', '..z.', '.z..', 'zzzz'];
+const Z_M = ['zzzz', '..z.', '.z..', 'zzzz'];
+const Z_L = ['zzzzzz', '....zz', '...zz.', '..zz..', '.zz...', 'zzzzzz'];
+const Z_XL = ['zzzzzzz', 'zzzzzzz', '....zz.', '...zz..', '..zz...', 'zzzzzzz', 'zzzzzzz'];
 function zzz(p: Px, mask: Uint8Array, c: Ctx): void {
   const { h, t } = c;
   const col = hx('#f4ead8');
   for (let j = 0; j < 2; j++) {
     const u = wrap(t / 1.5 + j * 0.5, 1);
-    const [sx, sy] = project(mul(h.at([7 + 3.5 * u, 0, 5 + 9 * u]), RR));
+    // От макушки справа вверх — в мире (голова кивнула, её «верх» смотрит на зрителя).
+    const [sx, sy] = project(mul(add(h.at([6, 0, 6]), [2.5 + 4 * u, 0, 3 + 10 * u]), RR));
     const x0 = Math.round(OX + sx);
     const y0 = Math.round(OY + sy);
-    const rows = HI && u > 0.3 ? Z_L : Z_S;
+    const rows = HI ? (u > 0.45 ? Z_XL : Z_L) : u > 0.45 ? Z_M : Z_S;
     for (let y = 0; y < rows.length; y++)
       for (let x = 0; x < rows[y].length; x++) {
         if (rows[y][x] !== 'z') continue;
         const X = x0 + x;
         const Y = y0 + y;
         if (X < 0 || Y < 0 || X >= p.w || Y >= p.h || mask[Y * p.w + X]) continue;
-        if (!dith(X, Y, 1.2 * (1 - u) * Math.min(1, u * 6))) continue;
+        if (!dith(X, Y, 1.2 * Math.min(1, (1 - u) * 2.5) * Math.min(1, u * 6))) continue;
         p.set(X, Y, col);
       }
   }
@@ -2238,6 +2308,7 @@ export function roachFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   if (o.streak > 0.02) smear(p, f, o.streak);
   if (o.speed > 0.02) speedLines(p, c);
   glintFx(p, c);
+  if (a === 'attack') slashFx(p, c);
   const mask = new Uint8Array(p.w * p.h);
   for (let j = 0; j < mask.length; j++) mask[j] = p.data[j * 4 + 3] > 0 ? 1 : 0;
   if (a === 'sleep') zzz(p, mask, c);
