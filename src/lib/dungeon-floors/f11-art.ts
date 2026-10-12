@@ -50,6 +50,7 @@ import './f11-mob-boarder';
 import './f11-mob-spirit';
 import './f11-mob-jelly';
 import './f11-mob-gardener';
+import './f11-mob-beetle';
 
 type RGBA = [number, number, number, number];
 
@@ -3247,56 +3248,13 @@ registerPropPainter('f11_vane', (_o, time) => {
 });
 
 // ---------------------------------------------------------------------------
-// Монстры. Кадр собирается один раз на позу, сторону, вспышку и вид (элита,
-// альбинос) и лежит в кеше. Все смотрят вправо; влево — отражение.
+// Монстры — `f11-mob-*.ts` (анимации мобов 11); здесь — цвета, общие с
+// Древним стражем и предметами.
 // ---------------------------------------------------------------------------
 
-interface Built {
-  p: Px;
-  ax: number;
-  ay: number;
-  eye?: [number, number] | null;
-}
-const mobFrames = new Map<string, MobFrame>();
 const GOLDK = hx('#ffd24a');
 const CYAN = hx('#7af6ff');
 const LENS_RIM = hx('#20242c');
-
-function finishMob(
-  key: string,
-  b: Built,
-  look: MobPose['look'],
-  flash: boolean,
-  left: boolean,
-): MobFrame {
-  let p = b.p;
-  if (look === 'albino') {
-    const pale = hx('#f6f0ea');
-    const q = new Px(p.w, p.h);
-    for (let i = 0; i < p.data.length; i += 4) {
-      if (!p.data[i + 3]) continue;
-      const l = (p.data[i] + p.data[i + 1] + p.data[i + 2]) / 3;
-      const c = mixc([l, l, l, 255], pale, 0.5);
-      q.data[i] = c[0];
-      q.data[i + 1] = c[1];
-      q.data[i + 2] = c[2];
-      q.data[i + 3] = p.data[i + 3];
-    }
-    p = q;
-  }
-  if (look === 'elite') p.outline(GOLDK);
-  if (flash) p = p.tint(WHITE, 0.85);
-  if (left) p = p.flipX();
-  const eye = b.eye ? ([left ? p.w - 1 - b.eye[0] : b.eye[0], b.eye[1]] as [number, number]) : null;
-  const out: MobFrame = { img: p.canvas(), ax: left ? p.w - b.ax : b.ax, ay: b.ay, eye };
-  mobFrames.set(key, out);
-  return out;
-}
-
-function mobFrame(kind: string, pose: MobPose, anim: string, build: () => Built): MobFrame {
-  const key = `${kind}|${anim}|${pose.left ? 1 : 0}|${pose.flash ? 1 : 0}|${pose.look}`;
-  return mobFrames.get(key) ?? finishMob(key, build(), pose.look, pose.flash, pose.left);
-}
 
 // --- Роботы: садовник и страж ----------------------------------------------------
 // Рисовальщики — `f11-mob-gardener.ts`, `f11-mob-guard.ts` (анимации мобов 11);
@@ -3332,50 +3290,7 @@ const BRASS = tn('#6a4a1a', '#a07a30', '#d0a84a', '#f4d884');
 // Рисовальщик и смерч (`f11_tornado`) — `f11-mob-spirit.ts` (анимации мобов 11).
 
 // --- Жук-копилка -----------------------------------------------------------------
-
-function beetlePx(f: number, fly: boolean): Built {
-  const W = 20;
-  const H = 18;
-  const p = new Px(W, H);
-  const cx = 9;
-  const cy = 10;
-  // Лапки.
-  for (let i = 0; i < 3; i++) {
-    const x = cx - 3 + i * 3;
-    const d = (i + f) % 2 ? 1 : -1;
-    stroke(p, x, cy + 2, x + d, cy + 5, IRON[0]);
-  }
-  // Крылья — при побеге.
-  if (fly)
-    for (const s of [-1, 1])
-      p.ell(cx + s * 5, cy - 4 - (f % 2), 4, 2.4, alpha(hx('#e8f4ff'), 0.55));
-  // Панцирь-копилка.
-  shadeEll(p, cx, cy, 6.2, 4.6, GOLD, 0.05);
-  stroke(p, cx - 3, cy - 2, cx + 2, cy - 2, GOLD[0]);
-  // Монета в щели.
-  p.ell(cx - 0.5, cy - 3.5, 1.8, 1.1, GOLD[3]);
-  p.set(cx - 1, cy - 4, WHITE);
-  // Голова, усы, глаз.
-  shadeEll(p, cx + 6, cy + 1, 2.2, 2, IRON, 0.1);
-  stroke(p, cx + 7, cy - 1, cx + 10, cy - 4, IRON[1]);
-  stroke(p, cx + 6, cy - 1, cx + 8, cy - 5, IRON[1]);
-  p.set(cx + 7, cy + 1, WHITE);
-  const out = ink(p);
-  // Блеск золота.
-  const sx = [cx - 4, cx + 2, cx - 1, cx + 4][f % 4];
-  out.set(sx, cy - 1, WHITE);
-  return { p: out, ax: cx, ay: H - 3, eye: [cx + 7, cy + 1] };
-}
-
-registerMobPainter('f11_beetle', (m: Mob, pose: MobPose) => {
-  const t = paintSim()?.time ?? 0;
-  const run = pose.mode === 'flee' || pose.anim === 'run';
-  const f = ((Math.floor(t * (run ? 16 : 4) + m.id) % 4) + 4) % 4;
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('beetle', pose, 'dead', () => beetlePx(0, false));
-  if (pose.mode === 'escape') return mobFrame('beetle', pose, `fly${f}`, () => beetlePx(f, true));
-  return mobFrame('beetle', pose, `walk${f}`, () => beetlePx(f, false));
-});
+// Рисовальщик — `f11-mob-beetle.ts` (анимации мобов 11).
 
 // --- Щитовой пилон и Древний страж (v2.87) -----------------------------------------
 //

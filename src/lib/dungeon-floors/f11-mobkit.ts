@@ -640,13 +640,17 @@ export const WARM_POSE: MobPose = {
   now: 0,
 };
 
-/** Прогрев: кадры поз по всем сторонам (у отражаемого вида — пяти; `only` — только эти), по одному на шаг. */
+/**
+ * Прогрев: кадры поз по всем сторонам (у отражаемого вида — пяти; `only` —
+ * только эти; `dark` — ступень проявления из тьмы), по одному на шаг.
+ */
 export function* warmAll(
   K: Kind,
   list: [string, number][],
   pic: (a: string, f: number, d: number) => Pic,
   looks: MobPose['look'][] = ['normal'],
   only?: number[],
+  dark = 0,
 ) {
   const sides = only ?? (K.mirror ? SIDES5 : [0, 1, 2, 3, 4, 5, 6, 7]);
   for (const look of looks)
@@ -655,7 +659,7 @@ export function* warmAll(
         for (let f = 0; f < n; f++) {
           warming = true;
           try {
-            frameOf(K, anim, f, d, { ...WARM_POSE, look }, (dd) => pic(anim, f, dd));
+            frameOf(K, anim, f, d, { ...WARM_POSE, look }, (dd) => pic(anim, f, dd), dark);
           } finally {
             warming = false;
           }
