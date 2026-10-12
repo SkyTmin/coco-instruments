@@ -4736,13 +4736,7 @@
   place-items: center;
   flex: none;
 }
-.ppick-ico img {
-  width: 100%;
-  height: 100%;
-  image-rendering: auto;
-  pointer-events: none;
-}
-.ppick-ico:is(.r2, .r3, .r4, .r5, .r6) img {
+.ppick-ico:is(.r2, .r3, .r4, .r5, .r6) > .pxs {
   filter: drop-shadow(0 0 2px var(--rc));
 }
 /* Обычная и необычная кирки без свечения: ржаво-бурая головка на глине
@@ -4750,7 +4744,7 @@
    прям сливается с блоками первого этажа»). Светлый ореол — статичный
    фильтр на самой картинке; взмах двигает родителя, так что перерисовки
    под фильтром нет. */
-.ppick-ico:is(.r0, .r1) img {
+.ppick-ico:is(.r0, .r1) > .pxs {
   filter: drop-shadow(0 0 1px rgba(255, 238, 205, 0.95)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.45));
 }
 .pore-ico {
@@ -4907,14 +4901,8 @@
   flex: none;
   isolation: isolate;
 }
-.pkart > img {
-  position: relative;
+.pkart > .pxs {
   z-index: 3;
-  width: 80%;
-  height: 80%;
-  image-rendering: auto;
-  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.35));
-  pointer-events: none;
 }
 .pkart__glow {
   position: absolute;
@@ -4945,92 +4933,12 @@
   }
 }
 /* Ещё не выкована: чёрный силуэт в ореоле своей редкости. */
-.pkart.is-dim > img {
+.pkart.is-dim > .pxs {
   filter: brightness(0) drop-shadow(0 0 6px var(--rc));
   opacity: 0.85;
 }
 .pkart.is-dim .pkart__glow {
   opacity: 0.55;
-}
-
-/* Блик по кирке — полоса света, обрезанная силуэтом самой кирки. */
-.pkart__shine {
-  position: absolute;
-  inset: 10%;
-  z-index: 4;
-  overflow: hidden;
-  -webkit-mask: var(--pkimg) center / contain no-repeat;
-  mask: var(--pkimg) center / contain no-repeat;
-  pointer-events: none;
-}
-.pkart__shine::before {
-  content: '';
-  position: absolute;
-  top: -20%;
-  left: 0;
-  width: 34%;
-  height: 140%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
-  transform: translateX(-120%) rotate(18deg);
-  animation: pkart-shine 3.2s ease-in-out infinite;
-}
-@keyframes pkart-shine {
-  0%,
-  55% {
-    transform: translateX(-120%) rotate(18deg);
-  }
-  100% {
-    transform: translateX(320%) rotate(18deg);
-  }
-}
-
-/* Искры — четыре звёздочки мерцают по очереди. */
-.pkart__sparks {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-}
-.pkart__sparks b {
-  position: absolute;
-  width: 11%;
-  height: 11%;
-  background: var(--rl);
-  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
-  opacity: 0;
-  animation: pkart-twinkle 2.4s ease-in-out infinite;
-  animation-delay: calc(var(--k) * 0.6s);
-}
-.pkart__sparks b:nth-child(1) {
-  left: 14%;
-  top: 18%;
-}
-.pkart__sparks b:nth-child(2) {
-  right: 12%;
-  top: 30%;
-}
-.pkart__sparks b:nth-child(3) {
-  left: 24%;
-  bottom: 14%;
-}
-.pkart__sparks b:nth-child(4) {
-  right: 22%;
-  bottom: 22%;
-}
-@keyframes pkart-twinkle {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.3) rotate(0deg);
-  }
-  20% {
-    opacity: 1;
-    transform: scale(1) rotate(45deg);
-  }
-  40% {
-    opacity: 0;
-    transform: scale(0.4) rotate(90deg);
-  }
 }
 
 /* Лучи за легендарной — нарисованы один раз, крутятся трансформом. */
@@ -5048,34 +4956,6 @@
 @keyframes pkart-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-/* Аура мифической: шесть огоньков по кругу. */
-.pkart__aura {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  animation: pkart-spin 9s linear infinite reverse;
-  pointer-events: none;
-}
-.pkart__aura b {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 8%;
-  height: 8%;
-  margin: -4% 0 0 -4%;
-  border-radius: 50%;
-  background: var(--rl);
-  box-shadow: 0 0 6px var(--rc);
-  transform: rotate(calc(var(--k) * 60deg)) translateX(290%);
-  animation: pkart-ember 1.8s ease-in-out infinite;
-  animation-delay: calc(var(--k) * 0.3s);
-}
-@keyframes pkart-ember {
-  50% {
-    opacity: 0.25;
   }
 }
 
@@ -5415,9 +5295,7 @@ button.fg-slot {
   cursor: pointer;
   scroll-snap-align: center;
 }
-.fg-rung img {
-  width: 34px;
-  height: 34px;
+.fg-rung .pxs {
   filter: brightness(0) opacity(0.55);
 }
 .fg-rung b {
@@ -5428,7 +5306,7 @@ button.fg-slot {
 .fg-rung.is-have {
   box-shadow: inset 0 0 0 2px var(--rc);
 }
-.fg-rung.is-have img {
+.fg-rung.is-have .pxs {
   filter: drop-shadow(0 0 3px var(--rc));
 }
 .fg-rung.is-have b {
@@ -5462,7 +5340,7 @@ button.fg-slot {
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.fg-rung.is-next img {
+.fg-rung.is-next .pxs {
   filter: brightness(0) drop-shadow(0 0 4px var(--rc));
 }
 .fg-rung.is-next::after {
@@ -5566,66 +5444,23 @@ button.fg-slot {
   opacity: 0;
   transition: opacity 260ms ease-out;
 }
-.fgr.is-flash .fgr__burst,
-.fgr.is-shape .fgr__burst {
-  opacity: 0.55;
+.fgr.is-forge .fgr__burst {
+  opacity: 0.22;
 }
 .fgr.is-reveal .fgr__burst {
   opacity: 0.4;
 }
-.fgr__anvil {
-  position: relative;
-  display: grid;
-  place-items: center;
-  color: #8e969e;
-}
-.fgr__anvil > .gx-icon {
-  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.5));
-}
-.fgr__hammer {
-  position: absolute;
-  right: -34px;
-  top: -64px;
-  color: #c9a27a;
-  transform-origin: 80% 85%;
-  transform: rotate(-10deg);
-}
-.fgr__sparks {
-  position: absolute;
-  left: 50%;
-  top: 18%;
-  width: 0;
-  height: 0;
-}
-.fgr__sparks i {
-  position: absolute;
-  left: -3px;
-  top: -3px;
-  width: 6px;
-  height: 6px;
-  border-radius: 1px;
-  box-shadow: 0 0 6px currentColor;
-  pointer-events: none;
-}
-.fgr.is-flash .fgr__anvil {
-  opacity: 0;
-  transition: opacity 120ms;
-}
-.fgr__pick {
+.fgr__pick,
+.fgr__forge {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  animation: fgr-shape 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
-.fgr__pick.is-shown {
-  animation: fgr-reveal 520ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
-}
-@keyframes fgr-shape {
-  from {
-    opacity: 0;
-    transform: scale(0.55);
-  }
+/* Полоса выковки — поверх кирки: по метке `reveal` кирка встаёт под неё в той же позе. */
+.fgr__forge {
+  z-index: 2;
+  pointer-events: none;
 }
 @keyframes fgr-reveal {
   from {
@@ -5672,11 +5507,7 @@ button.fg-slot {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pkart__shine::before,
-  .pkart__sparks b,
   .pkart__rays,
-  .pkart__aura,
-  .pkart__aura b,
   .pkart__pillar,
   .pkart.is-live .pkart__glow,
   .fg-go.is-ready,

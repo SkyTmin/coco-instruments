@@ -20,7 +20,6 @@ import {
   type RGBA,
   type V3,
   add,
-  bump,
   clamp01,
   cross,
   dith,
@@ -88,36 +87,203 @@ function palRGBA(c: RGBA[]): number {
 }
 
 // Металлы.
-const P_IRONR = pal('#1a1216', '#2c2022', '#42302c', '#5a4436', '#745844', '#8e6e54', '#aa8a6c', '#c8a888');
+const P_IRONR = pal(
+  '#1a1216',
+  '#2c2022',
+  '#42302c',
+  '#5a4436',
+  '#745844',
+  '#8e6e54',
+  '#aa8a6c',
+  '#c8a888',
+);
 const P_RUST = pal('#36120a', '#58200c', '#823612', '#aa5016', '#cc6e22', '#e69036', '#f6b458');
-const P_DSTEEL = pal('#0c0e16', '#171a26', '#242836', '#343a4a', '#474f62', '#5e687c', '#7c889c', '#a2aebc', '#c8d2dc');
-const P_STEEL = pal('#121824', '#232c3a', '#384454', '#52606f', '#71818f', '#94a5b4', '#b9c9d6', '#dce8f0', '#ffffff');
-const P_GOLD = pal('#2c1406', '#4a2808', '#70400e', '#966014', '#be841c', '#dfa82c', '#f4ca4a', '#fde488', '#fffbe0');
-const P_BRASS = pal('#281606', '#462c0c', '#6a4614', '#8e641e', '#b2842a', '#d0a43a', '#e8c458', '#f8e098', '#fffbe8');
-const P_SILVER = pal('#1c202c', '#323848', '#4c5466', '#6a7486', '#8c96a8', '#b0bacb', '#d4dce6', '#eef4fa', '#ffffff');
-const P_COPPER = pal('#280c08', '#46180e', '#6c2816', '#923e1e', '#b4582a', '#d0783c', '#e89c5a', '#f8c894', '#fff0dc');
-const P_WGOLD = pal('#26221a', '#433d2e', '#665e46', '#8c8464', '#b2aa88', '#d6d0b0', '#eeeAd4', '#fffdf2', '#ffffff');
-const P_STAR = pal('#05051a', '#0a0c26', '#121838', '#1c244e', '#283466', '#384882', '#4e60a2', '#7486c6', '#a8b8ec');
+const P_DSTEEL = pal(
+  '#0c0e16',
+  '#171a26',
+  '#242836',
+  '#343a4a',
+  '#474f62',
+  '#5e687c',
+  '#7c889c',
+  '#a2aebc',
+  '#c8d2dc',
+);
+const P_STEEL = pal(
+  '#121824',
+  '#232c3a',
+  '#384454',
+  '#52606f',
+  '#71818f',
+  '#94a5b4',
+  '#b9c9d6',
+  '#dce8f0',
+  '#ffffff',
+);
+const P_GOLD = pal(
+  '#2c1406',
+  '#4a2808',
+  '#70400e',
+  '#966014',
+  '#be841c',
+  '#dfa82c',
+  '#f4ca4a',
+  '#fde488',
+  '#fffbe0',
+);
+const P_SILVER = pal(
+  '#1c202c',
+  '#323848',
+  '#4c5466',
+  '#6a7486',
+  '#8c96a8',
+  '#b0bacb',
+  '#d4dce6',
+  '#eef4fa',
+  '#ffffff',
+);
+const P_COPPER = pal(
+  '#280c08',
+  '#46180e',
+  '#6c2816',
+  '#923e1e',
+  '#b4582a',
+  '#d0783c',
+  '#e89c5a',
+  '#f8c894',
+  '#fff0dc',
+);
+const P_WGOLD = pal(
+  '#26221a',
+  '#433d2e',
+  '#665e46',
+  '#8c8464',
+  '#b2aa88',
+  '#d6d0b0',
+  '#eeeAd4',
+  '#fffdf2',
+  '#ffffff',
+);
+const P_STAR = pal(
+  '#05051a',
+  '#0a0c26',
+  '#121838',
+  '#1c244e',
+  '#283466',
+  '#384882',
+  '#4e60a2',
+  '#7486c6',
+  '#a8b8ec',
+);
 const P_SPECK = pal('#3a4a8a', '#7088d0', '#a8c0ff', '#e4eeff', '#ffffff');
 
 // Камень и самоцветы.
-const P_FLINT = pal('#1c1a20', '#2e2a32', '#433e46', '#5a545c', '#746c72', '#90868a', '#ada2a0', '#cbc0b8', '#e6ddd2');
-const P_TURQ = pal('#0a2a30', '#0e4246', '#145e5c', '#1c7e74', '#2a9e8c', '#44bca2', '#70d6ba', '#a8ecd4', '#e0fff4');
+const P_FLINT = pal(
+  '#1c1a20',
+  '#2e2a32',
+  '#433e46',
+  '#5a545c',
+  '#746c72',
+  '#90868a',
+  '#ada2a0',
+  '#cbc0b8',
+  '#e6ddd2',
+);
+const P_TURQ = pal(
+  '#0a2a30',
+  '#0e4246',
+  '#145e5c',
+  '#1c7e74',
+  '#2a9e8c',
+  '#44bca2',
+  '#70d6ba',
+  '#a8ecd4',
+  '#e0fff4',
+);
 const P_MATRIX = pal('#1e140e', '#2e1e14', '#42301e', '#5a4428', '#745a36');
-const P_QUARTZ = pal('#241f3c', '#3a3260', '#544c84', '#7068a4', '#9088c2', '#b2acdc', '#d2d0f0', '#eef0fc', '#ffffff');
-const P_OPAL = pal('#46425c', '#625e7c', '#86829e', '#aaa8c0', '#cacade', '#e2e4ee', '#f4f4fa', '#ffffff');
+const P_QUARTZ = pal(
+  '#241f3c',
+  '#3a3260',
+  '#544c84',
+  '#7068a4',
+  '#9088c2',
+  '#b2acdc',
+  '#d2d0f0',
+  '#eef0fc',
+  '#ffffff',
+);
+const P_OPAL = pal(
+  '#46425c',
+  '#625e7c',
+  '#86829e',
+  '#aaa8c0',
+  '#cacade',
+  '#e2e4ee',
+  '#f4f4fa',
+  '#ffffff',
+);
 const P_OPALF = [
   pal('#d07aa8', '#ffb0d4', '#ffe4f0'),
   pal('#58b888', '#9ceec2', '#dcffee'),
   pal('#6a94e0', '#acccff', '#e2eeff'),
   pal('#d89a58', '#ffcc94', '#fff0dc'),
 ];
-const P_LAPIS = pal('#05072a', '#0a1046', '#121c68', '#1b2a8e', '#2840b0', '#3a5acc', '#5a7ee2', '#8aa8f2', '#c4d4ff');
+const P_LAPIS = pal(
+  '#05072a',
+  '#0a1046',
+  '#121c68',
+  '#1b2a8e',
+  '#2840b0',
+  '#3a5acc',
+  '#5a7ee2',
+  '#8aa8f2',
+  '#c4d4ff',
+);
 const P_CALCITE = pal('#7e86a6', '#a6aec8', '#cdd2e4', '#eef0f8');
-const P_GARNET = pal('#180206', '#32040c', '#540816', '#780e22', '#9c1832', '#c02a46', '#de4a60', '#f4888e', '#ffd2cc');
-const P_SAPPH = pal('#020a28', '#041548', '#08246c', '#0e3894', '#1850bc', '#2c6edc', '#5092f2', '#8cbcff', '#dceeff');
-const P_RUBY = pal('#280006', '#48000c', '#720214', '#9c061e', '#c81028', '#ea2a3c', '#ff5a5c', '#ff9c92', '#ffe2da');
-const P_DIAM = pal('#183040', '#284a5e', '#3a6a82', '#5690a8', '#7ab6cc', '#a2d8e8', '#caf0f8', '#ecfcff', '#ffffff');
+const P_GARNET = pal(
+  '#180206',
+  '#32040c',
+  '#540816',
+  '#780e22',
+  '#9c1832',
+  '#c02a46',
+  '#de4a60',
+  '#f4888e',
+  '#ffd2cc',
+);
+const P_SAPPH = pal(
+  '#020a28',
+  '#041548',
+  '#08246c',
+  '#0e3894',
+  '#1850bc',
+  '#2c6edc',
+  '#5092f2',
+  '#8cbcff',
+  '#dceeff',
+);
+const P_RUBY = pal(
+  '#280006',
+  '#48000c',
+  '#720214',
+  '#9c061e',
+  '#c81028',
+  '#ea2a3c',
+  '#ff5a5c',
+  '#ff9c92',
+  '#ffe2da',
+);
+const P_DIAM = pal(
+  '#183040',
+  '#284a5e',
+  '#3a6a82',
+  '#5690a8',
+  '#7ab6cc',
+  '#a2d8e8',
+  '#caf0f8',
+  '#ecfcff',
+  '#ffffff',
+);
 const P_FIRE = [
   pal('#ff6a6a', '#ffd0d0'),
   pal('#ffd84a', '#fff4c0'),
@@ -125,12 +291,52 @@ const P_FIRE = [
   pal('#5ab4ff', '#d4ecff'),
   pal('#c07aff', '#f0dcff'),
 ];
-const P_RHOD = pal('#380a1c', '#5a1430', '#822446', '#aa385e', '#ca5476', '#e27490', '#f29ab0', '#fcc6d4', '#fff0f4');
+const P_RHOD = pal(
+  '#380a1c',
+  '#5a1430',
+  '#822446',
+  '#aa385e',
+  '#ca5476',
+  '#e27490',
+  '#f29ab0',
+  '#fcc6d4',
+  '#fff0f4',
+);
 const P_MANG = pal('#100608', '#1e0e14', '#2e1820', '#40242e');
-const P_CHAR = pal('#1a0630', '#2e0c4e', '#461670', '#602492', '#7c38b2', '#9854ca', '#b678de', '#d4a4f0', '#f2e2ff');
+const P_CHAR = pal(
+  '#1a0630',
+  '#2e0c4e',
+  '#461670',
+  '#602492',
+  '#7c38b2',
+  '#9854ca',
+  '#b678de',
+  '#d4a4f0',
+  '#f2e2ff',
+);
 const P_CHARF = pal('#2a0c46', '#b48ce0', '#e4ccf8', '#fbf2ff');
-const P_ALEXG = pal('#021a12', '#063422', '#0c4e34', '#146a46', '#1e885a', '#2ea870', '#50c88a', '#88e4ac', '#d4fae4');
-const P_ALEXR = pal('#200008', '#3e0214', '#620624', '#880c38', '#ac184c', '#cc2c62', '#e8507e', '#f888a8', '#ffd8e6');
+const P_ALEXG = pal(
+  '#021a12',
+  '#063422',
+  '#0c4e34',
+  '#146a46',
+  '#1e885a',
+  '#2ea870',
+  '#50c88a',
+  '#88e4ac',
+  '#d4fae4',
+);
+const P_ALEXR = pal(
+  '#200008',
+  '#3e0214',
+  '#620624',
+  '#880c38',
+  '#ac184c',
+  '#cc2c62',
+  '#e8507e',
+  '#f888a8',
+  '#ffd8e6',
+);
 
 // Дерево рукояти: сосна → чёрное дерево по ступеням редкости.
 const P_WOOD = [
@@ -150,10 +356,29 @@ const P_ROPE = pal('#2a2010', '#44361c', '#62502c', '#806a3e', '#9e8654', '#baa2
 
 // Кузня.
 const P_HEAT = pal(
-  '#2a0a06', '#4e1008', '#7a1a0a', '#a8280c', '#d23e10', '#f06218',
-  '#fc8c28', '#ffb648', '#ffd878', '#fff2b8', '#ffffff',
+  '#2a0a06',
+  '#4e1008',
+  '#7a1a0a',
+  '#a8280c',
+  '#d23e10',
+  '#f06218',
+  '#fc8c28',
+  '#ffb648',
+  '#ffd878',
+  '#fff2b8',
+  '#ffffff',
 );
-const P_ANVIL = pal('#08080e', '#121219', '#1c1c26', '#282834', '#363644', '#484858', '#5e5e72', '#7a7a90', '#9c9cb2');
+const P_ANVIL = pal(
+  '#08080e',
+  '#121219',
+  '#1c1c26',
+  '#282834',
+  '#363644',
+  '#484858',
+  '#5e5e72',
+  '#7a7a90',
+  '#9c9cb2',
+);
 const P_HAMMER = P_DSTEEL;
 
 /** Ступень редкости → палитра света (тёмный → цвет → светлый → белый). */
@@ -276,39 +501,152 @@ interface Spec {
 const WOOD = (r: number) => M('wood', P_WOOD[r]);
 const SPECS: Spec[] = [
   // 0 Ржавая: изъеденное железо, рыжие раковины, сбитое острие, тряпичная обмотка.
-  { rar: 0, head: M('rust', P_IRONR, { p2: P_RUST }), eye: M('rust', P_IRONR, { p2: P_RUST }), fit: M('rust', P_IRONR, { p2: P_RUST }), grip: M('grip', P_CLOTH), chip: true },
+  {
+    rar: 0,
+    head: M('rust', P_IRONR, { p2: P_RUST }),
+    eye: M('rust', P_IRONR, { p2: P_RUST }),
+    fit: M('rust', P_IRONR, { p2: P_RUST }),
+    grip: M('grip', P_CLOTH),
+    chip: true,
+  },
   // 1 Каменная: кремень со сколами на верёвочной обвязке.
-  { rar: 0, head: M('flint', P_FLINT), eye: M('rope', P_ROPE), fit: M('rope', P_ROPE), grip: M('rope', P_ROPE), rope: true, crude: true },
+  {
+    rar: 0,
+    head: M('flint', P_FLINT),
+    eye: M('rope', P_ROPE),
+    fit: M('rope', P_ROPE),
+    grip: M('rope', P_ROPE),
+    rope: true,
+    crude: true,
+  },
   // 2 Кованая: тёмная сталь во вмятинах от молота.
-  { rar: 0, head: M('dents', P_DSTEEL, { gloss: 0.5 }), eye: M('dents', P_DSTEEL, { gloss: 0.5 }), fit: M('metal', P_DSTEEL), grip: M('grip', P_LEATH) },
+  {
+    rar: 0,
+    head: M('dents', P_DSTEEL, { gloss: 0.5 }),
+    eye: M('dents', P_DSTEEL, { gloss: 0.5 }),
+    fit: M('metal', P_DSTEEL),
+    grip: M('grip', P_LEATH),
+  },
   // 3 Железная: полированная сталь.
-  { rar: 1, head: M('chrome', P_STEEL), eye: M('chrome', P_STEEL), fit: M('metal', P_STEEL, { gloss: 1 }), grip: M('grip', P_LEATH) },
+  {
+    rar: 1,
+    head: M('chrome', P_STEEL),
+    eye: M('chrome', P_STEEL),
+    fit: M('metal', P_STEEL, { gloss: 1 }),
+    grip: M('grip', P_LEATH),
+  },
   // 4 Бирюзовая: полированный камень с сеткой бурой матрицы.
-  { rar: 1, head: M('stone', P_TURQ, { p2: P_MATRIX, tex: 'web', gloss: 1 }), eye: M('chrome', P_SILVER), fit: M('metal', P_SILVER, { gloss: 1 }), grip: M('grip', P_LEATH) },
+  {
+    rar: 1,
+    head: M('stone', P_TURQ, { p2: P_MATRIX, tex: 'web', gloss: 1 }),
+    eye: M('chrome', P_SILVER),
+    fit: M('metal', P_SILVER, { gloss: 1 }),
+    grip: M('grip', P_LEATH),
+  },
   // 5 Кварцевая: гранёный прозрачный кварц.
-  { rar: 1, head: M('gem', P_QUARTZ, { shard: true }), eye: M('chrome', P_SILVER), fit: M('metal', P_SILVER, { gloss: 1 }), grip: M('grip', P_LEATH) },
+  {
+    rar: 1,
+    head: M('gem', P_QUARTZ, { shard: true }),
+    eye: M('chrome', P_SILVER),
+    fit: M('metal', P_SILVER, { gloss: 1 }),
+    grip: M('grip', P_LEATH),
+  },
   // 6 Опаловая: молочный опал с игрой цвета.
-  { rar: 2, head: M('opal', P_OPAL, { gloss: 1 }), eye: M('chrome', P_GOLD), fit: M('metal', P_GOLD, { gloss: 1 }), grip: M('grip', P_LEATH) },
+  {
+    rar: 2,
+    head: M('opal', P_OPAL, { gloss: 1 }),
+    eye: M('chrome', P_GOLD),
+    fit: M('metal', P_GOLD, { gloss: 1 }),
+    grip: M('grip', P_LEATH),
+  },
   // 7 Золотая: золото с бронзовой глубиной, оправа медная (золото на золоте пропадает).
-  { rar: 2, head: M('chrome', P_GOLD), eye: M('chrome', P_GOLD), fit: M('metal', P_COPPER, { gloss: 1 }), grip: M('grip', P_LEATHD) },
+  {
+    rar: 2,
+    head: M('chrome', P_GOLD),
+    eye: M('chrome', P_GOLD),
+    fit: M('metal', P_COPPER, { gloss: 1 }),
+    grip: M('grip', P_LEATHD),
+  },
   // 8 Лазуритовая: синий камень, золотой крап пирита, белые прожилки кальцита.
-  { rar: 2, head: M('stone', P_LAPIS, { p2: P_CALCITE, tex: 'fleck', gloss: 1 }), eye: M('chrome', P_GOLD), fit: M('metal', P_GOLD, { gloss: 1 }), grip: M('grip', P_LEATHD) },
+  {
+    rar: 2,
+    head: M('stone', P_LAPIS, { p2: P_CALCITE, tex: 'fleck', gloss: 1 }),
+    eye: M('chrome', P_GOLD),
+    fit: M('metal', P_GOLD, { gloss: 1 }),
+    grip: M('grip', P_LEATHD),
+  },
   // 9 Гранатовая.
-  { rar: 3, head: M('gem', P_GARNET), eye: M('chrome', P_GOLD), fit: M('metal', P_GOLD, { gloss: 1 }), grip: M('grip', P_LEATHD), gem: M('gem', P_GARNET) },
+  {
+    rar: 3,
+    head: M('gem', P_GARNET),
+    eye: M('chrome', P_GOLD),
+    fit: M('metal', P_GOLD, { gloss: 1 }),
+    grip: M('grip', P_LEATHD),
+    gem: M('gem', P_GARNET),
+  },
   // 10 Сапфировая.
-  { rar: 3, head: M('gem', P_SAPPH), eye: M('chrome', P_SILVER), fit: M('metal', P_SILVER, { gloss: 1 }), grip: M('grip', P_LEATHD), gem: M('gem', P_SAPPH) },
+  {
+    rar: 3,
+    head: M('gem', P_SAPPH),
+    eye: M('chrome', P_SILVER),
+    fit: M('metal', P_SILVER, { gloss: 1 }),
+    grip: M('grip', P_LEATHD),
+    gem: M('gem', P_SAPPH),
+  },
   // 11 Рубиновая.
-  { rar: 3, head: M('gem', P_RUBY), eye: M('chrome', P_GOLD), fit: M('metal', P_GOLD, { gloss: 1 }), grip: M('grip', P_LEATHD), gem: M('gem', P_RUBY) },
+  {
+    rar: 3,
+    head: M('gem', P_RUBY),
+    eye: M('chrome', P_GOLD),
+    fit: M('metal', P_GOLD, { gloss: 1 }),
+    grip: M('grip', P_LEATHD),
+    gem: M('gem', P_RUBY),
+  },
   // 12 Алмазная: ледяной алмаз с «огнём».
-  { rar: 4, head: M('gem', P_DIAM, { gem: 'fire' }), eye: M('chrome', P_WGOLD), fit: M('metal', P_WGOLD, { gloss: 1 }), grip: M('grip', P_LEATHD), gem: M('gem', P_DIAM, { gem: 'fire' }) },
+  {
+    rar: 4,
+    head: M('gem', P_DIAM, { gem: 'fire' }),
+    eye: M('chrome', P_WGOLD),
+    fit: M('metal', P_WGOLD, { gloss: 1 }),
+    grip: M('grip', P_LEATHD),
+    gem: M('gem', P_DIAM, { gem: 'fire' }),
+  },
   // 13 Звёздная: тёмная сталь со светящейся россыпью.
-  { rar: 4, head: M('star', P_STAR, { p2: P_SPECK }), eye: M('star', P_STAR, { p2: P_SPECK }), fit: M('metal', P_SILVER, { gloss: 1 }), grip: M('grip', P_LEATHD), gem: M('gem', P_SAPPH) },
+  {
+    rar: 4,
+    head: M('star', P_STAR, { p2: P_SPECK }),
+    eye: M('star', P_STAR, { p2: P_SPECK }),
+    fit: M('metal', P_SILVER, { gloss: 1 }),
+    grip: M('grip', P_LEATHD),
+    gem: M('gem', P_SAPPH),
+  },
   // 14 Родонитовая: розовый камень с чёрными прожилками.
-  { rar: 5, head: M('stone', P_RHOD, { p2: P_MANG, tex: 'marble', gloss: 1 }), eye: M('chrome', P_GOLD), fit: M('metal', P_GOLD, { gloss: 1 }), grip: M('grip', P_LEATHR), gem: M('gem', P_RUBY) },
+  {
+    rar: 5,
+    head: M('stone', P_RHOD, { p2: P_MANG, tex: 'marble', gloss: 1 }),
+    eye: M('chrome', P_GOLD),
+    fit: M('metal', P_GOLD, { gloss: 1 }),
+    grip: M('grip', P_LEATHR),
+    gem: M('gem', P_RUBY),
+  },
   // 15 Чароитовая: фиолетовые волокнистые завитки.
-  { rar: 5, head: M('stone', P_CHAR, { p2: P_CHARF, tex: 'fibre', gloss: 1 }), eye: M('chrome', P_SILVER), fit: M('metal', P_SILVER, { gloss: 1 }), grip: M('grip', P_LEATHR), gem: M('gem', P_QUARTZ) },
+  {
+    rar: 5,
+    head: M('stone', P_CHAR, { p2: P_CHARF, tex: 'fibre', gloss: 1 }),
+    eye: M('chrome', P_SILVER),
+    fit: M('metal', P_SILVER, { gloss: 1 }),
+    grip: M('grip', P_LEATHR),
+    gem: M('gem', P_QUARTZ),
+  },
   // 16 Александритовая: от зелёного к малиновому.
-  { rar: 6, head: M('gem', P_ALEXG, { gem: 'alex' }), eye: M('chrome', P_WGOLD), fit: M('metal', P_WGOLD, { gloss: 1 }), grip: M('grip', P_LEATHR), gem: M('gem', P_ALEXG, { gem: 'alex' }) },
+  {
+    rar: 6,
+    head: M('gem', P_ALEXG, { gem: 'alex' }),
+    eye: M('chrome', P_WGOLD),
+    fit: M('metal', P_WGOLD, { gloss: 1 }),
+    grip: M('grip', P_LEATHR),
+    gem: M('gem', P_ALEXG, { gem: 'alex' }),
+  },
 ];
 export const PICK_N = SPECS.length;
 
@@ -330,7 +668,11 @@ function rot(v: V3, k: V3, a: number): V3 {
   const s = Math.sin(a);
   const kv = cross(k, v);
   const kd = dot(k, v) * (1 - c);
-  return [v[0] * c + kv[0] * s + k[0] * kd, v[1] * c + kv[1] * s + k[1] * kd, v[2] * c + kv[2] * s + k[2] * kd];
+  return [
+    v[0] * c + kv[0] * s + k[0] * kd,
+    v[1] * c + kv[1] * s + k[1] * kd,
+    v[2] * c + kv[2] * s + k[2] * kd,
+  ];
 }
 
 /** Рукоять на экране — вниз-вправо, головка — вверху слева. */
@@ -424,7 +766,8 @@ function shadeHit(h: Hit): [number, number] {
       return [m.p, 0.08 + diff * 0.9 + spec];
     case 'rust': {
       const s = 1.6;
-      const v = noise3(u / s, nn / s, b / s, 11) * 0.65 + noise3(u / 0.7, nn / 0.7, b / 0.7, 12) * 0.35;
+      const v =
+        noise3(u / s, nn / s, b / s, 11) * 0.65 + noise3(u / 0.7, nn / 0.7, b / 0.7, 12) * 0.35;
       const k = 0.04 + diff * 0.9 + (sp > 0.93 ? 0.1 : 0);
       if (v > 0.6) return [m.p2!, k + (v > 0.72 ? -0.18 : 0.04)];
       return [m.p, k + (v < 0.32 ? 0.06 : 0)];
@@ -485,7 +828,8 @@ function shadeHit(h: Hit): [number, number] {
         else if (w < -0.85) k -= 0.12;
       } else if (m.tex === 'fleck') {
         const [d1, , id] = cells(u / 1.3, nn / 1.3, b / 1.3, 81);
-        if (hash(id, 4, 3) < 0.3 && d1 < (HI ? 0.24 : 0.3)) return [P_GOLD, 0.3 + diff * 0.45 + spec];
+        if (hash(id, 4, 3) < 0.3 && d1 < (HI ? 0.24 : 0.3))
+          return [P_GOLD, 0.3 + diff * 0.45 + spec];
         const w = Math.sin(u * 0.4 - nn * 0.6 + 4 * noise3(u / 3, nn / 3, b / 3, 82));
         if (Math.abs(w) < (HI ? 0.06 : 0.07)) return [m.p2!, k];
       }
@@ -545,7 +889,8 @@ function shadeHit(h: Hit): [number, number] {
       if (wid > 0) {
         const sc = crust ? 4.2 : HI ? 2.4 : 3;
         const [d1, d2] = cells(u / sc, nn / sc, b / sc, 111);
-        if (d2 - d1 < wid) return [P_RAR[rr], (crust ? 0.42 + 0.3 * CRACK : 0.62) + 0.2 * Math.max(0, lam)];
+        if (d2 - d1 < wid)
+          return [P_RAR[rr], (crust ? 0.42 + 0.3 * CRACK : 0.62) + 0.2 * Math.max(0, lam)];
       }
       // Корка — тёмное остывшее железо, чуть тёплое снизу.
       if (crust) return [P_ANVIL, 0.2 + Math.max(0, lam) * 0.4 + bounce];
@@ -620,7 +965,8 @@ function gemShade(h: Hit, m: Mat): [number, number] {
   // Внутренний свет: грань напротив источника светится — свет прошёл сквозь камень.
   const inner = lam < -0.35 ? 0.42 : lam < -0.1 ? 0.18 : 0;
   // Свечение изнутри по середине плеча (там толще всего).
-  const mid = h.prim.facet === 'bar' ? Math.max(0, 1 - Math.hypot(h.q[1], h.q[2]) * 1.15) * 0.12 : 0;
+  const mid =
+    h.prim.facet === 'bar' ? Math.max(0, 1 - Math.hypot(h.q[1], h.q[2]) * 1.15) * 0.12 : 0;
   let k = 0.1 + Math.max(0, lam) * 0.56 + inner + mid;
   if (sp > 0.965) k = 1.05;
   else if (sp > 0.9) k += 0.26;
@@ -791,9 +1137,7 @@ function buildPick(sp: Spec, o: Pose, opt: PickOpt = {}): Prim[] {
       const tB = t0 * (1 - 0.66 * sharp * v ** 1.5);
       const zone = Math.floor(v * 3);
       const cut =
-        chip && k >= K - 2
-          ? (qx: number, qy: number) => qx > 0.1 && qy * side > 0.25
-          : undefined;
+        chip && k >= K - 2 ? (qx: number, qy: number) => qx > 0.1 && qy * side > 0.25 : undefined;
       part([u, n, 0], [tl, e2, e3], [(Wl / K) * 1.5, hU, tB], sp.head, 1, {
         tube: true,
         facet: gemHead ? 'bar' : undefined,
@@ -818,15 +1162,42 @@ function buildPick(sp: Spec, o: Pose, opt: PickOpt = {}): Prim[] {
 
   // Проушина (у самоцветной — оправа из металла, у кремня — обвязка).
   if (sp.rope) {
-    part([0.2, 0, 0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [h0 * 1.25, 3.2, t0 * 1.18], sp.eye, 2);
+    part(
+      [0.2, 0, 0],
+      [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+      ],
+      [h0 * 1.25, 3.2, t0 * 1.18],
+      sp.eye,
+      2,
+    );
     for (const s of [-1, 1]) {
       const d = norm([1, s * 1.1, 0]);
-      part([0.3, 0, 0], [d, cross([0, 0, 1], d), [0, 0, 1]], [h0 * 1.55, 0.95, t0 * 1.3], sp.eye, 2);
+      part(
+        [0.3, 0, 0],
+        [d, cross([0, 0, 1], d), [0, 0, 1]],
+        [h0 * 1.55, 0.95, t0 * 1.3],
+        sp.eye,
+        2,
+      );
     }
   } else {
-    part([0, 0, 0], [[0, 1, 0], [1, 0, 0], [0, 0, 1]], [gemHead ? 3.3 : 2.9, h0 * 1.3, t0 * 1.22], sp.eye, 2, {
-      tube: sp.eye.kind !== 'rust' && sp.eye.kind !== 'dents',
-    });
+    part(
+      [0, 0, 0],
+      [
+        [0, 1, 0],
+        [1, 0, 0],
+        [0, 0, 1],
+      ],
+      [gemHead ? 3.3 : 2.9, h0 * 1.3, t0 * 1.22],
+      sp.eye,
+      2,
+      {
+        tube: sp.eye.kind !== 'rust' && sp.eye.kind !== 'dents',
+      },
+    );
   }
 
   // Кольца у проушины — с редкой; у божественной по два.
@@ -838,7 +1209,13 @@ function buildPick(sp: Spec, o: Pose, opt: PickOpt = {}): Prim[] {
         const tl = norm([2 * curve * v, side * W, 0]);
         const e2 = cross([0, 0, 1], tl);
         const taper = 1 - 0.78 * v ** 1.5;
-        part([u, n, 0], [tl, e2, [0, 0, 1]], [0.62, h0 * taper * 1.2, t0 * (1 - 0.66 * v ** 1.5) * 1.24], sp.fit, 3);
+        part(
+          [u, n, 0],
+          [tl, e2, [0, 0, 1]],
+          [0.62, h0 * taper * 1.2, t0 * (1 - 0.66 * v ** 1.5) * 1.24],
+          sp.fit,
+          3,
+        );
       }
   }
 
@@ -846,10 +1223,31 @@ function buildPick(sp: Spec, o: Pose, opt: PickOpt = {}): Prim[] {
   if (R >= 3 && sp.gem) {
     for (const s of [-1, 1]) {
       const bz = s * t0 * 1.22 * 0.86;
-      part([0, 0, bz], [[1, 0, 0], [0, 1, 0], [0, 0, s]], [1.95, 1.75, 0.7], sp.fit, 4);
-      part([0, 0, bz + s * 0.45], [[1, 0, 0], [0, 1, 0], [0, 0, s]], [1.45, 1.3, 0.75], sp.gem, 5, {
-        facet: 'cab',
-      });
+      part(
+        [0, 0, bz],
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, s],
+        ],
+        [1.95, 1.75, 0.7],
+        sp.fit,
+        4,
+      );
+      part(
+        [0, 0, bz + s * 0.45],
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, s],
+        ],
+        [1.45, 1.3, 0.75],
+        sp.gem,
+        5,
+        {
+          facet: 'cab',
+        },
+      );
     }
   }
 
@@ -861,29 +1259,83 @@ function buildPick(sp: Spec, o: Pose, opt: PickOpt = {}): Prim[] {
     const step = HI ? 0.9 : 1.2;
     for (let u = top; u < bot; u += step) {
       const uu = Math.min(u + step / 2, bot);
-      part([uu, 0, 0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [step * 1.6, RH + 0.12 * (uu / L_HANDLE), RH + 0.12 * (uu / L_HANDLE)], WOOD(sp.rar), 6, {
-        tube: true,
-      });
+      part(
+        [uu, 0, 0],
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ],
+        [step * 1.6, RH + 0.12 * (uu / L_HANDLE), RH + 0.12 * (uu / L_HANDLE)],
+        WOOD(sp.rar),
+        6,
+        {
+          tube: true,
+        },
+      );
     }
     // Клин в торце (с эпической — металлическая шляпка).
-    if (R >= 3) part([top + 0.2, 0, 0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [0.9, RH + 0.35, RH + 0.35], sp.fit, 7);
+    if (R >= 3)
+      part(
+        [top + 0.2, 0, 0],
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ],
+        [0.9, RH + 0.35, RH + 0.35],
+        sp.fit,
+        7,
+      );
     // Обмотка.
     const g0 = L_HANDLE - 11.5;
     const g1 = L_HANDLE - 1.6;
     if (hk >= 1 || bot > g0)
       for (let u = g0; u < Math.min(g1, bot); u += 0.9) {
-        part([u + 0.45, 0, 0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [1.4, RH + 0.42, RH + 0.42], sp.grip, 8, {
-          tube: true,
-        });
+        part(
+          [u + 0.45, 0, 0],
+          [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+          [1.4, RH + 0.42, RH + 0.42],
+          sp.grip,
+          8,
+          {
+            tube: true,
+          },
+        );
       }
     if (hk >= 1) {
       // Навершие: у простых — голый торец, с необычной — колпачок оправы.
       if (R >= 1 || sp.chip)
-        part([L_HANDLE + 0.3, 0, 0], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [1.15, RH + 0.6, RH + 0.6], sp.chip ? sp.head : sp.fit, 9);
+        part(
+          [L_HANDLE + 0.3, 0, 0],
+          [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+          [1.15, RH + 0.6, RH + 0.6],
+          sp.chip ? sp.head : sp.fit,
+          9,
+        );
       if (R >= 4 && sp.gem)
-        part([L_HANDLE + 1.7, 0, 0], [[0, 1, 0], [0, 0, 1], [1, 0, 0]], [1.35, 1.35, 1.2], sp.gem, 10, {
-          facet: 'cab',
-        });
+        part(
+          [L_HANDLE + 1.7, 0, 0],
+          [
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 0, 0],
+          ],
+          [1.35, 1.35, 1.2],
+          sp.gem,
+          10,
+          {
+            facet: 'cab',
+          },
+        );
     }
     // Лангеты: стальные полосы по щекам рукояти (с мифической).
     if (R >= 5) {
@@ -891,7 +1343,17 @@ function buildPick(sp: Spec, o: Pose, opt: PickOpt = {}): Prim[] {
       const l1 = Math.min(10.5, bot);
       if (l1 > l0)
         for (const s of [-1, 1])
-          part([(l0 + l1) / 2, 0, s * (RH + 0.02)], [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [(l1 - l0) / 2 + 0.8, 0.62, 0.36], sp.fit, 11);
+          part(
+            [(l0 + l1) / 2, 0, s * (RH + 0.02)],
+            [
+              [1, 0, 0],
+              [0, 1, 0],
+              [0, 0, 1],
+            ],
+            [(l1 - l0) / 2 + 0.8, 0.62, 0.36],
+            sp.fit,
+            11,
+          );
     }
   }
   return out;
@@ -928,7 +1390,8 @@ function facetEdges(f: Frame): void {
       if (g < 0 || !FE[i]) continue;
       const a = FB[i - w];
       const b = FB[i - 1];
-      if ((a >= 0 && a !== g && pal[i - w] >= 0) || (b >= 0 && b !== g && pal[i - 1] >= 0)) hit.push(i);
+      if ((a >= 0 && a !== g && pal[i - w] >= 0) || (b >= 0 && b !== g && pal[i - 1] >= 0))
+        hit.push(i);
     }
   for (const i of hit) tone[i] = Math.max(0, Math.min(PALS[pal[i]].length - 1, tone[i] + FE[i]));
 }
@@ -1064,7 +1527,7 @@ function drawOrbit(f: Frame, p: Px, o: Pose, rar: number, t: number, T: number):
       const Pz: V3 = add(P, mul(U, Math.sin(ang * 2 + k) * 3 * RR));
       const [x, y, d] = scr(Pz);
       if (!visible(f, x, y, d)) continue;
-      const c = tr === 0 ? [255, 255, 255, 255] as RGBA : rcol(rar, tr <= 1 ? 4 : 2);
+      const c = tr === 0 ? ([255, 255, 255, 255] as RGBA) : rcol(rar, tr <= 1 ? 4 : 2);
       if (tr > 0 && !dith(Math.floor(x), Math.floor(y), 1 - tr * 0.18)) continue;
       putPx(p, x, y, c);
       if (tr === 0) {
@@ -1135,7 +1598,6 @@ export function spinAngle(ph: number): number {
   return THETA0 + Math.PI * (u - (0.7 * Math.sin(TAU * u)) / TAU);
 }
 
-
 function spinFrame(pick: number, i: number, res: Res, icon = false): Px {
   const cv = setRes(res);
   const sp = SPECS[pick];
@@ -1166,20 +1628,24 @@ function spinFrame(pick: number, i: number, res: Res, icon = false): Px {
 const ZF = -10.5;
 const ZFL = -24;
 const AY = 4.5;
-const P_ANVILW = pal('#140a0c', '#22121a', '#341a1e', '#4a2420', '#643022', '#824026', '#a2562c', '#c47436', '#e6984a');
+const P_ANVILW = pal(
+  '#140a0c',
+  '#22121a',
+  '#341a1e',
+  '#4a2420',
+  '#643022',
+  '#824026',
+  '#a2562c',
+  '#c47436',
+  '#e6984a',
+);
 const P_STEAM = pal('#6c7484', '#929aaa', '#b8bfcc', '#d8dde6', '#eef1f6', '#ffffff');
 
 /** Точка кузни (модельные единицы) → мир кадра. */
 const wm = (x: number, y: number, z: number): V3 => [x * RR, y * RR, z * RR];
 
 /** Плоский многоугольник: глубина по плоскости, палитра и тон — от точки мира. */
-function poly(
-  f: Frame,
-  pts: V3[],
-  shade: (P: V3) => [number, number],
-  id: number,
-  vis = 1,
-): void {
+function poly(f: Frame, pts: V3[], shade: (P: V3) => [number, number], id: number, vis = 1): void {
   const pr = pts.map((q) => project(q));
   let best = 0;
   let tri: [number, number, number] = [0, 1, 2];
@@ -1187,7 +1653,8 @@ function poly(
     for (let b = a + 1; b < pr.length; b++)
       for (let c = b + 1; c < pr.length; c++) {
         const d =
-          (pr[b][0] - pr[a][0]) * (pr[c][1] - pr[a][1]) - (pr[c][0] - pr[a][0]) * (pr[b][1] - pr[a][1]);
+          (pr[b][0] - pr[a][0]) * (pr[c][1] - pr[a][1]) -
+          (pr[c][0] - pr[a][0]) * (pr[b][1] - pr[a][1]);
         if (Math.abs(d) > Math.abs(best)) {
           best = d;
           tri = [a, b, c];
@@ -1282,7 +1749,12 @@ function drawAnvil(f: Frame, heat: number, vis = 1): void {
   poly(f, [wm(-12, -AY + 0.4, ZF), wm(-12, AY - 0.4, ZF), wm(-23.5, 0, ZF - 0.7)], top, 21, vis);
   poly(
     f,
-    [wm(-11, -AY - 1, ZFL + 3.4), wm(12.5, -AY - 1, ZFL + 3.4), wm(12.5, AY, ZFL + 3.4), wm(-11, AY, ZFL + 3.4)],
+    [
+      wm(-11, -AY - 1, ZFL + 3.4),
+      wm(12.5, -AY - 1, ZFL + 3.4),
+      wm(12.5, AY, ZFL + 3.4),
+      wm(-11, AY, ZFL + 3.4),
+    ],
     () => [P_ANVIL, 0.55],
     22,
     vis,
@@ -1310,20 +1782,78 @@ function drawHammer(f: Frame, hm: Ham, vis = 1, withHandle = true): void {
   const hw = 2.7;
   const hd = 2.5;
   const corner = (ks: number, kh: number, ky: number): V3 =>
-    wm(head[0] + s[0] * hl * ks + h[0] * hw * kh, hd * ky, head[2] + s[2] * hl * ks + h[2] * hw * kh);
+    wm(
+      head[0] + s[0] * hl * ks + h[0] * hw * kh,
+      hd * ky,
+      head[2] + s[2] * hl * ks + h[2] * hw * kh,
+    );
   const faces: [V3, [number, number, number][]][] = [
-    [[0, 1, 0], [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]],
-    [[0, -1, 0], [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1]]],
-    [s, [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]]],
-    [mul(s, -1), [[-1, -1, -1], [-1, 1, -1], [-1, 1, 1], [-1, -1, 1]]],
-    [h, [[-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]]],
-    [mul(h, -1), [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]]],
+    [
+      [0, 1, 0],
+      [
+        [-1, -1, 1],
+        [1, -1, 1],
+        [1, 1, 1],
+        [-1, 1, 1],
+      ],
+    ],
+    [
+      [0, -1, 0],
+      [
+        [-1, -1, -1],
+        [1, -1, -1],
+        [1, 1, -1],
+        [-1, 1, -1],
+      ],
+    ],
+    [
+      s,
+      [
+        [1, -1, -1],
+        [1, 1, -1],
+        [1, 1, 1],
+        [1, -1, 1],
+      ],
+    ],
+    [
+      mul(s, -1),
+      [
+        [-1, -1, -1],
+        [-1, 1, -1],
+        [-1, 1, 1],
+        [-1, -1, 1],
+      ],
+    ],
+    [
+      h,
+      [
+        [-1, 1, -1],
+        [1, 1, -1],
+        [1, 1, 1],
+        [-1, 1, 1],
+      ],
+    ],
+    [
+      mul(h, -1),
+      [
+        [-1, -1, -1],
+        [1, -1, -1],
+        [1, -1, 1],
+        [-1, -1, 1],
+      ],
+    ],
   ];
   faces.forEach(([n, cs], k) => {
     const lam = Math.max(0, dot(n, LIGHT));
     const sp = dot(n, HV);
     const tone = 0.18 + lam * 0.62 + (sp > 0.9 ? 0.2 : 0) + (k === 2 ? 0.12 : 0);
-    poly(f, cs.map(([a, b, c]) => corner(a, b, c)), () => [P_HAMMER, tone], 30, vis);
+    poly(
+      f,
+      cs.map(([a, b, c]) => corner(a, b, c)),
+      () => [P_HAMMER, tone],
+      30,
+      vis,
+    );
   });
   if (!withHandle) return;
   // Рукоять: от головки к руке.
@@ -1363,7 +1893,11 @@ function lyingPose(curve: number, h0: number): Pose {
   return { U: [0, 0, -1], N: [1, 0, 0], B: [0, -1, 0], T: wm(0, 0, eyeZ), s: S };
 }
 
-const lerp3v = (a: V3, b: V3, k: number): V3 => [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
+const lerp3v = (a: V3, b: V3, k: number): V3 => [
+  lerp(a[0], b[0], k),
+  lerp(a[1], b[1], k),
+  lerp(a[2], b[2], k),
+];
 
 /** Нормированная интерполяция поз (оси почти соосны — хватает). */
 function lerpPose(a: Pose, b: Pose, k: number): Pose {
@@ -1423,7 +1957,10 @@ function hammerAngle(t: number, ft: FT, r: number): number {
 }
 
 /** Форма заготовки: после каждого удара длиннее, тоньше, острее (с проседанием в момент удара). */
-function blankForm(t: number, ft: FT): { W: number; curve: number; h0: number; t0: number; tip: number } {
+function blankForm(
+  t: number,
+  ft: FT,
+): { W: number; curve: number; h0: number; t0: number; tip: number } {
   const pf = kf(t, [
     [0, 0],
     [ft.s[0], 0],
@@ -1492,7 +2029,9 @@ function drawSparks(f: Frame, p: Px, t: number, tc: number, k: number, r: number
     const Bp = scr(wm(px - vx * 0.02, y, pz - vz * 0.02));
     const u = age / life;
     const rare = r >= 1 && k === 2 && j % 2 === 0;
-    const head: RGBA = rare ? rcol(r, u < 0.5 ? 6 : 4) : PALS[P_HEAT][u < 0.3 ? 10 : u < 0.6 ? 8 : 6];
+    const head: RGBA = rare
+      ? rcol(r, u < 0.5 ? 6 : 4)
+      : PALS[P_HEAT][u < 0.3 ? 10 : u < 0.6 ? 8 : 6];
     const tail: RGBA = rare ? rcol(r, 3) : PALS[P_HEAT][u < 0.4 ? 7 : 5];
     if (u > 0.7 && !dith(Math.floor(A[0]), Math.floor(A[1]), (1 - u) / 0.3)) continue;
     const len = Math.max(1, Math.round(Math.hypot(A[0] - Bp[0], A[1] - Bp[1])));
@@ -1522,7 +2061,10 @@ function drawSteam(p: Px, t: number, ft: FT, r: number, front: boolean): void {
     const side = hash(j, 4, 501) - 0.5;
     const x0 = side * 2 * W_ARM * SCALE * 0.7;
     const sz = 0.55 + 0.75 * hash(j, 6, 501);
-    const lo = lobe === 0 ? [0, 0] : [(hash(j, 7 + lobe, 501) - 0.5) * 7 * sz, (hash(j, 9 + lobe, 501) - 0.2) * 4 * sz];
+    const lo =
+      lobe === 0
+        ? [0, 0]
+        : [(hash(j, 7 + lobe, 501) - 0.5) * 7 * sz, (hash(j, 9 + lobe, 501) - 0.2) * 4 * sz];
     const z = ZF + 3 + (12 + 18 * hash(j, 5, 501)) * age + lo[1] * (0.5 + age);
     const x = x0 + side * 14 * age + lo[0] * (0.6 + age) + Math.sin(age * 9 + j) * 1.2;
     const R = (2 + 7 * (1 - Math.exp(-age * 3.4))) * sz * (lobe ? 0.7 : 1) * (1 + 0.04 * r) * RR;
@@ -1565,7 +2107,8 @@ function iconMask(res: Res, r: number): Uint8Array {
         for (let dx = -1; dx <= 1 && !on; dx++) {
           const xx = x + dx;
           const yy = y + dy;
-          if (xx >= 0 && yy >= 0 && xx < cv.cw && yy < cv.ch && f.pal[yy * cv.cw + xx] >= 0) on = true;
+          if (xx >= 0 && yy >= 0 && xx < cv.cw && yy < cv.ch && f.pal[yy * cv.cw + xx] >= 0)
+            on = true;
         }
       m[y * cv.cw + x] = on ? 1 : 0;
     }
@@ -1778,7 +2321,8 @@ function forgeFrame(r: number, i: number, res: Res): Px {
   setRes(res);
   // Толчок от удара: кадр удара и следующий — всё на пиксель вниз.
   let jolt = 0;
-  for (const tc of ft.s) if (t >= tc - 1e-6 && t < tc + 1.5 / FPS) jolt = Math.max(1, Math.round(RR * 0.6));
+  for (const tc of ft.s)
+    if (t >= tc - 1e-6 && t < tc + 1.5 / FPS) jolt = Math.max(1, Math.round(RR * 0.6));
   OY += jolt;
   // Дрожь перед развязкой (легендарная+).
   let shx = 0;
@@ -1834,7 +2378,14 @@ function forgeFrame(r: number, i: number, res: Res): Px {
     if (r <= 2) {
       // Без подъёма: заготовка тает в пару, силуэт проявляется на месте значка.
       const m = clamp01((t - ft.q - 0.16) / 0.18);
-      if (m < 1) renderPick(f, sp, lp, { all: MAT_HOT, form: fm, bare: true, handle: 0, vis: m > 0 ? -m : 1 });
+      if (m < 1)
+        renderPick(f, sp, lp, {
+          all: MAT_HOT,
+          form: fm,
+          bare: true,
+          handle: 0,
+          vis: m > 0 ? -m : 1,
+        });
       if (m > 0) renderPick(f, sp, ip, { all: MAT_GLOW, vis: m });
     } else if (handle <= 0) {
       renderPick(f, sp, lp, { all: MAT_HOT, form: fm, bare: true, handle: 0 });
@@ -1858,7 +2409,16 @@ function forgeFrame(r: number, i: number, res: Res): Px {
     const age = t - ft.s[2];
     if (age >= 0 && age < 0.32) {
       const [x, y] = scr(wm(contact[0], 0, ZF));
-      ring(p, x, y, (5 + 110 * age) * RR, 0.3, HI ? 2 : 1, rcol(r, age < 0.12 ? 5 : 3), 1 - age / 0.32);
+      ring(
+        p,
+        x,
+        y,
+        (5 + 110 * age) * RR,
+        0.3,
+        HI ? 2 : 1,
+        rcol(r, age < 0.12 ? 5 : 3),
+        1 - age / 0.32,
+      );
     }
   }
   drawSteam(p, t, ft, r, false);
@@ -1903,14 +2463,10 @@ function forgeFrame(r: number, i: number, res: Res): Px {
     }
   }
   // Край холста — пустой (искра, долетевшая до края, просто уходит из кадра).
-  for (let x = 0; x < p.w; x++) {
-    p.set(x, 0, [0, 0, 0, 0]);
-    p.set(x, p.h - 1, [0, 0, 0, 0]);
-  }
-  for (let y = 0; y < p.h; y++) {
-    p.set(0, y, [0, 0, 0, 0]);
-    p.set(p.w - 1, y, [0, 0, 0, 0]);
-  }
+  for (let y = 0; y < p.h; y++)
+    for (let x = 0; x < p.w; x++)
+      if (x === 0 || y === 0 || x === p.w - 1 || y === p.h - 1)
+        p.data.fill(0, (y * p.w + x) * 4, (y * p.w + x) * 4 + 4);
   return p;
 }
 

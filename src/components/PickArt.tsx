@@ -1,19 +1,17 @@
 // Кирка с редкостью (v2.67): чем реже, тем ярче. Лестница эффектов — по
-// ступеням `lib/rarity.ts`: рамка → свечение → блик → искры → лучи → аура →
-// столб света. Всё движется только прозрачностью и поворотом (бюджет кадра
-// в CLAUDE.md): вращающийся слой рисуется один раз и крутится трансформом.
+// ступеням `lib/rarity.ts`. Сама кирка — пиксельная полоса (`lib/props-pixel/picks.ts`):
+// значок `icon-<i>` в списках, вращение `spin-<i>` на пьедестале; блёстки, аура и руны
+// запечены в полосу, CSS даёт только мягкий фон — свечение, лучи, столб.
 
 import type { CSSProperties, ReactNode } from 'react';
+import { PxStrip } from '@/components/PxStrip';
 import { PICKS } from '@/lib/prison';
-import { FX_AURA, FX_PILLAR, FX_RAYS, FX_SHINE, FX_SPARKS, rarityOf } from '@/lib/rarity';
+import { FX_PILLAR, FX_RAYS, rarityOf } from '@/lib/rarity';
 
-/**
- * Картинка кирки. v2.69 — рендер 3D-модели 640 px (scripts/picks-render):
- * прежние 64 px из Kenney Voxel Pack на пьедестале растягивались вдесятеро.
- * Новый каталог, а не те же имена: старые картинки сидят в прекеше
- * service worker, и телефон показывал бы их до переустановки воркера.
- */
-export const pickSrc = (i: number) => `/ui/picks/v2/p${i}.webp`;
+/** Доля стороны `PickArt`, которую занимает рамка рисунка (остальное — ореол). */
+export const PICK_ART = 0.8;
+/** С какой стороны рамки (CSS-пикселей) кирка вращается, а не стоит значком. */
+const SPIN_MIN = 96;
 
 /** Переменные цвета ступени для CSS: рамка, свет, тень. */
 export function rarityVars(rarity: number): CSSProperties {
@@ -21,9 +19,15 @@ export function rarityVars(rarity: number): CSSProperties {
   return { '--rc': r.color, '--rl': r.light, '--rd': r.dark } as CSSProperties;
 }
 
+/** Пиксельный значок кирки (кадр 0 вращения, без блёсток) — для списков и лестницы. */
+export function PickPx({ pick, size }: { pick: number; size: number }) {
+  const i = Math.max(0, Math.min(PICKS.length - 1, pick));
+  return <PxStrip set="picks" name={`icon-${i}`} size={size} mode="still" />;
+}
+
 /**
  * Большая кирка — на пьедестале кузницы и в сцене выковки. `fx` выключает
- * живые слои (для списков, где таких кирок много).
+ * живые слои (для списков, где таких кирок много): тогда — значок.
  */
 export function PickArt({
   pick,
@@ -42,37 +46,21 @@ export function PickArt({
   const i = Math.max(0, Math.min(PICKS.length - 1, pick));
   const rar = PICKS[i].rarity;
   const live = fx && !dim;
+  const art = Math.round(size * PICK_ART);
+  const spin = live && art >= SPIN_MIN;
   return (
     <span
       className={`pkart r${rar}${dim ? ' is-dim' : ''}${live ? ' is-live' : ''}${className ? ` ${className}` : ''}`}
-      style={
-        {
-          ...rarityVars(rar),
-          width: size,
-          height: size,
-          '--pkimg': `url(${pickSrc(i)})`,
-        } as CSSProperties
-      }
+      style={{ ...rarityVars(rar), width: size, height: size }}
       aria-hidden="true"
     >
       {live && rar >= FX_PILLAR && <i className="pkart__pillar" />}
       {live && rar >= FX_RAYS && <i className="pkart__rays" />}
       <i className="pkart__glow" />
-      {live && rar >= FX_AURA && (
-        <i className="pkart__aura">
-          {Array.from({ length: 6 }, (_, k) => (
-            <b key={k} style={{ '--k': k } as CSSProperties} />
-          ))}
-        </i>
-      )}
-      <img src={pickSrc(i)} alt="" draggable={false} />
-      {live && rar >= FX_SHINE && <i className="pkart__shine" />}
-      {live && rar >= FX_SPARKS && (
-        <i className="pkart__sparks">
-          {Array.from({ length: 4 }, (_, k) => (
-            <b key={k} style={{ '--k': k } as CSSProperties} />
-          ))}
-        </i>
+      {spin ? (
+        <PxStrip set="picks" name={`spin-${i}`} size={art} mode="loop" />
+      ) : (
+        <PickPx pick={i} size={art} />
       )}
     </span>
   );

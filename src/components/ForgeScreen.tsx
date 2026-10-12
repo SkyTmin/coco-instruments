@@ -14,7 +14,15 @@ import { createPortal } from 'react-dom';
 import { GxIcon, KIcon } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { BagIcon, OreIcon, TokenIcon } from '@/components/PrisonCamp';
-import { PickArt, pickSrc, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
+import {
+  PICK_ART,
+  PickArt,
+  PickPx,
+  RarityChip,
+  RarityName,
+  rarityVars,
+} from '@/components/PickArt';
+import { preloadPx, PxStrip } from '@/components/PxStrip';
 import { useFinanceStore } from '@/store';
 import {
   AUTOSELL_TOKENS,
@@ -42,6 +50,7 @@ import {
   coinDing,
   forgeReveal,
   forgeStrike,
+  lavaHiss,
   primeAudio,
   uiBuy,
   uiClose,
@@ -117,6 +126,13 @@ export function ForgeScreen({
   // Лучше этой кирки сейчас нет: либо конец лестницы, либо следующая — за
   // престижем, которого ещё нет.
   const lockedByPrestige = n < 0 && PICKS[p.pickMax + 1] ? PICKS[p.pickMax + 1] : null;
+
+  // Сцена выковки не ждёт сети: её полосу и вращение новой кирки берём заранее.
+  useEffect(() => {
+    if (!ready || n < 0) return;
+    void preloadPx('picks', `forge-r${PICKS[n].rarity}`, FORGE_PX);
+    void preloadPx('picks', `spin-${n}`, FORGE_PX);
+  }, [ready, n]);
 
   const forge = () => {
     primeAudio();
@@ -378,7 +394,7 @@ export function ForgeScreen({
               }
               aria-pressed={i <= p.pickMax ? i === p.pick : undefined}
             >
-              <img src={pickSrc(i)} alt="" draggable={false} />
+              <PickPx pick={i} size={34} />
               <b>{d.prestige ? `П${d.prestige}` : `⛏${d.power}`}</b>
               {i === p.pick && <i className="fg-rung__hand">в руке</i>}
             </button>
@@ -445,19 +461,29 @@ export function ForgeScreen({
 // Сцена выковки.
 // ---------------------------------------------------------------------------
 
-type Phase = 'strike' | 'flash' | 'shape' | 'reveal';
+/**
+ * Сторона рамки кирки в сцене (CSS-пикселей). Полоса `forge-r<r>` есть только крупной (рамка
+ * 112), и вращение кирки на пьедестале сцены (`PickArt` 188 → рамка 150) встаёт ровно туда же:
+ * при DPR 2 и 3 у обеих целый масштаб крупной полосы — 3 и 4, — и подмена по метке `reveal`
+ * не сдвигает кирку ни на пиксель.
+ */
+const FORGE_PX = 150;
+const FORGE_ART = Math.round(FORGE_PX / PICK_ART);
 
-/** Сколько длится «силуэт»: чем реже кирка, тем дольше пауза — это вопрос. */
-const SHAPE_MS = [300, 360, 460, 560, 820, 920, 1100];
-
+/**
+ * Сцена выковки — пиксельная полоса `forge-r<ступень>` (`lib/props-pixel/picks.ts`): раскалённая
+ * заготовка, три удара молота, закалка в пару, свечение → силуэт, вспышка цвета ступени. По
+ * метке `reveal` под полосой встаёт настоящая кирка (`PickArt`, вращение с кадра 0 — та же
+ * поза), полоса доигрывает вспышку и кончается пустой. Звук и дрожь — на метках полосы.
+ */
 function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
   const d = PICKS[pick];
   const r = rarityOf(d.rarity);
-  const [phase, setPhase] = useState<Phase>(() => (reduceMotion() ? 'reveal' : 'strike'));
+  const still = reduceMotion();
+  const [shown, setShown] = useState(still);
+  const [strip, setStrip] = useState(!still);
   const stage = useRef<HTMLDivElement>(null);
-  const hammer = useRef<HTMLSpanElement>(null);
-  const sparks = useRef<HTMLDivElement>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const done = useRef(false);
   const p = useFinanceStore((s) => s.prison);
   const m = modsOf(p);
   const opens = opensRocks(pick);
@@ -469,132 +495,60 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
     return off;
   }, []);
 
-  const finish = () => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-    setPhase('reveal');
+  /** Кирка проявилась: звук, отклик, вспышка экрана, конфетти у эпической и выше. */
+  const reveal = () => {
+    if (done.current) return;
+    done.current = true;
+    setShown(true);
+    forgeReveal(d.rarity);
+    notifySuccess();
+    if (still) return;
+    flashFrame(d.rarity >= 4 ? 'mega' : 'big');
+    if (d.rarity >= 3) burstConfetti(40 + 20 * d.rarity, [r.color, r.light, '#ffffff']);
   };
 
   useEffect(() => {
-    if (reduceMotion()) {
-      forgeReveal(d.rarity);
-      notifySuccess();
-      return undefined;
-    }
-    const slow = d.rarity >= 4;
-    const step = slow ? 460 : 380;
-    const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
-    for (let i = 0; i < 3; i++) {
-      at(i * step, () => swing(i));
-      at(i * step + step * 0.62, () => strike(i));
-    }
-    const tFlash = 3 * step + 60;
-    at(tFlash, () => {
-      setPhase('flash');
-      flashFrame(d.rarity >= 4 ? 'mega' : 'big');
-    });
-    at(tFlash + 140, () => setPhase('shape'));
-    at(tFlash + 140 + SHAPE_MS[d.rarity], () => {
-      setPhase('reveal');
-      forgeReveal(d.rarity);
-      notifySuccess();
-      if (d.rarity >= 3) burstConfetti(40 + 20 * d.rarity, [r.color, r.light, '#ffffff']);
-    });
-    return () => {
-      timers.current.forEach(clearTimeout);
-      timers.current = [];
-    };
+    if (still) reveal();
     // Сцена играет один раз на выковку.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Молот замахивается и падает на наковальню. */
-  const swing = (i: number) => {
-    const el = hammer.current;
-    if (!el) return;
-    try {
-      el.animate(
-        [
-          { transform: 'rotate(-10deg)' },
-          { transform: 'rotate(-62deg)', offset: 0.45 },
-          { transform: 'rotate(14deg)', offset: 0.62 },
-          { transform: 'rotate(4deg)' },
-        ],
-        { duration: d.rarity >= 4 ? 460 : 380, easing: 'ease-in' },
-      );
-    } catch {
-      /* не страшно */
-    }
-    void i;
-  };
-
-  /** Удар: звон, дрожь, искры. Третий удар — искры цвета редкости. */
+  /** Удар (метки strike1…3): звон, отклик, дрожь сцены. */
   const strike = (i: number) => {
     forgeStrike(i);
     tapMedium();
     const st = stage.current;
-    if (st) {
-      try {
-        st.animate(
-          [
-            { transform: 'translate(0,0)' },
-            { transform: `translate(${i % 2 ? 3 : -3}px, 4px)` },
-            { transform: 'translate(0,0)' },
-          ],
-          { duration: 140, easing: 'ease-out' },
-        );
-      } catch {
-        /* не страшно */
-      }
-    }
-    const last = i === 2;
-    spray(
-      last ? [r.color, r.light, '#ffffff', r.color] : ['#fff3b0', '#ffb04a', '#ff7a1a'],
-      last ? 26 + 4 * d.rarity : 12,
-      last ? 1.5 : 1,
-    );
-  };
-
-  /** Искры из точки удара: DOM-точки на трансформе и прозрачности. */
-  const spray = (colors: string[], count: number, power: number) => {
-    const host = sparks.current;
-    if (!host) return;
-    for (let k = 0; k < count; k++) {
-      const s = document.createElement('i');
-      s.style.background = colors[k % colors.length];
-      s.style.color = colors[k % colors.length];
-      host.appendChild(s);
-      const a = -Math.PI * (0.08 + 0.84 * Math.random());
-      const dist = (40 + Math.random() * 90) * power;
-      const dx = Math.cos(a) * dist;
-      const dy = Math.sin(a) * dist;
-      const ms = 380 + Math.random() * 320;
-      try {
-        const anim = s.animate(
-          [
-            { transform: 'translate(0,0) scale(1)', opacity: 1 },
-            {
-              transform: `translate(${dx}px, ${dy + 30 * power}px) scale(0.2)`,
-              opacity: 0,
-            },
-          ],
-          { duration: ms, easing: 'cubic-bezier(.2,.6,.4,1)' },
-        );
-        anim.onfinish = () => s.remove();
-      } catch {
-        s.remove();
-      }
+    if (!st) return;
+    try {
+      st.animate(
+        [
+          { transform: 'translate(0,0)' },
+          { transform: `translate(${i % 2 ? 3 : -3}px, ${3 + i}px)` },
+          { transform: 'translate(0,0)' },
+        ],
+        { duration: 140, easing: 'ease-out' },
+      );
+    } catch {
+      /* не страшно */
     }
   };
 
-  const shown = phase === 'reveal';
+  const onMark = (mark: string) => {
+    if (mark.startsWith('strike')) strike(Number(mark.slice(6)) - 1);
+    else if (mark === 'quench') lavaHiss();
+    else if (mark === 'reveal') reveal();
+  };
+
   return (
     <div
-      className={`fgr is-${phase} r${d.rarity}`}
+      className={`fgr${shown ? ' is-reveal' : ' is-forge'} r${d.rarity}`}
       style={rarityVars(d.rarity)}
       onClick={() => {
-        if (!shown) finish();
-        else {
+        if (!shown) {
+          // Тап до развязки — сразу кирка.
+          setStrip(false);
+          reveal();
+        } else {
           tapLight();
           onDone();
         }
@@ -602,23 +556,24 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
     >
       <div className="fgr__stage" ref={stage}>
         <i className="fgr__burst" aria-hidden="true" />
-        {(phase === 'strike' || phase === 'flash') && (
-          <div className="fgr__anvil">
-            <span className="fgr__hammer" ref={hammer}>
-              <GxIcon name="hammer" size={78} />
-            </span>
-            <GxIcon name="anvil" size={128} />
-            <div className="fgr__sparks" ref={sparks} />
-          </div>
-        )}
-        {phase === 'shape' && (
-          <div className="fgr__pick">
-            <PickArt pick={pick} size={168} dim />
-          </div>
-        )}
         {shown && (
           <div className="fgr__pick is-shown">
-            <PickArt pick={pick} size={168} />
+            <PickArt pick={pick} size={FORGE_ART} />
+          </div>
+        )}
+        {strip && (
+          <div className="fgr__forge">
+            <PxStrip
+              set="picks"
+              name={`forge-r${d.rarity}`}
+              size={FORGE_PX}
+              mode="once"
+              onMark={onMark}
+              onEnd={() => {
+                setStrip(false);
+                reveal();
+              }}
+            />
           </div>
         )}
       </div>
