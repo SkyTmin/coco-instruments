@@ -17,6 +17,7 @@ import {
 } from './dragon';
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
+import { FPS as WOLF_FPS, FRAMES as WOLF_FRAMES, RES as WOLF_RES, wolfFrame } from './wolf';
 
 export type { Anim, Canvas, Res };
 
@@ -46,6 +47,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: DRAGON_RES,
     anims: at24(DRAGON_FRAMES, DRAGON_FPS),
     frame: dragonFrame,
+    variants: [1],
+  },
+  // Волк: свой золотой; радужного уровня больше нет — его не рисуем.
+  wolf: {
+    res: WOLF_RES,
+    anims: at24(WOLF_FRAMES, WOLF_FPS),
+    frame: wolfFrame,
     variants: [1],
   },
 };

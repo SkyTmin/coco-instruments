@@ -152,6 +152,20 @@ Owner: «добавь возможность выбирать скин у пит
 - **Вес** Феникса — ~0,74 МБ всех полос: малая 74 / 86 КБ (обычный /
   золотой), крупная 272 / 309 КБ, значки по 1 КБ (тушью было ~2 МБ).
   Полосы вне прекеша (`**/ui/pets/**`).
+- **Wolf** (`pets-pixel/wolf.ts`, `wolfFrame(a, i, res, v)`, `variants: [1]`): sitting grey pack
+  leader — ruff = mane ellipsoid + rosette of teardrop `lock()`s (pale in the middle), pale cheeks
+  under fur cheek locks, heavy brow, amber eyes, big black nose, 3 scars on his right cheek
+  (viewer's left), notch in the left ear, iron collar half-buried in the ruff, broken chain on
+  springs, tin tag «7»; tail on the floor, dark tip. Plans SIT / STAND (walk) / CURL (sleep),
+  lerped. Howl (work): moon rises from behind the back → head thrown back AND turned 3/4 toward
+  the moon (turn 0.85, nod −1.05; from the front a muzzle pointing up foreshortens to a blob),
+  ears pitched forward while the head is back (else the far ear reads as a horn), the ruff follows
+  the head (`0.55·hz`, else the head floats over a dome), rings from a FIXED mouth point (they
+  don't ride down with the head), white where they cross the moon (dark read as cracks) → head
+  down, stare + glint → moon dissolves. Attack: crouch → lunge (scale 1.16, jaws open f9–10) →
+  `chomp` lens of two toothed arcs f9–12 → shake → idle. Weight 516 KB v0+v1 (small 51 / 56,
+  large 197 / 210, thumbs 1 KB; ink was 1.93 MB). Released in v2.112;
+  its −v2 strips (written by the pre-v2.111 pipeline) were deleted at merge. Tests «пиксельный волк» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
