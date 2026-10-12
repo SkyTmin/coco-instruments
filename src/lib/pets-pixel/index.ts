@@ -36,6 +36,7 @@ import {
 } from './ferret';
 import { FPS as FOX_FPS, FRAMES as FOX_FRAMES, foxFrame, RES as FOX_RES } from './fox';
 import { FPS as MOLE_FPS, FRAMES as MOLE_FRAMES, moleFrame, RES as MOLE_RES } from './mole';
+import { FPS as MOUSE_FPS, FRAMES as MOUSE_FRAMES, mouseFrame, RES as MOUSE_RES } from './mouse';
 import { FPS as OWL_FPS, FRAMES as OWL_FRAMES, owlFrame, RES as OWL_RES } from './owl';
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
@@ -172,6 +173,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: MOLE_RES,
     anims: at24(MOLE_FRAMES, MOLE_FPS),
     frame: moleFrame,
+    variants: [1],
+  },
+  // Мышь-воришка: свой золотой.
+  mouse: {
+    res: MOUSE_RES,
+    anims: at24(MOUSE_FRAMES, MOUSE_FPS),
+    frame: mouseFrame,
     variants: [1],
   },
 };
