@@ -15,6 +15,9 @@ import type { Lang, Leaf, Plural } from './types';
 import { cyrillicLines, hasCyrillic } from './scan';
 import { SKINS } from '@/lib/skins';
 import { PETS } from '@/lib/pets';
+import * as P from '@/lib/prison';
+import { PICKS } from '@/lib/economy';
+import { RARITIES } from '@/lib/rarity';
 
 const CATALOGS = { en, fr, tr, de, es, it: it_ } as const;
 
@@ -247,5 +250,25 @@ describe('data areas match src/lib', () => {
       expect([c.name, c.lore]).toEqual([p.name, p.lore]);
     }
     expect(Object.keys(ru.pets).sort()).toEqual(PETS.map((p) => p.id).sort());
+  });
+
+  it('mine (rocks, picks, rarities, enchants, items, runes, streak, chests, crew, perks, horizons)', () => {
+    const ix = (a: string[]) => Object.fromEntries(a.map((v, i) => [String(i), v]));
+    const by = <T extends { id: string }>(a: T[], f: (x: T) => unknown) =>
+      Object.fromEntries(a.map((x) => [x.id, f(x)]));
+    expect(ru.mine).toEqual({
+      rock: ix(P.ROCKS.map((r) => r.name)),
+      block: ix(P.ROCKS.map((r) => r.blockName)),
+      pick: ix(PICKS.map((p) => p.name)),
+      rarity: by(RARITIES, (r) => r.name),
+      enchant: by(P.ENCHANTS, (e) => e.name),
+      item: by(P.ITEMS, (i) => ({ name: i.name, text: i.text })),
+      rune: by(P.RUNES, (r) => ({ name: r.name, text: r.text })),
+      streak: ix(P.STREAK_TIERS.map((s) => s.name)),
+      chest: by(P.CASE_TIERS, (c) => c.name),
+      crew: by(P.CREW_SHIFTS, (c) => ({ name: c.name, text: c.text })),
+      perk: by(P.PERKS, (p) => ({ name: p.name, per: p.per })),
+      horizon: ix(P.HORIZONS.map((h) => h.name)),
+    });
   });
 });
