@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useAction } from '@/input/hooks';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
@@ -1364,6 +1365,14 @@ export function ScatterPage() {
       ),
     );
   }, [hydrated, spinning, balance, stake, playScatter, turbo, playOrbs]);
+
+  // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
+  useAction('confirm', (e) => {
+    const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
+    if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
+    spin();
+    return true;
+  });
 
   // Бонус крутится сам: вращения бесплатные, ждать нажатия незачем.
   useEffect(() => {
