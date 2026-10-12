@@ -29,6 +29,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { rarityVars } from '@/components/PickArt';
+import { PxStrip } from '@/components/PxStrip';
 import { eggOf, petOf } from '@/lib/pets';
 import type { EggId, PetId } from '@/lib/pets';
 import { PET_PX } from '@/lib/pet-pixel-sprites';
@@ -273,24 +274,34 @@ export function PetArt({
   );
 }
 
-/** Яйцо: 3D-рендер вида (`scripts/eggs-render`). */
+/**
+ * Яйцо: пиксельный рисунок (`lib/props-pixel/eggs.ts`, полосы `ui/px/eggs`). От ~60 px яйцо
+ * дышит (петля покоя), мельче — кадр 0 покоя: в списках и иконках движение только мешает.
+ */
 export function EggArt({
   egg,
   size = 72,
   className,
+  still,
+  phase,
 }: {
   egg: EggId;
   size?: number;
   className?: string;
+  /** Не дышать и на крупном размере. */
+  still?: boolean;
+  /** Сдвиг петли (доля): соседние яйца не дышат хором. */
+  phase?: number;
 }) {
   return (
-    <img
+    <PxStrip
+      set="eggs"
+      name={`idle-${egg}`}
+      size={size}
+      mode={still || size < 60 ? 'still' : 'loop'}
+      phase={phase}
       className={`pegg-img${className ? ` ${className}` : ''}`}
-      src={`/ui/eggs/${egg}.webp`}
-      width={size}
-      height={size}
-      alt={eggOf(egg).name}
-      draggable={false}
+      label={eggOf(egg).name}
     />
   );
 }

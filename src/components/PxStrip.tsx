@@ -206,7 +206,12 @@ export function PxStrip({
     let cur = -1;
     let ended = false;
     const fire = (upto: number) => {
-      while (next < marks.length && marks[next][1] <= upto) cb.current.onMark?.(marks[next++][0]);
+      // `next++` — отдельно: у `onMark?.(…)` без обработчика аргументы не вычисляются,
+      // и цикл без него крутился вечно (страница вставала на первой метке).
+      while (next < marks.length && marks[next][1] <= upto) {
+        const m = marks[next++][0];
+        cb.current.onMark?.(m);
+      }
     };
     const finish = () => {
       if (ended) return;
