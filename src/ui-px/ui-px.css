@@ -1,0 +1,700 @@
+/* Pixel UI kit — tokens, fonts and components. Frames come from kit.gen.css (baked by
+   scripts/ui-px/bake.ts); rules and the style guide — .claude/rules/ui-px.md.
+   Units: one ART pixel = var(--u) = --ui-px from the shell (2 px on phones, 3 tablet/laptop,
+   4 at 1080p…). Every size below is a whole number of art pixels. */
+@import './kit.gen.css';
+
+@font-face {
+  font-family: 'CocoPx';
+  src: url('/ui/fonts/tiny5.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CocoHead';
+  src: url('/ui/fonts/coco-head.woff2') format('woff2');
+  font-display: swap;
+}
+
+:root {
+  --u: var(--ui-px, 2px);
+  /* Text scale: the fonts have an 8-px em; text is one step under the art on big scales
+     (an art pixel of 4 CSS px would make 32-px body text on 1080p). */
+  --ts: max(2, calc(var(--ui-scale, 2) - 1));
+  --px-fs-tiny: calc(8px * (var(--ts) - 1));
+  --px-fs: calc(8px * var(--ts));
+  --px-fs-big: calc(8px * (var(--ts) + 1));
+  --px-fs-hero: calc(8px * (var(--ts) + 2));
+  --px-font: 'CocoPx', 'GxRubik', system-ui, sans-serif;
+  --px-head: 'CocoHead', 'CocoPx', 'GxRubik', sans-serif;
+  --px-text: #f2e4c4;
+  --px-muted: #b9a988;
+  --px-dim: #7e735f;
+  --px-ink: #120a0e;
+  --px-gold: #ffcf5a;
+  --px-red: #ff7a5a;
+  --px-green: #8fe07a;
+  --px-blue: #8cc8ff;
+  --px-violet: #c6a6ff;
+}
+
+/* ---- Typography ------------------------------------------------------------------------- */
+.px {
+  font-family: var(--px-font);
+  font-size: var(--px-fs);
+  line-height: 1.25;
+  font-weight: 400;
+  font-synthesis: none;
+  color: var(--px-text);
+  -webkit-font-smoothing: none;
+  text-rendering: optimizeSpeed;
+  letter-spacing: 0;
+}
+.px :is(b, strong, em, i, h1, h2, h3, h4) {
+  font-weight: inherit;
+  font-style: normal;
+}
+.px-h {
+  margin: 0;
+  font: 400 var(--px-fs) / 1.15 var(--px-head);
+  color: var(--px-gold);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  text-transform: none;
+}
+.px-h--big {
+  font-size: var(--px-fs-big);
+}
+.px-h--sub {
+  font-family: var(--px-font);
+  color: var(--px-muted);
+}
+.px-num {
+  font-family: var(--px-head);
+  font-variant-numeric: tabular-nums;
+}
+.px-shadow {
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+
+/* ---- Frames (border-image: one art pixel of real border, the frame drawn inward) ----------
+   Never the `border` shorthand here: it resets border-image (the frame class sets it). */
+.px-k {
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-outset: 0;
+  image-rendering: pixelated;
+  background-clip: padding-box;
+}
+.px-panel {
+  position: relative;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  image-rendering: pixelated;
+  padding: calc(var(--pad, 5) * var(--u));
+}
+.px-panel--stone {
+  --pad: 6;
+}
+.px-panel--iron {
+  --pad: 6;
+}
+.px-panel--wood {
+  --pad: 8;
+}
+.px-panel--parch {
+  --pad: 3;
+  color: #3a2614;
+}
+.px-panel--obsidian {
+  --pad: 5;
+}
+.px-panel--well {
+  --pad: 3;
+}
+.px-panel.is-tight {
+  --pad: 2;
+}
+/* A stage: stone floor tile behind (no `fill` from the frame). */
+.px-stage {
+  background-color: #2b2c37;
+  background-image: var(--tile);
+  background-size: calc(var(--tile-w) * var(--u)) calc(var(--tile-h) * var(--u));
+  background-clip: padding-box;
+  image-rendering: pixelated;
+}
+
+/* ---- Icons (white masks, colour = currentColor) ----------------------------------------- */
+.px-i {
+  display: inline-block;
+  flex: none;
+  width: calc(var(--i-w, 9) * var(--u));
+  height: calc(var(--i-h, 9) * var(--u));
+  background: currentColor;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+
+/* ---- Buttons ----------------------------------------------------------------------------- */
+/* Defaults at zero specificity: the variant/state blocks in kit.gen.css come earlier in the
+   cascade (the @import) and must still win. */
+:where(.px-btn) {
+  --b: var(--pxk-btn-iron-n);
+  --bs: var(--pxk-btn-iron-n-s);
+  --bw: var(--pxk-btn-iron-n-w);
+}
+.px-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+  min-height: calc(19 * var(--u));
+  min-width: calc(19 * var(--u));
+  margin: 0;
+  padding: calc(2 * var(--u)) calc(6 * var(--u)) calc(5 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--b);
+  border-image-slice: var(--bs);
+  border-image-width: var(--bw);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  background: none;
+  font: 400 var(--px-fs) / 1 var(--px-font);
+  font-synthesis: none;
+  color: #fff6e0;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.px-btn--gold {
+  color: #3a2105;
+  text-shadow: 0 var(--u) 0 #ffe9a6;
+}
+/* Pressed: the body sits two art pixels lower (the lip is gone) — the content follows. */
+.px-btn:active,
+.px-btn.is-down {
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+.px-btn[aria-disabled='true'] {
+  color: #b5b0a6;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  cursor: default;
+}
+.px-btn[aria-disabled='true']:active {
+  padding: calc(2 * var(--u)) calc(6 * var(--u)) calc(5 * var(--u));
+}
+.px-btn--icon {
+  padding-left: calc(3 * var(--u));
+  padding-right: calc(3 * var(--u));
+}
+.px-btn--sm {
+  min-height: calc(15 * var(--u));
+  min-width: calc(15 * var(--u));
+  padding: calc(1 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u));
+}
+.px-btn--sm:active,
+.px-btn--sm.is-down {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+.px-btn--wide {
+  display: flex;
+  width: 100%;
+}
+.px-btn.is-on {
+  --b: var(--pxk-btn-gold-p);
+  --bs: var(--pxk-btn-gold-p-s);
+  --bw: var(--pxk-btn-gold-p-w);
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+  color: #3a2105;
+  text-shadow: 0 var(--u) 0 #ffe9a6;
+}
+.px-btn--sm.is-on {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+
+/* ---- Focus: very visible, outside the element, for keyboard and gamepad ---------------- */
+.px-f {
+  outline: none;
+}
+.px-f::after {
+  content: '';
+  position: absolute;
+  inset: calc(-3 * var(--u));
+  z-index: 3;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-focus);
+  border-image-slice: var(--pxk-focus-s);
+  border-image-width: var(--pxk-focus-w);
+  image-rendering: pixelated;
+  pointer-events: none;
+  opacity: 0;
+}
+.px-f:focus-visible::after,
+html[data-input='keyboard'] .px-f[data-focus]::after,
+html[data-input='gamepad'] .px-f[data-focus]::after {
+  opacity: 1;
+  animation: px-blink 1.2s steps(2, jump-none) infinite;
+}
+html[data-game][data-input] .px-f[data-focus],
+html[data-game][data-input] .px-f:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+@keyframes px-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .px-f:focus-visible::after,
+  html[data-input] .px-f[data-focus]::after {
+    animation: none;
+  }
+}
+
+/* ---- Tabs -------------------------------------------------------------------------------- */
+.px-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.px-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(2 * var(--u));
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: calc(16 * var(--u));
+  margin: 0;
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-tab-off);
+  border-image-slice: var(--pxk-tab-off-s);
+  border-image-width: var(--pxk-tab-off-w);
+  image-rendering: pixelated;
+  background: none;
+  font: 400 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-muted);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.px-tab[aria-selected='true'] {
+  min-height: calc(18 * var(--u));
+  border-image-source: var(--pxk-tab-on);
+  border-image-slice: var(--pxk-tab-on-s);
+  border-image-width: var(--pxk-tab-on-w);
+  color: var(--px-gold);
+}
+.px-tab .ip-prompt {
+  font-size: var(--px-fs-tiny);
+}
+
+/* ---- Item cell --------------------------------------------------------------------------- */
+:where(.px-slot) {
+  --b: var(--pxk-slot-r0);
+  --bs: var(--pxk-slot-r0-s);
+  --bw: var(--pxk-slot-r0-w);
+}
+.px-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--slot, calc(26 * var(--u)));
+  height: var(--slot, calc(26 * var(--u)));
+  margin: 0;
+  padding: 0;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--b);
+  border-image-slice: var(--bs);
+  border-image-width: var(--bw);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.px-slot > .px-slot__art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.px-slot.is-locked > .px-slot__art {
+  opacity: 0.85;
+}
+.px-slot__n {
+  position: absolute;
+  right: calc(2 * var(--u));
+  bottom: calc(1 * var(--u));
+  z-index: 2;
+  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  color: #fff;
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
+}
+.px-slot__tl {
+  position: absolute;
+  left: calc(2 * var(--u));
+  top: calc(2 * var(--u));
+  z-index: 2;
+  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  color: var(--px-gold);
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink);
+}
+.px-slot__lock {
+  position: absolute;
+  z-index: 2;
+  color: var(--px-muted);
+}
+.px-slot__dot {
+  position: absolute;
+  top: calc(-2 * var(--u));
+  right: calc(-2 * var(--u));
+  z-index: 4;
+}
+.px-slot.is-sel::before {
+  content: '';
+  position: absolute;
+  inset: calc(-3 * var(--u));
+  z-index: 3;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-select);
+  border-image-slice: var(--pxk-select-s);
+  border-image-width: var(--pxk-select-w);
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.px-slot.is-empty {
+  cursor: pointer;
+  color: var(--px-dim);
+}
+
+/* ---- Bar --------------------------------------------------------------------------------- */
+.px-bar {
+  --c: #e8a52a;
+  --hi: #ffe08a;
+  --lo: #a8661a;
+  position: relative;
+  display: block;
+  height: calc(var(--bh, 6) * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-trough);
+  border-image-slice: var(--pxk-trough-s);
+  border-image-width: var(--pxk-trough-w);
+  image-rendering: pixelated;
+}
+.px-bar > i {
+  position: absolute;
+  left: var(--u);
+  top: var(--u);
+  bottom: var(--u);
+  width: calc((100% - 2 * var(--u)) * var(--v, 0));
+  background: linear-gradient(
+    to bottom,
+    var(--hi) 0 var(--u),
+    var(--c) var(--u) calc(100% - var(--u)),
+    var(--lo) calc(100% - var(--u))
+  );
+}
+.px-bar--blue {
+  --c: #4a9cf0;
+  --hi: #bfe0ff;
+  --lo: #23589c;
+}
+.px-bar--green {
+  --c: #4cb84a;
+  --hi: #b6f09a;
+  --lo: #23702a;
+}
+.px-bar__label {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  color: #fff;
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
+}
+
+/* ---- Badge ------------------------------------------------------------------------------- */
+.px-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-badge);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  image-rendering: pixelated;
+  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  color: #fff;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  box-sizing: border-box;
+}
+.px-badge--gold {
+  border-image-source: var(--pxk-badge-gold);
+  color: #3a2105;
+  text-shadow: none;
+}
+.px-badge--dot {
+  min-width: calc(6 * var(--u));
+  width: calc(6 * var(--u));
+  height: calc(6 * var(--u));
+  padding: 0;
+}
+
+/* ---- Ribbon heading ---------------------------------------------------------------------- */
+.px-ribbon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(12 * var(--u));
+  padding: 0 calc(8 * var(--u)) calc(2 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-top-width: 0;
+  border-bottom-width: 0;
+  border-image-source: var(--pxk-ribbon);
+  border-image-slice: var(--pxk-ribbon-s);
+  border-image-width: 0 5 0 5;
+  image-rendering: pixelated;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  color: #fff3d6;
+  text-shadow: 0 var(--u) 0 #3a0a0c;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* ---- Key hint (S's <Prompt> in kit clothes) ---------------------------------------------- */
+.px-keyhint {
+  font: 400 var(--px-fs-tiny) / 1 var(--px-font);
+  color: var(--px-muted);
+  gap: calc(2 * var(--u));
+}
+.px-keyhint .ip {
+  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+}
+.px-keyhint .ip--key {
+  min-height: calc(11 * var(--u));
+  padding: calc(1 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-key);
+  border-image-slice: var(--pxk-key-s);
+  border-image-width: var(--pxk-key-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  color: #3a2614;
+}
+.px-keyhint .ip-prompt__label {
+  font-size: var(--px-fs);
+}
+.px-keyhints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(3 * var(--u)) calc(6 * var(--u));
+}
+
+/* ---- Inspect (big detail card) ----------------------------------------------------------- */
+.px-inspect {
+  --rc: #c4c0b8;
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.px-inspect__head {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+  border-bottom: var(--u) solid #32283f;
+}
+.px-inspect__name {
+  font: 400 var(--px-fs) / 1.2 var(--px-head);
+  color: var(--rc);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  overflow-wrap: anywhere;
+}
+.px-inspect__sub {
+  color: var(--px-muted);
+}
+.px-inspect__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(4 * var(--u));
+}
+.px-inspect__row > span:first-child {
+  color: var(--px-muted);
+}
+.px-inspect__lore {
+  margin: 0;
+  color: var(--px-muted);
+}
+
+/* ---- Tooltip ----------------------------------------------------------------------------- */
+.px-tip {
+  position: fixed;
+  z-index: 200;
+  max-width: calc(140 * var(--u));
+  padding: calc(4 * var(--u)) calc(5 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+}
+.px-tip.is-below {
+  transform: translate(-50%, 0);
+}
+
+/* ---- Overlays: modal (centre) and sheet (bottom on phones, centre elsewhere) -------------- */
+.px-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--safe-top, 0px) + 8 * var(--u)) calc(4 * var(--u))
+    calc(var(--safe-bottom, 0px) + 4 * var(--u));
+  background: rgba(10, 7, 12, 0.72);
+  animation: px-fade 120ms steps(3, jump-none);
+}
+.px-veil--sheet {
+  align-items: flex-end;
+  padding-bottom: 0;
+}
+html:not([data-ff='phone-portrait']) .px-veil--sheet {
+  align-items: center;
+  padding-bottom: calc(var(--safe-bottom, 0px) + 4 * var(--u));
+}
+@keyframes px-fade {
+  from {
+    opacity: 0;
+  }
+}
+.px-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, calc(var(--mw, 200) * var(--u)));
+  max-height: 100%;
+  min-height: 0;
+  padding: calc(8 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: repeat;
+  image-rendering: pixelated;
+  animation: px-rise 160ms steps(4, jump-none);
+}
+.px-veil--sheet .px-modal {
+  width: min(100%, calc(var(--mw, 220) * var(--u)));
+  max-height: calc(100% - 6 * var(--u));
+}
+@keyframes px-rise {
+  from {
+    transform: translateY(calc(8 * var(--u)));
+  }
+}
+.px-modal__title {
+  position: absolute;
+  top: calc(-6 * var(--u));
+  left: 50%;
+  z-index: 2;
+  max-width: calc(100% - 40 * var(--u));
+  transform: translateX(-50%);
+}
+.px-modal__title > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.px-modal__close {
+  position: absolute !important;
+  top: calc(-6 * var(--u));
+  right: calc(2 * var(--u));
+  z-index: 3;
+}
+.px-modal__body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: calc(4 * var(--u)) calc(2 * var(--u)) calc(2 * var(--u));
+  scrollbar-width: thin;
+  scrollbar-color: #54466e transparent;
+}
+
+/* ---- Grid -------------------------------------------------------------------------------- */
+.px-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, auto-fill), var(--slot, calc(26 * var(--u))));
+  gap: calc(3 * var(--u));
+  justify-content: start;
+  padding: calc(3 * var(--u));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .px-veil,
+  .px-modal {
+    animation: none;
+  }
+}

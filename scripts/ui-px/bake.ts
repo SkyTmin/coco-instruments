@@ -103,6 +103,19 @@ if (bad.length) {
   console.error(bad.join('\n'));
   process.exit(1);
 }
+// Buttons: one block per variant and state (the frame of a state = 3 vars, picked by `.px-btn`).
+const vars = (n: string) => `--b: var(--pxk-${n});\n  --bs: var(--pxk-${n}-s);\n  --bw: var(--pxk-${n}-w);`;
+for (const m of ['gold', 'iron', 'red', 'green']) {
+  css.push(
+    `.px-btn--${m} {\n  ${vars(`btn-${m}-n`)}\n}`,
+    `@media (hover: hover) and (pointer: fine) {\n  .px-btn--${m}:hover {\n    ${vars(`btn-${m}-h`).replace(/\n {2}/g, '\n    ')}\n  }\n}`,
+    `.px-btn--${m}:active,\n.px-btn--${m}.is-down {\n  ${vars(`btn-${m}-p`)}\n}`,
+    `.px-btn--${m}[aria-disabled='true'] {\n  ${vars(`btn-${m}-d`)}\n}`,
+  );
+}
+// Item cells by rarity.
+for (const piece of PIECES.filter((x) => x.name.startsWith('slot-r')))
+  css.push(`.px-slot--${piece.name.slice(5)} {\n  ${vars(piece.name)}\n}`);
 css.splice(1, 0, `:root {\n${root.join('\n')}\n}`);
 fs.writeFileSync(CSS, css.join('\n\n') + '\n');
 console.log(`ui-px: ${PIECES.length} pieces, ${(bytes / 1024).toFixed(1)} KB → public/ui/kit/, kit.gen.css`);

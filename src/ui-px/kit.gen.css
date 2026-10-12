@@ -517,3 +517,153 @@
   --i-w: 9;
   --i-h: 9;
 }
+
+.px-btn--gold {
+  --b: var(--pxk-btn-gold-n);
+  --bs: var(--pxk-btn-gold-n-s);
+  --bw: var(--pxk-btn-gold-n-w);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .px-btn--gold:hover {
+    --b: var(--pxk-btn-gold-h);
+    --bs: var(--pxk-btn-gold-h-s);
+    --bw: var(--pxk-btn-gold-h-w);
+  }
+}
+
+.px-btn--gold:active,
+.px-btn--gold.is-down {
+  --b: var(--pxk-btn-gold-p);
+  --bs: var(--pxk-btn-gold-p-s);
+  --bw: var(--pxk-btn-gold-p-w);
+}
+
+.px-btn--gold[aria-disabled='true'] {
+  --b: var(--pxk-btn-gold-d);
+  --bs: var(--pxk-btn-gold-d-s);
+  --bw: var(--pxk-btn-gold-d-w);
+}
+
+.px-btn--iron {
+  --b: var(--pxk-btn-iron-n);
+  --bs: var(--pxk-btn-iron-n-s);
+  --bw: var(--pxk-btn-iron-n-w);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .px-btn--iron:hover {
+    --b: var(--pxk-btn-iron-h);
+    --bs: var(--pxk-btn-iron-h-s);
+    --bw: var(--pxk-btn-iron-h-w);
+  }
+}
+
+.px-btn--iron:active,
+.px-btn--iron.is-down {
+  --b: var(--pxk-btn-iron-p);
+  --bs: var(--pxk-btn-iron-p-s);
+  --bw: var(--pxk-btn-iron-p-w);
+}
+
+.px-btn--iron[aria-disabled='true'] {
+  --b: var(--pxk-btn-iron-d);
+  --bs: var(--pxk-btn-iron-d-s);
+  --bw: var(--pxk-btn-iron-d-w);
+}
+
+.px-btn--red {
+  --b: var(--pxk-btn-red-n);
+  --bs: var(--pxk-btn-red-n-s);
+  --bw: var(--pxk-btn-red-n-w);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .px-btn--red:hover {
+    --b: var(--pxk-btn-red-h);
+    --bs: var(--pxk-btn-red-h-s);
+    --bw: var(--pxk-btn-red-h-w);
+  }
+}
+
+.px-btn--red:active,
+.px-btn--red.is-down {
+  --b: var(--pxk-btn-red-p);
+  --bs: var(--pxk-btn-red-p-s);
+  --bw: var(--pxk-btn-red-p-w);
+}
+
+.px-btn--red[aria-disabled='true'] {
+  --b: var(--pxk-btn-red-d);
+  --bs: var(--pxk-btn-red-d-s);
+  --bw: var(--pxk-btn-red-d-w);
+}
+
+.px-btn--green {
+  --b: var(--pxk-btn-green-n);
+  --bs: var(--pxk-btn-green-n-s);
+  --bw: var(--pxk-btn-green-n-w);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .px-btn--green:hover {
+    --b: var(--pxk-btn-green-h);
+    --bs: var(--pxk-btn-green-h-s);
+    --bw: var(--pxk-btn-green-h-w);
+  }
+}
+
+.px-btn--green:active,
+.px-btn--green.is-down {
+  --b: var(--pxk-btn-green-p);
+  --bs: var(--pxk-btn-green-p-s);
+  --bw: var(--pxk-btn-green-p-w);
+}
+
+.px-btn--green[aria-disabled='true'] {
+  --b: var(--pxk-btn-green-d);
+  --bs: var(--pxk-btn-green-d-s);
+  --bw: var(--pxk-btn-green-d-w);
+}
+
+.px-slot--r0 {
+  --b: var(--pxk-slot-r0);
+  --bs: var(--pxk-slot-r0-s);
+  --bw: var(--pxk-slot-r0-w);
+}
+
+.px-slot--r1 {
+  --b: var(--pxk-slot-r1);
+  --bs: var(--pxk-slot-r1-s);
+  --bw: var(--pxk-slot-r1-w);
+}
+
+.px-slot--r2 {
+  --b: var(--pxk-slot-r2);
+  --bs: var(--pxk-slot-r2-s);
+  --bw: var(--pxk-slot-r2-w);
+}
+
+.px-slot--r3 {
+  --b: var(--pxk-slot-r3);
+  --bs: var(--pxk-slot-r3-s);
+  --bw: var(--pxk-slot-r3-w);
+}
+
+.px-slot--r4 {
+  --b: var(--pxk-slot-r4);
+  --bs: var(--pxk-slot-r4-s);
+  --bw: var(--pxk-slot-r4-w);
+}
+
+.px-slot--r5 {
+  --b: var(--pxk-slot-r5);
+  --bs: var(--pxk-slot-r5-s);
+  --bw: var(--pxk-slot-r5-w);
+}
+
+.px-slot--r6 {
+  --b: var(--pxk-slot-r6);
+  --bs: var(--pxk-slot-r6-s);
+  --bw: var(--pxk-slot-r6-w);
+}
