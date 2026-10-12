@@ -332,6 +332,9 @@ export const F10_MOB_STAT = {
   max: 0,
   maxKey: '',
   battle: new Map<string, number>(),
+  /** Пикселей во всех построенных кадрах (с `lit`) и число кадров — средний вес кадра. */
+  px: 0,
+  built: 0,
   clear: () => {
     for (const K of KINDS) {
       K.pics.clear();
@@ -378,6 +381,7 @@ if (import.meta.env?.DEV && typeof window !== 'undefined') {
       max: +F10_MOB_STAT.max.toFixed(2),
       maxKey: F10_MOB_STAT.maxKey,
       sizes: F10_MOB_STAT.sizes(),
+      kbPerFrame: +((F10_MOB_STAT.px * 4) / 1024 / Math.max(1, F10_MOB_STAT.built)).toFixed(1),
       battle: [...F10_MOB_STAT.battle.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14),
     };
   };
@@ -565,6 +569,8 @@ export function frameOf(
     if (!pic) pic = K.pics.set(key, build());
     fr = K.frames.set(fk, finish(pic, pose.look, dark, darkC));
     stat(performance.now() - t0, K, fk);
+    F10_MOB_STAT.built++;
+    F10_MOB_STAT.px += fr.img.width * fr.img.height + (fr.lit ? fr.lit.width * fr.lit.height : 0);
   }
   return pose.flash ? { ...fr, img: flashImg(fr.img) } : fr;
 }
