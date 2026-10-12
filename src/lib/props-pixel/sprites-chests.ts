@@ -67,7 +67,7 @@ export const PX: PxManifest = {
       anchors: { lock: [39.8, 68.7] },
       s: { x: 0, y: -10, w: 53, h: 57, cols: 26 },
       l: { x: 3, y: -23, w: 127, h: 138, cols: 26 },
-      rev: '75c059af',
+      rev: '8bdae1a4',
     },
     'open-rare': {
       n: 30,
@@ -87,7 +87,7 @@ export const PX: PxManifest = {
       anchors: { lock: [39.8, 68.7] },
       s: { x: -13, y: -37, w: 75, h: 87, cols: 40 },
       l: { x: -37, y: -92, w: 195, h: 215, cols: 40 },
-      rev: '41229f65',
+      rev: '7e2ae08b',
     },
     'open-legend': {
       n: 54,
@@ -97,7 +97,7 @@ export const PX: PxManifest = {
       anchors: { lock: [39.8, 68.7] },
       s: { x: -25, y: -65, w: 95, h: 117, cols: 54 },
       l: { x: -61, y: -162, w: 239, h: 289, cols: 54 },
-      rev: 'd6fe7c89',
+      rev: 'ac38b798',
     },
   },
 };

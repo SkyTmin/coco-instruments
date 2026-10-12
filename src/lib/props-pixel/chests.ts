@@ -1554,15 +1554,16 @@ function openPose(tier: Tier, t: number): Pose {
       [0.33, 0.5],
       [0.4, 0.62],
     ]);
+    // Тёплая щель горит и в покое (0,32): полоса начинается с того же света.
     o.leak =
       kf(t, [
-        [0.06, 0],
-        [0.25, 0.4],
+        [0, 0.32],
+        [0.25, 0.42],
         [0.9, 1],
         [1.0, 1],
         [1.05, 0],
       ]) *
-      (0.85 + 0.15 * Math.sin(t * 40));
+      (1 - 0.15 * (0.5 - 0.5 * Math.cos(t * 40)));
     if (t > 0.25 && t < 0.93) {
       const u = (t - 0.25) / 0.68;
       const a = 0.4 + 1.6 * u * u;
@@ -1608,7 +1609,7 @@ function openPose(tier: Tier, t: number): Pose {
     o.inner = kf(t, [
       [1.04, 0],
       [1.1, 1],
-      [2.25, 0.75],
+      [2.0, 0.75],
     ]);
     o.beam = kf(t, [
       [1.07, 0],
@@ -1720,19 +1721,28 @@ function sparkle(p: Px, x: number, y: number, d: number, life: number, col: RGBA
   }
 }
 
-/** Пятно-клуб пыли: круг, светлый верх-слева, проявление шахматкой. */
+/** Клуб пыли: три круга (крупный и два мельче снизу по бокам), светлая кромка сверху-слева,
+ *  тёмная снизу-справа, проявление шахматкой. */
+const PUFF: [number, number, number][] = [
+  [0, 0, 1],
+  [-0.62, 0.3, 0.66],
+  [0.6, 0.34, 0.6],
+];
 function puff(p: Px, x: number, y: number, d: number, r: number, vis: number, base: RGBA): void {
   const R = r * RR;
   const lite = mixc(base, WHITE, 0.35);
   const dark = mixc(base, INK, 0.35);
+  const inside = (px: number, py: number) =>
+    PUFF.some(([cx, cy, cr]) => (px - x - cx * R) ** 2 + (py - y - cy * R) ** 2 <= (cr * R) ** 2);
+  const s = Math.max(0.8, R * 0.3);
+  // Сплошной, пока не погас на 40%: шахматка только в конце, клуб не рябит с первого кадра.
+  const v = Math.min(1, vis / 0.6);
   for (let yy = Math.floor(y - R); yy <= Math.ceil(y + R); yy++)
-    for (let xx = Math.floor(x - R); xx <= Math.ceil(x + R); xx++) {
-      const dx = xx + 0.5 - x;
-      const dy = yy + 0.5 - y;
-      const q = (dx * dx + dy * dy) / (R * R);
-      if (q > 1) continue;
-      if (!dith(xx, yy, vis)) continue;
-      const c = dx + dy < -R * 0.3 ? lite : dx + dy > R * 0.6 ? dark : base;
+    for (let xx = Math.floor(x - R * 1.4); xx <= Math.ceil(x + R * 1.4); xx++) {
+      const px = xx + 0.5;
+      const py = yy + 0.5;
+      if (!inside(px, py) || !dith(xx, yy, v)) continue;
+      const c = !inside(px - s, py - s) ? lite : !inside(px + s, py + s) ? dark : base;
       put(p, xx, yy, d, c);
     }
 }
@@ -2116,24 +2126,29 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
   if (tier === 'common') {
     // Пыль из щели крышки и у петель, когда крышка трогается и бьётся об упор.
     const puffs: [number, V3, number][] = [
-      [0.6, [-12, D2 + 1, H + 0.5], 0],
-      [0.62, [10, D2 + 1, H + 0.5], 1],
-      [0.64, [-1, D2 + 1.5, H + 1], 2],
-      [0.76, [-14, -D2 - 1, H + 1], 3],
-      [0.78, [12, -D2 - 1, H + 1], 4],
+      [0.56, [-12, D2 + 1, H + 0.5], 0],
+      [0.58, [10, D2 + 1, H + 0.5], 1],
+      [0.6, [-1, D2 + 1.5, H + 1], 2],
+      [0.68, [-14, -D2 - 1, H + 1], 3],
+      [0.7, [12, -D2 - 1, H + 1], 4],
     ];
+    // Клубы гаснут до последнего кадра (он же открытая иконка).
     for (const [t0, w, j] of puffs) {
-      const u = (t - t0) / 0.32;
+      const u = (t - t0) / 0.28;
       if (u < 0 || u > 1) continue;
       const pw = chestPt(o, [w[0] + (rnd(j, 3) - 0.5) * 4 * u, w[1] + 2 * u, w[2] + 5 * u]);
       const [x, y, d] = sp(pw);
       puff(p, x, y, d + 1, 1.4 + 2.2 * u, 1 - u * u, hx('#a89a88'));
     }
-    // Блик на монете.
-    const life = (t - peak) / 0.28;
-    if (life > 0 && life < 1) {
-      const gp = chestPt(o, [-5, 0, LK.heap - 0.5]);
-      const [x, y, d] = sp(gp);
+    // Блики на монетах: два подряд, гаснут к концу полосы.
+    const glints: [number, number, V3][] = [
+      [peak, 0.24, [-5, 0, LK.heap - 0.5]],
+      [peak + 0.08, 0.17, [6, 2, LK.heap - 0.4]],
+    ];
+    for (const [g0, dur, w] of glints) {
+      const life = (t - g0) / dur;
+      if (life <= 0 || life >= 1) continue;
+      const [x, y, d] = sp(chestPt(o, w));
       sparkle(p, x, y, d + 30, life, GOLD[6], WHITE);
     }
     return;
@@ -2183,8 +2198,9 @@ function openFx(p: Px, f: CFrame, tier: Tier, t: number, o: Pose): void {
   const nSp = tier === 'rare' ? 10 : tier === 'epic' ? 12 : 18;
   const spEnd = tier === 'rare' ? 0.62 : 1.1;
   for (let j = 0; j < nSp; j++) {
-    const t0 = peak + rnd(j, 11) * (tier === 'legend' ? 0.8 : 0.25);
-    const life = (t - t0) / (0.3 + rnd(j, 12) * 0.3);
+    // Последняя искра гаснет раньше конца полосы (у легендарного — к кадру 50).
+    const t0 = peak + rnd(j, 11) * (tier === 'legend' ? 0.45 : 0.25);
+    const life = (t - t0) / (0.3 + rnd(j, 12) * (tier === 'legend' ? 0.25 : 0.3));
     if (life <= 0 || life >= 1 || t > peak + spEnd) continue;
     const a = rnd(j, 13) * PI * 2;
     const sp0 = 10 + rnd(j, 14) * 14;
