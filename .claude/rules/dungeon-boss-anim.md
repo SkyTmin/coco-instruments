@@ -273,4 +273,28 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   v2.106 floor 6 (`f6-mob-*.ts`, `f6-mobkit.ts`, `f6-mob-fx.ts`), v2.107 floor 9 (`f9-mob-*.ts`,
   `f9-mobkit.ts`; `f9_body`/`f9_head` stay registered for floor 15), v2.108 floor 8
   (`f8-mob-*.ts`, `f8-mobkit.ts`, `f8-mob-fx.ts`, brain `f8_snap`), v2.109 floor 10
-  (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept).
+  (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept);
+  floor 11 (`f11-mobkit.ts`, `f11-mob-*.ts`, section below).
+
+## Floor 11 mobs (`f11-mobkit.ts`, `f11-mob-<kind>.ts`)
+
+- Ten kinds, all mini-3D rigs with honest 8 sides (no mirrors: wings, vortex spin, hook arm are
+  asymmetric), 24 fps tracks, contact = the brain's damage moment (`flapf`/`lungef`, vent f0,
+  rec f0…). Kit = f10 kit + `bankOf` (flyer roll from turn rate), `put(frame, ex)` (multiplies
+  `sx/sy` — don't spread), `warmAll(K, list, pic, looks, only?, dark?)`, `F11_MOB_STAT` /
+  `window.__f11stat()` (frames built in combat by key), `SHEET_PREV`.
+- Moved from `f11-art.ts` into the mob files: shot `f11_dart`, zones `f11_tornado`, `f11_puff`,
+  `f11_jetfx`; `f11_glider` zone painter is empty (the boarder draws its own glider). New impact
+  painters `f11_laser`, `f11_zapring`, `f11_jet`. Brain untouched (diff vs base empty).
+- `f11_harpy` is still the floor-15 echo source (motif 4): the echo sheet changed with the harpy
+  drawing (checked by eye); boss and pylon sheets pixel-equal to base.
+- Measured: warm-up 10 419 frames, 27.4 MB (guard 6.3, gardener 5.5, ray 3.5, jelly 3.4, …), each
+  kind under its cap (800–1900); new frame build p50 0.2–0.5 / p90 0.5–1.3 ms (cold harpy first).
+  0 frames built in 8 s of combat, deaths (DMGK 5) included. Crowd 18 mobs, 3 pairs base → new,
+  load 4.6–7: p50 −0.1/+0.3/−0.1, p90 −0.5/+0.3/−0.8, p99 +1.7/+1.4/−1.5 ms.
+- Gotchas: whole-floor warm-up under load needs `WAIT` ≥ 90 (at 45 only 4–9 kinds were done and
+  their frames counted as "combat"); beetles go to `escape` 20 s after spawn — spawn fresh ones in
+  `SETUP` for counts; ground mobs use `dy` (engine `lift` is flyers only) and `anim-sheet.mjs`
+  ignores `lift`; 2D effects after the rig cover the back on sides 5–7 (skip solid pixels).
+  PIL `getbbox()` on an RGBA diff looks at alpha only — compare all channels
+  (`getbbox(alpha_only=False)`), else opaque sheets read as equal.

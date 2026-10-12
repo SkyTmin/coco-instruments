@@ -440,7 +440,6 @@ const skyOf = (area: string) => SKY[area] ?? SKY[F11_GARDEN];
 // Трава: тень, основа, свет, блик и сухая.
 const GRASS = tn('#2e6a36', '#468d43', '#62a84d', '#8cc75f');
 const GRASS_HI = hx('#b4dc78');
-const GRASS_DARK = hx('#244f2c');
 // Дорожка: светлый тёплый камень.
 const PATH = tn('#948a76', '#b1a791', '#c3baa3', '#d9d1bc');
 const GROUT = hx('#7a715e');
