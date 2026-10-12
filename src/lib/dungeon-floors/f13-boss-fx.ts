@@ -44,6 +44,7 @@ import './f13-mob-harlequin';
 import './f13-mob-knight';
 import './f13-mob-masks';
 import './f13-mob-nutcracker';
+import './f13-mob-spider';
 
 type G = CanvasRenderingContext2D;
 const TS = 16;
