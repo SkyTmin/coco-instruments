@@ -19,12 +19,10 @@ import {
   registerMobPainter,
   registerMobWarm,
   registerPropPainter,
-  registerShotPainter,
   registerZonePainter,
 } from '../dungeon-paint';
 import type { CellCtx, MobFrame, MobPose, Sprite } from '../dungeon-paint';
 import type { Mob, Sim, Strike, Zone } from '../dungeon-sim';
-import type { WorldObj } from '../dungeon-world';
 import { F12_GEO, F12_GROTTO, F12_LAKE, F12_MARK, F12_SHRINE, F12_TOP } from './f12';
 // Мобы этажа на своих файлах (анимации мобов 12).
 import './f12-mob-lemming';
@@ -37,6 +35,7 @@ import './f12-mob-seal';
 import './f12-mob-icicle';
 import './f12-mob-warrior';
 import './f12-mob-keeper';
+import { shamanWarm } from './f12-mob-shaman';
 import { RIM_C, rimLight } from './f12-mobkit';
 import {
   f12Aurora,
@@ -1852,24 +1851,7 @@ function mobFrame(c: Cached, cv: Canvas, extra: Partial<MobFrame> = {}): MobFram
   return { img: c.img, lit: c.lit, eye: c.eye, ax: cv.ox - c.dx, ay: cv.oy - c.dy, ...extra };
 }
 
-/** Прошлый режим моба (контакт удара рисуется в первых кадрах `recover`). */
-const TRACK = new Map<number, { mode: string; prev: string }>();
-function prevMode(m: Mob): string {
-  let r = TRACK.get(m.id);
-  if (!r) {
-    r = { mode: m.mode, prev: '' };
-    TRACK.set(m.id, r);
-    if (TRACK.size > 900) TRACK.delete(TRACK.keys().next().value as number);
-  } else if (r.mode !== m.mode) {
-    r.prev = r.mode;
-    r.mode = m.mode;
-  }
-  return r.prev;
-}
-
 const speedOf = (m: Mob) => Math.hypot(m.vx, m.vy);
-/** Кадр 24 к/с по времени режима, не больше `max`. */
-const k24 = (t: number, max = 999) => Math.min(max, f24(t));
 
 /**
  * Рисовальщик моба этажа: общее для всех — невидимка «Безмолвия» (видны
@@ -1901,7 +1883,7 @@ const DARK = ramp('#05060a', '#0e1018', '#1a1c26', '#2a2c36', '#3c3e48');
 // таз, корпус, голова, руки и ноги — цепочками по кривым.
 // ---------------------------------------------------------------------------
 
-interface Body {
+export interface Body {
   /** Масштаб фигуры. */
   s: number;
   /** Наклон корпуса вперёд (рад). */
@@ -1925,7 +1907,7 @@ interface Body {
   feet?: [V3, V3];
 }
 
-const BODY0: Body = {
+export const BODY0: Body = {
   s: 1,
   lean: 0,
   up: 0,
@@ -2150,7 +2132,7 @@ function haft(
 
 /** Ключ позы: [время, значение, подход — i разгон, o торможение, l ровно, иначе плавно]. */
 type Key = [number, number, string?];
-function kf(t: number, keys: Key[]): number {
+export function kf(t: number, keys: Key[]): number {
   if (t <= keys[0][0]) return keys[0][1];
   for (let i = 1; i < keys.length; i++) {
     const k = keys[i];
@@ -2182,7 +2164,7 @@ function bezQ(a: V3, b: V3, c: V3, u: number): V3 {
   ];
 }
 /** Колотушка по ударам `hits`: занос (−1) за 0,22 с, удар разгоном, контакт (1) ровно в ударе, отскок. */
-function beatAt(t: number, hits: number[]): number {
+export function beatAt(t: number, hits: number[]): number {
   for (const h of hits) {
     if (t >= h - 0.22 && t < h - 0.07) return -ease((t - (h - 0.22)) / 0.15);
     if (t >= h - 0.07 && t < h) return -1 + 2 * ((t - (h - 0.07)) / 0.07) ** 2;
@@ -2242,13 +2224,12 @@ const SH_LEG = ramp('#160a10', '#2a121c', '#44202a', '#62323a', '#84504e');
 const RIB_V = ramp('#3a1a6a', '#5a2ea0', '#8a5ad8', '#b89aff', '#eee0ff');
 const SH_EYE = hx('#6cff9a');
 /** Масштаб наездницы и летуньи — как у мамонта: спрыгнув, она не уменьшается. */
-const SH_SC = 1.3;
+export const SH_SC = 1.3;
 /** Рост фигуры шаманки в модели (до масштаба `SH_SC`). */
-const SH_S = 1;
-const CV_SHA: Canvas = { w: 76, h: 92, ox: 38, oy: 70 };
-const SH_HIGH = 30;
+export const SH_S = 1;
+export const SH_HIGH = 30;
 
-interface ShO {
+export interface ShO {
   body: Body;
   /** Бубен: 0 у груди … 1 над головой. */
   drum: number;
@@ -2266,7 +2247,7 @@ interface ShO {
 }
 
 /** Кисти по бубну и колотушке (оси фигуры до масштаба). */
-function shHands(drum: number, beat: number): { L: V3; R: V3 } {
+export function shHands(drum: number, beat: number): { L: V3; R: V3 } {
   const L = lerp3([3.6, -3.4, 11], [2.4, -3, 17.5], drum);
   const rest = lerp3([3.4, 3.6, 10], [2.6, 3.6, 15.5], drum);
   const up = lerp3([-0.8, 4.6, 16.5], [-1, 4.4, 21.5], drum);
@@ -2292,7 +2273,7 @@ function tiltV(v: V3, a: number): V3 {
   return [v[0] * c + v[2] * s, v[1], v[2] * c - v[0] * s];
 }
 
-function shamanParts(
+export function shamanParts(
   parts: Part[],
   o: ShO,
   look: MobPose['look'],
@@ -3173,7 +3154,7 @@ function mammothBuild(look: MobPose['look'], o: MamO): Build {
  * литералом одной формы (не `{...p}`): копия через spread у двух сотен
  * частей — заметная доля кадра, а одна форма объекта ускоряет и сам риг.
  */
-function scaleBuild(b: Build, s: number): Build {
+export function scaleBuild(b: Build, s: number): Build {
   const sc = (v: V3): V3 => [v[0] * s, v[1] * s, v[2] * s];
   return {
     ...b,
@@ -4374,7 +4355,6 @@ function mamPts(
 const MAM_PTS = new Map<number, { drum: [number, number]; tusk: [number, number] }>();
 
 lruOf('f12boss', 560);
-lruOf('f12_shaman', 320);
 
 regMob('f12boss', (m, pose) => {
   const { o, key, ex } = mamPose(m, pose);
@@ -4444,290 +4424,8 @@ registerMobWarm('f12boss', function* () {
     yield 0;
   }
 });
-
-// ---- Шаманка в небе (фаза 3) -----------------------------------------------------
-
-/** Полёт: корпус наклонён по ходу, ноги отстают, бубен вперёд, ленты сзади. */
-function shFly(lean: number, rib: number): ShO {
-  return {
-    body: {
-      ...BODY0,
-      s: SH_S,
-      lean,
-      handL: [3.5, -3.2, 12.5],
-      handR: [-1, 4, 11],
-      feet: [
-        [-3.5 - lean * 2.5, -1.6, 1.5 + lean * 3.5],
-        [-2.5 - lean * 2.5, 1.6, 0.5 + lean * 4],
-      ],
-    },
-    drum: 0,
-    beat: 0,
-    aurora: 1,
-    rib,
-    ribA: 1.1,
-    ribUp: 0.12,
-    ribLen: 1,
-    hem: Math.min(1, lean * 1.3),
-  };
-}
-
-function shamanPose(
-  m: Mob,
-  pose: MobPose,
-): { o: ShO; key: string; ex: Partial<MobFrame>; face: number } {
-  const t = f24(pose.t) / 24;
-  const ex: Partial<MobFrame> = { shadow: 4, still: true, lift: 0.01 };
-  let face = m.face;
-  const fI = Math.floor(pose.now * 10) % 10;
-  const fly = shFly(0.65, (fI / 10) * TAU);
-  switch (pose.mode) {
-    case 'f12s_jump': {
-      // Спрыгнула со спины мамонта и взмыла: смотрит туда же, куда он.
-      const mam = paintSim()?.mobs.find((x) => x.kind === 'f12boss');
-      if (mam) face = mam.face;
-      const k = clamp01((t - 0.1) / 0.5);
-      const o = shFly(lerp(-0.1, 0.65, ease(k)), t * 7);
-      const up = 1 - ease(clamp01((t - 0.3) / 0.6));
-      const hd = shHands(0, 0);
-      o.body.handL = lerp3(hd.L, [1.6, -3.4, 19.5], up);
-      o.body.handR = lerp3([-1, 4, 11], [1.6, 3.4, 19.5], up);
-      o.body.crouch = t < 0.1 ? 2 : 0;
-      if (t < 0.3) o.body.feet = undefined;
-      o.ribUp = kf(t, [
-        [0, -1],
-        [0.5, -0.6],
-        [0.9, 0.12],
-      ]);
-      o.ribA = 1.4;
-      o.aurora = kf(t, [
-        [0, 1.3],
-        [0.9, 1],
-      ]);
-      ex.lift = kf(t, [
-        [0, 14],
-        [0.1, 12, 'o'],
-        [0.55, SH_HIGH + 8, 'o'],
-        [0.9, SH_HIGH],
-      ]);
-      ex.ghost = { every: 0.05, life: 0.22, tint: '#9affd8', alpha: 0.3 };
-      ex.shadow = 3.5;
-      return { o, key: `j${f24(t)}`, ex, face };
-    }
-    case 'f12s_dive': {
-      // Пике к месту колдовства: головой вниз, руки назад, ленты рвутся вверх.
-      const k = clamp01(t / 0.45);
-      const o = shFly(1.0, t * 12);
-      o.body.handL = [-1.5, -4, 12];
-      o.body.handR = [-1.5, 4, 12];
-      o.ribUp = 1.3;
-      o.ribA = 0.6;
-      ex.lift = lerp(SH_HIGH, 5, k * k);
-      ex.ghost = { every: 0.035, life: 0.18, tint: '#9affd8', alpha: 0.4 };
-      return { o, key: `d${f24(t)}`, ex, face };
-    }
-    case 'f12s_cast': {
-      // Колдует: торможение у пола — бубен вверх, три удара — руки к небу,
-      // ленты встают и вспыхивают к 1,1 с (занавесы падают в этот миг).
-      const o = shFly(
-        kf(t, [
-          [0, 0.9],
-          [0.12, -0.12, 'o'],
-          [1.0, -0.2],
-          [1.1, -0.3],
-        ]),
-        t * 9,
-      );
-      o.body.feet = undefined;
-      o.body.wide = 0.8;
-      o.drum = kf(t, [
-        [0.08, 0],
-        [0.3, 1, 'o'],
-      ]);
-      o.beat = beatAt(t, [0.45, 0.65, 0.85]);
-      const hd = shHands(o.drum, o.beat);
-      const up = kf(t, [
-        [0.92, 0],
-        [1.05, 1, 'o'],
-      ]);
-      o.body.handL = lerp3(hd.L, [1.5, -3.3, 20.5], up);
-      o.body.handR = lerp3(hd.R, [1.5, 3.3, 20.5], up);
-      o.ribUp = kf(t, [
-        [0, 1.2],
-        [0.2, 0.6],
-        [0.95, 1.7],
-        [1.1, 2.2],
-      ]);
-      o.ribA = kf(t, [
-        [0, 0.8],
-        [1.1, 1.8],
-      ]);
-      o.aurora = kf(t, [
-        [0, 0.8],
-        [0.9, 1.4],
-        [1.1, 2],
-      ]);
-      o.hem = kf(t, [
-        [0, 1],
-        [0.2, 0.2],
-      ]);
-      ex.lift = kf(t, [
-        [0, 5],
-        [0.1, 3.5, 'o'],
-        [0.3, 4.5],
-        [1.1, 7.5],
-      ]);
-      if (t < 0.12) {
-        const q = 1 - t / 0.12;
-        ex.sy = 1 - 0.1 * q;
-        ex.sx = 1 + 0.08 * q;
-      }
-      ex.shadow = 5;
-      return { o, key: `c${f24(t)}`, ex, face };
-    }
-    case 'f12s_low': {
-      // Выдохлась: у самого пола, на коленях, грудь ходит — бей сейчас.
-      const fP = Math.floor(t * 10) % 4;
-      const o = shFly(0.55 + 0.07 * Math.sin((fP / 4) * TAU), fP * 0.6);
-      o.body.feet = undefined;
-      o.body.kneel = 1;
-      o.body.crouch = 2.2 + 0.4 * Math.sin((fP / 4) * TAU);
-      o.body.handL = [2.5, -3.6, 5];
-      o.body.handR = [2.5, 3.6, 4.5];
-      o.ribUp = -1.4;
-      o.ribA = 0.25;
-      o.ribLen = 0.85;
-      o.aurora = 0.25;
-      o.hem = 0;
-      if (t < 0.12) {
-        const k = ease(t / 0.12);
-        o.body.handL = lerp3([1.5, -3.3, 20.5], [2.5, -3.6, 5], k);
-        o.body.handR = lerp3([1.5, 3.3, 20.5], [2.5, 3.6, 4.5], k);
-        o.ribUp = lerp(2.2, -1.4, k);
-        o.aurora = lerp(2, 0.25, k);
-      }
-      ex.lift = t < 0.12 ? lerp(7.5, 1.5, ease(t / 0.12)) : 1.5;
-      ex.shadow = 5;
-      return { o, key: t < 0.12 ? `lb${f24(t)}` : `l${fP}`, ex, face };
-    }
-    case 'f12s_rise': {
-      // Взмывает: присела глубже — толчок, ленты хлещут вниз.
-      const o = shFly(
-        kf(t, [
-          [0, 0.55],
-          [0.12, 0.8],
-          [0.45, 0.65],
-        ]),
-        t * 10,
-      );
-      if (t < 0.15) {
-        o.body.feet = undefined;
-        o.body.kneel = 1;
-        o.body.crouch = kf(t, [
-          [0, 2.2],
-          [0.12, 3],
-        ]);
-      }
-      o.ribUp = kf(t, [
-        [0, -1.4],
-        [0.15, -1.2],
-        [0.45, 0.12],
-      ]);
-      o.ribA = 1.6;
-      o.aurora = kf(t, [
-        [0, 0.3],
-        [0.2, 1.2],
-        [0.45, 1],
-      ]);
-      ex.lift = kf(t, [
-        [0, 1.5],
-        [0.12, 0.8, 'o'],
-        [0.45, SH_HIGH, 'o'],
-      ]);
-      ex.ghost = { every: 0.04, life: 0.2, tint: '#9affd8', alpha: 0.32 };
-      return { o, key: `r${f24(t)}`, ex, face };
-    }
-    case 'dying': {
-      // Падает с высоты, сгибается, ленты гаснут и опадают.
-      const o = shFly(
-        kf(t, [
-          [0, -0.45],
-          [0.3, -0.2],
-          [0.45, 0.9],
-          [0.9, 1.35],
-        ]),
-        t * 6,
-      );
-      o.body.feet = undefined;
-      o.body.kneel = kf(t, [
-        [0.3, 0],
-        [0.5, 1],
-      ]);
-      o.body.handL = lerp3([1, -5, 17], [3, -4, 2], clamp01((t - 0.3) / 0.4));
-      o.body.handR = lerp3([1, 5, 17], [3, 4, 2], clamp01((t - 0.3) / 0.4));
-      o.ribLen = kf(t, [
-        [0, 1],
-        [1.0, 0],
-      ]);
-      o.ribUp = kf(t, [
-        [0, 1.5],
-        [0.6, -1.5],
-      ]);
-      o.aurora = kf(t, [
-        [0, 2],
-        [0.15, 1.5],
-        [1.0, 0],
-      ]);
-      o.hem = 0;
-      ex.lift = kf(t, [
-        [0, 6],
-        [0.3, 0.01, 'i'],
-        [0.36, 1, 'o'],
-        [0.45, 0.01, 'i'],
-      ]);
-      ex.linger = 1.3;
-      ex.alpha = t > 0.85 ? Math.max(0, 1 - (t - 0.85) / 0.45) : 1;
-      ex.shadow = 5;
-      return { o, key: `x${f24(t)}`, ex, face };
-    }
-    case 'escape':
-      ex.lift = SH_HIGH + t * 50;
-      ex.alpha = Math.max(0, 1 - t / 0.4);
-      return { o: fly, key: `h${fI}`, ex, face };
-    default:
-      // Под сводом кругами — недосягаема: чуть прозрачна, ленты по ветру.
-      ex.lift = SH_HIGH + Math.sin(pose.now * 1.7) * 1.5;
-      ex.alpha = 0.88;
-      ex.shadow = 3.2;
-      return { o: fly, key: `h${fI}`, ex, face };
-  }
-}
-
-function shamanBuild(look: MobPose['look'], o: ShO): Build {
-  const parts: Part[] = [];
-  const r = shamanParts(parts, o, look, (p) => p);
-  return scaleBuild({ parts, eyes: r.eyes, post: (p) => rimLight(p, RIM_C, 0.38) }, SH_SC);
-}
-
-regMob('f12_shaman', (m, pose) => {
-  const { o, key, ex, face } = shamanPose(m, pose);
-  const c = rigFrame('f12_shaman', `${pose.look}|${key}`, face, CV_SHA, pose.flash, () =>
-    shamanBuild(pose.look, o),
-  );
-  return mobFrame(c, CV_SHA, ex);
-});
-
-// Прогрев шаманки: полёт под сводом во все 16 сторон.
-registerMobWarm('f12_shaman', function* () {
-  for (let d = 0; d < 16; d++)
-    for (let fI = 0; fI < 10; fI++) {
-      const o = shFly(0.65, (fI / 10) * TAU);
-      rigCached('f12_shaman', `normal|h${fI}`, (d / 16) * TAU, CV_SHA, false, () =>
-        shamanBuild('normal', o),
-      );
-      yield 0;
-    }
-});
+// Шаманка спрыгнет в фазе 3 — её кадры греются в очереди мамонта, после его.
+registerMobWarm('f12boss', shamanWarm);
 
 // ---------------------------------------------------------------------------
 // Слой пола (`f12_floor`, под мобами): трещины тонкого льда, пролом
