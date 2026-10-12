@@ -1398,10 +1398,14 @@ function tail(out: Part[], flats: Flat[], c: Ctx): void {
     apex: p0,
     a: wl,
     b: wr,
-    pal: P_COAL,
+    // Красная перепонка, как у туши: угольная с жилкой лавы читалась цифрой «1».
+    pal: P_MEMB,
     id: nid(),
-    shade: (u, r) => 0.12 - 0.1 * r + (u < 0.5 ? 0.06 : -0.04),
-    vein: (u, r) => (Math.abs(u - 0.5) < (HI ? 0.06 : 0.1) && r > 0.15 && r < 0.8 ? 1 : -1),
+    shade: (u, r) =>
+      0.16 -
+      0.14 * r +
+      (u < 0.5 ? 0.07 : -0.05) -
+      (HI && Math.abs(u - 0.5) < 0.05 && r < 0.75 ? 0.12 : 0),
   });
 }
 
@@ -2327,13 +2331,14 @@ const EYES_S: Record<string, string[]> = {
 };
 // Крупная: глаз 6×5 — тёмный ободок, радужка светлее книзу, щель зрачка, блик.
 const EYES_L: Record<string, string[]> = {
-  open: ['.oooo.', 'obbKWo', 'oaaKao', 'occKco', '.oddo.'],
-  wide: ['.oooo.', 'oabKWo', 'oaaKao', 'oaaKao', '.occo.'],
-  half: ['......', 'oooooo', 'oaaKao', 'occKco', '.oddo.'],
-  shut: ['......', '......', 'olllll', '.oooo.', '......'],
-  happy: ['......', '.llll.', 'lo..ol', 'o....o', '......'],
-  sleep: ['......', 'o....o', 'lo..ol', '.llll.', '.oooo.'],
-  angry: ['oo....', 'oooooo', 'obbKWo', 'oaaKao', '.occo.'],
+  // 7×6: зрачок по центру, радужка в три ступени — глаз держит морду, как у туши.
+  open: ['.ooooo.', 'obbKWbo', 'oaaKaao', 'oaaKaao', 'occKcco', '.oddoo.'],
+  wide: ['.ooooo.', 'obbKWbo', 'oaaKaao', 'oaaKaao', 'oaaKaao', '.occco.'],
+  half: ['.......', 'ooooooo', 'oaaKaao', 'oaaKaao', 'occKcco', '.oddoo.'],
+  shut: ['.......', '.......', 'ollllll', '.ooooo.', '.......', '.......'],
+  happy: ['.......', '.lllll.', 'lo...ol', 'o.....o', '.......', '.......'],
+  sleep: ['.......', '.......', 'o.....o', 'lo...ol', '.lllll.', '.ooooo.'],
+  angry: ['ooo....', 'ooooooo', 'obbKWbo', 'oaaKaao', 'occKcco', '.ooooo.'],
 };
 
 function eyes(p: Px, f: Frame, c: Ctx): void {
@@ -2348,7 +2353,7 @@ function eyes(p: Px, f: Frame, c: Ctx): void {
       else if (o.blink > 0.3) key = 'half';
     }
     const flip = side > 0;
-    if (HI) stamp(p, EYES_L[key], ep, at[0] - 3 + (flip ? 1 : 0), at[1] - 2, flip);
+    if (HI) stamp(p, EYES_L[key], ep, at[0] - 3, at[1] - 2, flip);
     else stamp(p, EYES_S[key], ep, at[0] - 1, at[1] - 1, flip);
   }
   // Ноздри: тёмные, на вдохе внутри тлеет.
