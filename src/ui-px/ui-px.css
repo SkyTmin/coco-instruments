@@ -375,6 +375,8 @@ html[data-game][data-input] .px-f:focus-visible {
 }
 .px-slot__lock {
   position: absolute;
+  right: calc(2 * var(--u));
+  bottom: calc(2 * var(--u));
   z-index: 2;
   color: var(--px-muted);
 }
