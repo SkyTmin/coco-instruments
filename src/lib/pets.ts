@@ -27,7 +27,7 @@ export type PetId =
   | 'cat'
   | 'bulldog'
   | 'ferret'
-  | 'crow'
+  | 'scarab'
   | 'badger'
   | 'owl'
   | 'raccoon'
@@ -85,7 +85,7 @@ export const PETS: PetDef[] = [
   pet('cat', 'Кот Шрам', 1, ['sell'], 'Торгуется до последней рыбьей косточки'),
   pet('bulldog', 'Бульдог Кастет', 1, ['dmg'], 'Лбом пробивает породу'),
   pet('ferret', 'Хорёк-шнырь', 1, ['rate'], 'Ни секунды на месте'),
-  pet('crow', 'Ворона-барахольщица', 1, ['token'], 'Тащит в гнездо всё, что блестит'),
+  pet('scarab', 'Жук-скарабей', 1, ['token'], 'Скатывает в шар всё, что блестит'),
   pet('badger', 'Барсук-проходчик', 2, ['loot'], 'Ведёт штрек как по линейке'),
   pet('owl', 'Сова-фонарщица', 2, ['luck'], 'Светит туда, где спрятано'),
   pet('raccoon', 'Енот-медвежатник', 2, ['dmg'], 'Вскрывает руду, как сейф'),
@@ -637,16 +637,20 @@ export function trickRole(id: PetId, turn: number): PetStat {
 //   нет / 1 — v2.49–v2.71, шесть зверей кольской фауны (`LEGACY_PET`);
 //   2 — v2.72, общие милые звери (`V2_PET`);
 //   3 — v2.73, жители лагеря (`PETS`);
-//   4 — v2.111, без радужной ступени (`dropRainbow`), ключи — как в 3.
+//   4 — v2.111, без радужной ступени (`dropRainbow`), ключи — как в 3;
+//   5 — ворона стала скарабеем (`V4_PET`): двух врановых владелец
+//       не хотел, «зачем нам две вороны» — роль и редкость те же.
 // Версия обязательна: ключи `fox`, `raven`, `owl` в старой схеме значили
 // песца, ворона и сову, а теперь это эпический лис, легендарный ворон и
 // редкая сова — без версии старый песец стал бы бесплатным эпиком.
 // Переезд по редкости, роль — какая ближе; опыт и копии сохраняются.
 // ---------------------------------------------------------------------------
 
-export const PETS_V = 4;
-/** С какой версии ключи `pets` — нынешние виды (`PETS`). */
+export const PETS_V = 5;
+/** С какой версии ключи `pets` — виды схемы 3 (дальше — `V4_PET`). */
 const KEYS_V = 3;
+/** С какой версии радужной ступени нет (v2.111). */
+const NO_RAINBOW_V = 4;
 /** Сколько ступеней было до v2.111: 0 обычный, 1 золотой, 2 радужный. */
 const OLD_V_MAX = 2;
 /** Сколько копий ушло на радужного (`MERGE_NEED[1]` до v2.111). */
@@ -682,7 +686,7 @@ export const V2_PET: Record<string, PetId> = {
   hedgehog: 'roach',
   mouse: 'pigeon',
   corgi: 'ferret',
-  kitten: 'crow',
+  kitten: 'scarab',
   owlet: 'bulldog',
   raccoon: 'cat',
   panda: 'raccoon',
@@ -697,10 +701,16 @@ export const V2_PET: Record<string, PetId> = {
   whale: 'phoenix',
 };
 
+/** v4 → v5: ворона-барахольщица → жук-скарабей, та же редкость и роль. */
+export const V4_PET: Record<string, PetId> = { crow: 'scarab' };
+
 /** Ключ сохранения → нынешний вид (или ничего). */
 export function petFromSave(key: unknown, ver: number): PetId | undefined {
   if (typeof key !== 'string') return undefined;
-  if (ver >= KEYS_V) return isPetId(key) ? key : undefined;
+  if (ver >= KEYS_V) {
+    const id = ver < PETS_V ? (V4_PET[key] ?? key) : key;
+    return isPetId(id) ? id : undefined;
+  }
   return V2_PET[LEGACY_PET[key] ?? key];
 }
 
@@ -731,7 +741,7 @@ export function normalizePets(raw: unknown, ver: number = PETS_V): Pets {
         dup: num(r.dup, 0, 1e6, 0),
         // До v2.111 бывал радужный (2): его переносит `dropRainbow` ниже,
         // обрезать ступень раньше — потерять его копии.
-        v: num(r.v, 0, ver < PETS_V ? OLD_V_MAX : MERGE_NEED.length, 0),
+        v: num(r.v, 0, ver < NO_RAINBOW_V ? OLD_V_MAX : MERGE_NEED.length, 0),
         pat: num(r.pat, 0, 1e15, 0),
       };
       if (typeof r.skin === 'number') rec.skin = num(r.skin, 0, MERGE_NEED.length, 0);
@@ -749,7 +759,7 @@ export function normalizePets(raw: unknown, ver: number = PETS_V): Pets {
   }
   for (const id of Object.keys(out) as PetId[]) {
     let rec = out[id]!;
-    if (ver < PETS_V) rec = dropRainbow(rec);
+    if (ver < NO_RAINBOW_V) rec = dropRainbow(rec);
     // Скин выше ступени или равный ей не храним: вид ступени и так по умолчанию.
     if (rec.skin !== undefined && rec.skin >= rec.v) rec = noSkin(rec);
     out[id] = rec;

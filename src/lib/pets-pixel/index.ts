@@ -55,6 +55,12 @@ import {
 import { FPS as RAVEN_FPS, FRAMES as RAVEN_FRAMES, RES as RAVEN_RES, ravenFrame } from './raven';
 import { FPS as ROACH_FPS, FRAMES as ROACH_FRAMES, RES as ROACH_RES, roachFrame } from './roach';
 import {
+  FPS as SCARAB_FPS,
+  FRAMES as SCARAB_FRAMES,
+  RES as SCARAB_RES,
+  scarabFrame,
+} from './scarab';
+import {
   FPS as SHEPHERD_FPS,
   FRAMES as SHEPHERD_FRAMES,
   RES as SHEPHERD_RES,
@@ -201,6 +207,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: PIGEON_RES,
     anims: at24(PIGEON_FRAMES, PIGEON_FPS),
     frame: pigeonFrame,
+    variants: [1],
+  },
+  // Жук-скарабей: свой золотой.
+  scarab: {
+    res: SCARAB_RES,
+    anims: at24(SCARAB_FRAMES, SCARAB_FPS),
+    frame: scarabFrame,
     variants: [1],
   },
 };

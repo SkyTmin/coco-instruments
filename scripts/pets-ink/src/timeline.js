@@ -12,7 +12,7 @@
     ['attack', 12, 14],
     ['sleep', 18, 6],
   ];
-  const PETS = ['mole', 'mouse', 'badger', 'raccoon', 'cat', 'bulldog', 'ferret', 'shepherd', 'fox', 'wolf', 'dragon', 'pigeon', 'crow', 'owl', 'raven', 'phoenix', 'roach', 'spider'];
+  const PETS = ['mole', 'mouse', 'badger', 'raccoon', 'cat', 'bulldog', 'ferret', 'shepherd', 'fox', 'wolf', 'dragon', 'pigeon', 'owl', 'raven', 'phoenix', 'roach', 'spider'];
   const shots = [];
   let t = 0;
   let n = 1;

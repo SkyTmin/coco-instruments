@@ -28,6 +28,10 @@ Owner: «добавь возможность выбирать скин у пит
   `xp += dup * PET_TREAT_XP`, `dup = 0`; normal untouched. Idempotent by construction (a gold
   pet never has dups after it). Pet KEYS are current since schema 3 (`KEYS_V` in
   `petFromSave` — don't compare keys with `PETS_V`). Old clients read a v4 save fine (keys ≥ 3).
+  **v2.137: `PETS_V` 4 → 5** — the crow became the scarab (`V4_PET = { crow: 'scarab' }`,
+  `petFromSave` maps keys when `KEYS_V ≤ ver < PETS_V`): xp, copies, tier, skin and the squad
+  slot carry over; a stray `crow` key in a v5 save is dropped. A stale pre-2.137 client drops the
+  unknown `scarab` key — the PWA update window is the only risk. Test «v2.129: ворона → скарабей».
   Both store load paths go through `normalizePrison`; `server.js` does not inspect pets. Tests:
   `pets.test.ts` «v2.111: …» (rainbow, gold dups, normal, v1/v2 schemas, merged old keys,
   `normalizePrison` round trip).
@@ -562,6 +566,38 @@ Owner: «добавь возможность выбирать скин у пит
   bronze depth, emerald + rose-gold neck, leather stays, copper goggles/buckle, green clover.
   Hatch plays `happy`. Weight 467 KB v0+v1 (small 51 / 57, large 172 / 185, thumbs 1 KB; ink was 1.59 MB).
   Tests «пиксельный голубь» in `pets-pixel.test.ts`.
+- **Scarab** (`pets-pixel/scarab.ts`, `scarabFrame(a, i, res, v)`, `variants: [1]`): «Жук-скарабей»
+  (replaced the crow; no ink art), a chunky dung beetle LOW on six legs, 3/4 front (`YAW0` 0.32 —
+  0.5 read as a side profile at EL 0.27; `KB` 1.42 body scale, `ROOT_Y0` −9.5 keeps the near
+  front foot inside the 48 box). Own `drawPartsF` (fox `pick`/`tube` + raccoon `cut` + `vis`,
+  plus `clip`, `spec`, `lk` light curve). 44-px read: emerald dome + bronze toothed shield + two
+  amber fan clubs + six short dark legs. Dome = `SHELL_LK` [0.74, 0.12] (the default 0.6/0.4 made
+  flat mint), seam −0.4 with a lit ridge, copper on grazing lit edges, specular STREAK from its
+  own `HV_DOME` (top-left; the LIGHT+VIEW half-vector put it on the pronotum), shimmer band once
+  per idle loop. Head = bronze dome + flat clypeus (`clip` notches + 4/6 tooth ellipsoids) +
+  bronze eye BUMPS with stamps on top (dark bumps read as round eyes in every mood). Antennae
+  leave the shield's side edge and splay sideways-BACK in head axes (`dRest` y −0.25): forward
+  ones pointed at the viewer and hung down like a tongue; `limb()` swaps its hint when the
+  segment is parallel to it (degenerate `axes`). Legs: tripod IK, feet in WORLD coords in the
+  pose; work steps by schedule (`planted`: lands at the root's home 0.035 s ahead, no sliding by
+  construction). Work (2 s): turns left + backs off → 8 glints fly in on arcs, ball grows
+  2.6 → 11 (cells in the ball's OWN coords → they roll; specular fixed to the light; sparkles
+  rotate with it) → turns around (head sweeps toward the viewer, not through the ball), backs
+  up → HEADSTAND (pitch 0.55, nod −0.2 keeps the shield off the ground, bz 5) with hind feet ON
+  the ball (`ballContact`, gap 0 every frame), front + mid legs stepping in crossed pairs on the
+  ground (mid legs can't reach the ball) → pushes 7 px, rot = path / R, dust → bumps the stone,
+  crack over ball pixels only, halves (`cut`) + 6 tokens (two-hop ballistic) → drops back and
+  hops `S_HOP` away (flat tail would enter the half) → turns to us, front-left foot on token 0,
+  «^», props fade → REST. Ball distance in the headstand = `ballClear()` (sampled body vs ball,
+  0.6 px). Work strip is wider than the box (small x −24, w 92; like badger). Happy: elytra
+  halves hinge up + rear tips swing out (`yawZ` −s·0.5), thinned 35 %; wing blur copies face
+  the viewer (flat horizontal membranes vanish edge-on at EL 0.27). Attack: crouch → shove with
+  `by` 3.4 + scale 1.16 (feet stay; `gy` slid them), shield tip to the ground, dust + rays over
+  empty. Sleep: belly down, shield down, antennae folded, hugging a ball R 7.2 at his right, zzz
+  right of the head (above the neck it fell on the dome mask). Gold: gold shell / red-bronze
+  depth and head / lapis clubs and eyes. Hatch plays `happy`. Weight 594 KB v0+v1 (small 61 /
+  69, large 222 / 242, thumbs 1 KB). Tests «пиксельный скарабей» (incl. `probe()`: reach, foot
+  slide, body↔ball clearance, head against travel, hind feet on the ball).
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;

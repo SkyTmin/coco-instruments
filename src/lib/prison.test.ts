@@ -1625,7 +1625,7 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
   it('прибавки рун и питомца упираются в потолок', () => {
     const runes = [1, 2, 3, 4].map((id) => ({ id, kind: 'token' as const, tier: 5, roll: 100 }));
     const big = { xp: 1e12, dup: 0, v: 1, pat: 0 };
-    const b = bonusOf({ runes, sockets: [1, 2, 3, 4], squad: ['crow'], pets: { crow: big } });
+    const b = bonusOf({ runes, sockets: [1, 2, 3, 4], squad: ['scarab'], pets: { scarab: big } });
     expect(b.token).toBe(BONUS_CAP.token);
     // Продажу даже полный набор не выводит за +100%: её потолок — край.
     const sell = [1, 2, 3, 4].map((id) => ({ id, kind: 'sell' as const, tier: 5, roll: 100 }));
@@ -1682,13 +1682,13 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
     expect(a.p.runes.length).toBe(RUNE_BAG);
     expect(a.shattered).toBe(RUNE_SHATTER[2]);
     expect(a.p.tokens).toBe(full.tokens + RUNE_SHATTER[2]);
-    const b = applyReward(base, { kind: 'pet', id: 'crow' });
-    expect(b.newPet).toBe('crow');
-    expect(b.p.squad).toEqual(['crow']);
+    const b = applyReward(base, { kind: 'pet', id: 'scarab' });
+    expect(b.newPet).toBe('scarab');
+    expect(b.p.squad).toEqual(['scarab']);
     // Второй такой же — не новый питомец, а копия к золотому.
-    const c = applyReward(b.p, { kind: 'pet', id: 'crow' });
+    const c = applyReward(b.p, { kind: 'pet', id: 'scarab' });
     expect(c.newPet).toBeNull();
-    expect(c.p.pets.crow?.dup).toBe(1);
+    expect(c.p.pets.scarab?.dup).toBe(1);
     // Яйцо — в гнездо, пока есть место, потом в корзину.
     const e1 = applyReward(base, { kind: 'egg', egg: 'moss' });
     const e2 = applyReward(e1.p, { kind: 'egg', egg: 'stone' });

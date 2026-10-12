@@ -133,7 +133,7 @@ describe('питомцы (v2.72–v2.73)', () => {
     // Скин ступени не хранится; выше ступени и у неприручённого — нельзя.
     expect(setPetSkin(pets, 'mole', 1)!.mole).toEqual(gold);
     expect(setPetSkin(pets, 'mouse', 1)).toBeNull();
-    expect(setPetSkin(pets, 'crow', 0)).toBeNull();
+    expect(setPetSkin(pets, 'scarab', 0)).toBeNull();
     expect(setPetSkin(pets, 'mole', 0.5)).toBeNull();
     // Скин выше ступени из сохранения показывается не выше ступени.
     expect(petLook({ v: 0, skin: 1 })).toBe(0);
@@ -163,7 +163,7 @@ describe('питомцы (v2.72–v2.73)', () => {
     expect(once).toEqual({
       mole: { xp: 1000 + (RAINBOW_COPIES + 3) * T, dup: 0, v: 1, pat: 5 },
       mouse: { xp: 700 + 7 * T, dup: 0, v: 1, pat: 0 },
-      crow: { xp: 300, dup: 2, v: 0, pat: 0 },
+      scarab: { xp: 300, dup: 2, v: 0, pat: 0 },
       cat: { xp: 50, dup: 0, v: 1, pat: 0 },
       // Ступень выше радужной в старом сохранении — радужный.
       fox: { xp: 9 + (RAINBOW_COPIES + 1) * T, dup: 0, v: 1, pat: 0 },
@@ -209,6 +209,30 @@ describe('питомцы (v2.72–v2.73)', () => {
     // Скин переживает сохранение.
     const skinned = { ...old, pets: setPetSkin(old.pets, 'mole', 0)! };
     expect(normalizePrison(JSON.parse(JSON.stringify(skinned))).pets.mole!.skin).toBe(0);
+  });
+
+  it('v2.129: ворона → скарабей, опыт, копии, ступень, скин и место в отряде целы', () => {
+    const rec = { xp: 4321, dup: 3, v: 1, pat: 7, skin: 0 };
+    const old = normalizePrison({
+      petsV: 4,
+      pets: { crow: rec, mole: { xp: 1, dup: 0, v: 0, pat: 0 } },
+      squad: ['crow', 'mole'],
+      rank: 25,
+    } as never);
+    expect(old.petsV).toBe(PETS_V);
+    expect(old.pets.scarab).toEqual(rec);
+    expect('crow' in old.pets).toBe(false);
+    expect(old.squad).toEqual(['scarab', 'mole']);
+    // Перенос один раз: прочли снова — то же самое.
+    const again = normalizePrison(JSON.parse(JSON.stringify(old)));
+    expect(again.pets).toEqual(old.pets);
+    expect(again.squad).toEqual(old.squad);
+    // В новой схеме «crow» — чужой ключ, а не скарабей.
+    expect(normalizePets({ crow: rec }, PETS_V)).toEqual({});
+    // Ступень v4 читается без переноса радужной: золотой остаётся золотым.
+    expect(normalizePets({ crow: { xp: 0, dup: 0, v: 1, pat: 0 } }, 4)).toEqual({
+      scarab: { xp: 0, dup: 0, v: 1, pat: 0 },
+    });
   });
 
   it('чем реже, тем сильнее на том же уровне', () => {
