@@ -71,7 +71,7 @@ const P_GLASS = 6;
 const P_STRAP = 7;
 const P_MOUTH = 8;
 const P_DUST = 9;
-const P_STEEL = 10;
+// 10 — сталь булавок (берётся прямо из рампы STEEL).
 
 const STEEL = ramp(
   '#24272a',
@@ -1211,7 +1211,10 @@ function shield(out: PartF[], c: Ctx): void {
         PICK_T = -0.32;
         return P_BELLY;
       }
-      if (HI && ((qx - 0.32) ** 2 + (qz - 0.05) ** 2 < 0.05 || (qx + 0.32) ** 2 + (qz - 0.05) ** 2 < 0.05))
+      if (
+        HI &&
+        ((qx - 0.32) ** 2 + (qz - 0.05) ** 2 < 0.05 || (qx + 0.32) ** 2 + (qz - 0.05) ** 2 < 0.05)
+      )
         PICK_T = -0.12;
       return P_SHELL;
     },
@@ -1219,7 +1222,12 @@ function shield(out: PartF[], c: Ctx): void {
       let d = gl(qx, qy, qz) + sh(qx, qz);
       // Блик — дугой по верху каждой лопасти (видна сбоку от головы).
       const ax0 = Math.abs(qx);
-      if (ax0 > 0.6 && ax0 < 0.92 && qz > 0.28 - 0.25 * (ax0 - 0.6) && qz < 0.44 - 0.25 * (ax0 - 0.6))
+      if (
+        ax0 > 0.6 &&
+        ax0 < 0.92 &&
+        qz > 0.28 - 0.25 * (ax0 - 0.6) &&
+        qz < 0.44 - 0.25 * (ax0 - 0.6)
+      )
         d += qx < 0 ? 0.42 : 0.24;
       return d;
     },
@@ -1560,9 +1568,9 @@ function antPts(c: Ctx, side: number): V3[] {
   const P: V3[] = [
     [0, 0, 0],
     [s * 0.8, 0.8, 3.6],
-    [s * 3.4, 0.6, 7.4],
-    [s * 6.8, 0.0, 8.8],
-    [s * 10.2, -0.6, 9.0],
+    [s * 3.4, 0.6, 7.0],
+    [s * 6.8, 0.0, 8.0],
+    [s * 10.4, -0.6, 7.9],
   ];
   if (s < 0) P[4] = add(P[3], [s * 1.5, 0.5, -2.8]);
   const sp = (s < 0 ? o.antL : o.antR) + o.antS + 1.0 * o.droop;
@@ -1985,14 +1993,12 @@ const SEVEN_S = ['rrr', '..r', '.r.', '.r.'];
 const SEVEN_L = ['rrrrrr', 'rRRRrR', '....rR', '...rR.', '...rR.', '..rR..', '..rR..', '..rR..'];
 function bib(p: Px, f: Frame, c: Ctx): void {
   const { S } = c;
-  const pl = S.pl;
   const r = S.br;
   const onBody = (qx: number, qz: number): V3 => {
     const qy = Math.sqrt(Math.max(0, 1 - qx * qx - qz * qz));
     const [e1, e2, e3] = S.bax;
     return add(S.bc, add(add(mul(e1, qx * r[0]), mul(e2, qy * r[1])), mul(e3, qz * r[2])));
   };
-  void pl;
   const mid = (BIB_Z0 + BIB_Z1) / 2;
   const at = seen(f, mul(onBody(0, mid), RR), OX, OY, 3 * RR);
   if (!at) return;
@@ -2153,7 +2159,8 @@ function slashFx(p: Px, c: Ctx): void {
       const [sx, sy] = project(mul(tip, RR));
       const cur: [number, number] = [OX + sx, OY + sy];
       if (prev) {
-        const steps = Math.ceil(Math.max(Math.abs(cur[0] - prev[0]), Math.abs(cur[1] - prev[1])) * 2) + 1;
+        const steps =
+          Math.ceil(Math.max(Math.abs(cur[0] - prev[0]), Math.abs(cur[1] - prev[1])) * 2) + 1;
         for (let q = 0; q <= steps; q++) {
           const f = (n - 1 + q / steps) / N;
           const x = Math.round(lerp(prev[0], cur[0], q / steps) - 0.5);
@@ -2232,13 +2239,7 @@ export function lagOf(a: Anim, t: number): Lag {
   const env = LOOP[a] ? 1 : clamp01((T - t) / 0.2);
   // Разовая к концу приходит не в чистую позу, а в запаздывание покоя на кадре 0: стык без сдвига.
   const L0 = LOOP[a] ? null : lagOf('idle', 0);
-  const d = (
-    fn: (tt: number) => number,
-    freq: number,
-    damp: number,
-    off: number,
-    cap: number,
-  ) => {
+  const d = (fn: (tt: number) => number, freq: number, damp: number, off: number, cap: number) => {
     const now = fn(t);
     const v = Math.max(-cap, Math.min(cap, spring(fn, t, t0, freq, damp) - now));
     return v * env + (L0 ? off * (1 - env) : 0);
