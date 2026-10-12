@@ -593,6 +593,32 @@ describe('пиксельный енот', () => {
       0, 0, 0, 0, 0, -1,
     ]);
   });
+
+  it('стетоскоп: слушает валун — оливы в ушах по бокам головы, потом снова на шее', () => {
+    // Пока головка на валуне (0,32–0,86 с), концы дуги — у боков головы (полуось
+    // 8) под ушами-лопухами, выше подбородка (голова наклонена к валуну), а не на шее.
+    for (const t of [0.34, 0.6, 0.84]) {
+      expect(W.poseAt('work', t).phones).toBe(1);
+      const { tips, head, k, neck, ears } = W.earTips('work', t);
+      tips.forEach((p, j) => {
+        const side = j ? 1 : -1;
+        const out = (p[0] - head[0]) * side;
+        expect([t, side, out > 6 * k && out < 8.5 * k]).toEqual([t, side, true]);
+        expect([t, side, p[2] < ears[j][2] - 3 && p[2] > head[2] - 5 * k]).toEqual([t, side, true]);
+        // Выше и дальше вбок, чем точка дуги на шее.
+        const up = p[2] - neck[j][2];
+        const wide = (p[0] - neck[j][0]) * side;
+        expect([t, side, up > 1.5 && wide > 1.5]).toEqual([t, side, true]);
+      });
+    }
+    // До и после — дуга на шее, как в покое; в остальных анимациях оливы не трогаются.
+    for (const t of [0, 1.1, W.FRAMES.work / W.FPS]) {
+      const { tips, neck } = W.earTips('work', t);
+      expect(tips).toEqual(neck);
+    }
+    for (const a of ['idle', 'walk', 'happy', 'attack', 'sleep'] as Anim[])
+      for (let i = 0; i < W.FRAMES[a]; i += 3) expect(W.poseAt(a, i / W.FPS).phones).toBe(0);
+  });
 });
 
 describe('пиксельная сова', () => {
@@ -686,6 +712,22 @@ describe('пиксельная сова', () => {
     const first = (k: 'blinkL' | 'blinkR') => ts.find((t) => at(t)[k] > 0.8) ?? -1;
     expect(first('blinkL')).toBeGreaterThan(0);
     expect(first('blinkR')).toBeGreaterThan(first('blinkL'));
+  });
+
+  it('ходьба вразвалку: вес над ОПОРНОЙ лапой, стоящая лапа не едет', () => {
+    // Левая лапа (x < 0) в воздухе — тело и крен к правой (+x), и наоборот.
+    let seen = 0;
+    for (let i = 0; i < W.FRAMES.walk; i++) {
+      const o = W.poseAt('walk', i / W.FPS);
+      const up = o.fLz > 0.3 ? -1 : o.fRz > 0.3 ? 1 : 0;
+      if (!up) continue;
+      seen++;
+      const stance = -up;
+      expect([i, Math.sign(o.x), Math.sign(o.lean)]).toEqual([i, stance, stance]);
+      const [sz, sx] = stance > 0 ? [o.fRz, o.fRx] : [o.fLz, o.fLx];
+      expect([i, Math.abs(sz) + Math.abs(sx) + Math.abs(o.fz)]).toEqual([i, 0]);
+    }
+    expect(seen).toBeGreaterThan(12);
   });
 });
 

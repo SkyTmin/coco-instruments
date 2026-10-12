@@ -300,8 +300,11 @@ Owner: «добавь возможность выбирать скин у пит
   wide-arms strike read as «ta-da»). Sleep: curled, tail over the nose, mask readable. One-shot
   tails key off `REST.tailCurl` (seam test caught a literal). Gold: gold fur with bronze depth,
   dark bronze mask, bronze tail rings, redder gloves, amber iris (a dark iris vanished in the
-  bronze mask). Hatch plays `happy`. Weight 511 KB v0+v1 (small 48 / 53, large 197 / 211,
+  bronze mask). Hatch plays `happy`. Weight 512 KB v0+v1 (small 48 / 53, large 198 / 211,
   thumbs 1 KB; ink was 1.91 MB). Tests «пиксельный енот» in `pets-pixel.test.ts`.
+  Listening (audit): earpieces IN THE EARS, not round the neck — `phones` up 0.04–0.26 s, back
+  0.86–1.0 s; `binaural()` lerps the arc from the neck U to the head sides under the ears and down
+  the cheeks, mid-way pushed along `VIEW` so the tubes pass in front of the face (test «стетоскоп»).
 - **Owl** (`pets-pixel/owl.ts`, `owlFrame(a, i, res, v)`, `variants: [1]`): «Сова-фонарщица», a
   round eagle-owl facing us (fox's `drawPartsF` + `pick`), head straight on the body. Head = ONE
   part with `headPick`: pale two-ring disc, dark rim only on the outer/lower side (a full rim
@@ -335,9 +338,10 @@ Owner: «добавь возможность выбирать скин у пит
   body over empty pixels → settle. Idle: breath, head swivel + tilt with the body still, blink
   left then right, tuft springs, a shake. Sleep: fluffed, head sunk, tufts back, lamp off, zzz.
   Hatch plays `happy`. Weight 639 KB v0+v1 (small 70 / 77, large 237 / 254, thumbs 1 KB; ink was
-  1.86 MB; 611 before the beam fix — lit body pixels add colours). Open logic note: in `walk` the
-  body sways and leans TOWARD the lifted foot (`o.x = -0.8·sway`, `lean = -0.1·sway` while
-  `liftL` is up) — weight should go over the stance foot; left as is (scope of the beam fix).
+  1.86 MB; 611 before the beam fix — lit body pixels add colours). Walk (logic audit): the
+  waddle puts the weight over the STANCE foot — `o.x = 0.8·sway`, `lean = 0.1·sway` (left foot up
+  → body and lean to the right), head counter-tilts (`tilt`/`hx` −sway); it used to lean over the
+  lifted foot. Planted feet don't move (`fz` 0). Test «ходьба вразвалку».
   Tests «пиксельная сова» in `pets-pixel.test.ts`.
 - **Bulldog** (`pets-pixel/bulldog.ts`, `bulldogFrame(a, i, res, v)`, `variants: [1]`): «Бульдог
   Кастет», a stocky fawn-and-white English bulldog sitting square to us (shepherd's `drawPartsF` +
