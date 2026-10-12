@@ -48,6 +48,7 @@ import type { F11State } from './f11-brains';
 import './f11-mob-harpy';
 import './f11-mob-moss';
 import './f11-mob-drone';
+import './f11-mob-ray';
 
 type RGBA = [number, number, number, number];
 
@@ -3418,99 +3419,6 @@ function dizzy(p: Px, cx: number, cy: number, rx: number, f: number): void {
     p.set(x, y + 1, GOLD[3]);
   }
 }
-
-// --- Небесный скат ------------------------------------------------------------
-
-const RAY_T = tn('#1c3c66', '#2b5b92', '#4583be', '#7ab4e2');
-const RAY_E = tn('#9ab0c8', '#c8d8e8', '#e8f0f8', '#ffffff');
-
-function rayPx(fy: number, kind: 'glide' | 'aim' | 'swoop' | 'hurt' | 'dead', f: number): Built {
-  // Манта сверху: голова к зрителю, крылья в стороны, хвост-хлыст назад.
-  const W = 38;
-  const H = 28;
-  const p = new Px(W, H);
-  const cx = 19;
-  const cy = 13;
-  const swoop = kind === 'swoop';
-  const dead = kind === 'dead';
-  const body = dead ? RAY_E : RAY_T;
-  // Хвост — прямо назад, лёгкой волной.
-  const wig = Math.sin(f * 0.9) * 1.2;
-  for (let k = 0; k < 11; k++) {
-    const x = cx + Math.sin(k * 0.5 + f * 0.9) * (k / 11) * 1.4 + wig * (k / 11);
-    p.set(Math.round(x), cy - 4 - k, k > 8 ? RAY_E[1] : RAY_T[0]);
-  }
-  // Крылья: выпуклая передняя кромка (к зрителю), срезанная задняя.
-  const span = swoop ? 10 : 17 - Math.abs(fy) * 0.55;
-  const tipY = swoop ? cy - 5 : cy - 1 + fy;
-  for (const s of [-1, 1]) {
-    const lead = spline(
-      [
-        [cx + s * 2, cy + 4],
-        [cx + s * span * 0.45, cy + 4 + fy * 0.25],
-        [cx + s * span * 0.8, cy + 1.5 + fy * 0.7],
-        [cx + s * span, tipY],
-      ],
-      4,
-    );
-    const trail: [number, number][] = [
-      [cx + s * (span - 2), tipY - 1],
-      [cx + s * span * 0.55, cy - 2 + fy * 0.35],
-      [cx + s * 3, cy - 4],
-    ];
-    polyShade(p, [...lead, ...trail], body, s < 0 ? 0.12 : -0.04);
-    // Светлая кромка — брюхо, видное снизу.
-    for (const [x, y] of lead) p.set(Math.floor(x), Math.floor(y), RAY_E[dead ? 3 : 1]);
-    if (fy < -1 && !dead)
-      for (const [x, y] of lead.slice(2)) p.set(Math.floor(x), Math.floor(y) + 1, RAY_E[2]);
-  }
-  // Тело — бугор на спине.
-  shadeEll(p, cx, cy, 4.6, 5.2, body, 0.15);
-  // Узор: светлые горошины по спине.
-  if (!dead)
-    for (let i = 0; i < 18; i++) {
-      const x = Math.round(cx - 14 + hash(i, 3, 701) * 28);
-      const y = Math.round(cy - 3 + hash(i, 4, 702) * 6);
-      if (p.solid(x, y) && Math.abs(x - cx) > 2) p.set(x, y, alpha(RAY_E[2], 0.55));
-    }
-  // Головные плавники-«рога», между ними рот.
-  limb(p, cx - 2.5, cy + 4, cx - 3.5, cy + 8.5, 1.3, 0.7, body, 0.1);
-  limb(p, cx + 2.5, cy + 4, cx + 3.5, cy + 8.5, 1.3, 0.7, body);
-  p.rect(cx - 1, cy + 5, cx + 1, cy + 5, RAY_T[0]);
-  // Глаза по бокам головы.
-  const ec = kind === 'aim' ? WHITE : dead ? RAY_T[1] : CYAN;
-  p.set(cx - 4, cy + 3, ec);
-  p.set(cx + 4, cy + 3, ec);
-  const q = ink(p);
-  if (kind === 'aim')
-    for (let x = 0; x < W; x++)
-      for (let y = 0; y < H; y++)
-        if (q.get(x, y)[3] && Math.hypot(x - cx, (y - cy) * 1.3) < 6) q.set(x, y, alpha(CYAN, 0.3));
-  if (swoop)
-    for (let i = 0; i < 4; i++) {
-      const x = cx - 7 + i * 4.5;
-      for (let k = 0; k < 5; k++) q.set(Math.round(x), 1 + k, alpha(WHITE, 0.2 + k * 0.08));
-    }
-  return { p: q, ax: cx, ay: H - 2, eye: [cx + 4, cy + 3] };
-}
-
-registerMobPainter('f11_ray', (m: Mob, pose: MobPose) => {
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('ray', pose, 'dead', () => rayPx(2, 'dead', 0));
-  if (pose.mode === 'aim') {
-    const f = Math.floor(pose.t * 10) % 2;
-    return mobFrame('ray', pose, `aim${f}`, () => rayPx(-5 + f, 'aim', 0));
-  }
-  if (pose.mode === 'f11_swoop') {
-    const f = Math.floor(pose.t * 14) % 2;
-    return mobFrame('ray', pose, `swoop${f}`, () => rayPx(0, 'swoop', f * 3));
-  }
-  if (pose.anim === 'hurt') return mobFrame('ray', pose, 'hurt', () => rayPx(2, 'hurt', 1));
-  const f = ((Math.floor((paintSim()?.time ?? 0) * 9 + m.id * 1.7) % 8) + 8) % 8;
-  return mobFrame('ray', pose, `glide${f}`, () =>
-    rayPx(Math.round(Math.sin((f / 8) * TAU) * 4.5), 'glide', f),
-  );
-});
 
 // --- Роботы: садовник и страж ----------------------------------------------------
 
@@ -8315,7 +8223,7 @@ registerItemArt('f11_fillet', () => {
     ],
     (x, y) => tone(tn('#c07a70', '#e0a098', '#f4c8c0', '#fff0ec'), 0.9 - (x + y) * 0.05),
   );
-  stroke(p, 4, 2, 9, 3, RAY_T[2]);
+  stroke(p, 4, 2, 9, 3, hx('#4583be'));
   stroke(p, 2, 6, 7, 6, hx('#f4d8d0'));
   p.outline(INK);
   return p;
