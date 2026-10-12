@@ -33,7 +33,6 @@ import {
   expoAt,
   f11State,
   GARDENER,
-  GUARD,
   gustBlow,
   gustWarn,
   JELLY,
@@ -49,6 +48,7 @@ import './f11-mob-harpy';
 import './f11-mob-moss';
 import './f11-mob-drone';
 import './f11-mob-ray';
+import './f11-mob-guard';
 
 type RGBA = [number, number, number, number];
 
@@ -3424,8 +3424,6 @@ function dizzy(p: Px, cx: number, cy: number, rx: number, f: number): void {
 
 const BOT = tn('#4a3a2a', '#6e583e', '#957856', '#b99c74');
 const BOT_SEAM = hx('#34281c');
-const GUARD_T = tn('#353c48', '#56606e', '#7a8594', '#a6b0bc');
-const GUARD_RUST = tn('#5a2c18', '#8a4424', '#b0643a', '#cc8656');
 const EYE_CALM = hx('#6ff4e6');
 const EYE_ANGRY = hx('#ff5a3a');
 const EYE_OFF = hx('#3a4048');
@@ -3678,245 +3676,7 @@ registerMobPainter('f11_gardener', (m: Mob, pose: MobPose) => {
   );
 });
 
-/** Страж: шире, в латах и ржавчине, голова-шлем со щелью и красной линзой. */
-function guardPx(q: BotPose, f: number): Built {
-  const W = 30;
-  const H = 34;
-  const p = new Px(W, H);
-  const gy = 32;
-  const cx = 14 + q.lean;
-  const cy = (q.seated ? 22 : 18) + q.sink;
-  armPx(p, q.armB, 1.5, GUARD_T, -0.25);
-  shadeEll(p, q.armB[4], q.armB[5], 1.8, 1.6, GUARD_T, -0.2);
-  // Ноги: сидя — колени вперёд.
-  if (q.seated) {
-    limb(p, cx - 3, cy + 4, cx + 3, cy + 4, 2.2, 2, GUARD_T, -0.1);
-    limb(p, cx + 3, cy + 4, cx + 5, gy - 1, 2, 1.8, GUARD_T, -0.05);
-    limb(p, cx + 1, cy + 5, cx + 7, cy + 6, 2.2, 2, GUARD_T, 0.05);
-    limb(p, cx + 7, cy + 6, cx + 8, gy - 1, 2, 1.8, GUARD_T, 0.05);
-    shadeEll(p, cx + 6, gy - 0.5, 2.6, 1.3, GUARD_T);
-    shadeEll(p, cx + 9, gy - 0.5, 2.6, 1.3, GUARD_T);
-  } else {
-    limb(p, cx - 3, cy + 6, cx - 3 + q.legB, gy - 1, 2.4, 2, GUARD_T, -0.15);
-    limb(p, cx + 3, cy + 6, cx + 3 + q.legF, gy - 1, 2.4, 2, GUARD_T, 0);
-    shadeEll(p, cx - 3 + q.legB, gy - 0.5, 2.8, 1.4, GUARD_T, -0.1);
-    shadeEll(p, cx + 3.5 + q.legF, gy - 0.5, 2.8, 1.4, GUARD_T);
-  }
-  // Корпус: широкая кираса.
-  shadeEll(p, cx, cy, 8, 8.4, GUARD_T);
-  for (let x = cx - 8; x <= cx + 8; x++) if (p.solid(x, cy + 2)) p.set(x, cy + 2, IRON[0]);
-  for (let x = cx - 6; x <= cx + 6; x += 3) p.set(x, cy + 3, GUARD_T[3]);
-  // Нагрудник: пластина, под которой ядро.
-  if (q.open) {
-    p.ell(cx + 2, cy - 2, 3.4, 3, IRON[0]);
-    p.ell(cx + 2, cy - 2, 2.4, 2.1, hx('#ff9a3a'));
-    p.ell(cx + 1.6, cy - 2.4, 1.2, 1, hx('#fff0b0'));
-    p.rect(cx - 3, cy - 6, cx - 1, cy + 1, GUARD_T[1]);
-    p.rect(cx + 5, cy - 6, cx + 7, cy + 1, GUARD_T[1]);
-  } else {
-    polyShade(
-      p,
-      [
-        [cx - 2, cy - 6],
-        [cx + 6, cy - 6],
-        [cx + 6, cy + 1],
-        [cx + 2, cy + 3],
-        [cx - 2, cy + 1],
-      ],
-      GUARD_T,
-      0.15,
-    );
-    p.set(cx + 2, cy - 2, hx('#c83a2a'));
-  }
-  // Ржавчина — тремя подтёками от швов вниз, а не сыпью.
-  for (const [rx0, ry0] of [
-    [cx - 6, cy + 3],
-    [cx + 4, cy + 3],
-    [cx - 3, cy - 5],
-  ])
-    for (let k = 0; k < 4; k++) {
-      if (p.solid(rx0, ry0 + k)) p.set(rx0, ry0 + k, GUARD_RUST[k < 2 ? 1 : 0]);
-      if (k < 2 && p.solid(rx0 + 1, ry0 + k)) p.set(rx0 + 1, ry0 + k, GUARD_RUST[0]);
-    }
-  // Наплечники.
-  shadeEll(p, cx - 7, cy - 5, 3.2, 2.4, GUARD_T, 0.1);
-  shadeEll(p, cx + 7, cy - 5, 3.2, 2.4, GUARD_T, 0.1);
-  // Шлем со щелью.
-  const hx0 = cx + 2;
-  const hy0 = cy - 9.5 + q.headDy;
-  shadeEll(p, hx0, hy0, 4.6, 3.8, GUARD_T, 0.1);
-  p.rect(Math.round(hx0 - 3), Math.round(hy0), Math.round(hx0 + 4), Math.round(hy0), IRON[0]);
-  p.set(Math.round(hx0), Math.round(hy0 - 4), GUARD_T[3]);
-  p.set(Math.round(hx0), Math.round(hy0 - 5), hx('#c83a2a'));
-  lens(p, hx0 + 2, hy0, 1.5, q.eye, q.eyeBright);
-  // Ближняя рука — с клинком.
-  armPx(p, q.armF, 1.6, GUARD_T, 0.05);
-  shadeEll(p, q.armF[4], q.armF[5], 2, 1.8, GUARD_T, 0.1);
-  tool(p, q.tool, Math.round(q.armF[4]) + 1, Math.round(q.armF[5]));
-  // Мох на спящем.
-  if (q.seated && !q.eyeBright)
-    for (let i = 0; i < 30; i++) {
-      const x = Math.floor(hash(i, 1, 741) * W);
-      const y = Math.floor(hash(i, 2, 742) * H);
-      if (p.solid(x, y) && !p.solid(x, y - 1)) p.set(x, y, MOSS[hash(i, 3, 743) < 0.5 ? 2 : 3]);
-    }
-  const out = ink(p);
-  // Прицел: блик линзы крестом.
-  if (q.eyeBright && q.eye === EYE_ANGRY && f > 0) {
-    const ex = Math.round(hx0 + 2);
-    const ey = Math.round(hy0);
-    const flare = hx('#ffb0a0');
-    for (let k = 2; k <= 3 + f; k++) {
-      out.set(ex + k, ey, alpha(flare, 0.8 - k * 0.1));
-      out.set(ex - k, ey, alpha(flare, 0.8 - k * 0.1));
-      out.set(ex, ey - k, alpha(flare, 0.7 - k * 0.1));
-      out.set(ex, ey + k, alpha(flare, 0.7 - k * 0.1));
-    }
-  }
-  if (q.steam) {
-    puffs(out, cx - 6, cy - 8, f, 3, 3);
-    puffs(out, cx + 7, cy - 8, f + 0.6, 3, 3);
-  }
-  return { p: out, ax: 14, ay: gy, eye: [Math.round(hx0 + 2), Math.round(hy0)] };
-}
-
-function guardDead(): Built {
-  const p = new Px(34, 20);
-  shadeEll(p, 14, 12, 9, 6, GUARD_T);
-  for (let i = 0; i < 16; i++) {
-    const x = Math.round(6 + hash(i, 1, 751) * 16);
-    const y = Math.round(7 + hash(i, 2, 752) * 10);
-    if (p.solid(x, y)) p.set(x, y, GUARD_RUST[1]);
-  }
-  shadeEll(p, 26, 13, 4.2, 3.4, GUARD_T);
-  lens(p, 27, 13, 1.3, EYE_OFF);
-  limb(p, 8, 14, 2, 17, 1.6, 1.4, GUARD_T);
-  limb(p, 18, 15, 22, 18, 1.6, 1.4, GUARD_T);
-  const out = ink(p);
-  puffs(out, 14, 7, 1.2, 2, 2);
-  return { p: out, ax: 15, ay: 18, eye: null };
-}
-
-registerMobPainter('f11_guard', (_m: Mob, pose: MobPose) => {
-  const base: BotPose = {
-    lean: 0,
-    sink: 0,
-    legF: 0,
-    legB: 0,
-    armB: [7, 14, 5, 20, 5, 26],
-    armF: [21, 14, 23, 20, 23, 26],
-    headDy: 0,
-    eye: EYE_ANGRY,
-    tool: 'blade',
-  };
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('guard', pose, 'dead', guardDead);
-  const f4 = ((pose.frame % 4) + 4) % 4;
-  switch (pose.mode) {
-    case 'f11_dormant':
-      return mobFrame('guard', pose, 'dormant', () =>
-        guardPx(
-          {
-            ...base,
-            seated: true,
-            headDy: 2,
-            eye: EYE_OFF,
-            armB: [7, 18, 6, 24, 8, 29],
-            armF: [21, 18, 22, 24, 20, 29],
-            tool: null,
-          },
-          0,
-        ),
-      );
-    case 'f11_post': {
-      const f = Math.floor(pose.t * 1.2) % 2;
-      return mobFrame('guard', pose, `post${f}`, () =>
-        guardPx({ ...base, eye: f ? hx('#ffb040') : hx('#c87a30') }, 0),
-      );
-    }
-    case 'f11_rise': {
-      const f = pose.t < 0.4 ? 0 : 1;
-      return mobFrame('guard', pose, `rise${f}`, () =>
-        f === 0
-          ? guardPx(
-              {
-                ...base,
-                seated: true,
-                eyeBright: true,
-                armB: [7, 18, 5, 23, 6, 28],
-                armF: [21, 18, 24, 22, 25, 27],
-              },
-              0,
-            )
-          : guardPx({ ...base, sink: 3, legF: 2, legB: -2, eyeBright: true, steam: 1 }, 1),
-      );
-    }
-    case 'f11_aim': {
-      const k = Math.min(1, pose.t / (GUARD.track + GUARD.lock));
-      const f = 1 + Math.min(3, Math.floor(k * 4));
-      return mobFrame('guard', pose, `aim${f}`, () =>
-        guardPx(
-          { ...base, lean: 1, headDy: 0.5, eyeBright: true, armF: [21, 14, 24, 18, 24, 23] },
-          f,
-        ),
-      );
-    }
-    case 'f11_vent': {
-      const f = Math.floor(pose.t * 6) % 4;
-      return mobFrame('guard', pose, `vent${f}`, () =>
-        guardPx(
-          {
-            ...base,
-            sink: 1.5,
-            headDy: 2,
-            eye: EYE_OFF,
-            open: true,
-            steam: 1,
-            armB: [7, 14, 4, 20, 4, 27],
-            armF: [21, 14, 24, 20, 24, 27],
-          },
-          f,
-        ),
-      );
-    }
-    case 'f11_bash': {
-      const strike = pose.t > GUARD.bash - 0.2;
-      if (!strike)
-        return mobFrame('guard', pose, 'bashw', () =>
-          guardPx({ ...base, lean: -1, eyeBright: true, armF: [21, 14, 22, 7, 17, 3] }, 0),
-        );
-      return mobFrame('guard', pose, 'bashs', () =>
-        guardPx(
-          { ...base, lean: 2, legF: 3, legB: -2, eyeBright: true, armF: [21, 14, 25, 17, 27, 23] },
-          0,
-        ),
-      );
-    }
-  }
-  if (pose.anim === 'hurt')
-    return mobFrame('guard', pose, 'hurt', () =>
-      guardPx({ ...base, lean: -1, headDy: -1, eye: WHITE }, 0),
-    );
-  if (pose.anim === 'run') {
-    const sw = [-2, 0, 2, 0][f4];
-    return mobFrame('guard', pose, `run${f4}`, () =>
-      guardPx(
-        {
-          ...base,
-          sink: f4 % 2 ? -0.5 : 0,
-          legF: sw,
-          legB: -sw,
-          armB: [7, 14, 5 - sw * 0.5, 20, 5 - sw, 26],
-          armF: [21, 14, 23 + sw * 0.5, 20, 23 + sw, 26],
-        },
-        0,
-      ),
-    );
-  }
-  return mobFrame('guard', pose, `idle${f4 >> 1}`, () =>
-    guardPx({ ...base, headDy: f4 >> 1 ? 0.5 : 0 }, 0),
-  );
-});
+// Робот-страж — `f11-mob-guard.ts` (анимации мобов 11).
 
 /** Наложить готовый (уже обведённый) рисунок поверх. */
 function over(dst: Px, src: Px, ox = 0, oy = 0): void {

@@ -206,6 +206,8 @@ const SHEET_PREV = [
   'f11_vent',
   'f11_perch',
   'f11_hide',
+  'f11_dormant',
+  'f11_post',
 ];
 
 export const speedOf = (m: Mob) => Math.hypot(m.vx ?? 0, m.vy ?? 0);
@@ -638,14 +640,15 @@ export const WARM_POSE: MobPose = {
   now: 0,
 };
 
-/** Прогрев: кадры поз по всем сторонам (у отражаемого вида — пяти), по одному на шаг. */
+/** Прогрев: кадры поз по всем сторонам (у отражаемого вида — пяти; `only` — только эти), по одному на шаг. */
 export function* warmAll(
   K: Kind,
   list: [string, number][],
   pic: (a: string, f: number, d: number) => Pic,
   looks: MobPose['look'][] = ['normal'],
+  only?: number[],
 ) {
-  const sides = K.mirror ? SIDES5 : [0, 1, 2, 3, 4, 5, 6, 7];
+  const sides = only ?? (K.mirror ? SIDES5 : [0, 1, 2, 3, 4, 5, 6, 7]);
   for (const look of looks)
     for (const [anim, n] of list)
       for (const d of sides)
