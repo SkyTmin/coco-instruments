@@ -266,19 +266,39 @@ Owner: «добавь возможность выбирать скин у пит
   read as a second pair of eyes. Vest = ONE torso part (`vestPick`): open front with the grey
   belly in the gap, lit stitched edges, patch pockets with a flap + brass button, breast pocket
   with a pencil (`rodF`). All-grey tail (a white tip read as a snowball). Claws, pick, pencil =
-  `rodF` (spider's rod with palette and fade). Work (pick, 2 s): rock + pick fade in → two
-  swings (wind-up over the hat, strike at 0.5 / 1.0 s: star + chips, squint) → the second
-  stroke leaves the pick STUCK in the rock, crack glows → crystal (`gemDraw`, flat faceted
-  polygon with depth) pops out in an arc into the right paw → held up high, crystal and goggle
-  glints, happy eyes, grin → props fade 1.72–1.92 s and reset to REST (test). Pick head is 2 px
-  and lighter on the small strip, else it vanished against the rock. Attack: crouch → lunge
+  `rodF` (spider's rod with palette and fade). Work (pick, 2 s, redone after v2.126): a two-handed
+  pick swing SIDE-ON, after Muybridge's «digging with a pick». Rock + pick fade in → two lifted
+  steps turn him to profile facing +x (`yaw` 0 → 1.3 eased over 0.24 s; body, head, ears, stripe
+  turn together; feet `fLx/fRx/fLy/fRy` move only while lifted, planted feet pivot on the ankle):
+  near foot (code L) forward, far foot back. Far paw (code R, `paw[1]`) holds the handle END,
+  near paw (code L = his anatomical right) higher and SLIDES (`SLIDE` keys): up toward the head on
+  the wind-up, down to the far paw at the strike. Wind-up: grip at the near shoulder under the
+  cheek, pick up-back behind the nape, body straightens, rocks back (`bow` −0.06) and coils
+  (`yaw` −0.3). Strike at 0.5 / 1.0 s: hinge at the waist (`bow` 0.5), knees bend (`cz` 1.2),
+  head follows, both arms extended, handle 35° to the ground, tip into the rock TOP (star +
+  chips from `hitGeo().T`, squint). The second stroke leaves the pick STUCK (drawn from
+  `hitGeo().B`), crack glows → lets go → crystal (`gemDraw`) pops from the crack in an arc and
+  the far paw catches it mid-turn back (`yaw` 1.3 → 0.8) → facing us, holds it up (glints, happy
+  eyes) → props fade 1.72–1.92 s, settle from 1.7 s (span 0.3: the joint with idle is 12‰,
+  not 16). Geometry is solved, not keyed: `hitGeo()` builds the strike pose, puts the grip
+  `REACH_F` ahead of the shoulders and the rock under the tip; the swing is keyed in the swing
+  plane (`SWING`: grip offset + handle dir) and the paws are sent to world grip points through
+  `toBody` (inverse of `skel().up`, raccoon's idea, copied). Pose carries `pdx/pdy/pdz` (world
+  handle dir) instead of angles. Rock centre 24 world px out (was 11), handle 12.5 (was 7.4).
+  Lessons: the chibi head (≈10 px radius) hides anything near the body midline in profile — a
+  far-side swing vanished behind the head, so the swing runs on the NEAR side; arms are short
+  (reach 11.9) — at the strike the near arm is at full stretch, so the grip sits 0.7 toward the
+  near shoulder (`REACH_N`) or the paw leaves the handle (test checks both paws on the handle
+  0.2–1.08 s, feet planted 0.26–1.42 s, tip in the rock top, crystal in the far paw). A 3/4
+  version (`YAW` 0.8) also works but the strike shows less handle; profile ships. Pick head is
+  2 px and lighter on the small strip, else it vanished against the rock. Attack: crouch → lunge
   (scale 1.18, jaws open 0.36–0.47 s) with paws high, `claw` spreads and lengthens the claws ×1.55
   → slash down across the vest, white-amber arcs over EMPTY pixels → head shake. Sleep: sits
   slumped, hat tipped over the eyes (head nod only 0.06 — a nodded head showed just the hat
   dome), mouth and cheeks visible under the brim, zzz. Gold: fur gold with bronze depth, bands
   and arms dark YELLOW bronze (red-brown read as chocolate), white → pale gold, hat redder.
-  Hatch plays `happy`. Weight 528 KB v0+v1 (small 56 / 62,
-  large 197 / 211, thumbs 1 KB; ink was 1.64 MB). Tests «пиксельный барсук» in `pets-pixel.test.ts`.
+  Hatch plays `happy`. Weight 566 KB v0+v1 (small 60 / 67,
+  large 209 / 227, thumbs 1 KB; ink was 1.64 MB). Tests «пиксельный барсук» in `pets-pixel.test.ts`.
 - **Raccoon** (`pets-pixel/raccoon.ts`, `raccoonFrame(a, i, res, v)`, `variants: [1]`):
   «Енот-медвежатник», a plump warm-grey raccoon STANDING on two legs facing us (fox's
   `drawPartsF` + `pick`, plus own `cut` clip plane with a face shader and `vis` dither fade;

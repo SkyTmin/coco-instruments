@@ -24,12 +24,12 @@ export interface PetPx extends PetPxSet {
 export const PET_PX: Record<string, PetPx> = {
   badger: {
     box: 48,
-    rev: '767d02a95a',
+    rev: 'b604381958',
     anims: {
       idle: { n: 72, fps: 24, x: 5, y: -2, w: 37, h: 51 },
       walk: { n: 24, fps: 24, x: 3, y: -2, w: 42, h: 51 },
       happy: { n: 26, fps: 24, x: 5, y: -8, w: 38, h: 57 },
-      work: { n: 48, fps: 24, x: 5, y: -4, w: 43, h: 56 },
+      work: { n: 48, fps: 24, x: 1, y: -5, w: 57, h: 56 },
       attack: { n: 22, fps: 24, x: -6, y: -9, w: 61, h: 59 },
       sleep: { n: 72, fps: 24, x: 7, y: 2, w: 37, h: 48 },
     },
@@ -39,7 +39,7 @@ export const PET_PX: Record<string, PetPx> = {
         idle: { n: 72, fps: 24, x: 18, y: 2, w: 76, h: 107 },
         walk: { n: 24, fps: 24, x: 14, y: 3, w: 84, h: 106 },
         happy: { n: 26, fps: 24, x: 17, y: -11, w: 79, h: 120 },
-        work: { n: 48, fps: 24, x: 17, y: -2, w: 89, h: 117 },
+        work: { n: 48, fps: 24, x: 9, y: -4, w: 121, h: 117 },
         attack: { n: 22, fps: 24, x: -10, y: -13, w: 133, h: 125 },
         sleep: { n: 72, fps: 24, x: 24, y: 9, w: 72, h: 103 },
       },
