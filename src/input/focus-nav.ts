@@ -11,48 +11,59 @@ export interface Box {
 export type Dir = 'up' | 'down' | 'left' | 'right';
 
 /**
- * Сосед в направлении `dir`: кандидат должен лежать по ту сторону (центр за
- * серединой и ближний край не глубже половины меньшей стороны внутри), счёт
- * — расстояние вдоль оси + удвоенный зазор поперёк (ряд/колонка важнее
- * близости) + десятая доля несоосности центров (ровнее — лучше).
+ * Сосед в направлении `dir` (как FocusFinder в Android): кандидат лежит по ту
+ * сторону (центр дальше нашего, ближний край не глубже половины меньшей
+ * стороны внутри). Кандидат «в луче» (перекрывает нас поперёк оси) бьёт
+ * кандидата вне луча: по горизонтали — всегда (свой ряд важнее близкой
+ * диагонали), по вертикали — если он ближе, чем дальний край другого. Дальше —
+ * взвешенное расстояние 13·вдоль² + поперёк² (поперёк — между центрами).
  * Возвращает индекс или −1.
  */
 export function pickNeighbour(from: Box, cands: readonly Box[], dir: Dir): number {
   const horiz = dir === 'left' || dir === 'right';
   const sign = dir === 'right' || dir === 'down' ? 1 : -1;
-  const fc = horiz ? from.x + from.w / 2 : from.y + from.h / 2;
-  const fLo = horiz ? from.y : from.x;
-  const fHi = horiz ? from.y + from.h : from.x + from.w;
-  const fOc = (fLo + fHi) / 2;
-  let best = -1;
-  let bestScore = Infinity;
+  const lo = (b: Box) => (horiz ? b.x : b.y);
+  const hi = (b: Box) => (horiz ? b.x + b.w : b.y + b.h);
+  const olo = (b: Box) => (horiz ? b.y : b.x);
+  const ohi = (b: Box) => (horiz ? b.y + b.h : b.x + b.w);
+  const fc = (lo(from) + hi(from)) / 2;
+  const fFar = sign > 0 ? hi(from) : lo(from);
+  const fOc = (olo(from) + ohi(from)) / 2;
+  interface Cand {
+    i: number;
+    beam: boolean;
+    along: number;
+    alongFar: number;
+    minor: number;
+  }
+  const list: Cand[] = [];
   cands.forEach((c, i) => {
     if (c === from) return;
-    const cc = horiz ? c.x + c.w / 2 : c.y + c.h / 2;
-    if ((cc - fc) * sign <= 0.5) return;
-    // Расстояние вдоль оси: от нашего дальнего края до его ближнего.
-    const fFar = horiz
-      ? sign > 0
-        ? from.x + from.w
-        : from.x
-      : sign > 0
-        ? from.y + from.h
-        : from.y;
-    const cNear = horiz ? (sign > 0 ? c.x : c.x + c.w) : sign > 0 ? c.y : c.y + c.h;
-    const along = (cNear - fFar) * sign;
-    const minSide = Math.min(horiz ? from.w : from.h, horiz ? c.w : c.h);
+    if (((lo(c) + hi(c)) / 2 - fc) * sign <= 0.5) return;
+    const near = sign > 0 ? lo(c) : hi(c);
+    const far = sign > 0 ? hi(c) : lo(c);
+    const along = (near - fFar) * sign;
+    const minSide = Math.min(hi(from) - lo(from), hi(c) - lo(c));
     if (along < -minSide / 2) return;
-    const cLo = horiz ? c.y : c.x;
-    const cHi = horiz ? c.y + c.h : c.x + c.w;
-    const gap = Math.max(0, cLo - fHi, fLo - cHi);
-    const off = Math.abs((cLo + cHi) / 2 - fOc);
-    const score = Math.max(0, along) + gap * 2 + off * 0.1;
-    if (score < bestScore - 1e-6) {
-      bestScore = score;
-      best = i;
-    }
+    const beam = Math.min(ohi(c), ohi(from)) - Math.max(olo(c), olo(from)) > 0;
+    list.push({
+      i,
+      beam,
+      along: Math.max(0, along),
+      alongFar: Math.max(0, (far - fFar) * sign),
+      minor: Math.abs((olo(c) + ohi(c)) / 2 - fOc),
+    });
   });
-  return best;
+  const beamBeats = (a: Cand, b: Cand) => a.beam && !b.beam && (horiz || a.along < b.alongFar);
+  const weight = (a: Cand) => 13 * a.along * a.along + a.minor * a.minor;
+  let best: Cand | null = null;
+  for (const c of list) {
+    if (!best) best = c;
+    else if (beamBeats(c, best)) best = c;
+    else if (beamBeats(best, c)) continue;
+    else if (weight(c) < weight(best) - 1e-6) best = c;
+  }
+  return best ? best.i : -1;
 }
 
 // ---- DOM ------------------------------------------------------------------
