@@ -116,7 +116,7 @@ export const PET_PX: Record<string, PetPx> = {
   },
   mole: {
     box: 48,
-    rev: '1501b9dff0',
+    rev: '7e73639f64',
     anims: {
       idle: { n: 72, fps: 24, x: 3, y: 5, w: 42, h: 44 },
       walk: { n: 24, fps: 24, x: 1, y: 5, w: 46, h: 44 },

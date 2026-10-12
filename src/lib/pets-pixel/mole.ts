@@ -1218,8 +1218,6 @@ const nid = () => ++NEXT_ID;
 const BODY_ID = 1;
 /** Где фонарь (стекло) в кадре — для света. */
 let LAMP_AT: V3 = [0, 0, 0];
-/** Куда смотрит фонарь (единичный вектор, вперёд от стекла). */
-let LAMP_DIR: V3 = [0, 1, 0];
 
 /** Прут прямо в кадр (когти). */
 interface Rod {
@@ -1343,7 +1341,7 @@ function bellyPick(qx: number, qy: number, qz: number): number {
     }
     const edge = Math.abs(dz) > bw - (HI ? 0.03 : 0.035);
     if (edge) PICK_T = dz > 0 ? 0.1 : -0.12;
-    if (HI && !edge && Math.abs(Math.abs(dz) - (bw - 0.045)) < 0.012 && ((qx * 30 + 50) % 1) < 0.5)
+    if (HI && !edge && Math.abs(Math.abs(dz) - (bw - 0.045)) < 0.012 && (qx * 30 + 50) % 1 < 0.5)
       PICK_T = 0.16;
     return P_LEATH;
   }
@@ -1671,7 +1669,6 @@ function hatParts(out: PartF[], c: Ctx): void {
   });
   const gc = h.hat([0, ly + 1.6, LAMP_Z]);
   LAMP_AT = gc;
-  LAMP_DIR = h.hdir([0, 1, 0]);
   const on = o.lamp > 0.05;
   out.push({
     c: gc,
@@ -1692,7 +1689,11 @@ function heapParts(out: PartF[], c: Ctx): void {
   const vis = o.heap;
   const g = 0.45 + 0.55 * o.hp;
   const tex = (qx: number, qy: number, qz: number) => {
-    const n = hash(Math.floor((qx + 2) * (HI ? 7 : 3.5)), Math.floor((qz + qy + 4) * (HI ? 6 : 3)), 5);
+    const n = hash(
+      Math.floor((qx + 2) * (HI ? 7 : 3.5)),
+      Math.floor((qz + qy + 4) * (HI ? 6 : 3)),
+      5,
+    );
     return n < 0.28 ? -0.1 : n > 0.82 ? 0.07 : 0;
   };
   out.push({
@@ -1941,7 +1942,11 @@ function oreDraw(f: Frame, c: V3, vis: number): void {
         pal = P_ROCK;
         const l = (-dx - dy) / (2.4 * s);
         tn = 5 + (l > 0.35 ? 1 : l < -0.4 ? -2 : l < 0 ? -1 : 0);
-        const n = hash(Math.floor(dx / Math.max(1, s * 0.8)), Math.floor(dy / Math.max(1, s * 0.8)), 9);
+        const n = hash(
+          Math.floor(dx / Math.max(1, s * 0.8)),
+          Math.floor(dy / Math.max(1, s * 0.8)),
+          9,
+        );
         if (n > 0.86) {
           pal = P_ORE;
           tn = 5;
@@ -2366,8 +2371,7 @@ export function moleFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   rimLight(
     f,
     PAL,
-    (pl) =>
-      pl !== P_MOUTH && pl !== P_GLASS && pl !== P_LIT && pl !== P_ORE && pl !== P_CLAW,
+    (pl) => pl !== P_MOUTH && pl !== P_GLASS && pl !== P_LIT && pl !== P_ORE && pl !== P_CLAW,
   );
   lightPool(f, c);
   if (HI) softBands(f);
