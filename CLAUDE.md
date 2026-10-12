@@ -92,6 +92,7 @@ Release history (full former texts of the rules) lives in `.claude/archive/*.md`
 | «Каторга» economy, shop | `economy.md` |
 | Forge, pickaxes, rift, mine field | `forge-mine.md` |
 | Enchantment books, chests | `books-chests.md` |
+| Pixel props: chests / books / picks (code-drawn strips, `PxStrip`) | `props-chests.md`, `props-books.md`, `props-picks.md` |
 | Pets, eggs, ink drawing | `pets.md` |
 | Mine critters, risk game | `critters.md` |
 | Yard: events, trader | `yard.md` |

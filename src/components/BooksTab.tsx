@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import { GxIcon, GxModal } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { PickArt, RarityName, rarityVars } from '@/components/PickArt';
+import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
 import { PickIcon, TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import { rarityOf } from '@/lib/rarity';
@@ -32,6 +33,7 @@ import {
   tierOfLevel,
 } from '@/lib/books';
 import type { Book, BookTier } from '@/lib/books';
+import { bookIdleBob } from '@/lib/props-pixel/books-idle';
 import {
   bookTitle,
   ENCHANT_TOGGLE,
@@ -54,6 +56,9 @@ import { flashFrame } from '@/lib/juice';
 import { registerEscape } from '@/lib/escape-stack';
 import {
   caseTick,
+  chestLand,
+  chestLatch,
+  chestOpen,
   forgeReveal,
   forgeStrike,
   primeAudio,
@@ -92,44 +97,116 @@ export const TIER_RARITY: Record<BookTier, number> = { simple: 0, rare: 2, epic:
 
 const rarityOfLevel = (lvl: number) => TIER_RARITY[tierOfLevel(lvl)];
 
+/** Точка якоря полосы книги (проценты рамки) → CSS-пиксели в квадрате `size`. */
+function bookAnchor(name: string, size: number, key: string): [number, number] | null {
+  const fo = pxFitOf('books', name, size);
+  const a = fo?.st.anchors?.[key];
+  if (!fo || !a) return null;
+  const o = (size - fo.fit.s) / 2;
+  return [o + (a[0] / 100) * fo.fit.s, o + (a[1] / 100) * fo.fit.s];
+}
+
 /**
- * Книга: обложка яруса (3D-рендер, scripts/books-render) и знак чары
- * тиснением поверх. Без `book` — загадочная книга Чародея: знак «?».
+ * Знак чары в медальоне: квадрат 100×100 матрицей ложится на медальон с тем
+ * же поворотом крышки (якоря `glyph`, `glyphX` — край вправо, `glyphY` — вверх).
+ */
+function glyphStyle(name: string, size: number): CSSProperties | null {
+  const c = bookAnchor(name, size, 'glyph');
+  const x = bookAnchor(name, size, 'glyphX');
+  const y = bookAnchor(name, size, 'glyphY');
+  if (!c || !x || !y) return null;
+  const m = [x[0] - c[0], x[1] - c[1], c[0] - y[0], c[1] - y[1]].map((v) => (v / 50).toFixed(4));
+  return { left: c[0] - 50, top: c[1] - 50, transform: `matrix(${m.join(',')},0,0)` };
+}
+
+/** Знак чары (или «?» загадочной книги) — маска иконки в медальоне. */
+function BookGlyph({ book }: { book?: Pick<Book, 'id' | 'lvl'> }) {
+  return book ? (
+    <i
+      className="pbook__glyph"
+      style={{ ['--gx-icon' as string]: `url(/ui/icons/${ENCH_ICON[book.id]}.svg)` }}
+    />
+  ) : (
+    <b className="pbook__q">?</b>
+  );
+}
+
+/**
+ * Книга — пиксельная полоса (`lib/props-pixel/books.ts`): `still-<ярус>` на
+ * полке, `idle-<ярус>` (`live`, по умолчанию при `glow`) — парит и бликует.
+ * Знак чары лежит поверх в медальоне и покачивается с книгой кадр в кадр
+ * (`bookIdleBob`). Без `book` — загадочная книга Чародея: знак «?».
  */
 export function BookArt({
   book,
   tier,
   size = 64,
   glow = false,
+  live,
 }: {
   book?: Pick<Book, 'id' | 'lvl'>;
   tier?: BookTier;
   size?: number;
   glow?: boolean;
+  live?: boolean;
 }) {
   const t = book ? tierOfLevel(book.lvl) : (tier ?? 'simple');
   const r = TIER_RARITY[t];
+  const anim = live ?? glow;
+  const name = `${anim ? 'idle' : 'still'}-${t}`;
+  const gs = glyphStyle(name, size);
+  const bob = useRef<HTMLSpanElement>(null);
+
+  // Знак едет с книгой: тот же кадр полосы, что у `PxStrip` (часы от монтирования).
+  useEffect(() => {
+    const fo = anim && !reduceMotion() ? pxFitOf('books', name, size) : null;
+    if (!fo) return undefined;
+    const { st, fit, box } = fo;
+    const k = fit.s / box;
+    const scale = box / BOOK_BOX;
+    const t0 = performance.now();
+    let cur = -1;
+    let raf = requestAnimationFrame(function step(now) {
+      const i = Math.floor(((now - t0) / 1000) * st.fps) % st.n;
+      if (i !== cur && bob.current) {
+        cur = i;
+        bob.current.style.transform = `translateY(${bookIdleBob(t, i, st.n, scale) * k}px)`;
+      }
+      raf = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [anim, name, size, t]);
+
   return (
     <span
       className={`pbook t-${t}${glow ? ' is-glow' : ''}`}
       style={{ width: size, height: size, ...rarityVars(r) } as CSSProperties}
       aria-hidden="true"
     >
-      <img src={`/ui/books/${t}.webp`} alt="" draggable={false} />
-      <span className="pbook__emboss">
-        {book ? (
-          <i
-            className="pbook__glyph"
-            style={{ ['--gx-icon' as string]: `url(/ui/icons/${ENCH_ICON[book.id]}.svg)` }}
-          />
-        ) : (
-          <b className="pbook__q" style={{ fontSize: Math.round(size * 0.2) }}>
-            ?
-          </b>
+      {/* Своя рамка `size` по центру: CSS может ужать `.pbook` (ячейка инвентаря), знак не съедет. */}
+      <span className="pbook__in" style={{ width: size, height: size }}>
+        <PxStrip set="books" name={name} size={size} mode={anim ? 'loop' : 'still'} />
+        {gs && (
+          <span className="pbook__bob" ref={bob}>
+            <span className="pbook__emboss" style={gs}>
+              <BookGlyph book={book} />
+            </span>
+          </span>
         )}
       </span>
     </span>
   );
+}
+
+/** Рамка малой полосы книг (пиксели рисунка) — покачивание считается в ней. */
+const BOOK_BOX = 48;
+/** Сцены книг: сторона рамки (CSS) — у крупной полосы (112) целый масштаб на 2× и 3×. */
+const REVEAL_SIZE = 170;
+const APPLY_SIZE = 112;
+
+/** Подгрузить полосу открытия заранее — по нажатию «Купить» / «Склеить». */
+function preloadBookReveal(tier: BookTier): void {
+  void preloadPx('books', `reveal-${tier}`, REVEAL_SIZE);
 }
 
 /** Пыль чар: фиолетовая искра. */
@@ -192,6 +269,7 @@ export function BooksTab() {
     const book = buy(tier);
     if (!book) return;
     uiBuy();
+    preloadBookReveal(tierOfLevel(book.lvl));
     setScene({ kind: 'buy', book, tier });
   };
 
@@ -289,9 +367,10 @@ export function BooksTab() {
                 className={`pbk-tier t-${t.id}${can ? '' : ' is-no'}`}
                 aria-disabled={!can}
                 style={rarityVars(TIER_RARITY[t.id])}
+                onPointerDown={() => can && preloadBookReveal(t.id)}
                 onClick={() => onBuy(t.id)}
               >
-                <BookArt tier={t.id} size={58} glow={can} />
+                <BookArt tier={t.id} size={56} glow={can} />
                 <b>{t.name}</b>
                 <i>
                   {ROMAN[t.lvl[0] - 1]}–{ROMAN[t.lvl[1] - 1]} · {t.chance[0]}–{t.chance[1]}%
@@ -524,6 +603,11 @@ function BookSheet({
       uiError();
       return;
     }
+    void preloadPx(
+      'books',
+      `${res.ok ? 'apply-ok' : 'apply-burn'}-${tierOfLevel(res.book.lvl)}`,
+      APPLY_SIZE,
+    );
     onScene({
       kind: 'apply',
       book: res.book,
@@ -629,6 +713,7 @@ function BookSheet({
               const from = b;
               const got = anvil(i, mate);
               if (!got) return;
+              preloadBookReveal(tierOfLevel(got.lvl));
               onScene({ kind: 'anvil', book: got, from });
             }}
           >
@@ -660,7 +745,13 @@ function BookSheet({
 // Сцены.
 // ---------------------------------------------------------------------------
 
-/** Покупка у Чародея и наковальня: книга дрожит, вспышка, проявление. */
+/**
+ * Покупка у Чародея и наковальня. Книга — полоса `reveal-<ярус>`: падает,
+ * вращаясь, садится, щёлкает застёжка, раскрывается, свет из страниц; на
+ * метке `peak` над разворотом зажигается знак чары, на `close` он уходит в
+ * страницы, последний кадр — книга в покое (её сменяет `BookArt` кадр в кадр).
+ * На наковальне сперва сходятся две книги-источника под удары молота.
+ */
 function RevealScene({
   scene,
   onDone,
@@ -669,11 +760,14 @@ function RevealScene({
   onDone: () => void;
 }) {
   const b = scene.book;
+  const t = tierOfLevel(b.lvl);
   const r = rarityOfLevel(b.lvl);
+  const strip = `reveal-${t}`;
   const slow = b.lvl >= 7;
-  const [phase, setPhase] = useState<'build' | 'flash' | 'show'>(() =>
-    reduceMotion() ? 'show' : 'build',
+  const [phase, setPhase] = useState<'build' | 'play' | 'show'>(() =>
+    reduceMotion() ? 'show' : scene.kind === 'anvil' ? 'build' : 'play',
   );
+  const [sigil, setSigil] = useState<'' | 'up' | 'sink'>('');
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
@@ -681,13 +775,17 @@ function RevealScene({
 
   useEffect(() => registerEscape(() => doneRef.current()), []);
 
-  const reveal = () => {
+  const show = () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
+    setSigil('');
     setPhase('show');
+  };
+  // Тап до конца — сразу итог, со звуком исхода.
+  const skip = () => {
     forgeReveal(r);
     notifySuccess();
-    if (r >= 3) burstConfetti(30 + 20 * r, [rarityOf(r).color, rarityOf(r).light, '#ffffff']);
+    show();
   };
 
   useEffect(() => {
@@ -695,21 +793,19 @@ function RevealScene({
       forgeReveal(r);
       return undefined;
     }
+    void preloadPx('books', strip, REVEAL_SIZE);
+    if (scene.kind !== 'anvil') return undefined;
     const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
     const beats = slow ? 5 : 3;
-    const step = scene.kind === 'anvil' ? 360 : 240;
     for (let k = 0; k < beats; k++)
-      at(k * step, () => {
-        if (scene.kind === 'anvil') forgeStrike(k);
-        else caseTick();
+      at(k * 360, () => {
+        forgeStrike(k);
         tapLight();
       });
-    const tFlash = beats * step + 80;
-    at(tFlash, () => {
-      setPhase('flash');
+    at(beats * 360 + 80, () => {
       flashFrame(slow ? 'mega' : 'big');
+      setPhase('play');
     });
-    at(tFlash + 150, reveal);
     return () => {
       timers.current.forEach(clearTimeout);
       timers.current = [];
@@ -718,13 +814,41 @@ function RevealScene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const onMark = (m: string) => {
+    if (m === 'land') {
+      chestLand();
+      tapMedium();
+    } else if (m === 'snap') {
+      chestLatch();
+      tapLight();
+    } else if (m === 'open') {
+      chestOpen();
+    } else if (m === 'peak') {
+      setSigil('up');
+      forgeReveal(r);
+      notifySuccess();
+      flashFrame(r >= 4 ? 'mega' : r >= 2 ? 'big' : 'small');
+      if (r >= 3) burstConfetti(30 + 20 * r, [rarityOf(r).color, rarityOf(r).light, '#ffffff']);
+    } else if (m === 'close') {
+      setSigil('sink');
+    } else if (m === 'lock') {
+      softChime(Math.min(4, r));
+      tapLight();
+    }
+  };
+
+  const fo = pxFitOf('books', strip, REVEAL_SIZE);
+  const rise = bookAnchor(strip, REVEAL_SIZE, 'rise');
+  const meta = fo?.st;
+  // Знак уходит в разворот за время от `close` до `lock`.
+  const sinkMs = meta?.marks ? ((meta.marks.lock - meta.marks.close) / meta.fps) * 1000 : 400;
   const shown = phase === 'show';
   return (
     <div
-      className={`pbks is-${phase} is-${scene.kind}${slow ? ' is-slow' : ''}`}
+      className={`pbks is-${phase} is-${scene.kind}${slow ? ' is-slow' : ''}${sigil === 'up' ? ' is-peak' : ''}`}
       style={rarityVars(r)}
       onClick={() => {
-        if (!shown) reveal();
+        if (!shown) skip();
         else {
           tapLight();
           onDone();
@@ -733,35 +857,57 @@ function RevealScene({
     >
       <div className="pbks__stage">
         <i className="pbks__burst" aria-hidden="true" />
-        {!shown &&
-          (scene.kind === 'anvil' ? (
-            <div className="pbks__pair">
-              <span className="is-l">
-                <BookArt book={scene.from} size={120} />
-              </span>
-              <span className="is-r">
-                <BookArt book={scene.from} size={120} />
-              </span>
-            </div>
-          ) : (
-            <span className="pbks__shake">
-              <BookArt tier={scene.tier} size={170} glow />
+        {phase === 'build' && scene.kind === 'anvil' && (
+          <div className="pbks__pair">
+            <span className="is-l">
+              <BookArt book={scene.from} size={120} />
             </span>
-          ))}
+            <span className="is-r">
+              <BookArt book={scene.from} size={120} />
+            </span>
+          </div>
+        )}
+        {phase === 'play' && (
+          <span className="pbks__px" style={{ width: REVEAL_SIZE, height: REVEAL_SIZE }}>
+            <PxStrip
+              set="books"
+              name={strip}
+              size={REVEAL_SIZE}
+              mode="once"
+              onMark={onMark}
+              onEnd={show}
+            />
+            {sigil && rise && (
+              <span
+                className={`pbks__sigil t-${t} is-${sigil}`}
+                style={
+                  {
+                    left: rise[0],
+                    top: rise[1],
+                    '--sink-y': `${Math.round(REVEAL_SIZE * 0.2)}px`,
+                    '--sink-ms': `${Math.round(sinkMs)}ms`,
+                  } as CSSProperties
+                }
+                aria-hidden="true"
+              >
+                <BookGlyph book={b} />
+              </span>
+            )}
+          </span>
+        )}
         {shown && (
           <span className="pbks__book">
-            <BookArt book={b} size={170} glow />
+            <BookArt book={b} size={REVEAL_SIZE} glow />
           </span>
         )}
       </div>
-      {shown && (
-        <div className="pbks__text">
-          <RarityName rarity={r}>{bookTitle(b)}</RarityName>
-          <span className="pbks__fx">{effectOf(b.id, b.lvl, p.pickStars)}</span>
-          <span className={`pbks__ch is-${chanceTone(b.chance)}`}>шанс вписать {b.chance}%</span>
-          <span className="fgr__cta">На полку</span>
-        </div>
-      )}
+      {/* Подпись занимает место с первого кадра: иначе на смене полосы книга прыгнула бы вверх. */}
+      <div className="pbks__text" aria-hidden={!shown}>
+        <RarityName rarity={r}>{bookTitle(b)}</RarityName>
+        <span className="pbks__fx">{effectOf(b.id, b.lvl, p.pickStars)}</span>
+        <span className={`pbks__ch is-${chanceTone(b.chance)}`}>шанс вписать {b.chance}%</span>
+        <span className="fgr__cta">На полку</span>
+      </div>
     </div>
   );
 }
@@ -770,7 +916,9 @@ function RevealScene({
  * Вписывание: книга над киркой, стрелка бежит по кругу и встаёт — в
  * зелёном секторе (он ровно `chance` процентов круга) или в красном.
  * Исход уже записан стором; сцена только показывает его честно: угол
- * остановки берётся внутри нужного сектора.
+ * остановки берётся внутри нужного сектора. Потом полоса книги: удача —
+ * `apply-ok-<ярус>` (раскрылась, листы светом летят в кирку: якорь `to`,
+ * метка `hit`), сгорела — `apply-burn-<ярус>` (огонь с краёв, пепел).
  */
 function ApplyScene({
   scene,
@@ -782,13 +930,20 @@ function ApplyScene({
   onDone: () => void;
 }) {
   const b = scene.book;
+  const t = tierOfLevel(b.lvl);
   const r = rarityOfLevel(b.lvl);
+  const strip = `${scene.ok ? 'apply-ok' : 'apply-burn'}-${t}`;
   const [phase, setPhase] = useState<'spin' | 'ok' | 'fail'>(() =>
     reduceMotion() ? (scene.ok ? 'ok' : 'fail') : 'spin',
   );
+  // Удача: лучи дошли до кирки. Сгорела: книга рассыпалась. Тогда же — подпись.
+  const [hit, setHit] = useState(() => reduceMotion());
+  const [ended, setEnded] = useState(() => reduceMotion());
   const needle = useRef<HTMLSpanElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const anim = useRef<Animation | null>(null);
+  const hitRef = useRef(hit);
+  hitRef.current = hit;
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   const p = useFinanceStore((s) => s.prison);
@@ -803,17 +958,26 @@ function ApplyScene({
 
   useEffect(() => registerEscape(() => doneRef.current()), []);
 
+  const land = () => {
+    if (hitRef.current) return;
+    hitRef.current = true;
+    setHit(true);
+    if (scene.ok) {
+      tierBreak(r >= 3 ? 2 : 1);
+      forgeReveal(r);
+      flashFrame(r >= 4 ? 'mega' : 'big');
+      notifySuccess();
+      burstConfetti(40 + 15 * r, [rarityOf(r).color, rarityOf(r).light, '#ffffff']);
+    } else softThud(0.4);
+  };
+
   const settle = () => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
     anim.current?.finish();
     if (scene.ok) {
       setPhase('ok');
-      tierBreak(r >= 3 ? 2 : 1);
-      forgeReveal(r);
-      flashFrame(r >= 4 ? 'mega' : 'big');
-      notifySuccess();
-      burstConfetti(40 + 15 * r, [rarityOf(r).color, rarityOf(r).light, '#ffffff']);
+      softChime(1);
     } else {
       setPhase('fail');
       riskLose();
@@ -827,6 +991,7 @@ function ApplyScene({
       else riskLose();
       return undefined;
     }
+    void preloadPx('books', strip, APPLY_SIZE);
     const total = 2 * 360 + stopAt;
     const dur = 1700;
     try {
@@ -852,13 +1017,28 @@ function ApplyScene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const onMark = (m: string) => {
+    if (m === 'open') chestOpen();
+    else if (m === 'ignite') tapMedium();
+    else if (m === 'hit' || m === 'crumble') land();
+  };
+  const finish = () => {
+    land();
+    setEnded(true);
+  };
+
+  // Кирка встаёт так, чтобы точка `to` (куда бьют лучи) пришлась на её верхнюю треть.
+  const to = bookAnchor(`apply-ok-${t}`, APPLY_SIZE, 'to');
+  const pickTop = to ? APPLY_TOP + to[1] - PICK_SIZE * 0.36 : undefined;
   const c = Math.max(0, Math.min(100, scene.chance));
+  const told = phase !== 'spin' && hit;
   return (
     <div
-      className={`pbka is-${phase}`}
+      className={`pbka is-${phase}${hit ? ' is-hit' : ''}`}
       style={{ ...rarityVars(r), '--ch': `${c}%` } as CSSProperties}
       onClick={() => {
         if (phase === 'spin') settle();
+        else if (!ended) finish();
         else {
           tapLight();
           onDone();
@@ -874,23 +1054,35 @@ function ApplyScene({
             style={phase === 'spin' ? undefined : { transform: `rotate(${stopAt}deg)` }}
           />
         </span>
-        <span className="pbka__pick">
-          <PickArt pick={pick} size={132} fx={phase === 'ok'} />
+        <span className="pbka__pick" style={{ top: pickTop }}>
+          <PickArt pick={pick} size={PICK_SIZE} fx={phase === 'ok' && hit} />
         </span>
-        <span className="pbka__book">
-          <BookArt book={b} size={92} glow />
+        <span
+          className="pbka__book"
+          style={{ top: APPLY_TOP, width: APPLY_SIZE, height: APPLY_SIZE }}
+        >
+          {phase === 'spin' ? (
+            <BookArt book={b} size={APPLY_SIZE} glow />
+          ) : (
+            !ended && (
+              <>
+                <PxStrip
+                  set="books"
+                  name={strip}
+                  size={APPLY_SIZE}
+                  mode="once"
+                  onMark={onMark}
+                  onEnd={finish}
+                />
+                <BookLift book={b} size={APPLY_SIZE} burn={!scene.ok} />
+              </>
+            )
+          )}
         </span>
-        {phase === 'fail' && (
-          <span className="pbka__embers" aria-hidden="true">
-            {Array.from({ length: 12 }, (_, k) => (
-              <i key={k} style={{ '--k': k } as CSSProperties} />
-            ))}
-          </span>
-        )}
       </div>
       <div className="pbka__text">
         {phase === 'spin' && <b className="pbka__odds">{c}%</b>}
-        {phase === 'ok' && (
+        {told && phase === 'ok' && (
           <>
             <RarityName rarity={r}>Вписано: {bookTitle(b)}</RarityName>
             <span className="pbks__fx">{effectOf(b.id, b.lvl, p.pickStars)}</span>
@@ -899,15 +1091,46 @@ function ApplyScene({
             )}
           </>
         )}
-        {phase === 'fail' && (
+        {told && phase === 'fail' && (
           <>
             <b className="pbka__lost">Книга сгорела</b>
             <span className="pbks__fx">кирка цела · пыль поднимет шанс</span>
           </>
         )}
-        {phase !== 'spin' && <span className="fgr__cta">Дальше</span>}
+        {told && <span className="fgr__cta">Дальше</span>}
       </div>
     </div>
+  );
+}
+
+/** Сцена вписывания: книга над киркой (верх рамки книги в сцене), сторона рамки кирки. */
+const APPLY_TOP = 42;
+const PICK_SIZE = 132;
+
+/**
+ * Знак чары в начале полосы вписывания: стоит в медальоне покоя и уходит —
+ * вверх светом (удача) или темнеет и гаснет (сгорела). Дальше книгу ведёт полоса.
+ */
+function BookLift({
+  book,
+  size,
+  burn,
+}: {
+  book: Pick<Book, 'id' | 'lvl'>;
+  size: number;
+  burn: boolean;
+}) {
+  const t = tierOfLevel(book.lvl);
+  const gs = glyphStyle(`still-${t}`, size);
+  if (!gs) return null;
+  return (
+    <span className={`pbook pbook--lift t-${t}${burn ? ' is-burn' : ''}`}>
+      <span className="pbook__bob">
+        <span className="pbook__emboss" style={gs}>
+          <BookGlyph book={book} />
+        </span>
+      </span>
+    </span>
   );
 }
 

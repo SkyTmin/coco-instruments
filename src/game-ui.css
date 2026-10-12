@@ -5652,21 +5652,31 @@ button.fg-slot {
 
 /* ==========================================================================
    Книги зачарований (v2.70) — components/BooksTab.tsx.
-   Обложка — 3D-рендер яруса (public/ui/books, scripts/books-render), знак
-   чары — маска game-icons в медальоне. Центр медальона на картинке
-   (48,2% · 50,6%, радиус 14,5%) печатает run.mjs рендера.
+   Книга — пиксельная полоса (`lib/props-pixel/books.ts`, `PxStrip`), знак
+   чары — маска game-icons в медальоне поверх: квадрат 100×100 ложится на
+   медальон матрицей по якорям полосы (`glyph`, `glyphX`, `glyphY`), у живой
+   книги `.pbook__bob` покачивается с ней кадр в кадр (`bookIdleBob`).
    ========================================================================== */
 .pbook {
   position: relative;
   display: inline-block;
   flex: none;
 }
-.pbook > img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  user-select: none;
+.pbook__in {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.pbook__in > .pxs {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+/* Знак в начале полосы вписывания: над той же рамкой, что и полоса. */
+.pbook--lift {
+  position: absolute;
+  inset: 0;
 }
 /* Свечение цвета яруса — статичное, под книгой. */
 .pbook.is-glow::before {
@@ -5675,31 +5685,34 @@ button.fg-slot {
   inset: 4%;
   border-radius: 30%;
   background: radial-gradient(closest-side, var(--rc), transparent 75%);
-  opacity: 0.55;
+  opacity: 0.45;
 }
 .pbook.t-simple.is-glow::before {
-  opacity: 0.25;
+  opacity: 0.2;
+}
+.pbook__bob {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 .pbook__emboss {
   position: absolute;
-  left: 33.7%;
-  top: 36.1%;
-  width: 29%;
-  height: 29%;
+  width: 100px;
+  height: 100px;
   display: grid;
   place-items: center;
   /* Тиснение: тень снизу и светлый край сверху — один раз, без анимации. */
-  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.25));
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.75)) drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.22));
 }
 .pbook__glyph {
   width: 100%;
   height: 100%;
-  -webkit-mask: var(--gx-icon) center / 82% no-repeat;
-  mask: var(--gx-icon) center / 82% no-repeat;
+  -webkit-mask: var(--gx-icon) center / 70% no-repeat;
+  mask: var(--gx-icon) center / 70% no-repeat;
   background: linear-gradient(180deg, #fff3c4, #f0b83c 55%, #9a6412);
 }
 .pbook.t-simple .pbook__glyph {
-  background: linear-gradient(180deg, #f6d2a0, #c0833e 60%, #6e4418);
+  background: linear-gradient(180deg, #ffe8bc, #dba05a 60%, #8a5522);
 }
 .pbook.t-rare .pbook__glyph {
   background: linear-gradient(180deg, #ffffff, #c9d6e4 55%, #6d7f94);
@@ -5711,10 +5724,11 @@ button.fg-slot {
   background: linear-gradient(180deg, #ffffff, #ffe08a 45%, #ff9d2e);
 }
 .pbook.t-legend .pbook__emboss {
-  filter: drop-shadow(0 0 3px rgba(255, 200, 80, 0.8)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.7));
+  filter: drop-shadow(0 0 6px rgba(255, 200, 80, 0.8)) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.7));
 }
 .pbook__q {
   font-family: 'GxRubik', system-ui, sans-serif;
+  font-size: 64px;
   font-weight: 900;
   line-height: 1;
   color: #ffe6a8;
@@ -6427,7 +6441,7 @@ button.fg-slot {
   opacity: 0.25;
   transition: opacity 260ms ease-out;
 }
-.pbks.is-flash .pbks__burst,
+.pbks.is-peak .pbks__burst,
 .pbka.is-ok .pbks__burst {
   opacity: 0.6;
 }
@@ -6436,36 +6450,6 @@ button.fg-slot {
 }
 .pbka.is-fail .pbks__burst {
   opacity: 0.12;
-}
-/* Книга дрожит всё сильнее — ярус виден, чара ещё нет. */
-.pbks__shake {
-  animation: pbk-shake 720ms ease-in both;
-}
-.pbks.is-slow .pbks__shake {
-  animation-duration: 1200ms;
-}
-@keyframes pbk-shake {
-  0% {
-    transform: scale(0.8) rotate(0deg);
-  }
-  20% {
-    transform: scale(0.95) rotate(-3deg);
-  }
-  40% {
-    transform: scale(1) rotate(4deg);
-  }
-  60% {
-    transform: scale(1.03) rotate(-6deg);
-  }
-  80% {
-    transform: scale(1.06) rotate(7deg);
-  }
-  100% {
-    transform: scale(1.1) rotate(0deg);
-  }
-}
-.pbks.is-flash .pbks__shake {
-  opacity: 0;
 }
 .pbks__pair {
   position: relative;
@@ -6494,8 +6478,73 @@ button.fg-slot {
     transform: translateX(-60px) rotate(-8deg);
   }
 }
-.pbks__book {
-  animation: fgr-reveal 520ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+/* Полоса открытия: рамка `REVEAL_SIZE`, над ней знак чары. */
+.pbks__px {
+  position: relative;
+  display: block;
+}
+.pbks__px > .pxs,
+.pbka__book > .pxs {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+/* Знак над разворотом (якорь `rise`): вспыхивает на `peak`, на `close` уходит в страницы. */
+.pbks__sigil {
+  position: absolute;
+  width: 36%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 6px var(--rc));
+  pointer-events: none;
+  animation: pbk-sigil 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+/* Тёмный круг под знаком: иначе светлый знак тонет в столбе света и белых страницах. */
+.pbks__sigil::before {
+  content: '';
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(14, 6, 22, 0.88) 55%, rgba(14, 6, 22, 0) 100%);
+}
+.pbks__sigil .pbook__glyph {
+  -webkit-mask-size: 100%;
+  mask-size: 100%;
+  background: linear-gradient(180deg, #ffffff, var(--rl) 55%, var(--rc));
+}
+.pbks__sigil .pbook__q {
+  font-size: 52px;
+  color: #fff;
+}
+.pbks__sigil.is-sink {
+  animation: none;
+  transform: translate(-50%, calc(-50% + var(--sink-y))) scale(0.2);
+  opacity: 0;
+  transition:
+    transform var(--sink-ms) cubic-bezier(0.5, 0, 0.9, 0.4),
+    opacity var(--sink-ms) ease-in;
+}
+@keyframes pbk-sigil {
+  from {
+    transform: translate(-50%, -20%) scale(0.3);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+/* Итог: книга та же, что в последнем кадре полосы, знак проступает в медальоне. */
+.pbks.is-show .pbook__emboss {
+  animation: pbk-glyph-in 520ms ease-out both;
+}
+@keyframes pbk-glyph-in {
+  from {
+    opacity: 0;
+  }
 }
 .pbks__text,
 .pbka__text {
@@ -6507,6 +6556,15 @@ button.fg-slot {
   padding: 0 16px;
   text-align: center;
   animation: fgr-text 380ms 120ms ease-out both;
+}
+/* Подпись вписывания меняется на метке `hit` — места под самую длинную хватает сразу. */
+.pbka__text {
+  min-height: 124px;
+}
+/* Подпись итога ждёт своей фазы невидимой (место под неё занято сразу). */
+.pbks:not(.is-show) .pbks__text {
+  visibility: hidden;
+  animation: none;
 }
 .pbks__text .rname,
 .pbka__text .rname {
@@ -6569,29 +6627,28 @@ button.fg-slot {
   border-top: 22px solid #fff4d0;
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6));
 }
+/* Книга (рамка 112) в середине круга, кирка — под точкой `to` полосы (верх задаёт сцена). */
 .pbka__book {
   position: absolute;
   left: 50%;
-  top: 52px;
-  margin-left: -46px;
+  top: 42px;
+  margin-left: -56px;
 }
 .pbka__pick {
   position: absolute;
   left: 50%;
-  bottom: 0;
+  top: 198px;
   margin-left: -66px;
 }
-.pbka.is-ok .pbka__book {
-  animation: pbk-into 560ms cubic-bezier(0.55, 0, 0.85, 0.4) both;
+/* Лучи дошли до кирки (метка `hit`): кирка вздрагивает и вспыхивает. */
+.pbka.is-ok.is-hit .pbka__pick {
+  animation: pbk-pick-hit 520ms ease-out;
 }
-@keyframes pbk-into {
-  to {
-    transform: translateY(170px) scale(0.2);
-    opacity: 0;
+@keyframes pbk-pick-hit {
+  30% {
+    transform: scale(1.1);
+    filter: brightness(1.7);
   }
-}
-.pbka.is-ok .pbka__pick {
-  animation: fgr-reveal 520ms 480ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
 }
 .pbka.is-ok .pbka__dial,
 .pbka.is-ok .pbka__needle {
@@ -6603,63 +6660,24 @@ button.fg-slot {
     transform: scale(1.25);
   }
 }
-/* Сгорела: книга чернеет и осыпается, искры летят вверх. */
-.pbka.is-fail .pbka__book {
-  animation: pbk-burn 900ms ease-in both;
+/* Знак чары в начале полосы: уходит светом вверх (удача) или темнеет (сгорела). */
+.pbook--lift .pbook__bob {
+  animation: pbk-lift 520ms ease-in both;
 }
-.pbka__book::after {
-  content: '';
-  position: absolute;
-  inset: 8%;
-  border-radius: 12%;
-  background: radial-gradient(closest-side, #1a0a04 30%, #ff5a1a 70%, transparent);
-  opacity: 0;
-  pointer-events: none;
+.pbook--lift.is-burn .pbook__bob {
+  animation: pbk-lift-burn 420ms ease-in both;
 }
-.pbka.is-fail .pbka__book::after {
-  animation: pbk-char 900ms ease-in both;
-}
-@keyframes pbk-burn {
-  60% {
-    transform: scale(1.04) rotate(-3deg);
-    opacity: 1;
-  }
+@keyframes pbk-lift {
   to {
-    transform: translateY(40px) scale(0.6) rotate(8deg);
+    transform: translateY(-16%) scale(1.25);
     opacity: 0;
+    filter: brightness(2);
   }
 }
-@keyframes pbk-char {
+@keyframes pbk-lift-burn {
   to {
-    opacity: 1;
-  }
-}
-.pbka__embers {
-  position: absolute;
-  left: 50%;
-  top: 100px;
-  width: 0;
-  height: 0;
-}
-.pbka__embers i {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 1px;
-  background: #ffb040;
-  box-shadow: 0 0 6px #ff7a1a;
-  opacity: 0;
-  animation: pbk-ember 1100ms calc(var(--k) * 45ms) ease-out both;
-  --dx: calc((var(--k) - 5.5) * 9px);
-}
-@keyframes pbk-ember {
-  0% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1);
-  }
-  100% {
     opacity: 0;
-    transform: translate(var(--dx), -140px) scale(0.3) rotate(160deg);
+    filter: brightness(0.3);
   }
 }
 .pbka__odds {
@@ -6677,12 +6695,11 @@ button.fg-slot {
   .pbk-mage__lid,
   .pbk-mage__fire,
   .pbk-mage__flare,
-  .pbks__shake,
   .pbks__pair span,
-  .pbks__book,
-  .pbka__book,
-  .pbka.is-ok .pbka__pick,
-  .pbka__embers i,
+  .pbks__sigil,
+  .pbks.is-show .pbook__emboss,
+  .pbka.is-ok.is-hit .pbka__pick,
+  .pbook--lift .pbook__bob,
   .pbk-book.is-fresh,
   .pbks__text,
   .pbka__text {
