@@ -320,6 +320,8 @@ export interface Pose {
   wRz: number;
   /** Ладони: 0 — к зрителю (висят, роют), 1 — вверх (держат). */
   palm: number;
+  /** Хлопок: лопаты пальцами вверх, ладонями друг к другу (0…1). */
+  pray: number;
   /** Ладони поворачиваются вокруг предплечья (лапы разминаются). */
   flexL: number;
   flexR: number;
@@ -389,6 +391,7 @@ const REST: Pose = {
   wRy: 0,
   wRz: 0,
   palm: 0,
+  pray: 0,
   flexL: 0,
   flexR: 0,
   claw: 0,
@@ -454,8 +457,8 @@ const STAND: Plan = {
   hip: [3.6, 0.6, 4.4],
   foot: [4.2, 1.4, 0],
   sole: 0,
-  body: [0, 0, 9.4],
-  chest: [0, 0.6, 16.8],
+  body: [0, 0, 10.4],
+  chest: [0, 0.9, 18.2],
   sh: [7.0, 1.8, 12.8],
   paw: [10.2, 4.8, 8.8],
   head: [0, 1.4, 22.6],
@@ -467,12 +470,12 @@ const SIT: Plan = {
   body: [0, 0.2, 8.2],
   chest: [0, 1.4, 14.2],
   sh: [6.2, 2.6, 12.2],
-  paw: [4.0, 8.6, 6.8],
-  head: [0, 3.0, 19.0],
+  paw: [5.0, 8.2, 5.0],
+  head: [0, 2.6, 19.4],
 };
 /** Радиусы груши: брюхо и верх (одна деталь — шеи не видно), голова. */
-const BODY_R: V3 = [9.2, 7.6, 9.2];
-const CHEST_R: V3 = [7.6, 6.6, 6.6];
+const BODY_R: V3 = [9.2, 7.6, 10.8];
+const CHEST_R: V3 = [7.0, 6.2, 5.4];
 /** Длины костей руки и ноги. */
 const ARM1 = 3.1;
 const ARM2 = 3.0;
@@ -590,7 +593,7 @@ function happyPose(t: number): Pose {
   const env = 1 - clamp01((t - 0.86) / (T - 0.86));
   o.z = 2.6 * up;
   o.cz = 1.0 * neg(rise);
-  o.sq = 0.08 * neg(rise) - 0.04 * up;
+  o.sq = 0.08 * neg(rise) - 0.025 * up;
   o.fLz = 0.7 * up;
   o.fRz = 0.7 * up;
   // Лапы: врозь → хлоп перед грудью → врозь → хлоп → на место.
@@ -611,14 +614,14 @@ function happyPose(t: number): Pose {
     [0.8, 1],
     [1.02, 0, 's'],
   ]);
-  const ax = -6.0 * pos(shut) + 1.6 * neg(shut);
+  const ax = -7.4 * pos(shut) + 1.6 * neg(shut);
   o.aRx = ax;
   o.aLx = ax;
-  o.aRy = 2.8 * lift;
-  o.aLy = 2.8 * lift;
-  o.aRz = 6.2 * lift;
-  o.aLz = 6.2 * lift;
-  o.palm = clamp01(pos(shut) * 1.2);
+  o.aRy = 3.4 * lift;
+  o.aLy = 3.4 * lift;
+  o.aRz = 2.2 * lift;
+  o.aLz = 2.2 * lift;
+  o.pray = clamp01(lift * 1.1);
   o.clap = -1;
   for (const c of CLAPS) if (t >= c && t < c + 0.16) o.clap = (t - c) / 0.16;
   o.nod = -0.12 * up;
@@ -865,8 +868,8 @@ function attackPose(t: number): Pose {
   o.grin = REST.grin * (1 - bump(t, 0, T));
   // Лапы: вверх-назад-наружу → вперёд к зрителю когтями → накрест вниз → на место.
   const W: V3 = [1.6, -3.0, 9.6];
-  const S: V3 = [-2.6, 7.4, 4.6];
-  const F: V3 = [-5.0, 4.4, -2.2];
+  const S: V3 = [-3.2, 7.2, 8.2];
+  const F: V3 = [-5.4, 4.6, 0.6];
   const arm = (j: number, d: number): number =>
     kf(t - d, [
       [0, 0],
@@ -915,11 +918,11 @@ function sleepPose(t: number): Pose {
   o.chest = br;
   o.cz = -0.25 * br;
   o.bow = 0.12;
-  o.nod = 0.08 + 0.04 * br;
+  o.nod = 0.04 + 0.03 * br;
   o.tilt = 0.14 - 0.02 * br;
   o.hz = 0.15 * br;
-  o.hatNod = 0.5;
-  o.hatUp = -0.6;
+  o.hatNod = 0.34;
+  o.hatUp = -0.5;
   o.hatTilt = -0.1;
   o.jaw = 0.12 * (1 - br);
   o.sniff = 0.3 * bump(t, 2.1, 2.3);
@@ -1131,7 +1134,7 @@ export function lagOf(a: Anim, t: number): Lag {
   const r: Lag = {
     headX: lagged((tt) => sk(tt).head[0], 3.2, 0.32, (L0?.headX ?? 0) - S0.head[0], 1),
     headZ: lagged((tt) => sk(tt).head[2], 3.2, 0.32, (L0?.headZ ?? 0) - S0.head[2], 0.8),
-    hatZ: delta((tt) => sk(tt).head[2], 3.4, 0.2, -0.3, 1.8, L0?.hatZ ?? 0),
+    hatZ: delta((tt) => sk(tt).head[2], 3.4, 0.2, -0.3, 0.9, L0?.hatZ ?? 0),
     hatR: delta((tt) => sk(tt).head[0] + 6 * P(tt).tilt, 2.6, 0.2, -1.8, 1.8, L0?.hatR ?? 0),
     pouch: delta((tt) => sk(tt).bc[0], 2.0, 0.16, -1.6, 1.6, L0?.pouch ?? 0),
   };
@@ -1259,10 +1262,18 @@ function toes(n: number) {
   };
 }
 
-/** Бархат на крупной: мелкая редкая рябь (по точке на части — не «кипит»). */
+/**
+ * Бархат на крупной: короткие штрихи ворса сверху вниз рядами со сдвигом и
+ * редкая рябь (по точке на части — не «кипит»).
+ */
 function velvet(qx: number, qy: number, qz: number): number {
+  const r = Math.floor((qz + 2) * 8);
+  const u = (qx + 2) * 9 + (r & 1) * 0.5;
+  const fu = u - Math.floor(u);
+  const fv = (qz + 2) * 8 - r;
+  const tick = fu < 0.2 && fv > 0.3 ? -0.06 : fu > 0.55 && fu < 0.7 && fv < 0.35 ? 0.045 : 0;
   const n = hash(Math.floor((qx + 2) * 11), Math.floor((qz + 2) * 13), Math.floor((qy + 2) * 3));
-  return n < 0.12 ? -0.05 : n > 0.93 ? 0.04 : 0;
+  return tick + (n < 0.1 ? -0.04 : n > 0.94 ? 0.04 : 0);
 }
 
 function legs(out: PartF[], rods: Rod[], c: Ctx): void {
@@ -1309,7 +1320,7 @@ function legs(out: PartF[], rods: Rod[], c: Ctx): void {
  * кромкам), латунная пряжка посередине; над поясом слева в кадре — вытертое
  * светлое пятно.
  */
-const BELT_Z = -0.34;
+const BELT_Z = -0.4;
 function beltZ(qx: number): number {
   return BELT_Z - 0.06 * (1 - qx * qx);
 }
@@ -1452,10 +1463,12 @@ function arms(out: PartF[], rods: Rod[], c: Ctx): void {
     // держит руду — ладони вверх и к середине.
     const fa = norm(sub(paw, el));
     const hang = norm(lerp3([side * 0.32, 0.3, -0.9], [-side * 0.5, 0.85, 0.12], o.palm));
-    const fd = norm(add(mul(fa, 0.45), mul(hang, 0.55)));
+    const hang2 = norm(lerp3(hang, [side * 0.16, 0.35, 0.92], o.pray));
+    const fd = norm(add(mul(fa, 0.45 * (1 - o.pray)), mul(hang2, 0.55 + 0.45 * o.pray)));
     const flex = j === 0 ? o.flexL : o.flexR;
     const n0 = norm(lerp3([side * 0.42, 0.9, 0.12], [-side * 0.15, -0.1, 1], o.palm));
-    let nrm = norm(sub(n0, mul(fd, dot(n0, fd))));
+    const n1 = norm(lerp3(n0, [-side * 0.6, 0.78, 0.1], o.pray));
+    let nrm = norm(sub(n1, mul(fd, dot(n1, fd))));
     const wv0 = norm([
       nrm[1] * fd[2] - nrm[2] * fd[1],
       nrm[2] * fd[0] - nrm[0] * fd[2],
@@ -1667,6 +1680,8 @@ function hatParts(out: PartF[], c: Ctx): void {
     id: nid(),
     bias: on ? -0.55 + 0.8 * o.lamp : 0,
     noSeam: true,
+    // Блик на стекле сверху слева — видно и у погашенного.
+    tex: (qx, _qy, qz) => (qx < -0.1 && qz > 0.15 ? (on ? 0.2 : 0.5) : 0),
   });
 }
 
