@@ -61,9 +61,9 @@ export const RES: { s: Canvas; l: Canvas } = {
 
 export const FPS = 24;
 /** До разлома (с), по редкости: чем реже, тем дольше вопрос. */
-export const HATCH_WOB = [1.1, 1.3, 1.6, 2.0, 2.6, 2.9];
+export const HATCH_WOB = [1.1, 1.3, 1.6, 2.1, 2.7, 2.7];
 /** После разлома до конца полосы (куски падают и тают). */
-export const HATCH_POST = [0.8, 0.85, 0.95, 1.05, 1.15, 1.05];
+export const HATCH_POST = [0.8, 0.85, 0.95, 1.25, 1.35, 1.2];
 const IDLE_N = 48;
 const POP_N = 15;
 
@@ -165,7 +165,7 @@ const GLOW: number[] = RARITIES.slice(0, 6).map((q) => {
 });
 /** Изнанка скорлупы, освещённая изнутри светом редкости. */
 const INGLOW: number[] = RARITIES.slice(0, 6).map((q) =>
-  pal(PALS[INNER].map((c, i) => mixc(c, hx(q.light), 0.12 + i * 0.07))),
+  pal(PALS[INNER].map((c, i) => mixc(c, hx(i < 4 ? q.color : q.light), 0.2 + i * 0.05))),
 );
 const INK = hx('#120a10');
 
@@ -890,14 +890,14 @@ function shadePx(
     const pl = glowR >= 0 ? INGLOW[glowR] : INNER;
     const N = PALS[pl].length;
     // Изнанка: свет изнутри яйца сильнее света сверху.
-    const k = litTone(mul(nW, -1), N) * 0.5 + (N - 1) * (glowR >= 0 ? 0.5 : 0.25);
+    const k = litTone(mul(nW, -1), N) * 0.5 + (N - 1) * (glowR >= 0 ? 0.3 : 0.25);
     f.pal[i] = pl;
     f.tone[i] = Math.max(0, Math.min(N - 1, Math.round(k)));
     return;
   }
   if (edge) {
     f.pal[i] = glowR >= 0 ? INGLOW[glowR] : INNER;
-    f.tone[i] = 5;
+    f.tone[i] = glowR >= 0 ? 4 : 5;
     return;
   }
   // Трещина.
@@ -1191,7 +1191,9 @@ function splatShell(
     const c = sh.cen[k];
     const rel = dirWorld(P, [sm0.l[0] - c[0], sm0.l[1] - c[1], sm0.l[2] - c[2]]);
     const rot = rotV(rel, st[k].ax, st[k].an);
-    return [st[k].pos[0] + rot[0] * P.S, st[k].pos[1] + rot[1] * P.S, st[k].pos[2] + rot[2] * P.S];
+    // Тает не шахматкой: сжимается к своей середине (и темнеет ступенями ниже).
+    const sc = P.S * (st[k].vis < 1 ? Math.max(0, st[k].vis) ** 0.7 : 1);
+    return [st[k].pos[0] + rot[0] * sc, st[k].pos[1] + rot[1] * sc, st[k].pos[2] + rot[2] * sc];
   };
   for (let j = 0; j < sh.samples.length; j += 7) {
     const sm0 = sh.samples[j];
@@ -1213,7 +1215,7 @@ function splatShell(
     const px = Math.floor(ox + sx);
     const py = Math.floor(oy + sy);
     if (px < 0 || py < 0 || px >= w || py >= h) continue;
-    if (S0.vis < 1 && !dith(px, py, S0.vis)) continue;
+    if (S0.vis < 0.12) continue;
     const i = py * w + px;
     if (dz <= f.zb[i]) continue;
     const nW = rotV(dirWorld(P, sm0.n), S0.ax, S0.an);
@@ -1233,6 +1235,7 @@ function splatShell(
         );
       }
     }
+    if (S0.vis < 0.7) f.tone[i] = Math.max(0, f.tone[i] - (S0.vis < 0.4 ? 2 : 1));
   }
   return { st, lift };
 }
@@ -1241,10 +1244,6 @@ function splatShell(
 // Частицы и свет (накладываются поверх готовых пикселей).
 // ---------------------------------------------------------------------------
 
-function blend(p: Px, x: number, y: number, c: RGBA, a: number): void {
-  if (a <= 0) return;
-  p.set(x, y, [c[0], c[1], c[2], Math.round(Math.min(1, a) * 255)]);
-}
 /** Только по пустому: свет «за» предметом. */
 function onEmpty(p: Px, x: number, y: number, c: RGBA): void {
   x = Math.round(x);
@@ -1254,67 +1253,185 @@ function onEmpty(p: Px, x: number, y: number, c: RGBA): void {
   p.set(x, y, c);
 }
 
-/** Искра-звёздочка: крест с белой серединой (крупная — с длинными лучами). */
-function star(p: Px, x: number, y: number, sz: number, c: RGBA, empty = false): void {
-  const put = (xx: number, yy: number, cc: RGBA) =>
-    empty ? onEmpty(p, xx, yy, cc) : p.set(xx, yy, cc);
+/** Ступень палитры по индексу (обрезка с обеих сторон). */
+const toneC = (ramp: RGBA[], k: number): RGBA =>
+  ramp[Math.max(0, Math.min(ramp.length - 1, Math.round(k)))];
+/** Свет редкости: 0 тёмный, 1 тёмно-цветной, 2 цвет, 3 светлее, 4 светлый, 5 белый. */
+const glowR = (r: number): RGBA[] => PALS[GLOW[r]];
+const easeOut = (u: number) => 1 - (1 - clamp01(u)) ** 3;
+/** С перелётом: к 1 через ~1,1 (рост луча, вспышки). */
+const easeBack = (u: number) => {
+  const x = clamp01(u) - 1;
+  return 1 + 2.4 * x * x * x + 1.4 * x * x;
+};
+
+/**
+ * Четырёхлучевая звезда: середина — верхняя ступень, лучи длиной `arm` гаснут ступенями к
+ * кончикам; от 3 — короткие диагонали. Без шахматки: исчезает укорачиванием и ступенями.
+ */
+function star4(
+  p: Px,
+  x: number,
+  y: number,
+  arm: number,
+  ramp: RGBA[],
+  top: number,
+  empty = false,
+): void {
+  if (top < 0) return;
+  const put = (xx: number, yy: number, k: number) => {
+    if (k < 0) return;
+    const c = toneC(ramp, k);
+    if (empty) onEmpty(p, xx, yy, c);
+    else p.set(xx, yy, c);
+  };
   const X = Math.round(x);
   const Y = Math.round(y);
-  const n = Math.max(0, Math.round(sz));
+  const n = Math.max(0, Math.round(arm));
   for (let k = 1; k <= n; k++) {
-    const cc = k === n && n > 1 ? mixc(c, [c[0], c[1], c[2], 0], 0.45) : c;
-    put(X + k, Y, cc);
-    put(X - k, Y, cc);
-    put(X, Y + k, cc);
-    put(X, Y - k, cc);
+    const tk = top - 1 - Math.floor(((k - 1) * 2) / Math.max(1, n));
+    put(X + k, Y, tk);
+    put(X - k, Y, tk);
+    put(X, Y + k, tk);
+    put(X, Y - k, tk);
   }
-  if (n >= 3) {
-    put(X + 1, Y + 1, c);
-    put(X - 1, Y - 1, c);
-    put(X + 1, Y - 1, c);
-    put(X - 1, Y + 1, c);
+  if (n >= 3) for (const [dx, dy] of DIAG) put(X + dx, Y + dy, top - 2);
+  put(X, Y, top);
+}
+const DIAG = [
+  [1, 1],
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+] as const;
+
+/**
+ * Искра с хвостом: голова (2×2 у крупной) верхней ступенью, хвост назад по скорости
+ * гаснет ступенями. `vx, vy` — направление полёта на экране.
+ */
+function spark(
+  p: Px,
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  len: number,
+  ramp: RGBA[],
+  top: number,
+  big: boolean,
+): void {
+  if (top < 0) return;
+  const d = Math.hypot(vx, vy) || 1;
+  const ux = vx / d;
+  const uy = vy / d;
+  const n = Math.max(0, Math.round(len));
+  for (let k = n; k >= 1; k--) {
+    const tk = top - 1 - Math.floor((k * 3) / Math.max(1, n + 1));
+    if (tk < 0) continue;
+    p.set(Math.round(x - ux * k), Math.round(y - uy * k), toneC(ramp, tk));
   }
-  put(X, Y, hx('#ffffff'));
+  const X = Math.round(x);
+  const Y = Math.round(y);
+  p.set(X, Y, toneC(ramp, top));
+  if (big) {
+    p.set(X + 1, Y, toneC(ramp, top - 1));
+    p.set(X, Y + 1, toneC(ramp, top - 1));
+    p.set(X + 1, Y + 1, toneC(ramp, top - 2));
+  }
 }
 
-/** Клуб пыли/дыма: круг, свет сверху-слева, растворяется шахматкой. */
-function puff(p: Px, x: number, y: number, rr: number, cols: RGBA[], vis: number): void {
-  if (rr < 0.4 || vis <= 0) return;
-  for (let yy = Math.floor(y - rr); yy <= Math.ceil(y + rr); yy++)
-    for (let xx = Math.floor(x - rr); xx <= Math.ceil(x + rr); xx++) {
-      const dx = xx + 0.5 - x;
-      const dy = yy + 0.5 - y;
-      const d = Math.hypot(dx, dy) / rr;
-      if (d > 1) continue;
-      if (!dith(xx, yy, vis)) continue;
-      const lit = (-dx - dy) / (rr * 1.41);
-      const c = lit > 0.35 ? cols[2] : d > 0.78 && lit < -0.2 ? cols[0] : cols[1];
-      p.set(xx, yy, c);
+/**
+ * Клуб пыли/дыма: сплошной круг, свет сверху-слева. Тает не шахматкой, а ступенями:
+ * темнеет на тон и сжимается (`vis` 1 → 0).
+ */
+function puff(
+  p: Px,
+  x: number,
+  y: number,
+  rr: number,
+  cols: RGBA[],
+  vis: number,
+  cloud = false,
+): void {
+  if (vis <= 0) return;
+  const st = vis > 0.66 ? 0 : vis > 0.33 ? 1 : 2;
+  rr *= [1, 0.85, 0.62][st];
+  if (rr < 0.6) return;
+  // Облачко пыли — три доли (большая внизу, две поменьше сверху), не шар.
+  const lobes: [number, number, number][] = cloud
+    ? [
+        [0, 0.15, 0.85],
+        [-0.5, -0.3, 0.62],
+        [0.48, -0.38, 0.55],
+      ]
+    : [[0, 0, 1]];
+  for (let yy = Math.floor(y - rr * 1.1); yy <= Math.ceil(y + rr); yy++)
+    for (let xx = Math.floor(x - rr * 1.2); xx <= Math.ceil(x + rr * 1.2); xx++) {
+      let best = 2;
+      let lit = 0;
+      for (const [lx, ly, lr] of lobes) {
+        const dx = xx + 0.5 - (x + lx * rr);
+        const dy = yy + 0.5 - (y + ly * rr);
+        const d = Math.hypot(dx, dy) / (rr * lr);
+        if (d < best) {
+          best = d;
+          lit = (-dx - dy) / (rr * lr * 1.41);
+        }
+      }
+      if (best > 1) continue;
+      const k = (lit > 0.35 ? 2 : best > 0.78 && lit < -0.2 ? 0 : 1) - st;
+      if (k < 0 && st === 2 && best > 0.8) continue;
+      p.set(xx, yy, cols[Math.max(0, k)]);
     }
 }
 
-function ellipseRing(
+/**
+ * Кольцо света на полу: полоса ширины `T` в плоскости пола (сплюснута взглядом сверху) и
+ * светящаяся «стенка» высоты `hgt` над ней — толстое, с объёмом. Ближняя половина — поверх
+ * всего, дальняя — только по пустому (за куском). Тон: низ стенки и внутренняя кромка
+ * светлее, верх темнее; `top` — верхняя ступень палитры (гаснет ступенями).
+ */
+function floorRing(
   p: Px,
   cx: number,
   cy: number,
-  rx: number,
-  ry: number,
-  thick: number,
-  c: RGBA,
-  vis: number,
-  front?: (x: number, y: number) => boolean,
+  R: number,
+  T: number,
+  hgt: number,
+  ramp: RGBA[],
+  top: number,
 ): void {
-  if (rx < 0.5 || vis <= 0) return;
-  for (let yy = Math.floor(cy - ry - thick); yy <= Math.ceil(cy + ry + thick); yy++)
-    for (let xx = Math.floor(cx - rx - thick); xx <= Math.ceil(cx + rx + thick); xx++) {
-      const dx = (xx + 0.5 - cx) / rx;
-      const dy = (yy + 0.5 - cy) / Math.max(0.5, ry);
-      const d = Math.hypot(dx, dy);
-      const e = Math.abs(d - 1) * Math.min(rx, Math.max(ry, rx * 0.35));
-      if (e > thick / 2) continue;
-      if (!dith(xx, yy, vis)) continue;
-      if (front && !front(xx, yy)) continue;
-      p.set(xx, yy, c);
+  if (top < 0 || R < 1 || T <= 0) return;
+  const hs = Math.max(0, hgt);
+  const x0 = Math.floor(cx - R - T);
+  const x1 = Math.ceil(cx + R + T);
+  const y0 = Math.floor(cy - (R + T) * SE - hs * CE - 1);
+  const y1 = Math.ceil(cy + (R + T) * SE + 1);
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      if (x < 0 || y < 0 || x >= p.w || y >= p.h) continue;
+      const X = x + 0.5 - cx;
+      // Самая низкая высота стенки, на которой пиксель попадает в полосу.
+      let hit = -1;
+      let side = 0;
+      let yf = 0;
+      for (let h = 0; h <= hs + 1e-6; h += 0.5) {
+        yf = (y + 0.5 - cy + h * CE) / SE;
+        const d = Math.hypot(X, yf) - R;
+        if (Math.abs(d) <= T / 2) {
+          hit = h;
+          side = d < 0 ? 1 : 0;
+          break;
+        }
+      }
+      if (hit < 0) continue;
+      const near = yf > 0;
+      let k = top - (hs > 0 ? Math.floor((hit / Math.max(1, hs)) * 2.2) : 0) - (side ? 0 : 1);
+      if (near && Math.abs(X) < R * 0.6) k += 1;
+      k = Math.min(top, k);
+      if (k < 0) continue;
+      if (near) p.set(x, y, toneC(ramp, k));
+      else onEmpty(p, x, y, toneC(ramp, k));
     }
 }
 
@@ -1567,7 +1684,7 @@ function overIdle(p: Px, kind: EggKind, res: Res, t: number, P: Pose, L: Look, k
     const w = toWorld(P, surfLocal('crystal', ph, sv, 0.3));
     const u = L.glint === 3 ? (wrap(t, 2) - 0.55) / 0.17 : (wrap(t, 2) - 1.35) / 0.17;
     const sz = Math.round(Math.sin(clamp01(u) * Math.PI) * (res === 'l' ? 4 : 1.6));
-    if (sz > 0) star(p, ox + w[0], oy + w[1] * SE - w[2] * CE, sz, hx('#e8fdff'));
+    if (sz > 0) star4(p, ox + w[0], oy + w[1] * SE - w[2] * CE, sz, PALS[CORE], 5);
   }
 }
 
@@ -1688,7 +1805,7 @@ function bitsFor(kind: EggKind, r: number, cen: V3, pop: boolean): Bit[] {
 
 /** Цвет пыли по материалу. */
 const DUST: Record<EggKind, RGBA[]> = {
-  moss: [hx('#4a4a26'), hx('#6c6a3a'), hx('#8f8c56')],
+  moss: [hx('#5e5640'), hx('#857c5c'), hx('#ada27c')],
   stone: [hx('#4a4b50'), hx('#6c6d72'), hx('#9a9a9e')],
   crystal: [hx('#4f8fa8'), hx('#8cc8da'), hx('#d0f2f8')],
   dragon: [hx('#1c1416'), hx('#3a3032'), hx('#5e5254')],
@@ -1700,9 +1817,6 @@ function hatchFrame(kind: EggKind, r: number, i: number, res: Res): Px {
   const net = crackNet(kind, r);
   const [ox, oy] = origin(res);
   const S = RES[res].box / 36;
-  const rc = RARITIES[r];
-  const RC = hx(rc.color);
-  const RL = hx(rc.light);
   const pulse = pulseAt(kind, t);
   if (t < pl.b) {
     const inner = innerAt(r, t);
@@ -1732,29 +1846,30 @@ function hatchFrame(kind: EggKind, r: number, i: number, res: Res): Px {
     const C = toWorld(P, [0, 0, SHAPE[kind].H * 0.5]);
     const cx = ox + C[0];
     const cy = oy + C[1] * SE - C[2] * CE;
-    // Свет из трещин наружу (r ≥ 2): лучи за яйцом.
+    // Свет из трещин наружу (r ≥ 2): клинья за яйцом растут к разлому.
     if (r >= 2 && t >= pl.c3) {
-      const k = clamp01((t - pl.c3) / (pl.b - pl.c3));
-      rays(p, cx, cy, (SHAPE[kind].R * 1.2 + k * (8 + r * 3)) * S, 7 + r, t * 0.4, k, RC, RL, S);
+      const k = easeOut((t - pl.c3) / (pl.b - pl.c3));
+      rays(p, cx, cy, (6 + k * (6 + r * 3)) * S, 7 + r, t * 0.4, k, r, S, SHAPE[kind].R * 0.8 * S);
     }
-    // Искры у трещин (r ≥ 1).
+    // Искры у трещин (r ≥ 1): звёздочки вылетают из трещины, растут и гаснут ступенями.
     if (r >= 1)
       for (const c of [pl.c1, pl.c2, pl.c3]) {
-        const u = (t - c) / 0.25;
+        const u = (t - c) / 0.3;
         if (u < 0 || u > 1) continue;
         for (let j = 0; j < 1 + Math.floor(r / 2); j++) {
           const a = hash(j, Math.round(c * 100), 5) * Math.PI * 2;
-          const d = (SHAPE[kind].R * 0.9 + u * 6) * S;
-          star(
+          const d = (SHAPE[kind].R * 0.9 + easeOut(u) * 6) * S;
+          star4(
             p,
             cx + Math.sin(a) * d,
             cy - 2 * S + Math.cos(a) * d * 0.7 - u * 3 * S,
-            Math.round(Math.sin(u * Math.PI) * (res === 'l' ? 3 : 1.4)),
-            RL,
+            Math.round(Math.sin(u * Math.PI) * (res === 'l' ? 3.4 : 1.4)),
+            glowR(r),
+            5 - Math.floor(u * 2.5),
           );
         }
       }
-    for (const ru of runes) drawRune(p, f, ru, RC, RL, S, ox, oy);
+    for (const ru of runes) drawRune(p, f, ru, r, S, ox, oy);
     return p;
   }
   return burstFrame(kind, r, t, res, pl);
@@ -1783,7 +1898,11 @@ function spill(f: Frame, pl: number, rad: number): void {
   for (const j of hit) f.tone[j] = Math.min(PALS[f.pal[j]].length - 1, f.tone[j] + 1);
 }
 
-/** Лучи света за предметом: веер из середины, только по пустым пикселям. */
+/**
+ * Лучи света за предметом: веер клиньев из середины, только по пустым пикселям. Клин —
+ * светлая сердцевина и цветная кайма, к кончику на ступень темнее; края ступенями (ширина
+ * округляется по шагу). `k` 0…1 — длина (растут и втягиваются, а не гаснут шахматкой).
+ */
 function rays(
   p: Px,
   cx: number,
@@ -1792,24 +1911,26 @@ function rays(
   n: number,
   rot: number,
   k: number,
-  c: RGBA,
-  l: RGBA,
+  r: number,
   S: number,
+  from = 0,
 ): void {
-  if (k <= 0) return;
+  if (k <= 0.02) return;
+  const ramp = glowR(r);
   for (let j = 0; j < n; j++) {
     const a = rot + (j / n) * Math.PI * 2 + hash(j, 2, 9) * 0.3;
-    const L = len * (0.75 + hash(j, 3, 9) * 0.5);
-    const wdt = Math.max(1, Math.round((j % 2 ? 1 : 1.6) * S * 0.6));
-    for (let d = 0; d < L; d += 0.5) {
-      const x = cx + Math.cos(a) * d;
-      const y = cy + Math.sin(a) * d;
-      const fade = 1 - d / L;
-      for (let o = -(wdt >> 1); o <= wdt >> 1; o++) {
-        const xx = Math.round(x - Math.sin(a) * o);
-        const yy = Math.round(y + Math.cos(a) * o);
-        if (!dith(xx, yy, fade * k * 1.2)) continue;
-        onEmpty(p, xx, yy, fade > 0.55 && o === 0 ? l : c);
+    const L = len * (0.7 + hash(j, 3, 9) * 0.5) * (j % 2 ? 0.8 : 1) * k;
+    const bw = (j % 2 ? 1.1 : 1.8) * S * 0.75;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    for (let d = from; d < from + L; d += 0.5) {
+      const v = (d - from) / L;
+      const hw = Math.round(bw * (1 - v) * 2) / 2;
+      const x = cx + ca * d;
+      const y = cy + sa * d;
+      for (let o = -hw; o <= hw; o += 0.5) {
+        const tk = (Math.abs(o) <= hw * 0.45 ? 4 : 2) - (v > 0.72 ? 1 : 0);
+        onEmpty(p, x - sa * o, y + ca * o, toneC(ramp, tk));
       }
     }
   }
@@ -1828,46 +1949,49 @@ function orbitRunes(r: number, t: number, P: Pose, S: number): RuneAt[] {
   const n = r >= 5 ? 6 : 5;
   const a0 = t - pl.c1;
   const sp = 2.2 + a0 * 1.4;
-  const shrink = 1 - clamp01((t - (pl.b - 0.3)) / 0.3);
+  const shrink = 1 - easeOut((t - (pl.b - 0.32)) / 0.32) * 0.92;
   const C = add(P.B, mul(P.A, P.H * 0.5));
   for (let j = 0; j < n; j++) {
     const a = (j / n) * Math.PI * 2 + sp * a0;
-    const R0 = (SHAPE.crystal.R * 1.9 + Math.sin(a0 * 3 + j) * 1.2) * S * shrink;
+    // Выходят из яйца по очереди и раскручиваются с перелётом орбиты.
+    const e = easeBack((a0 - j * 0.05) / 0.45);
+    const R0 = (SHAPE.crystal.R * 1.9 + Math.sin(a0 * 3 + j) * 1.2) * S * shrink * e;
     const pos: V3 = [
       C[0] + Math.cos(a) * R0,
       C[1] + Math.sin(a) * R0,
       C[2] + Math.sin(a * 2 + j) * 2.5 * S - 3 * S,
     ];
-    out.push({ pos, g: j % GLYPHS.length, vis: clamp01(a0 / 0.3) * (shrink > 0.05 ? 1 : 0) });
+    const vis = clamp01((a0 - j * 0.05) / 0.3) * (t < pl.b - 0.06 ? 1 : 0);
+    out.push({ pos, g: j % GLYPHS.length, vis });
   }
   return out;
 }
-function drawRune(
-  p: Px,
-  f: Frame,
-  ru: RuneAt,
-  c: RGBA,
-  l: RGBA,
-  S: number,
-  ox: number,
-  oy: number,
-): void {
+/**
+ * Руна: штрихи проявляются по порядку (дорисовываются), тон ступенями — тёмный, цвет,
+ * светлый с цветной тенью. Позади яйца закрыта им.
+ */
+function drawRune(p: Px, f: Frame, ru: RuneAt, r: number, S: number, ox: number, oy: number): void {
   if (ru.vis <= 0) return;
+  const ramp = glowR(r);
   const sx = ox + ru.pos[0];
   const sy = oy + ru.pos[1] * SE - ru.pos[2] * CE;
   const dz = ru.pos[1] * CE + ru.pos[2] * SE;
   const sz = S >= 2 ? 3.2 * S * 0.75 : 2;
-  for (const sg of GLYPHS[ru.g]) {
+  const top = ru.vis < 0.34 ? 2 : ru.vis < 0.67 ? 3 : 4;
+  const segs = GLYPHS[ru.g];
+  const drawn = ru.vis * 1.6 * segs.length;
+  segs.forEach((sg, si) => {
+    const part = clamp01(drawn - si);
+    if (part <= 0) return;
     const n = Math.ceil(Math.hypot(sg[2] - sg[0], sg[3] - sg[1]) * sz * 1.5) + 1;
-    for (let k = 0; k <= n; k++) {
+    for (let k = 0; k <= n * part; k++) {
       const x = Math.round(sx + lerp(sg[0], sg[2], k / n) * sz * 0.6);
       const y = Math.round(sy - lerp(sg[1], sg[3], k / n) * sz);
       if (x < 0 || y < 0 || x >= f.w || y >= f.h) continue;
       const i = y * f.w + x;
       // Позади яйца — закрыта им.
       if (f.pal[i] >= 0 && f.zb[i] > dz) continue;
-      if (!dith(x, y, ru.vis)) continue;
-      p.set(x, y, S >= 2 ? l : c);
+      p.set(x, y, toneC(ramp, S >= 2 ? top : top - 1));
       if (S >= 2) {
         for (const [dx, dy] of [
           [1, 0],
@@ -1876,11 +2000,11 @@ function drawRune(
           const xx = x + dx;
           const yy = y + dy;
           if (xx < f.w && yy < f.h && !(f.pal[yy * f.w + xx] >= 0 && f.zb[yy * f.w + xx] > dz))
-            p.set(xx, yy, c);
+            p.set(xx, yy, toneC(ramp, top - 2));
         }
       }
     }
-  }
+  });
 }
 
 /**
@@ -1920,10 +2044,6 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
   const net = crackNet(kind, r);
   const sh = shellOf(kind, r, res, false);
   const P = makePose(kind, res, hatchPose(kind, r, pl.b - 0.001));
-  const rc = RARITIES[r];
-  const RC = hx(rc.color);
-  const RL = hx(rc.light);
-  const WH = hx('#ffffff');
   const fadeA = pl.end - pl.b - 0.34;
   const fadeB = pl.end - pl.b - 2 / FPS;
   const vis = 1 - clamp01((tau - fadeA) / (fadeB - fadeA));
@@ -2009,12 +2129,14 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
       tau,
       GRAV * S,
     );
-    const life = 1 - clamp01((tau - b.life) / 0.2);
-    if (life <= 0 || vis <= 0) return;
+    // Гаснет сжатием (на полу — оставаясь на полу), а не исчезает разом.
+    const sz = Math.min(1 - clamp01((tau - b.life) / 0.25), vis) ** 0.6;
+    if (sz < 0.3) return;
+    const rz = b.r * S * 0.8;
     parts.push({
-      c: q.pos,
+      c: [q.pos[0], q.pos[1], q.pos[2] - (q.pos[2] <= rz + 0.01 ? rz * (1 - sz) : 0)],
       ax: axes(norm([Math.cos(j + tau * 9), Math.sin(j), 0.3]), [0, 0, 1]),
-      r: [b.r * S * 1.25, b.r * S, b.r * S * 0.8],
+      r: [b.r * S * 1.25 * sz, b.r * S * sz, rz * sz],
       pal: b.pal,
       id: 40 + j,
       bias: 0.05,
@@ -2042,122 +2164,159 @@ function burstFrame(kind: EggKind, r: number, t: number, res: Res, pl: Plan): Px
   const cx = ox + C[0];
   const cy = oy + C[1] * SE - C[2] * CE;
   const floorY = oy;
-  const k0 = 1 - clamp01(tau / 0.35);
+  const ramp = glowR(r);
+  const R0 = SHAPE[kind].R * S;
+  // Вспышка разлома — ЗА кусками (по пустому): ореол из-за силуэта, кольцом расходится
+  // и истончается, гаснет ступенями; середину и куски не заливает.
+  const fu = tau / (r >= 4 ? 0.12 : 0.1);
+  if (fu < 1) {
+    const fl = r >= 4 ? 1.25 : r >= 2 ? 1.05 : 0.8;
+    const e = easeOut(fu);
+    const rr = (0.95 + e * 0.75) * fl * R0 + 2 * S;
+    const hole = rr * (0.55 + e * 0.35);
+    const s0 = Math.floor(fu * 3);
+    for (let yy = Math.floor(cy - rr); yy <= cy + rr; yy++)
+      for (let xx = Math.floor(cx - rr); xx <= cx + rr; xx++) {
+        const D = Math.hypot(xx + 0.5 - cx, (yy + 0.5 - cy) * 1.1);
+        if (D > rr || D < hole) continue;
+        const d = (D - hole) / Math.max(1, rr - hole);
+        const k = (d < 0.4 ? 5 : d < 0.75 ? 4 : 2) - s0 - (r < 2 ? 1 : 0);
+        if (k >= 0) onEmpty(p, xx, yy, toneC(ramp, k));
+      }
+  }
   // Столб света (r ≥ 3): из места яйца вверх; ближние куски его закрывают.
-  if (r >= 3) pillar(p, f, cx, cy + 6 * S, C[1] * CE + C[2] * SE, tau, pl, S, RC, RL, r);
-  // Солнце (r5): вращающиеся лучи за всем.
-  if (r >= 5)
-    rays(
-      p,
-      cx,
-      cy,
-      (34 + Math.min(1, tau / 0.2) * 22) * S * 0.6,
-      14,
-      tau * 1.2,
-      1 - clamp01((tau - 0.5) / 0.3),
-      RC,
-      hx('#ffe0a0'),
-      S,
-    );
-  else if (r >= 2) rays(p, cx, cy, (20 + r * 5) * S * 0.6, 7 + r, pl.b * 0.4, k0, RC, RL, S);
-  // Кольцо света на полу (r ≥ 2) и ударная волна (r ≥ 4).
+  if (r >= 3) beam(p, f, cx, cy + 6 * S, C[1] * CE + C[2] * SE, tau, pl, S, r);
+  // Лучи: у r2–r4 втягиваются те, что выросли до разлома; у r5 — вращающееся солнце.
+  if (r >= 5) {
+    const k = easeBack(tau / 0.22) * (1 - easeOut((tau - 0.5) / 0.4));
+    rays(p, cx, cy, (34 + 22) * S * 0.6, 14, tau * 1.2, k, r, S, R0 * 0.6);
+  } else if (r >= 2)
+    rays(p, cx, cy, (12 + r * 3) * S, 7 + r, pl.b * 0.4, 1 - easeOut(tau / 0.45), r, S, R0 * 0.8);
+  // Кольцо света на полу (r ≥ 2): толстое, со светящейся стенкой, расходится и гаснет
+  // ступенями; ударная волна (r ≥ 4) — второе кольцо в плоскости середины яйца.
   if (r >= 2) {
-    const u = clamp01(tau / 0.45);
-    const fr0 = (10 + u * (18 + r * 3)) * S;
-    ellipseRing(
-      p,
-      cx,
-      floorY,
-      fr0,
-      fr0 * SE * 1.1,
-      Math.max(1, S * 1.2 * (1 - u) + 0.6),
-      u < 0.5 ? RL : RC,
-      1 - u,
-    );
+    const u = tau / 0.6;
+    if (u < 1) {
+      const e = easeOut(u);
+      floorRing(
+        p,
+        cx,
+        floorY,
+        R0 * 0.8 + e * (18 + r * 3) * S,
+        (1 - u) ** 0.5 * 3 * S + 1,
+        (r >= 3 ? 3 : 1.8) * S * (1 - u) ** 0.7,
+        ramp,
+        5 - Math.floor(u * 4.6),
+      );
+    }
   }
   if (r >= 4) {
-    const u = clamp01(tau / 0.32);
-    // Ударная волна — кольцо в плоскости пола через середину яйца (сплюснуто взглядом сверху).
-    ellipseRing(
-      p,
-      cx,
-      cy,
-      (8 + u * 36) * S,
-      (8 + u * 36) * S * 0.5,
-      Math.max(1, 2.2 * S * (1 - u)),
-      u < 0.4 ? WH : RL,
-      1 - u * u,
-    );
+    const u = (tau - 0.04) / 0.42;
+    if (u >= 0 && u < 1) {
+      const e = easeOut(u);
+      floorRing(
+        p,
+        cx,
+        cy,
+        (8 + e * 36) * S,
+        (1 - u) ** 0.5 * 3.4 * S + 1,
+        1.2 * S * (1 - u),
+        ramp,
+        5 - Math.floor(u * 5),
+      );
+    }
   }
-  // Пыль у основания.
-  // Пыль с пола — только если яйцо разбилось на полу (парящее бьётся в воздухе).
+  // Пыль у основания — только если яйцо разбилось на полу (парящее бьётся в воздухе).
   const nPuff = P.B[2] > 2 * S ? 0 : 3 + Math.min(4, r);
   for (let j = 0; j < nPuff; j++) {
     const sd = j % 2 ? 1 : -1;
     const u = clamp01(tau / (0.5 + hash(j, 2, 4) * 0.2));
-    const x = cx + sd * (4 + u * (10 + j * 2.2)) * S;
-    const y = floorY - (1.5 + u * 2 + (j % 3)) * S;
+    const e = easeOut(u);
+    const x = cx + sd * (4 + e * (10 + j * 2.2)) * S;
+    const y = floorY - (1.5 + e * 2 + (j % 3)) * S;
     puff(
       p,
       x,
       y,
-      (1.6 + u * 3.2) * S * (0.8 + hash(j, 1, 4) * 0.4),
+      (1.6 + e * 3.2) * S * (0.8 + hash(j, 1, 4) * 0.4),
       DUST[kind],
-      (1 - u) * 0.95 * (tau < 0.02 ? 0 : 1),
+      tau < 0.02 ? 0 : 1 - u,
+      true,
     );
   }
-  // Угольки дракона: поднимаются, мерцают.
-  if (kind === 'dragon')
+  // Угольки дракона: 2×2 с горячей серединой, поднимаются, мерцают, остывают ступенями.
+  if (kind === 'dragon') {
+    const E = PALS[EMBER];
     bits.forEach((b, j) => {
       if (!b.ember) return;
       const u = tau / (b.life + 0.3);
       if (u > 1 || vis <= 0) return;
-      const x = ox + (b.pos[0] + b.vel[0] * tau * 0.8) * S;
+      const x = ox + (b.pos[0] + b.vel[0] * tau * 0.8 + Math.sin(tau * 9 + j) * 0.8) * S;
       const z = (b.pos[2] + b.vel[2] * 0.6 * tau + 18 * tau * tau) * S;
       const y = oy + b.pos[1] * S * SE - z * CE;
-      const c = (Math.floor(tau * 24) + j) % 3 ? hx('#ffb84a') : hx('#ffe8a0');
-      if (dith(Math.round(x), Math.round(y), (1 - u) * Math.min(1, vis * 2))) {
-        p.set(x, y, c);
-        if (S >= 2) {
-          p.set(x + 1, y, hx('#f48a22'));
-          p.set(x, y + 1, hx('#d85a12'));
-        }
+      const top =
+        6 -
+        Math.floor(u * 4.5) -
+        ((Math.floor(tau * 24) + j) % 3 === 0 ? 1 : 0) -
+        Math.floor((1 - vis) * 4);
+      if (top < 2) return;
+      p.set(x, y, E[top]);
+      if (S >= 2) {
+        p.set(x + 1, y, E[top - 1]);
+        p.set(x, y + 1, E[top - 1]);
+        p.set(x + 1, y + 1, E[top - 2]);
       }
     });
-  // Искры редкости (r ≥ 1): разлетаются и гаснут.
-  if (r >= 1) {
-    const n = 3 + r * 2;
-    for (let j = 0; j < n; j++) {
-      const a = (j / n) * Math.PI * 2 + hash(j, 1, 8);
-      const u = clamp01(tau / (0.45 + hash(j, 2, 8) * 0.3));
-      if (u >= 1) continue;
-      const d = (8 + u * (18 + r * 4)) * S;
-      const sz = Math.sin(u * Math.PI) * (S >= 2 ? 3.5 : 1.6) * (j % 3 ? 1 : 1.3);
-      star(
-        p,
-        cx + Math.cos(a) * d,
-        cy + Math.sin(a) * d * 0.75 - u * 6 * S,
-        Math.round(sz),
-        u < 0.5 ? RL : RC,
-      );
-    }
   }
-  // Вспышка разлома: белая середина, кайма редкости, тает шахматкой.
-  const fl = r >= 4 ? 1.25 : r >= 2 ? 0.8 : 0.45;
-  const fu = clamp01(tau / (r >= 4 ? 0.22 : 0.14));
-  if (fu < 1) {
-    const rr = (SHAPE[kind].R * (0.6 + fu * 0.9) * fl + 2) * S;
-    for (let yy = Math.floor(cy - rr); yy <= cy + rr; yy++)
-      for (let xx = Math.floor(cx - rr); xx <= cx + rr; xx++) {
-        const d = Math.hypot(xx + 0.5 - cx, (yy + 0.5 - cy) * 1.1) / rr;
-        if (d > 1 || !dith(xx, yy, (1 - fu) * (1.3 - d))) continue;
-        blend(p, xx, yy, d < 0.55 ? WH : r >= 1 ? RL : hx('#f4efe4'), r === 0 ? 0.75 : 1);
+  // Искры редкости (r ≥ 1): венок искр с хвостами по дуге (разлёт с замедлением и
+  // падением), гаснут ступенями; у r ≥ 3 — второй венок звёздочек, мерцает и тает.
+  if (r >= 1) {
+    const n = 4 + r * 2;
+    const big = S >= 2;
+    for (let j = 0; j < n; j++) {
+      const a = (j / n) * Math.PI * 2 + hash(j, 1, 8) * 0.35;
+      const life = 0.5 + hash(j, 2, 8) * 0.25;
+      const u = tau / life;
+      if (u >= 1) continue;
+      const D = (16 + r * 4) * S * (j % 2 ? 0.8 : 1);
+      const d = R0 * 0.6 + easeOut(u) * D;
+      const drop = u * u * 9 * S;
+      const x = cx + Math.cos(a) * d;
+      const y = cy + Math.sin(a) * d * 0.75 + drop;
+      // Направление полёта: по радиусу, к концу — вниз.
+      const vx = Math.cos(a) * (1 - u) * D;
+      const vy = Math.sin(a) * 0.75 * (1 - u) * D + u * 18 * S;
+      spark(p, x, y, vx, vy, (big ? 3 : 1) * (1 - u * 0.6), ramp, 5 - Math.floor(u * 3.6), big);
+    }
+    if (r >= 3) {
+      const m = r * 2;
+      for (let j = 0; j < m; j++) {
+        const t0 = 0.08 + (j % 3) * 0.06;
+        const u = (tau - t0) / 0.42;
+        if (u < 0 || u >= 1) continue;
+        const a = (j / m) * Math.PI * 2 + 0.4;
+        const d = R0 * (1.7 + (j % 2) * 0.5) + easeOut(u) * 4 * S;
+        star4(
+          p,
+          cx + Math.cos(a) * d,
+          cy + Math.sin(a) * d * 0.7 - u * 4 * S,
+          Math.round(Math.sin(u * Math.PI) * (big ? 4 : 1.5)),
+          ramp,
+          5 - Math.floor(u * 2.5),
+        );
       }
+    }
   }
   return p;
 }
 
-function pillar(
+/**
+ * Столб света (r ≥ 3): горячая белая сердцевина, две-три цветные полосы, ступенчатые края
+ * (ширина постоянна на блоках строк и «течёт» вверх), расширение у основания, сужение к
+ * верху. Растёт с перелётом и сужается до нуля, отрываясь от пола, — не выключается
+ * разом. Внутри поднимаются пылинки 2×2, гаснущие ступенями.
+ */
+function beam(
   p: Px,
   f: Frame,
   cx: number,
@@ -2166,31 +2325,70 @@ function pillar(
   tau: number,
   pl: Plan,
   S: number,
-  c: RGBA,
-  l: RGBA,
   r: number,
 ): void {
-  const dur = pl.end - pl.b - 0.15;
-  const grow = clamp01(tau / 0.12);
-  const fade = 1 - clamp01((tau - dur * 0.4) / (dur * 0.35));
-  if (fade <= 0) return;
-  const half = (r >= 5 ? 9 : 7) * S * (0.6 + 0.4 * grow) * (0.7 + 0.3 * fade);
-  const top = cy - (70 + r * 4) * S * 0.8 * grow;
-  const WH = hx('#ffffff');
-  for (let y = Math.floor(top); y <= cy; y++) {
-    const v = (cy - y) / (cy - top + 1);
-    const flow = (Math.floor((y + tau * 90 * S) / (5 * S)) % 3 === 0 ? 1 : 0) * 0.15;
-    const wv = half * (1 - v * 0.25);
-    for (let x = Math.floor(cx - wv); x <= cx + wv; x++) {
-      if (x < 0 || y < 0 || x >= f.w || y >= f.h) continue;
-      const e = Math.abs(x + 0.5 - cx) / wv;
-      const k = fade * (1 - v * v) * (1 - e * 0.5) + flow;
-      if (!dith(x, y, k)) continue;
+  const dur = pl.end - pl.b;
+  const ramp = glowR(r);
+  const grow = easeBack(tau / 0.2);
+  const u = clamp01((tau - dur * 0.42) / (dur * 0.38));
+  const wf = grow * (1 - easeOut(u) ** 1.3) * (1 - u);
+  if (wf <= 0.03) return;
+  const H = (70 + r * 4) * S * 0.8;
+  const top = cy - H * easeOut(tau / 0.24);
+  // Сужаясь, столб отрывается от пола и уходит вверх.
+  const base = cy - H * 0.55 * u * u;
+  const W = (r >= 5 ? 8.5 : 7) * S * wf;
+  const blk = Math.max(2, Math.round(2 * S));
+  for (let y = Math.floor(top); y <= base; y++) {
+    if (y < 0 || y >= f.h) continue;
+    const v = (base - y) / Math.max(1, base - top);
+    // Ступени: ширина постоянна на блоке строк, блоки «текут» вверх.
+    const yb = Math.floor((y + tau * 110 * S) / blk);
+    const wave = 1 + 0.1 * Math.sin(yb * 1.3) + 0.06 * Math.sin(yb * 0.47 + 1);
+    const flare = v < 0.14 ? 1 + 0.55 * (1 - v / 0.14) ** 2 : 1;
+    // К верху чуть уже и гаснет ступенями: сердцевина остывает, кайма уходит первой.
+    const cap = v > 0.9 ? Math.sqrt(Math.max(0, 1 - ((v - 0.9) / 0.1) ** 2)) : 1;
+    const taper = (v > 0.7 ? 1 - (v - 0.7) * 0.9 : 1) * cap;
+    const hw = Math.round(W * wave * flare * taper);
+    if (hw < 1) continue;
+    const cool = v > 0.92 ? 3 : v > 0.82 ? 2 : v > 0.6 ? 1 : 0;
+    for (let x = Math.floor(cx) - hw - 1; x <= Math.floor(cx) + hw + 1; x++) {
+      if (x < 0 || x >= f.w) continue;
+      const e = Math.abs(x + 0.5 - cx);
+      let k: number;
+      if (e <= hw * 0.34) k = 5 - cool;
+      else if (e <= hw * 0.68) k = 4 - cool;
+      else if (e <= hw) k = 2 - (cool >= 2 ? 1 : 0);
+      else k = cool >= 2 ? -1 : 1;
+      if (k < 0) continue;
       const i = y * f.w + x;
       // Ближний кусок закрывает столб.
       if (f.pal[i] >= 0 && f.zb[i] > dz) continue;
       if (p.data[i * 4 + 3] > 0 && f.pal[i] < 0) continue;
-      blend(p, x, y, e < 0.3 ? WH : e < 0.65 ? l : c, f.pal[i] >= 0 ? 0.55 : 0.9);
+      // Кайма — только по пустому: дальний кусок за ней остаётся виден силуэтом.
+      if (k <= 2 && f.pal[i] >= 0) continue;
+      p.set(x, y, toneC(ramp, k));
+    }
+  }
+  // Пылинки: поднимаются внутри и у краёв, ступенями гаснут к верху.
+  const nm = 6 + r * 2;
+  for (let j = 0; j < nm; j++) {
+    const sp = (60 + hash(j, 1, 21) * 70) * S;
+    const ph = wrap(hash(j, 2, 21) + (tau * sp) / H, 1);
+    const y = base - ph * (base - top);
+    const x = cx + (hash(j, 3, 21) - 0.5) * 2.6 * W + Math.sin(tau * 6 + j) * S;
+    const k = 5 - Math.floor(ph * 3.2) - (wf < 0.4 ? 1 : 0);
+    if (k < 1) continue;
+    const X = Math.round(x);
+    const Y = Math.round(y);
+    if (X < 0 || Y < 0 || X >= f.w || Y >= f.h) continue;
+    const i = Y * f.w + X;
+    if (f.pal[i] >= 0 && f.zb[i] > dz) continue;
+    p.set(X, Y, toneC(ramp, k));
+    if (S >= 2) {
+      p.set(X + 1, Y, toneC(ramp, k - 1));
+      p.set(X, Y + 1, toneC(ramp, k - 1));
+      p.set(X + 1, Y + 1, toneC(ramp, k - 2));
     }
   }
 }
@@ -2281,8 +2479,9 @@ function popFrame(kind: EggKind, i: number, res: Res): Px {
       (1.4 + u * 2.4) * S,
       DUST[kind],
       (1 - u) * 0.9,
+      true,
     );
   }
-  if (tau < 0.09) star(p, cx, cy - 3 * S, 2, hx('#fff6dc'));
+  if (tau < 0.09) star4(p, cx, cy - 3 * S, 2, PALS[INNER], 6);
   return p;
 }

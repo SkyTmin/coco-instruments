@@ -50,18 +50,32 @@ build`, `grep -c "ui/px/" dist/sw.js` → 1.
 - **Strips** (24 fps): `idle-<egg>` 48 frames (2 s, both sizes; loop seam test), `hatch-<egg>-r<r>`
   (large only) for every rarity the egg can drop (`EGG_RARITIES` = `EGGS[].odds` > 0, test),
   `pop-<egg>` 15 frames (small only, burst on frame 6) for «Вылупить все».
-- **Hatch timeline** (`hatchPlan`): wobble `HATCH_WOB` 1.1…2.9 s by rarity, cracks at 0.34 /
-  0.62 / 0.86 of it, burst at its end, `clear` 5 frames later, then `HATCH_POST` 0.8…1.15 s of
-  falling pieces. Marks `w1 (0), crack1, w2, crack2, w3, crack3, burst, clear`. Each crack is
+- **Hatch timeline** (`hatchPlan`): wobble `HATCH_WOB` 1.1…2.7 s by rarity, cracks at 0.34 /
+  0.62 / 0.86 of it, burst at its end, `clear` 5 frames later, then `HATCH_POST` 0.8…1.35 s of
+  falling pieces (r3–r5 slower: 1.25 / 1.35 / 1.2). Marks `w1 (0), crack1, w2, crack2, w3, crack3, burst, clear`. Each crack is
   a knock: squash frame, then a bigger wobble (0.18 / 0.28 / 0.38 rad × (1 + 0.06 r)); rocking
   is a rotation about the bottom pole + lift so the lowest point stays on the floor (test
   `lowestZ` ≤ 0.35 px for r < 3; r ≥ 3 hovers). Frame 0 = idle frame 0, last frame empty (tests).
 - **Rarity ladder**: r0/r1 dark cracks with a pale broken edge; r2+ cracks glow in the rarity
-  colour (light leaks before the open), rays from behind, floor ring; r3 hovers + precesses,
-  light pillar (depth-tested slab); r4 + orbiting runes, shake, shockwave ring (flattened, in
-  the floor plane); r5 rises (10 units) and spins faster and faster, cracks spread over the
-  whole egg, a second band of cuts (`net.band`) doubles the shards (20), they orbit then fly,
-  sunburst. A hovering egg bursts in the air — no floor dust under it.
+  colour (light leaks before the open), wedge rays from behind, floor ring; r3 hovers +
+  precesses, light beam; r4 + orbiting runes (come out one by one, drawn stroke by stroke),
+  shake, shockwave ring at the egg's centre plane; r5 rises (10 units) and spins faster and
+  faster, cracks spread over the whole egg, a second band of cuts (`net.band`) doubles the
+  shards (20), they orbit then fly, rotating sunburst. A hovering egg bursts in the air — no
+  floor dust under it.
+- **Effects language (after the owner rejected the books' epic/legend: «недоработано, эффекты не
+  проработаны»)** — no checkerboard dither anywhere in effects; everything fades by palette
+  STEPS (`GLOW[r]`: dark, dark-colour, colour, lighter, light, white), shrinking or narrowing.
+  Burst light never covers the egg/shards: the halo (hollow ring, 2–3 frames) and rays draw only
+  on empty pixels. Beam (`beam`): white core + light + colour bands + 1-px dark edge, width
+  constant per 2·S-row block and the blocks flow up (stepped edges), base flare, rounded cap,
+  grows with overshoot (`easeBack`), narrows to nothing while its base lifts off — never pops;
+  rising 2×2 motes. Floor rings (`floorRing`): band in the floor plane + a glowing wall above it
+  (brighter at the base and inner edge), near half over everything, far half only on empty. Sparks
+  (`spark`): 2×2 head + stepped trail along an ease-out + gravity arc, in a wreath; `star4`
+  grows/shrinks; embers 2×2 cool by `EMBER` steps; dust = solid 3-lobe clouds that darken and
+  shrink. Pieces fade by shrinking to their centre (floor contact kept) and −1/−2 tone. The
+  membrane (`INGLOW`) is tinted with the rarity colour, not near-white (pale shards read as paper).
 - **Pieces come from the crack net** (`crackNet` → `pieceOf`: ring + vertical splits; cap
   above, petals below), drawn as point splats (outer = material, inner = membrane lit by the
   rarity glow, broken edge = pale rim). Cap: ballistic with one bounce (`fly`), snapped to the
