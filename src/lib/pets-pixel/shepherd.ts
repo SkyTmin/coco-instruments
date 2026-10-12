@@ -202,16 +202,7 @@ const PAL_V: RGBA[][][] = [
       '#9c4832',
       '#b05a40',
     ),
-    ramp(
-      '#3a2606',
-      '#5e420e',
-      '#8a6a1c',
-      '#b49030',
-      '#dcb84a',
-      '#f2d470',
-      '#fdeca4',
-      '#fffbe4',
-    ),
+    ramp('#3a2606', '#5e420e', '#8a6a1c', '#b49030', '#dcb84a', '#f2d470', '#fdeca4', '#fffbe4'),
     STEEL,
     ramp('#0c0603', '#170c05', '#231308', '#311c0c', '#432812', '#5a381a'),
     MOUTH,
@@ -1158,12 +1149,14 @@ function bodyPick(qx: number, qy: number, qz: number): number {
   PICK_T = 0;
   const ax0 = Math.abs(qx);
   const s = (0.25 - qy) * 2.6 + qz * 1.2;
+  // Крупная: шерсть пучками черепицей и на рыжем, и на чепраке.
+  const fur = HI ? tufts(7, 7, 0.05, 1.05)(qx, qy, qz) : 0;
   if (s > 0.25) {
-    PICK_T = s < 0.6 ? 0.1 : 0;
+    PICK_T = (s < 0.6 ? 0.1 : 0) + fur * 1.6;
     return P_BLACK;
   }
   if (s > -0.15) {
-    PICK_T = -0.1;
+    PICK_T = -0.1 + fur;
     return P_FUR;
   }
   const bw = 0.3 + 0.14 * clamp01(qz + 0.3);
@@ -1171,6 +1164,7 @@ function bodyPick(qx: number, qy: number, qz: number): number {
     if (HI) PICK_T = tufts(6, 5, 0.06, 1.0)(qx, qy, qz);
     return P_PALE;
   }
+  PICK_T = fur;
   return P_FUR;
 }
 
@@ -1237,12 +1231,7 @@ function strap(out: PartF[], S: Skel, pts: [number, number][], segs: number): V3
     const f = clamp01(u) * (pts.length - 1);
     const i = Math.min(pts.length - 2, Math.floor(f));
     const t = f - i;
-    return torsoAt(
-      S,
-      lerp(pts[i][0], pts[i + 1][0], t),
-      lerp(pts[i][1], pts[i + 1][1], t),
-      1.04,
-    );
+    return torsoAt(S, lerp(pts[i][0], pts[i + 1][0], t), lerp(pts[i][1], pts[i + 1][1], t), 1.04);
   };
   const line: V3[] = [];
   for (let i = 0; i < segs; i++) {
@@ -1366,11 +1355,7 @@ function chainParts(out: PartF[], c: Ctx): void {
   }
   // Путь цепи: свисает с кольца (провис отстаёт и качается), дальше по полу.
   const top = add(ring, [0, 0, -rr]);
-  const F0: V3 = [
-    S.pl.floor[0] * G + o.x * 0.3,
-    S.pl.floor[1] * G + o.y * 0.2,
-    S.pl.floor[2] * k,
-  ];
+  const F0: V3 = [S.pl.floor[0] * G + o.x * 0.3, S.pl.floor[1] * G + o.y * 0.2, S.pl.floor[2] * k];
   const F1: V3 = add(F0, [-2.4 * G, 3.6 * G, 0]);
   const F2: V3 = add(F1, [-3.6 * G, 0.6 * G, 0]);
   const sw = (lag.chX - S.bc[0]) * 1.2 + lag.lsw * 1.5;
@@ -1605,10 +1590,7 @@ function skullPick(qx: number, qy: number, qz: number): number {
     return P_BLACK;
   }
   if (qz < -0.42 && ax0 < 0.6) return P_PALE;
-  if (qy < 0.15) {
-    PICK_T = -0.08;
-    return P_FUR;
-  }
+  PICK_T = (qy < 0.15 ? -0.08 : 0) + (HI ? tufts(6, 6, 0.05, 0.95)(qx, qy, qz) : 0);
   return P_FUR;
 }
 
@@ -2127,8 +2109,7 @@ function badge(p: Px, f: Frame, c: Ctx, hs: { straps: V3[][]; collar: V3[] }): v
     p.set(at[0] + 1, at[1] + 1, br[2]);
   };
   if (HI) {
-    for (const line of hs.straps)
-      for (let j = 2; j < line.length - 2; j += 3) rivet(line[j]);
+    for (const line of hs.straps) for (let j = 2; j < line.length - 2; j += 3) rivet(line[j]);
     for (let j = 1; j < hs.collar.length; j += 3) rivet(hs.collar[j]);
   } else {
     for (const j of [2, hs.collar.length - 3]) {
