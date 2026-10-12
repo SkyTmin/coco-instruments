@@ -7071,8 +7071,12 @@ button.fg-slot {
   animation: gx-fade 180ms ease-out;
   cursor: pointer;
 }
+/* Имя яруса — над сценой: откинутая крышка и луч встают выше рамки сундука. */
 .pchs__head {
+  position: relative;
+  z-index: 3;
   min-height: 34px;
+  margin-bottom: 16px;
 }
 .pchs__head .rname {
   display: inline-block;
@@ -7346,7 +7350,8 @@ button.fg-slot {
   top: calc(10px + var(--ly));
   width: 60px;
   height: 60px;
-  margin: -30px 0 0 -30px;
+  /* Капля чуть выше якоря: так она ложится на нарисованный ключ кадра 0. */
+  margin: -34px 0 0 -30px;
   z-index: 2;
   filter: drop-shadow(0 0 10px rgba(142, 232, 148, 0.95));
   animation: pch-key 420ms cubic-bezier(0.3, 0, 0.6, 1) both;
