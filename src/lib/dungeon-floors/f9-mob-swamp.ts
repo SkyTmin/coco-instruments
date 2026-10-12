@@ -146,16 +146,21 @@ function wispRig(o: WispO, yaw: number): Rig {
     0.3,
     out_,
   );
-  // Тёмное ядро с глазами.
+  // Тёмное ядро с глазами — выглядывает из пламени по ходу (лицо огня;
+  // внутри шара его не было бы видно).
+  // Лицо смотрит к зрителю и чуть в сторону хода (как прежний огонь).
+  const fy = PI / 2 + 0.6 * Math.sin(yaw - PI / 2);
+  const FF = F3.yaw(fy, c0);
+  let eye: V3 | null = null;
   if (o.core > 0.05) {
-    r.ell(F, [0.9 * k, 0, 3.0 * k], [1.3 * k * o.core, 1.5 * k * o.core, 1.4 * k * o.core], {
-      T: CORE,
-      bias: -0.2,
-    });
+    const c = o.core;
+    const C = FF.at(1.75 * k, 0, 1.3 * k).pitch(-0.5);
+    r.ell(C, [0, 0, 0], [1.5 * k * c, 1.7 * k * c, 1.6 * k * c], { T: CORE, bias: -0.2 });
     if (o.eyes > 0.5)
-      for (const sd of [-1, 1]) r.dot(F.p(2.1 * k, sd * 0.7 * k, 3.3 * k), W_EYE, 1, 1, 1.2);
+      for (const sd of [-1, 1]) r.dot(C.p(1.45 * k * c, sd * 0.75 * k, 0.25 * k), W_EYE, 1, 1, 1.2);
+    eye = C.p(1.45 * k * c, 0, 0.25 * k);
   }
-  r.eye = o.eyes > 0.5 && o.core > 0.05 ? F.p(2.1 * k, camSide(yaw) * 0.7 * k, 3.3 * k) : null;
+  r.eye = o.eyes > 0.5 ? eye : null;
   // Искры кружат и поднимаются.
   for (let i = 0; i < 5 && o.spark > 0; i++) {
     const a = o.fl * 0.6 + (i / 5) * TAU;
@@ -310,7 +315,7 @@ function wispPose(anim: string, f: number): WispO {
   return o;
 }
 
-const WISP = kindOf('f9_wisp', 56, 60, 28, 40, 900);
+const WISP = kindOf('f9_wisp', 56, 60, 28, 40, 900, 1.3);
 const wispPic = (anim: string, f: number, d: number): Pic =>
   drawRig(WISP, wispRig(wispPose(anim, f), yawN(d)), 0, null);
 
@@ -723,7 +728,7 @@ function rootPose(anim: string, f: number): RootO {
   return o;
 }
 
-const ROOT = kindOf('f9_root', 56, 52, 28, 34, 900);
+const ROOT = kindOf('f9_root', 56, 52, 28, 34, 900, 1.2);
 const rootPic = (anim: string, f: number, d: number): Pic =>
   drawRig(ROOT, rootRig(rootPose(anim, f), yawN(d)));
 
@@ -820,10 +825,10 @@ const LO: LeechO = {
   pop: 0,
 };
 
-function leechRig(o: LeechO): Rig {
+function leechRig(o: LeechO, yaw: number): Rig {
   const r = new Rig();
-  // Один курс на все стороны: бок к зрителю (вдоль экрана).
-  const B = F3.yaw(0);
+  // Тело вытянуто по ходу: присоской вперёд (8 сторон — один эллипсоид).
+  const B = F3.yaw(yaw);
   const k = 1 + o.full * 0.3;
   const len = lerp(5.4 * o.sx, 3.3, o.ball) * k;
   const wid = lerp(3.3 / Math.sqrt(o.sx), 3.3, o.ball) * k;
@@ -978,15 +983,17 @@ function leechPose(anim: string, f: number): LeechO {
   return o;
 }
 
-const LCH = kindOf('f9_leech', 40, 36, 20, 24, 300);
-const leechPic = (anim: string, f: number): Pic => drawRig(LCH, leechRig(leechPose(anim, f)));
+const LCH = kindOf('f9_leech', 40, 36, 20, 24, 900, 1.4);
+const leechPic = (anim: string, f: number, d: number): Pic =>
+  drawRig(LCH, leechRig(leechPose(anim, f), yawN(d)));
 
 registerMobPainter('f9_leech', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = pose.t;
   const now = pose.now || 0;
   const id = m.id ?? 0;
-  const v = visOf(m, pose, 0, 30);
+  // Курс — по ходу (присоской вперёд), на герое — к нему.
+  const v = visOf(m, pose, md === 'latch' || !moving(m, 0.3) ? (m.face ?? 0) : headOf(m, 0.3), 14);
   const ex: Partial<MobFrame> = { shadow: 4, still: true };
   let anim = 'idle';
   let f = mod((now + hash(id, 17) * 5) * 6, 8);
@@ -1021,8 +1028,9 @@ registerMobPainter('f9_leech', (m: Mob, pose: MobPose) => {
     f = mod((v.dist / 0.5) * 8, 8);
   }
   if (md !== 'dying' && md !== 'latch') hurtFields(v, now, ex, 0.6);
+  const d = dirN(v.yaw);
   return out(
-    frameOf(LCH, anim, f, 0, pose.look, () => leechPic(anim, f)),
+    frameOf(LCH, anim, f, d, pose.look, () => leechPic(anim, f, d)),
     ex,
     pose.flash,
   );
@@ -1070,9 +1078,5 @@ registerMobWarm('f9_root', function* () {
   yield* warmAll(ROOT, ROOT_WARM, rootPic);
 });
 registerMobWarm('f9_leech', function* () {
-  for (const [a, n] of LEECH_WARM)
-    for (let f = 0; f < n; f++) {
-      frameOf(LCH, a, f, 0, 'normal', () => leechPic(a, f));
-      yield 0;
-    }
+  yield* warmAll(LCH, LEECH_WARM, leechPic);
 });

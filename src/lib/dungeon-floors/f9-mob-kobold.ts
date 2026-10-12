@@ -130,7 +130,7 @@ const K0: KobO = {
   fwd: 0,
   side: 0,
   hip: 5.4,
-  lean: 0.3,
+  lean: 0.2,
   twist: 0,
   head: 0,
   jaw: 0,
@@ -214,12 +214,12 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
 
   // Мешок скупщика — за спиной, с верёвкой и монетами сверху.
   if (hoard) {
-    const S0 = T.p(-3.0, 0, 3.9 + o.sack);
-    r.ell(T.at(-3.0, 0, 3.9 + o.sack), [0, 0, 0], [2.9, 3.2, 3.3], SACK_M);
+    const S0 = T.p(-3.4, 0, 3.8 + o.sack);
+    r.ell(T.at(-3.4, 0, 3.8 + o.sack), [0, 0, 0], [2.3, 1.9, 2.6], SACK_M);
     r.cap(T.p(-1.4, 0, 6.6 + o.sack), T.p(-3.0, 0, 7.6 + o.sack), 0.9, 0.6, { T: SACK });
     for (let i = 0; i < 4; i++)
       r.dot(
-        vadd(S0, T.v(-0.4 + (i % 2) * 0.9, (i - 1.5) * 0.9, 3.3 + (i % 2) * 0.4)),
+        vadd(S0, T.v(-0.4 + (i % 2) * 0.9, (i - 1.5) * 0.6, 2.6 + (i % 2) * 0.4)),
         i % 2 ? COIN : COIN_HI,
         0.3,
         1,
@@ -244,8 +244,12 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
   }
 
   // Тело, светлое брюхо.
-  r.ell(T, [0, 0, 2.8], [2.2, 2.1, 3.1], FUR_M);
-  r.ell(T, [0.9, 0, 2.6], [1.4, 1.6, 2.3], FUR_LT_M);
+  // Скупщик — в лиловой робе с рунами (как прежде), кобольд — мехом наружу.
+  r.ell(T, [0, 0, 2.8], [2.2, 2.1, 3.1], hoard ? HOOD_M : FUR_M);
+  if (!hoard) r.ell(T, [0.9, 0, 2.6], [1.4, 1.6, 2.3], FUR_LT_M);
+  else
+    for (let i = 0; i < 3; i++)
+      r.dot(T.p(2.15, (i - 1) * 0.9, 2.0 + (i % 2) * 1.1), o.rune > 0.6 ? RUNE : RUNE_DIM, o.rune, 1, 1);
   // Полы капюшона-плаща за спиной (отстают при беге).
   if (!hoard) {
     const a = T.p(-1.6, 0, 5.4);
@@ -336,7 +340,7 @@ function kobRig(o: KobO, yaw: number, hoard: boolean): Rig {
 function kobPose(anim: string, f: number, hoard: boolean): KobO {
   const o: KobO = { ...K0, fl: [...K0.fl], fr: [...K0.fr], grip: [...K0.grip], lh: [...K0.lh] };
   if (hoard) {
-    o.lean = 0.5;
+    o.lean = 0.32;
     o.grip = [1.6, 2.0, 2.2];
     o.lh = [1.6, -2.0, 2.4];
   }
@@ -691,8 +695,8 @@ function kobPose(anim: string, f: number, hoard: boolean): KobO {
 
 // ---- Кадры ----
 
-const KOB = kindOf('f9_kobold', 40, 40, 20, 30, 1100);
-const HOA = kindOf('f9_hoarder', 40, 40, 20, 30, 900);
+const KOB = kindOf('f9_kobold', 40, 40, 20, 30, 1100, 1.4);
+const HOA = kindOf('f9_hoarder', 40, 40, 20, 30, 900, 1.4);
 const kobPic = (anim: string, f: number, d: number): Pic =>
   drawRig(KOB, kobRig(kobPose(anim, f, false), yawN(d), false));
 const hoaPic = (anim: string, f: number, d: number): Pic =>

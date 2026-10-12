@@ -540,7 +540,7 @@ function toadPose(anim: string, f: number): ToadO {
 
 // ---- Кадры ----
 
-const TOAD = kindOf('f9_toad', 52, 40, 26, 26, 1100);
+const TOAD = kindOf('f9_toad', 52, 40, 26, 26, 1100, 1.25);
 const toadPic = (anim: string, f: number, d: number): Pic =>
   drawRig(TOAD, toadRig(toadPose(anim, f), yawN(d)));
 

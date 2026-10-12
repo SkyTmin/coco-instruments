@@ -263,8 +263,14 @@ export interface Kind {
   frames: FrameLRU<MobFrame>;
   /** Предел кеша (для стенда). */
   limit: number;
+  /** Масштаб рига: позы задаются в «своих» пикселях, рисунок — крупнее. */
+  s: number;
 }
 const KINDS: Kind[] = [];
+/**
+ * Вид моба: холст `w×h` с точкой ног `(ax, ay)` — в своих пикселях позы;
+ * `s` — во сколько раз рисунок крупнее (холст и якорь растут следом).
+ */
 export function kindOf(
   name: string,
   w: number,
@@ -272,10 +278,47 @@ export function kindOf(
   ax: number,
   ay: number,
   limit: number,
+  s = 1,
 ): Kind {
-  const K: Kind = { name, w, h, ax, ay, frames: frameLRU<MobFrame>(limit), limit };
+  const K: Kind = {
+    name,
+    w: Math.ceil(w * s),
+    h: Math.ceil(h * s),
+    ax: Math.round(ax * s),
+    ay: Math.round(ay * s),
+    frames: frameLRU<MobFrame>(limit),
+    limit,
+    s,
+  };
   KINDS.push(K);
   return K;
+}
+
+/** Риг крупнее в `k` раз от точки ног (все примитивы и глаз). */
+function scaleRig(r: Rig, k: number): void {
+  const s = (p: V3): V3 => [p[0] * k, p[1] * k, p[2] * k];
+  for (const q of r.prims) {
+    if (q.k === 0) {
+      q.c = s(q.c);
+      q.a = [s(q.a[0]), s(q.a[1]), s(q.a[2])];
+    } else if (q.k === 1) {
+      q.a = s(q.a);
+      q.b = s(q.b);
+      q.r0 *= k;
+      q.r1 *= k;
+    } else if (q.k === 2) {
+      q.pts = q.pts.map(s);
+      q.bias *= k;
+    } else if (q.k === 3) {
+      q.p = s(q.p);
+      q.bias *= k;
+    } else {
+      q.a = s(q.a);
+      q.b = s(q.b);
+      q.bias *= k;
+    }
+  }
+  if (r.eye) r.eye = s(r.eye);
 }
 
 /**
@@ -351,7 +394,8 @@ export interface Pic {
 
 /** Рисунок рига на холсте вида (внешний контур — чернилами, внутренний — по глубине). */
 export function drawRig(K: Kind, r: Rig, inner = 2.2, outline: RGBA | null = INK): Pic {
-  const o = renderRig(r, K.w, K.h, K.ax, K.ay, { outline, inner });
+  if (K.s !== 1) scaleRig(r, K.s);
+  const o = renderRig(r, K.w, K.h, K.ax, K.ay, { outline, inner: inner * K.s });
   return { p: o.p, lit: o.lit, eye: o.eye };
 }
 
