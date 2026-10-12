@@ -225,6 +225,9 @@
 .nur .pet.is-ghost .pet__thumb {
   filter: brightness(0) invert(0.32);
 }
+.nur-stage .pet.is-ghost .pet__thumb {
+  filter: brightness(0) opacity(0.7);
+}
 /* along: a paw tag on the bottom-left of the collection slot */
 .nur-along {
   position: absolute;

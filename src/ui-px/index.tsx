@@ -337,9 +337,12 @@ export function Slot({
  *  release). Returns the portal to render. */
 export function useTip(ref: RefObject<HTMLElement>, content: ReactNode): ReactNode {
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null);
+  // Content is new JSX on every render — subscribe once per element, not per render (a
+  // re-subscription hid the tip on each store tick).
+  const has = content != null;
   useEffect(() => {
     const el = ref.current;
-    if (!el || content == null) return undefined;
+    if (!el || !has) return undefined;
     let timer = 0;
     const show = () => {
       const r = el.getBoundingClientRect();
@@ -375,8 +378,8 @@ export function useTip(ref: RefObject<HTMLElement>, content: ReactNode): ReactNo
       el.removeEventListener('pointercancel', hide);
       window.removeEventListener('scroll', hide, true);
     };
-  }, [ref, content]);
-  if (!pos || content == null) return null;
+  }, [ref, has]);
+  if (!pos || !has) return null;
   return createPortal(<Tooltip {...pos}>{content}</Tooltip>, document.body);
 }
 
