@@ -247,6 +247,36 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   pixel.
 - Rig 390×844, headless renders in software; not checked on a phone or by ear — say so.
 
+## Floor 12 mobs (`f12-rig.ts`, `f12-mobkit.ts`, `f12-mob-*.ts`)
+
+- The rig was moved verbatim `f12-art.ts` → `f12-rig.ts`; it is the mammoth's rig too — any
+  edit there changes the boss (compare the boss sheet). `rimLight`/`RIM_C` live in the kit.
+- Kit on f10/f8: `visOf` (turn rate, prev mode), `stepPh`, `idlePh` (id phase), `hurtFx`,
+  `trk` (24 fps keys), `kindOf` (frameLRU + looks LRU 35%), `frameOf` (new-frame budget
+  0.5 ms, then a known mob holds its last frame; flash ring 96), `warmAll` (8 sides),
+  `paintMob` (dark/blind on a copy — the old `regMob` mutated cached frames), `__f12stat()`.
+- 12 kinds, one file each; 8 sides (warrior, keeper, shaman — 8 honest). f12 brains don't
+  use `def.windup`: contact frames come from their own timers (`CATALOG` in the agents'
+  notes). Brain untouched — no `v…` fields were needed.
+- Specials: the icicle carries its hang height in the model (engine `lift` is for `fly`
+  only); the owl keeps lift/bank in its own WeakMap (live only); the golem draws `m.face`
+  at 18 rad/s (the back ×1.5 bonus is by `m.face`; the old path-driven drawing showed the
+  core to the hero for up to 0.9 s) — so it may walk sideways around walls; warrior,
+  golem and keeper pick which recover plays per mob (WeakMap from the prev mode, sheets
+  fall back to `data`); the shaman spawns only in boss phase 3, so her warm-up is also
+  registered on `f12boss`, from `f12-art.ts` after the mammoth's generator
+  (`registerMobWarm` appends; a mob file runs before f12-art's body).
+- Measured: 11 246 warmed frames, 22 MB (all within caps); warm step p90 ≤ 0.6 ms except
+  keeper 0.9 / shaman 0.8 (the rig, not the post pass — left as is: 0 frames are built in
+  combat). New frames in combat: 0 (17-mob crowd, batch deaths, boss fight to phase 3);
+  all-elite crowd — 268 recolours in 8 s, p90 0.6 ms. Crowd A/B (17 mobs) vs v2.109,
+  5 pairs base → new: p50 4.7→3.8, 4.8→3.2, 3.4→3.1, 3.7→3.8, 3.2→3.5; p90 8.8→6.8,
+  8.4→4.8, 4.7→4.9, 5.8→5.3, 4.8→4.6; p99 18.8→12.2, 28.6→8.0, 7.1→9.5, 14.1→7.9,
+  10.8→7.4 ms. Mammoth sheet pixel-equal; no floor-15 echoes of floor-12 mobs.
+- Pitfalls: sheets make a fresh mob per frame — transitions from the previous mode, owl
+  lift, golem turn show only live; tall and low frames on one sheet cut ground pixels —
+  separate specs; fading via glass alpha leaves an outlined ghost — use frame `alpha`.
+
 ## Known issues, requests to the engine (not done)
 
 - The engine lacks: a "behind mobs but above darkness" layer; two-layer contact in one
@@ -273,4 +303,5 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   v2.106 floor 6 (`f6-mob-*.ts`, `f6-mobkit.ts`, `f6-mob-fx.ts`), v2.107 floor 9 (`f9-mob-*.ts`,
   `f9-mobkit.ts`; `f9_body`/`f9_head` stay registered for floor 15), v2.108 floor 8
   (`f8-mob-*.ts`, `f8-mobkit.ts`, `f8-mob-fx.ts`, brain `f8_snap`), v2.109 floor 10
-  (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept).
+  (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept);
+  floor 12 (`f12-rig.ts`, `f12-mobkit.ts`, `f12-mob-*.ts`; see the section above).
