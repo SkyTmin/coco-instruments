@@ -9,7 +9,7 @@
 // `f14_curl` 0,55 (линия на полу) → `f14_roll` до 1,5 с по `m.dir` со
 // скоростью 9, отскок от стен (курс — по скорости) → `dizzy` 0,9.
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import {
@@ -46,6 +46,8 @@ import {
   visOf,
   vlerp,
   warmAll,
+  demOf,
+  regWarm,
   yawN,
 } from './f14-mobkit';
 import type { Mat, Pic, Proj2, RGBA, RigOut, V3 } from './f14-mobkit';
@@ -715,6 +717,10 @@ const WARM: [string, number, number[]?][] = [
   ['land', 8],
 ];
 
-registerMobWarm('f14_beetle', function* () {
-  yield* warmAll(KB, WARM, bePic);
-});
+regWarm(
+  'f14_beetle',
+  function* () {
+    yield* warmAll(KB, WARM, bePic);
+  },
+  [[KB, demOf(WARM, bePic)]],
+);

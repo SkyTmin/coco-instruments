@@ -19,7 +19,7 @@
 // Состояние рисунка — в `WeakMap` по мобу: в `m.data` рисунок не пишет.
 
 import { Px } from '../dungeon-art';
-import { frameLRU, paintSim } from '../dungeon-paint';
+import { frameLRU, paintSim, registerMobWarm } from '../dungeon-paint';
 import type { FrameLRU, MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { F3, Rig, proj, renderRig } from './f15-rig';
@@ -367,6 +367,8 @@ export const kindOf = (
  */
 export const F14_MOB_STAT = {
   budget: 0.5,
+  /** Общая очередь прогрева этажа (стенд: `false` — как греет движок). */
+  sched: true,
   warming: false,
   n: 0,
   warm: 0,
@@ -375,6 +377,8 @@ export const F14_MOB_STAT = {
   max: 0,
   maxKey: '',
   battle: new Map<string, number>(),
+  /** Цена кадров прогрева по видам (мс) — для отчёта замера. */
+  wms: new Map<string, number[]>(),
   px: 0,
   built: 0,
   lit: 0,
@@ -401,6 +405,9 @@ export const F14_MOB_STAT = {
 function stat(ms: number, K: Kind, key: string): void {
   if (F14_MOB_STAT.warming) {
     F14_MOB_STAT.warm++;
+    const w = F14_MOB_STAT.wms.get(K.name) ?? [];
+    if (w.length < 4000) w.push(ms);
+    F14_MOB_STAT.wms.set(K.name, w);
     return;
   }
   F14_MOB_STAT.n++;
@@ -434,6 +441,12 @@ if (import.meta.env?.DEV && typeof window !== 'undefined') {
       litShare: +(F14_MOB_STAT.lit / Math.max(1, F14_MOB_STAT.built)).toFixed(2),
       kbPerFrame: +((F14_MOB_STAT.px * 4) / 1024 / Math.max(1, F14_MOB_STAT.built)).toFixed(1),
       battle: [...F14_MOB_STAT.battle.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16),
+      wcost: [...F14_MOB_STAT.wms.entries()].map(([k, w]) => {
+        const s = [...w].sort((a, b) => a - b);
+        const p = (x: number) =>
+          +(s[Math.min(s.length - 1, Math.floor(s.length * x))] ?? 0).toFixed(2);
+        return `${k} n${s.length} p50 ${p(0.5)} p90 ${p(0.9)} max ${p(1)}`;
+      }),
     };
   };
   w.__f14mob = F14_MOB_STAT;
@@ -656,6 +669,7 @@ export function frameOf(
   cur = null;
   const live = !F14_MOB_STAT.warming;
   let fr = K.frames.get(key);
+  if (!fr && live) miss(K, anim, f, d);
   if (!fr && live && v && !curFresh && v.last && v.lastK === K) {
     const now = pose.now || 0;
     if (now !== budNow) {
@@ -739,6 +753,106 @@ export function* warmGray(K: Kind, list: [string, number[], number[]?][]) {
         if (fr && !K.looks.get(lk)) K.looks.set(lk, lookFrame(fr, 'normal', true));
         yield 0;
       }
+}
+
+// ---------------------------------------------------------------------------
+// Прогрев этажа — одна очередь на все виды. Движок греет виды по одному, в
+// порядке `sim.mobs`, и только тех, кто уже в мире: вид, пришедший, пока
+// греется другой (песочный призрак и отмотчик у часов, пока греется жнец),
+// строил кадры в бою — его прогрев начинался поздно. Здесь живой промах
+// `frameOf` — спрос на всю серию (поза, сторона): её греем первой, со
+// следующего шага прогрева; вид, нарисованный вживую, сразу встаёт в общую
+// очередь — его прогрев идёт, кого бы ни грел сейчас движок.
+// ---------------------------------------------------------------------------
+
+export type WarmList = [string, number, number[]?][];
+type PicFn = (a: string, f: number, d: number) => Pic;
+/** Серия позы для спроса: сколько кадров и чем рисовать (нет — не греем). */
+type Dem = (anim: string) => [number, PicFn] | null;
+interface WJob {
+  gen: () => Iterator<unknown>;
+  it: Iterator<unknown> | null;
+  done: boolean;
+}
+const JOBS = new Map<Kind, WJob>();
+const DEMS = new Map<Kind, Dem>();
+const WANT: WJob[] = [];
+const DEMAND: [Kind, string, number, number][] = [];
+const DKEY = new Set<string>();
+
+function want(j: WJob, restart: boolean): void {
+  if (!restart && j.done) return;
+  if (!j.it) {
+    j.it = j.gen();
+    j.done = false;
+  }
+  if (!WANT.includes(j)) WANT.push(j);
+}
+
+function miss(K: Kind, anim: string, f: number, d: number): void {
+  const j = JOBS.get(K);
+  if (!j || !F14_MOB_STAT.sched) return;
+  want(j, false);
+  const k = `${K.name}|${anim}|${d}`;
+  if (DKEY.has(k) || DEMAND.length >= 64 || !DEMS.get(K)?.(anim)) return;
+  DKEY.add(k);
+  DEMAND.push([K, anim, f, d]);
+}
+
+function* drain() {
+  for (;;) {
+    const q = DEMAND.shift();
+    if (q) {
+      const [K, anim, f0, d] = q;
+      DKEY.delete(`${K.name}|${anim}|${d}`);
+      const s = DEMS.get(K)?.(anim);
+      if (s)
+        for (let i = 1; i <= s[0]; i++) {
+          const f = (f0 + i) % s[0];
+          if (K.frames.get(`${anim}|${f}|${d}`)) continue;
+          F14_MOB_STAT.warming = true;
+          try {
+            frameOf(K, anim, f, d, WARM_POSE, () => s[1](anim, f, d));
+          } finally {
+            F14_MOB_STAT.warming = false;
+          }
+          yield 0;
+        }
+      continue;
+    }
+    const j = WANT[0];
+    if (!j) return;
+    if (!j.it || j.it.next().done) {
+      j.it = null;
+      j.done = true;
+      WANT.shift();
+    }
+    yield 0;
+  }
+}
+
+/** Спрос из списка прогрева вида. */
+export const demOf =
+  (list: WarmList, pic: PicFn): Dem =>
+  (anim) => {
+    const e = list.find((q) => q[0] === anim);
+    return e ? [e[1], pic] : null;
+  };
+
+/**
+ * Прогрев вида через общую очередь этажа: `gen` — его генератор (как для
+ * `registerMobWarm`), `kinds` — виды, что он греет, и их спрос.
+ */
+export function regWarm(paintId: string, gen: () => Iterator<unknown>, kinds: [Kind, Dem][]) {
+  const j: WJob = { gen, it: null, done: false };
+  for (const [K, dem] of kinds) {
+    JOBS.set(K, j);
+    DEMS.set(K, dem);
+  }
+  registerMobWarm(paintId, function* () {
+    want(j, true);
+    yield* drain();
+  });
 }
 
 // ---------------------------------------------------------------------------

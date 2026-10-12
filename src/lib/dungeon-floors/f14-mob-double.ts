@@ -18,7 +18,7 @@
 // Всё, что играет, прогревается; состояние рисунка — в `WeakMap` по мобу.
 
 import { Px } from '../dungeon-art';
-import { registerImpactPainter, registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerImpactPainter, registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { bladeSprite, heroSprite, loadDungeonSprites, spritesReady } from '../dungeon-sprites';
@@ -46,6 +46,7 @@ import {
   sstep,
   visOf,
   warmAll,
+  regWarm,
   warmGray,
   wnow,
 } from './f14-mobkit';
@@ -759,32 +760,60 @@ const D4 = [0, 1, 2, 3];
 const D8 = [0, 1, 2, 3, 4, 5, 6, 7];
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
-registerMobWarm('f14_double', function* () {
-  for (let i = 0; i < 1200 && (!spritesReady() || !gearGet); i++) {
-    void loadDungeonSprites();
-    gearTiers();
-    yield 0;
-  }
-  if (!spritesReady()) return;
-  const [tier, wt] = gearTiers();
-  const tw = `${tier}.${wt}`;
-  const list: [string, number, number[]?][] = [
-    [`id.${tw}`, 8, D4],
-    [`wk.${tw}`, 16, D4],
-    [`wl.${tw}`, 32, D8],
-    [`sl.${tw}`, 5, range(32)],
-    [`rl.${tw}`, 5, range(16)],
-    [`wh.${tw}`, 32, D4],
-    [`sh.${tw}`, 5, range(16)],
-    [`rh.${tw}`, 5, D8],
-    [`st.${tw}`, 9, D4],
-    [`hu.${tw}`, 5, D4],
-    [`die.${tw}`, 21, D4],
-    [`dv.${tw}`, 11, D4],
-  ];
-  yield* warmAll(KD, list, dbPic);
-  yield* warmGray(KD, [[`id.${tw}`, [0], D4]]);
-});
+/** Кадров в серии по позе (имя позы — `поза.ступень.оружие`). */
+const DB_N: Record<string, number> = {
+  id: 8,
+  wk: 16,
+  wl: 32,
+  sl: 5,
+  rl: 5,
+  wh: 32,
+  sh: 5,
+  rh: 5,
+  st: 9,
+  hu: 5,
+  die: 21,
+  dv: 11,
+};
+
+regWarm(
+  'f14_double',
+  function* () {
+    for (let i = 0; i < 1200 && (!spritesReady() || !gearGet); i++) {
+      void loadDungeonSprites();
+      gearTiers();
+      yield 0;
+    }
+    if (!spritesReady()) return;
+    const [tier, wt] = gearTiers();
+    const tw = `${tier}.${wt}`;
+    const list: [string, number, number[]?][] = [
+      [`id.${tw}`, DB_N.id, D4],
+      [`wk.${tw}`, DB_N.wk, D4],
+      [`wl.${tw}`, DB_N.wl, D8],
+      [`sl.${tw}`, DB_N.sl, range(32)],
+      [`rl.${tw}`, DB_N.rl, range(16)],
+      [`wh.${tw}`, DB_N.wh, D4],
+      [`sh.${tw}`, DB_N.sh, range(16)],
+      [`rh.${tw}`, DB_N.rh, D8],
+      [`st.${tw}`, DB_N.st, D4],
+      [`hu.${tw}`, DB_N.hu, D4],
+      [`die.${tw}`, DB_N.die, D4],
+      [`dv.${tw}`, DB_N.dv, D4],
+    ];
+    yield* warmAll(KD, list, dbPic);
+    yield* warmGray(KD, [[`id.${tw}`, [0], D4]]);
+  },
+  [
+    [
+      KD,
+      (anim) => {
+        const n = DB_N[anim.split('.')[0]];
+        return n && spritesReady() ? [n, dbPic] : null;
+      },
+    ],
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Контакт ударов двойника (вместо общего взрыва движка).

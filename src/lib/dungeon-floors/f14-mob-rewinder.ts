@@ -14,7 +14,7 @@
 // `f14_dazed` 1,6: стекло треснуло (урон ×1,5 — трещина светится), стрелки
 // повисли маятниками, песок течёт из трещины.
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { CE, SE } from './f15-rig';
@@ -55,6 +55,8 @@ import {
   vmul,
   vnorm,
   warmAll,
+  demOf,
+  regWarm,
   warmGray,
   wnow,
   yawN,
@@ -986,7 +988,11 @@ const WARM: [string, number, number[]?][] = [
   ['land', 8],
 ];
 
-registerMobWarm('f14_rewinder', function* () {
-  yield* warmAll(KR, WARM, rwPic);
-  yield* warmGray(KR, [['strike', [1]]]);
-});
+regWarm(
+  'f14_rewinder',
+  function* () {
+    yield* warmAll(KR, WARM, rwPic);
+    yield* warmGray(KR, [['strike', [1]]]);
+  },
+  [[KR, demOf(WARM, rwPic)]],
+);

@@ -22,7 +22,7 @@
 // рассыпает монеты, тело рассыпается золотой пылью (`scatter` из
 // `f14-art.ts`).
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { clear, scatter } from './f14-art';
@@ -60,6 +60,8 @@ import {
   visOf,
   vlerp,
   warmAll,
+  demOf,
+  regWarm,
   yawN,
 } from './f14-mobkit';
 import type { KeyPose, Mat, Pic, Proj2, RGBA, RigOut, V3 } from './f14-mobkit';
@@ -667,6 +669,10 @@ const WARM: [string, number, number[]?][] = [
   ['die', DIE_N],
 ];
 
-registerMobWarm('f14_smith', function* () {
-  yield* warmAll(KS, WARM, smPic);
-});
+regWarm(
+  'f14_smith',
+  function* () {
+    yield* warmAll(KS, WARM, smPic);
+  },
+  [[KS, demOf(WARM, smPic)]],
+);

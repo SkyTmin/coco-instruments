@@ -10,7 +10,7 @@
 // `f14_rise`: удар кругом через 0,5 с (кадр 12) → `recover`. Наводнение
 // поднимает призрака сразу в `f14_rise`.
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import {
@@ -49,6 +49,8 @@ import {
   vnorm,
   vsub,
   warmAll,
+  demOf,
+  regWarm,
   warmGray,
   yawN,
 } from './f14-mobkit';
@@ -1250,7 +1252,11 @@ const WARM: [string, number, number[]?][] = [
   ['land', 8],
 ];
 
-registerMobWarm('f14_sand', function* () {
-  yield* warmAll(KSG, WARM, sgPic);
-  yield* warmGray(KSG, [['claw', [9]]]);
-});
+regWarm(
+  'f14_sand',
+  function* () {
+    yield* warmAll(KSG, WARM, sgPic);
+    yield* warmGray(KSG, [['claw', [9]]]);
+  },
+  [[KSG, demOf(WARM, sgPic)]],
+);

@@ -19,7 +19,7 @@
 // на путь, что оно пролетит за 0,14 с), за ней — след по всей пружине и
 // искры у клюва. Птица летит на высоте дверцы, тень — на линии.
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { CUCKOO } from './f14-brains';
@@ -48,6 +48,8 @@ import {
   tn,
   visOf,
   warmAll,
+  demOf,
+  regWarm,
   yawN,
 } from './f14-mobkit';
 import type { KeyPose, Mat, Pic, Proj2, RGBA, RigOut, Tones, V3 } from './f14-mobkit';
@@ -733,6 +735,10 @@ const WARM: [string, number, number[]][] = [
   ['die', 21, SIDES],
 ];
 
-registerMobWarm('f14_cuckoo', function* () {
-  yield* warmAll(KC, WARM, cuPic);
-});
+regWarm(
+  'f14_cuckoo',
+  function* () {
+    yield* warmAll(KC, WARM, cuPic);
+  },
+  [[KC, demOf(WARM, cuPic)]],
+);

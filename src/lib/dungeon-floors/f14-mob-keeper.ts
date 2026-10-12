@@ -12,7 +12,7 @@
 // (0,6 / 0,78 / 0,96), затем `recover` 0,8; `f14_haste` 0,7 — переводит часы на
 // груди (стрелки бегут, циферблат разгорается), в конце — сфера ускорения.
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { vcross } from './f15-rig';
@@ -54,6 +54,8 @@ import {
   vnorm,
   vsub,
   warmAll,
+  demOf,
+  regWarm,
   warmGray,
   yawN,
 } from './f14-mobkit';
@@ -1139,10 +1141,14 @@ const WARM: [string, number, number[]?][] = [
   ['land', 8],
 ];
 
-registerMobWarm('f14_keeper', function* () {
-  yield* warmAll(KK, WARM, kkPic);
-  yield* warmGray(KK, [
-    ['hour', [14]],
-    ['idle', [0]],
-  ]);
-});
+regWarm(
+  'f14_keeper',
+  function* () {
+    yield* warmAll(KK, WARM, kkPic);
+    yield* warmGray(KK, [
+      ['hour', [14]],
+      ['idle', [0]],
+    ]);
+  },
+  [[KK, demOf(WARM, kkPic)]],
+);

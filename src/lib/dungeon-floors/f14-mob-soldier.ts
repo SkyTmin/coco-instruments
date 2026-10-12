@@ -12,7 +12,7 @@
 // Отголосок 15-го этажа (`f15_echo`, мотив 5) рисуется этим же
 // рисовальщиком: `windup` 0,9 (удар прикладом о пол, кольцо) → `recover` 0,5.
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import {
@@ -55,6 +55,8 @@ import {
   vmul,
   vnorm,
   warmAll,
+  demOf,
+  regWarm,
   warmGray,
   yawN,
 } from './f14-mobkit';
@@ -863,10 +865,14 @@ const WARM: [string, number, number[]?][] = [
   ['waking', 20, [2]],
 ];
 
-registerMobWarm('f14_soldier', function* () {
-  yield* warmAll(KS, WARM, soPic);
-  yield* warmGray(KS, [
-    ['attn', [0], [2]],
-    ['thrust', [2]],
-  ]);
-});
+regWarm(
+  'f14_soldier',
+  function* () {
+    yield* warmAll(KS, WARM, soPic);
+    yield* warmGray(KS, [
+      ['attn', [0], [2]],
+      ['thrust', [2]],
+    ]);
+  },
+  [[KS, demOf(WARM, soPic)]],
+);

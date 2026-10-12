@@ -25,7 +25,7 @@
 // осыпаются ржавой крошкой (`scatter` из `f14-art.ts`).
 
 import { Px } from '../dungeon-art';
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { scatter } from './f14-art';
@@ -53,8 +53,11 @@ import {
   tn,
   visOf,
   warmAll,
+  demOf,
+  regWarm,
   wnow,
 } from './f14-mobkit';
+import type { WarmList } from './f14-mobkit';
 import type { Pic, RGBA, Tones } from './f14-mobkit';
 
 const IRON = tn('#16161c', '#2e2e38', '#4e4e5a', '#8a8a98');
@@ -1008,27 +1011,29 @@ registerMobPainter('f14_weight', (m: Mob, pose: MobPose) => {
 // ---------------------------------------------------------------------------
 
 const ONE = [0];
-registerMobWarm('f14_weight', function* () {
-  yield* warmAll(
-    KBK,
-    [
-      ['tw', TWN, ONE],
-      ['fall', 4, ONE],
-      ['land', LAND_N, ONE],
-      ['rest', REST_N, ONE],
-      ['tight', TIGHT_N, ONE],
-      ['die', DIE_N, ONE],
-    ],
-    bodyPic,
-  );
-  yield* warmAll(
-    KGK,
-    [
-      ['gl', LAND_N, ONE],
-      ['gr', REST_N, ONE],
-      ['gu', 6, ONE],
-      ['gd', DIE_N, ONE],
-    ],
-    gndPic,
-  );
-});
+const BODY_WARM: WarmList = [
+  ['tw', TWN, ONE],
+  ['fall', 4, ONE],
+  ['land', LAND_N, ONE],
+  ['rest', REST_N, ONE],
+  ['tight', TIGHT_N, ONE],
+  ['die', DIE_N, ONE],
+];
+const GND_WARM: WarmList = [
+  ['gl', LAND_N, ONE],
+  ['gr', REST_N, ONE],
+  ['gu', 6, ONE],
+  ['gd', DIE_N, ONE],
+];
+
+regWarm(
+  'f14_weight',
+  function* () {
+    yield* warmAll(KBK, BODY_WARM, bodyPic);
+    yield* warmAll(KGK, GND_WARM, gndPic);
+  },
+  [
+    [KBK, demOf(BODY_WARM, bodyPic)],
+    [KGK, demOf(GND_WARM, gndPic)],
+  ],
+);

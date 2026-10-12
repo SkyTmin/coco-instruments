@@ -12,7 +12,7 @@
 // — лезвие в конусе на полном ходу. После серии `recover` 1,3 (урон ×1,4):
 // маятник затухает двумя качаниями, жнец сгорблен и дышит.
 
-import { registerMobPainter, registerMobWarm } from '../dungeon-paint';
+import { registerMobPainter } from '../dungeon-paint';
 import type { MobFrame, MobPose } from '../dungeon-paint';
 import type { Mob } from '../dungeon-sim';
 import { vcross } from './f15-rig';
@@ -55,6 +55,8 @@ import {
   vnorm,
   vsub,
   warmAll,
+  demOf,
+  regWarm,
   warmGray,
   yawN,
 } from './f14-mobkit';
@@ -763,10 +765,14 @@ const WARM: [string, number, number[]?][] = [
   ['land', 8],
 ];
 
-registerMobWarm('f14_reaper', function* () {
-  yield* warmAll(KRP, WARM, rpPic);
-  yield* warmGray(KRP, [
-    ['swBR', [13]],
-    ['idle', [0]],
-  ]);
-});
+regWarm(
+  'f14_reaper',
+  function* () {
+    yield* warmAll(KRP, WARM, rpPic);
+    yield* warmGray(KRP, [
+      ['swBR', [13]],
+      ['idle', [0]],
+    ]);
+  },
+  [[KRP, demOf(WARM, rpPic)]],
+);
