@@ -37,7 +37,6 @@ import {
   GUARD,
   gustBlow,
   gustWarn,
-  HARPY,
   JELLY,
   millDir,
   MOSS as MOSS_AI,
@@ -48,6 +47,7 @@ import {
   windAt,
 } from './f11-brains';
 import type { F11State } from './f11-brains';
+import './f11-mob-harpy';
 
 type RGBA = [number, number, number, number];
 
@@ -4020,185 +4020,12 @@ function over(dst: Px, src: Px, ox = 0, oy = 0): void {
 }
 
 // --- Гарпия --------------------------------------------------------------------
+// Рисовальщик — `f11-mob-harpy.ts` (анимации мобов 11); палитра перьев и кожи
+// здесь — для абордажника и перьев-предметов.
 
 const FEATH = tn('#4a2e22', '#7a4a30', '#a8703f', '#d49c62');
 const FEATH_TIP = tn('#1e5a5e', '#2c8088', '#48a8ac', '#7cd0cc');
 const SKIN = tn('#9a6248', '#c8866a', '#e8ae8e', '#f8d2b4');
-const HAIR = tn('#1a3c40', '#28585c', '#3a787a', '#5a9c98');
-const TALON = tn('#6a5a20', '#a88c30', '#d8b848', '#f4dc80');
-
-/** Крыло: кость от плеча, веер маховых от запястья, кроющие по кости. */
-function wing(
-  p: Px,
-  sx: number,
-  sy: number,
-  s: number,
-  a: number,
-  len: number,
-  spread: number,
-  bias: number,
-): void {
-  const wx = sx + s * Math.cos(a) * len * 0.5;
-  const wy = sy - Math.sin(a) * len * 0.5;
-  // Маховые — веером, длиннее к краю.
-  for (let i = 0; i < 5; i++) {
-    const fa = a - 0.35 - i * spread;
-    const fl = len * (0.62 + 0.1 * (4 - i) * 0.5);
-    const ex = wx + s * Math.cos(fa) * fl;
-    const ey = wy - Math.sin(fa) * fl;
-    limb(p, wx, wy, ex, ey, 1.3, 0.5, i % 2 ? FEATH : FEATH, bias - i * 0.05);
-    p.set(Math.round(ex), Math.round(ey), FEATH_TIP[2]);
-    p.set(Math.round(ex - s * Math.cos(fa)), Math.round(ey + Math.sin(fa)), FEATH_TIP[1]);
-  }
-  // Кость и кроющие.
-  limb(p, sx, sy, wx, wy, 1.8, 1.4, FEATH, bias + 0.15);
-  for (let k = 0; k < 3; k++) {
-    const t = 0.25 + k * 0.3;
-    const x = sx + (wx - sx) * t;
-    const y = sy + (wy - sy) * t;
-    shadeEll(p, x, y + 1.2, 1.6, 1.3, FEATH, bias + 0.1);
-  }
-}
-
-interface HarpyPose {
-  a: number;
-  len: number;
-  spread: number;
-  /** Ноги: 0 — висят, 1 — когти вперёд. */
-  claw: number;
-  tilt: number;
-  eye: RGBA;
-  hurt?: boolean;
-  perch?: boolean;
-  speed?: boolean;
-}
-
-function harpyPx(q: HarpyPose): Built {
-  const W = 34;
-  const H = 30;
-  const p = new Px(W, H);
-  const cx = 17 + q.tilt;
-  const cy = 14;
-  // Дальнее крыло.
-  if (!q.perch) wing(p, cx - 2, cy - 2, -1, q.a, q.len, q.spread, -0.2);
-  // Хвост.
-  for (let i = 0; i < 3; i++)
-    limb(p, cx - 1, cy + 5, cx - 5 + i * 2, cy + 11 - Math.abs(i - 1), 1.3, 0.6, FEATH, -0.1);
-  // Ноги.
-  const lx = q.claw ? cx + 5 : cx + 1;
-  const ly = q.claw ? cy + 7 : cy + 11;
-  limb(p, cx, cy + 5, lx - 1, ly, 1.4, 0.8, TALON, -0.1);
-  limb(p, cx + 2, cy + 5, lx + 2, ly - (q.claw ? 1 : 0), 1.4, 0.8, TALON);
-  for (const x of [lx - 1, lx + 2]) {
-    p.set(Math.round(x) - 1, ly + 1, INK);
-    p.set(Math.round(x) + 1, ly + 1, INK);
-    p.set(Math.round(x), ly + 1, INK);
-  }
-  // Тело: пёрышки снизу, кожа сверху.
-  shadeEll(p, cx + 1, cy + 3, 3.8, 3.6, FEATH, 0.05);
-  shadeEll(p, cx + 1, cy - 1, 3, 3.2, SKIN, 0.05);
-  for (let i = 0; i < 6; i++) p.set(cx - 2 + i, cy + 1 + (i % 2), FEATH[3]);
-  // Голова и волосы-перья, откинутые назад.
-  const hx0 = cx + 2 + (q.hurt ? -1 : 0);
-  const hy0 = cy - 6 + (q.hurt ? -1 : 0);
-  polyShade(
-    p,
-    [
-      [hx0 - 1, hy0 - 4],
-      [hx0 + 3, hy0 - 3.5],
-      [hx0 + 1, hy0 - 1],
-      [hx0 - 4, hy0 + 2],
-      [hx0 - 8, hy0 + 5],
-      [hx0 - 5, hy0 + 1],
-      [hx0 - 3, hy0 - 2],
-    ],
-    HAIR,
-  );
-  shadeEll(p, hx0 + 0.5, hy0, 2.8, 2.9, SKIN, 0.1);
-  polyShade(
-    p,
-    [
-      [hx0 - 2.5, hy0 - 2.8],
-      [hx0 + 3, hy0 - 3],
-      [hx0 + 2.5, hy0 - 1.5],
-      [hx0 - 1, hy0 - 1],
-    ],
-    HAIR,
-    0.1,
-  );
-  p.set(hx0 - 7, hy0 + 5, FEATH_TIP[2]);
-  p.set(hx0 - 5, hy0 + 3, FEATH_TIP[2]);
-  // Глаз хищной птицы и рот.
-  p.set(hx0 + 2, hy0, q.eye);
-  p.set(hx0 + 1, hy0, INK);
-  p.set(hx0 + 2, hy0 + 2, SKIN[0]);
-  // Ближнее крыло (или сложенные — плащом).
-  if (q.perch) {
-    polyShade(
-      p,
-      [
-        [cx - 3, cy - 3],
-        [cx + 5, cy - 3],
-        [cx + 5, cy + 6],
-        [cx + 1, cy + 9],
-        [cx - 4, cy + 7],
-      ],
-      FEATH,
-    );
-    for (let y = cy - 1; y <= cy + 7; y += 2) p.set(cx + 4, y, FEATH_TIP[2]);
-  } else wing(p, cx + 3, cy - 2, 1, q.a, q.len, q.spread, 0.05);
-  const out = ink(p);
-  if (q.speed)
-    for (let i = 0; i < 4; i++)
-      for (let x = 0; x < 6; x++) out.set(x + i, 6 + i * 4, alpha(WHITE, 0.2 + x * 0.06));
-  return { p: out, ax: 17, ay: H - 2, eye: [hx0 + 2, hy0] };
-}
-
-registerMobPainter('f11_harpy', (m: Mob, pose: MobPose) => {
-  const base: HarpyPose = { a: 0.4, len: 12, spread: 0.2, claw: 0, tilt: 0, eye: hx('#f6c83a') };
-  if (pose.mode === 'dying' || pose.anim === 'dead')
-    return mobFrame('harpy', pose, 'dead', () =>
-      harpyPx({ ...base, a: -1, len: 10, spread: 0.1, hurt: true, eye: INK }),
-    );
-  switch (pose.mode) {
-    case 'f11_perch':
-      return mobFrame('harpy', pose, `perch${Math.floor(pose.t * 0.8 + m.id) % 2}`, () =>
-        harpyPx({ ...base, perch: true, claw: 0, tilt: Math.floor(pose.t * 0.8 + m.id) % 2 }),
-      );
-    case 'f11_flap': {
-      const f = Math.floor(pose.t * 10) % 2;
-      return mobFrame('harpy', pose, `flap${f}`, () =>
-        harpyPx({ ...base, a: f ? 0.7 : -0.2, len: 14, spread: 0.27, eye: hx('#ffe060') }),
-      );
-    }
-    case 'f11_claw':
-      return mobFrame('harpy', pose, 'claw', () =>
-        harpyPx({ ...base, a: 1.25, len: 13, claw: 1, tilt: -1, eye: hx('#ff6a3a') }),
-      );
-    case 'f11_lunge':
-      return mobFrame('harpy', pose, 'lunge', () =>
-        harpyPx({
-          ...base,
-          a: 1.45,
-          len: 11,
-          spread: 0.12,
-          claw: 1,
-          tilt: 1,
-          eye: hx('#ff6a3a'),
-          speed: true,
-        }),
-      );
-  }
-  if (pose.anim === 'hurt')
-    return mobFrame('harpy', pose, 'hurt', () =>
-      harpyPx({ ...base, a: -0.3, hurt: true, eye: WHITE }),
-    );
-  const f = ((Math.floor((paintSim()?.time ?? 0) * 8 + m.id * 1.3) % 4) + 4) % 4;
-  const A = [1.05, 0.45, -0.35, 0.3][f];
-  return mobFrame('harpy', pose, `fly${f}`, () =>
-    harpyPx({ ...base, a: A, len: 12 + (f === 2 ? 1 : 0) }),
-  );
-});
 
 // --- Облачная медуза -------------------------------------------------------------
 
