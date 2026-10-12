@@ -185,7 +185,7 @@ export const PET_PX: Record<string, PetPx> = {
   },
   mouse: {
     box: 48,
-    rev: 'abb283a5e5',
+    rev: 'a3ab13b7f0',
     anims: {
       idle: { n: 72, fps: 24, x: 4, y: 1, w: 42, h: 50 },
       walk: { n: 24, fps: 24, x: 3, y: 3, w: 43, h: 46 },
@@ -201,7 +201,7 @@ export const PET_PX: Record<string, PetPx> = {
         walk: { n: 24, fps: 24, x: 13, y: 13, w: 90, h: 97 },
         happy: { n: 26, fps: 24, x: 16, y: -1, w: 86, h: 114 },
         work: { n: 48, fps: 24, x: 18, y: 7, w: 86, h: 107 },
-        attack: { n: 22, fps: 24, x: -2, y: -5, w: 117, h: 118 },
+        attack: { n: 22, fps: 24, x: -2, y: -5, w: 117, h: 119 },
         sleep: { n: 72, fps: 24, x: 16, y: 13, w: 83, h: 101 },
       },
     },

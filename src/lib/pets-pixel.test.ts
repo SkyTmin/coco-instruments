@@ -1134,7 +1134,8 @@ describe('пиксельная мышь', () => {
     for (let y = 0; y < p.h; y++)
       for (let x = x0; x < p.w; x++) {
         const j = (y * p.w + x) * 4;
-        if (p.data[j + 3] === 255 && pal.includes(`${p.data[j]},${p.data[j + 1]},${p.data[j + 2]}`)) n++;
+        if (p.data[j + 3] === 255 && pal.includes(`${p.data[j]},${p.data[j + 1]},${p.data[j + 2]}`))
+          n++;
       }
     return n;
   };
@@ -1249,6 +1250,19 @@ describe('пиксельная мышь', () => {
     expect(strike.swipe).toBeGreaterThanOrEqual(0);
     const sleep = W.poseAt('sleep', 1);
     expect([sleep.sit, sleep.wrap, sleep.earDrop, sleep.eye]).toEqual([1, 1, 1, 'sleep']);
+  });
+
+  it('ступни не скользят: двигаются только в воздухе (прыжки атаки и радости, шаг)', () => {
+    for (const an of ['idle', 'happy', 'work', 'attack', 'sleep'] as Anim[])
+      for (let i = 0; i < W.FRAMES[an]; i++) {
+        const a = W.poseAt(an, i / W.FPS);
+        const b = W.poseAt(an, (i + 1) / W.FPS);
+        if (Math.max(a.z, b.z, a.fLz, b.fLz, a.fRz, b.fRz) > 0) continue;
+        for (const j of [0, 1]) {
+          const d = dist(W.skel(a).foot[j], W.skel(b).foot[j]);
+          expect([an, i, j, d < 0.35]).toEqual([an, i, j, true]);
+        }
+      }
   });
 
   it('ходьба на цыпочках: ноги по очереди, опорная стоит на месте', () => {

@@ -461,6 +461,33 @@ Owner: «добавь возможность выбирать скин у пит
   (a gold helmet vanished on gold fur), copper lamp/buckle, dark bronze leather. Hatch plays
   `happy`. Weight 520 KB v0+v1 (small 52 / 59, large 196 / 211, thumbs 1 KB; ink was 1.60 MB).
   Tests «пиксельный крот» in `pets-pixel.test.ts`.
+- **Mouse** (`pets-pixel/mouse.ts`, `mouseFrame(a, i, res, v)`, `variants: [1]`): «Мышь-воришка»,
+  a light-grey mouse STANDING facing us (mole's `drawPartsF` + `cut`/`inner` = a cut shell shows
+  its dark lining, `tube` light for the tail). 44-px read: two huge round ears (thin discs, pink
+  bowl + fur rim, viewer's-left one notched by a `cut`), big bead eyes under a sly lid (large:
+  procedural ellipse, glint, raised lower lid), pink nose, brown capelet, pink tail curling up at
+  the viewer's right. Capelet = ONE ellipsoid shell (`capeFrame`, spring sway): yoke ring above
+  `yokeZ` covers shoulders + chest; below it only back + sides to the ragged `hemZ`; wedge slit
+  from the throat knot (`KNOT_QZ`). Rope belt (twist stripes, knot, frayed ends), «ω» mouth +
+  buck teeth, whiskers blended over fur. Chain token always in the LEFT paw (pendulum lags).
+  Work (2 s): sniff → spot 0.42 (wide eyes, head to the token, glint ON the floor token) → sly
+  crouch → dart (bow 0.45, crouch 2, lean right; head counter-nods so the face stays visible) →
+  `GRAB` = frame 20 exactly: fingertips (`S.grip`; IK straight to the fingertip with a longer
+  forearm bone — the iterative wrist aim missed by 0.8 px) on the token lying in front of the
+  right foot → token turns upright before the fingers → held over the shoulder under the ear, on
+  tiptoe (`cz` < 0, NOT `z`: that lifted the feet) → under the yoke edge → up into the gap
+  between capelet and chest, tilted back along it (vertical, it poked through the curved yoke) →
+  gone 1.6 s → wink + spark. Tests: `underCape` at `TUCKED`, no brass pixels right of centre
+  there (s/l, v0/v1). Attack: clawed paws up by the cheeks → HOP at the viewer (scale 1.18; a
+  slide skated both feet 3.6 px), paws cross down, teeth bared, three diagonal slashes over empty
+  pixels → hop back. Happy: two hops, paws V, giggle into the right paw. Walk: tiptoe in place,
+  paws before the chest, tail up. Sleep: wrapped (`wrap` closes slit + sides), ears droop, tail
+  round the front, clutches the chain token. Pitfalls: brow arcs over the eyes read as a second
+  pair of shut eyes; straight tie strings + the slit read as a letter «A» (now a bow). Gold: gold
+  fur with bronze depth, rose-gold ears/nose/paws/tail, dark leather capelet, dark bronze rope,
+  COPPER token. Hatch plays `happy`. Weight 577 KB v0+v1 (small 58 / 64, large 216 / 236, thumbs
+  1 KB; ink was 1.85 MB). Tests «пиксельная мышь» in `pets-pixel.test.ts` (feet never slide on
+  the floor in any animation).
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;

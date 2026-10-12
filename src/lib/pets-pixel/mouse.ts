@@ -803,7 +803,8 @@ function workPose(t: number): Pose {
   o.tailUp = 0.9 * pos(dive) + 0.4 * bump(t, LIFT, 1.5);
   o.tailSw = -0.3 * pos(dive) + 0.3 * Math.sin(t * TAU * 2) * bump(t, 1.1, 1.9);
   // Держит жетон над плечом — подпрыгнула на носочки.
-  o.z = 0.8 * bump(t, HIGH - 0.06, 1.34);
+  // Держит над плечом — тянется на носочки (ступни на полу).
+  o.cz -= 0.7 * bump(t, HIGH - 0.06, 1.34);
   o.glint = 0.85 * bump(t, SPOT + 0.02, 0.64) + bump(t, HIGH - 0.02, 1.34);
   // Подмигнула.
   o.wink = kf(t, [
@@ -849,7 +850,16 @@ function attackPose(t: number): Pose {
     [0.6, 0.3, 's'],
     [T, 0, 's'],
   ]);
-  o.y = 3.6 * pos(l) - 0.6 * neg(l);
+  // К зрителю — прыжком (ступни в воздухе, пока тело летит), назад — вторым прыжком.
+  o.y = kf(t, [
+    [0, 0],
+    [0.28, 0],
+    [0.38, 3.6, 'o'],
+    [0.58, 3.4],
+    [0.74, 0, 's'],
+    [T, 0],
+  ]);
+  o.z = 1.4 * bump(t, 0.27, 0.43) + 0.8 * bump(t, 0.57, 0.77);
   o.scale = 1 + 0.18 * pos(l);
   o.cz = 1.3 * neg(l);
   o.sq = 0.06 * neg(l) + 0.05 * bump(t, 0.5, 0.66);
@@ -1050,8 +1060,8 @@ export function skel(o: Pose): Skel {
     knee: [z3, z3],
     ank: [z3, z3],
     foot: [
-      [-pl.foot[0] * s, pl.foot[1] * s + o.fLy * G + o.y, pl.foot[2] * s + o.fLz * G + lift],
-      [pl.foot[0] * s, pl.foot[1] * s + o.fRy * G + o.y, pl.foot[2] * s + o.fRz * G + lift],
+      [-pl.foot[0] * G, pl.foot[1] * G + o.fLy * G + o.y, pl.foot[2] * G + o.fLz * G + lift],
+      [pl.foot[0] * G, pl.foot[1] * G + o.fRy * G + o.y, pl.foot[2] * G + o.fRz * G + lift],
     ],
   };
   /** Рука в точку: запястье (`tip` = 0) или кончики пальцев (`tip` = 1 — кость до них длиннее). */
@@ -1274,7 +1284,7 @@ function fur(qx: number, qy: number, qz: number): number {
   const fv = (qz + 2) * 7 - r;
   const tick = fu < 0.18 && fv > 0.25 ? -0.07 : fu > 0.55 && fu < 0.7 && fv < 0.4 ? 0.05 : 0;
   const n = hash(Math.floor((qx + 2) * 11), Math.floor((qz + 2) * 13), Math.floor((qy + 2) * 3));
-  return tick + (n < 0.1 ? -0.04 : n > 0.94 ? 0.04 : 0);
+  return tick + (n < 0.05 ? -0.04 : n > 0.97 ? 0.04 : 0);
 }
 
 /** Пальцы ступни: тёмные щели спереди (ось 1 — вперёд). */
@@ -1534,7 +1544,7 @@ function cape(out: PartF[], rods: Rod[], c: Ctx): void {
 }
 
 /** Ладошка: розовая, на крупной — пальцы щелями у кончика. */
-function pawPick(qx: number, qy: number, qz: number): number {
+function pawPick(qx: number, qy: number): number {
   PICK_T = 0;
   if (qx < -0.7) {
     PICK_T = -0.02;
