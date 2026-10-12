@@ -29,6 +29,14 @@ const MUSIC_LEVEL = 0.42;
 const SFX_LEVEL = 0.9;
 
 /**
+ * Громкости из общих настроек (0…1): общая, музыка, эффекты. Множатся на
+ * уровни шин выше — те задают баланс, а эти лишь убавляют.
+ */
+const vol = { master: 1, music: 1, sfx: 1 };
+const sfxLevel = () => SFX_LEVEL * vol.master * vol.sfx;
+const musicLevel = () => MUSIC_LEVEL * vol.master * vol.music;
+
+/**
  * «Тёплая» полка каторги (v2.67.3): всё, что выше 2,8 кГц, на 7 дБ тише.
  * Владелец: «звуки должны быть мягкими и приятными, а не звонкими и
  * отталкивающими». Звон — это и есть энергия в 2–6 кГц, к которой ухо
@@ -62,14 +70,14 @@ function ensureCtx(): Ctx | null {
     comp.release.value = 0.2;
     comp.connect(ctx.destination);
     sfxBus = ctx.createGain();
-    sfxBus.gain.value = muted ? 0 : SFX_LEVEL;
+    sfxBus.gain.value = muted ? 0 : sfxLevel();
     warm = ctx.createBiquadFilter();
     warm.type = 'highshelf';
     warm.frequency.value = WARM_HZ;
     warm.gain.value = flavor === 'camp' ? WARM_DB : 0;
     sfxBus.connect(warm).connect(comp);
     musicBus = ctx.createGain();
-    musicBus.gain.value = muted || !musicOn ? 0 : MUSIC_LEVEL;
+    musicBus.gain.value = muted || !musicOn ? 0 : musicLevel();
     musicBus.connect(comp);
     document.addEventListener('visibilitychange', () => {
       if (!ctx) return;
@@ -107,8 +115,8 @@ if (typeof window !== 'undefined') {
 function applyLevels(): void {
   if (!ctx || !sfxBus || !musicBus) return;
   const t = ctx.currentTime;
-  sfxBus.gain.setTargetAtTime(muted ? 0 : SFX_LEVEL, t, 0.03);
-  musicBus.gain.setTargetAtTime(muted || !musicOn ? 0 : MUSIC_LEVEL, t, 0.15);
+  sfxBus.gain.setTargetAtTime(muted ? 0 : sfxLevel(), t, 0.03);
+  musicBus.gain.setTargetAtTime(muted || !musicOn ? 0 : musicLevel(), t, 0.15);
 }
 
 export function setMuted(value: boolean): void {
@@ -118,6 +126,15 @@ export function setMuted(value: boolean): void {
 
 export function setMusicOn(value: boolean): void {
   musicOn = value;
+  applyLevels();
+}
+
+/** Громкости 0…1 из настроек (`src/settings`). Не трогает `setMuted`/`setMusicOn`. */
+export function setVolumes(v: Partial<typeof vol>): void {
+  for (const k of ['master', 'music', 'sfx'] as const) {
+    const x = v[k];
+    if (typeof x === 'number' && Number.isFinite(x)) vol[k] = Math.min(1, Math.max(0, x));
+  }
   applyLevels();
 }
 
@@ -570,8 +587,8 @@ function duck(sec: number, depth = 0.35): void {
     if (until <= duckUntil) return;
     duckUntil = until;
     musicBus.gain.cancelScheduledValues(t);
-    musicBus.gain.setTargetAtTime(MUSIC_LEVEL * depth, t, 0.05);
-    musicBus.gain.setTargetAtTime(MUSIC_LEVEL, until, 0.4);
+    musicBus.gain.setTargetAtTime(musicLevel() * depth, t, 0.05);
+    musicBus.gain.setTargetAtTime(musicLevel(), until, 0.4);
   } catch {
     /* no-op */
   }
@@ -584,7 +601,7 @@ function unduck(): void {
     const t = ctx.currentTime;
     duckUntil = t;
     musicBus.gain.cancelScheduledValues(t);
-    musicBus.gain.setTargetAtTime(muted || !musicOn ? 0 : MUSIC_LEVEL, t, 0.12);
+    musicBus.gain.setTargetAtTime(muted || !musicOn ? 0 : musicLevel(), t, 0.12);
   } catch {
     /* no-op */
   }

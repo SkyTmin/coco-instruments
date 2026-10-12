@@ -13,6 +13,8 @@ import { LOCALE } from './langs';
 import { LANGS } from './types';
 import type { Lang, Leaf, Plural } from './types';
 import { cyrillicLines, hasCyrillic } from './scan';
+import { SKINS } from '@/lib/skins';
+import { PETS } from '@/lib/pets';
 
 const CATALOGS = { en, fr, tr, de, es, it: it_ } as const;
 
@@ -172,7 +174,6 @@ const NOT_YET_TRANSLATED = [
   'src/pages/DungeonPage.tsx',
   'src/pages/FishingPage.tsx',
   'src/pages/ForestPage.tsx',
-  'src/pages/GamesPage.tsx',
   'src/pages/PrisonPage.tsx',
   'src/pages/ScatterPage.tsx',
   'src/pages/SlotsPage.tsx',
@@ -221,5 +222,30 @@ describe('game files (b): no hard-coded Cyrillic text', () => {
       bad,
       'Move these texts to src/i18n/ru + all 6 languages (see .claude/rules/i18n.md)',
     ).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Data names: every id of the game data has its catalog entry, and the Russian
+// catalog matches the Russian text in src/lib (change one — change both, and
+// the six translations with them).
+
+describe('data areas match src/lib', () => {
+  it('skins', () => {
+    for (const s of SKINS) {
+      const c = ru.skins[s.id];
+      expect(c, s.id).toBeTruthy();
+      expect([c.name, c.hint, c.title, c.subtitle]).toEqual([s.name, s.hint, s.title, s.subtitle]);
+    }
+    expect(Object.keys(ru.skins).sort()).toEqual(SKINS.map((s) => s.id).sort());
+  });
+
+  it('pets', () => {
+    for (const p of PETS) {
+      const c = ru.pets[p.id];
+      expect(c, p.id).toBeTruthy();
+      expect([c.name, c.lore]).toEqual([p.name, p.lore]);
+    }
+    expect(Object.keys(ru.pets).sort()).toEqual(PETS.map((p) => p.id).sort());
   });
 });

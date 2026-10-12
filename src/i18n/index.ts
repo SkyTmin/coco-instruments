@@ -17,6 +17,7 @@ export {
   resetLang,
   savedLang,
   detectLang,
+  autoLang,
   matchLang,
   loadLang,
   subscribeLang,

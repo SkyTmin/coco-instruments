@@ -122,7 +122,8 @@ import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
-import { AudioToggles } from '@/components/AudioToggles';
+import { GameSettings } from '@/settings';
+import { useT } from '@/i18n';
 import { playTotem } from '@/lib/totem';
 import { kuivaCells, METEOR_HITS } from '@/lib/yard';
 import type { YardPrize } from '@/lib/yard';
@@ -273,6 +274,7 @@ export function PrisonPage() {
   const prison = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const haptics = useFinanceStore((s) => s.slotsHaptics);
+  const t = useT();
   const prisonBreak = useFinanceStore((s) => s.prisonBreak);
   const prisonSell = useFinanceStore((s) => s.prisonSell);
   const prisonRankUp = useFinanceStore((s) => s.prisonRankUp);
@@ -1433,7 +1435,7 @@ export function PrisonPage() {
     setSheet(null);
     mineRumble();
     tapMedium();
-    say(what === 'all' ? 'Всё в играх начато заново' : 'Каторга начата заново');
+    say(what === 'all' ? t('settings.progress.wipedAll') : t('settings.progress.wipedPrison'));
   };
 
   const claimGuide = () => {
@@ -1702,7 +1704,7 @@ export function PrisonPage() {
           <button
             type="button"
             className="gx-round gx-round--dark pmx-top__btn"
-            aria-label="Настройки"
+            aria-label={t('common.settings')}
             onClick={() => openSheet('settings')}
           >
             <KIcon name="gear" />
@@ -2216,39 +2218,42 @@ export function PrisonPage() {
       )}
 
       {sheet === 'settings' && (
-        <GxModal
-          title="Настройки"
+        <GameSettings
+          initial="progress"
           onClose={() => {
             setSheet(null);
             setWipe(null);
           }}
-          className="pmx-settings"
-        >
-          <div className="pmx-sound">
-            <AudioToggles />
-          </div>
-          <div className="pcash">
-            <CashDesk />
-          </div>
-          <div className="pmx-wipe">
-            <button
-              type="button"
-              className={`gx-btn gx-btn--block${wipe === 'prison' ? ' gx-btn--red' : ''}`}
-              onClick={() => doWipe('prison')}
-            >
-              {wipe === 'prison' ? 'Точно? Нажми ещё раз' : 'Начать шахту заново'}
-            </button>
-            <p>Монеты и уровень останутся — они общие с автоматами.</p>
-            <button
-              type="button"
-              className={`gx-btn gx-btn--block${wipe === 'all' ? ' gx-btn--red' : ''}`}
-              onClick={() => doWipe('all')}
-            >
-              {wipe === 'all' ? 'Точно всё? Нажми ещё раз' : 'Сбросить все игры'}
-            </button>
-            <p>Шахта, лес и автоматы с нуля, монет — снова тысяча. Отменить нельзя.</p>
-          </div>
-        </GxModal>
+          progress={
+            <>
+              <div className="pmx-wipe">
+                <button
+                  type="button"
+                  className={`gx-btn gx-btn--block${wipe === 'prison' ? ' gx-btn--red' : ''}`}
+                  onClick={() => doWipe('prison')}
+                >
+                  {wipe === 'prison'
+                    ? t('settings.progress.wipePrisonSure')
+                    : t('settings.progress.wipePrison')}
+                </button>
+                <p>{t('settings.progress.wipePrisonNote')}</p>
+                <button
+                  type="button"
+                  className={`gx-btn gx-btn--block${wipe === 'all' ? ' gx-btn--red' : ''}`}
+                  onClick={() => doWipe('all')}
+                >
+                  {wipe === 'all'
+                    ? t('settings.progress.wipeAllSure')
+                    : t('settings.progress.wipeAll')}
+                </button>
+                <p>{t('settings.progress.wipeAllNote')}</p>
+              </div>
+              <div className="pcash">
+                <CashDesk />
+              </div>
+            </>
+          }
+        />
       )}
 
       {sheet === 'norm' && !atTop && (

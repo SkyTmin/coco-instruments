@@ -12,6 +12,6 @@ export const common = {
   soon: 'Скоро',
   settings: 'Настройки',
   loading: 'Загрузка…',
-  level: 'ур. {n}',
+  level: '{n} ур.',
   coins: { one: '{n} монета', few: '{n} монеты', many: '{n} монет', other: '{n} монеты' },
 } as const;
