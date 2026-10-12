@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useAction } from '@/input/hooks';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
@@ -961,19 +962,14 @@ export function SlotsPage() {
     if (pulled) spin(true);
   };
 
-  // Пробел/Enter — крутить (десктопный Telegram и браузер).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
-      if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        spin();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [spin]);
+  // Пробел/Enter и «A» геймпада — крутить (слой действий src/input). Кнопка в
+  // фокусе жмётся сама: Enter — браузером, «A» — навигацией фокуса.
+  useAction('confirm', (e) => {
+    const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
+    if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
+    spin();
+    return true;
+  });
 
   const shownBalance = Math.max(0, balance - pending);
   // Подсветка живёт только на фазе показа звена: после схлопывания этих

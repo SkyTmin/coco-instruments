@@ -60,6 +60,7 @@ import {
 } from '@/lib/sound';
 import { tapLight } from '@/lib/haptics';
 import { registerEscape } from '@/lib/escape-stack';
+import { useAction, useGameplayCapture, useMoveAxis } from '@/input/hooks';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 const clock = (ms: number) => {
@@ -538,39 +539,18 @@ function HubWorld() {
     if (interactNear(sim)) tapLight();
   }, [sim]);
 
-  useEffect(() => {
-    const keys = new Set<string>();
-    const axis = () => {
-      const x =
-        (keys.has('d') || keys.has('arrowright') ? 1 : 0) -
-        (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
-      const y =
-        (keys.has('s') || keys.has('arrowdown') ? 1 : 0) -
-        (keys.has('w') || keys.has('arrowup') ? 1 : 0);
-      const l = Math.hypot(x, y) || 1;
-      input.current = { mx: x / l, my: y / l };
-    };
-    const MOVE = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
-    const down = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (busyRef.current) return;
-      if (MOVE.includes(k)) {
-        keys.add(k);
-        axis();
-      } else if (k === 'e' && !e.repeat) actNear();
-    };
-    const up = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (!keys.delete(k)) return;
-      axis();
-    };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-    };
-  }, [actNear]);
+  // Клавиатура и геймпад — через слой действий (src/input): WASD/стрелки,
+  // крестовина и стик — ход, E/X — заговорить/войти. Пока открыто окно,
+  // стрелки и крестовина водят фокус по его кнопкам.
+  useGameplayCapture(!busy && !fade);
+  useMoveAxis(({ x, y }) => {
+    input.current = busyRef.current ? { mx: 0, my: 0 } : { mx: x, my: y };
+  });
+  useAction('interact', () => {
+    if (busyRef.current) return false;
+    actNear();
+    return true;
+  });
 
   // ---- Табло --------------------------------------------------------------
 

@@ -30,6 +30,7 @@ export function getPadStyle(): PadStyle {
  *  наоборот, всё остальное (XInput, 8BitDo в X-режиме, неизвестные) — Xbox. */
 export function padStyleOf(id: string): PadStyle {
   const s = id.toLowerCase();
+  if (/xbox|xinput|045e/.test(s)) return 'xbox';
   if (/054c|playstation|dualsense|dualshock|wireless controller/.test(s)) return 'ps';
   if (/057e|nintendo|pro controller|joy-con/.test(s)) return 'nintendo';
   return 'xbox';
