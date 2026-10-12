@@ -286,6 +286,8 @@ export const F9_MOB_STAT = {
   n: 0,
   ms: [] as number[],
   by: {} as Record<string, number>,
+  /** Цена нового кадра по видам, мс (до 3000 на вид). */
+  kms: {} as Record<string, number[]>,
   miss: [] as string[],
   sizes: () => Object.fromEntries(KINDS.map((K) => [K.name, [K.frames.size, K.limit]])),
   clear: () => {
@@ -296,6 +298,8 @@ function stat(kind: string, ms: number, key: string): void {
   F9_MOB_STAT.n++;
   if (F9_MOB_STAT.ms.length < 4000) F9_MOB_STAT.ms.push(ms);
   F9_MOB_STAT.by[kind] = (F9_MOB_STAT.by[kind] ?? 0) + 1;
+  const km = (F9_MOB_STAT.kms[kind] ??= []);
+  if (km.length < 3000) km.push(ms);
   F9_MOB_STAT.miss.push(`${kind}|${key}`);
   if (F9_MOB_STAT.miss.length > 600) F9_MOB_STAT.miss.splice(0, 300);
 }

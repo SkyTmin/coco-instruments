@@ -440,7 +440,7 @@ function serpPose(anim: string, f: number, bend: number): SerpO {
 
 // ---- Кадры ----
 
-const SERP = kindOf('f9_serpent', 64, 52, 32, 34, 1200);
+const SERP = kindOf('f9_serpent', 64, 52, 32, 34, 1800);
 const BEND_STEP = 0.42;
 const serpPic = (anim: string, f: number, d: number, b = 0): Pic =>
   drawRig(SERP, serpRig(serpPose(anim, f, b * BEND_STEP), yawN(d)));
