@@ -1,8 +1,10 @@
 // Сундуки (v2.71): вкладка лагеря и сцена открытия. Правила — lib/prison.ts
 // (`rollCase`, `CASE_BUNDLE`), стор — `prisonOpenCase(s)`.
 //
-// Сундук — 3D-рендер (scripts/chests-render), закрытый и открытый, по
-// ярусу. В сундуке набор: монеты, токены, приз (книга, руна, находка…).
+// Сундук — пиксельные полосы (`lib/props-pixel/chests.ts`, запекание
+// `scripts/props-pixel/bake.ts -- --set chests`): покой яруса, открытие
+// яруса, тёмный сундук-загадка и его вращение. В сундуке набор: монеты,
+// токены, приз (книга, руна, находка…).
 // Ярус не виден заранее: падает обычный сундук и при открытии «растёт» —
 // вздрагивает и со вспышкой становится редким, эпическим, легендарным.
 // Исход решён стором в обработчике тапа (StrictMode в разработке гоняет
@@ -12,6 +14,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { RarityName, rarityVars } from '@/components/PickArt';
+import { PxStrip, preloadPx, pxFitOf } from '@/components/PxStrip';
+import { pxStrip } from '@/lib/props-pixel/manifest';
 import { KeyIcon, RewardIcon, rewardLabel } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import type { CasesOpened } from '@/store';
@@ -54,28 +58,52 @@ export const CHEST_NAME: Record<CaseTier, string> = {
   legend: 'Легендарный',
 };
 const TIER_ORDER: CaseTier[] = ['common', 'rare', 'epic', 'legend'];
+/** Сторона сундука в сцене: крупная полоса ровно ×2 CSS (×6 точек на DPR 3, ×4 на DPR 2). */
+const SCENE_PX = 240;
 
-/** Сундук: 3D-рендер яруса, закрытый или открытый. */
+/**
+ * Сундук: пиксельная полоса яруса. Закрытый — кадр 0 покоя (`live` — живой
+ * покой: блик по оковке, у легендарного парение и искры), открытый —
+ * последний кадр открытия.
+ */
 export function ChestArt({
   tier = 'common',
   open = false,
   size = 96,
+  live = false,
+  phase = 0,
 }: {
   /** `mystery` — тёмный сундук-загадка (ярус ещё не известен). */
   tier?: CaseTier | 'mystery';
   open?: boolean;
   size?: number;
+  live?: boolean;
+  phase?: number;
 }) {
+  const shut = !open || tier === 'mystery';
   return (
-    <img
-      className="pchest-img"
-      src={`/ui/chests/${tier}-${open ? 'open' : 'closed'}.webp`}
-      width={size}
-      height={size}
-      alt=""
-      draggable={false}
+    <PxStrip
+      set="chests"
+      name={shut ? `idle-${tier}` : `open-${tier}`}
+      size={size}
+      mode={live && shut ? 'loop' : 'still'}
+      frame={shut ? 0 : -1}
+      phase={phase}
+      className="pchest-px"
     />
   );
+}
+
+/**
+ * Скважина замка в CSS-пикселях от угла квадрата `size`: якорь `lock` полосы
+ * в процентах рамки, рамка подогнана под целый масштаб и стоит по центру.
+ */
+function lockAt(size: number): [number, number] {
+  const fo = pxFitOf('chests', 'idle-common', size);
+  const [lx, ly] = pxStrip('chests', 'idle-common')?.anchors?.lock ?? [40, 69];
+  const s = fo?.fit.s ?? size;
+  const o = (size - s) / 2;
+  return [o + (s * lx) / 100, o + (s * ly) / 100];
 }
 
 /** Последние призы за сессию — живут, пока открыто приложение. */
@@ -145,6 +173,12 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
   const [, bump] = useState(0);
   const seq = useRef(0);
 
+  // Полёт начинается сразу по тапу: вращение и тёмный сундук — заранее.
+  useEffect(() => {
+    void preloadPx('chests', 'mystery-spin', SCENE_PX);
+    void preloadPx('chests', 'idle-mystery', SCENE_PX);
+  }, []);
+
   const remember = (rolls: CaseRoll[]) => {
     for (const r of rolls) recent.unshift(prizeOf(r));
     recent.splice(RECENT_MAX);
@@ -183,8 +217,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
             start();
           }}
         >
-          <ChestArt size={210} />
-          <i className="pch-hero__glint" aria-hidden="true" />
+          <ChestArt size={180} live />
         </button>
         <span className="pch-keys">
           <KeyIcon size={24} /> ×{fmt(keys)}
@@ -234,7 +267,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
       <div className="pch-odds">
         {TIER_ORDER.map((id) => (
           <span key={id} className="pch-odd" style={rarityVars(CHEST_RARITY[id])}>
-            <ChestArt tier={id} size={58} />
+            <ChestArt tier={id} size={48} />
             <b>{CHEST_NAME[id]}</b>
             <i>{caseTierOf(id).weight}%</i>
           </span>
@@ -285,18 +318,24 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
 }
 
 // ---------------------------------------------------------------------------
-// Сцена (v2.71.1): тёмный сундук-загадка вылетает, вращаясь, садится и
-// превращается в выпавший → ключ → крышка → карточки.
+// Сцена: тёмный сундук-загадка вылетает, вращаясь (полоса настоящего 3D-
+// вращения), садится и превращается в выпавший → ключ летит в скважину →
+// полоса открытия яруса (ключ, защёлка, крышка, свет) → карточки.
 // ---------------------------------------------------------------------------
 
-type Phase = 'fly' | 'land' | 'reveal' | 'key' | 'open' | 'done';
+type Phase = 'fly' | 'land' | 'reveal' | 'key' | 'turn' | 'open' | 'done';
 
-/** Полёт тёмного сундука, мс (два оборота ленты кадров). */
+/** Полёт тёмного сундука, мс (полоса `mystery-spin`: два оборота за 0,92 с). */
 const FLY_MS = 900;
 /** Сколько сундук дрожит перед превращением: чем реже ярус, тем дольше. */
 const TREMBLE_MS = [140, 260, 420, 700];
 /** Превращение — полоса света снизу вверх: старшим медленнее. */
 const REVEAL_MS = [480, 560, 700, 950];
+/** Ключ летит в скважину (CSS `pch-key`); дальше его поворачивает полоса открытия. */
+const KEY_MS = 420;
+/** Пауза от пика открытия до первой карточки: старшим дольше — свет и монеты читаются. */
+const CARDS_AFTER = [260, 400, 560, 720];
+const OPEN_MARKS = ['turn', 'latch', 'lidOpen', 'peak'];
 
 function ChestScene({
   roll,
@@ -320,15 +359,27 @@ function ChestScene({
   const [phase, setPhase] = useState<Phase>('fly');
   const [shake, setShake] = useState(false);
   const [cards, setCards] = useState(0);
+  /** Играет полоса открытия; пропуск тапом — сразу открытый кадр. */
+  const [playing, setPlaying] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const paid = useRef(false);
+  const over = useRef(false);
+  const fired = useRef(new Set<string>());
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const flying = phase === 'fly';
-  const known = phase === 'key' || phase === 'open' || phase === 'done';
+  const known = phase !== 'fly' && phase !== 'land' && phase !== 'reveal';
   const opened = phase === 'open' || phase === 'done';
+  const [lx, ly] = lockAt(SCENE_PX);
+  // Покой яруса доигрывает петлю ровно к прилёту ключа: полоса открытия
+  // начинается с той же позы, без скачка (у легендарного — парение).
+  const idle = pxStrip('chests', `idle-${tier}`);
+  const idleMs = idle ? (idle.n / idle.fps) * 1000 : 2000;
+  const idlePhase = 1 - ((REVEAL_MS[k] + KEY_MS) % idleMs) / idleMs;
 
   useEffect(() => registerEscape(() => closeRef.current()), []);
+
+  const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
 
   const pay = () => {
     if (paid.current || !gain) return;
@@ -337,21 +388,60 @@ function ChestScene({
   };
 
   const finish = () => {
+    over.current = true;
     timers.current.forEach(clearTimeout);
     timers.current = [];
     setShake(false);
+    setPlaying(false);
     setCards(roll.rewards.length);
     setPhase('done');
     pay();
   };
 
+  /** Карточки по одной, приз — последним и с паузой. */
+  const deal = () => {
+    const t = CARDS_AFTER[k];
+    roll.rewards.forEach((rw, j) => {
+      const prize = j === roll.rewards.length - 1;
+      at(t + j * 360 + (prize ? 260 : 0), () => {
+        setCards(j + 1);
+        cardFlip();
+        if (rw.kind === 'coins') {
+          coinDing();
+          pay();
+        }
+        if (prize) {
+          softChime(6);
+          if (k >= 2) tierBreak(Math.min(3, caseTierOf(tier).beats));
+        }
+      });
+    });
+    at(t + roll.rewards.length * 360 + 520, () => setPhase('done'));
+  };
+
+  /** Метки полосы открытия: звук и фазы сцены идут за кадрами, а не за таймерами. */
+  const onMark = (m: string) => {
+    if (over.current || fired.current.has(m)) return;
+    fired.current.add(m);
+    if (m === 'turn') caseTick();
+    else if (m === 'latch') {
+      chestLatch();
+      tapLight();
+    } else if (m === 'lidOpen') {
+      setPhase('open');
+      chestOpen();
+      flashFrame('small');
+    } else if (m === 'peak') deal();
+  };
+
   useEffect(() => {
+    void preloadPx('chests', `open-${tier}`, SCENE_PX);
+    void preloadPx('chests', `idle-${tier}`, SCENE_PX);
     if (reduceMotion()) {
       chestReveal(k);
       finish();
       return undefined;
     }
-    const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
     const color = rarityOf(r).color;
     // 1. Полёт: тёмный сундук вылетает снизу, вращаясь, и падает.
     chestFly();
@@ -381,37 +471,12 @@ function ChestScene({
       if (k >= 1) notifySuccess();
       if (k >= 2) burstConfetti(40 + 30 * k, [color, rarityOf(r).light, '#ffffff']);
     });
-    // 4. Ключ в замок.
-    t += 380;
+    // 4. Ключ в скважине — дальше полоса открытия (метки ведут звук и карточки).
+    t += KEY_MS;
     at(t, () => {
-      chestLatch();
-      tapLight();
+      setPhase('turn');
+      setPlaying(true);
     });
-    // 5. Крышка.
-    t += 340;
-    at(t, () => {
-      setPhase('open');
-      flashFrame('small');
-      chestOpen();
-    });
-    t += 480;
-    // 6. Карточки по одной, приз — последним и с паузой.
-    roll.rewards.forEach((rw, j) => {
-      const prize = j === roll.rewards.length - 1;
-      at(t + j * 360 + (prize ? 260 : 0), () => {
-        setCards(j + 1);
-        cardFlip();
-        if (rw.kind === 'coins') {
-          coinDing();
-          pay();
-        }
-        if (prize) {
-          softChime(6);
-          if (k >= 2) tierBreak(Math.min(3, caseTierOf(tier).beats));
-        }
-      });
-    });
-    at(t + roll.rewards.length * 360 + 520, () => setPhase('done'));
     return () => {
       timers.current.forEach(clearTimeout);
       timers.current = [];
@@ -423,7 +488,14 @@ function ChestScene({
   return (
     <div
       className={`pchs is-${phase}${opened ? ' is-opened' : ''}${known ? ' is-known' : ''} t-${tier}`}
-      style={{ ...rarityVars(r), '--rv': `${REVEAL_MS[k]}ms` } as CSSProperties}
+      style={
+        {
+          ...rarityVars(r),
+          '--rv': `${REVEAL_MS[k]}ms`,
+          '--lx': `${lx}px`,
+          '--ly': `${ly}px`,
+        } as CSSProperties
+      }
       onClick={() => {
         if (phase !== 'done') finish();
       }}
@@ -434,28 +506,43 @@ function ChestScene({
       <div className="pchs__stage">
         <i className="pchs__rays" aria-hidden="true" />
         {known && <i className="pchs__burst" aria-hidden="true" />}
-        {known && k >= 2 && <i className="pchs__pillar" aria-hidden="true" />}
         <i className="pchs__floor" aria-hidden="true" />
         {flying ? (
           <div className="pchs__fly">
-            <div className="pchs__spin">
-              <img className="pchs__strip" src="/ui/chests/mystery-spin.webp" alt="" />
-            </div>
+            <PxStrip set="chests" name="mystery-spin" size={SCENE_PX} mode="loop" />
           </div>
         ) : (
           <div
             className={`pchs__chest${phase === 'land' ? ' is-land' : ''}${shake ? ' is-shake' : ''}`}
           >
-            {!known && (
+            {(phase === 'land' || phase === 'reveal') && (
               <span className="pchs__dark">
-                <ChestArt tier="mystery" size={240} />
+                <ChestArt tier="mystery" size={SCENE_PX} live />
                 <i className="pchs__glowhole" aria-hidden="true" />
               </span>
             )}
             {phase !== 'land' && (
               <span className={`pchs__reveal${phase === 'reveal' ? ' is-run' : ''}`}>
                 <span className="pchs__reveal-in">
-                  <ChestArt tier={tier} open={opened} size={240} />
+                  {playing ? (
+                    <PxStrip
+                      set="chests"
+                      name={`open-${tier}`}
+                      size={SCENE_PX}
+                      mode="once"
+                      poster={`idle-${tier}`}
+                      onMark={onMark}
+                      onEnd={() => OPEN_MARKS.forEach(onMark)}
+                    />
+                  ) : (
+                    <ChestArt
+                      tier={tier}
+                      open={opened}
+                      size={SCENE_PX}
+                      live={!opened}
+                      phase={idlePhase}
+                    />
+                  )}
                 </span>
               </span>
             )}
