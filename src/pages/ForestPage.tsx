@@ -51,6 +51,7 @@ import {
   streakTier,
 } from '@/lib/prison';
 import type { YardEvent } from '@/lib/prison';
+import { petLook } from '@/lib/pets';
 import {
   barkTexture,
   bearTexture,
@@ -1403,7 +1404,11 @@ export function ForestPage() {
                     setCamp('pets');
                   }}
                 >
-                  <PetArt id={prison.squad[0]} size={30} v={prison.pets[prison.squad[0]]?.v ?? 0} />
+                  <PetArt
+                    id={prison.squad[0]}
+                    size={30}
+                    v={petLook(prison.pets[prison.squad[0]])}
+                  />
                 </span>
               )}
               {prison.keys > 0 ? (

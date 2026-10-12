@@ -27,7 +27,7 @@ import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/com
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
 import { MinePets } from '@/components/MinePets';
 import { PetArt } from '@/components/PetArt';
-import { eggOf, TRICK_RUSH, TRICK_RUSH_MS, TRICK_SENSE_MS } from '@/lib/pets';
+import { eggOf, petLook, TRICK_RUSH, TRICK_RUSH_MS, TRICK_SENSE_MS } from '@/lib/pets';
 import type { BatHandle, MagpieHandle } from '@/components/Critters';
 import { BAT_GAP_MS, BAT_RARE, batRoll } from '@/lib/critters';
 import type { ShinyKind } from '@/lib/critters';
@@ -2092,7 +2092,7 @@ export function PrisonPage() {
                 <PetArt
                   id={prison.squad[0]}
                   size={30}
-                  v={prison.pets[prison.squad[0]]?.v ?? 0}
+                  v={petLook(prison.pets[prison.squad[0]])}
                   still
                 />
               ) : (

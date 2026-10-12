@@ -24,9 +24,12 @@ export interface PixelPet {
   /** Холст и рамка тела у каждой полосы: малая обязательна, крупная — если есть. */
   res: { s: Canvas; l?: Canvas };
   anims: Record<Anim, { n: number; fps: number }>;
-  /** Кадр; `v` — золотой (1) или радужный (2), если рисовальщик рисует их сам. */
+  /** Кадр; `v` — золотой (1), если рисовальщик рисует его сам. */
   frame: (a: Anim, i: number, res: Res, v?: number) => Px;
-  /** Какие варианты рисует сам рисовальщик; остальные post.py делает матрицами фильтров. */
+  /**
+   * Рисует ли золотой (`[1]`) сам рисовальщик; иначе post.py делает его матрицей
+   * фильтра. Радужного (2) нет с v2.110.
+   */
   variants?: number[];
 }
 
@@ -43,6 +46,6 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: DRAGON_RES,
     anims: at24(DRAGON_FRAMES, DRAGON_FPS),
     frame: dragonFrame,
-    variants: [1, 2],
+    variants: [1],
   },
 };

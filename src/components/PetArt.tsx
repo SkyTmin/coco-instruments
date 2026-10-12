@@ -18,10 +18,13 @@
 // выходят разной ширины. У них свой `rev` в адресе и две полосы своего
 // рисунка: малая (рамка `box`) и крупная (`large`, `<anim>-l.webp`) —
 // `pxFit` берёт крупную, если на её пиксель приходится целое число точек
-// экрана (от двух), иначе малую. Золотой и радужный у них запечены в свои
-// полосы (`<anim>[-l]-v1/-v2.webp`, `thumb-v1/-v2`): класс `is-pxpet`
-// снимает CSS-фильтр с полосы и миниатюры при любом масштабе — фильтр на
-// длинной полосе растеризовал её целиком.
+// экрана (от двух), иначе малую. Золотой у них запечён в свои полосы
+// (`<anim>[-l]-v1.webp`, `thumb-v1`): класс `is-pxpet` снимает CSS-фильтр с
+// полосы и миниатюры при любом масштабе — фильтр на длинной полосе
+// растеризовал её целиком.
+//
+// `v` — ВИД рисунка (скин, `petLook`), а не ступень: золотой может ходить в
+// обычной шкуре (v2.110). Радужного больше нет.
 
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
@@ -39,7 +42,7 @@ const LARGE_FROM = 110;
 
 const stripSrc = (id: PetId, anim: PetAnim, large: boolean, v = 0): string => {
   const px = PET_PX[id];
-  // У пиксельных золотой и радужный — свои запечённые полосы, а не CSS-фильтр.
+  // У пиксельных золотой — свои запечённые полосы, а не CSS-фильтр.
   if (px) return `/ui/pets/${id}/${anim}${large ? '-l' : ''}${v ? `-v${v}` : ''}.webp?v=${px.rev}`;
   return `/ui/pets/${id}/${anim}${large && (PET_LARGE as readonly string[]).includes(anim) ? '-l' : ''}.webp?v=${PET_REV}`;
 };
@@ -81,7 +84,7 @@ export function PetArt({
 }: {
   id: PetId;
   size?: number;
-  /** 0 — обычный, 1 — золотой, 2 — радужный. */
+  /** Вид рисунка (скин): 0 — обычный, 1 — золотой. */
   v?: number;
   /** Ещё не приручён: тёмный силуэт без движения. */
   ghost?: boolean;
@@ -192,7 +195,7 @@ export function PetArt({
       aria-label={ghost ? undefined : def.name}
     >
       {!ghost && def.rarity >= 1 && <i className="pet__aura" aria-hidden="true" />}
-      {!ghost && (v === 2 || def.rarity >= 4) && <i className="pet__rays" aria-hidden="true" />}
+      {!ghost && def.rarity >= 4 && <i className="pet__rays" aria-hidden="true" />}
       {still || ghost || !st ? (
         <img
           className="pet__thumb"

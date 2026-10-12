@@ -7802,13 +7802,12 @@ button.fg-slot {
 .pet.is-px :is(.pet__strip, .pet__thumb) {
   image-rendering: pixelated;
 }
-/* Золотой и радужный у пиксельных запечены в полосы (`-v1`, `-v2`, со своим
-   пиксельным ореолом) — фильтр снимаем при любом масштабе. Силуэт-призрак
-   неполученного остаётся чёрным. */
-.pet.is-pxpet:is(.v1, .v2):not(.is-ghost) :is(.pet__strip, .pet__thumb) {
+/* Золотой у пиксельных запечён в полосы (`-v1`, со своим пиксельным ореолом) —
+   фильтр снимаем при любом масштабе. Силуэт-призрак неполученного остаётся чёрным. */
+.pet.is-pxpet.v1:not(.is-ghost) :is(.pet__strip, .pet__thumb) {
   filter: none;
 }
-/* Ореол редкости: статичный градиент, у легендарных и радужных — лучи,
+/* Ореол редкости: статичный градиент, у легендарных и мифических — лучи,
    нарисованные один раз и крутящиеся трансформом. */
 .pet__aura {
   position: absolute;
@@ -7839,18 +7838,9 @@ button.fg-slot {
   animation: pch-rays 16s linear infinite;
   pointer-events: none;
 }
-.pet.r5 .pet__rays,
-.pet.v2 .pet__rays {
-  background: conic-gradient(
-    #ff5f6d,
-    #ffc371,
-    #f9f871,
-    #7cffb2,
-    #5fd3ff,
-    #a17bff,
-    #ff6fd8,
-    #ff5f6d
-  );
+/* Мифический — кольцом своего цвета (v2.110: радуги у питомцев нет). */
+.pet.r5 .pet__rays {
+  background: conic-gradient(var(--rc), var(--rl), var(--rc), var(--rl), var(--rc));
   -webkit-mask: radial-gradient(closest-side, transparent 38%, #000 52%, transparent 70%);
   mask: radial-gradient(closest-side, transparent 38%, #000 52%, transparent 70%);
   opacity: 0.55;
@@ -7859,7 +7849,7 @@ button.fg-slot {
 .pet.is-still .pet__rays {
   animation: none;
 }
-/* Золотой и радужный — статичный фильтр на самой полосе: её трансформ
+/* Золотой — статичный фильтр на самой полосе: её трансформ
    двигает готовый слой, фильтр не пересчитывается (а на родителе — пересчитывался бы).
    Свечение меряется `--pglow` в пикселях: где размер питомца задан процентом
    (карточка коллекции, `--ps: 100%`), `drop-shadow` с процентом — ошибка, и
@@ -7867,10 +7857,6 @@ button.fg-slot {
 .pet.v1 :is(.pet__strip, .pet__thumb) {
   filter: sepia(0.8) saturate(2.2) hue-rotate(-12deg) brightness(1.06)
     drop-shadow(0 0 calc(var(--pglow, var(--ps)) * 0.03) rgba(255, 200, 60, 0.85));
-}
-.pet.v2 :is(.pet__strip, .pet__thumb) {
-  filter: saturate(1.35) drop-shadow(0 0 calc(var(--pglow, var(--ps)) * 0.025) #ff6fd8)
-    drop-shadow(0 0 calc(var(--pglow, var(--ps)) * 0.04) #5fd3ff);
 }
 
 /* ---- Сердечки на ласку ------------------------------------------------------ */
@@ -8339,22 +8325,12 @@ button.fg-slot {
   border-color: rgba(109, 75, 39, 0.3);
   background: rgba(109, 75, 39, 0.08);
 }
-/* Золотой и радужный видны в сетке и рамкой карточки, не только самим зверем. */
+/* Золотой виден в сетке и рамкой карточки, не только самим зверем: рамка — по
+   ступени, а не по скину (как имя «Золотой»). */
 .ppn__card.is-v1 {
   border-color: #e8b53a;
   background:
     radial-gradient(closest-side, rgba(255, 200, 60, 0.4), transparent), rgba(109, 75, 39, 0.1);
-}
-.ppn__card.is-v2 {
-  border-color: transparent;
-  /* Радуга только рамкой: внутри — непрозрачный пергамент, иначе она
-     просвечивает на всю карточку. */
-  background:
-    radial-gradient(closest-side, rgba(161, 123, 255, 0.28), transparent) padding-box,
-    linear-gradient(rgba(109, 75, 39, 0.1), rgba(109, 75, 39, 0.1)) padding-box,
-    linear-gradient(var(--gx-paper), var(--gx-paper)) padding-box,
-    conic-gradient(#ff5f6d, #ffc371, #f9f871, #7cffb2, #5fd3ff, #a17bff, #ff6fd8, #ff5f6d)
-      border-box;
 }
 .ppn__card.is-with {
   box-shadow: 0 0 0 2px var(--gx-red);
@@ -8440,6 +8416,49 @@ button.fg-slot {
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* Скин золотого (v2.110): обычный или золотой рисунок; сила и имя — по ступени. */
+.ppn-skin {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.ppn-skin__seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(109, 75, 39, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(109, 75, 39, 0.3);
+}
+.ppn-skin__seg button {
+  min-width: 84px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gx-ink);
+  font:
+    700 12px/1.1 'GxRubik',
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.ppn-skin__seg button.is-on {
+  background: var(--gx-paper);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.25),
+    inset 0 0 0 1px rgba(109, 75, 39, 0.45);
+}
+.ppn-skin__seg button.is-gold.is-on {
+  background: linear-gradient(#ffe48a, #e8b53a);
+  color: #4a2c06;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.25),
+    inset 0 0 0 1px #b07e16;
 }
 .ppn-sheet__name {
   display: flex;
@@ -8618,10 +8637,6 @@ button.fg-slot {
   opacity: 0.6;
   transform-origin: 50% 100%;
   animation: pch-pillar 900ms ease-out both;
-}
-.phs.r5 .phs__pillar {
-  background: linear-gradient(90deg, transparent, #ff6fd8, #7cffb2, #5fd3ff, #ffc371, transparent);
-  opacity: 0.55;
 }
 .phs__floor {
   position: absolute;

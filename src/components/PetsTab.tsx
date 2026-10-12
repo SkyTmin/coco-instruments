@@ -36,6 +36,7 @@ import {
   PET_RARITY_NAME,
   petBonus,
   petLevelOf,
+  petLook,
   petOf,
   PETS,
   petScore,
@@ -195,7 +196,7 @@ export function PetsTab() {
               }}
             >
               <span className="ppn__pad">
-                <PetArt id={id} size={74} v={rec.v} />
+                <PetArt id={id} size={74} v={petLook(rec)} />
               </span>
               <b>{petOf(id).name}</b>
               <GxBar thin tone="gold" value={lv.need ? lv.into / lv.need : 1} />
@@ -369,7 +370,7 @@ export function PetsTab() {
                 setSheet(d.id);
               }}
             >
-              <PetArt id={d.id} size={48} v={rec?.v ?? 0} ghost={!rec} still />
+              <PetArt id={d.id} size={48} v={petLook(rec)} ghost={!rec} still />
               {canMerge(rec) && <i className="ppn__dot">!</i>}
             </button>
           );
@@ -418,10 +419,17 @@ const SHOWCASE: [PetAnim, string][] = [
   ['sleep', 'Сон'],
 ];
 
+/** Скины золотого: какой рисунок показывать везде, где питомец нарисован. */
+const SKINS: [number, string][] = [
+  [0, 'Обычный'],
+  [1, 'Золотой'],
+];
+
 function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
   const p = useFinanceStore((s) => s.prison);
   const pat = useFinanceStore((s) => s.prisonPetPat);
   const merge = useFinanceStore((s) => s.prisonPetMerge);
+  const setSkin = useFinanceStore((s) => s.prisonPetSkin);
   const setSquad = useFinanceStore((s) => s.prisonSquadSet);
   const [joy, setJoy] = useState(0);
   const [xpPop, setXpPop] = useState(0);
@@ -440,7 +448,7 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
         <PetArt
           id={id}
           size={150}
-          v={rec?.v ?? 0}
+          v={petLook(rec)}
           ghost={!rec}
           joy={joy}
           play={show}
@@ -479,6 +487,33 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
           ))}
         </div>
       )}
+      {/* Скин (v2.110): золотого можно нарисовать обычным. Сила и имя — по ступени. */}
+      {rec && rec.v >= 1 && (
+        <div className="ppn-skin">
+          <span>Скин</span>
+          <span className="ppn-skin__seg" role="radiogroup" aria-label="Скин">
+            {SKINS.map(([s, name]) => {
+              const on = petLook(rec) === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  className={`${s ? 'is-gold' : ''}${on ? ' is-on' : ''}`}
+                  onClick={() => {
+                    if (on) return;
+                    selectionChanged();
+                    if (setSkin(id, s)) setJoy((j) => j + 1);
+                  }}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </span>
+        </div>
+      )}
       <div className="ppn-sheet__name">
         <RarityName rarity={r}>
           {rec && rec.v ? `${VARIANT_NAME[rec.v]} ` : ''}
@@ -511,8 +546,7 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
           {rec.v < MERGE_NEED.length && (
             <div className="ppn-sheet__merge">
               <span>
-                Копии до {rec.v === 0 ? 'золотого' : 'радужного'}:{' '}
-                {Math.min(rec.dup, MERGE_NEED[rec.v])}/{MERGE_NEED[rec.v]}
+                Копии до золотого: {Math.min(rec.dup, MERGE_NEED[rec.v])}/{MERGE_NEED[rec.v]}
               </span>
               <GxBar thin tone="blue" value={rec.dup / MERGE_NEED[rec.v]} />
               {canMerge(rec) && (
@@ -525,15 +559,12 @@ function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
                       petMerge();
                       notifySuccess();
                       flashFrame('big');
-                      burstConfetti(
-                        60,
-                        rec.v === 0 ? ['#ffd24a', '#fff3b0', '#ffffff'] : undefined,
-                      );
+                      burstConfetti(60, ['#ffd24a', '#fff3b0', '#ffffff']);
                       setJoy((j) => j + 1);
                     }
                   }}
                 >
-                  Сделать {rec.v === 0 ? 'золотым' : 'радужным'}
+                  Сделать золотым
                 </button>
               )}
             </div>
@@ -745,7 +776,7 @@ function SquadPicker({ slot, onClose }: { slot: number; onClose: () => void }) {
                   onClose();
                 }}
               >
-                <PetArt id={id} size={48} v={rec.v} still />
+                <PetArt id={id} size={48} v={petLook(rec)} still />
                 <span>
                   <b>
                     {petOf(id).name} <em>ур. {petLevelOf(rec.xp).level}</em>
@@ -844,7 +875,7 @@ function HatchScene({
       ? 'Новый питомец!'
       : res.kind === 'dup'
         ? rec && rec.v < MERGE_NEED.length
-          ? `Копия · ${Math.min(rec.dup, MERGE_NEED[rec.v])}/${MERGE_NEED[rec.v]} до ${rec.v === 0 ? 'золотого' : 'радужного'}`
+          ? `Копия · ${Math.min(rec.dup, MERGE_NEED[rec.v])}/${MERGE_NEED[rec.v]} до золотого`
           : 'Копия'
         : 'Лакомство: +400 опыта';
 
@@ -897,7 +928,7 @@ function HatchScene({
         )}
         {shown && (
           <span className="phs__pet">
-            <PetArt id={res.id} size={190} v={rec?.v ?? 0} intro="happy" />
+            <PetArt id={res.id} size={190} v={petLook(rec)} intro="happy" />
           </span>
         )}
       </div>

@@ -12,9 +12,10 @@ each drawn by the pet's own painter at its own resolution):
     horizontal strip of equal frames at the NATIVE size: lossless WebP, public/ui/pets/<id>/<anim>.webp
     (large: <anim>-l.webp);
   * thumb.webp — the first idle frame of the small strip inside the body box (box × box), for lists;
-  * golden and rainbow copies of every strip and of the thumb (<anim>-v1/-v2.webp, thumb-v1/-v2):
-    the colour matrices of the CSS filters plus a 1–2 px pixel glow, baked — PetArt drops the CSS
-    filter for pixel pets (a filter on a long strip rasterises the whole strip);
+  * a golden copy of every strip and of the thumb (<anim>-v1.webp, thumb-v1): the colour matrix
+    of the CSS filter (or the painter's own golden drawing) plus a 1–2 px pixel glow, baked — PetArt
+    drops the CSS filter for pixel pets (a filter on a long strip rasterises the whole strip).
+    There is no rainbow tier since v2.110;
   * the pet's folder is emptied first: the ink strips of a pet that went pixel do not linger;
   * src/lib/pet-pixel-sprites.ts gets the pet's strips in ART PIXELS relative to the body box's
     top-left corner and the pet's own revision (sha1 of its files): the game asks ?v=<rev>, so a
@@ -63,10 +64,12 @@ def load(pid, res):
 
 
 def load_own(pid, res, meta):
-    """Золотой и радужный, нарисованные самим рисовальщиком (`variants` в meta): {v: {anim: кадры}}."""
+    """Золотой, нарисованный самим рисовальщиком (`variants` в meta): {v: {anim: кадры}}."""
     d = os.path.join(TMP, pid, res)
     own = {}
     for v in meta.get('variants', []):
+        if v not in VARIANTS:
+            continue
         own[v] = {}
         for a, m in meta['anims'].items():
             raw = np.fromfile(os.path.join(d, f'{a}-v{v}.rgba'), dtype=np.uint8)
@@ -80,7 +83,7 @@ def bbox(fr):
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
-# --- Золотой (v1) и радужный (v2) пекутся, а не фильтруются в CSS --------------
+# --- Золотой (v1) пекётся, а не фильтруется в CSS -------------------------------
 # Фильтр на полосе из десятков кадров растеризуется целиком и в карточке
 # (150 px, DPR 3) дорисовывался по частям, а drop-shadow у пикселей давал
 # светлый прямоугольник. Цвет — те же матрицы, что у CSS-фильтров (Filter
@@ -113,14 +116,13 @@ def m_hue(deg):
     ])
 
 
-# CSS: v1 — sepia(0.8) saturate(2.2) hue-rotate(-12deg) brightness(1.06) + золотое свечение;
-#      v2 — saturate(1.35) + розовое и голубое свечение.
+# CSS: v1 — sepia(0.8) saturate(2.2) hue-rotate(-12deg) brightness(1.06) + золотое свечение.
+# Радужного (v2) нет с v2.110: владелец убрал ступень.
 VARIANTS = {
     1: ([m_sepia(0.8), m_saturate(2.2), m_hue(-12), np.eye(3) * 1.06],
         [((255, 200, 60), 215), ((255, 200, 60), 95)]),
-    2: ([m_saturate(1.35)],
-        [((255, 111, 216), 205), ((95, 211, 255), 140)]),
 }
+VS = (0, *VARIANTS)
 HALO = 2
 
 
@@ -203,7 +205,7 @@ def strips(pid, res, out_dir, sizes):
         fr = frames[a]
         x0, y0, x1, y1 = bbox(fr if not own else np.concatenate([fr] + [own[v][a] for v in own]))
         # Поле: ореол вариантов (HALO) и пустой пиксель, чтобы выборка на краю
-        # кадра не цепляла соседний кадр. Прямоугольник у трёх вариантов один.
+        # кадра не цепляла соседний кадр. Прямоугольник у вариантов один.
         m = HALO + 1
         x0, y0, x1, y1 = x0 - m, y0 - m, x1 + m, y1 + m
         if x0 < 0 or y0 < 0 or x1 > meta['cw'] or y1 > meta['ch']:
@@ -216,7 +218,7 @@ def strips(pid, res, out_dir, sizes):
             continue
         w, h = x1 - x0, y1 - y0
         n = len(fr)
-        for v in (0, 1, 2):
+        for v in VS:
             fv = fr if not v else variant(fr, v, own[v][a] if v in own else None)
             strip = np.zeros((h, w * n, 4), np.uint8)
             for i in range(n):
@@ -248,7 +250,7 @@ def cut(pid):
     ix0, iy0, ix1, iy1 = bbox(idle[:1])
     if ix0 < bx or iy0 < by or ix1 > bx + B or iy1 > by + B:
         print(f'  ! {pid}: кадр 0 покоя вылезает из рамки тела {ix0 - bx, iy0 - by, ix1 - bx, iy1 - by} при {B}')
-    for v in (0, 1, 2):
+    for v in VS:
         f0 = idle[0] if not v else variant(idle[:1], v, own[v]['idle'][:1] if v in own else None)[0]
         name = 'thumb' + (f'-v{v}' if v else '')
         sizes[name] = save_webp(Image.fromarray(f0[by:by + B, bx:bx + B], 'RGBA'), os.path.join(out_dir, name + '.webp'))
@@ -266,7 +268,7 @@ def cut(pid):
 
 
 def group_sizes(sizes):
-    """Веса по группам: полоса (малая, крупная, значок) × вариант (v0, v1, v2)."""
+    """Веса по группам: полоса (малая, крупная, значок) × вариант (v0, v1)."""
     out = {}
     for k, s in sizes.items():
         mv = re.search(r'-v(\d)$', k)

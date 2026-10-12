@@ -312,6 +312,7 @@ import {
   addPet as addPetRec,
   mergePet,
   PAT_XP,
+  setPetSkin,
   putEgg,
   refillNest,
   squadSlots,
@@ -884,7 +885,7 @@ export interface HatchResult {
   egg: EggId;
   id: PetId;
   rarity: number;
-  /** Новый, копия к золотому или (у радужного) лакомство. */
+  /** Новый, копия к золотому или (у золотого) лакомство. */
   kind: 'new' | 'dup' | 'treat';
   /** Сработала гарантия. */
   forced: boolean;
@@ -1474,8 +1475,10 @@ interface FinanceState {
   prisonEggPlace: (egg: EggId, swap?: number) => boolean;
   /** Вылупить сразу за цену яйца (монеты или токены), не грея: гнездо готово. */
   prisonHatchNow: (i: number) => boolean;
-  /** Слить копии: пять одинаковых — золотой, пять золотых — радужный. */
+  /** Слить копии: пять одинаковых — золотой. */
   prisonPetMerge: (id: PetId) => boolean;
+  /** Скин питомца: 0 — обычный, 1 — золотой (не выше ступени); сила не меняется. */
+  prisonPetSkin: (id: PetId, skin: number) => boolean;
   /** Погладить: сердечки всегда, опыт — раз в десять минут (true — дал опыт). */
   prisonPetPat: (id: PetId) => boolean;
   /** Трюк питомца из отряда (место `slot`), если он накопил работы. */
@@ -4687,6 +4690,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   prisonPetMerge: (id) => {
     const p = get().prison;
     const pets = mergePet(p.pets, id);
+    if (!pets) return false;
+    const prison = { ...p, pets };
+    set({ prison });
+    persistPrison(prison);
+    return true;
+  },
+
+  prisonPetSkin: (id, skin) => {
+    const p = get().prison;
+    const pets = setPetSkin(p.pets, id, skin);
     if (!pets) return false;
     const prison = { ...p, pets };
     set({ prison });

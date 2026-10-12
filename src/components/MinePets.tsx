@@ -11,7 +11,7 @@ import { PetArt } from '@/components/PetArt';
 import { useFinanceStore } from '@/store';
 import type { PetTrick } from '@/store';
 import { shortMoney } from '@/lib/prison';
-import { TRICK_EVERY } from '@/lib/pets';
+import { petLook, TRICK_EVERY } from '@/lib/pets';
 import type { PetId } from '@/lib/pets';
 import { petPat, petTrick, primeAudio } from '@/lib/sound';
 import { tapLight } from '@/lib/haptics';
@@ -99,7 +99,7 @@ export function MinePets({
             <PetArt
               id={id}
               size={44}
-              v={rec.v}
+              v={petLook(rec)}
               joy={joy[i]}
               trick={tricks[i]}
               onClick={() => {
