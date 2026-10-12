@@ -38,6 +38,7 @@ import './f14-mob-reaper';
 import './f14-mob-keeper';
 import './f14-mob-double';
 import './f14-mob-cuckoo';
+import './f14-mob-weight';
 
 type RGBA = [number, number, number, number];
 
@@ -509,7 +510,7 @@ function frameOf(
 }
 
 /** Смерть механизма: фигура оседает, из неё сыплются шестерёнки. */
-function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
+export function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
   if (k <= 0) return p;
   const o = new Px(p.w, p.h);
   for (let y = 0; y < p.h; y++)
@@ -534,83 +535,16 @@ function scatter(p: Px, k: number, seed: number, bits: RGBA[]): Px {
 }
 
 /** Номер кадра смерти по времени режима. */
-const deathK = (pose: MobPose) =>
+export const deathK = (pose: MobPose) =>
   pose.mode === 'dying' ? Math.min(3, Math.floor(pose.t / 0.16)) : 0;
 
 /** Стереть пиксель (полупрозрачный `set` поверх не стирает). */
-function clear(p: Px, x: number, y: number): void {
+export function clear(p: Px, x: number, y: number): void {
   x = Math.round(x);
   y = Math.round(y);
   if (x < 0 || y < 0 || x >= p.w || y >= p.h) return;
   p.data[(y * p.w + x) * 4 + 3] = 0;
 }
-
-// ---------------------------------------------------------------------------
-// Гиря: чугунный цилиндр с латунными обручами и кольцом, цепь уходит вверх.
-// Висит — высоко над своей тенью; падает — ниже; лежит — на полу, вокруг
-// пыль. Кадр 20×72, земля 68.
-// ---------------------------------------------------------------------------
-
-function drawWeight(height: number, shake: number, down: boolean): Built {
-  const p = new Px(20, 72);
-  const G = 68;
-  const cx = 10 + shake;
-  const bottom = G - height;
-  const top = bottom - 15;
-  // Цепь вверх: звенья вдоль и поперёк.
-  for (let y = 0; y < top - 2; y++) {
-    const link = Math.floor(y / 2) % 2;
-    if (link) p.set(Math.round(cx), y, IRON[3]);
-    else {
-      p.set(Math.round(cx) - 1, y, IRON[1]);
-      p.set(Math.round(cx) + 1, y, IRON[2]);
-    }
-  }
-  // Кольцо.
-  p.ell(cx, top - 1.5, 2.2, 1.8, IRON[2]);
-  for (let y = top - 2; y <= top - 1; y++) clear(p, Math.round(cx), y);
-  // Цилиндр.
-  for (let y = top; y <= bottom; y++)
-    for (let x = Math.round(cx - 5); x <= Math.round(cx + 4); x++) {
-      const u = (x + 0.5 - cx) / 5;
-      p.set(x, y, tone(IRON, -u * 0.8 + 0.45 + (y === top ? 0.35 : 0)));
-    }
-  // Латунные обручи и клеймо гири.
-  for (const y of [top + 1, bottom - 2])
-    for (let x = Math.round(cx - 5); x <= Math.round(cx + 4); x++)
-      p.set(x, y, tone(BRASS, -((x + 0.5 - cx) / 5) * 0.8 + 0.5));
-  p.rect(Math.round(cx - 2), top + 6, Math.round(cx), top + 6, BRASS[2]);
-  p.rect(Math.round(cx - 1), top + 7, Math.round(cx - 1), top + 8, BRASS[1]);
-  p.outline(INK);
-  if (down) {
-    // Пыль и крошка вокруг основания.
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * TAU;
-      p.set(Math.round(cx + Math.cos(a) * 7), Math.round(G - 1 + Math.sin(a) * 1.5), hx('#8a7a6a'));
-    }
-  }
-  return { p, ax: 10, ay: G, eye: null };
-}
-
-registerMobPainter('f14_weight', (_m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  let h = 24;
-  let shake = 0;
-  let down = false;
-  if (mode === 'f14_lock') shake = Math.round(Math.sin(pose.t * 60));
-  else if (mode === 'f14_fall') h = Math.max(0, 24 * (1 - Math.min(1, pose.t / 0.18)));
-  else if (mode === 'f14_down' || mode === 'dying') {
-    h = 0;
-    down = true;
-  } else if (mode === 'f14_up') h = Math.min(24, 24 * (pose.t / 0.8));
-  const hb = Math.round(h / 2) * 2;
-  const dk = mode === 'dying' ? deathK(pose) : 0;
-  return frameOf('f14_weight', pose, `h${hb}${down ? 'd' : ''}`, (shake + 1) * 10 + dk, () => {
-    const b = drawWeight(hb, shake, down);
-    if (dk) b.p = scatter(b.p, dk, 21, [IRON[3], BRASS[3]]);
-    return b;
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Часовщик (редкий): сгорбленный старик в зелёном козырьке, с моноклем и
