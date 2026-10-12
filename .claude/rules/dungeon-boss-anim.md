@@ -277,7 +277,7 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   `f9-mobkit.ts`; `f9_body`/`f9_head` stay registered for floor 15), v2.108 floor 8
   (`f8-mob-*.ts`, `f8-mobkit.ts`, `f8-mob-fx.ts`, brain `f8_snap`), v2.109 floor 10
   (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept);
-  floor 11 (`f11-mobkit.ts`, `f11-mob-*.ts`, section below).
+  v2.118 floor 11 (`f11-mobkit.ts`, `f11-mob-*.ts`, section below).
 
 ## Floor 11 mobs (`f11-mobkit.ts`, `f11-mob-<kind>.ts`)
 
