@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { EGGS } from './pets';
 import * as eggs from './props-pixel/eggs';
 import { propFit } from './props-pixel/fit';
 import { PX_SETS, pxSrc } from './props-pixel/manifest';
@@ -51,6 +52,53 @@ describe('пиксельные яйца', () => {
 
   it('манифест и файлы совпадают с рисовальщиком', () => {
     expect(manifestProblems(eggs, PX, ROOT)).toEqual([]);
+  });
+
+  it('полоса вылупления есть на каждую редкость, что выпадает из яйца', () => {
+    for (const e of EGGS) {
+      const can = e.odds.flatMap((w, r) => (w > 0 ? [r] : []));
+      expect([e.id, eggs.EGG_RARITIES[e.id]]).toEqual([e.id, can]);
+      for (const r of can) expect(eggs.STRIPS[`hatch-${e.id}-r${r}`]?.res).toEqual(['l']);
+    }
+  });
+
+  it('вылупление начинается кадром покоя и кончается пустым кадром', () => {
+    const empty = (p: { data: Uint8ClampedArray | Uint8Array }) =>
+      p.data.every((v, i) => i % 4 !== 3 || v === 0);
+    for (const [name, d] of Object.entries(eggs.STRIPS)) {
+      if (d.loop) continue;
+      const res = d.res![0];
+      const kind = name.split('-')[1];
+      expect([
+        name,
+        sameBytes(eggs.frame(name, 0, res), eggs.frame(`idle-${kind}`, 0, res)),
+      ]).toEqual([name, true]);
+      expect([name, empty(eggs.frame(name, d.frames - 1, res))]).toEqual([name, true]);
+      expect([name, empty(eggs.frame(name, d.marks!.burst - 1, res))]).toEqual([name, false]);
+    }
+  });
+
+  it('метки по порядку: трещина → качка, разлом, потом пусто в середине', () => {
+    for (const [name, d] of Object.entries(eggs.STRIPS)) {
+      if (!name.startsWith('hatch-')) continue;
+      const m = d.marks!;
+      const order = [m.crack1, m.w2, m.crack2, m.w3, m.crack3, m.burst, m.clear, d.frames];
+      expect([name, order.every((v, i) => i === 0 || v > order[i - 1])]).toEqual([name, true]);
+      const r = Number(name.slice(-1));
+      expect(d.frames).toBe(Math.round((eggs.HATCH_WOB[r] + eggs.HATCH_POST[r]) * eggs.FPS));
+    }
+  });
+
+  it('качка: самая низкая точка яйца на полу (не тонет, не висит), парение — выше пола', () => {
+    for (const kind of eggs.EGG_KINDS)
+      for (const r of eggs.EGG_RARITIES[kind]) {
+        const pl = eggs.hatchPlan(r);
+        for (let i = 0; i < pl.b * eggs.FPS; i++) {
+          const z = eggs.lowestZ(kind, r, i / eggs.FPS);
+          if (r < 3) expect([kind, r, i, Math.abs(z) < 0.35]).toEqual([kind, r, i, true]);
+          else expect([kind, r, i, z > -0.35]).toEqual([kind, r, i, true]);
+        }
+      }
   });
 
   it('петли без шва', () => {

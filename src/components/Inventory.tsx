@@ -92,7 +92,7 @@ export function InvIconView({ icon, size = 26 }: { icon: InvIcon; size?: number 
       return <GxIcon name="gift" size={size} style={{ color: tier?.color }} />;
     }
     case 'egg':
-      return <EggArt egg={icon.egg} size={size} />;
+      return <EggArt egg={icon.egg} size={Math.round(size * 1.15)} />;
     case 'book':
       return <BookArt book={icon.book} size={size} />;
     case 'rune':
