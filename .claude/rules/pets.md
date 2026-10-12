@@ -255,6 +255,29 @@ Owner: «добавь возможность выбирать скин у пит
   copper bands darker and redder. Hatch plays `happy`. Weight 818 KB v0+v1 (small 72 / 81, large
   319 / 344, thumbs 1 KB; ink was 1.69 MB) — heavier than the others because of the strands. Released in v2.117.
   Tests «пиксельный паук» in `pets-pixel.test.ts`.
+- **Raccoon** (`pets-pixel/raccoon.ts`, `raccoonFrame(a, i, res, v)`, `variants: [1]`):
+  «Енот-медвежатник», a plump warm-grey raccoon STANDING on two legs facing us (fox's
+  `drawPartsF` + `pick`, plus own `cut` clip plane with a face shader and `vis` dither fade;
+  ears = `drawFlats`, stethoscope/tools/hammer = spider's `rod`/`rods` with palette). 44-px read:
+  black mask (`skullPick`, `maskTop`/`maskBot` keyed across the face) with WHITE brows above it
+  and a dark forehead stripe, ringed tail (5 dark rings + dark tip by arc length) curling up at
+  the viewer's right, steel stethoscope U + bell on the chest, leather gloves, tool roll across
+  the belly (red and blue drivers, file, pick, brass buckle — `bellyPick` band). Off the badger:
+  cheeks are grey fur with pale ruff locks (all-white cheeks read as a badger), ear backs dark
+  with pale rims, gloves brown (orange read as boxing gloves). Feet stand FORWARD of the belly
+  (y 4.6): under it the camera from above hid them. Arms = two-bone `ik` to body-local hand
+  targets; trick hands go to WORLD points through `toBody` (inverse of `skel().up`), else the
+  bent body moved them off the rock. Work: boulder fades in → bell put on the rock's front
+  surface, ears turn, eyes half shut, sound ticks over EMPTY pixels → little hammer (wind-up,
+  strike 1.12 s, star) → crack only over rock pixels → halves fall outward (`cut` plane per
+  half, yaw/roll/offset by `split`) showing a geode with gold nuggets + glints → happy → props
+  fade 1.66–1.9 s and reset to REST (test). Attack: crouch with gloves up → pounce (scale 1.18,
+  jaws open 0.36–0.46 s, claws UP beside the head, 3 bone claws per glove) → rays → settle (a
+  wide-arms strike read as «ta-da»). Sleep: curled, tail over the nose, mask readable. One-shot
+  tails key off `REST.tailCurl` (seam test caught a literal). Gold: gold fur with bronze depth,
+  dark bronze mask, bronze tail rings, redder gloves, amber iris (a dark iris vanished in the
+  bronze mask). Hatch plays `happy`. Weight 511 KB v0+v1 (small 48 / 53, large 197 / 211,
+  thumbs 1 KB; ink was 1.91 MB). Tests «пиксельный енот» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
