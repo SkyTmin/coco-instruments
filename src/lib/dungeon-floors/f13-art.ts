@@ -3209,154 +3209,9 @@ export const KNIGHT_BODY: Body = {
   joints: true,
 };
 
-function sword(rig: Rig, hand: V3, dir: V3, len: number, T: Tone = P.silver): void {
-  const tip = vadd(hand, vsc(dir, len));
-  const guardA = vadd(hand, vsc(dir, 1.2));
-  rig.cap(vadd(hand, vsc(dir, -1.4)), hand, 0.55, 0.55, P.wood);
-  rig.cap(guardA, tip, 0.85, 0.35, T);
-  // Гарда поперёк.
-  const side = vnorm(v3(-dir.z, 0, dir.x));
-  rig.cap(vadd(guardA, vsc(side, -1.6)), vadd(guardA, vsc(side, 1.6)), 0.5, 0.5, P.gold);
-}
-
-const swordDir = (j: Joints, side: 'L' | 'R', up = 0.6): V3 => {
-  const f = side === 'R' ? j.foreR : j.foreL;
-  return vnorm(vadd(vsc(f, 1), vadd(vsc(j.fwd, 0.6), v3(0, up, 0))));
-};
-
 // Рыцарь рисуется в `f13-mob-knight.ts` (анимации мобов 13).
 
-// ---------------------------------------------------------------------------
-// Щелкунчик-гвардеец (элита).
-// ---------------------------------------------------------------------------
-
-const NUT_BODY: Body = {
-  hip: 10,
-  torso: 8.5,
-  waist: 3.2,
-  chest: 4.2,
-  neck: 0.6,
-  head: 4.6,
-  shW: 4.4,
-  upper: 4.6,
-  fore: 4.2,
-  armR: 1.5,
-  hand: 1.5,
-  hipW: 2,
-  thigh: 5,
-  shin: 5,
-  legR: 1.6,
-  foot: 2.4,
-  T: {
-    torso: P.red,
-    arm: P.red,
-    leg: P.blue,
-    head: P.cream,
-    hand: P.cream,
-    foot: P.black,
-    joint: P.gold,
-    pelvis: P.blue,
-  },
-  torsoPat: (t, nx) =>
-    Math.abs(nx + (t - 0.5) * 1.2) < 0.16 || Math.abs(nx - (t - 0.5) * 1.2) < 0.16
-      ? P.cream
-      : t < 0.12
-        ? P.gold
-        : null,
-  legPat: bandPat(0.62, 1, P.black),
-  joints: true,
-};
-
-paintMob(
-  'f13_nutcracker',
-  puppetPainter('f13_nutcracker', {
-    w: 48,
-    h: 58,
-    ax: 24,
-    ay: 52,
-    dirs: 8,
-    body: NUT_BODY,
-    shadow: 8,
-    keyX: (c) =>
-      c.m.mode === 'windup'
-        ? `j${Math.floor(windK(c.m) * 6)}`
-        : c.m.mode === 'recover' && c.m.t < 0.2
-          ? 'jc'
-          : '',
-    pose: (c, q) => {
-      const { m } = c;
-      if (m.mode === 'windup') {
-        const n = Math.min(11, Math.floor(windK(m) * 12));
-        const e = ease(n / 11);
-        // Челюсть распахнута, голова назад, руки в стороны.
-        q.hp = -0.45 * e;
-        q.lean = -0.15 * e;
-        q.aL = limb(0.6 * e, 0.7 * e + 0.1, 0.4);
-        q.aR = limb(0.6 * e, 0.7 * e + 0.1, 0.4);
-        q.sink = 1.5 * e;
-        return { q, key: `w${n}` };
-      }
-      if (m.mode === 'recover' && m.t < 0.3) {
-        const n = Math.min(5, Math.floor(m.t / 0.05));
-        const e = easeOut(n / 5);
-        q.hp = -0.45 + 0.9 * e;
-        q.lean = 0.35 * e;
-        q.aL = limb(0.8, 0.5, 0.5);
-        q.aR = limb(0.8, 0.5, 0.5);
-        return { q, key: `h${n}` };
-      }
-      if (m.mode === 'aim') {
-        // Марш-таран: топчется, саблю вперёд.
-        const n = Math.floor(c.now * 10) % 8;
-        const s = Math.sin((n / 8) * TAU);
-        q.lL = limb(0.5 * Math.max(0, s), 0.1, 0.9 * Math.max(0, s));
-        q.lR = limb(0.5 * Math.max(0, -s), 0.1, 0.9 * Math.max(0, -s));
-        q.aR = limb(1.5, 0.15, 0.1);
-        q.lean = 0.25;
-        q.hp = 0.2;
-        return { q, key: `aim${n}` };
-      }
-      if (m.mode === 'f13_charge') {
-        const n = Math.floor(c.now * 16) % 8;
-        const g = gait((n / 8) * TAU, 1.4);
-        g.lean = 0.55;
-        g.aR = limb(1.5, 0.15, 0.1);
-        g.aL = limb(-0.6, 0.3, 0.6);
-        return { q: g, key: `ch${n}` };
-      }
-      return null;
-    },
-    dress: (rig, j, c) => {
-      const R = NUT_BODY.head;
-      const open = c.m.mode === 'windup' ? ease(windK(c.m)) : 0;
-      // Кивер: высокий чёрный цилиндр с золотом и плюмажем.
-      const hatB = onHead(j, R, -0.05, 0, 0.75);
-      const hatT = vadd(hatB, vsc(j.hUp, 7));
-      rig.cap(hatB, hatT, 3.6, 3.9, P.black, bandPat(0, 0.18, P.gold));
-      rig.ball(vadd(hatT, vsc(j.hFwd, 2.6)), 1.2, P.gold);
-      rig.cap(hatT, vadd(hatT, vadd(vsc(j.hUp, 3), vsc(j.hFwd, -1))), 1.4, 0.6, P.red);
-      // Лицо: глаза, усы, большая челюсть с бородой.
-      rig.dot(onHead(j, R, 0.92, -0.38, 0.2), INK, 1);
-      rig.dot(onHead(j, R, 0.92, 0.38, 0.2), INK, 1);
-      rig.dot(onHead(j, R, 0.95, -0.38, 0.32), WHITE, 1);
-      rig.cap(onHead(j, R, 1, -0.5, -0.12), onHead(j, R, 1, 0.5, -0.12), 0.8, 0.8, P.black);
-      const jawA = onHead(j, R, 0.55, 0, -0.55 - open * 0.5);
-      rig.cap(vadd(jawA, vsc(j.hRight, -2.6)), vadd(jawA, vsc(j.hRight, 2.6)), 2.2, 2.2, P.cream);
-      rig.cap(vadd(jawA, v3(0, -1.6, 0)), vadd(jawA, v3(0, -4, 0)), 2.2, 0.8, P.porcelain);
-      if (open > 0.2) rig.dot(onHead(j, R, 1.02, 0, -0.42), INK, 2);
-      // Эполеты и пуговицы.
-      rig.disc(vadd(j.shL, v3(0, 0.8, 0)), 2.2, 0.8, P.gold);
-      rig.disc(vadd(j.shR, v3(0, 0.8, 0)), 2.2, 0.8, P.gold);
-      for (let k = 0; k < 3; k++)
-        rig.dot(
-          vadd(vmix(j.pelvis, j.chest, 0.3 + k * 0.25), vsc(j.fwd, NUT_BODY.chest * 0.95)),
-          P.gold[3],
-          1,
-        );
-      sword(rig, j.haR, swordDir(j, 'R', 0.3), 13, P.silver);
-    },
-  }),
-);
+// Щелкунчик-гвардеец рисуется в `f13-mob-nutcracker.ts` (анимации мобов 13).
 
 // ---------------------------------------------------------------------------
 // Барабанщик: кольцо на сильную долю.
@@ -7724,8 +7579,7 @@ export function lordVagaPx(m: Mob, _now: number): [number, number] {
 
 // ---- прогрев -----------------------------------------------------------------
 
-for (const k of ['f13_nutcracker', 'f13_drummer', 'f13_prompter', 'f13_shade', 'f13_cashier'])
-  warmPuppet(k, 8);
+for (const k of ['f13_drummer', 'f13_prompter', 'f13_shade', 'f13_cashier']) warmPuppet(k, 8);
 
 /**
  * Кукловод: пробуждение, висение акта I в обе стороны с жестами ваги под

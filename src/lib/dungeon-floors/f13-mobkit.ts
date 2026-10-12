@@ -319,6 +319,7 @@ const SHEET_PREV = [
   'stun',
   'drop',
   'f13_broken',
+  'f13_charge',
 ];
 
 export const speedOf = (m: Mob) => Math.hypot(m.vx ?? 0, m.vy ?? 0);
