@@ -291,7 +291,9 @@ export const kindOf = (
     h,
     ax,
     ay,
-    pics: frameLRU<Pic>(Math.round(limit * 0.6)),
+    // Сырые картинки рига (полный холст, Px) — только чтобы элита и альбинос не
+    // собирали риг заново; держать их все — десятки МБ и долгие сборки мусора.
+    pics: frameLRU<Pic>(64),
     frames: frameLRU<MobFrame>(limit),
     limit,
   };

@@ -470,7 +470,7 @@ function golPose(anim: string, f: number, plates: number, T = 0.8): GolO {
   return o;
 }
 
-const GK = kindOf('f6_golem', 64, 64, 32, 50, 2200);
+const GK = kindOf('f6_golem', 64, 64, 32, 50, 3400);
 
 /** Анимация с числом плит: `walk3`, `wind2_80`, `harden4`. */
 function parse(anim: string): [string, number, number] {
@@ -671,4 +671,19 @@ registerMobWarm('f6_golem', function* () {
     ],
     golPic,
   );
+  // Треснувшая корка (1–3 плиты): под ударами героя голем проходит её каждый
+  // круг — без прогрева это ~40 новых кадров за 8 с толпы.
+  for (const p of [3, 2, 1]) {
+    yield* warmAll(
+      GK,
+      [
+        [`walk${p}`, 10],
+        [`idle${p}`, 8],
+        [`wind${p}_80`, 19],
+        [`slamf${p}`, 16],
+        ...(p < 3 ? ([[`crack${p}`, 8]] as [string, number][]) : []),
+      ],
+      golPic,
+    );
+  }
 });
