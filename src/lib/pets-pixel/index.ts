@@ -15,6 +15,7 @@ import {
   FRAMES as BADGER_FRAMES,
   RES as BADGER_RES,
 } from './badger';
+import { catFrame, FPS as CAT_FPS, FRAMES as CAT_FRAMES, RES as CAT_RES } from './cat';
 import {
   dragonFrame,
   FPS as DRAGON_FPS,
@@ -109,6 +110,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: BADGER_RES,
     anims: at24(BADGER_FRAMES, BADGER_FPS),
     frame: badgerFrame,
+    variants: [1],
+  },
+  // Кот Шрам: свой золотой.
+  cat: {
+    res: CAT_RES,
+    anims: at24(CAT_FRAMES, CAT_FPS),
+    frame: catFrame,
     variants: [1],
   },
 };
