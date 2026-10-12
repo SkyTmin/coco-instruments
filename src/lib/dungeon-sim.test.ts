@@ -358,6 +358,30 @@ describe('подземелье: бой', () => {
     expect(s.hero.hp).toBe(s.stats.maxHp);
   });
 
+  // Владелец: «когда двигаешься, ты персонажем двигаешь боссов и мобов».
+  it.each(['rat', 'fatrat'])('герой упирается в моба (%s), а не толкает его', (kind) => {
+    const lift = liftOf(world, 'mouth')!;
+    const s = sim(1, 0, lift.x + 0.5, lift.y - 22, 11);
+    // Первый шаг выталкивает героя из стены у места появления.
+    stepSim(s, DT, NO_INPUT);
+    // Лоб в лоб, пока моб ещё только настораживается.
+    const m = spawnMob(s, kind, s.hero.x + 0.9, s.hero.y, { mode: 'sleep' });
+    const x0 = m.x;
+    for (let i = 0; i < 20; i++) stepSim(s, DT, { ...NO_INPUT, mx: 1 });
+    expect(m.x).toBeLessThan(x0 + 0.01);
+    expect(m.x - s.hero.x).toBeGreaterThan(m.r + s.hero.r - 0.05);
+  });
+
+  it('крыса, бегущая на стоящего героя, его не сдвигает', () => {
+    const lift = liftOf(world, 'mouth')!;
+    const s = sim(1, 0, lift.x + 0.5, lift.y - 22, 11);
+    stepSim(s, DT, NO_INPUT);
+    const { x, y } = s.hero;
+    spawnMob(s, 'rat', x + 1.2, y, { mode: 'chase' });
+    for (let i = 0; i < 30; i++) stepSim(s, DT, NO_INPUT);
+    expect(Math.hypot(s.hero.x - x, s.hero.y - y)).toBeLessThan(0.02);
+  });
+
   it('Вход в шахты в первом комплекте проходим: бот ходит 4 минуты и почти не умирает', () => {
     const lift = liftOf(world, 'mouth')!;
     const top = bandOf(world, 'mouth')!;

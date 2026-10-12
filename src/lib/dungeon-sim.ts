@@ -614,6 +614,8 @@ export const SKILL = { dur: 0.5, reach: 1.9, mult: 1.5, perHit: 0.08 };
 
 /** Кого сколько весит — от этого отдача. */
 const massOf = (kind: MobId) => MOBS[kind]?.mass ?? 1;
+/** Вес героя, когда разводить его с мобом некому, кроме массы. */
+const HERO_MASS = 1.5;
 /** Описание вида (незнакомый — как серая крыса, чтобы битое сохранение не падало). */
 const defOf = (kind: MobId): MobDef => MOBS[kind] ?? MOBS.rat ?? Object.values(MOBS)[0];
 
@@ -2721,11 +2723,20 @@ function moveMobs(sim: Sim, dt: number): void {
     const min = a.r + h.r;
     const d = Math.hypot(dx, dy);
     if (d < min && d > 1e-6 && h.mode !== 'dash') {
+      // Наступает тот, кто шагнул навстречу, — он и упирается: герой не
+      // толкает ни моба, ни босса, моб не толкает стоящего героя. Никто не
+      // идёт навстречу (вылез из норы под ногами, сдуло) — разводит масса.
+      const nx = dx / d;
+      const ny = dy / d;
       const push = min - d;
-      a.x += (dx / d) * push * 0.85;
-      a.y += (dy / d) * push * 0.85;
-      h.x -= (dx / d) * push * 0.15;
-      h.y -= (dy / d) * push * 0.15;
+      const hIn = Math.max(0, h.vx * nx + h.vy * ny);
+      const mIn = Math.max(0, -((a.vx + a.kx) * nx + (a.vy + a.ky) * ny));
+      const mobShare =
+        hIn + mIn > 1e-3 ? mIn / (hIn + mIn) : HERO_MASS / (HERO_MASS + massOf(a.kind));
+      a.x += nx * push * mobShare;
+      a.y += ny * push * mobShare;
+      h.x -= nx * push * (1 - mobShare);
+      h.y -= ny * push * (1 - mobShare);
     }
   }
   for (const m of live) collideTiles(sim, m);

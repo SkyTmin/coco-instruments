@@ -12,7 +12,16 @@ import { describe, expect, it } from 'vitest';
 import { DUNGEON_START, heroOf, MOBS, SLOTS } from '../dungeon';
 import type { DungeonState, Gear } from '../dungeon';
 import { buildWorld, Tile, walkableTile } from '../dungeon-world';
-import { API, createSim, NO_INPUT, spawnMob, stepSim, strikeHits, SWORD } from '../dungeon-sim';
+import {
+  API,
+  createSim,
+  lineOfSight,
+  NO_INPUT,
+  spawnMob,
+  stepSim,
+  strikeHits,
+  SWORD,
+} from '../dungeon-sim';
 import type { Mob, Sim, SimInput } from '../dungeon-sim';
 import { f10Events, f10Posts, KING, KNIGHT } from './f10-brains';
 import { F10_GALLERY, F10_GATES, F10_MARK, F10_THRONE } from './f10';
@@ -178,6 +187,9 @@ function bot(s: Sim, st: BotState): SimInput {
     if (m.kind === 'f10boss') king = m;
     if (m.mode === 'dying' || m.mode === 'emerge' || (m.data.ghost ?? 0) > 0) continue;
     if (m.kind === 'f10boss' && m.mode === 'f10_throne') continue;
+    // За стеной не гнаться: живой игрок не давит в стену семь минут, а идёт
+    // в обход (бот упирался в стену, маг — с другой стороны в ту же).
+    if (!lineOfSight(s, h.x, h.y, m.x, m.y)) continue;
     const d = Math.hypot(m.x - h.x, m.y - h.y);
     const w = m.kind === 'f10boss' && m.mode === 'f10_command' ? d - 6 : d;
     if (w < nd) {
@@ -885,18 +897,43 @@ describe('этаж 10: районы', () => {
     const gy = Math.floor(gate / W) + 3;
     const goal = field(gx, gy);
     let arrived = 0;
-    for (const seed of [71, 72, 73]) {
+    // Шесть зёрен, а не три: на трёх исход решало везение (v2.120: сквозь мобов
+    // не пройти; на 71–80 бот доходит 4 из 10, до правки — 5 из 10).
+    for (const seed of [71, 72, 73, 74, 75, 76]) {
       const s = sim(8, 5, lift.x + 0.5, lift.y + 1.5, seed, 10);
       const st: BotState = { lastAtk: -9, react: [0.22, 0.4], miss: 0.1, seed };
       let t = 0;
       let stuckT = 0;
       let lastD = 1e9;
+      // Упёрся (колонна посреди клетки, угол, моб, которого не сдвинуть) —
+      // живой игрок шагает вбок, а не давит в стену до конца.
+      let still = 0;
+      let aside = 0;
+      let sx = 0;
+      let sy = 0;
+      let sgn = 1;
       for (; t < 600 * 60; t++) {
         const inp = bot(s, st);
         // Никого рядом и никаких меток — идти к цели.
         if (!inp.mx && !inp.my && !inp.attack && !inp.eat)
           Object.assign(inp, follow(s, goal, gx, gy), { dash: false });
+        if (aside > 0) {
+          aside -= DT;
+          inp.mx = sx;
+          inp.my = sy;
+        }
+        const x0 = s.hero.x;
+        const y0 = s.hero.y;
         stepSim(s, DT, inp);
+        const pushing = (inp.mx || inp.my) && s.hero.mode === 'free';
+        still = pushing && Math.hypot(s.hero.x - x0, s.hero.y - y0) < 0.005 ? still + DT : 0;
+        if (still > 1 && aside <= 0) {
+          sgn = -sgn;
+          sx = -inp.my * sgn;
+          sy = inp.mx * sgn;
+          aside = 0.4;
+          still = 0;
+        }
         if (Math.hypot(s.hero.x - gx - 0.5, s.hero.y - gy - 0.5) < 1.5) break;
         if (s.hero.mode === 'dead') break;
         if (t % 600 === 0) {

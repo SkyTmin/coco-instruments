@@ -449,6 +449,10 @@ describe('этаж 13: сцена и дорога', () => {
       if (p.alive && p.r >= 0.3) tiles[Math.floor(p.y) * W + Math.floor(p.x)] = Tile.Wall;
     const fl = field(gate % W, Math.floor(gate / W), tiles);
     const h = s.hero;
+    // Посты тоже без мобов: иначе страж встаёт на пост каждый кадр заново, а
+    // сквозь моба герой не проходит (v2.120).
+    stepSim(s, DT, NO_INPUT);
+    for (const p of f13State(s)!.posts) p.dead = true;
     let arrived = -1;
     for (let t = 0; t < 600 * 60; t++) {
       s.mobs = [];

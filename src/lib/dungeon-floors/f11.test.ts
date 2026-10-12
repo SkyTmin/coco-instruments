@@ -286,9 +286,12 @@ function fight(tier: number, plus: number, seed: number, meat = 4): Fight {
 
 describe('этаж 11: Древний страж', () => {
   it('на Т8+5 с едой бот побеждает за 2–6 минут, проходя все четыре фазы', () => {
-    const res = [41, 42, 43, 44].map((seed) => fight(8, 5, seed));
+    // Стража больше не сдвинуть телом (v2.120) — бой стал труднее: на зёрнах
+    // 41–56 бот побеждает 7 из 16, до правки — 10 из 16. Восемь зёрен, а не
+    // четыре: на четырёх исход решало везение.
+    const res = [41, 42, 43, 44, 45, 46, 47, 48].map((seed) => fight(8, 5, seed));
     const wins = res.filter((r) => r.won > 0);
-    expect(wins.length).toBeGreaterThanOrEqual(2);
+    expect(wins.length).toBeGreaterThanOrEqual(3);
     for (const r of wins) {
       expect(r.won).toBeGreaterThan(120);
       expect(r.won).toBeLessThan(360);

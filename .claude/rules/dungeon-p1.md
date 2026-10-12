@@ -68,6 +68,18 @@ entry — «Клеть» in the yard from rank F. Files: rules `lib/dungeon.ts`,
 - **Explored stays lit forever:** `sim.fog` (radius 5), `cutExplored` cuts the darkness by
   82% (`EXPLORED_LIT`) with a "dot per cell" mask, smoothed. Not 100% — the lantern and
   lamps still have work to do; for dark areas the share should probably be per-area.
+- **The hero doesn't shove mobs or bosses** (v2.120). Owner: «когда двигаешься, ты
+  персонажем двигаешь боссов и мобов». The hero↔mob overlap in `moveMobs` used to go 85% to
+  the mob, whatever its mass. Now whoever stepped INTO the other (velocity along the normal,
+  mob `vx + kx`) takes the push: walking into a mob — the hero stops or slides round it; a
+  mob running at a standing hero — the mob stops. Neither stepped in (emerged underfoot,
+  blown by wind, a boss moving by position) — split by mass, `HERO_MASS` 1.5. Dash still
+  passes through. A crowd can now box the hero in — dash is the way out. Tests «герой
+  упирается в моба», «крыса … его не сдвигает». Bot fallout: f13 road test respawned a post
+  guard every frame (now posts are off there); f10 bot chased mobs through walls and stood
+  head-on against a centred deco prop (now: line of sight, step aside when stuck); balance
+  shift on 16/10 seeds — f11 guardian win 7/16 (was 10/16), f10 passage 4/10 (was 5/10);
+  those tests now use 8 and 6 seeds (4 and 3 were seed luck).
 - **Lair door** (v2.66): the gate cell isn't part of the arena — the winner is flagged
   `exiting`, the gate closes only once he's farther than `GATE_CLEAR` (2.5 cells); you
   can't get to a resting king from outside. Test — 200 exits (previously 0 of 200: the gate
