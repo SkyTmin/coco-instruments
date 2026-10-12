@@ -226,7 +226,7 @@ Owner: «добавь возможность выбирать скин у пит
   the bark. Walk: standing trot, tail out to the left at body height (raised beside the head it
   read as a black club). Attack: fox's pounce (scale 1.18, jaws open 0.36–0.46 s). Sleep: lying,
   chin on paws, ears laid back (1.1). Hatch plays `happy`. Weight 460 KB v0+v1 (small 47 / 53,
-  large 170 / 187, thumbs 1 KB; ink was 1.89 MB). Tests «пиксельная овчарка» in
+  large 170 / 187, thumbs 1 KB; ink was 1.89 MB). Released in v2.116. Tests «пиксельная овчарка» in
   `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
