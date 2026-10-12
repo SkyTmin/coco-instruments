@@ -15,6 +15,7 @@ import * as Fox from './pets-pixel/fox';
 import * as Owl from './pets-pixel/owl';
 import * as Raccoon from './pets-pixel/raccoon';
 import * as Raven from './pets-pixel/raven';
+import * as Scarab from './pets-pixel/scarab';
 import * as Shepherd from './pets-pixel/shepherd';
 import * as Spider from './pets-pixel/spider';
 import * as Wolf from './pets-pixel/wolf';
@@ -931,5 +932,135 @@ describe('пиксельный хорёк', () => {
     const b = W.poseAt('walk', 0.375);
     expect(b.fRz).toBeGreaterThan(1);
     expect(b.fLz).toBe(0);
+  });
+});
+
+describe('пиксельный скарабей', () => {
+  const W = Scarab;
+  const T = (a: Anim) => W.FRAMES[a] / W.FPS;
+  const foot = (o: Scarab.Pose, i: number) =>
+    ['x', 'y', 'z'].map((k) => (o as unknown as Record<string, number>)[`f${i}${k}`]);
+
+  it('рисунок детерминирован; золотой рисует сам, на том же холсте', () => {
+    for (const r of ['s', 'l'] as const)
+      for (const v of [0, 1]) {
+        const a = W.scarabFrame('work', 30, r, v);
+        const b = W.scarabFrame('work', 30, r, v);
+        expect([a.w, a.h]).toEqual([W.RES[r].cw, W.RES[r].ch]);
+        expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
+      }
+    const plain = W.scarabFrame('idle', 0, 's', 0).data;
+    const gold = W.scarabFrame('idle', 0, 's', 1).data;
+    expect(Buffer.from(plain).equals(Buffer.from(gold))).toBe(false);
+  });
+
+  it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, только свой золотой', () => {
+    const m = PET_PX.scarab;
+    expect(m.box).toBe(W.RES.s.box);
+    expect(m.large?.box).toBe(W.RES.l.box);
+    for (const a of ANIMS) {
+      for (const set of [m, m.large!]) {
+        expect(set.anims[a].n).toBe(W.FRAMES[a]);
+        expect(set.anims[a].fps).toBe(W.FPS);
+      }
+      expect(PIXEL_PETS.scarab.anims[a]).toEqual({ n: W.FRAMES[a], fps: W.FPS });
+    }
+    expect(PIXEL_PETS.scarab.variants).toEqual([1]);
+    expect(PET_SPRITES.scarab).toBeUndefined();
+    expect([T('idle'), T('sleep'), T('walk'), T('work')]).toEqual([3, 3, 1, 2]);
+    expect(Math.abs(T('happy') - 1.1)).toBeLessThan(0.05);
+    expect(Math.abs(T('attack') - 0.9)).toBeLessThan(0.05);
+  });
+
+  it('разовые кончаются позой начала покоя, петли — без шва (и поза, и вторичное движение)', () => {
+    const rest = W.poseAt('idle', 0);
+    const lag0 = W.lagOf('idle', 0);
+    for (const a of ['happy', 'work', 'attack'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), rest)]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), lag0, 0.05)]).toEqual([a, []]);
+    }
+    for (const a of ['idle', 'walk', 'sleep'] as Anim[]) {
+      expect([a, poseDiff(W.poseAt(a, T(a)), W.poseAt(a, 0))]).toEqual([a, []]);
+      expect([a, poseDiff(W.lagOf(a, T(a)), W.lagOf(a, 0), 0.05)]).toEqual([a, []]);
+    }
+  });
+
+  it('стопы на земле не скользят (кроме шага на месте), лапы дотягиваются до стоп', () => {
+    for (const a of ['idle', 'happy', 'work', 'attack', 'sleep'] as Anim[]) {
+      const n = W.FRAMES[a];
+      for (let i = 0; i + 1 < n; i++) {
+        const o0 = W.poseAt(a, i / W.FPS);
+        const o1 = W.poseAt(a, (i + 1) / W.FPS);
+        for (let k = 0; k < 6; k++) {
+          const [x0, y0, z0] = foot(o0, k);
+          const [x1, y1, z1] = foot(o1, k);
+          if (z0 < 0.01 && z1 < 0.01)
+            expect([a, i, k, Math.hypot(x1 - x0, y1 - y0) < 0.05]).toEqual([a, i, k, true]);
+        }
+        // Лапа на земле или на шаре стоит, где велено (в воздухе — допуск на рывок шага).
+        W.probe(a, i / W.FPS).reach.forEach((r, k) => {
+          const z = foot(o0, k)[2];
+          expect([a, i, k, r < (z < 0.01 ? 0.3 : 3)]).toEqual([a, i, k, true]);
+        });
+      }
+    }
+  });
+
+  it('трюк: шар растёт из блёсток, жук стоит на голове спиной к ходу, задние лапы на шаре, тело не в шаре', () => {
+    expect(W.poseAt('work', 0.1).ballR).toBeLessThan(0);
+    const g = W.poseAt('work', 0.45).ballR;
+    expect(g).toBeGreaterThan(2.5);
+    expect(g).toBeLessThan(11);
+    expect(W.poseAt('work', 0.7).ballR).toBe(11);
+    for (let i = 0; i < W.FRAMES.work; i++)
+      expect([i, W.probe('work', i / W.FPS).clear >= 0]).toEqual([i, true]);
+    let prev = W.poseAt('work', 25 / W.FPS);
+    for (let i = 25; i <= 34; i++) {
+      const p = W.probe('work', i / W.FPS);
+      expect(p.headDotFG).toBeLessThan(-0.95);
+      expect(p.ballAhead).toBeGreaterThan(11);
+      expect(Math.abs(p.gap[4])).toBeLessThan(0.3);
+      expect(Math.abs(p.gap[5])).toBeLessThan(0.3);
+      expect(p.clyZ).toBeGreaterThan(0);
+      const o = W.poseAt('work', i / W.FPS);
+      expect(o.pitch).toBeGreaterThan(0.5);
+      // Шар катится: угол = путь / радиус.
+      const d = Math.hypot(o.ballX - prev.ballX, o.ballY - prev.ballY);
+      expect(Math.abs(o.ballRot - prev.ballRot - d / o.ballR)).toBeLessThan(1e-6);
+      prev = o;
+    }
+    expect(W.poseAt('work', 1.43).ballRot).toBeGreaterThan(0.5);
+    const burst = W.poseAt('work', 1.66);
+    expect(burst.crack).toBe(1);
+    expect(burst.tokT).toBeGreaterThan(0);
+    expect(burst.stone).toBe(1);
+    // Гордится: левая передняя лапа на жетоне.
+    expect(foot(W.poseAt('work', 1.82), 0)[2]).toBeGreaterThan(1);
+    expect(W.poseAt('work', 1.82).eye).toBe('happy');
+    const end = W.poseAt('work', T('work'));
+    expect([end.ballR, end.crack, end.stone, end.prop, end.tokT]).toEqual([-1, 0, 0, 0, -1]);
+  });
+
+  it('шаг — треножник: Л1 П2 Л3 в воздухе, когда П1 Л2 П3 на земле, и наоборот', () => {
+    const a = W.poseAt('walk', 0.25);
+    for (const i of [0, 3, 4]) expect(foot(a, i)[2]).toBeGreaterThan(1);
+    for (const i of [1, 2, 5]) expect(foot(a, i)[2]).toBe(0);
+    const b = W.poseAt('walk', 0.75);
+    for (const i of [1, 2, 5]) expect(foot(b, i)[2]).toBeGreaterThan(1);
+    for (const i of [0, 3, 4]) expect(foot(b, i)[2]).toBe(0);
+  });
+
+  it('радость: надкрылья раскрыты, крылья жужжат, прыжок; атака — щитком вперёд; сон — у шара', () => {
+    const h = W.poseAt('happy', 0.4);
+    expect([h.ely, h.buzz, h.eye]).toEqual([1, 1, 'happy']);
+    expect(h.air).toBeGreaterThan(4);
+    const s = W.poseAt('attack', 0.4);
+    expect(s.by).toBeGreaterThan(2.5);
+    expect(s.scale).toBeGreaterThan(1.1);
+    expect(s.antL).toBe(-1);
+    expect(s.eye).toBe('angry');
+    const z = W.poseAt('sleep', 1);
+    expect([z.eye, z.antL]).toEqual(['sleep', -1]);
+    expect(z.ballR).toBeGreaterThan(5);
   });
 });

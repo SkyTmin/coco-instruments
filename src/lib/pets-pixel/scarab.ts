@@ -342,7 +342,7 @@ const H0 = 6.0 * KB;
 /** Поворот покоя: голова вправо-к нам (три четверти). */
 const YAW0 = 0.32;
 /** Жук стоит чуть глубже: передние лапки не уходят под рамку. */
-const ROOT_Y0 = -3.4;
+const ROOT_Y0 = -9.5;
 
 const BELLY_C: V3 = [0, -3.0, -1.8];
 const BELLY_R: V3 = [7.2, 10.4, 2.8];
@@ -820,7 +820,7 @@ const T_BURST = 1.52;
 function workRoot(t: number): Root {
   const yaw = kf(t, [
     [0, YAW0],
-    [0.03, YAW0],
+    [0.04, YAW0],
     [0.28, YAW_G, 'o'],
     [0.64, YAW_G],
     [0.8, YAW_P],
@@ -833,7 +833,7 @@ function workRoot(t: number): Root {
 function workS(t: number): number {
   return kf(t, [
     [0, 0],
-    [0.05, 0],
+    [0.06, 0],
     [0.3, S_G],
     [0.78, S_G],
     [0.95, S_H],
@@ -866,14 +866,14 @@ const pair = (f: number, m: number, a: number, b: number): Step[] => [
 
 /** Блёстки: откуда летят, когда прилипают, что это (0 — монета, 1 — бирюза, 2 — рубин). */
 const GLINTS: { from: V3; arr: number; kind: number }[] = [
-  { from: [-38, 2, 20], arr: 0.22, kind: 0 },
-  { from: [30, 0, 32], arr: 0.27, kind: 1 },
-  { from: [-34, -8, 30], arr: 0.32, kind: 0 },
-  { from: [32, 6, 24], arr: 0.37, kind: 2 },
-  { from: [-40, 8, 12], arr: 0.42, kind: 1 },
-  { from: [26, -8, 36], arr: 0.47, kind: 0 },
-  { from: [-28, 10, 28], arr: 0.53, kind: 2 },
-  { from: [34, 2, 16], arr: 0.58, kind: 0 },
+  { from: [-38, 2, 20], arr: 0.25, kind: 0 },
+  { from: [30, 0, 32], arr: 0.29, kind: 1 },
+  { from: [-34, -8, 30], arr: 0.34, kind: 0 },
+  { from: [32, 6, 24], arr: 0.39, kind: 2 },
+  { from: [-40, 8, 12], arr: 0.44, kind: 1 },
+  { from: [26, -8, 36], arr: 0.49, kind: 0 },
+  { from: [-28, 10, 28], arr: 0.54, kind: 2 },
+  { from: [34, 2, 16], arr: 0.6, kind: 0 },
 ];
 const G_FLY = 0.24;
 function gatherR(t: number): number {
@@ -980,8 +980,8 @@ const WORK_STEPS: Step[] = [
   ...pair(0, 3, 1.37, 1.44),
   ...pair(1, 2, 1.42, 1.48),
   // Встал на лапы и отскочил от шара.
-  { i: 1, a: 1.5, b: 1.57, h: 1.4 },
-  { i: 2, a: 1.5, b: 1.57, h: 1.4 },
+  { i: 1, a: 1.48, b: 1.56, h: 1.4 },
+  { i: 2, a: 1.48, b: 1.56, h: 1.4 },
   { i: 0, a: 1.53, b: 1.6, h: 1.4 },
   { i: 3, a: 1.53, b: 1.6, h: 1.4 },
   // Поворот к нам; Л1 — на жетон, потом домой.
@@ -995,13 +995,13 @@ const WORK_STEPS: Step[] = [
   { i: 0, a: 1.88, b: 1.95, h: 1.4 },
 ].sort((p, q) => p.a - q.a);
 
-/** Стопа по расписанию шагов: стоит, пока не шагнёт; встаёт в дом корня на миг приземления. */
+/** Стопа по расписанию шагов: стоит, пока не шагнёт; встаёт в дом корня на полшага вперёд — тело догоняет. */
 function planted(i: number, t: number): V3 {
   let p = homeW(i, workRoot(0));
   for (const st of WORK_STEPS) {
     if (st.i !== i) continue;
     if (t < st.a) break;
-    const to = st.to ?? homeW(i, workRoot(st.b), st.hs ?? false);
+    const to = st.to ?? homeW(i, workRoot(st.b + Math.min(0.035, (st.b - st.a) * 0.5)), st.hs ?? false);
     if (t < st.b) {
       const u = (t - st.a) / (st.b - st.a);
       const w = smooth(u);
@@ -1181,10 +1181,10 @@ function attackPose(t: number): Pose {
   ]);
   o.by = kf(t, [
     [0, 0],
-    [0.26, -1.6, 'o'],
-    [0.36, 2.4, 'i'],
-    [0.52, 1.2],
-    [0.78, 0],
+    [0.26, -1.8, 'o'],
+    [0.36, 3.4, 'i'],
+    [0.56, 2.6],
+    [0.8, 0],
   ]);
   o.yaw = kf(t, [
     [0, YAW0],
@@ -1192,13 +1192,6 @@ function attackPose(t: number): Pose {
     [0.36, 0.16],
     [0.56, 0.2],
     [0.8, YAW0],
-  ]);
-  o.gy = kf(t, [
-    [0, 0],
-    [0.28, 0],
-    [0.38, 4, 'o'],
-    [0.56, 4],
-    [0.82, 0],
   ]);
   o.scale = kf(t, [
     [0, 1],
@@ -1256,7 +1249,7 @@ function sleepPose(t: number): Pose {
   o.breath = Math.sin(br);
   o.bz = -1.6 + 0.16 * Math.sin(br);
   o.pitch = 0.1;
-  o.nod = 0.22;
+  o.nod = 0.2;
   o.hturn = 0.1;
   o.antL = -1;
   o.antR = -1;
@@ -2417,48 +2410,36 @@ export function scarabFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   return p;
 }
 
-/** Отладка: ключевые точки позы в мире. */
-export function DBG(o: Pose): Record<string, V3> {
-  const F = bodyFrame(o);
-  const L = legsOf(o, F);
-  const r: Record<string, V3> = {
-    elyC: bodyAt(F, ELY_C),
-    proC: bodyAt(F, PRO_C),
-    head: headAt(F, HEAD_C),
-    clyTip: headAt(F, [0, CLY_C[1] + CLY_R[1], CLY_C[2]]),
-    eyeR: headAt(F, EYE),
-    eyeL: headAt(F, [-EYE[0], EYE[1], EYE[2]]),
-    antL: headAt(F, [-ANT[0], ANT[1], ANT[2]]),
-    antR: headAt(F, ANT),
-    antTipL: antGeo(o, F, lagOf('idle', 0), -1).tip,
-    antTipR: antGeo(o, F, lagOf('idle', 0), 1).tip,
-    antElL: antGeo(o, F, lagOf('idle', 0), -1).elbow,
-    ballC: [o.ballX, o.ballY, o.ballR],
-  };
-  for (const l of L) r['foot' + l.i] = l.foot;
-  return r;
-}
-
-/** Отладка трюка: дотягиваются ли лапы, зазор стопа↔шар, голова против хода, шар перед хвостом. */
-export function CHK(t: number) {
-  const o = workPose(t);
+/** Проверка (тесты): дотягиваются ли лапы, зазор стопа↔шар, голова против хода шара, тело не в шаре. */
+export function probe(a: Anim, t: number) {
+  const o = poseAt(a, t);
   const F = bodyFrame(o);
   const L = legsOf(o, F);
   const C: V3 = [o.ballX, o.ballY, o.ballR];
-  const reach = L.map((l) => Math.hypot(...(sub(l.foot, footOf(o, l.i)) as [number, number, number])));
-  const gap = L.map((l) => (o.ballR > 0 ? Math.hypot(...(sub(l.foot, C) as [number, number, number])) - o.ballR : -99));
+  const len = (v: V3) => Math.hypot(v[0], v[1], v[2]);
   const hd = F.HRd([0, 1, 0]);
-  const tail = bodyAt(F, [0, ELY_C[1] - ELY_R[1], ELY_C[2]]);
+  let clear = 99;
+  if (o.ballR > 0 && o.crack <= 0)
+    for (let u = 0; u < 24; u++)
+      for (let b = 0; b <= 12; b++) {
+        const th = (u / 24) * TAU;
+        const ph = (b / 12) * Math.PI - Math.PI / 2;
+        const d: V3 = [Math.cos(ph) * Math.cos(th), Math.cos(ph) * Math.sin(th), Math.sin(ph)];
+        for (const [c0, r0] of [
+          [ELY_C, ELY_R],
+          [BELLY_C, BELLY_R],
+          [PRO_C, PRO_R],
+        ] as [V3, V3][]) {
+          const q = bodyAt(F, add(c0, [r0[0] * d[0], r0[1] * d[1], r0[2] * d[2]]));
+          clear = Math.min(clear, len(sub(q, C)) - o.ballR);
+        }
+      }
   return {
-    reach,
-    gap,
+    reach: L.map((l) => len(sub(l.foot, add(footOf(o, l.i), [o.gx, o.gy, o.air * 0.85])))),
+    gap: L.map((l) => (o.ballR > 0 ? len(sub(l.foot, C)) - o.ballR : 99)),
     headDotFG: dot(norm([hd[0], hd[1], 0]), FG),
     ballAhead: dot(sub(C, [o.rx, o.ry, 0]), FG),
-    tailGap: Math.hypot(...(sub(tail, C) as [number, number, number])) - o.ballR,
-    pitch: o.pitch,
-    footZ: L.map((l) => l.foot[2]),
+    clear,
     clyZ: headAt(F, [0, CLY_C[1] + CLY_R[1], CLY_C[2]])[2],
-    BA_HS,
-    S_G,
   };
 }

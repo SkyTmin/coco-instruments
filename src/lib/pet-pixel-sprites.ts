@@ -252,6 +252,29 @@ export const PET_PX: Record<string, PetPx> = {
       },
     },
   },
+  scarab: {
+    box: 48,
+    rev: '197e11a660',
+    anims: {
+      idle: { n: 72, fps: 24, x: -1, y: 13, w: 50, h: 38 },
+      walk: { n: 24, fps: 24, x: -1, y: 13, w: 50, h: 39 },
+      happy: { n: 26, fps: 24, x: -2, y: -4, w: 50, h: 55 },
+      work: { n: 48, fps: 24, x: -24, y: 2, w: 92, h: 50 },
+      attack: { n: 22, fps: 24, x: -4, y: 5, w: 53, h: 52 },
+      sleep: { n: 72, fps: 24, x: 4, y: 14, w: 54, h: 39 },
+    },
+    large: {
+      box: 112,
+      anims: {
+        idle: { n: 72, fps: 24, x: 3, y: 35, w: 105, h: 81 },
+        walk: { n: 24, fps: 24, x: 2, y: 36, w: 106, h: 81 },
+        happy: { n: 26, fps: 24, x: 1, y: -5, w: 106, h: 121 },
+        work: { n: 48, fps: 24, x: -50, y: 10, w: 203, h: 107 },
+        attack: { n: 22, fps: 24, x: -4, y: 17, w: 112, h: 109 },
+        sleep: { n: 72, fps: 24, x: 13, y: 37, w: 117, h: 80 },
+      },
+    },
+  },
   shepherd: {
     box: 48,
     rev: '648f06fd6e',
