@@ -1,6 +1,6 @@
 // Этаж 6 — Бесёнок-старьёвщик (анимации мобов 6). Красный чертёнок с
 // мешком добычи за плечом: рожки, острые уши, ухмылка, хвост стрелкой.
-// Мини-3D (риг 15-го, ×1,1), 8 сторон честно.
+// Мини-3D (риг 15-го, ×1,45), 8 сторон честно.
 //
 // Из норы 0,45 с: из ямы выпрыгивает, комья земли, приземляется уже на
 // бегу. Бег — по пройденному пути: мешок подпрыгивает с запозданием, хвост
@@ -45,7 +45,7 @@ import {
   warmAll,
   yawN,
 } from './f6-mobkit';
-import type { Pic, Proj2 } from './f6-mobkit';
+import type { Key, Pic, Proj2 } from './f6-mobkit';
 
 const RED = tn('#3a0806', '#7a160c', '#c0301a', '#f0603a');
 const DARK = tn('#1a0806', '#3a1008', '#6a2010', '#9a3a20');
@@ -56,7 +56,7 @@ const TOOTH = hx('#fff4dc');
 const STICK = tn('#5a0c0c', '#a01818', '#e03a2a', '#ff8a6a');
 const SMOKE = hx('#8a7e78');
 const HOLE = hx('#140c0a');
-const SC = 1.1;
+const SC = 1.45;
 
 interface ImpO {
   z: number;
@@ -68,11 +68,15 @@ interface ImpO {
   step: number;
   look: number;
   grin: number;
-  /** Мешок: подскок (запаздывает), съехал 0…1. Рука с петардой: 0…1 замах. */
+  /** Мешок: подскок (запаздывает), съехал 0…1. */
   bag: number;
   slip: number;
-  arm: number;
   stick: boolean;
+  /** Кисть с петардой (точка в теле, перекрывает `arm`), фитиль горит. */
+  hand: V3 | null;
+  fuse: number;
+  /** Куда пришёлся фитиль (заполняет риг — для искр в `post`). */
+  fusePt: V3 | null;
   /** Хвост: взмах. Глаза кругами. Ушёл в пол 0…1 (нора), яма 0…1. */
   tail: number;
   dizzy: boolean;
@@ -96,8 +100,10 @@ const O0 = (): ImpO => ({
   grin: 0.5,
   bag: 0,
   slip: 0,
-  arm: -1,
   stick: false,
+  hand: null,
+  fuse: 0,
+  fusePt: null,
   tail: 0,
   dizzy: false,
   dive: 0,
@@ -116,14 +122,16 @@ function impRig(o: ImpO, yaw: number): Rig {
   const limb: Mat = { T: DARK };
   // Ноги: бег, копытца.
   for (const sd of [-1, 1]) {
+    // Опора 40% шага (нога едет назад вместе с полом), остальное — мах и полёт.
     const ps = mod((o.ph + (sd > 0 ? 0.5 : 0)) * 1000, 1000) / 1000;
-    const L = 2.6 * o.step;
+    const L = 3.4 * o.step;
     let f = 0;
     let u = 0;
-    if (ps < 0.5) f = L / 2 - L * (ps / 0.5);
+    if (ps < STANCE) f = L / 2 - L * (ps / STANCE);
     else {
-      f = -L / 2 + L * ((ps - 0.5) / 0.5);
-      u = Math.sin(PI * ((ps - 0.5) / 0.5)) * 1.4 * o.step;
+      const q = (ps - STANCE) / (1 - STANCE);
+      f = -L / 2 + L * easeOutQ(q);
+      u = Math.sin(PI * q) * 1.6 * o.step;
     }
     const hip = C.p(-0.2, sd * 0.75, -1.4);
     const ft = B.p(o.fwd + f, sd * 0.85, u + 0.4 + Math.max(0, o.z - 3.8) * 0.7);
@@ -180,27 +188,22 @@ function impRig(o: ImpO, yaw: number): Rig {
   // Рука на горловине мешка.
   r.cap(C.p(0.2, -1.2, 1.0), C.p(-0.7, -1.0, 2.0 - o.slip), 0.36 * SC, 0.3 * SC, limb);
   // Свободная рука: мах в беге или бросок петарды.
-  const sw = o.arm >= 0 ? 0 : Math.sin(o.ph * TAU) * 1.2 * o.step;
-  const hand: V3 =
-    o.arm >= 0
-      ? C.p(
-          trk(o.arm, [
-            [0, 0.6],
-            [0.5, -2.0, easeOut],
-            [1, 0.4, easeIn],
-          ]),
-          1.4,
-          trk(o.arm, [
-            [0, 0.6],
-            [0.5, 2.6, easeOut],
-            [1, 1.8],
-          ]),
-        )
-      : C.p(0.4 + sw, 1.4, -0.4);
-  r.cap(C.p(0.2, 1.2, 1.0), hand, 0.36 * SC, 0.3 * SC, limb);
+  const sw = Math.sin(o.ph * TAU) * 1.2 * o.step;
+  const hand: V3 = o.hand ? C.p(o.hand[0], o.hand[1], o.hand[2]) : C.p(0.4 + sw, 1.4, -0.4);
+  const sh = C.p(0.2, 1.2, 1.0);
+  const elbow = vadd(
+    [(sh[0] + hand[0]) / 2, (sh[1] + hand[1]) / 2, (sh[2] + hand[2]) / 2],
+    C.v(-0.25, 0.55, -0.25),
+  );
+  r.cap(sh, elbow, 0.36 * SC, 0.32 * SC, limb);
+  r.cap(elbow, hand, 0.32 * SC, 0.3 * SC, limb);
+  r.ell(F3.yaw(yaw + o.spin, hand).scale(SC), [0, 0, 0], [0.45, 0.45, 0.45], skin);
   if (o.stick) {
-    r.cap(hand, vadd(hand, B.v(-0.3, 0.2, 1.4)), 0.3 * SC, 0.3 * SC, { T: STICK });
-    r.dot(vadd(hand, B.v(-0.4, 0.25, 1.9)), FIRE[4], 1, 1, 2);
+    // Палочка торчит из кулака вверх-назад, фитиль на конце.
+    const tip = vadd(hand, C.v(-0.4, 0.15, 2.0));
+    r.cap(hand, tip, 0.34 * SC, 0.34 * SC, { T: STICK });
+    o.fusePt = vadd(tip, C.v(-0.2, 0, 0.5));
+    r.dot(o.fusePt, o.fuse ? FIRE[4] : SMOKE, 0.9, 1, 2.2);
   }
   // Нора: всё, что ниже пола, не видно.
   if (o.dive > 0.01)
@@ -216,15 +219,88 @@ function impRig(o: ImpO, yaw: number): Rig {
   return r;
 }
 
+/** Доля опоры в шаге; путь за шаг (две ноги), клетки. */
+const STANCE = 0.4;
+const STRIDE = 0.75;
+const easeOutQ = (k: number) => 1 - (1 - k) * (1 - k);
+
 function run(o: ImpO, ph: number): void {
   o.ph = ph;
   o.step = 1;
-  const s = Math.sin(ph * TAU * 2);
-  o.z = 3.6 + 0.4 * Math.abs(s);
-  o.pitch = 0.3;
-  o.bag = 0.5 * Math.abs(Math.sin(ph * TAU * 2 - 0.9));
+  // Ниже всего — посреди опоры (ph 0,2 и 0,7), выше всего — в полёте.
+  const s = Math.abs(Math.sin(TAU * (ph - 0.2)));
+  o.z = 3.5 + 0.6 * s;
+  o.pitch = 0.3 + 0.06 * (1 - s);
+  // Мешок отстаёт от тела на ~1/8 шага и бьёт по спине.
+  o.bag = 0.55 * Math.abs(Math.sin(TAU * (ph - 0.32)));
   o.roll = 0.08 * Math.sin(ph * TAU);
-  o.tail = ph * TAU;
+  o.tail = ph * TAU - 0.9;
+}
+
+/**
+ * Петарда — 14 кадров (24 к/с), контакт на 7-м = миг, когда мозг ставит круг:
+ * 0–2 рука в мешок, 3–4 вынул, фитиль загорелся, 5–6 замах вперёд-вверх
+ * (6 — держит, пока герой далеко), 7 — швырнул за спину, 8–10 проводка,
+ * 11–13 рука возвращается к бегу. Ноги — свои, по пути (4 фазы).
+ */
+const TOSS = 14;
+const TOSS_HIT = 7;
+const H_X: Key[] = [
+  [0, 0.4],
+  [2, -1.5, easeOut],
+  [4, -0.4],
+  [6, 0.7, easeOut],
+  [7, -1.9, easeIn],
+  [9, -2.3, easeOut],
+  [13, 0.4],
+];
+const H_Y: Key[] = [
+  [0, 1.4],
+  [2, 0.7],
+  [4, 1.5],
+  [7, 1.4],
+  [9, 1.5],
+  [13, 1.4],
+];
+const H_Z: Key[] = [
+  [0, -0.4],
+  [2, 2.6, easeOut],
+  [4, 3.2],
+  [6, 3.7, easeOut],
+  [7, 2.6, easeIn],
+  [9, 0.4, easeOut],
+  [13, -0.4],
+];
+
+function toss(o: ImpO, tf: number, lp: number): void {
+  run(o, lp / 4);
+  o.hand = [trk(tf, H_X), trk(tf, H_Y), trk(tf, H_Z)];
+  o.stick = tf >= 3 && tf < TOSS_HIT;
+  o.fuse = tf >= 3 && tf < TOSS_HIT ? 1 : 0;
+  o.look = trk(tf, [
+    [0, 0],
+    [2, 0.7],
+    [4, 0.2],
+    [6, 0],
+    [7, 1.5, easeOut],
+    [10, 1.9],
+    [13, 0.2],
+  ]);
+  // Замах — откинулся назад, бросок — клюнул вперёд, мешок подбросило.
+  o.pitch += trk(tf, [
+    [0, 0],
+    [6, -0.22, easeOut],
+    [7, 0.3, easeIn],
+    [9, 0.18],
+    [13, 0],
+  ]);
+  o.bag += trk(tf, [
+    [0, 0],
+    [7, 0],
+    [8, 0.6, easeOut],
+    [11, 0],
+  ]);
+  o.grin = 1;
 }
 
 function impPose(anim: string, f: number): ImpO {
@@ -250,15 +326,10 @@ function impPose(anim: string, f: number): ImpO {
       o.roll = 0.1 * Math.sin(a);
       break;
     }
-    case 'throw': {
-      // 0,3 с (8 кадров) поверх бега: рука в мешок — замах — бросок назад.
-      run(o, (f / 8) % 1);
-      o.arm = f / 7;
-      o.stick = f < 6;
-      o.look = 1.4 * Math.sin(PI * (f / 7));
-      o.grin = 1;
+    case 'toss':
+      // f = кадр трека × 4 + фаза ног (по пути).
+      toss(o, Math.floor(f / 4), f % 4);
       break;
-    }
     case 'emerge': {
       // 0,45 с (11 кадров): из ямы — прыжок — приземление на бегу.
       const t = f / FPS;
@@ -333,7 +404,7 @@ function impPose(anim: string, f: number): ImpO {
   return o;
 }
 
-const IK = kindOf('f6_imp', 40, 42, 20, 32, 1200);
+const IK = kindOf('f6_imp', 52, 56, 26, 44, 1400);
 
 function impPic(anim: string, f: number, d: number): Pic {
   const o = impPose(anim, f);
@@ -396,6 +467,21 @@ function post(out: RigOut, P: Proj2, o: ImpO, f: number, anim: string): void {
       }
     }
   }
+  // Фитиль искрит — поверх темноты: видно, что бесёнок сейчас бросит.
+  if (o.fusePt && o.fuse) {
+    const [fx, fy] = P(o.fusePt);
+    const lit = litOn(out);
+    lit.set(Math.round(fx), Math.round(fy), FIRE[4]);
+    for (let i = 0; i < 3; i++) {
+      const an = hash(f, i, 31) * TAU;
+      const rr = 1 + hash(f, i, 32) * 2;
+      const x = Math.round(fx + Math.cos(an) * rr);
+      const y = Math.round(fy - 0.5 + Math.sin(an) * rr);
+      const c = i ? FIRE[3] : hx('#fff4b0');
+      out.p.set(x, y, c);
+      lit.set(x, y, c);
+    }
+  }
   if (anim === 'escape' && f >= 6) {
     const k = (f - 6) / 3;
     out.p.ell(gx, gy - 3 - k * 3, 2 + k * 3, 1.5 + k * 2, alpha(SMOKE, 0.7 * (1 - k * 0.7)));
@@ -411,10 +497,12 @@ registerMobPainter('f6_imp', (m: Mob, pose: MobPose) => {
   const want = sp > 0.4 ? Math.atan2(m.vy ?? 0, m.vx ?? 0) : (m.face ?? 0);
   const v = visOf(m, pose, want, 12);
   const d = dirN(v.yaw);
-  // Петарда: таймер `bang` подскочил — только что бросил.
-  const bang = m.data?.bang ?? 0;
-  if (bang > (v.n.bang ?? bang) + 0.5) v.n.thrown = now;
-  v.n.bang = bang;
+  // Петарда по таймеру мозга `bang`: последние 0,29 с до броска — рука в
+  // мешке и замах (ниже нуля — герой далеко, держит наготове); таймер
+  // подскочил — мозг поставил круг, это кадр контакта.
+  const bang = m.data?.bang;
+  if (bang !== undefined && bang > (v.n.bang ?? bang) + 0.5) v.n.thrown = now;
+  v.n.bang = bang ?? 9;
   const ex: Partial<MobFrame> = { shadow: 4, still: true };
   let anim = 'idle';
   let f = 0;
@@ -436,14 +524,18 @@ registerMobPainter('f6_imp', (m: Mob, pose: MobPose) => {
   } else if (md === 'stun') {
     anim = 'dizzy';
     f = fi(t, 11);
-  } else if (ta >= 0 && ta < 0.3) {
-    anim = 'throw';
-    f = Math.min(7, Math.floor(ta * FPS));
+  } else if ((ta >= 0 && ta < (TOSS - TOSS_HIT) / FPS) || (bang ?? 9) < TOSS_HIT / FPS) {
+    anim = 'toss';
+    const tf =
+      ta >= 0 && ta < (TOSS - TOSS_HIT) / FPS
+        ? TOSS_HIT + Math.min(TOSS - 1 - TOSS_HIT, Math.floor(ta * FPS))
+        : clamp(Math.floor((TOSS_HIT / FPS - (bang ?? 0)) * FPS), 0, TOSS_HIT - 1);
+    f = tf * 4 + (Math.floor((v.dist / STRIDE) * 4) % 4);
   } else if (moving(m)) {
     // Оглядывается раз в ~2,2 с (фаза по id) на 0,4 с.
     const g = mod(now + hash(id, 5) * 2.2, 2.2);
     anim = g < 0.4 ? 'runl' : 'run';
-    f = Math.floor((v.dist / 0.8) * 8) % 8;
+    f = Math.floor((v.dist / STRIDE) * 8) % 8;
     const turn = angD(want, v.yaw);
     ex.rot = clamp(turn * 0.1, -0.1, 0.1);
   } else {
@@ -460,7 +552,7 @@ registerMobWarm('f6_imp', function* () {
     [
       ['run', 8],
       ['runl', 8],
-      ['throw', 8],
+      ['toss', TOSS * 4],
       ['emerge', 11],
       ['escape', 10],
       ['dizzy', 12],
