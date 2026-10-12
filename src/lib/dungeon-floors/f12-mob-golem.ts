@@ -758,9 +758,11 @@ paintMob('f12_golem', (m: Mob, p: MobPose): MobFrame => {
   const t = p.t || 0;
   const now = p.now || 0;
   const mv = speedOf(m) > 0.3;
-  const atk = mode === 'f12_wind' || mode === 'f12_stomp' || mode === 'recover';
-  const want = mv && !atk ? Math.atan2(m.vy, m.vx) : (m.face ?? 0);
-  const v = visOf(m, p, want, atk ? 9 : 5);
+  // Рисунок держит `m.face` (по нему мозг считает удар в спину ×1,5) и догоняет
+  // его 18 рад/с — полуоборот за 0,17 с через все стороны, без скачка: светлое
+  // ядро на спине не расходится с бонусом (было: путь в погоне, 5/9 рад/с).
+  const want = m.face ?? (mv ? Math.atan2(m.vy, m.vx) : 0);
+  const v = visOf(m, p, want, 18);
   let tr = TURN.get(m);
   if (!tr) TURN.set(m, (tr = { yaw: v.yaw, acc: 0, until: -9 }));
   const dy = Math.abs(angD(v.yaw, tr.yaw));
