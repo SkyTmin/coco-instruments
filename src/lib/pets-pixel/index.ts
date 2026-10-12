@@ -16,6 +16,7 @@ import {
   RES as DRAGON_RES,
 } from './dragon';
 import { FPS as FOX_FPS, FRAMES as FOX_FRAMES, foxFrame, RES as FOX_RES } from './fox';
+import { FPS as OWL_FPS, FRAMES as OWL_FRAMES, owlFrame, RES as OWL_RES } from './owl';
 import { FPS, FRAMES, phoenixFrame, RES } from './phoenix';
 import type { Anim, Canvas, Res } from './phoenix';
 import { FPS as RAVEN_FPS, FRAMES as RAVEN_FRAMES, RES as RAVEN_RES, ravenFrame } from './raven';
@@ -96,6 +97,13 @@ export const PIXEL_PETS: Record<string, PixelPet> = {
     res: SPIDER_RES,
     anims: at24(SPIDER_FRAMES, SPIDER_FPS),
     frame: spiderFrame,
+    variants: [1],
+  },
+  // Сова-фонарщица: свой золотой.
+  owl: {
+    res: OWL_RES,
+    anims: at24(OWL_FRAMES, OWL_FPS),
+    frame: owlFrame,
     variants: [1],
   },
 };
