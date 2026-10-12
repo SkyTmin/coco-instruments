@@ -301,6 +301,8 @@ export interface Pose {
   /** Голова: сдвиг, поворот (+ вправо), кивок (+ вниз), наклон набок. */
   hx: number;
   hz: number;
+  /** Голова вперёд (к зрителю) — трюк: тянется к скважине перед грудью. */
+  hy: number;
   turn: number;
   nod: number;
   tilt: number;
@@ -331,11 +333,15 @@ export interface Pose {
   /** Блеск монокля (своя фаза), звон ключей (толчок связке). */
   glint: number;
   jingle: number;
-  /** Трюк: ключ в правом крыле, его угол, вставлен (0…1), повёрнут (0…1). */
+  /**
+   * Трюк: ключ в КЛЮВЕ (кольцо зажато в кончике), вставлен (0…1; отпущенный
+   * остаётся в скважине), повёрнут (0…1); `twist` — поворот головы вокруг
+   * клюва (рад): ключ поворачивают головой.
+   */
   hold: number;
-  keyAng: number;
   keyIn: number;
   keyTurn: number;
+  twist: number;
   /** Замок: виден (масштаб), высота над полом, дужка открыта (0…1). */
   lock: number;
   lockZ: number;
@@ -358,6 +364,7 @@ const REST: Pose = {
   bow: 0,
   hx: 0,
   hz: 0,
+  hy: 0,
   turn: 0,
   nod: 0,
   tilt: 0,
@@ -382,9 +389,9 @@ const REST: Pose = {
   glint: 0,
   jingle: 0,
   hold: 0,
-  keyAng: 0,
   keyIn: 0,
   keyTurn: 0,
+  twist: 0,
   lock: 0,
   lockZ: 0,
   shack: 0,
@@ -631,10 +638,34 @@ function happyPose(t: number): Pose {
 
 /** Трюк: когда ключ входит в скважину (с). */
 const T_INS = 0.92;
+/** Щелчок замка — ворон отпускает ключ, тот остаётся в скважине. */
+const T_REL = 1.12;
+/**
+ * Поза у скважины (трюк): подскок влево, наклон и крен к замку, голова в профиль
+ * влево (монокль к зрителю) и вниз сбоку от тела; клюв почти отвесно вниз.
+ * Подобрано так, чтобы хватка клюва лежала на продолжении ключа к скважине.
+ */
+const INS = {
+  x: -3,
+  bow: 0.12,
+  lean: -0.2,
+  hx: -4.95,
+  hy: -0.9,
+  hz: -7.03,
+  nod: 0.71,
+  turn: -1.09,
+  tilt: 0.1,
+  th: -0.16,
+};
+/** Поворот головы вокруг клюва, когда ключ повёрнут (рад). */
+const TWIST = 0.9;
+/** Ключ в клюве: хватка между кончиками надклювья и подклювья, стержень — вдоль клюва (координаты головы). */
+const BEAK_GRIP: V3 = [0, 7.0, -2.6];
+const BEAK_DIR: V3 = norm([0, 1, -0.45]);
 
 function workPose(t: number): Pose {
   const o: Pose = { ...REST };
-  // 0–0,34 — замок падает на пол справа и подпрыгивает; ворон глядит на него.
+  // 0–0,34 — замок падает на пол слева и подпрыгивает; ворон глядит на него.
   o.lock = kf(t, [
     [0, 0],
     [0.04, 1],
@@ -651,74 +682,93 @@ function workPose(t: number): Pose {
     [1.18, 1.3, 'o'],
     [1.26, 0, 'i'],
   ]);
+  // Ключ — в КЛЮВЕ (крыло не держит): 0,2–0,6 голову вверх в профиль, ключ блеснул;
+  // 0,45–0,76 подскок; 0,8–0,92 нагнулся к скважине, бородка ключа в ней;
+  // 0,96–1,1 повернул ключ головой; щёлк — отпустил (`T_REL`), ключ остался
+  // в замке и уходит вместе с ним; выпрямился, каркнул.
+  o.hold = t > 0.2 && t < T_REL ? 1 : 0;
   o.turn = kf(t, [
     [0.05, 0],
-    [0.22, 0.5, 'o'],
-    [0.42, 0.3],
-    [0.6, 0.55],
-    [1.3, 0.5],
+    [0.22, -0.5, 'o'],
+    [0.42, -0.85],
+    [0.6, -0.7],
+    [0.88, INS.turn, 'o'],
+    [1.14, INS.turn],
+    [1.3, 0.5, 'o'],
     [1.5, 0.15],
     [1.85, 0, 'o'],
   ]);
   o.tilt = kf(t, [
     [0.1, 0],
-    [0.26, 0.22, 'o'],
-    [0.45, 0.05],
-    [0.96, 0.05],
-    [1.12, 0.34, 'o'],
-    [1.22, 0.26],
-    [1.42, 0],
+    [0.26, -0.22, 'o'],
+    [0.45, -0.05],
+    [0.7, 0],
   ]);
   o.nod = kf(t, [
     [0.15, 0],
-    [0.4, -0.28, 'o'],
-    [0.55, -0.1],
-    [0.84, 0.3],
-    [1.14, 0.32],
-    [1.24, -0.12, 'o'],
+    [0.4, -0.5, 'o'],
+    [0.55, -0.3],
+    [0.88, INS.nod, 'o'],
+    [1.14, INS.nod],
+    [1.26, -0.12, 'o'],
     [1.45, -0.06],
     [1.85, 0],
   ]);
-  o.hx = o.turn * 1.2 + o.tilt * 2.2;
-  // 0,15–0,45 — поднял правое крыло (справа в кадре) с ключом: блеснул.
-  o.hold = t > 0.2 && t < 1.52 ? 1 : 0;
-  o.thR = kf(t, [
-    [0.15, REST_TH],
-    [0.42, 2.5, 'o'],
-    [0.55, 2.35],
-    [0.84, 0.75, 'i'],
-    [0.92, 0.62, 'o'],
-    [1.32, 0.62],
-    [1.56, REST_TH, 'o'],
+  // Нагнулся к замку на полу: корпус вперёд и к замку, шея вниз.
+  const dip = kf(t, [
+    [0.72, 0],
+    [0.88, 1, 'o'],
+    [1.14, 1],
+    [1.32, 0, 'o'],
   ]);
-  o.fanR = kf(t, [
+  o.bow = INS.bow * dip;
+  o.tilt += INS.tilt * dip;
+  o.hx = o.turn * 1.2 + o.tilt * 2.2 + INS.hx * dip;
+  o.hz = INS.hz * dip;
+  o.hy = INS.hy * dip;
+  // Головой вокруг клюва — вместе с ключом; отпустил — голова обратно.
+  o.keyTurn = kf(t, [
+    [0.96, 0],
+    [1.1, 1, 'o'],
+  ]);
+  o.twist = kf(t, [
+    [0.96, 0],
+    [1.1, TWIST, 'o'],
+    [1.16, TWIST],
+    [1.3, 0, 'o'],
+  ]);
+  // Левое (со стороны замка) крыло только показывает на ключ и замок, при наклоне
+  // прижато, чтобы не закрыть голову; правое уравновешивает.
+  o.thL = kf(t, [
+    [0.15, REST_TH],
+    [0.42, 1.25, 'o'],
+    [0.6, 0.9],
+    [0.88, INS.th, 'o'],
+    [1.14, INS.th],
+    [1.4, REST_TH, 'o'],
+  ]);
+  o.fanL = kf(t, [
     [0.15, REST_FAN],
-    [0.42, 1.0, 'o'],
-    [0.84, 0.7],
+    [0.42, 0.85, 'o'],
+    [0.88, 0.7],
     [1.4, 0.7],
     [1.6, REST_FAN],
   ]);
-  o.thL = kf(t, [
+  o.thR = kf(t, [
     [0.45, REST_TH],
     [0.58, 0.9, 'o'],
     [0.76, 0.5],
-    [0.9, REST_TH + 0.1],
-    [1.36, REST_TH + 0.1],
+    [0.9, 0.55],
+    [1.14, 0.55],
+    [1.36, REST_TH + 0.1, 'o'],
     [1.46, 0.75, 'o'],
     [1.62, REST_TH, 'i'],
   ]);
-  o.keyAng = kf(t, [
-    [0.15, 2.0],
-    [0.42, 2.75, 'o'],
-    [0.6, 2.4],
-    [0.88, 1.35],
-  ]);
   o.glint = bump(t, 0.38, 0.6);
-  // 0,45–0,8 — подскок к замку; 0,8–0,92 — наклонился, ключ в скважину.
   o.x = kf(t, [
     [0.45, 0],
-    [0.76, 5.5, 'o'],
-    [1.34, 5.5],
+    [0.76, INS.x, 'o'],
+    [1.34, INS.x],
     [1.66, 0, 'o'],
   ]);
   o.z = kf(t, [
@@ -743,22 +793,10 @@ function workPose(t: number): Pose {
     [1.66, 0.1, 'i'],
     [1.8, 0, 'o'],
   ]);
-  o.lean = kf(t, [
-    [0.7, 0],
-    [0.9, 0.2, 'o'],
-    [1.26, 0.2],
-    [1.42, 0, 'o'],
-  ]);
+  o.lean = INS.lean * dip;
   o.keyIn = kf(t, [
     [0.8, 0],
     [T_INS, 1, 'o'],
-    [1.3, 1],
-    [1.42, 0, 'i'],
-  ]);
-  // 0,96–1,12 — повернул ключ (и голову за ним); щёлк — дужка отскочила.
-  o.keyTurn = kf(t, [
-    [0.96, 0],
-    [1.1, 1, 'o'],
   ]);
   o.flash = kf(t, [
     [1.08, 0],
@@ -771,11 +809,12 @@ function workPose(t: number): Pose {
     [1.24, 0.92],
     [1.3, 1.0],
   ]);
-  // Замок исчез, ключ убран — их числа к покою (не видно; стык с покоем чистый).
-  if (o.lock <= 0 && !o.hold) o.keyAng = o.keyTurn = o.shack = 0;
+  // Замок (с ключом в нём) исчез — их числа к покою (не видно; стык с покоем чистый).
+  if (o.lock <= 0 && !o.hold) o.keyIn = o.keyTurn = o.shack = 0;
   // 1,16–1,72 — жетон и монета выпрыгивают и летят в ключи на груди.
   o.loot = t < 1.16 || t > 1.74 ? -1 : (t - 1.16) / 0.58;
   o.eye = t > 1.16 && t < 1.7 ? 'happy' : 'open';
+  // Каркнул — уже без ключа: клюв раскрыт только после `T_REL`.
   o.beak = bump(t, 1.2, 1.5) * 0.7;
   o.crest = kf(t, [
     [0.1, 0],
@@ -1018,7 +1057,7 @@ function skel(o: Pose): Skel {
     up,
     body: up(BODY0),
     chest: up([0, 1.6, 19.2]),
-    head: up(add(HEAD0, [o.hx, 0, o.hz])),
+    head: up(add(HEAD0, [o.hx, o.hy, o.hz])),
     shL: up([-8.0, 1.2, 23.8]),
     shR: up([8.0, 1.2, 23.8]),
     rump: up([0, -3.6, 8.6]),
@@ -1041,13 +1080,30 @@ const yawZ0 = (p: V3, a: number): V3 => [
   -p[0] * Math.sin(a) + p[1] * Math.cos(a),
   p[2],
 ];
+/** Поворот вектора вокруг оси `ax` (единичной) на угол `a` (по правой руке). */
+function rotAx(v: V3, ax: V3, a: number): V3 {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const d = ax[0] * v[0] + ax[1] * v[1] + ax[2] * v[2];
+  return add(add(mul(v, c), mul(cross(ax, v), s)), mul(ax, d * (1 - c)));
+}
+
 function headF(o: Pose, S: Skel): HeadF {
   const nb = o.nod + o.bow;
   const tl = o.tilt + o.lean;
-  const dir = (v: V3): V3 => rollY(yawZ0(pitchX(v, nb), o.turn), tl);
+  const dir0 = (v: V3): V3 => rollY(yawZ0(pitchX(v, nb), o.turn), tl);
   // На малой голова крупнее: глаз, монокль и клюв должны поместиться.
   const k = S.k * (HI ? 1.1 : 1.22);
-  return { dir, k, at: (p) => add(S.head, mul(dir(p), k)) };
+  if (!o.twist) return { dir: dir0, k, at: (p) => add(S.head, mul(dir0(p), k)) };
+  // Ключ зажат в клюве и повёрнут головой: голова вертится вокруг оси клюва,
+  // хватка стоит на месте.
+  const ax = dir0(BEAK_DIR);
+  const piv = add(S.head, mul(dir0(BEAK_GRIP), k));
+  return {
+    dir: (v) => rotAx(dir0(v), ax, o.twist),
+    k,
+    at: (p) => add(piv, rotAx(mul(dir0(sub(p, BEAK_GRIP)), k), ax, o.twist)),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1898,12 +1954,15 @@ function keyRing(out: Part[], c: Ctx): void {
 }
 
 // ---------------------------------------------------------------------------
-// Трюк: ключ в крыле, замок, жетон и монета.
+// Трюк: ключ в клюве, замок, жетон и монета.
 // ---------------------------------------------------------------------------
 
-/** Замок на полу справа; передняя грань развёрнута к ворону. */
-const LOCK0: V3 = [19.0, 3.0, 0];
-const LOCK_YAW = 0.55;
+/**
+ * Замок на полу слева (голова, повёрнутая к нему, показывает монокль); передняя
+ * грань развёрнута к ворону и к зрителю.
+ */
+const LOCK0: V3 = [-21, 5, 0];
+const LOCK_YAW = 0.9;
 const LOCK_K = 1.05;
 /** Скважина: точка на передней грани замка (в его координатах). */
 const HOLE: V3 = [0, 1.9, 2.4];
@@ -1911,20 +1970,74 @@ const HOLE: V3 = [0, 1.9, 2.4];
 const lockAt = (o: Pose, p: V3): V3 =>
   add(add(LOCK0, [0, 0, o.lockZ]), mul(yawZ(p, LOCK_YAW), LOCK_K * G * o.lock));
 
-function heldKey(out: Part[], c: Ctx): void {
-  const { o, S } = c;
-  if (!o.hold) return;
+/**
+ * Длина ключа и его толщина (`keyParts`); кольцо — в клюве. Ключ тюремный, длинный:
+ * с коротким клюв доставал до скважины, только уткнув голову в пол — голова тонула в теле.
+ */
+const KEY_L = 10;
+const KEY_K = 1.3;
+
+interface KeyG {
+  /** Кольцо (начало ключа), направление стержня, длина, толщина. */
+  top: V3;
+  d: V3;
+  L: number;
+  k: number;
+  /** Хватка клюва, направление клюва, скважина, центр головы. */
+  grip: V3;
+  beak: V3;
+  hole: V3;
+  head: V3;
+}
+
+/** Ключ, зажатый в клюве позы `o`: кольцо в кончике, к скважине — по `keyIn`. */
+function beakKey(o: Pose, S: Skel, h: HeadF): KeyG {
   const k = S.k;
-  const { hand, A } = armOf(c, 1);
-  const L = 6.2 * k;
-  // В крыле: от запястья по углу `keyAng`; в замке: кончик в скважине.
-  const dHold = norm(add(dirFront(o.keyAng, 1, 0.1), mul(A, 0.2)));
-  const hole = lockAt({ ...o, lock: 1 }, HOLE);
-  const dIn = norm(sub(hole, hand));
-  const d = norm(lerp3(dHold, dIn, o.keyIn));
-  const topHeld = add(hand, mul(dHold, -1.2 * k));
-  const topIn = add(hole, mul(dIn, -L + 0.6 * k));
-  keyParts(out, lerp3(topHeld, topIn, o.keyIn), d, L, P_GOLD, k * 1.15, o.keyTurn);
+  const grip = h.at(BEAK_GRIP);
+  const beak = h.dir(BEAK_DIR);
+  const hole = lockAt(o, HOLE);
+  const d = norm(lerp3(beak, norm(sub(hole, grip)), o.keyIn));
+  const top = sub(grip, mul(d, KEY_K * k));
+  return { top, d, L: KEY_L * k, k: KEY_K * k, grip, beak, hole, head: h.at([0, 0, 0]) };
+}
+
+/**
+ * Ключ трюка: в клюве (крыло ключ не держит — им нечем хватать) или, после
+ * `T_REL`, в скважине — как его оставили, с замком растёт и исчезает.
+ */
+function keyGeom(c: Ctx): KeyG | null {
+  const { o, S, h } = c;
+  if (o.hold) return beakKey(o, S, h);
+  if (o.keyIn <= 0 || o.lock < 0.02) return null;
+  const oR = poseAt('work', T_REL);
+  const SR = skel(oR);
+  const g = beakKey(oR, SR, headF(oR, SR));
+  // В координатах замка (`lockAt` — сдвиг, поворот, масштаб `lock`).
+  const base = add(LOCK0, [0, 0, oR.lockZ]);
+  const now = add(LOCK0, [0, 0, o.lockZ]);
+  const s = o.lock / oR.lock;
+  const inLock = (p: V3): V3 => add(now, mul(sub(p, base), s));
+  return { ...g, top: inLock(g.top), hole: inLock(g.hole), L: g.L * s, k: g.k * s };
+}
+
+function heldKey(out: Part[], c: Ctx): void {
+  const g = keyGeom(c);
+  // Ключ поворачивается вместе с головой (`twist`) вокруг своей оси.
+  if (g) keyParts(out, g.top, g.d, g.L, P_GOLD, g.k, -(c.o.keyTurn * TWIST) / (Math.PI / 2));
+}
+
+/**
+ * Для теста логики: ключ трюка в миг `t` — кольцо, стержень, кончик, хватка клюва,
+ * направление клюва, скважина (крупная полоса); `null` — ключа нет.
+ */
+export function keyAt(t: number, res: Res = 'l'): (KeyG & { tip: V3 }) | null {
+  const was = HI;
+  HI = res === 'l';
+  const o = poseAt('work', t);
+  const S = skel(o);
+  const g = keyGeom({ o, S, h: headF(o, S), lag: lagOf('work', t), t });
+  HI = was;
+  return g && { ...g, tip: add(g.top, mul(g.d, g.L)) };
 }
 
 function lockParts(out: Part[], c: Ctx): void {
@@ -2249,10 +2362,10 @@ function sparkles(p: Px, f: Frame, c: Ctx, mask: Uint8Array): void {
     const [sx, sy] = project(mul(q, RR));
     return [Math.round(OX + sx), Math.round(OY + sy)];
   };
-  if (o.hold && o.glint > 0.3) {
-    const { hand } = armOf(c, 1);
-    const tip = add(hand, mul(norm(dirFront(o.keyAng, 1, 0.1)), 5 * S.k));
-    const [x, y] = px(tip);
+  // Блик на ключе в клюве — на стержне за кончиком клюва.
+  const g = o.hold && o.glint > 0.3 ? keyGeom(c) : null;
+  if (g) {
+    const [x, y] = px(add(g.top, mul(g.d, g.L * 0.72)));
     star(p, x, y, HI ? Math.round(1 + 3 * o.glint) : o.glint > 0.6 ? 2 : 1, WHITE, gp[6]);
   }
   if (o.flash > 0.2) {

@@ -194,6 +194,12 @@ interface Pose {
   fanR: number;
   hugL: number;
   hugR: number;
+  /**
+   * Обхват ВПЕРЁД (атака, 0…1): плечо остаётся сбоку, рука — вниз-вперёд и чуть
+   * наружу, перья приоткрыты, крыло лежит перед грудью. Действует только вместе
+   * с `hug` (без обхвата — ноль).
+   */
+  wrap: number;
   /** Хвост: подъём кончиков и раскрытие веера. */
   tailUp: number;
   tailFan: number;
@@ -241,6 +247,7 @@ const REST: Pose = {
   fanR: 1,
   hugL: 0,
   hugR: 0,
+  wrap: 0,
   tailUp: 0,
   tailFan: 0,
   fLx: 0,
@@ -676,6 +683,14 @@ function attackPose(t: number): Pose {
     [0.64, 0.6],
     [0.84, 0],
   ]);
+  // Проводка: крылья запахиваются ВПЕРЁД, перед грудью (обхват трюка уводил
+  // их в наклонённое туловище). Ключи — вне обхвата, на кадре не видны.
+  o.wrap = kf(t, [
+    [0.3, 0],
+    [0.33, 1],
+    [0.84, 1],
+    [0.88, 0],
+  ]);
   o.fanL = o.fanR = kf(t, [
     [0, REST.fanL],
     [0.3, 1.45, 'o'],
@@ -1061,6 +1076,59 @@ interface Ctx {
   tau: number;
 }
 
+/** Запахнутое крыло (`wrap`) — на столько единиц ближе к зрителю вдоль взгляда (только глубина). */
+const WRAP_FWD = 16;
+
+/**
+ * Плечо и рука крыла. Обхват (`hug`) ведёт плечо вперёд, руку — к груди; корень
+ * идёт за наклоном (`bow`): грудь уходит вперёд — и плечо с ней. В атаке
+ * (`wrap`) рука — вниз-вперёд и чуть наружу, плечо остаётся сбоку, а всё крыло
+ * сдвинуто вдоль взгляда к зрителю: обхват трюка направлял руку НА зрителя
+ * (крыло сжималось в столбик цвета груди), а черепица перьев (`back`, до 24
+ * единиц вглубь) уводила его за наклонённую грудь — в проводке крылья пропадали.
+ */
+function wingRig(o: Pose, S: Skel, side: -1 | 1): { sh: V3; sh0: V3; arm: (a: number) => V3 } {
+  const k = S.k;
+  const hug = side < 0 ? o.hugL : o.hugR;
+  const w = o.wrap;
+  const sh0 = add(side < 0 ? S.shoulderL : S.shoulderR, [
+    -side * hug * 2.2 * (1 - w) * k,
+    hug * (6 + 8 * Math.max(0, o.bow)) * k,
+    -hug * 1.5 * k,
+  ]);
+  const sh = w > 0 && hug > 0 ? add(sh0, mul(VIEW, hug * w * WRAP_FWD * k)) : sh0;
+  // Рука: во фронтальной плоскости (чуть вперёд), при обхвате — к груди,
+  // запахнутая — вниз-вперёд перед ней, полого: кончики маховых ложатся на пол
+  // перед лапами (круче — уходили под пол, `wingAt` в тесте).
+  const hv: V3 = [-side * 0.55, 1, -0.35];
+  const HUG = norm(w > 0 ? lerp3(hv, [side * 0.3, 0.85, -0.35], w) : hv);
+  const arm = (a: number): V3 =>
+    norm(lerp3(norm(add(rollY(dirFront(a, side), o.lean), [0, 0.22, 0])), HUG, hug));
+  return { sh, sh0, arm };
+}
+
+/**
+ * Для теста логики: корень крыла (без сдвига глубины), рука, конец сложенного
+ * крыла (рука + маховые вдоль неё) и перед груди (центр + полуось к зрителю).
+ */
+export function wingAt(
+  a: Anim,
+  t: number,
+  side: -1 | 1,
+): { root: V3; arm: V3; tip: V3; chest: V3; hug: number } {
+  const o = poseAt(a, t);
+  const S = skel(o);
+  const { sh0, arm } = wingRig(o, S, side);
+  const A = arm(side < 0 ? o.thL : o.thR);
+  return {
+    root: sh0,
+    arm: A,
+    tip: add(sh0, mul(A, (8.4 + 14) * S.k)),
+    chest: add(S.chest, [0, (3.4 + o.fluff * 0.4) * S.k, 0]),
+    hug: side < 0 ? o.hugL : o.hugR,
+  };
+}
+
 function wing(out: Part[], c: Ctx, side: -1 | 1): void {
   const { o, S, lag } = c;
   const k = S.k;
@@ -1068,15 +1136,7 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
   const th = side < 0 ? o.thL : o.thR;
   const thLag = side < 0 ? lag.thL : lag.thR;
   const fan = side < 0 ? o.fanL : o.fanR;
-  const sh = add(side < 0 ? S.shoulderL : S.shoulderR, [
-    -side * hug * 2.2 * k,
-    hug * 6 * k,
-    -hug * 1.5 * k,
-  ]);
-  // Рука: во фронтальной плоскости (чуть вперёд), при обхвате — к груди.
-  const HUG = norm([-side * 0.55, 1, -0.35]);
-  const arm = (a: number): V3 =>
-    norm(lerp3(norm(add(rollY(dirFront(a, side), o.lean), [0, 0.22, 0])), HUG, hug));
+  const { sh, arm } = wingRig(o, S, side);
   const A = arm(th);
   const AL = arm(thLag);
   // Плоскость крыла смотрит на зрителя; D — к задней кромке (вниз у раскрытого).
@@ -1084,7 +1144,9 @@ function wing(out: Part[], c: Ctx, side: -1 | 1): void {
   const D = norm(mul(cross(A, N0), -side));
   const DL = norm(mul(cross(AL, N0), -side));
   // Сложенное крыло — перья вдоль руки; раскрытое — веером вниз и наружу.
-  const open = clamp01((th - 0.3) / 0.9) * (1 - hug * 0.5);
+  const open0 = clamp01((th - 0.3) / 0.9) * (1 - hug * 0.5);
+  // Запахнутое крыло приоткрыто — широкая лопасть, а не узкий клинок.
+  const open = o.wrap > 0 ? clamp01(open0 + 0.25 * hug * o.wrap) : open0;
   const fdir = (phi: number, lagged = false): V3 =>
     norm(add(mul(lagged ? DL : D, Math.cos(phi)), mul(lagged ? AL : A, Math.sin(phi))));
   const LA = 8.4;

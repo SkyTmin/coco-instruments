@@ -126,6 +126,10 @@ Owner: «добавь возможность выбирать скин у пит
   тёмный силуэт (`sil`: палитры смешаны с SIL) с огненными крапинами и
   глазами-угольками → вспышка (`flash` + столб) → птица в цвете
   расправляет крылья и складывает их к позе покоя.
+- **Phoenix attack follow-through** (logic audit, f10–f16): wings wrap FORWARD (`wrap`, `wingRig`):
+  roots go in front of the chest with the bow (`hug·(6 + 8·bow)` + `VIEW`·16, past the shingle
+  depth), blades point down-forward and out, tips by the feet. Behind the bowed chest they vanished;
+  crossed over the same-colour chest they read as one column at 44 px. Test «атака: в проводке…».
 - **Дракон** (`pets-pixel/dragon.ts`, `dragonFrame(a, i, res, v)`): сидит
   анфас сторожем клада — угольная чешуя рядами (верхняя кромка чешуйки на
   ступень светлее), трещины лавы на самих частях (своя фаза мерцания у
@@ -181,10 +185,15 @@ Owner: «добавь возможность выбирать скин у пит
   the mine's dark band. Happy: wings HALF open (th ≤ 1.12), gold «^» eyes (dark arcs vanish on
   black). Attack: strike f9 with the head UP (nod −0.46 against bow 0.42) so the beak points at
   the viewer, the upper mandible lifts, the red gape shows (a nodded head showed only the crown).
-  Work: padlock falls → key raised in the right wing (glint) → hop → key in, turn → flash,
-  shackle springs → token + coin jump into the key ring → lock vanishes; trick props reset to
-  REST once the lock is gone (seam test). Hatch plays `happy`. Weight 697 KB v0+v1 (small
-  68 / 79, large 260 / 288, thumbs 1 KB; ink was 1.6 MB). Released in v2.113. Tests «пиксельный ворон» in
+  Work (logic audit): padlock falls on the LEFT → gold key in the BEAK (ring at the beak tip
+  `BEAK_GRIP`, a wing has no grip), head up in profile with a glint → hop → bends, head in
+  profile BESIDE the body, monocle eye toward us (why the lock is on the left), beak nearly
+  straight down, long key (`KEY_L` 10: a short one put the head on the floor, sunk in the body)
+  bit in the keyhole → turn = head `twist` about the beak axis, key turns with it → click,
+  released at `T_REL` 1.12, key stays in the lock and rides with it; beak opens only after →
+  flash, shackle springs → token + coin jump into the key ring → lock vanishes; trick props reset
+  to REST once the lock is gone (seam test). Test «трюк: ключ в КЛЮВЕ». Hatch plays `happy`.
+  Weight 690 KB v0+v1 (small 68 / 79, large 257 / 285, thumbs 1 KB; ink was 1.6 MB). Released in v2.113. Tests «пиксельный ворон» in
   `pets-pixel.test.ts`.
 - **Fox** (`pets-pixel/fox.ts`, `foxFrame(a, i, res, v)`, `variants: [1]`): sitting red fox
   card-sharp facing us. Own rasterizer `drawPartsF` with `pick` (palette per point: burgundy
