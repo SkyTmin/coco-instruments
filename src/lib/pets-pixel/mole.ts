@@ -750,7 +750,8 @@ function workPose(t: number): Pose {
   for (const [ts, s] of STROKES) side += s * bump(t, ts, ts + ST_END);
   o.bow = 0.28 * bend;
   o.cz = 1.8 * pos(bend) + 0.6 * bump(t, GRAB - 0.04, 1.24);
-  o.nod = 0.1 * bend - 0.2 * bump(t, 1.34, 1.66);
+  // Голова смотрит на лапы — фонарь на лбу каски наклонён туда же, куда светит.
+  o.nod = 0.26 * pos(bend) - 0.2 * bump(t, 1.34, 1.66);
   o.lean = 0.07 * side;
   o.x = 0.5 * side;
   o.turn = -0.08 * side;
@@ -2137,7 +2138,7 @@ const scr = (q: V3): [number, number] => {
 /** Куда светит фонарь, пока роет: на землю перед лапами. */
 function beamTarget(c: Ctx): V3 {
   const g = 0.45 + 0.55 * c.o.hp;
-  return [0, HEAP_Y * G + 1.2, HEAP_R[2] * G * g * 0.55];
+  return [0, HEAP_Y * G + 2.0, HEAP_R[2] * G * g * 0.6];
 }
 
 /**
