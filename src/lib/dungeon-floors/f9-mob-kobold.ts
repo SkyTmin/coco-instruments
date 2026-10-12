@@ -695,8 +695,8 @@ function kobPose(anim: string, f: number, hoard: boolean): KobO {
 
 // ---- Кадры ----
 
-const KOB = kindOf('f9_kobold', 40, 40, 20, 30, 1100, 1.4);
-const HOA = kindOf('f9_hoarder', 40, 40, 20, 30, 900, 1.4);
+const KOB = kindOf('f9_kobold', 40, 38, 20, 24, 1100, 1.4);
+const HOA = kindOf('f9_hoarder', 40, 38, 20, 24, 900, 1.4);
 const kobPic = (anim: string, f: number, d: number): Pic =>
   drawRig(KOB, kobRig(kobPose(anim, f, false), yawN(d), false));
 const hoaPic = (anim: string, f: number, d: number): Pic =>

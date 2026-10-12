@@ -265,11 +265,14 @@ export interface Kind {
   limit: number;
   /** Масштаб рига: позы задаются в «своих» пикселях, рисунок — крупнее. */
   s: number;
+  /** Стенд: охват всех построенных кадров на холсте [x0, y0, x1, y1]. */
+  ext: [number, number, number, number];
 }
 const KINDS: Kind[] = [];
 /**
- * Вид моба: холст `w×h` с точкой ног `(ax, ay)` — в своих пикселях позы;
- * `s` — во сколько раз рисунок крупнее (холст и якорь растут следом).
+ * Вид моба: холст `w×h` с точкой ног `(ax, ay)` — в пикселях кадра (по
+ * охвату всех кадров вида, с запасом); `s` — во сколько раз риг крупнее
+ * своих поз.
  */
 export function kindOf(
   name: string,
@@ -282,13 +285,14 @@ export function kindOf(
 ): Kind {
   const K: Kind = {
     name,
-    w: Math.ceil(w * s),
-    h: Math.ceil(h * s),
-    ax: Math.round(ax * s),
-    ay: Math.round(ay * s),
+    w,
+    h,
+    ax,
+    ay,
     frames: frameLRU<MobFrame>(limit),
     limit,
     s,
+    ext: [1e9, 1e9, -1, -1],
   };
   KINDS.push(K);
   return K;
@@ -331,8 +335,12 @@ export const F9_MOB_STAT = {
   by: {} as Record<string, number>,
   /** Цена нового кадра по видам, мс (до 3000 на вид). */
   kms: {} as Record<string, number[]>,
+  /** Из неё — рисунок рига (остальное — облик, обрезка, холст), мс. */
+  build: 0,
+  bake: 0,
   miss: [] as string[],
   sizes: () => Object.fromEntries(KINDS.map((K) => [K.name, [K.frames.size, K.limit]])),
+  ext: () => Object.fromEntries(KINDS.map((K) => [K.name, [K.w, K.h, ...K.ext]])),
   clear: () => {
     for (const K of KINDS) K.frames.clear();
   },
@@ -430,6 +438,13 @@ function bake(K: Kind, pic: Pic, look: Look): MobFrame {
     x1 = 0;
     y1 = 0;
   }
+  const e = K.ext;
+  if (x1 >= 0) {
+    if (x0 < e[0]) e[0] = x0;
+    if (y0 < e[1]) e[1] = y0;
+    if (x1 > e[2]) e[2] = x1;
+    if (y1 > e[3]) e[3] = y1;
+  }
   const cw = x1 + 1 - x0;
   const ch = y1 + 1 - y0;
   const img = cut(p, x0, y0, cw, ch);
@@ -469,8 +484,13 @@ export function frameOf(
   let fr = K.frames.get(key);
   if (fr) return fr;
   const t0 = performance.now();
-  fr = K.frames.set(key, bake(K, build(), look));
-  stat(K.name, performance.now() - t0, key);
+  const pic = build();
+  const t1 = performance.now();
+  fr = K.frames.set(key, bake(K, pic, look));
+  const t2 = performance.now();
+  F9_MOB_STAT.build += t1 - t0;
+  F9_MOB_STAT.bake += t2 - t1;
+  stat(K.name, t2 - t0, key);
   return fr;
 }
 

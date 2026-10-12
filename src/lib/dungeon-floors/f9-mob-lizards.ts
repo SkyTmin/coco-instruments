@@ -1398,8 +1398,8 @@ function priestPose(anim: string, f: number): LizO {
 
 // ---- Кадры ----
 
-const LIZ = kindOf('f9_lizard', 56, 52, 26, 38, 1600, 1.2);
-const PRI = kindOf('f9_priest', 52, 56, 24, 42, 1500, 1.2);
+const LIZ = kindOf('f9_lizard', 70, 55, 35, 36, 1600, 1.2);
+const PRI = kindOf('f9_priest', 72, 69, 36, 46, 1500, 1.2);
 
 const lizPic = (anim: string, f: number, d: number): Pic =>
   drawRig(LIZ, lizRig(lizPose(anim, f), yawN(d), false));

@@ -315,7 +315,7 @@ function wispPose(anim: string, f: number): WispO {
   return o;
 }
 
-const WISP = kindOf('f9_wisp', 56, 60, 28, 40, 900, 1.3);
+const WISP = kindOf('f9_wisp', 57, 60, 28, 46, 900, 1.3);
 const wispPic = (anim: string, f: number, d: number): Pic =>
   drawRig(WISP, wispRig(wispPose(anim, f), yawN(d)), 0, null);
 
@@ -725,7 +725,7 @@ function rootPose(anim: string, f: number): RootO {
   return o;
 }
 
-const ROOT = kindOf('f9_root', 56, 52, 28, 34, 900, 1.25);
+const ROOT = kindOf('f9_root', 53, 48, 27, 21, 900, 1.25);
 const rootPic = (anim: string, f: number, d: number): Pic =>
   drawRig(ROOT, rootRig(rootPose(anim, f), yawN(d)));
 
@@ -980,7 +980,7 @@ function leechPose(anim: string, f: number): LeechO {
   return o;
 }
 
-const LCH = kindOf('f9_leech', 40, 36, 20, 24, 900, 1.4);
+const LCH = kindOf('f9_leech', 28, 23, 14, 14, 900, 1.4);
 const leechPic = (anim: string, f: number, d: number): Pic =>
   drawRig(LCH, leechRig(leechPose(anim, f), yawN(d)));
 
