@@ -1,0 +1,5 @@
+{
+  "name": "coco-mods",
+  "owner": { "name": "SkyTmin" },
+  "plugins": [{ "name": "cache-meter", "source": "./cache-meter" }]
+}
