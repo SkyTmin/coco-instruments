@@ -3201,7 +3201,7 @@ const bandPat =
 // Рыцарь-марионетка.
 // ---------------------------------------------------------------------------
 
-const KNIGHT_BODY: Body = {
+export const KNIGHT_BODY: Body = {
   hip: 9,
   torso: 7,
   waist: 2.6,
@@ -3263,41 +3263,7 @@ function knightPose(c: Ctx, q: Pose): { q: Pose; key: string } | null {
   return null;
 }
 
-paintMob(
-  'f13_knight',
-  puppetPainter('f13_knight', {
-    w: 40,
-    h: 44,
-    ax: 20,
-    ay: 38,
-    dirs: 8,
-    body: KNIGHT_BODY,
-    shadow: 6,
-    pose: knightPose,
-    dress: (rig, j, c) => {
-      const R = KNIGHT_BODY.head;
-      // Шлем: забрало с прорезью, плюмаж.
-      rig.dot(onHead(j, R, 0.98, -0.35, 0.05), INK, 1);
-      rig.dot(onHead(j, R, 0.98, 0.35, 0.05), INK, 1);
-      rig.dot(onHead(j, R, 0.98, 0, 0.05), INK, 1);
-      rig.cap(onHead(j, R, 0.1, 0, 0.95), onHead(j, R, -1.2, 0, 1.4), 1.1, 0.7, P.red);
-      // Наплечники.
-      rig.ball(vadd(j.shL, v3(0, 0.6, 0)), 1.7, P.silver);
-      rig.ball(vadd(j.shR, v3(0, 0.6, 0)), 1.7, P.silver);
-      // Меч и щит.
-      sword(rig, j.haR, swordDir(j, 'R'), 10);
-      const sh = vadd(vmix(j.elL, j.haL, 0.6), vsc(j.right, -1));
-      rig.ball(sh, 3.3, P.red, (t, nx, ny) =>
-        Math.abs(nx) < 0.18 || Math.abs(ny) < 0.18
-          ? P.gold
-          : Math.hypot(nx, ny) > 0.82
-            ? P.gold
-            : null,
-      );
-      void c;
-    },
-  }),
-);
+// Рыцарь рисуется в `f13-mob-knight.ts` (анимации мобов 13).
 
 // ---------------------------------------------------------------------------
 // Щелкунчик-гвардеец (элита).
@@ -8141,7 +8107,6 @@ export function lordVagaPx(m: Mob, _now: number): [number, number] {
 // ---- прогрев -----------------------------------------------------------------
 
 for (const k of [
-  'f13_knight',
   'f13_nutcracker',
   'f13_drummer',
   'f13_fiddler',
