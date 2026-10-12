@@ -1,6 +1,7 @@
 import { common } from './common';
 import { hall } from './hall';
 import { input } from './input';
+import { nursery } from './nursery';
 import { pets } from './pets';
 import { settings } from './settings';
 import { skins } from './skins';
@@ -13,6 +14,7 @@ export const ru = {
   common,
   hall,
   input,
+  nursery,
   pets,
   settings,
   skins,

@@ -15,6 +15,18 @@ fonts/rubik.woff2 — Rubik (Hubert & Fischer, Meir Sadan, Cyreal),
            SIL Open Font License 1.1 (fonts/OFL.txt). Изменения: оставлены
            только латиница, кириллица и знаки; формат woff2.
 
+fonts/tiny5.woff2 — Tiny5 (Gissio, github.com/Gissio/font_tiny5), SIL Open
+           Font License 1.1 (fonts/OFL-tiny5.txt). Изменения: оставлены латиница
+           с расширением A, кириллица и знаки; формат woff2.
+
+fonts/coco-head.woff2 — Press Start 2P (CodeMan38), SIL Open Font License 1.1
+           (fonts/OFL-coco-head.txt). Изменения: оставлены латиница с расширением
+           A, кириллица и знаки; формат woff2; переименован в «Coco Head»
+           (зарезервированное имя шрифта).
+
+kit/*.png — рамки, кнопки и ячейки пиксельного интерфейса нарисованы кодом
+           (scripts/ui-px/bake.ts), наши.
+
 cards/deck.png — Kenney, «Playing Cards Pack» (www.kenney.nl), CC0 1.0.
            Копия: github.com/shorepine/kenney. Изменения: карты собраны
            в один лист, рубашка перекрашена в цвета лагеря (своя сетка и

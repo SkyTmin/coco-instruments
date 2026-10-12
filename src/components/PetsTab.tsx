@@ -13,7 +13,9 @@ import { createPortal } from 'react-dom';
 import { GxBar, GxModal, KIcon } from '@/components/gx';
 import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
-import type { PetAnim } from '@/components/PetArt';
+import { Nursery } from '@/components/Nursery';
+import { Tabs } from '@/ui-px';
+import { useT } from '@/i18n';
 import { CoinIcon } from '@/components/slot-art';
 import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
@@ -22,7 +24,6 @@ import { rarityOf } from '@/lib/rarity';
 import { rankLetter, shortMoney } from '@/lib/prison';
 import {
   canMerge,
-  canPat,
   eggChances,
   eggCount,
   eggOf,
@@ -33,34 +34,17 @@ import {
   hatchNowCost,
   MERGE_NEED,
   NEST_SLOTS,
-  PAT_XP,
   PET_RARITY_NAME,
   petBonus,
-  petLevelOf,
   petLook,
   petOf,
-  PETS,
-  petScore,
   ROLE,
-  squadSlots,
-  SQUAD_RANK2,
-  VARIANT_NAME,
-  zooMult,
 } from '@/lib/pets';
 import type { EggId, PetId, PetStat } from '@/lib/pets';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { registerEscape } from '@/lib/escape-stack';
-import {
-  eggCrack,
-  eggHatch,
-  eggWobble,
-  petMerge,
-  petPat,
-  primeAudio,
-  uiBuy,
-  uiError,
-} from '@/lib/sound';
+import { eggCrack, eggHatch, eggWobble, primeAudio, uiBuy, uiError } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
@@ -103,8 +87,11 @@ export function PetsTab() {
   const balance = useFinanceStore((s) => s.slotsBalance);
   const hatch = useFinanceStore((s) => s.prisonHatch);
   const buyEgg = useFinanceStore((s) => s.prisonEggBuy);
-  const [sheet, setSheet] = useState<PetId | null>(null);
-  const [pick, setPick] = useState<number | null>(null);
+  const t = useT();
+  /** Pets (the pixel Nursery) or eggs; a ready nest opens straight on the eggs. */
+  const [view, setView] = useState<'pets' | 'eggs'>(() =>
+    p.nest.some((n) => n.left <= 0) ? 'eggs' : 'pets',
+  );
   const [nestAt, setNestAt] = useState<number | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
   const armT = useRef<ReturnType<typeof setTimeout>>();
@@ -139,9 +126,6 @@ export function PetsTab() {
     },
     [],
   );
-  const slots = squadSlots(p.rank, p.prestige);
-  const owned = PETS.filter((d) => p.pets[d.id]).length;
-  const zoo = zooMult(p.pets) - 1;
   const eggsAll = p.nest.length + eggCount(p.eggs);
   const plan = hatchAllPlan(p.nest, p.eggs, p.eggHeat, balance, p.tokens);
   // Не хватает ни на одно — кнопка серая, но цена всего видна.
@@ -187,69 +171,26 @@ export function PetsTab() {
     else setBatch({ list, coins: plan.coins, tokens: plan.tokens, key: Date.now() });
   };
 
-  const squadBonus: Partial<Record<PetStat, number>> = {};
-  for (const id of p.squad) {
-    const rec = p.pets[id];
-    if (!rec) continue;
-    for (const [k, v] of Object.entries(petBonus(id, rec)))
-      squadBonus[k as PetStat] = (squadBonus[k as PetStat] ?? 0) + (v ?? 0);
-  }
-  const bonusText = (Object.keys(squadBonus) as PetStat[])
-    .map((k) => `${pct(squadBonus[k] ?? 0)} ${ROLE[k].text}`)
-    .join(' · ');
-
   return (
-    <div className="ppn">
-      <div className="ppn__squad">
-        {[0, 1, 2].map((i) => {
-          if (i >= slots)
-            return (
-              <div key={i} className="ppn__slot is-locked">
-                <KIcon name="locked" />
-                <i>{i === 1 ? `с ранга ${rankLetter(SQUAD_RANK2)}` : 'после престижа'}</i>
-              </div>
-            );
-          const id = p.squad[i];
-          const rec = id ? p.pets[id] : undefined;
-          if (!id || !rec)
-            return (
-              <button
-                key={i}
-                type="button"
-                className="ppn__slot is-empty"
-                onClick={() => {
-                  tapLight();
-                  if (!owned) say('Сначала вырасти питомца из яйца');
-                  else setPick(i);
-                }}
-              >
-                <KIcon name="plus" />
-                <i>С собой</i>
-              </button>
-            );
-          const lv = petLevelOf(rec.xp);
-          return (
-            <button
-              key={i}
-              type="button"
-              className="ppn__slot"
-              style={rarityVars(petOf(id).rarity)}
-              onClick={() => {
-                tapLight();
-                setSheet(id);
-              }}
-            >
-              <span className="ppn__pad">
-                <PetArt id={id} size={74} v={petLook(rec)} />
-              </span>
-              <b>{petOf(id).name}</b>
-              <GxBar thin tone="gold" value={lv.need ? lv.into / lv.need : 1} />
-              <i>ур. {lv.level}</i>
-            </button>
-          );
-        })}
-      </div>
-      {bonusText && <div className="ppn__bonus">{bonusText}</div>}
+    <div className={`ppn is-${view}`}>
+      <Tabs
+        className="ppn__tabs"
+        items={[
+          { id: 'pets', label: t('nursery.tabPets'), icon: 'paw' },
+          {
+            id: 'eggs',
+            label: t('nursery.tabEggs'),
+            icon: 'egg',
+            badge: p.nest.some((n) => n.left <= 0) ? '!' : eggsAll || null,
+          },
+        ]}
+        value={view}
+        onChange={(v) => {
+          selectionChanged();
+          setView(v);
+        }}
+      />
+      {view === 'pets' && <Nursery say={say} />}
 
       <h4 className="ppn__h">Гнёзда</h4>
       <div className="ppn__nests">
@@ -421,34 +362,7 @@ export function PetsTab() {
         })}
       </div>
 
-      <h4 className="ppn__h">
-        Коллекция {owned}/{PETS.length}
-        {zoo > 0 && <em> · {pct(zoo)} к продаже</em>}
-      </h4>
-      <div className="ppn__zoo">
-        {PETS.map((d) => {
-          const rec = p.pets[d.id];
-          return (
-            <button
-              key={d.id}
-              type="button"
-              className={`ppn__card r${d.rarity}${rec ? '' : ' is-ghost'}${rec?.v ? ` is-v${rec.v}` : ''}${p.squad.includes(d.id) ? ' is-with' : ''}`}
-              style={rarityVars(d.rarity)}
-              onClick={() => {
-                tapLight();
-                setSheet(d.id);
-              }}
-            >
-              <PetArt id={d.id} size={48} v={petLook(rec)} ghost={!rec} still />
-              {canMerge(rec) && <i className="ppn__dot">!</i>}
-            </button>
-          );
-        })}
-      </div>
-
       {note && <div className="ppn__note">{note}</div>}
-      {sheet && <PetSheet id={sheet} onClose={() => setSheet(null)} />}
-      {pick !== null && <SquadPicker slot={pick} onClose={() => setPick(null)} />}
       {nestAt !== null && (
         <NestSheet
           i={nestAt}
@@ -489,208 +403,6 @@ export function PetsTab() {
   );
 }
 
-// ---- Карточка питомца --------------------------------------------------------
-
-/** Витрина в карточке: каждая анимация вида по кнопке. */
-const SHOWCASE: [PetAnim, string][] = [
-  ['happy', 'Радость'],
-  ['work', 'Трюк'],
-  ['attack', 'Атака'],
-  ['sleep', 'Сон'],
-];
-
-/** Скины золотого: какой рисунок показывать везде, где питомец нарисован. */
-const SKINS: [number, string][] = [
-  [0, 'Обычный'],
-  [1, 'Золотой'],
-];
-
-function PetSheet({ id, onClose }: { id: PetId; onClose: () => void }) {
-  const p = useFinanceStore((s) => s.prison);
-  const pat = useFinanceStore((s) => s.prisonPetPat);
-  const merge = useFinanceStore((s) => s.prisonPetMerge);
-  const setSkin = useFinanceStore((s) => s.prisonPetSkin);
-  const setSquad = useFinanceStore((s) => s.prisonSquadSet);
-  const [joy, setJoy] = useState(0);
-  const [xpPop, setXpPop] = useState(0);
-  const [show, setShow] = useState<{ anim: PetAnim; k: number } | null>(null);
-  const def = petOf(id);
-  const rec = p.pets[id];
-  const r = def.rarity;
-  const slots = squadSlots(p.rank, p.prestige);
-  const here = p.squad.includes(id);
-  // Из каких яиц бывает: там, где у его редкости шанс больше нуля.
-  const from = EGGS.filter((e) => eggChances(e.id)[r] > 0).map((e) => e.name.replace(' яйцо', ''));
-  const lv = petLevelOf(rec?.xp ?? 0);
-  return (
-    <GxModal title={rec ? def.name : 'Кто это?'} onClose={onClose} className="ppn-sheet">
-      <div className={`ppn-sheet__stage r${r}`} style={rarityVars(r)}>
-        <PetArt
-          id={id}
-          size={150}
-          v={petLook(rec)}
-          ghost={!rec}
-          joy={joy}
-          play={show}
-          onClick={
-            rec
-              ? () => {
-                  primeAudio();
-                  petPat();
-                  tapLight();
-                  setJoy((j) => j + 1);
-                  if (canPat(rec, Date.now()) && pat(id)) setXpPop((x) => x + 1);
-                }
-              : undefined
-          }
-        />
-        {xpPop > 0 && (
-          <b key={xpPop} className="ppn-sheet__xp">
-            +{PAT_XP} опыта
-          </b>
-        )}
-      </div>
-      {rec && (
-        <div className="ppn-sheet__acts">
-          {SHOWCASE.map(([anim, label]) => (
-            <button
-              key={anim}
-              type="button"
-              className="gx-btn gx-btn--sm"
-              onClick={() => {
-                tapLight();
-                setShow((s) => ({ anim, k: (s?.k ?? 0) + 1 }));
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-      {/* Скин (v2.111): золотого можно нарисовать обычным. Сила и имя — по ступени. */}
-      {rec && rec.v >= 1 && (
-        <div className="ppn-skin">
-          <span>Скин</span>
-          <span className="ppn-skin__seg" role="radiogroup" aria-label="Скин">
-            {SKINS.map(([s, name]) => {
-              const on = petLook(rec) === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  className={`${s ? 'is-gold' : ''}${on ? ' is-on' : ''}`}
-                  onClick={() => {
-                    if (on) return;
-                    selectionChanged();
-                    if (setSkin(id, s)) setJoy((j) => j + 1);
-                  }}
-                >
-                  {name}
-                </button>
-              );
-            })}
-          </span>
-        </div>
-      )}
-      <div className="ppn-sheet__name">
-        <RarityName rarity={r}>
-          {rec && rec.v ? `${VARIANT_NAME[rec.v]} ` : ''}
-          {PET_RARITY_NAME[r]}
-        </RarityName>
-        {!rec && <b>{def.name}</b>}
-      </div>
-      <p className="ppn-sheet__lore">{def.lore}</p>
-      <div className="ppn-sheet__roles">
-        {def.stats.map((s) => (
-          <span key={s}>
-            <b>{ROLE[s].name}</b>
-            <i>
-              {rec ? pct(petBonus(id, rec)[s] ?? 0) : ''} {ROLE[s].text}
-            </i>
-          </span>
-        ))}
-      </div>
-      {rec ? (
-        <>
-          <GxBar
-            tone="gold"
-            value={lv.need ? lv.into / lv.need : 1}
-            label={
-              lv.need
-                ? `ур. ${lv.level} · ${fmt(lv.into)}/${fmt(lv.need)}`
-                : `ур. ${lv.level} · предел`
-            }
-          />
-          {rec.v < MERGE_NEED.length && (
-            <div className="ppn-sheet__merge">
-              <span>
-                Копии до золотого: {Math.min(rec.dup, MERGE_NEED[rec.v])}/{MERGE_NEED[rec.v]}
-              </span>
-              <GxBar thin tone="blue" value={rec.dup / MERGE_NEED[rec.v]} />
-              {canMerge(rec) && (
-                <button
-                  type="button"
-                  className="gx-btn gx-btn--red"
-                  onClick={() => {
-                    primeAudio();
-                    if (merge(id)) {
-                      petMerge();
-                      notifySuccess();
-                      flashFrame('big');
-                      burstConfetti(60, ['#ffd24a', '#fff3b0', '#ffffff']);
-                      setJoy((j) => j + 1);
-                    }
-                  }}
-                >
-                  Сделать золотым
-                </button>
-              )}
-            </div>
-          )}
-          <div className="ppn-sheet__btns">
-            {here ? (
-              <button
-                type="button"
-                className="gx-btn"
-                onClick={() => {
-                  selectionChanged();
-                  setSquad(p.squad.filter((x) => x !== id));
-                }}
-              >
-                Оставить дома
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="gx-btn gx-btn--red"
-                onClick={() => {
-                  primeAudio();
-                  selectionChanged();
-                  // Отряд полон — встаёт на место последнего.
-                  const next =
-                    p.squad.length < slots
-                      ? [...p.squad, id]
-                      : [...p.squad.slice(0, slots - 1), id];
-                  setSquad(next);
-                  petPat();
-                  setJoy((j) => j + 1);
-                }}
-              >
-                Взять с собой
-              </button>
-            )}
-          </div>
-        </>
-      ) : (
-        <p className="ppn-sheet__from">Вылупляется из яиц: {from.join(', ')}</p>
-      )}
-    </GxModal>
-  );
-}
-
-/** Кого взять на пустое место отряда: сильнейшие сверху. */
 /** Сбережённый прогрев вида — тонкая полоска под яйцом в корзине. */
 function HeatBar({ egg, heat }: { egg: EggId; heat: number }) {
   return (
@@ -824,52 +536,6 @@ function NestSheet({
           !n && <p className="ppn-sheet__from">Корзина пуста</p>
         )}
       </div>
-    </GxModal>
-  );
-}
-
-function SquadPicker({ slot, onClose }: { slot: number; onClose: () => void }) {
-  const p = useFinanceStore((s) => s.prison);
-  const setSquad = useFinanceStore((s) => s.prisonSquadSet);
-  const list = (Object.keys(p.pets) as PetId[])
-    .filter((id) => !p.squad.includes(id))
-    .sort((a, b) => petScore(b, p.pets[b]!) - petScore(a, p.pets[a]!));
-  return (
-    <GxModal title="С собой" onClose={onClose}>
-      {list.length ? (
-        <div className="ppn-pick">
-          {list.map((id) => {
-            const rec = p.pets[id]!;
-            return (
-              <button
-                key={id}
-                type="button"
-                className="ppn-pick__row"
-                style={rarityVars(petOf(id).rarity)}
-                onClick={() => {
-                  primeAudio();
-                  selectionChanged();
-                  const next = [...p.squad];
-                  next.splice(slot, 0, id);
-                  setSquad(next);
-                  petPat();
-                  onClose();
-                }}
-              >
-                <PetArt id={id} size={48} v={petLook(rec)} still />
-                <span>
-                  <b>
-                    {petOf(id).name} <em>ур. {petLevelOf(rec.xp).level}</em>
-                  </b>
-                  <i>{petLine(id, rec)}</i>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="ppn-sheet__from">Все питомцы уже с тобой</p>
-      )}
     </GxModal>
   );
 }
