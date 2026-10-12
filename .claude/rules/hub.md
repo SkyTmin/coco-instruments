@@ -92,6 +92,20 @@ paths:
   искать тёмное на открытой земле; и списком занятых клеток, под которыми
   на картинке нет предмета. Остаётся нарочно: полоса за забором, пруд
   (вода), низ табличек между столбами (сквозь табличку не ходят).
+- **Карманы без выхода заделываются при сборке (v2.114).** Owner got stuck in
+  the kennel nook between the pet carrier and the dog bed: their corners
+  left a diagonal gap of 0.5 tile, less than the body (0.6). `collideGrid`
+  pushes cell by cell, so it squeezed the hero in moving right but never back.
+  The same one-way pinches were on 8 of 13 maps (square, mine, zone, lift,
+  tower, kennel, hq, club). Fix is data-only: `build.py` `seal_unreachable`
+  floods standable lattice points (1/32 tile, same test as `canStand`) from
+  every spawn and turns every free cell no reachable body touches (r + 0.02)
+  into wall. `walk.ts` stays byte-identical (shared with the dungeon). Doors,
+  residents and tap paths are reachable exactly as before. A saved spot inside
+  a sealed pocket is now in wall, so `placeHero` moves it to the nearest
+  stand. Guard: test «нет карманов, откуда не выйти» (joystick flood from
+  spawns, then reverse flood from door hits; the square takes ~10 s).
+  `hub-maps.ts` from `build.py` needs `npx prettier --write` before commit.
 - **Сутки — 20 минут, как в Майнкрафте** (`lib/hub-time.ts`, от
   `Date.now()`, одни у всех): день 50%, закат 7,5%, ночь 35%, рассвет 7,5%.
   Фонари зажигаются на закате по очереди, окна светятся ночью, прожекторы с

@@ -22,6 +22,7 @@ import json
 import re
 import os
 import sys
+from collections import deque
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -71,6 +72,85 @@ def pack(sprites: dict[str, list[Img]]) -> tuple[Img, dict[str, list[int]]]:
     return atlas, rects
 
 
+# The hero's body on the square — mirror of HERO_R in src/lib/hub-sim.ts.
+HERO_R = 0.3
+SEAL_STEP = 32      # lattice points per tile for the reach flood
+SEAL_MARGIN = 0.02  # a cell this close to a reachable body stays open
+
+
+def seal_unreachable(m: lib.Map) -> int:
+    """Close every free cell no standing body reachable from a spawn ever touches (v2.114).
+
+    The circle-vs-cells push (walk.ts collideGrid) squeezes the body through a gap a little
+    narrower than it is — a diagonal pinch between two pieces of furniture, a 0.5-tile slot —
+    in one direction only. Behind such a pinch the hero was trapped for good (the kennel nook
+    between the pet carrier and the dog bed). Sealing what an honest body cannot reach removes
+    those pockets on every map, present and future, without touching the shared walk code.
+    Returns how many cells were closed."""
+    sub = lib.SUB
+    k = SEAL_STEP // sub
+    ch, cw = m.solid.shape
+    pad = np.pad(m.solid, 2, constant_values=True)  # outside the map is wall
+
+    def near(a: int, b: int, ox: int, oy: int, r2: float) -> bool:
+        # lattice point (a, b) of a cell against the cell (ox, oy) away, in tiles
+        dx = max(ox - a / k, 0.0, a / k - (ox + 1)) / sub
+        dy = max(oy - b / k, 0.0, b / k - (oy + 1)) / sub
+        return dx * dx + dy * dy < r2
+
+    # where the body stands: same test as canStand (r − 1e-6, d² < r² − 1e-9)
+    rs = HERO_R - 1e-6
+    stand = np.zeros((ch * k, cw * k), bool)
+    for b in range(k):
+        for a in range(k):
+            blocked = np.zeros((ch, cw), bool)
+            for oy in range(-2, 3):
+                for ox in range(-2, 3):
+                    if near(a, b, ox, oy, rs * rs - 1e-9):
+                        blocked |= pad[2 + oy:2 + oy + ch, 2 + ox:2 + ox + cw]
+            stand[b::k, a::k] = ~blocked
+    H, W = stand.shape
+    st = bytearray(stand.astype(np.uint8).tobytes())
+    seen = bytearray(H * W)
+    q: deque[int] = deque()
+    for x, y, _face in m.spawns.values():
+        # the page places a hero that cannot stand at the nearest spot where it can
+        j0, i0 = int(round(y * SEAL_STEP)), int(round(x * SEAL_STEP))
+        R = 4 * SEAL_STEP
+        win = stand[max(0, j0 - R):j0 + R + 1, max(0, i0 - R):i0 + R + 1]
+        jj, ii = np.nonzero(win)
+        if not len(jj):
+            continue
+        jj, ii = jj + max(0, j0 - R), ii + max(0, i0 - R)
+        n = int(np.argmin((jj - j0) ** 2 + (ii - i0) ** 2))
+        p = int(jj[n]) * W + int(ii[n])
+        if not seen[p]:
+            seen[p] = 1
+            q.append(p)
+    # a standing body never touches the map edge, so the neighbours stay in range
+    while q:
+        p = q.pop()
+        for nb in (p + 1, p - 1, p + W, p - W):
+            if st[nb] and not seen[nb]:
+                seen[nb] = 1
+                q.append(nb)
+    reach = np.frombuffer(bytes(seen), np.uint8).reshape(H, W).astype(bool)
+    rt = HERO_R + SEAL_MARGIN
+    touched = np.zeros((ch + 4, cw + 4), bool)
+    for b in range(k):
+        for a in range(k):
+            ra = reach[b::k, a::k]
+            if not ra.any():
+                continue
+            for oy in range(-2, 3):
+                for ox in range(-2, 3):
+                    if near(a, b, ox, oy, rt * rt):
+                        touched[2 + oy:2 + oy + ch, 2 + ox:2 + ox + cw] |= ra
+    sealed = ~m.solid & ~touched[2:-2, 2:-2]
+    m.solid |= sealed
+    return int(sealed.sum())
+
+
 def solid_b64(m: lib.Map) -> str:
     bits = np.packbits(m.solid.astype(np.uint8).reshape(-1))
     return base64.b64encode(bits.tobytes()).decode()
@@ -118,6 +198,10 @@ def main() -> None:
     ap.add_argument('--check', action='store_true')
     a = ap.parse_args()
     built = [maps.load(id) for id in maps.MAPS]
+    for m in built:
+        n = seal_unreachable(m)
+        if n:
+            print(f'  {m.id}: sealed {n} unreachable cells')
     # every door must lead somewhere real
     ids = {m.id for m in built}
     for m in built:

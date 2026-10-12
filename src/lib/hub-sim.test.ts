@@ -154,6 +154,90 @@ describe('площадь: карты', () => {
   });
 });
 
+// Карман за щелью уже тела (угол переноски и лежанки в Питомнике): толчок от
+// стен протискивал героя внутрь, а назад — нет, и выйти было нельзя (v2.114).
+// Обход: куда герой доходит джойстиком от точек появления — оттуда он обязан
+// дойти до двери. Сборщик карт заделывает такие щели (`seal_unreachable`).
+describe('площадь: нет карманов, откуда не выйти (v2.114)', () => {
+  const G = 0.125;
+  const DIRS = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [0.7, 0.7],
+    [0.7, -0.7],
+    [-0.7, 0.7],
+    [-0.7, -0.7],
+  ];
+  const key = (x: number, y: number) => `${Math.round(x / G)},${Math.round(y / G)}`;
+
+  it.each(IDS)(
+    '%s',
+    (id) => {
+      const s = createHubSim({ map: id, at: Object.keys(HUB_MAPS[id].spawns)[0] });
+      const pos = new Map<string, [number, number]>();
+      const back = new Map<string, string[]>();
+      const exits: string[] = [];
+      const q: string[] = [];
+      for (const sp of Object.values(s.map.data.spawns)) {
+        const h = createHubSim({ map: id, x: sp[0], y: sp[1], face: 0 }).hero;
+        const k = key(h.x, h.y);
+        if (pos.has(k)) continue;
+        pos.set(k, [h.x, h.y]);
+        q.push(k);
+      }
+      while (q.length) {
+        const k = q.shift()!;
+        const [x, y] = pos.get(k)!;
+        for (const [mx, my] of DIRS) {
+          Object.assign(s.hero, { x, y, vx: 0, vy: 0 });
+          s.path = null;
+          s.talking = null;
+          s.events.length = 0;
+          s.armed = s.map.doors.map(() => true);
+          let door = false;
+          for (let t = 0; t < 10 && !door; t++) {
+            stepHub(s, DT, { mx, my });
+            door = s.events.some((e) => e.t === 'door');
+          }
+          if (door) {
+            exits.push(k);
+            continue;
+          }
+          const k2 = key(s.hero.x, s.hero.y);
+          if (k2 === k) continue;
+          if (!back.has(k2)) back.set(k2, []);
+          back.get(k2)!.push(k);
+          if (pos.has(k2)) continue;
+          pos.set(k2, [s.hero.x, s.hero.y]);
+          q.push(k2);
+        }
+      }
+      expect(exits.length, id).toBeGreaterThan(0);
+      const out = new Set(exits);
+      const stack = [...exits];
+      while (stack.length)
+        for (const p of back.get(stack.pop()!) ?? []) {
+          if (out.has(p)) continue;
+          out.add(p);
+          stack.push(p);
+        }
+      const traps = [...pos.keys()].filter((k) => !out.has(k));
+      expect(
+        traps.slice(0, 5).map((k) =>
+          pos
+            .get(k)!
+            .map((v) => v.toFixed(2))
+            .join(','),
+        ),
+        `${id}: ${traps.length} точек без выхода`,
+      ).toEqual([]);
+    },
+    60_000,
+  );
+});
+
 describe('площадь: ходьба', () => {
   it('появился у двери — стоишь, дверь сама не срабатывает', () => {
     for (const id of IDS) {
