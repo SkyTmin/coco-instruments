@@ -137,6 +137,29 @@ export const PET_PX: Record<string, PetPx> = {
       },
     },
   },
+  spider: {
+    box: 48,
+    rev: '24f205ffe1',
+    anims: {
+      idle: { n: 72, fps: 24, x: -4, y: 8, w: 56, h: 43 },
+      walk: { n: 24, fps: 24, x: -4, y: 8, w: 56, h: 44 },
+      happy: { n: 26, fps: 24, x: -7, y: -1, w: 62, h: 52 },
+      work: { n: 48, fps: 24, x: -7, y: 3, w: 66, h: 48 },
+      attack: { n: 22, fps: 24, x: -8, y: 2, w: 64, h: 56 },
+      sleep: { n: 72, fps: 24, x: 1, y: 12, w: 46, h: 41 },
+    },
+    large: {
+      box: 112,
+      anims: {
+        idle: { n: 72, fps: 24, x: -4, y: 23, w: 120, h: 92 },
+        walk: { n: 24, fps: 24, x: -4, y: 23, w: 120, h: 93 },
+        happy: { n: 26, fps: 24, x: -12, y: 2, w: 136, h: 113 },
+        work: { n: 48, fps: 24, x: -10, y: 11, w: 143, h: 104 },
+        attack: { n: 22, fps: 24, x: -14, y: 8, w: 140, h: 117 },
+        sleep: { n: 72, fps: 24, x: 7, y: 32, w: 98, h: 85 },
+      },
+    },
+  },
   wolf: {
     box: 48,
     rev: '2cfe8196e1',

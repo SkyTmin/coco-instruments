@@ -144,45 +144,45 @@ const PAL_V: RGBA[][][] = [
     MOUTH,
   ],
   [
-    // Золотой: бронза в тени → золото → бледное золото на кончиках.
+    // Золотой: бронза в тени и в толще шерсти → золото → бледное золото на кончиках прядей.
     ramp(
-      '#2a1606',
-      '#3e2208',
-      '#56320c',
-      '#6e4612',
-      '#885c18',
-      '#a2741e',
-      '#bc8c28',
-      '#d4a636',
-      '#e6bf4c',
-      '#f4d66c',
-      '#fce898',
-      '#fff6cc',
+      '#1e0e04',
+      '#2e1606',
+      '#42200a',
+      '#58300e',
+      '#6e4014',
+      '#86521a',
+      '#9e6620',
+      '#b67c28',
+      '#cc9434',
+      '#e0ae46',
+      '#f0ca66',
+      '#fce49a',
     ),
     // Лапы — глубже, бронзовее.
     ramp(
-      '#22120a',
-      '#341c0a',
-      '#4a2a0e',
-      '#623a12',
-      '#7a4c18',
-      '#94621e',
-      '#ae7a28',
-      '#c69434',
-      '#dcae48',
-      '#eec864',
+      '#1a0c04',
+      '#2a1406',
+      '#3e1e08',
+      '#54290c',
+      '#6c3810',
+      '#844a16',
+      '#9c5e1e',
+      '#b47428',
+      '#c88c34',
+      '#dca848',
     ),
-    // Медь вместо рыжего.
+    // Медь вместо рыжего: темнее и краснее — читается на золоте.
     ramp(
-      '#2e0e06',
-      '#4a180a',
-      '#6a2410',
-      '#8c3418',
-      '#ac4622',
-      '#c85c30',
-      '#dc7444',
-      '#ec9060',
-      '#f8b088',
+      '#2a0a04',
+      '#44120a',
+      '#621c10',
+      '#822818',
+      '#a03622',
+      '#bc4a2e',
+      '#d26240',
+      '#e47e58',
+      '#f29c78',
     ),
     FANG,
     STEEL,
@@ -877,7 +877,7 @@ export function skel(o: Pose, lag: Lag): Skel {
       if (k === 0) {
         raised = s < 0 ? o.raiseL : o.raiseR;
         if (raised > 0) {
-          const tgt: V3 = [s * (15 + o.spread * 4), 9 + o.spread * 2, 36 - o.spread * 13];
+          const tgt: V3 = [s * (15 + o.spread * 5), 9 + o.spread * 2, 36 - o.spread * 6];
           foot = lerp3(foot, tgt, raised);
         }
         foot = add(foot, s < 0 ? [o.fLx, 0, o.fLz] : [o.fRx, 0, o.fRz]);
@@ -1047,7 +1047,7 @@ function abdomen(out: PartF[], c: Ctx): void {
     id: nid(),
     pick: abdPick,
     tex: HI ? furTex(60, 15, 0.26, 3) : furTex(26, 7, 0.14, 3),
-    bias: -0.13,
+    bias: -0.21,
   });
   // Пряди по контуру: обрывистый край шара.
   for (const h of HI ? ABD_HAIR.l : ABD_HAIR.s) {
@@ -1079,7 +1079,7 @@ function head(out: PartF[], c: Ctx): void {
     pal: P_FUR,
     id: nid(),
     tex: HI ? furTex(40, 10, 0.24, 7) : furTex(18, 5, 0.1, 7),
-    bias: -0.08,
+    bias: -0.15,
   });
   for (const h of HI ? HEAD_HAIR.l : HEAD_HAIR.s) {
     hair(out, at(h.b), S.hrot(h.d), (HI ? 1.7 : 1.9) * h.L, HI ? 0.65 : 0.85, P_FUR, -0.04, 0.2);
@@ -1098,7 +1098,7 @@ function head(out: PartF[], c: Ctx): void {
       pal: P_FUR,
       id: nid(),
       tex: HI ? furTex(20, 6, 0.2, 21 + s) : undefined,
-      bias: -0.02,
+      bias: -0.09,
     });
     // Клыки: костяной коготь вниз и внутрь; раскрытый — длиннее и врозь.
     const fb = at([s * (1.9 + f * 1.3), 7.6 + f * 0.8, -5.0 - f * 0.4]);
@@ -1141,10 +1141,10 @@ function legParts(out: PartF[], c: Ctx): void {
     const idF = nid();
     // Поднятая лапа ближе к нам — на ступень светлее, не тонет в коленях соседей.
     const lb = L.raised * 0.08;
-    limb(out, L.hip, L.knee, fr, fr * 0.92, P_LEG, idF, { tube: true, bias: -0.02 + lb });
+    limb(out, L.hip, L.knee, fr, fr * 0.92, P_LEG, idF, { tube: true, bias: -0.08 + lb });
     limb(out, L.knee, L.ankle, tr, tr * 0.92, P_LEG, nid(), {
       tube: true,
-      bias: lb,
+      bias: -0.05 + lb,
       pick: (qx) => shinPick(qx),
     });
     limb(out, L.ankle, L.foot, tr * 0.72, tr * 0.7, P_LEG, nid(), { tube: true, bias: -0.06 });
