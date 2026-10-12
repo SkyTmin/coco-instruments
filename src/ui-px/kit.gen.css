@@ -518,6 +518,48 @@
   --i-h: 9;
 }
 
+.pxi-coin {
+  -webkit-mask-image: url('/ui/kit/i-coin.png?v=9d3c8aed');
+  mask-image: url('/ui/kit/i-coin.png?v=9d3c8aed');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-token {
+  -webkit-mask-image: url('/ui/kit/i-token.png?v=1d237714');
+  mask-image: url('/ui/kit/i-token.png?v=1d237714');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-gem {
+  -webkit-mask-image: url('/ui/kit/i-gem.png?v=d47b89cc');
+  mask-image: url('/ui/kit/i-gem.png?v=d47b89cc');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-clock {
+  -webkit-mask-image: url('/ui/kit/i-clock.png?v=9734661e');
+  mask-image: url('/ui/kit/i-clock.png?v=9734661e');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-key {
+  -webkit-mask-image: url('/ui/kit/i-key.png?v=48078356');
+  mask-image: url('/ui/kit/i-key.png?v=48078356');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-egg {
+  -webkit-mask-image: url('/ui/kit/i-egg.png?v=6195c514');
+  mask-image: url('/ui/kit/i-egg.png?v=6195c514');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .px-btn--gold {
   --b: var(--pxk-btn-gold-n);
   --bs: var(--pxk-btn-gold-n-s);

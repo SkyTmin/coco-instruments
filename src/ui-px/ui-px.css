@@ -19,7 +19,7 @@
   --u: var(--ui-px, 2px);
   /* Text scale: the fonts have an 8-px em; text is one step under the art on big scales
      (an art pixel of 4 CSS px would make 32-px body text on 1080p). */
-  --ts: max(2, calc(var(--ui-scale, 2) - 1));
+  --ts: max(2, calc(var(--ui-scale, 2) - 1 + var(--ts-add, 0)));
   --px-fs-tiny: calc(8px * (var(--ts) - 1));
   --px-fs: calc(8px * var(--ts));
   --px-fs-big: calc(8px * (var(--ts) + 1));
@@ -35,6 +35,14 @@
   --px-green: #8fe07a;
   --px-blue: #8cc8ff;
   --px-violet: #c6a6ff;
+}
+/* L's text-size setting (`data-text` on <html>): whole font steps only — a pixel font at a
+   fractional scale gets uneven rows. «s» never goes under the 2× floor. */
+html[data-text='s'] {
+  --ts-add: -1;
+}
+html[data-text='l'] {
+  --ts-add: 1;
 }
 
 /* ---- Typography ------------------------------------------------------------------------- */

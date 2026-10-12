@@ -45,7 +45,13 @@ export type PxIconName =
   | 'info'
   | 'sword'
   | 'bolt'
-  | 'zzz';
+  | 'zzz'
+  | 'coin'
+  | 'token'
+  | 'gem'
+  | 'clock'
+  | 'key'
+  | 'egg';
 
 /** A 9×9 pixel icon (mask), colour = currentColor. */
 export function Icon({ name, className }: { name: PxIconName; className?: string }) {
