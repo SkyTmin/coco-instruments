@@ -37,6 +37,7 @@ import './f14-mob-soldier';
 import './f14-mob-sand';
 import './f14-mob-rewinder';
 import './f14-mob-reaper';
+import './f14-mob-keeper';
 
 type RGBA = [number, number, number, number];
 
@@ -219,7 +220,6 @@ export const TEAL = tn('#0e3a44', '#1e7a88', '#4cc8d8', '#b8f4ff');
 export const SAND = tn('#6a4a24', '#a8844c', '#d8b878', '#f4e2b0');
 const WOOD = tn('#2a160c', '#4a2816', '#6e3e22', '#9a5e34');
 const REDC = tn('#3a0a0c', '#6a1418', '#a42228', '#d8484a');
-const NAVY = tn('#10142a', '#1e2648', '#34406a', '#5a6aa0');
 const SKIN = tn('#8a4a38', '#c88a70', '#f0c0a0', '#ffe4cc');
 const GLASS = hx('#bfe8f0', 150);
 const GLASS_HI = hx('#ffffff', 200);
@@ -670,173 +670,6 @@ registerMobPainter('f14_cuckoo', (m: Mob, pose: MobPose) => {
   const out: MobFrame = { img: q.canvas(), ax: c, ay: c + 4, eye: null };
   frames.set(key, out);
   return out;
-});
-
-// ---------------------------------------------------------------------------
-// Хранитель стрелок: шлем-колокол со шпилем, тёмно-синий сюртук с латунью,
-// на груди — циферблат (стрелки идут). В руках — минутная стрелка-копьё и
-// часовая стрелка-булава. Кадр 32×34, земля 32.
-// ---------------------------------------------------------------------------
-
-type KeeperClub = 'rest' | 'up' | 'down';
-interface KeeperPose {
-  f: number;
-  legs: number;
-  lance: number;
-  club: KeeperClub;
-  spin: boolean;
-}
-
-function drawKeeper(o: KeeperPose): Built {
-  const p = new Px(32, 34);
-  const G = 32;
-  const cx = 13;
-  const LEG = tn('#08080e', '#14141e', '#24242e', '#3a3a48');
-  // Ноги.
-  const st = [1.4, 0, -1.4, 0][o.legs % 4];
-  limb(p, cx - 2, 24, cx - 2 - st, G - 1, 1.8, 1.5, LEG);
-  limb(p, cx + 2, 24, cx + 2 + st, G - 1, 1.8, 1.5, LEG, 0.1);
-  p.rect(cx - 4 - Math.round(st), G - 1, cx - Math.round(st), G - 1, hx('#0a0808'));
-  p.rect(cx + 1 + Math.round(st), G - 1, cx + 4 + Math.round(st), G - 1, hx('#0a0808'));
-  // Часовая стрелка-булава: ромб на железной рукояти.
-  const club = (x0: number, y0: number, x1: number, y1: number) => {
-    stroke(p, x0, y0, x1, y1, IRON[2], 2);
-    poly(
-      p,
-      [
-        [x1 - 2.4, y1],
-        [x1, y1 - 3],
-        [x1 + 2.4, y1],
-        [x1, y1 + 3],
-      ],
-      BRASS[2],
-    );
-    p.set(Math.round(x1), Math.round(y1), BRASS[0]);
-    p.set(Math.round(x1 - 1), Math.round(y1 - 1), BRASS[3]);
-  };
-  if (o.club === 'up') club(cx - 5, 13, cx - 3, 1.5);
-  else if (o.club === 'rest') club(cx - 6, 15, cx - 10, 23);
-  // Сюртук.
-  polyShade(
-    p,
-    [
-      [cx - 6, 11],
-      [cx + 6, 11],
-      [cx + 7, 26],
-      [cx - 7, 26],
-    ],
-    NAVY,
-    0.05,
-  );
-  for (let y = 12; y < 26; y++) {
-    p.set(cx - 6 - (y > 22 ? 1 : 0), y, BRASS[1]);
-    p.set(cx + 6 + (y > 22 ? 1 : 0), y, BRASS[2]);
-  }
-  // Эполеты.
-  shadeEll(p, cx - 5.5, 11.5, 2, 1.3, BRASS, 0.2);
-  shadeEll(p, cx + 5.5, 11.5, 2, 1.3, BRASS, 0.2);
-  // Циферблат на груди: переводит — стрелки бегут, светится.
-  dialFace(
-    p,
-    cx,
-    18,
-    5,
-    o.spin ? (o.f / 4) * TAU * 3 : (o.f / 16) * TAU,
-    o.spin ? (o.f / 4) * TAU : 2.2,
-    {
-      glow: o.spin ? AMBER : null,
-    },
-  );
-  // Шлем-колокол со шпилем, щель глаз.
-  polyShade(
-    p,
-    [
-      [cx - 5, 10],
-      [cx + 5, 10],
-      [cx + 3.5, 3.5],
-      [cx - 3.5, 3.5],
-    ],
-    BRASS,
-    0.1,
-  );
-  shadeEll(p, cx, 4, 3.6, 1.8, BRASS, 0.2);
-  stroke(p, cx, 2.5, cx, 0.5, BRASS[3]);
-  p.rect(cx - 3, 7, cx + 3, 7, INK);
-  if (o.club === 'down') club(cx + 4, 15, cx + 11, 22);
-  // Минутная стрелка-копьё (правая рука): угол `lance`.
-  const la = o.lance;
-  const lx0 = cx + 6;
-  const ly0 = 16;
-  const lx1 = lx0 + Math.cos(la) * 12;
-  const ly1 = ly0 + Math.sin(la) * 12;
-  stroke(p, lx0, ly0, lx1, ly1, BRASS[2]);
-  stroke(p, lx0, ly0 + 1, lx1, ly1 + 1, BRASS[0]);
-  const ax = Math.cos(la);
-  const ay = Math.sin(la);
-  poly(
-    p,
-    [
-      [lx1 + ax * 3.5, ly1 + ay * 3.5],
-      [lx1 - ay * 1.9, ly1 + ax * 1.9],
-      [lx1 + ay * 1.9, ly1 - ax * 1.9],
-    ],
-    BRASS[3],
-  );
-  shadeEll(p, lx0, ly0, 1.4, 1.4, SKIN, 0.1);
-  p.outline(INK);
-  p.set(cx + 1, 7, AMBER);
-  p.set(cx + 2, 7, hx('#fff0b0'));
-  return { p, ax: cx, ay: G, eye: [cx + 2, 7] };
-}
-
-registerMobPainter('f14_keeper', (_m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame % 16;
-  let anim = 'idle';
-  let fr = f;
-  let o: KeeperPose = { f, legs: 0, lance: 0.9, club: 'rest', spin: false };
-  const gray = mode === 'f14_frozen';
-  if (gray) {
-    anim = 'tableau';
-    fr = 0;
-    o = { f: 3, legs: 1, lance: 0.2, club: 'up', spin: false };
-  } else if (mode === 'f14_hour') {
-    const down = pose.t > 0.62;
-    anim = down ? 'hourD' : 'hourU';
-    fr = 0;
-    o = { f: 0, legs: 0, lance: 1.3, club: down ? 'down' : 'up', spin: false };
-  } else if (mode === 'f14_minute') {
-    anim = 'min';
-    fr = Math.min(2, Math.floor(pose.t / 0.18));
-    o = { f: 0, legs: 0, lance: -0.55 + fr * 0.55, club: 'rest', spin: false };
-  } else if (mode === 'f14_haste') {
-    anim = 'haste';
-    fr = Math.floor(pose.t * 12) % 4;
-    o = { f: fr, legs: 0, lance: 1, club: 'rest', spin: true };
-  } else if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-  } else if (pose.anim === 'run') {
-    anim = 'run';
-    fr = f % 4;
-    o = { f, legs: fr, lance: 0.9, club: 'rest', spin: false };
-  } else if (pose.anim === 'hurt') {
-    anim = 'hurt';
-    fr = 0;
-    o = { f: 0, legs: 0, lance: 1.4, club: 'rest', spin: false };
-  }
-  return frameOf(
-    'f14_keeper',
-    pose,
-    anim,
-    fr,
-    () => {
-      const b = drawKeeper(o);
-      if (anim === 'dead') b.p = scatter(b.p, fr, 13, [BRASS[3], ENAMEL[3], NAVY[2]]);
-      return b;
-    },
-    gray,
-  );
 });
 
 // ---------------------------------------------------------------------------
