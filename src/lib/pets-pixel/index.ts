@@ -28,7 +28,7 @@ export interface PixelPet {
   frame: (a: Anim, i: number, res: Res, v?: number) => Px;
   /**
    * Рисует ли золотой (`[1]`) сам рисовальщик; иначе post.py делает его матрицей
-   * фильтра. Радужного (2) нет с v2.110.
+   * фильтра. Радужного (2) нет с v2.111.
    */
   variants?: number[];
 }

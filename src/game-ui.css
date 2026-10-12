@@ -7838,7 +7838,7 @@ button.fg-slot {
   animation: pch-rays 16s linear infinite;
   pointer-events: none;
 }
-/* Мифический — кольцом своего цвета (v2.110: радуги у питомцев нет). */
+/* Мифический — кольцом своего цвета (v2.111: радуги у питомцев нет). */
 .pet.r5 .pet__rays {
   background: conic-gradient(var(--rc), var(--rl), var(--rc), var(--rl), var(--rc));
   -webkit-mask: radial-gradient(closest-side, transparent 38%, #000 52%, transparent 70%);
@@ -8417,7 +8417,7 @@ button.fg-slot {
   flex-wrap: wrap;
   gap: 6px;
 }
-/* Скин золотого (v2.110): обычный или золотой рисунок; сила и имя — по ступени. */
+/* Скин золотого (v2.111): обычный или золотой рисунок; сила и имя — по ступени. */
 .ppn-skin {
   display: flex;
   justify-content: center;

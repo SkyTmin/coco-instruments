@@ -15,7 +15,7 @@ each drawn by the pet's own painter at its own resolution):
   * a golden copy of every strip and of the thumb (<anim>-v1.webp, thumb-v1): the colour matrix
     of the CSS filter (or the painter's own golden drawing) plus a 1–2 px pixel glow, baked — PetArt
     drops the CSS filter for pixel pets (a filter on a long strip rasterises the whole strip).
-    There is no rainbow tier since v2.110;
+    There is no rainbow tier since v2.111;
   * the pet's folder is emptied first: the ink strips of a pet that went pixel do not linger;
   * src/lib/pet-pixel-sprites.ts gets the pet's strips in ART PIXELS relative to the body box's
     top-left corner and the pet's own revision (sha1 of its files): the game asks ?v=<rev>, so a
@@ -117,7 +117,7 @@ def m_hue(deg):
 
 
 # CSS: v1 — sepia(0.8) saturate(2.2) hue-rotate(-12deg) brightness(1.06) + золотое свечение.
-# Радужного (v2) нет с v2.110: владелец убрал ступень.
+# Радужного (v2) нет с v2.111: владелец убрал ступень.
 VARIANTS = {
     1: ([m_sepia(0.8), m_saturate(2.2), m_hue(-12), np.eye(3) * 1.06],
         [((255, 200, 60), 215), ((255, 200, 60), 95)]),

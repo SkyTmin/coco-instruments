@@ -85,7 +85,7 @@ describe('пиксельные питомцы', () => {
   });
 });
 
-describe('без радужной ступени (v2.110)', () => {
+describe('без радужной ступени (v2.111)', () => {
   it('у пиксельных есть обычный и золотой, полос радужного нет', () => {
     for (const id of Object.keys(PET_PX)) {
       const files = fs.readdirSync(`public/ui/pets/${id}`);
@@ -124,7 +124,7 @@ describe('пиксельный дракон', () => {
       }
       expect(PIXEL_PETS.dragon.anims[a]).toEqual({ n: D.FRAMES[a], fps: D.FPS });
     }
-    // Радужного нет (v2.110): только золотой свой; полос `-v2` в игре нет.
+    // Радужного нет (v2.111): только золотой свой; полос `-v2` в игре нет.
     expect(PIXEL_PETS.dragon.variants).toEqual([1]);
     for (const p of Object.values(PIXEL_PETS)) expect(p.variants ?? []).not.toContain(2);
     expect(PIXEL_PETS.phoenix.variants).toBeUndefined();

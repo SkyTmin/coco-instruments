@@ -13,7 +13,7 @@ paths:
 <!-- Перенесено из CLAUDE.md дословно (v2.87): грузится, только когда
      открыт файл из `paths`. Тема: Питомцы: правила, яйца и гнёзда, рисунок тушью, кадры. -->
 
-## Tiers and skins (v2.110) — `lib/pets.ts`, `PetsTab.tsx` (`PetSheet`), `PetArt.tsx`
+## Tiers and skins (v2.111) — `lib/pets.ts`, `PetsTab.tsx` (`PetSheet`), `PetArt.tsx`
 
 Owner: «добавь возможность выбирать скин у питомца — обычный или золотой» and «уберём вообще
 радужный цвет… как будто повестка»; asked about the tier — «убрать ступень совсем».
@@ -29,7 +29,7 @@ Owner: «добавь возможность выбирать скин у пит
   pet never has dups after it). Pet KEYS are current since schema 3 (`KEYS_V` in
   `petFromSave` — don't compare keys with `PETS_V`). Old clients read a v4 save fine (keys ≥ 3).
   Both store load paths go through `normalizePrison`; `server.js` does not inspect pets. Tests:
-  `pets.test.ts` «v2.110: …» (rainbow, gold dups, normal, v1/v2 schemas, merged old keys,
+  `pets.test.ts` «v2.111: …» (rainbow, gold dups, normal, v1/v2 schemas, merged old keys,
   `normalizePrison` round trip).
 - **Skin** — optional `PetRec.skin` (0/1), only up to `v`; missing → the tier's look; a skin
   equal to the tier is not stored (`setPetSkin` drops it, `normalizePets` too); `mergePet`
@@ -89,7 +89,7 @@ Owner: «добавь возможность выбирать скин у пит
   просмотра), игру не трогают. Рисунок детерминирован. Полный прогон ~3 мин
   (пружины вторичного считаются заново на кадр).
 - **Золотой запечён** (`<anim>[-l]-v1.webp`, `thumb-v1`; радужного нет
-  с v2.110): матрица того же CSS-фильтра (Filter Effects 1, sRGB,
+  с v2.111): матрица того же CSS-фильтра (Filter Effects 1, sRGB,
   обрезка после каждой функции) + пиксельный ореол 2 кольца от «тела»
   (пиксели с ≥2 соседями — одиночные искры без ореола). CSS-фильтр на
   длинной полосе растеризовал её целиком: в карточке золотой был без птицы.
@@ -146,7 +146,7 @@ Owner: «добавь возможность выбирать скин у пит
   пишет `<anim>-v1.rgba`, `post.py` (`load_own`) берёт его вместо матрицы
   фильтра, ореол — общий; обрезка по объединению обоих. У Феникса
   `variants` нет — путь прежний. Радужный дракона (оттенок ступенями по
-  высоте модели) удалён в v2.110 вместе со ступенью.
+  высоте модели) удалён в v2.111 вместе со ступенью.
 - **Вес** дракона — ~0,65 МБ: малая 65 / 72 КБ (обычный / золотой),
   крупная 245 / 267 КБ, значки по 1 КБ (тушью было ~2,0 МБ на один вариант).
 - **Вес** Феникса — ~0,74 МБ всех полос: малая 74 / 86 КБ (обычный /
@@ -422,7 +422,7 @@ Owner: «добавь возможность выбирать скин у пит
   другой дорогой. Подбор: `PETK=0.5 EGGP=… EGGN=… EGGK=… PACE=1 npx vitest
   run src/lib/prison.test.ts -t "A→Z — четыре"`.
 - **Копии не пропадают**: 5 одинаковых — золотой (×1,5), дальше копия —
-  лакомство (радужный ×2,5 убран в v2.110, см. «Tiers and skins»). Коллекция: +1% к
+  лакомство (радужный ×2,5 убран в v2.111, см. «Tiers and skins»). Коллекция: +1% к
   продаже за вид, весь зоопарк — ещё +10% (внутри общего потолка продажи).
 - **Бросок вылупления — в сторе** (`prisonHatch`, со сбросом на диск), сцена
   (`HatchScene`) только показывает. Трещины светятся цветом редкости ДО
