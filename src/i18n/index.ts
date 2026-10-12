@@ -23,6 +23,7 @@ export {
   subscribeLang,
   hasKey,
   fmtNum,
+  fmtShort,
   fmtDec,
   fmtDate,
   upper,

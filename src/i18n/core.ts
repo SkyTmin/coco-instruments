@@ -198,6 +198,18 @@ export function fmtNum(n: number, l: Lang = lang): string {
   return nf(l, 0).format(Math.round(n));
 }
 
+/**
+ * Short money like the old `shortMoney`: below 10 000 in full, above — the
+ * language's compact form (ru «12,3 тыс.», «1,2 млн»; en «12.3K»; de «1,2 Mio.»).
+ */
+export function fmtShort(n: number, l: Lang = lang): string {
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) < 1e4) return fmtNum(n, l);
+  return new Intl.NumberFormat(LOCALE[l], { notation: 'compact', maximumFractionDigits: 1 }).format(
+    n,
+  );
+}
+
 /** Number with up to `digits` decimals in the language's style («1,5» / «1.5»). */
 export function fmtDec(n: number, digits = 1, l: Lang = lang): string {
   if (!Number.isFinite(n)) return '—';
