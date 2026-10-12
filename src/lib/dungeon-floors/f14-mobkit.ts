@@ -171,6 +171,8 @@ export interface Vis {
   /** Прошлый кадр (держится, когда бюджет новых кадров исчерпан). */
   last: MobFrame | null;
   lastK: Kind | null;
+  /** Нарисованная сторона (с запасом у границы сектора — `sideOf`); −1 — ещё нет. */
+  side: number;
 }
 const VIS = new WeakMap<Mob, Vis>();
 
@@ -242,6 +244,7 @@ export function visOf(m: Mob, pose: MobPose, want: number, turn: number): Vis {
       ky: 0,
       last: null,
       lastK: null,
+      side: -1,
     };
     knockOf(v, m);
     VIS.set(m, v);
@@ -271,6 +274,18 @@ export function visOf(m: Mob, pose: MobPose, want: number, turn: number): Vis {
   cur = v;
   curFresh = false;
   return v;
+}
+
+/**
+ * Сторона рисунка с запасом `hyst` (рад) у границы сектора: курс, что
+ * виляет у границы (зигзаг погони), не дёргает сторону туда-сюда.
+ */
+export function sideOf(v: Vis, hyst = 0.14): number {
+  const d = dirN(v.yaw);
+  if (v.side < 0 || d === v.side) return (v.side = d);
+  const c = (v.side / NDIR) * TAU;
+  if (Math.abs(angD(v.yaw, c)) < PI / NDIR + hyst) return v.side;
+  return (v.side = d);
 }
 
 /** Фаза шага 0…1 по пройденному пути (`stride` — клеток на цикл). */

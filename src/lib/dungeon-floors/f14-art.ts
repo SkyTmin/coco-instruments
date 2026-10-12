@@ -32,6 +32,7 @@ import type { Dir4 } from '../dungeon-sprites';
 import { F14_DIAL, F14_GEO, F14_MARK, F14_MECH, F14_SAND, F14_TOP } from './f14';
 import { MAP_F14_DIAL, MAP_F14_SAND } from './f14-map';
 import { F14_FX, KNIFE_ANG, LORD, NOON, REAPER, rewindTrail, worldStopped } from './f14-brains';
+import './f14-mob-beetle';
 import './f14-mob-soldier';
 
 type RGBA = [number, number, number, number];
@@ -1070,88 +1071,6 @@ registerMobPainter('f14_reaper', (m: Mob, pose: MobPose) => {
     },
     gray,
   );
-});
-
-// ---------------------------------------------------------------------------
-// Шестерёнчатый жук: панцирь — половина латунной шестерни, железные ножки,
-// бирюзовый глаз; катится — целая шестерня. Кадр 20×16, земля 14.
-// ---------------------------------------------------------------------------
-
-interface BeetlePose {
-  legs: number;
-  roll: number;
-  curl: number;
-}
-
-function drawBeetle(o: BeetlePose): Built {
-  const p = new Px(20, 16);
-  const G = 14;
-  const cx = 9;
-  if (o.roll >= 0) {
-    cog(p, cx, 7.5, 6.4, 10, (o.roll / 4) * (TAU / 10), BRASS, {
-      hole: 1.5,
-      spokes: 0,
-      dark: BRASS[0],
-    });
-    p.outline(INK);
-    p.set(cx + 2, 6, TEAL_GLOW);
-    return { p, ax: cx, ay: G, eye: [cx + 2, 6] };
-  }
-  // Ножки: три пары, шаг.
-  for (let i = 0; i < 3; i++) {
-    const x = cx - 3 + i * 3;
-    const s = ((o.legs + i) % 2 ? 1 : -1) * 0.8;
-    stroke(p, x, 10, x + s - 1, G - 1, IRON[2]);
-    p.set(Math.round(x + s - 1), G - 1, IRON[3]);
-  }
-  // Панцирь — половина шестерни зубьями вверх.
-  const tmp = new Px(20, 16);
-  cog(tmp, cx, 11, 6.4 - o.curl * 0.6, 10, 0.16, BRASS, { hole: 1.2, spokes: 0 });
-  for (let y = 0; y <= 11; y++)
-    for (let x = 0; x < 20; x++) if (tmp.solid(x, y)) p.set(x, y, tmp.get(x, y));
-  // Брюшко и голова.
-  p.rect(cx - 5, 10, cx + 4, 11, IRON[1]);
-  shadeEll(p, cx + 6, 9.5, 2, 1.8, IRON, 0.1);
-  stroke(p, cx + 7.5, 10.5, cx + 9, 11.5, IRON[3]);
-  p.outline(INK);
-  p.set(cx + 6, 9, TEAL_GLOW);
-  return { p, ax: cx, ay: G, eye: [cx + 6, 9] };
-}
-
-registerMobPainter('f14_beetle', (_m: Mob, pose: MobPose) => {
-  const mode = pose.mode;
-  const f = pose.frame % 4;
-  let anim = 'idle';
-  let fr = f;
-  let o: BeetlePose = { legs: 0, roll: -1, curl: 0 };
-  if (mode === 'f14_roll') {
-    anim = 'roll';
-    fr = Math.floor(pose.t * 24) % 4;
-    o = { legs: 0, roll: fr, curl: 0 };
-  } else if (mode === 'f14_curl') {
-    anim = 'curl';
-    fr = Math.min(2, Math.floor(pose.t / 0.2));
-    o = { legs: 0, roll: fr >= 2 ? 0 : -1, curl: fr };
-  } else if (mode === 'dying') {
-    anim = 'dead';
-    fr = deathK(pose);
-  } else if (mode === 'dizzy') {
-    anim = 'dizzy';
-    fr = Math.floor(pose.t * 6) % 4;
-  } else if (pose.anim === 'run') {
-    anim = 'run';
-    o = { legs: f, roll: -1, curl: 0 };
-  } else if (pose.anim === 'wind') {
-    anim = 'wind';
-    fr = 0;
-    o = { legs: 1, roll: -1, curl: 1 };
-  } else fr = 0;
-  return frameOf('f14_beetle', pose, anim, fr, () => {
-    const b = drawBeetle(o);
-    if (anim === 'dizzy') stars(b.p, b.ax, 2, 4, fr);
-    if (anim === 'dead') b.p = scatter(b.p, fr, 11, [BRASS[3], IRON[3], TEAL_GLOW]);
-    return b;
-  });
 });
 
 // ---------------------------------------------------------------------------
