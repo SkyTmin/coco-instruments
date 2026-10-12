@@ -77,7 +77,8 @@ for (const piece of PIECES) {
     const rep = piece.repeat ?? 'stretch';
     const m = measureSlice(p, rep, piece.fixedH);
     const d = piece.slice ?? m;
-    if (m.join() !== d.join()) bad.push(`${piece.name}: declared ${d.join(' ')}, pixels say ${m.join(' ')}`);
+    if (m.join() !== d.join())
+      bad.push(`${piece.name}: declared ${d.join(' ')}, pixels say ${m.join(' ')}`);
     // Widths are NUMBERS: multiples of the element's border-width, which the kit sets to one art
     // pixel (`border: var(--u) solid transparent`) — the frame follows `--ui-scale` wherever set.
     root.push(
@@ -94,9 +95,13 @@ for (const piece of PIECES) {
       `.pxi-${piece.name.slice(2)} {\n  -webkit-mask-image: ${url};\n  mask-image: ${url};\n  --i-w: ${p.w};\n  --i-h: ${p.h};\n}`,
     );
   } else if (piece.kind === 'tile') {
-    css.push(`.pxt-${piece.name.slice(5)} {\n  --tile: ${url};\n  --tile-w: ${p.w};\n  --tile-h: ${p.h};\n}`);
+    css.push(
+      `.pxt-${piece.name.slice(5)} {\n  --tile: ${url};\n  --tile-w: ${p.w};\n  --tile-h: ${p.h};\n}`,
+    );
   } else {
-    root.push(`  --pximg-${piece.name}: ${url};\n  --pximg-${piece.name}-w: ${p.w};\n  --pximg-${piece.name}-h: ${p.h};`);
+    root.push(
+      `  --pximg-${piece.name}: ${url};\n  --pximg-${piece.name}-w: ${p.w};\n  --pximg-${piece.name}-h: ${p.h};`,
+    );
   }
 }
 if (bad.length) {
@@ -104,7 +109,8 @@ if (bad.length) {
   process.exit(1);
 }
 // Buttons: one block per variant and state (the frame of a state = 3 vars, picked by `.px-btn`).
-const vars = (n: string) => `--b: var(--pxk-${n});\n  --bs: var(--pxk-${n}-s);\n  --bw: var(--pxk-${n}-w);`;
+const vars = (n: string) =>
+  `--b: var(--pxk-${n});\n  --bs: var(--pxk-${n}-s);\n  --bw: var(--pxk-${n}-w);`;
 for (const m of ['gold', 'iron', 'red', 'green']) {
   css.push(
     `.px-btn--${m} {\n  ${vars(`btn-${m}-n`)}\n}`,
@@ -118,4 +124,6 @@ for (const piece of PIECES.filter((x) => x.name.startsWith('slot-r')))
   css.push(`.px-slot--${piece.name.slice(5)} {\n  ${vars(piece.name)}\n}`);
 css.splice(1, 0, `:root {\n${root.join('\n')}\n}`);
 fs.writeFileSync(CSS, css.join('\n\n') + '\n');
-console.log(`ui-px: ${PIECES.length} pieces, ${(bytes / 1024).toFixed(1)} KB → public/ui/kit/, kit.gen.css`);
+console.log(
+  `ui-px: ${PIECES.length} pieces, ${(bytes / 1024).toFixed(1)} KB → public/ui/kit/, kit.gen.css`,
+);

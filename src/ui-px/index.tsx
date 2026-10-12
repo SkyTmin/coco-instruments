@@ -449,9 +449,7 @@ export function Grid({
   className,
   children,
   ...rest
-}: PropsWithChildren<
-  { cols?: number; slot?: number } & HTMLAttributes<HTMLDivElement>
->) {
+}: PropsWithChildren<{ cols?: number; slot?: number } & HTMLAttributes<HTMLDivElement>>) {
   const style = {
     ...(cols ? { '--cols': cols } : {}),
     ...(slot ? { '--slot': `calc(${slot} * var(--u))` } : {}),
@@ -495,11 +493,7 @@ export function Modal({
     };
   }, []);
   return createPortal(
-    <div
-      className={cx('px px-veil', sheet && 'px-veil--sheet')}
-      data-ui-layer=""
-      onClick={onClose}
-    >
+    <div className={cx('px px-veil', sheet && 'px-veil--sheet')} data-ui-layer="" onClick={onClose}>
       <div
         className={cx('px-modal', className)}
         style={width ? ({ '--mw': width } as CSSProperties) : undefined}

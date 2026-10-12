@@ -42,7 +42,8 @@ describe('ui-px: пиксельный набор', () => {
       expect(frames.some((p) => p.name === `slot-r${r}`)).toBe(true);
     for (const piece of PIECES) {
       const d = piece.draw().data;
-      for (let i = 3; i < d.length; i += 4) expect(d[i] === 0 || d[i] === 255, piece.name).toBe(true);
+      for (let i = 3; i < d.length; i += 4)
+        expect(d[i] === 0 || d[i] === 255, piece.name).toBe(true);
     }
   });
 

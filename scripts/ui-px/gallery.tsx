@@ -42,8 +42,24 @@ const LANGS: [string, string][] = [
   ['it', 'Allevamento · Volpe baro · Epico · Liv. 15 · Perché più così'],
 ];
 const ICONS: PxIconName[] = [
-  'x', 'plus', 'check', 'lock', 'left', 'right', 'up', 'down', 'star', 'heart', 'paw', 'sort',
-  'filter', 'play', 'info', 'sword', 'bolt', 'zzz',
+  'x',
+  'plus',
+  'check',
+  'lock',
+  'left',
+  'right',
+  'up',
+  'down',
+  'star',
+  'heart',
+  'paw',
+  'sort',
+  'filter',
+  'play',
+  'info',
+  'sword',
+  'bolt',
+  'zzz',
 ];
 const hover = (m: string) =>
   ({
@@ -56,7 +72,15 @@ function Sec({ title, children }: { title: string; children: React.ReactNode }) 
   return (
     <section style={{ margin: '0 0 calc(8 * var(--u))' }}>
       <Heading>{title}</Heading>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'calc(4 * var(--u))', marginTop: 'calc(3 * var(--u))', alignItems: 'flex-start' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 'calc(4 * var(--u))',
+          marginTop: 'calc(3 * var(--u))',
+          alignItems: 'flex-start',
+        }}
+      >
         {children}
       </div>
     </section>
@@ -67,7 +91,15 @@ function Gallery() {
   const [tab, setTab] = useState<'a' | 'b' | 'c'>('a');
   const [modal, setModal] = useState(q.has('modal'));
   return (
-    <div className="px" style={{ padding: 'calc(6 * var(--u))', height: '100dvh', overflow: 'auto', boxSizing: 'border-box' }}>
+    <div
+      className="px"
+      style={{
+        padding: 'calc(6 * var(--u))',
+        height: '100dvh',
+        overflow: 'auto',
+        boxSizing: 'border-box',
+      }}
+    >
       <Sec title="Type">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(2 * var(--u))' }}>
           <Heading big>Coco Head — Питомник 123</Heading>
@@ -88,7 +120,11 @@ function Gallery() {
             {m}
           </Panel>
         ))}
-        <Panel material="stone" stage style={{ width: 'calc(80 * var(--u))', height: 'calc(50 * var(--u))' }}>
+        <Panel
+          material="stone"
+          stage
+          style={{ width: 'calc(80 * var(--u))', height: 'calc(50 * var(--u))' }}
+        >
           stage
         </Panel>
       </Sec>
@@ -96,7 +132,12 @@ function Gallery() {
         {(['primary', 'secondary', 'danger', 'confirm'] as const).map((k) => (
           <div key={k} style={{ display: 'flex', gap: 'calc(3 * var(--u))', flexWrap: 'wrap' }}>
             <Button kind={k}>{k}</Button>
-            <Button kind={k} style={hover({ primary: 'gold', secondary: 'iron', danger: 'red', confirm: 'green' }[k])}>
+            <Button
+              kind={k}
+              style={hover(
+                { primary: 'gold', secondary: 'iron', danger: 'red', confirm: 'green' }[k],
+              )}
+            >
               hover
             </Button>
             <Button kind={k} className="is-down">
@@ -141,7 +182,11 @@ function Gallery() {
         <Grid style={{ width: '100%' }}>
           {RARITIES.map((r, i) => (
             <Slot key={r.id} rarity={i} count={i * 3 + 1} corner={i === 4 ? '★' : undefined}>
-              <PetArt id={(['mole', 'mouse', 'owl', 'fox', 'raven', 'phoenix', 'dragon'] as const)[i]} size={40} still />
+              <PetArt
+                id={(['mole', 'mouse', 'owl', 'fox', 'raven', 'phoenix', 'dragon'] as const)[i]}
+                size={40}
+                still
+              />
             </Slot>
           ))}
           <Slot rarity={3} selected>
@@ -171,7 +216,14 @@ function Gallery() {
         <Badge gold>NEW</Badge>
         <Badge>•</Badge>
         <Heading ribbon>Питомник</Heading>
-        <div style={{ display: 'flex', gap: 'calc(3 * var(--u))', color: 'var(--px-gold)', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 'calc(3 * var(--u))',
+            color: 'var(--px-gold)',
+            flexWrap: 'wrap',
+          }}
+        >
           {ICONS.map((n) => (
             <Icon key={n} name={n} />
           ))}
@@ -195,7 +247,13 @@ function Gallery() {
             <p className="px-inspect__lore">Держит туза в рукаве и монету за ухом.</p>
           </Inspect>
         </Panel>
-        <div style={{ position: 'relative', width: 'calc(120 * var(--u))', height: 'calc(40 * var(--u))' }}>
+        <div
+          style={{
+            position: 'relative',
+            width: 'calc(120 * var(--u))',
+            height: 'calc(40 * var(--u))',
+          }}
+        >
           <div style={{ position: 'absolute', inset: 0, transform: 'translateZ(0)' }}>
             <Tooltip x={120} y={70}>
               <b style={{ color: RARITIES[4].color }}>Ворон-ключник</b>

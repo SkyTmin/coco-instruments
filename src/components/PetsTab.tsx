@@ -44,14 +44,7 @@ import type { EggId, PetId, PetStat } from '@/lib/pets';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { registerEscape } from '@/lib/escape-stack';
-import {
-  eggCrack,
-  eggHatch,
-  eggWobble,
-  primeAudio,
-  uiBuy,
-  uiError,
-} from '@/lib/sound';
+import { eggCrack, eggHatch, eggWobble, primeAudio, uiBuy, uiError } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
