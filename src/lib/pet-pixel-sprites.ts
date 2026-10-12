@@ -24,7 +24,7 @@ export interface PetPx extends PetPxSet {
 export const PET_PX: Record<string, PetPx> = {
   badger: {
     box: 48,
-    rev: 'ac29500056',
+    rev: '767d02a95a',
     anims: {
       idle: { n: 72, fps: 24, x: 5, y: -2, w: 37, h: 51 },
       walk: { n: 24, fps: 24, x: 3, y: -2, w: 42, h: 51 },

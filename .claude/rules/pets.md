@@ -277,7 +277,8 @@ Owner: «добавь возможность выбирать скин у пит
   slumped, hat tipped over the eyes (head nod only 0.06 — a nodded head showed just the hat
   dome), mouth and cheeks visible under the brim, zzz. Gold: fur gold with bronze depth, bands
   and arms dark YELLOW bronze (red-brown read as chocolate), white → pale gold, hat redder.
-  Hatch plays `happy`. Weight WEIGHT_TBD. Tests «пиксельный барсук» in `pets-pixel.test.ts`.
+  Hatch plays `happy`. Weight 528 KB v0+v1 (small 56 / 62,
+  large 197 / 211, thumbs 1 KB; ink was 1.64 MB). Tests «пиксельный барсук» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;
