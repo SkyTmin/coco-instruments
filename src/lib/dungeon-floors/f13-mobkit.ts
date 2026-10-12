@@ -318,6 +318,7 @@ const SHEET_PREV = [
   'f13_pop',
   'stun',
   'drop',
+  'f13_broken',
 ];
 
 export const speedOf = (m: Mob) => Math.hypot(m.vx ?? 0, m.vy ?? 0);
@@ -746,14 +747,19 @@ export const WARM_POSE: MobPose = {
   now: 0,
 };
 
-/** Прогрев: кадры поз во всех 8 сторонах, по одному на шаг. */
+const ALL_DIRS = [0, 1, 2, 3, 4, 5, 6, 7];
+/**
+ * Прогрев: кадры поз во всех 8 сторонах (или в рисуемых `sides`, если
+ * остальные — зеркало), по одному на шаг.
+ */
 export function* warmAll(
   K: Kind,
   list: [string, number][],
   pic: (a: string, f: number, d: number) => Pic,
+  sides: readonly number[] = ALL_DIRS,
 ) {
   for (const [anim, n] of list)
-    for (let d = 0; d < NDIR; d++)
+    for (const d of sides)
       for (let f = 0; f < n; f++) {
         if (K.frames.get(`${anim}|${f}|${d}`)) continue;
         F13_MOB_STAT.warming = true;

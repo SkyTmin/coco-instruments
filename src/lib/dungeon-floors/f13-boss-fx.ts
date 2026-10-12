@@ -42,6 +42,7 @@ import './f13-mob-ballerina';
 import './f13-mob-fiddler';
 import './f13-mob-harlequin';
 import './f13-mob-knight';
+import './f13-mob-masks';
 
 type G = CanvasRenderingContext2D;
 const TS = 16;
