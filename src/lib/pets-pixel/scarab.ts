@@ -357,7 +357,7 @@ const CLY_C: V3 = [0, 11.8, -1.4];
 const CLY_R: V3 = [7.4, 4.6, 1.1];
 const CLY_TILT = 0.22;
 const EYE: V3 = [3.2, 11.0, 1.6];
-const ANT: V3 = [4.4, 11.6, -0.4];
+const ANT: V3 = [4.8, 12.4, -1.0];
 /** Бороздки надкрылий (крупная). */
 const STRIAE = [0.3, 0.55, 0.77];
 
@@ -516,8 +516,8 @@ const REST: Pose = (() => {
     nod: 0,
     hturn: 0,
     breath: 0,
-    fanL: 0.3,
-    fanR: 0.3,
+    fanL: 0.42,
+    fanR: 0.42,
     antL: 0,
     antR: 0,
     ely: 0,
@@ -614,8 +614,8 @@ function idlePose(t: number): Pose {
   o.hturn = 0.1 * Math.sin((TAU * t) / T + 1.2);
   o.nod = 0.04 * Math.sin((TAU * t) / T * 2 + 0.3);
   // Веера булав раскрываются и складываются вразнобой.
-  o.fanL = 0.3 + 0.32 * pos(Math.sin((TAU * t) / T * 2 + 0.4)) + 0.4 * bump(wrap(t - 0.2, T), 0, 0.5);
-  o.fanR = 0.3 + 0.32 * pos(Math.sin((TAU * t) / T * 2 + 2.2)) + 0.4 * bump(wrap(t - 1.6, T), 0, 0.5);
+  o.fanL = 0.42 + 0.3 * pos(Math.sin((TAU * t) / T * 2 + 0.4)) + 0.3 * bump(wrap(t - 0.2, T), 0, 0.5);
+  o.fanR = 0.42 + 0.3 * pos(Math.sin((TAU * t) / T * 2 + 2.2)) + 0.3 * bump(wrap(t - 1.6, T), 0, 0.5);
   o.antL = 0.15 * Math.sin((TAU * t) / T + 0.5);
   o.antR = 0.15 * Math.sin((TAU * t) / T + 2.1);
   for (const [i, t0, L] of TAPS) {
@@ -1244,9 +1244,9 @@ function attackPose(t: number): Pose {
 }
 
 /** Сон: прижался боком к своему шару, щиток на земле, усики сложены, дышит. */
-const SLEEP_BALL_R = 5.4;
+const SLEEP_BALL_R = 7.2;
 const SLEEP_BALL: V3 = (() => {
-  const p = yawZ([12.6 * KB, 3.6 * KB, 0], YAW0);
+  const p = yawZ([10.4 * KB + SLEEP_BALL_R, 4.2 * KB, 0], YAW0);
   return [ROOT0.x + p[0], ROOT0.y + p[1], SLEEP_BALL_R];
 })();
 function sleepPose(t: number): Pose {
@@ -1491,13 +1491,13 @@ function bodyParts(out: PartF[], c: Ctx): void {
     for (const s of [-1, 1]) {
       const e = o.ely;
       const hg: V3 = [s * 1.2, ELY_C[1] + ELY_R[1] * 0.78, ELY_C[2] + ELY_R[2] * 0.55];
-      const turn = (v: V3): V3 => pitchX(rollY(v, -s * 0.95 * e), 0.42 * e);
+      const turn = (v: V3): V3 => yawZ(pitchX(rollY(v, -s * 0.55 * e), 0.85 * e), -s * 0.5 * e);
       const cc = add(hg, turn(sub(ec, hg)));
       const hax: [V3, V3, V3] = [F.Rd(turn([1, 0, 0])), F.Rd(turn([0, 1, 0])), F.Rd(turn([0, 0, 1]))];
       out.push({
         c: bodyAt(F, cc),
         ax: hax,
-        r: F.sq(kb(er)),
+        r: F.sq(kb([er[0] * (1 - 0.35 * e), er[1], er[2] * (1 - 0.1 * e)])),
         pal: P_SHELL,
         id: nid(),
         lk: SHELL_LK,
@@ -1543,9 +1543,10 @@ function bodyParts(out: PartF[], c: Ctx): void {
       c: headAt(F, [s * EYE[0], EYE[1] - 0.5, EYE[2] - 0.6]),
       ax: hax,
       r: [1.7 * KB, 1.6 * KB, 1.5 * KB],
-      pal: P_BODY,
+      pal: P_HEAD,
       id: nid(),
-      bias: -0.1,
+      lk: HEAD_LK,
+      bias: -0.04,
       noSeam: true,
     });
   const tilt = (v: V3) => pitchX(v, CLY_TILT);
@@ -1603,8 +1604,8 @@ function antGeo(o: Pose, F: BodyF, lag: Lag, s: number) {
   const up = (s < 0 ? o.antL : o.antR) + (s < 0 ? lag.aL : lag.aR);
   const fan = clamp01((s < 0 ? o.fanL : o.fanR) + (s < 0 ? lag.fL : lag.fR));
   const base = headAt(F, [s * ANT[0], ANT[1], ANT[2]]);
-  const dRest: V3 = [s * 0.86, 0.12, 0.48];
-  const dUp: V3 = [s * 0.4, 0.0, 0.92];
+  const dRest: V3 = [s * 0.86, -0.25, 0.5];
+  const dUp: V3 = [s * 0.4, -0.12, 0.92];
   const dBack: V3 = [s * 0.55, -0.7, 0.35];
   const dl = up >= 0 ? lerp3(dRest, dUp, Math.min(1, up)) : lerp3(dRest, dBack, Math.min(1, -up));
   const d = norm(F.HRd(dl));
@@ -1625,14 +1626,14 @@ function antennae(out: PartF[], c: Ctx): void {
     const sid = nid();
     limb(out, base, elbow, HI ? 0.42 : 0.5, HI ? 0.42 : 0.5, P_BODY, sid, { tube: true, bias: 0.1 });
     limb(out, elbow, tip, HI ? 0.38 : 0.45, HI ? 0.38 : 0.45, P_BODY, sid, { tube: true, bias: 0.12 });
-    const L = (HI ? 2.9 : 3.0) * KB;
+    const L = (HI ? 3.3 : 3.5) * KB;
     for (const j of [-1, 0, 1]) {
       const a = j * (0.12 + 0.55 * fan);
       const dj = norm(add(mul(d2, Math.cos(a)), mul(u, Math.sin(a))));
       out.push({
         c: add(tip, mul(dj, L * 0.5)),
         ax: axes(dj, nf),
-        r: [L * 0.5, (HI ? 0.8 : 0.9) * KB, 0.42 * KB],
+        r: [L * 0.5, (HI ? 0.92 : 1.05) * KB, 0.45 * KB],
         pal: P_CLUB,
         id: nid(),
         bias: 0.06 - Math.abs(j) * 0.04,
@@ -1718,17 +1719,17 @@ function wings(out: PartF[], c: Ctx): void {
     const ph = Math.sin(TAU * 7 * t + (s > 0 ? 0.6 : 0));
     for (const j of [-1, 0, 1]) {
       const flap = 0.38 * j + 0.15 * ph;
-      const dl = norm([s * 0.92, -0.5, 0.35 + flap]);
+      const dl = norm([s * 0.9, -0.55, 0.25 + flap]);
       const d = norm(F.Rd(dl));
-      const len = 9.4 * KB * o.buzz;
+      const len = 11.5 * KB * o.buzz;
       out.push({
         c: add(base, mul(d, len * 0.5)),
-        ax: axes(d, F.Rd([0, 0, 1])),
-        r: [len * 0.5, 3.0 * KB, 0.3 * KB],
+        ax: axes(d, F.Rd([0, 0.55, 0.85])),
+        r: [len * 0.5, 3.2 * KB, 0.3 * KB],
         pal: P_WING,
         id: nid(),
         bias: 0.1,
-        vis: j === 0 ? 0.6 : 0.34,
+        vis: j === 0 ? 0.75 : 0.42,
         noSeam: true,
         tex: (_qx, qy) => (Math.abs(qy) < 0.06 || Math.abs(qy - 0.45) < 0.05 ? -0.15 : 0),
       });
@@ -2312,7 +2313,7 @@ function zzz(p: Px, mask: Uint8Array, c: Ctx): void {
   const col = hx('#f4ead8');
   for (let j = 0; j < 2; j++) {
     const u = wrap(t / 1.5 + j * 0.5, 1);
-    const [x0, y0] = scr(add(F.N, [-4 - 4 * u, 0, 10 + 10 * u]));
+    const [x0, y0] = scr(add(headAt(F, HEAD_C), [6 + 5 * u, 0, 9 + 11 * u]));
     const rows = HI && u > 0.3 ? Z_L : Z_S;
     for (let y = 0; y < rows.length; y++)
       for (let x = 0; x < rows[y].length; x++) {
