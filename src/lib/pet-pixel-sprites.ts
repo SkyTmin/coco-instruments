@@ -208,9 +208,9 @@ export const PET_PX: Record<string, PetPx> = {
   },
   roach: {
     box: 48,
-    rev: '7b41e1476d',
+    rev: '4203ca6da3',
     anims: {
-      idle: { n: 72, fps: 24, x: 6, y: -5, w: 38, h: 54 },
+      idle: { n: 72, fps: 24, x: 6, y: -6, w: 37, h: 55 },
       walk: { n: 24, fps: 24, x: 4, y: -4, w: 42, h: 53 },
       happy: { n: 26, fps: 24, x: 5, y: -10, w: 39, h: 59 },
       work: { n: 48, fps: 24, x: -11, y: -6, w: 71, h: 56 },
@@ -220,7 +220,7 @@ export const PET_PX: Record<string, PetPx> = {
     large: {
       box: 112,
       anims: {
-        idle: { n: 72, fps: 24, x: 19, y: -5, w: 76, h: 115 },
+        idle: { n: 72, fps: 24, x: 19, y: -7, w: 76, h: 117 },
         walk: { n: 24, fps: 24, x: 14, y: -2, w: 88, h: 112 },
         happy: { n: 26, fps: 24, x: 17, y: -16, w: 80, h: 126 },
         work: { n: 48, fps: 24, x: -21, y: -8, w: 155, h: 119 },

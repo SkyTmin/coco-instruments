@@ -366,7 +366,7 @@ export interface Pose {
 }
 
 /** Кисти в покое: верхние — у пояса, нижние — ниже и шире (веером, как в туши). */
-const HA: V3 = [8.9, 3.6, 12.2];
+const HA: V3 = [9.4, 3.6, 12.2];
 const HB: V3 = [12.4, 3.6, 7.6];
 
 const REST: Pose = {
@@ -485,6 +485,9 @@ function idlePose(t: number): Pose {
   const ph = Math.sin(TAU * 5 * (t - 1.1)) * bump(t, 1.0, 1.75);
   setH(o, 'aL', [-1.7 + 0.5 * ph, 8.6, 18.0 + 0.4 * ph], rub);
   setH(o, 'aR', [1.7 + 0.5 * ph, 8.6, 18.0 - 0.4 * ph], rub);
+  // По пути от бёдер к груди кисти обходят живот спереди, а не сквозь него.
+  o.aLy += 7.2 * rub * (1 - rub);
+  o.aRy += 7.2 * rub * (1 - rub);
   o.eye = rub > 0.6 ? 'half' : 'open';
   o.smile = REST.smile + 0.4 * rub;
   o.nod = 0.05 * rub;
@@ -518,8 +521,9 @@ function idlePose(t: number): Pose {
   o.blink = Math.max(bump(t, 0.35, 0.5), bump(t, 2.8, 2.94));
   // Усы качаются каждый в своей фазе и дёргаются.
   o.antL = 0.07 * Math.sin((t / T) * TAU * 2) + 0.22 * bump(t, 1.95, 2.12);
-  o.antR = 0.07 * Math.sin((t / T) * TAU * 2 + 1.9) + 0.26 * bump(t, 0.68, 0.84);
-  o.antF = 0.05 * Math.sin((t / T) * TAU + 0.6);
+  // Фазы сдвинуты, но в кадре 0 усы в покое (REST): разовые кончаются ровно здесь.
+  o.antR = 0.07 * (Math.sin((t / T) * TAU * 2 + 1.9) - Math.sin(1.9)) + 0.26 * bump(t, 0.68, 0.84);
+  o.antF = 0.05 * (Math.sin((t / T) * TAU + 0.6) - Math.sin(0.6));
   o.shine = t >= 1.15 && t < 1.85 ? (t - 1.15) / 0.7 : -1;
   return o;
 }
@@ -544,8 +548,9 @@ function walkPose(t: number): Pose {
   o.tilt = -0.05 * sw;
   // Руки работают накрест: верхняя левая вперёд — с нижней правой.
   const p = Math.sin(u * TAU * 2);
-  setH(o, 'aL', [-8.4, 4.6 + 3.4 * p, 14.4 + 1.0 * p], 1);
-  setH(o, 'aR', [8.4, 4.6 - 3.4 * p, 14.4 - 1.0 * p], 1);
+  // Отведённая назад кисть уходит в сторону — мимо бока, не в него.
+  setH(o, 'aL', [-8.6 - 1.6 * pos(-p), 4.6 + 3.4 * p, 14.4 + 1.0 * p], 1);
+  setH(o, 'aR', [8.6 + 1.6 * pos(p), 4.6 - 3.4 * p, 14.4 - 1.0 * p], 1);
   setH(o, 'bL', [-11.0, 3.8 - 2.6 * p, 8.4], 1);
   setH(o, 'bR', [11.0, 3.8 + 2.6 * p, 8.4], 1);
   o.smile = 0.75;
@@ -678,7 +683,8 @@ function workPose(t: number): Pose {
     [1.12, 1],
     [1.24, 0, 's'],
   ]);
-  o.runPh = TAU * 7 * clamp01((t - 0.46) / 0.78) * 0.78;
+  // Фаза бега нужна, пока `run` > 0; после — 0 (поза конца трюка = покой).
+  o.runPh = run > 0 ? TAU * 7 * clamp01((t - 0.46) / 0.78) * 0.78 : 0;
   o.blur = run;
   o.carry = kf(t, [
     [0, 0],
@@ -703,9 +709,9 @@ function workPose(t: number): Pose {
   // Руки: на старте — как у бегуна, в беге — работают часто.
   const pump = Math.sin(o.runPh) * run;
   setH(o, 'aL', [-7.6, 7.8, 16.2], crouch);
-  setH(o, 'aR', [8.6, 0.6, 14.4], crouch);
-  setH(o, 'aL', [-8.2, 4.4 + 3.6 * pump, 15.0], run);
-  setH(o, 'aR', [8.2, 4.4 - 3.6 * pump, 15.0], run);
+  setH(o, 'aR', [10.4, 0.6, 14.4], crouch);
+  setH(o, 'aL', [-8.4 - 1.8 * pos(-pump), 4.4 + 3.6 * pump, 15.0], run);
+  setH(o, 'aR', [8.4 + 1.8 * pos(pump), 4.4 - 3.6 * pump, 15.0], run);
   setH(o, 'bL', [-11.0, 3.4 - 2.8 * pump, 9.0], run);
   setH(o, 'bR', [11.0, 3.4 + 2.8 * pump, 9.0], run);
   o.speed = kf(t, [
@@ -774,7 +780,7 @@ function swipeU(t: number, j: number): number {
 function swipePath(side: number, u: number): V3 {
   const a: V3 = [side * 10.6, 0.8, 25.2];
   const b: V3 = [side * 7.8, 8.6, 22.4];
-  const e: V3 = [side * 1.6, 7.2, 15.0];
+  const e: V3 = [side * 1.6, 8.0, 15.0];
   const v = 1 - u;
   return [0, 1, 2].map((i) => v * v * a[i] + 2 * v * u * b[i] + u * u * e[i]) as V3;
 }
@@ -822,6 +828,9 @@ function attackPose(t: number): Pose {
   const uL = swipeU(t, 1);
   setH(o, 'aR', swipePath(1, uR), eng);
   setH(o, 'aL', swipePath(-1, uL), eng);
+  // Возврат к бёдрам — дугой перед животом.
+  o.aRy += 6 * eng * (1 - eng);
+  o.aLy += 6 * eng * (1 - eng);
   const ub = kf(t, [
     [0.33, 0],
     [0.43, 1, 'o'],
@@ -871,8 +880,9 @@ function sleepPose(t: number): Pose {
   o.bow = 0.1;
   o.hz = -0.3 + 0.25 * br;
   o.sq = -0.04 * br;
-  setH(o, 'aL', [-1.6, 7.4, 13.0], 1);
-  setH(o, 'aR', [2.6, 7.2, 12.2], 1);
+  // Кисти лежат на животе и поднимаются с дыханием.
+  setH(o, 'aL', [-1.6, 8.0 + 0.3 * br, 13.0], 1);
+  setH(o, 'aR', [2.6, 7.9 + 0.3 * br, 12.2], 1);
   setH(o, 'bL', [-11.0, 3.4, 3.9], 1);
   setH(o, 'bR', [11.0, 3.4, 3.9], 1);
   o.smile = 0.3;
