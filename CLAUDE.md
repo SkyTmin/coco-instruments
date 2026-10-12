@@ -129,6 +129,14 @@ tokens. Hence the rules:
   agent from commits and a short note is cheaper.
 - Don't kill an agent's background processes (Vite) while it's alive: each death of such a
   process wakes the agent for a separate turn.
+- Run 3–4 agents at a time, not 7: seven Opus agents burned 27% of the 5-hour plan
+  window in 33 minutes (12.10) and then all get cut off mid-step together.
+- Keep agents short: one agent per 1–2 mobs (or one scoped step) with a handoff note.
+  Cost is calls × context: the floor-1 agent made 604 calls at 168k average = 101M cache
+  reads; ~60% of its context growth was its own preserved thinking.
+- Give agents a precise map (files, functions, line ranges, ready scripts) so they don't
+  explore; independent commands go in one turn; foreground commands stay under 4 minutes
+  (a subagent's cache lives 5 minutes).
 
 ## External sources
 
