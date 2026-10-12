@@ -7,7 +7,7 @@
 //    (`s` — малая, `l` — крупная).
 // 2. Сразу за ними `python3 scripts/pets-pixel/post.py` режет полосы (WebP
 //    без потерь) в `public/ui/pets/<id>/` (крупные — `<anim>-l.webp`), золотой
-//    и радужный (`-v1`, `-v2`), миниатюры, пишет манифест
+//    (`-v1`), миниатюры, пишет манифест
 //    `src/lib/pet-pixel-sprites.ts` (своя метка `rev` у каждого питомца) и
 //    список `scripts/pets-pixel/pets.json`.
 // Тушь (`scripts/pets-ink/tools/sprites-post.py`) читает `pets.json` и
@@ -42,8 +42,8 @@ for (const id of ids) {
     if (resOnly && res !== resOnly) continue;
     const dir = path.join(TMP, id, res);
     fs.mkdirSync(dir, { recursive: true });
-    // Золотой и радужный, которые рисовальщик рисует сам (`variants`), пишутся
-    // рядом (`<anim>-v1.rgba`); у остальных их сделает post.py матрицами фильтров.
+    // Золотой, который рисовальщик рисует сам (`variants`), пишется рядом
+    // (`<anim>-v1.rgba`); у остальных его сделает post.py матрицей фильтра.
     const vs = [0, ...(pet.variants ?? [])];
     const meta = { ...cv, anims: {} as Record<string, unknown>, variants: pet.variants ?? [] };
     for (const a of Object.keys(pet.anims) as Anim[]) {

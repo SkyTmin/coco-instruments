@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { normalizePrison } from './prison';
 import {
   addPet,
   canMerge,
+  dropRainbow,
   eggChances,
   eggOf,
   EGGS,
@@ -17,6 +19,13 @@ import {
   NO_EGGS,
   petsVerOf,
   PETS_V,
+  PET_TREAT_XP,
+  petLook,
+  RAINBOW_COPIES,
+  setPetSkin,
+  VARIANT_NAME,
+  VARIANT_POWER,
+  variantPower,
   V2_PET,
   petBonus,
   PETS,
@@ -88,7 +97,11 @@ describe('питомцы (v2.72–v2.73)', () => {
     expect(worst).toBeLessThan(EGG_PITY);
   });
 
-  it('копии: пять одинаковых — золотой, пять золотых — радужный, дальше лакомство', () => {
+  it('копии: пять одинаковых — золотой, дальше лакомство (радужной ступени нет)', () => {
+    expect(VARIANT_NAME).toEqual(['', 'Золотой']);
+    expect(VARIANT_POWER).toEqual([1, 1.5]);
+    expect([variantPower(0), variantPower(2), variantPower(undefined)]).toEqual([1, 1.5, 1]);
+    expect(MERGE_NEED).toEqual([4]);
     let pets: Pets = {};
     expect(addPet(pets, 'mole').kind).toBe('new');
     pets = addPet(pets, 'mole').pets;
@@ -97,17 +110,104 @@ describe('питомцы (v2.72–v2.73)', () => {
     pets = mergePet(pets, 'mole')!;
     expect(pets.mole).toMatchObject({ v: 1, dup: 0 });
     expect(mergePet(pets, 'mole')).toBeNull();
-    for (let i = 0; i < MERGE_NEED[1]; i++) pets = addPet(pets, 'mole').pets;
-    pets = mergePet(pets, 'mole')!;
-    expect(pets.mole!.v).toBe(2);
+    // Золотой — высшая ступень: копия сразу лакомство, копий не копит.
     const xp = pets.mole!.xp;
     const t = addPet(pets, 'mole');
     expect(t.kind).toBe('treat');
-    expect(t.pets.mole!.xp).toBeGreaterThan(xp);
-    // Золотой сильнее обычного, радужный — золотого.
+    expect(t.pets.mole).toMatchObject({ v: 1, dup: 0, xp: xp + PET_TREAT_XP });
+    expect(canMerge(t.pets.mole)).toBe(false);
+    // Золотой сильнее обычного.
     const rec = { xp: 5000 };
     expect(petScore('mole', { ...rec, v: 1 })).toBeGreaterThan(petScore('mole', { ...rec, v: 0 }));
-    expect(petScore('mole', { ...rec, v: 2 })).toBeGreaterThan(petScore('mole', { ...rec, v: 1 }));
+  });
+
+  it('скин: золотой можно нарисовать обычным, сила остаётся по ступени', () => {
+    const gold = { xp: 5000, dup: 0, v: 1, pat: 0 };
+    let pets: Pets = { mole: gold, mouse: { ...gold, v: 0 } };
+    expect(petLook(pets.mole)).toBe(1);
+    pets = setPetSkin(pets, 'mole', 0)!;
+    expect(pets.mole).toEqual({ ...gold, skin: 0 });
+    expect(petLook(pets.mole)).toBe(0);
+    expect(petBonus('mole', pets.mole!)).toEqual(petBonus('mole', gold));
+    // Скин ступени не хранится; выше ступени и у неприручённого — нельзя.
+    expect(setPetSkin(pets, 'mole', 1)!.mole).toEqual(gold);
+    expect(setPetSkin(pets, 'mouse', 1)).toBeNull();
+    expect(setPetSkin(pets, 'crow', 0)).toBeNull();
+    expect(setPetSkin(pets, 'mole', 0.5)).toBeNull();
+    // Скин выше ступени из сохранения показывается не выше ступени.
+    expect(petLook({ v: 0, skin: 1 })).toBe(0);
+    expect(petLook(undefined)).toBe(0);
+    // Сохраняется и читается; лишний — выкидывается.
+    expect(normalizePets(pets)).toEqual(pets);
+    expect(
+      normalizePets({ mole: { ...gold, skin: 1 }, mouse: { ...gold, v: 0, skin: 1 } }),
+    ).toEqual({ mole: gold, mouse: { ...gold, v: 0 } });
+    // Слить в золотой — вид новой ступени.
+    let up: Pets = { mole: { xp: 0, dup: MERGE_NEED[0], v: 0, pat: 0, skin: 0 } };
+    up = mergePet(up, 'mole')!;
+    expect(up.mole).toEqual({ xp: 0, dup: 0, v: 1, pat: 0 });
+    expect(petLook(up.mole)).toBe(1);
+  });
+
+  it('v2.110: радужный → золотой, двадцать копий и лишние — лакомствами', () => {
+    const T = PET_TREAT_XP;
+    const raw = {
+      mole: { xp: 1000, dup: 3, v: 2, pat: 5 },
+      mouse: { xp: 700, dup: 7, v: 1, pat: 0 },
+      crow: { xp: 300, dup: 2, v: 0, pat: 0 },
+      cat: { xp: 50, dup: 0, v: 1, pat: 0 },
+      fox: { xp: 9, dup: 1, v: 9, pat: 0 },
+    };
+    const once = normalizePets(raw, 3);
+    expect(once).toEqual({
+      mole: { xp: 1000 + (RAINBOW_COPIES + 3) * T, dup: 0, v: 1, pat: 5 },
+      mouse: { xp: 700 + 7 * T, dup: 0, v: 1, pat: 0 },
+      crow: { xp: 300, dup: 2, v: 0, pat: 0 },
+      cat: { xp: 50, dup: 0, v: 1, pat: 0 },
+      // Ступень выше радужной в старом сохранении — радужный.
+      fox: { xp: 9 + (RAINBOW_COPIES + 1) * T, dup: 0, v: 1, pat: 0 },
+    });
+    // Новое сохранение читается как есть: второй раз ничего не прибавится.
+    expect(normalizePets(once, PETS_V)).toEqual(once);
+    for (const rec of Object.values(once)) expect(dropRainbow(rec!)).toEqual(rec);
+    // В новой схеме ступени выше золотой нет: обрезается без опыта.
+    expect(normalizePets({ mole: { xp: 1, dup: 0, v: 2, pat: 0 } }, PETS_V)).toEqual({
+      mole: { xp: 1, dup: 0, v: 1, pat: 0 },
+    });
+    // v2.72 (схема 2) тоже переносится: панда → енот радужным.
+    expect(normalizePets({ panda: { xp: 0, dup: 0, v: 2, pat: 0 } }, 2)).toEqual({
+      raccoon: { xp: RAINBOW_COPIES * T, dup: 0, v: 1, pat: 0 },
+    });
+    // Два старых ключа в одном виде (песец v1 и хомяк v2.72 → мышь): сперва
+    // слияние (лучший опыт, копии вместе), потом перенос — копии не теряются.
+    expect(
+      normalizePets(
+        { fox: { xp: 100, dup: 1, v: 2, pat: 0 }, hamster: { xp: 40, dup: 3, v: 0, pat: 0 } },
+        2,
+      ),
+    ).toEqual({ mouse: { xp: 100 + (RAINBOW_COPIES + 4) * T, dup: 0, v: 1, pat: 0 } });
+  });
+
+  it('v2.110: сохранение шахты переносится один раз и пишется новой схемой', () => {
+    const old = normalizePrison({
+      petsV: 3,
+      pets: { mole: { xp: 0, dup: 2, v: 2, pat: 0 } },
+      squad: ['mole'],
+    } as never);
+    expect(old.petsV).toBe(PETS_V);
+    expect(old.pets.mole).toEqual({
+      xp: (RAINBOW_COPIES + 2) * PET_TREAT_XP,
+      dup: 0,
+      v: 1,
+      pat: 0,
+    });
+    expect(old.squad).toEqual(['mole']);
+    // Как будто сохранили на диск и прочли снова.
+    const again = normalizePrison(JSON.parse(JSON.stringify(old)));
+    expect(again.pets).toEqual(old.pets);
+    // Скин переживает сохранение.
+    const skinned = { ...old, pets: setPetSkin(old.pets, 'mole', 0)! };
+    expect(normalizePrison(JSON.parse(JSON.stringify(skinned))).pets.mole!.skin).toBe(0);
   });
 
   it('чем реже, тем сильнее на том же уровне', () => {
@@ -250,7 +350,7 @@ describe('питомцы (v2.72–v2.73)', () => {
     order72.forEach((id, i) =>
       expect(PETS.find((p) => p.id === V2_PET[id])!.rarity).toBe(rarity72[i]),
     );
-    const rec = { xp: 1234, dup: 3, v: 1, pat: 7 };
+    const rec = { xp: 1234, dup: 3, v: 0, pat: 7 };
     const got = normalizePets({ whale: rec, raccoon: rec, panda: { ...rec, xp: 5 } }, 2);
     expect(got).toEqual({ phoenix: rec, cat: rec, raccoon: { ...rec, xp: 5 } });
     expect(normalizeSquad(['raccoon', 'panda'], null, got, 3, 2)).toEqual(['cat', 'raccoon']);

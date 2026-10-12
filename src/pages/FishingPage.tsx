@@ -50,6 +50,7 @@ import {
 } from '@/lib/fishing';
 import type { Bite, Fight, FishDef } from '@/lib/fishing';
 import { modsOf, petOf, rankLetter, shortMoney } from '@/lib/prison';
+import { petLook } from '@/lib/pets';
 import { PetArt } from '@/components/PetArt';
 import { createFx } from '@/lib/prison-fx';
 import type { Fx } from '@/lib/prison-fx';
@@ -1112,7 +1113,7 @@ export function FishingPage() {
             aria-label="Покормить питомца уловом"
           >
             {petOn ? (
-              <PetArt id={petOn} size={30} v={prison.pets[petOn]?.v ?? 0} still />
+              <PetArt id={petOn} size={30} v={petLook(prison.pets[petOn])} still />
             ) : (
               <GxIcon name="paw" size={28} />
             )}

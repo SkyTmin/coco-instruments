@@ -27,9 +27,7 @@
 // красному и белому → оплывает в золотой самородок → дракон сияет,
 // самородок с искрой уходит «в рюкзак».
 //
-// Золотой и радужный рисуются здесь же (`v`): золотой — своими палитрами,
-// радужный — перелив оттенка по телу от точки модели (голова — алая,
-// грудь — золотая и зелёная, лапы и хвост — синие и лиловые).
+// Золотой рисуется здесь же (`v`) своими палитрами. Радужного нет с v2.110.
 
 import type { Px } from '../dungeon-art';
 import {
@@ -70,8 +68,7 @@ import {
 import type { Frame, Key, Part, RGBA, V3 } from './rig';
 
 // ---------------------------------------------------------------------------
-// Палитры. Три набора: обычный, золотой (v1), радужный (v2: оттенок
-// пересчитывается по точке модели, палитра даёт только ступени).
+// Палитры. Два набора: обычный и золотой (v1).
 // ---------------------------------------------------------------------------
 
 const P_COAL = 0;
@@ -148,9 +145,7 @@ const PAL_V: RGBA[][][] = [
     MOUTH,
   ],
 ];
-// Радужный рисуется по обычному набору, потом цвет пересчитывается.
-PAL_V.push(PAL_V[0]);
-const INK_V: RGBA[] = [hx('#07070b'), hx('#1a0d02'), hx('#120818')];
+const INK_V: RGBA[] = [hx('#07070b'), hx('#1a0d02')];
 const SMOKE = ramp('#2e2a2e', '#4a4448', '#6c6468', '#8e8689', '#b0a8aa');
 
 // ---------------------------------------------------------------------------
@@ -1812,7 +1807,7 @@ function crownStamp(p: Px, f: Frame): void {
     b: g[4],
     c: g[3],
     d: g[2],
-    r: V === 2 ? hx('#3ad0ff') : hx('#e8283a'),
+    r: hx('#e8283a'),
   };
   const rows = HI ? CROWN_L : CROWN_S;
   const tilt = Math.max(-1, Math.min(1, Math.round(CROWN.swing)));
@@ -2256,54 +2251,6 @@ function softBands(f: Frame): void {
   for (let n = 0; n < hit.length; n += 2) f.tone[hit[n]] = hit[n + 1];
 }
 
-function hsl(hh: number, s: number, l: number): RGBA {
-  const h6 = (((hh % 1) + 1) % 1) * 6;
-  const cch = (1 - Math.abs(2 * l - 1)) * s;
-  const xx = cch * (1 - Math.abs((h6 % 2) - 1));
-  const m = l - cch / 2;
-  const [r, g, b] =
-    h6 < 1
-      ? [cch, xx, 0]
-      : h6 < 2
-        ? [xx, cch, 0]
-        : h6 < 3
-          ? [0, cch, xx]
-          : h6 < 4
-            ? [0, xx, cch]
-            : h6 < 5
-              ? [xx, 0, cch]
-              : [cch, 0, xx];
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255), 255];
-}
-
-/** Радужный: оттенок от точки модели (голова алая → грудь золотая и зелёная → лапы синие и лиловые). */
-function rainbow(p: Px, f: Frame, o: Pose): void {
-  const { w, h, pal, tone } = f;
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      const pl = pal[i];
-      if (pl < 0 || pl === P_STONE || pl === P_MOUTH || pl === P_GOLD) continue;
-      // Пламя (струя, языки у камня, вспышка атаки) остаётся огнём — розовое пятно читалось брюхом.
-      // (части пламени без шва — в буфере номер −2).
-      if (pl === P_LAVA && f.idb[i] === -2) continue;
-      const W = mul(worldAt(f, x, y), 1 / RR);
-      const hz = (W[2] - o.z) / G;
-      const hxx = (W[0] - o.x) / G;
-      // Оттенок ступенями (14 на круг): радуга лентами, как в пиксельной палитре, и полоса легче.
-      const hue = Math.round((0.0 + (29 - hz) * 0.025 + hxx * 0.004) * 14) / 14;
-      const u = tone[i] / (PAL[pl].length - 1);
-      let col: RGBA;
-      if (pl === P_COAL) col = hsl(hue, 0.78, 0.17 + u * 0.5);
-      else if (pl === P_MEMB) col = hsl(hue + 0.08, 0.85, 0.24 + u * 0.48);
-      else if (pl === P_BELLY) col = hsl(hue + 0.04, 0.7, 0.5 + u * 0.42);
-      else if (pl === P_HORN) col = hsl(hue + 0.5, 0.35, 0.55 + u * 0.42);
-      else if (pl === P_WARM) col = hsl(hue + 0.15, 0.85, 0.3 + u * 0.2);
-      else col = hsl(hue + 0.45, 0.9, 0.55 + u * 0.42);
-      p.set(x, y, col);
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Глаза, ноздри, дым, угольки, звёзды.
 // ---------------------------------------------------------------------------
@@ -2526,14 +2473,14 @@ function toRes(parts: Part[]): Part[] {
   return parts.map((pt) => ({ ...pt, c: mul(pt.c, RR), r: mul(pt.r, RR) }));
 }
 
-/** Кадр `i` анимации `a` полосы `res`, вариант окраса `v` (0 — обычный, 1 — золотой, 2 — радужный). */
+/** Кадр `i` анимации `a` полосы `res`, вариант окраса `v` (0 — обычный, 1 — золотой). */
 export function dragonFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   const cv = RES[res];
   RR = cv.box / RES.s.box;
   HI = res === 'l';
   OX = cv.bx + cv.box / 2;
   OY = cv.by + GROUND * RR;
-  V = v;
+  V = v ? 1 : 0;
   NEXT_ID = 0;
   CRK.clear();
   frillFlats.length = 0;
@@ -2545,7 +2492,7 @@ export function dragonFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   PER = a === 'walk' ? T : FLICK_T;
   const tau = LOOP[a] ? t : wrap(t - T, FLICK_T);
   const c: Ctx = { o, S, h: headF(o, S), lag: lagOf(a, t), tau };
-  PAL = PAL_V[v].slice();
+  PAL = PAL_V[V].slice();
   PAL[P_STONE] = stonePal(o.heat, o.melt);
   const f = newFrame(cv.cw, cv.ch);
   const parts: Part[] = [];
@@ -2573,8 +2520,7 @@ export function dragonFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   rimLight(f, PAL, (pl) => pl === P_COAL, 'br');
   if (HI) softBands(f);
   const p = toPx(f, PAL);
-  if (v === 2) rainbow(p, f, o);
-  selOutline(p, INK_V[v], 0.8);
+  selOutline(p, INK_V[V], 0.8);
   // Дым до глаз и короны: клуб у ноздри не закрывает глаз.
   smoke(p, c, o.smoke);
   eyes(p, f, c);

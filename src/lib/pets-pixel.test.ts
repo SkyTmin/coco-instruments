@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { pxFit } from './pet-pixel-fit';
 import { PET_PX } from './pet-pixel-sprites';
@@ -84,20 +85,32 @@ describe('пиксельные питомцы', () => {
   });
 });
 
+describe('без радужной ступени (v2.110)', () => {
+  it('у пиксельных есть обычный и золотой, полос радужного нет', () => {
+    for (const id of Object.keys(PET_PX)) {
+      const files = fs.readdirSync(`public/ui/pets/${id}`);
+      expect([id, files.filter((f) => f.includes('-v2'))]).toEqual([id, []]);
+      for (const a of ANIMS)
+        for (const f of [`${a}.webp`, `${a}-v1.webp`]) expect(files).toContain(f);
+      expect(files).toContain('thumb-v1.webp');
+    }
+  });
+});
+
 describe('пиксельный дракон', () => {
   const D = Dragon;
 
-  it('рисунок детерминирован; золотой и радужный рисует сам, на том же холсте', () => {
+  it('рисунок детерминирован; золотой рисует сам, на том же холсте', () => {
     for (const r of ['s', 'l'] as const)
-      for (const v of [0, 1, 2]) {
+      for (const v of [0, 1]) {
         const a = D.dragonFrame('work', 30, r, v);
         const b = D.dragonFrame('work', 30, r, v);
         expect([a.w, a.h]).toEqual([D.RES[r].cw, D.RES[r].ch]);
         expect(Buffer.from(a.data).equals(Buffer.from(b.data))).toBe(true);
       }
     const plain = D.dragonFrame('idle', 0, 's', 0).data;
-    const rainbow = D.dragonFrame('idle', 0, 's', 2).data;
-    expect(Buffer.from(plain).equals(Buffer.from(rainbow))).toBe(false);
+    const gold = D.dragonFrame('idle', 0, 's', 1).data;
+    expect(Buffer.from(plain).equals(Buffer.from(gold))).toBe(false);
   });
 
   it('манифест совпадает с рисовальщиком: обе полосы, кадры, 24 к/с, варианты свои', () => {
@@ -111,7 +124,9 @@ describe('пиксельный дракон', () => {
       }
       expect(PIXEL_PETS.dragon.anims[a]).toEqual({ n: D.FRAMES[a], fps: D.FPS });
     }
-    expect(PIXEL_PETS.dragon.variants).toEqual([1, 2]);
+    // Радужного нет (v2.110): только золотой свой; полос `-v2` в игре нет.
+    expect(PIXEL_PETS.dragon.variants).toEqual([1]);
+    for (const p of Object.values(PIXEL_PETS)) expect(p.variants ?? []).not.toContain(2);
     expect(PIXEL_PETS.phoenix.variants).toBeUndefined();
     // Длительности по брифу: покой и сон ~3 с, ходьба 1 с, радость ~1,1, трюк 2, атака ~0,9.
     const sec = (a: Anim) => D.FRAMES[a] / D.FPS;

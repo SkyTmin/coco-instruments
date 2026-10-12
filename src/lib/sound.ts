@@ -1474,7 +1474,7 @@ export function petTrick(): void {
   play('gem.chime', { gain: 0.18, rate: 1.5, vary: 0.04 });
 }
 
-/** Золотой или радужный: удар и фраза. */
+/** Стал золотым: удар и фраза. */
 export function petMerge(): void {
   play('gem.burst', { gain: 0.32, rate: 1.2 });
   if (!softPhrase(0.55, 0.08)) softChime(8);

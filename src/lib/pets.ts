@@ -1,4 +1,4 @@
-// Питомцы v2.72–v2.73 — состав, роли, яйца, гнёзда, золотые и радужные, отряд.
+// Питомцы v2.72–v2.73 — состав, роли, яйца, гнёзда, золотые, скины, отряд.
 //
 // Владелец: «нарисуем новые, дадим им больше механик — в шахте, в подземелье
 // и во дворе… чтобы питомцы были милые и хотелось всех, особенно
@@ -8,7 +8,7 @@
 // рисунком: вместо общих милых зверей — жители лагеря (`PETS_V`, перенос —
 // `normalizePets`).
 //
-// Образцы: Pet Simulator 99 (яйца, золотые и радужные из одинаковых),
+// Образцы: Pet Simulator 99 (яйца, золотые из одинаковых),
 // Hypixel SkyBlock (питомец растёт от работы, у редкого больше силы),
 // яйца с ярусами редкости присон-серверов. Правило приложения «денег из
 // ничего нет» соблюдено: яйцо греется работой, а не часами.
@@ -104,7 +104,7 @@ export const isPetId = (id: unknown): id is PetId => PETS.some((x) => x.id === i
 // ---------------------------------------------------------------------------
 // Сила. Прибавка вида за уровень (`STAT_PER`); редкость множит её, у двух
 // ролей (легендарные) каждая слабее одной, у кита шесть ролей понемногу.
-// Золотой и радужный — ещё множитель. Всё складывается в `bonusOf` под общий
+// Золотой — ещё множитель. Всё складывается в `bonusOf` под общий
 // потолок `BONUS_CAP` (prison.ts).
 //
 // Числа вдвое меньше прежних (v2.49): тогда питомец был один и приходил
@@ -127,17 +127,22 @@ export function roleShare(n: number): number {
   return n <= 1 ? 1 : n === 2 ? 0.75 : 0.3;
 }
 
-/** Обычный, Золотой, Радужный. */
-export const VARIANT_NAME = ['', 'Золотой', 'Радужный'];
-export const VARIANT_POWER = [1, 1.5, 2.5];
 /**
- * Сколько копий нужно для следующего вида: пять одинаковых — золотой (свой
- * и ещё четыре), пять золотых — радужный (ещё двадцать).
+ * Обычный и Золотой. Радужной ступени нет с v2.110 (владелец: «уберём вообще
+ * радужный цвет»): радужные стали золотыми, копии вернулись лакомствами
+ * (`dropRainbow`).
  */
-export const MERGE_NEED = [4, 20];
+export const VARIANT_NAME = ['', 'Золотой'];
+export const VARIANT_POWER = [1, 1.5];
+/** Сколько копий нужно для следующего вида: пять одинаковых — золотой (свой и ещё четыре). */
+export const MERGE_NEED = [4];
+/** Множитель ступени; чужая ступень (2 из старого кода) — как высшая, а не NaN. */
+export function variantPower(v: number | undefined): number {
+  return VARIANT_POWER[Math.max(0, Math.min(VARIANT_POWER.length - 1, Math.floor(v ?? 0) || 0))];
+}
 
 export const PET_LEVEL_MAX = 25;
-/** Лакомство — опыт первому в отряде. Копия радужного — тоже лакомство. */
+/** Лакомство — опыт первому в отряде. Копия золотого — тоже лакомство. */
 export const PET_TREAT_XP = 400;
 
 export function petXpFor(level: number): number {
@@ -156,12 +161,18 @@ export function petLevelOf(xp: number): { level: number; into: number; need: num
   }
 }
 
-/** Приручённый питомец: опыт, лишние копии, вид (0/1/2), когда гладили. */
+/** Приручённый питомец: опыт, лишние копии, вид (0/1), когда гладили, скин. */
 export interface PetRec {
   xp: number;
   dup: number;
+  /** Ступень: 0 — обычный, 1 — золотой. От неё — сила и имя. */
   v: number;
   pat: number;
+  /**
+   * Скин (v2.110): каким питомец нарисован — 0 обычным, 1 золотым, не выше
+   * ступени. Нет поля — вид своей ступени. Сила от скина не зависит.
+   */
+  skin?: number;
 }
 
 export type Pets = Partial<Record<PetId, PetRec>>;
@@ -175,8 +186,7 @@ export function petBonus(
 ): Partial<Record<PetStat, number>> {
   const def = petOf(id);
   const level = petLevelOf(rec.xp).level;
-  const k =
-    RARITY_POWER[def.rarity] * roleShare(def.stats.length) * VARIANT_POWER[rec.v ?? 0] * level;
+  const k = RARITY_POWER[def.rarity] * roleShare(def.stats.length) * variantPower(rec.v) * level;
   const out: Partial<Record<PetStat, number>> = {};
   for (const s of def.stats) out[s] = STAT_PER[s] * k;
   return out;
@@ -488,7 +498,7 @@ export function warmNest(nest: Nest[], n: number): { nest: Nest[]; ready: number
   return { nest: out, ready };
 }
 
-/** Новый питомец, копия к золотому или (у радужного) лакомство. */
+/** Новый питомец, копия к золотому или (у золотого) лакомство. */
 export function addPet(pets: Pets, id: PetId): { pets: Pets; kind: 'new' | 'dup' | 'treat' } {
   const rec = pets[id];
   if (!rec) return { pets: { ...pets, [id]: newPetRec() }, kind: 'new' };
@@ -505,7 +515,35 @@ export function canMerge(rec: PetRec | undefined): boolean {
 export function mergePet(pets: Pets, id: PetId): Pets | null {
   const rec = pets[id];
   if (!rec || !canMerge(rec)) return null;
-  return { ...pets, [id]: { ...rec, v: rec.v + 1, dup: rec.dup - MERGE_NEED[rec.v] } };
+  // Новая ступень — и вид новой ступени: прежний скин сбрасывается.
+  return { ...pets, [id]: { ...noSkin(rec), v: rec.v + 1, dup: rec.dup - MERGE_NEED[rec.v] } };
+}
+
+/** Запись без скина: питомец в виде своей ступени. */
+function noSkin(rec: PetRec): PetRec {
+  const out = { ...rec };
+  delete out.skin;
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Скин (v2.110). Владелец: «добавь возможность выбирать скин у питомца — можно
+// обычный, можно золотой». Скин — только рисунок: золотой может ходить в
+// обычной шкуре, а сила, имя ступени и рамка в коллекции — по ступени `v`.
+// ---------------------------------------------------------------------------
+
+/** Каким видом рисовать питомца: выбранный скин, но не выше его ступени. */
+export function petLook(rec: Pick<PetRec, 'v' | 'skin'> | undefined): number {
+  if (!rec) return 0;
+  const v = rec.v ?? 0;
+  return typeof rec.skin === 'number' ? Math.max(0, Math.min(v, rec.skin)) : v;
+}
+
+/** Выбрать скин; выше ступени нельзя. Скин своей ступени не хранится. */
+export function setPetSkin(pets: Pets, id: PetId, skin: number): Pets | null {
+  const rec = pets[id];
+  if (!rec || !Number.isInteger(skin) || skin < 0 || skin > rec.v) return null;
+  return { ...pets, [id]: skin === rec.v ? noSkin(rec) : { ...rec, skin } };
 }
 
 // ---------------------------------------------------------------------------
@@ -519,12 +557,12 @@ export function mergePet(pets: Pets, id: PetId): Pets | null {
 export const TRICK_EVERY = 160;
 /** Сколько единиц руды выкапывает добытчик. */
 export function trickOre(id: PetId, v: number): number {
-  return Math.max(1, Math.round(3 * RARITY_POWER[petOf(id).rarity] * VARIANT_POWER[v ?? 0]));
+  return Math.max(1, Math.round(3 * RARITY_POWER[petOf(id).rarity] * variantPower(v)));
 }
 /** Торгаш продаёт свой кусок дороже на столько. */
 export const TRICK_SELL = 1.5;
 export function trickTokens(id: PetId, v: number): number {
-  return Math.max(1, Math.round(2 * RARITY_POWER[petOf(id).rarity] * VARIANT_POWER[v ?? 0]));
+  return Math.max(1, Math.round(2 * RARITY_POWER[petOf(id).rarity] * variantPower(v)));
 }
 /** Непоседа: столько миллисекунд кирка бьёт чаще. */
 export const TRICK_RUSH_MS = 8_000;
@@ -542,14 +580,34 @@ export function trickRole(id: PetId, turn: number): PetStat {
 // Перенос сохранений. Схема питомцев — `PETS_V` в сохранении:
 //   нет / 1 — v2.49–v2.71, шесть зверей кольской фауны (`LEGACY_PET`);
 //   2 — v2.72, общие милые звери (`V2_PET`);
-//   3 — v2.73, жители лагеря (`PETS`).
+//   3 — v2.73, жители лагеря (`PETS`);
+//   4 — v2.110, без радужной ступени (`dropRainbow`), ключи — как в 3.
 // Версия обязательна: ключи `fox`, `raven`, `owl` в старой схеме значили
 // песца, ворона и сову, а теперь это эпический лис, легендарный ворон и
 // редкая сова — без версии старый песец стал бы бесплатным эпиком.
 // Переезд по редкости, роль — какая ближе; опыт и копии сохраняются.
 // ---------------------------------------------------------------------------
 
-export const PETS_V = 3;
+export const PETS_V = 4;
+/** С какой версии ключи `pets` — нынешние виды (`PETS`). */
+const KEYS_V = 3;
+/** Сколько ступеней было до v2.110: 0 обычный, 1 золотой, 2 радужный. */
+const OLD_V_MAX = 2;
+/** Сколько копий ушло на радужного (`MERGE_NEED[1]` до v2.110). */
+export const RAINBOW_COPIES = 20;
+
+/**
+ * v2.110: радужной ступени нет. Радужный становится золотым, двадцать копий,
+ * отданных за него, и его лишние копии возвращаются лакомствами (опытом).
+ * Золотой копил копии к радужному — они тоже лакомства. Обычных не трогаем.
+ * Повторный вызов ничего не меняет: у золотого после него копий нет.
+ */
+export function dropRainbow(rec: PetRec): PetRec {
+  if (rec.v < 1) return rec;
+  const back = (rec.v >= 2 ? RAINBOW_COPIES : 0) + rec.dup;
+  if (rec.v === 1 && !back) return rec;
+  return { ...rec, v: 1, dup: 0, xp: rec.xp + back * PET_TREAT_XP };
+}
 
 /** v2.49–v2.71 → v2.72. */
 export const LEGACY_PET: Record<string, string> = {
@@ -586,7 +644,7 @@ export const V2_PET: Record<string, PetId> = {
 /** Ключ сохранения → нынешний вид (или ничего). */
 export function petFromSave(key: unknown, ver: number): PetId | undefined {
   if (typeof key !== 'string') return undefined;
-  if (ver >= PETS_V) return isPetId(key) ? key : undefined;
+  if (ver >= KEYS_V) return isPetId(key) ? key : undefined;
   return V2_PET[LEGACY_PET[key] ?? key];
 }
 
@@ -615,9 +673,12 @@ export function normalizePets(raw: unknown, ver: number = PETS_V): Pets {
       rec = {
         xp: num(r.xp, 0, 1e12, 0),
         dup: num(r.dup, 0, 1e6, 0),
-        v: num(r.v, 0, MERGE_NEED.length, 0),
+        // До v2.110 бывал радужный (2): его переносит `dropRainbow` ниже,
+        // обрезать ступень раньше — потерять его копии.
+        v: num(r.v, 0, ver < PETS_V ? OLD_V_MAX : MERGE_NEED.length, 0),
         pat: num(r.pat, 0, 1e15, 0),
       };
+      if (typeof r.skin === 'number') rec.skin = num(r.skin, 0, MERGE_NEED.length, 0);
     } else continue;
     // два старых ключа в одном новом виде: берём лучшее, копии складываем
     const had = out[id];
@@ -629,6 +690,13 @@ export function normalizePets(raw: unknown, ver: number = PETS_V): Pets {
           pat: Math.max(had.pat, rec.pat),
         }
       : rec;
+  }
+  for (const id of Object.keys(out) as PetId[]) {
+    let rec = out[id]!;
+    if (ver < PETS_V) rec = dropRainbow(rec);
+    // Скин выше ступени или равный ей не храним: вид ступени и так по умолчанию.
+    if (rec.skin !== undefined && rec.skin >= rec.v) rec = noSkin(rec);
+    out[id] = rec;
   }
   return out;
 }

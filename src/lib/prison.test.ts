@@ -1624,7 +1624,7 @@ describe('добыча: посылки, руны, питомцы, вехи', () 
 
   it('прибавки рун и питомца упираются в потолок', () => {
     const runes = [1, 2, 3, 4].map((id) => ({ id, kind: 'token' as const, tier: 5, roll: 100 }));
-    const big = { xp: 1e12, dup: 0, v: 2, pat: 0 };
+    const big = { xp: 1e12, dup: 0, v: 1, pat: 0 };
     const b = bonusOf({ runes, sockets: [1, 2, 3, 4], squad: ['crow'], pets: { crow: big } });
     expect(b.token).toBe(BONUS_CAP.token);
     // Продажу даже полный набор не выводит за +100%: её потолок — край.
