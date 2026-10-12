@@ -218,8 +218,14 @@ export interface Vis {
   fl: number;
   kx: number;
   ky: number;
+  /** Прошлый показанный кадр и его вид — его держит бюджет новых кадров. */
+  last?: MobFrame;
+  lastK?: Kind;
 }
 const VIS = new WeakMap<Mob, Vis>();
+/** Моб текущего вызова рисовальщика (`visOf` → `frameOf`) и впервые ли он виден. */
+let cur: Vis | null = null;
+let curFresh = false;
 
 /**
  * Прошлый режим для листа кадров: стенд рисует каждый кадр новым мобом и
@@ -266,8 +272,12 @@ export function visOf(m: Mob, pose: MobPose, want: number, turn: number): Vis {
     };
     knockOf(v, m);
     VIS.set(m, v);
+    cur = v;
+    curFresh = true;
     return v;
   }
+  cur = v;
+  curFresh = false;
   const dt = clamp(now - v.now, 0, 0.1);
   if (dt > 0) {
     const mx = (m.x ?? 0) - v.x;
@@ -356,8 +366,19 @@ export const F8_MOB_STAT = {
   n: 0,
   ms: [] as number[],
   by: {} as Record<string, number>,
+  /** Из неё — обрезка и холсты (`finishPic`), мс. */
+  fin: [] as number[],
+  /** Цена нового кадра по видам, мс. */
+  msBy: {} as Record<string, number[]>,
   miss: [] as string[],
   warm: 0,
+  /**
+   * Бюджет новых кадров на кадр рендера, мс (как у 1-го этажа): сверх него
+   * знакомый моб держит прошлый кадр, новый строится в следующем кадре.
+   */
+  budget: 0.5,
+  /** Сколько раз моб держал прошлый кадр из-за бюджета. */
+  held: 0,
   /** Площадь построенных холстов (кадр + `lit`), точек — оценка памяти кеша. */
   px: 0,
   /** Сейчас идёт прогрев (кадры прогрева не попадают в `miss`). */
@@ -375,6 +396,8 @@ function stat(K: Kind, ms: number, key: string): void {
   F8_MOB_STAT.n++;
   if (F8_MOB_STAT.ms.length < 4000) F8_MOB_STAT.ms.push(ms);
   F8_MOB_STAT.by[K.id] = (F8_MOB_STAT.by[K.id] ?? 0) + 1;
+  const mb = (F8_MOB_STAT.msBy[K.id] ??= []);
+  if (mb.length < 2000) mb.push(ms);
   F8_MOB_STAT.miss.push(`${K.id}|${key}`);
   if (F8_MOB_STAT.miss.length > 600) F8_MOB_STAT.miss.splice(0, 300);
 }
@@ -523,7 +546,15 @@ export function flashImg(img: HTMLCanvasElement): HTMLCanvasElement {
   return c;
 }
 
-/** Кадр вида: поза `anim`, кадр `f`, сторона `d`. Вспышка — поверх готового. */
+let budNow = -1;
+let budSpent = 0;
+
+/**
+ * Кадр вида: поза `anim`, кадр `f`, сторона `d`. Вспышка — поверх готового.
+ * Новых кадров за кадр рендера — не дороже `F8_MOB_STAT.budget`: сверх него
+ * знакомый моб (не первый показ, тот же вид) держит прошлый кадр. Лист кадров
+ * зовёт рисовальщик с новым мобом на каждый кадр — там бюджет не срабатывает.
+ */
 export function frameOf(
   K: Kind,
   anim: string,
@@ -533,12 +564,34 @@ export function frameOf(
   build: () => Pic,
 ): MobFrame {
   const key = `${anim}|${f}|${d}|${pose.look}`;
+  const v = cur;
+  cur = null;
+  const live = !F8_MOB_STAT.warming;
   let fr = K.frames.get(key);
+  if (!fr && live) {
+    const now = pose.now || 0;
+    if (now !== budNow) {
+      budNow = now;
+      budSpent = 0;
+    }
+    if (budSpent >= F8_MOB_STAT.budget && v && !curFresh && v.last && v.lastK === K) {
+      F8_MOB_STAT.held++;
+      fr = v.last;
+    }
+  }
   if (!fr) {
     const t0 = performance.now();
-    fr = K.frames.set(key, finishPic(build(), pose.look));
+    const pic = build();
+    const t1 = performance.now();
+    fr = K.frames.set(key, finishPic(pic, pose.look));
+    if (!F8_MOB_STAT.warming && F8_MOB_STAT.fin.length < 4000) F8_MOB_STAT.fin.push(performance.now() - t1);
     stat(K, performance.now() - t0, key);
+    if (live) budSpent += performance.now() - t0;
     F8_MOB_STAT.px += fr.img.width * fr.img.height * (fr.lit ? 2 : 1);
+  }
+  if (v && live) {
+    v.last = fr;
+    v.lastK = K;
   }
   return pose.flash ? { ...fr, img: flashImg(fr.img) } : fr;
 }
