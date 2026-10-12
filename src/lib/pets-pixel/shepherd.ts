@@ -2147,20 +2147,9 @@ function badge(p: Px, f: Frame, c: Ctx, hs: { straps: V3[][]; collar: V3[] }): v
   else stamp(p, BADGE_S, pal, at[0] - 1, at[1] - 1);
 }
 
-function star(p: Px, x: number, y: number, L: number, col: RGBA, arm: RGBA): void {
-  p.set(x, y, col);
-  for (let d = 1; d <= L; d++) {
-    const cc = d === 1 ? col : arm;
-    p.set(x - d, y, cc);
-    p.set(x + d, y, cc);
-    p.set(x, y - d, cc);
-    p.set(x, y + d, cc);
-  }
-}
-
 const RING = [hx('#fff4dc'), hx('#f0c070', 210)];
 
-/** Лай: кольца расходятся от пасти куполом и тают; ниже пола не идут. */
+/** Лай: дуги «(( ))» расходятся в стороны от пасти и тают; ниже пола не идут. */
 function rings(p: Px, mask: Uint8Array, c: Ctx): void {
   const { o } = c;
   // Кольца идут из пасти в позе лая и не едут за головой.
