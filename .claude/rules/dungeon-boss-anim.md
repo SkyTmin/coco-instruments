@@ -269,4 +269,8 @@ Owner after v2.97.0 (quote): «Просто идеально божествен�
   `f13_v_*`); v2.97 Повелитель-2 (`lordPointPx`, `lAhead`, `clipBodies`, `lordSeen`).
 - Mobs: v2.98 floor 2 (`f2-mobs.ts`, `mob-live.mjs`), v2.99 floor 3 (`f3-mobs.ts`), v2.100
   floor 5 (`f5-mobs.ts`), v2.101 floor 4 (`f4-mobkit.ts`), v2.103 floor 1 (`f1-art.ts`,
-  `F1_MOB_STAT`), v2.105 floor 7 (`f7-mob-*.ts`, `f7-mobkit.ts`: `visOf`, `hurtFx`, `dress`).
+  `F1_MOB_STAT`), v2.105 floor 7 (`f7-mob-*.ts`, `f7-mobkit.ts`: `visOf`, `hurtFx`, `dress`),
+  v2.106 floor 6 (`f6-mob-*.ts`, `f6-mobkit.ts`, `f6-mob-fx.ts`), v2.107 floor 9 (`f9-mob-*.ts`,
+  `f9-mobkit.ts`; `f9_body`/`f9_head` stay registered for floor 15), v2.108 floor 8
+  (`f8-mob-*.ts`, `f8-mobkit.ts`, `f8-mob-fx.ts`, brain `f8_snap`), v2.109 floor 10
+  (`f10-mobs.ts`, `f10-mob-*.ts`; zone `f10_puff` and the imp's in-frame smoke both kept).

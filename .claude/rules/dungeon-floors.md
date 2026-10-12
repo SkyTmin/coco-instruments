@@ -210,5 +210,6 @@ On a phone — floors, creative mode, all fights (rig 390×844 only); by ear —
 - Reworks: v2.90 floor 13 (Театр, was «Город за стенами»), v2.91 floor 12 (Полярная ночь,
   was «Проклятая станция»), v2.93 floor 15 (Ядро, was «Сердце» with the lion), v2.95
   `seamBlend`.
-- Animations: bosses v2.85–v2.97, mobs 2/3/5/4/1/7 — v2.98/99/100/101/103/105
+- Animations: bosses v2.85–v2.97, mobs 2/3/5/4/1/7/6/9/8/10 —
+  v2.98/99/100/101/103/105/106/107/108/109
   (`dungeon-boss-anim.md`).
