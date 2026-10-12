@@ -122,12 +122,16 @@ const R0: RaO = {
 /**
  * Корпус. В профиль спина доворачивается к зрителю (крен до 0,4 рад): камера
  * смотрит под 37°, и ближнее крыло на взмахе встаёт к ней ребром — скат
- * читался бы «парусом» из одного дальнего крыла.
+ * читался бы «парусом» из одного дальнего крыла. Носом к зрителю — то же
+ * самое по тангажу: нос чуть вниз (спина к камере), а дыбы на прицеле мягче,
+ * иначе скат встаёт к камере ребром и читается чертой.
  */
 function bodyF(o: RaO, yaw: number): F3 {
+  const fr = Math.max(0, Math.sin(yaw));
+  const p = o.pitch < 0 ? o.pitch * (1 - 0.75 * fr) : o.pitch;
   return F3.yaw(yaw)
     .at(o.fwd, 0, o.z)
-    .pitch(o.pitch)
+    .pitch(p + 0.35 * fr)
     .roll(o.roll + 0.4 * Math.cos(yaw));
 }
 
@@ -537,6 +541,9 @@ function bankLvl(m: Mob, spin: number, now: number): number {
   return st.b;
 }
 
+/** Миг удара касанием в пике (время рендера). */
+const RAM = new WeakMap<Mob, number>();
+
 registerMobPainter('f11_ray', (m: Mob, pose: MobPose) => {
   const md = pose.mode;
   const t = pose.t;
@@ -566,9 +573,23 @@ registerMobPainter('f11_ray', (m: Mob, pose: MobPose) => {
   } else if (md === 'f11_swoop') {
     f = t < 4 / FPS ? fi(t, 3) : 4 + (Math.floor(t * FPS) % 4);
     anim = 'swoop';
-    ex.lift = 7.5 - 4.5 * sstep(0, 0.16, t);
     ex.shadow = 7;
     ex.ghost = { every: 0.03, life: 0.18, tint: '#7ab4e2', alpha: 0.32 };
+    // Удар касанием (мозг ставит `data.hit`): тело отвечает — сплющило о
+    // героя и подбросило, 0,15 с.
+    let bump = 0;
+    if (m.data?.hit) {
+      let at = RAM.get(m);
+      if (at === undefined || at < v.since - 0.01 || at > now) {
+        at = now;
+        RAM.set(m, at);
+      }
+      const k = 1 - clamp01((now - at) / 0.15);
+      ex.sx = 1 + 0.14 * k;
+      ex.sy = 1 - 0.16 * k;
+      bump = 2.5 * Math.sin(PI * (1 - k));
+    }
+    ex.lift = 7.5 - 4.5 * sstep(0, 0.16, t) + bump;
   } else if (md === 'recover' && t < 0.42 && (v.prev === 'f11_swoop' || v.prev === '')) {
     f = fi(t, 9);
     anim = 'pull';
