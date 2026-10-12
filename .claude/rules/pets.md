@@ -277,7 +277,8 @@ Owner: «добавь возможность выбирать скин у пит
   at the viewer f9 (scale 1.18, head up, beak open with red gape, talons forward) → rays round the
   body over empty pixels → settle. Idle: breath, head swivel + tilt with the body still, blink
   left then right, tuft springs, a shake. Sleep: fluffed, head sunk, tufts back, lamp off, zzz.
-  Hatch plays `happy`. Weight OWL_WEIGHT. Tests «пиксельная сова» in `pets-pixel.test.ts`.
+  Hatch plays `happy`. Weight 611 KB v0+v1 (small 65 / 73, large 227 / 244, thumbs 1 KB; ink was
+  1.86 MB). Tests «пиксельная сова» in `pets-pixel.test.ts`.
 - **Грабли**: `rig.ts` импортирует `../dungeon-tiles` ДО `../dungeon-art`
   (иначе круг модулей под vite-node: `hex is not a function`); у `pitchX`
   положительный угол наклоняет «вперёд-вниз» — клюв смотрел в небо;

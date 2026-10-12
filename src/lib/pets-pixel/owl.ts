@@ -943,8 +943,8 @@ function skel(o: Pose): Skel {
     up,
     body: up(BODY0),
     head: up(add(HEAD0, [o.hx, 0, o.hz])),
-    shL: up([-7.4, 1.6, 21.0]),
-    shR: up([7.4, 1.6, 21.0]),
+    shL: up([-7.9, 1.6, 20.8]),
+    shR: up([7.9, 1.6, 20.8]),
     rump: up([0, -4.2, 5.4]),
     hipL: up([-3.6, 1.4, 5.6]),
     hipR: up([3.6, 1.4, 5.6]),
@@ -955,7 +955,7 @@ function skel(o: Pose): Skel {
 }
 
 /** Голова в своих единицах: полуоси, глаза (доли полуосей). */
-const HRX = 9.4;
+const HRX = 10.0;
 const HRY = 6.8;
 const HRZ = 8.0;
 const EYE_X = 0.42;
@@ -1463,7 +1463,7 @@ function body(out: PartF[], c: Ctx): void {
   const fl = o.fluff;
   const ax = axes(rollY([1, 0, 0], o.lean), pitchX([0, 0, 1], o.bow * 0.5));
   const rb: V3 = [
-    (10.0 + fl) * (1 + sq * 0.5) * k,
+    (10.7 + fl) * (1 + sq * 0.5) * k,
     (8.4 + fl * 0.8) * (1 + sq * 0.4) * k,
     (11.4 + fl * 0.5) * (1 - sq) * k,
   ];
@@ -1691,7 +1691,7 @@ function eyes(p: Px, f: Frame, c: Ctx): void {
     const [cx, cy] = scr(ep);
     const facing = clamp01(dot(norm(h.dir([side * 0.3, 1, 0])), VIEW) / 0.96);
     const sxk = Math.max(0.45, facing ** 0.7);
-    let R = HI ? 5.4 : 2.5;
+    let R = HI ? 5.8 : 2.5;
     if (o.eye === 'wide') R *= 1.08;
     const blink = side < 0 ? o.blinkL : o.blinkR;
     const n = Math.ceil(R + 2);
@@ -2012,6 +2012,7 @@ function strikeFx(p: Px, mask: Uint8Array, c: Ctx): void {
 /** Сон: буквы «z» поднимаются над головой и тают. */
 const Z_S = ['zzz', '.z.', 'zzz'];
 const Z_L = ['zzzz', '..z.', '.z..', 'zzzz'];
+const Z_L2 = ['zzzzz', '...z.', '..z..', '.z...', 'zzzzz'];
 function zzz(p: Px, mask: Uint8Array, c: Ctx): void {
   const { h, t } = c;
   for (let j = 0; j < 2; j++) {
@@ -2019,14 +2020,16 @@ function zzz(p: Px, mask: Uint8Array, c: Ctx): void {
     const [sx, sy] = project(mul(h.at([5 + 3.5 * u, 0, 8 + 9 * u]), RR));
     const x0 = Math.round(OX + sx);
     const y0 = Math.round(OY + sy);
-    const rows = HI && u > 0.3 ? Z_L : Z_S;
+    // Крупная «z» растёт по пути; редкая шахматка только на появлении и уходе
+    // (сплошь сквозь шахматку буквы читались точками).
+    const rows = HI ? (u > 0.45 ? Z_L2 : Z_L) : Z_S;
     for (let y = 0; y < rows.length; y++)
       for (let x = 0; x < rows[y].length; x++) {
         if (rows[y][x] !== 'z') continue;
         const X = x0 + x;
         const Y = y0 + y;
         if (X < 0 || Y < 0 || X >= p.w || Y >= p.h || mask[Y * p.w + X]) continue;
-        if (!dith(X, Y, 1.2 * (1 - u) * Math.min(1, u * 6))) continue;
+        if (!dith(X, Y, Math.min(1, 1.8 * (1 - u)) * Math.min(1, u * 5))) continue;
         p.set(X, Y, ZZ);
       }
   }
