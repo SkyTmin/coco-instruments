@@ -344,6 +344,8 @@ export interface Pose {
   lean: number;
   bow: number;
   scale: number;
+  /** Поворот корпуса вокруг вертикали (+ — передом вправо): трюк, замах к камню. */
+  yaw: number;
   /** Голова: сдвиг, поворот, кивок (+ — вниз), наклон набок. */
   hx: number;
   hy: number;
@@ -369,7 +371,9 @@ export interface Pose {
   aRx: number;
   aRy: number;
   aRz: number;
-  /** Ступни: сдвиг и подъём. */
+  /** Ступни: вбок, вперёд и подъём. */
+  fLx: number;
+  fRx: number;
   fLy: number;
   fLz: number;
   fRy: number;
@@ -383,14 +387,18 @@ export interface Pose {
   hatTilt: number;
   /** Сидит (сон): 0 — стоит. */
   sit: number;
-  /** Трюк: камень (видимость), трещина (0, 1, 2 — светится), кайло (видимость, угол, наклон к зрителю, застряло в камне). */
+  /**
+   * Трюк: камень (видимость), трещина (0, 1, 2 — светится), кайло (видимость; направление
+   * рукояти от хвата левой лапы к головке, в мире; застряло в камне).
+   */
   rock: number;
   crack: number;
   pick: number;
-  pickA: number;
-  pickF: number;
+  pdx: number;
+  pdy: number;
+  pdz: number;
   stuck: number;
-  /** Кристалл: −1 — нет, иначе видимость; где он; блик на нём и на очках. */
+  /** Кристалл: −1 — нет, иначе видимость; где он (в мире); блик на нём и на очках. */
   gem: number;
   gx: number;
   gy: number;
@@ -414,6 +422,7 @@ const REST: Pose = {
   lean: 0,
   bow: 0,
   scale: 1,
+  yaw: 0,
   hx: 0,
   hy: 0,
   hz: 0,
@@ -434,6 +443,8 @@ const REST: Pose = {
   aRx: 0,
   aRy: 0,
   aRz: 0,
+  fLx: 0,
+  fRx: 0,
   fLy: 0,
   fLz: 0,
   fRy: 0,
@@ -447,8 +458,9 @@ const REST: Pose = {
   rock: 0,
   crack: 0,
   pick: 0,
-  pickA: 0,
-  pickF: 0,
+  pdx: 0,
+  pdy: 0,
+  pdz: 1,
   stuck: 0,
   gem: -1,
   gx: 0,
@@ -466,6 +478,12 @@ const pos = (v: number) => Math.max(0, v);
 const neg = (v: number) => Math.max(0, -v);
 const TAU = Math.PI * 2;
 const smooth = (u: number) => u * u * (3 - 2 * u);
+/** Поворот вокруг вертикали, + — передом вправо. */
+const yawZ0 = (p: V3, a: number): V3 => [
+  p[0] * Math.cos(a) + p[1] * Math.sin(a),
+  -p[0] * Math.sin(a) + p[1] * Math.cos(a),
+  p[2],
+];
 
 /** Разовая к концу переходит в позу начала покоя: стык без сдвига. */
 function settle(o: Pose, t: number, T: number, span = 0.24): Pose {
@@ -539,9 +557,6 @@ const LEG2 = 3.4;
 /** Масштаб модели в рамке: ступни — макушка каски ~42 пикселя малой полосы. */
 const G = 1.1;
 
-/** Камень трюка (перед барсуком справа) и место удара кайлом. */
-const ROCK_C: V3 = [10.2, 8.4, 0];
-const ROCK_TOP: V3 = [9.6, 9.4, 5.6];
 /** Кисть правой руки в покое (тело) — для пересчёта целей в сдвиг. */
 const PAW0 = STAND.paw;
 
@@ -676,64 +691,163 @@ function happyPose(t: number): Pose {
 }
 
 /**
- * Трюк (2 с): камень и кайло проявляются → замах над плечом → удар (искры,
- * осколки) → второй замах → удар: кайло застряло, трещина светится → кристалл
- * выскакивает дугой, барсук ловит его правой лапой → поднимает к свету:
- * блик на кристалле и на очках → реквизит тает, лапы на место.
+ * Трюк (2 с) — замах кайлом двумя лапами, как на фотографиях Мейбриджа «копает
+ * киркой»: камень впереди справа, на длину рукояти и руки → барсук ставит ноги
+ * широко (левая впереди), поворачивается к камню на три четверти, левая лапа
+ * берёт конец рукояти, правая — выше → замах вверх-назад над правым плечом:
+ * правая лапа скользит к головке, корпус выпрямляется и откидывается → удар:
+ * правая лапа скользит вниз к левой, кайло идёт дугой, корпус складывается в
+ * поясе, колени пружинят, голова уходит за кайлом (искры, осколки) → второй
+ * замах → удар: кайло застряло, трещина светится, рывок на себя → барсук
+ * отпускает рукоять, кристалл выскакивает из трещины дугой, правая лапа ловит →
+ * поднимает к свету: блик на кристалле и на очках → реквизит тает, всё в покой.
  */
 const HIT1 = 0.5;
 const HIT2 = 1.0;
 const POP = 1.1;
 const CATCH = 1.32;
-/** Угол рукояти в кадре: 0 — вверх, + — по часовой; наклон к зрителю. */
-const STRIKE_A = 2.0;
-const STRIKE_F = 0.25;
-const HANDLE = 7.4;
-const HEAD_W = 3.4;
-/** Рукоять и поперечная ось головки кайла (в плоскости замаха). */
-function pickAxes(A: number, F: number): [V3, V3] {
-  const d: V3 = [Math.sin(A) * Math.cos(F), Math.sin(F), Math.cos(A) * Math.cos(F)];
-  const n = norm([-d[2], 0, d[0]]);
+/** Кайло (единицы модели, ×k): рукоять от хвата левой лапы до головки, полуширина головки, загиб зубьев. */
+const HANDLE = 12.5;
+const HEAD_W = 2.6;
+const HEAD_B = 0.7;
+/** Удар идёт вправо, почти в плоскости кадра; корпус — боком к зрителю (профиль). */
+const PSI = 1.42;
+const YAW = 1.3;
+/** Удар: наклон в поясе, присед, рукоять к земле (рад, вниз). */
+const BOW_HIT = 0.5;
+const CZ_HIT = 1.2;
+const A_HIT = -0.62;
+/** Хват при ударе: от середины плеч вперёд по плоскости и вниз (мир). */
+const REACH_F = 7.5;
+const REACH_Z = 0.8;
+
+const SW_D: V3 = [Math.sin(PSI), Math.cos(PSI), 0];
+/** Вбок от плоскости замаха — к правому (дальнему) плечу. */
+const SW_L: V3 = [Math.cos(PSI), -Math.sin(PSI), 0];
+/** Плоскость замаха → мир: [вдоль к камню, вбок к правому плечу, вверх]. */
+const sw3 = (v: V3): V3 => add(mul(SW_D, v[0]), add(mul(SW_L, v[1]), [0, 0, v[2]]));
+/** Рукоять в миг удара и куда головка шла бы дальше: зуб смотрит по ходу удара. */
+const D_HIT: V3 = add(mul(SW_D, Math.cos(A_HIT)), [0, 0, Math.sin(A_HIT)]);
+const D_ON: V3 = add(mul(SW_D, Math.cos(A_HIT - 0.9)), [0, 0, Math.sin(A_HIT - 0.9)]);
+
+/** Оси кайла: рукоять `d` и ведущий зуб `n` — поперёк рукояти по ходу удара. */
+function pickAxes(dir: V3): [V3, V3] {
+  const d = norm(dir);
+  const n = norm(sub(D_ON, mul(d, dot(D_ON, d))));
   return [d, n];
 }
-/** Где кисть, когда остриё кайла — на верху камня. */
-const STRIKE_PAW: V3 = (() => {
-  const [d, n] = pickAxes(STRIKE_A, STRIKE_F);
-  return sub(ROCK_TOP, sub(mul(d, HANDLE), mul(n, HEAD_W)));
-})();
-const GEM_ON: V3 = [0, 0.6, 2.7];
-/** Кисть правой лапы (абсолютно, в теле) и угол кайла по ключам. */
-const SWING: [number, number, number, number, number, number, ('i' | 'o' | 'l' | 's')?][] = [
-  [0, PAW0[0], PAW0[1], PAW0[2], 2.7, 0.2],
-  [0.18, 9.4, 3.2, 12.4, 1.7, 0.2, 'o'],
-  [0.4, 9.6, 0.4, 24.0, 0.25, 0.1, 'o'],
-  [0.44, 9.7, 0.3, 24.4, 0.2, 0.1],
-  [0.475, 10.4, 3.4, 19.0, 1.15, 0.2, 'i'],
-  [HIT1, STRIKE_PAW[0], STRIKE_PAW[1], STRIKE_PAW[2], STRIKE_A, STRIKE_F, 'i'],
-  [0.56, 7.0, 5.4, 12.8, 1.8, 0.22, 'o'],
-  [0.66, 8.6, 3.6, 16.0, 1.2, 0.18],
-  [0.88, 9.6, 0.4, 24.0, 0.25, 0.1, 'o'],
-  [0.92, 9.7, 0.3, 24.4, 0.2, 0.1],
-  [0.975, 10.4, 3.4, 19.0, 1.15, 0.2, 'i'],
-  [HIT2, STRIKE_PAW[0], STRIKE_PAW[1], STRIKE_PAW[2], STRIKE_A, STRIKE_F, 'i'],
-  [1.08, 8.4, 4.6, 13.4, STRIKE_A, STRIKE_F, 'o'],
-  [1.22, 9.0, 5.4, 11.6, STRIKE_A, STRIKE_F],
-  [CATCH, 8.8, 5.6, 13.2, STRIKE_A, STRIKE_F, 'o'],
-  [1.52, 9.6, 1.8, 26.0, STRIKE_A, STRIKE_F, 'o'],
-  [1.7, 9.6, 1.8, 26.2, STRIKE_A, STRIKE_F],
-  [2.0, PAW0[0], PAW0[1], PAW0[2], STRIKE_A, STRIKE_F, 's'],
+/** Остриё ведущего зуба от хвата (конца рукояти). */
+function pickTip(B: V3, dir: V3, k: number): V3 {
+  const [d, n] = pickAxes(dir);
+  return add(B, add(mul(d, (HANDLE - HEAD_B) * k), mul(n, HEAD_W * k)));
+}
+
+/** Точка мира → координаты тела позы (обратное к `skel().up`): лапа тянется к рукояти. */
+function toBody(o: Pose, p: V3): V3 {
+  const s = o.scale * G;
+  let q = mul(sub(p, [o.x, o.y, o.z - o.cz]), 1 / s);
+  q = rollY(q, -o.lean, [0, 0, 0]);
+  if (o.yaw) q = yawZ0(q, -o.yaw);
+  q = pitchX(q, -o.bow, [0, 0, 4]);
+  return [q[0] / (1 + o.sq * 0.5), q[1] / (1 + o.sq * 0.4), q[2] / (1 - o.sq)];
+}
+
+export interface HitGeo {
+  /** Хват левой лапы в миг удара (мир). */
+  B: V3;
+  /** Остриё в камне — место удара. */
+  T: V3;
+  /** Камень: центр и радиусы (мир). */
+  rc: V3;
+  rr: V3;
+  /** Трещина спереди сверху: отсюда выскакивает кристалл. */
+  crack: V3;
+}
+let HIT_G: HitGeo | null = null;
+/** Геометрия удара от позы удара: камень кладётся туда, куда достаёт кайло. */
+export function hitGeo(): HitGeo {
+  if (HIT_G) return HIT_G;
+  const S = skel({ ...REST, bow: BOW_HIT, cz: CZ_HIT, yaw: YAW });
+  const mid = mul(add(S.sh[0], S.sh[1]), 0.5);
+  const B = add(mid, add(mul(SW_D, REACH_F), [0, 0, -REACH_Z]));
+  const T = pickTip(B, D_HIT, G);
+  const rr: V3 = mul([5.4, 4.6, 4.8], G);
+  // Остриё входит в верх камня ближе к барсуку, чуть ниже макушки.
+  const rc: V3 = [T[0] + SW_D[0] * 1.2, T[1] + SW_D[1] * 1.2, T[2] + 0.5 - rr[2]];
+  const crack: V3 = add(rc, [-0.1 * rr[0], 0.72 * rr[1], 0.42 * rr[2]]);
+  HIT_G = { B, T, rc, rr, crack };
+  return HIT_G;
+}
+
+/**
+ * Замах по ключам (в плоскости замаха: вдоль к камню, вбок к правому плечу, вверх): время;
+ * хват (конец рукояти у левой лапы) — сдвиг от хвата удара; направление рукояти к головке.
+ */
+type Ease = 'i' | 'o' | 'l' | 's';
+type SwingKey = [number, V3, V3, Ease?];
+/** Верх замаха: кисти у ближнего (правого) плеча под щекой, кайло вверх-назад мимо щеки. */
+const TOP_B: V3 = [-19.0, -1.6, 6.6];
+const TOP_D: V3 = [-0.84, -0.2, 0.52];
+const TOP2_D: V3 = [-0.9, -0.2, 0.44];
+/** Середина удара: кисти под подбородком, кайло вперёд-вверх. */
+const MID_B: V3 = [-6.5, -1.4, 3.4];
+const MID_D: V3 = [0.71, 0, 0.7];
+const SWING: SwingKey[] = [
+  [0, [-7.4, -2.0, -0.4], [0.86, 0, -0.5]],
+  [0.18, [-7.0, -1.8, -0.6], [0.86, 0, -0.5], 'o'],
+  [0.4, TOP_B, TOP_D, 'o'],
+  [0.44, add(TOP_B, [-0.4, 0, 0.2]), TOP2_D],
+  [0.475, MID_B, MID_D, 'i'],
+  [HIT1, [0, 0, 0], [Math.cos(A_HIT), 0, Math.sin(A_HIT)], 'i'],
+  [0.56, [-0.5, 0, 1.0], [0.86, 0, -0.42], 'o'],
+  [0.66, [-6.0, -1.0, 2.5], [0.9, 0, 0.1]],
+  [0.88, TOP_B, TOP_D, 'o'],
+  [0.92, add(TOP_B, [-0.4, 0, 0.2]), TOP2_D],
+  [0.975, MID_B, MID_D, 'i'],
+  [HIT2, [0, 0, 0], [Math.cos(A_HIT), 0, Math.sin(A_HIT)], 'i'],
 ];
-function swingAt(t: number): { p: V3; A: number; F: number } {
-  const col = (j: number) => SWING.map((r) => [r[0], r[j], r[6]] as Key);
+const SLIDE: Key[] = [
+  [0, 4.4],
+  [0.18, 4.4],
+  [0.4, 4.8, 'o'],
+  [0.44, 4.8],
+  [0.475, 3.2, 'i'],
+  [HIT1, 1.3, 'i'],
+  [0.56, 1.5],
+  [0.66, 3.4],
+  [0.88, 4.8, 'o'],
+  [0.92, 4.8],
+  [0.975, 3.2, 'i'],
+  [HIT2, 1.3, 'i'],
+];
+function swingAt(t: number): { B: V3; d: V3; slide: number } {
+  const ch = (f: (r: SwingKey) => number) => kf(t, SWING.map((r) => [r[0], f(r), r[3]] as Key));
   return {
-    p: [kf(t, col(1)), kf(t, col(2)), kf(t, col(3))],
-    A: kf(t, col(4)),
-    F: kf(t, col(5)),
+    B: add(hitGeo().B, sw3([ch((r) => r[1][0]), ch((r) => r[1][1]), ch((r) => r[1][2])])),
+    d: norm(sw3([ch((r) => r[2][0]), ch((r) => r[2][1]), ch((r) => r[2][2])])),
+    slide: kf(t, SLIDE),
   };
+}
+/** Кристалл в правой лапе: чуть впереди и выше кисти (мир). */
+const GEM_ON: V3 = [0.2, 0.9, 2.6];
+
+/** Лапу в точку мира: сдвиг кисти от места покоя (в теле). */
+function reach(o: Pose, j: 0 | 1, w: V3): void {
+  const q = toBody(o, w);
+  if (j === 0) {
+    o.aLx = -q[0] - PAW0[0];
+    o.aLy = q[1] - PAW0[1];
+    o.aLz = q[2] - PAW0[2];
+  } else {
+    o.aRx = q[0] - PAW0[0];
+    o.aRy = q[1] - PAW0[1];
+    o.aRz = q[2] - PAW0[2];
+  }
 }
 
 function workPose(t: number): Pose {
   const o: Pose = { ...REST };
+  const H = hitGeo();
   o.rock = kf(t, [
     [0, 0],
     [0.16, 1, 'l'],
@@ -742,16 +856,102 @@ function workPose(t: number): Pose {
   ]);
   o.pick = kf(t, [
     [0, 0],
-    [0.14, 1, 'l'],
+    [0.04, 0],
+    [0.18, 1, 'l'],
     [1.72, 1],
     [1.92, 0, 'l'],
   ]);
-  const sw = swingAt(t);
-  o.aRx = sw.p[0] - PAW0[0];
-  o.aRy = sw.p[1] - PAW0[1];
-  o.aRz = sw.p[2] - PAW0[2];
-  o.pickA = sw.A;
-  o.pickF = sw.F;
+  // Стойка: левая нога шагает вперёд и в сторону (с подъёмом — не скользит), правая отходит назад.
+  // Поворот боком — двумя шагами: левая (ближняя) вперёд, правая (дальняя) назад; обратно так же.
+  const stL = kf(t, [
+    [0, 0],
+    [0.03, 0],
+    [0.16, 1, 'o'],
+    [1.44, 1],
+    [1.66, 0, 's'],
+  ]);
+  const stR = kf(t, [
+    [0, 0],
+    [0.1, 0],
+    [0.24, 1, 'o'],
+    [1.52, 1],
+    [1.76, 0, 's'],
+  ]);
+  o.fLx = 6.3 * stL;
+  o.fLy = 2.6 * stL;
+  o.fRx = -5.8 * stR;
+  o.fRy = -3.4 * stR;
+  o.fLz = 1.4 * (bump(t, 0.03, 0.16) + bump(t, 1.44, 1.66));
+  o.fRz = 1.2 * (bump(t, 0.1, 0.24) + bump(t, 1.52, 1.76));
+  // Корпус: поворот к камню, в замахе — скрутка дальше; удар — складка в поясе и присед.
+  o.yaw = kf(t, [
+    [0, 0],
+    [0.02, 0],
+    [0.24, YAW],
+    [0.4, YAW - 0.3, 'o'],
+    [0.44, YAW - 0.32],
+    [HIT1, YAW, 'i'],
+    [0.66, YAW - 0.05],
+    [0.88, YAW - 0.3, 'o'],
+    [0.92, YAW - 0.32],
+    [HIT2, YAW, 'i'],
+    [POP, YAW],
+    [CATCH, 0.8],
+    [1.52, 0.2, 'o'],
+    [1.76, 0.12],
+  ]);
+  o.bow = kf(t, [
+    [0, 0],
+    [0.18, 0.2, 'o'],
+    [0.4, -0.05, 'o'],
+    [0.44, -0.06],
+    [HIT1, BOW_HIT, 'i'],
+    [0.56, BOW_HIT - 0.04, 'o'],
+    [0.66, 0.2],
+    [0.88, -0.05, 'o'],
+    [0.92, -0.06],
+    [HIT2, BOW_HIT, 'i'],
+    [1.06, BOW_HIT - 0.05, 'o'],
+    [POP, BOW_HIT - 0.06],
+    [1.2, 0.24, 'o'],
+    [CATCH, 0.12, 'o'],
+    [1.52, -0.06, 'o'],
+    [1.76, -0.06],
+  ]);
+  o.cz = kf(t, [
+    [0, 0],
+    [0.18, 0.5, 'o'],
+    [0.4, -0.3, 'o'],
+    [0.44, -0.3],
+    [HIT1, CZ_HIT, 'i'],
+    [0.56, CZ_HIT - 0.2, 'o'],
+    [0.66, 0.5],
+    [0.88, -0.3, 'o'],
+    [0.92, -0.3],
+    [HIT2, CZ_HIT, 'i'],
+    [1.06, CZ_HIT - 0.25, 'o'],
+    [POP, CZ_HIT - 0.3],
+    [1.2, 0.6, 'o'],
+    [CATCH, 0.2, 'o'],
+    [1.52, -0.2, 'o'],
+    [1.76, 0],
+  ]);
+  o.lean = kf(t, [
+    [0, 0],
+    [0.18, 0.03],
+    [0.4, -0.06, 'o'],
+    [HIT1, 0.05, 'i'],
+    [0.66, 0.02],
+    [0.88, -0.06, 'o'],
+    [HIT2, 0.05, 'i'],
+    [POP, 0],
+  ]);
+  o.sq = 0.06 * Math.max(bump(t, HIT1 - 0.02, HIT1 + 0.1), bump(t, HIT2 - 0.02, HIT2 + 0.1));
+  // Кайло: до удара 2 — в лапах по ключам; после — стоит в камне как вошло.
+  const sw = swingAt(Math.min(t, HIT2));
+  o.pdx = sw.d[0];
+  o.pdy = sw.d[1];
+  o.pdz = sw.d[2];
   o.stuck = t >= HIT2 ? 1 : 0;
   o.crack = t >= HIT2 ? (t >= HIT2 + 0.03 && t < POP + 0.08 ? 2 : 1) : 0;
   o.hit =
@@ -760,7 +960,35 @@ function workPose(t: number): Pose {
       : t >= HIT2 && t < HIT2 + 0.16
         ? (t - HIT2) / 0.16
         : -1;
-  // Кристалл: дугой из трещины в лапу, потом на лапе.
+  // Лапы на рукояти. Барсук стоит к нам боком, передом вправо: лапа кадра-справа (+x, `paw[1]`)
+  // — дальняя, держит конец рукояти; лапа −x (`paw[0]`) — ближняя, по-настоящему его ПРАВАЯ,
+  // скользит: к головке в замахе, вниз к дальней на ударе. Замах — над ближним (правым) плечом.
+  const d = sw.d;
+  const farW = add(sw.B, mul(d, 0.2 * G));
+  const nearW = add(sw.B, mul(d, sw.slide * G));
+  const grab = kf(t, [
+    [0, 0],
+    [0.02, 0],
+    [0.18, 1, 'o'],
+  ]);
+  const rel = kf(t, [
+    [0, 0],
+    [POP - 0.02, 0],
+    [POP + 0.08, 1, 'o'],
+  ]);
+  const rest = skel({ ...o, aLx: 0, aLy: 0, aLz: 0, aRx: 0, aRy: 0, aRz: 0 });
+  // Дальняя (+x) после рывка: к кристаллу (ловит), потом вверх к свету.
+  const up0 = rest.up([PAW0[0] - 0.2, PAW0[1] - 0.6, 26.4]);
+  const catchW = add(H.crack, [-2.2, 1.6, 9.0]);
+  const Rfree: V3 =
+    t < CATCH
+      ? lerp3(farW, catchW, smooth(clamp01((t - POP + 0.02) / (CATCH - POP + 0.02))))
+      : lerp3(catchW, up0, smooth(clamp01((t - CATCH) / 0.2)));
+  // Ближняя отпускает и сжимает кулак у пояса.
+  const Lfree = rest.up([-PAW0[0] - 0.6, PAW0[1] + 2.0, PAW0[2] + 3.6]);
+  reach(o, 0, lerp3(lerp3(rest.paw[0], nearW, grab), Lfree, rel));
+  reach(o, 1, lerp3(lerp3(rest.paw[1], farW, grab), Rfree, rel));
+  // Кристалл: из трещины дугой в правую лапу, потом в лапе.
   if (t >= POP) {
     o.gem = kf(t, [
       [POP, 0.4],
@@ -768,62 +996,52 @@ function workPose(t: number): Pose {
       [1.72, 1],
       [1.92, 0, 'l'],
     ]);
-    const catchAt = add(swingAt(CATCH).p, GEM_ON);
     let g: V3;
     if (t < CATCH) {
       const u = (t - POP) / (CATCH - POP);
-      const s0: V3 = [ROCK_TOP[0] - 1.0, ROCK_TOP[1] - 0.4, ROCK_TOP[2] - 0.6];
-      g = lerp3(s0, catchAt, u);
-      g[2] += 9 * u * (1 - u);
-    } else g = add(sw.p, GEM_ON);
+      g = lerp3(H.crack, add(catchW, GEM_ON), u);
+      g[2] += 10 * u * (1 - u);
+    } else g = add(catchW, GEM_ON);
     o.gx = g[0];
     o.gy = g[1];
     o.gz = g[2];
   }
   o.glint = bump(t, 1.5, 1.74);
   o.gog = bump(t, 1.56, 1.76);
-  // Тело: замах — от камня, удар — к нему, колени пружинят.
-  const strike = Math.max(bump(t, 0.44, 0.62), bump(t, 0.94, 1.12));
-  const wind = Math.max(bump(t, 0.16, 0.48), bump(t, 0.64, 0.98));
-  o.lean = -0.05 * wind + 0.06 * strike;
-  o.bow = -0.05 * wind + 0.08 * strike;
-  o.cz = 0.7 * strike;
-  o.sq = 0.05 * Math.max(bump(t, HIT1 - 0.02, HIT1 + 0.1), bump(t, HIT2 - 0.02, HIT2 + 0.1));
-  // Левая лапа — для равновесия; с кристаллом — кулак вверх.
+  // Голова: смотрит на остриё, на ударе уходит за кайлом вниз; кристалл — вверх.
+  // Голова: корпус боком, морда — на три четверти к нам; на ударе уходит за кайлом вниз.
+  o.turn = kf(t, [
+    [0, 0],
+    [0.02, 0],
+    [0.24, -0.32],
+    [0.4, -0.36],
+    [HIT1, -0.26, 'i'],
+    [0.88, -0.36],
+    [HIT2, -0.26, 'i'],
+    [POP, -0.24],
+    [CATCH, -0.1],
+    [1.52, 0.1, 'o'],
+    [1.76, 0.12],
+  ]);
+  o.nod = kf(t, [
+    [0, 0],
+    [0.18, 0.1, 'o'],
+    [0.4, -0.06],
+    [HIT1, 0.0, 'i'],
+    [0.66, 0.08],
+    [0.88, -0.06],
+    [HIT2, 0.0, 'i'],
+    [POP, -0.04],
+    [1.24, -0.2, 'o'],
+    [CATCH, 0.02],
+    [1.52, -0.3, 'o'],
+    [1.76, -0.3],
+  ]);
   const hold = kf(t, [
     [0, 0],
     [1.36, 0],
     [1.52, 1, 'o'],
     [1.76, 1],
-    [1.96, 0, 's'],
-  ]);
-  o.aLx = 0.8 * Math.max(wind, strike) + 0.4 * hold;
-  o.aLy = 1.2 * Math.max(wind, strike) + 2.2 * hold;
-  o.aLz = 1.4 * Math.max(wind, strike) + 4.5 * hold;
-  // Голова: на камень; кристалл — проводила взглядом вверх; держит — смотрит на него.
-  o.turn = kf(t, [
-    [0, 0],
-    [0.16, 0.2, 'o'],
-    [1.06, 0.2],
-    [1.2, 0.06],
-    [1.36, 0.2],
-    [1.52, 0.26, 'o'],
-    [1.76, 0.26],
-    [1.96, 0, 's'],
-  ]);
-  o.nod = kf(t, [
-    [0, 0],
-    [0.16, 0.16, 'o'],
-    [0.4, 0.02],
-    [HIT1, 0.2, 'i'],
-    [0.88, 0.02],
-    [HIT2, 0.2, 'i'],
-    [POP, 0.12],
-    [1.24, -0.16, 'o'],
-    [CATCH, 0.06],
-    [1.52, -0.3, 'o'],
-    [1.76, -0.3],
-    [1.96, 0, 's'],
   ]);
   o.tilt = 0.08 * hold;
   const imp = (t >= HIT1 - 0.03 && t < HIT1 + 0.08) || (t >= HIT2 - 0.03 && t < HIT2 + 0.08);
@@ -832,7 +1050,7 @@ function workPose(t: number): Pose {
       ? 'happy'
       : t >= POP && t < CATCH + 0.02
         ? 'wide'
-        : imp
+        : imp || (t >= HIT2 && t < POP)
           ? 'squint'
           : 'open';
   o.jaw = 0.4 * bump(t, POP, CATCH + 0.04) + 0.3 * bump(t, 1.44, 1.84);
@@ -848,20 +1066,29 @@ function workPose(t: number): Pose {
     o.stuck = 0;
     o.gem = -1;
     o.gx = o.gy = o.gz = 0;
-    o.pickA = REST.pickA;
-    o.pickF = REST.pickF;
+    o.pdx = REST.pdx;
+    o.pdy = REST.pdy;
+    o.pdz = REST.pdz;
   }
   // Тело и лапы приходят в покой; реквизит тает сам и к концу уже на местах.
   const r = settle(o, t, dur('work'));
   for (const k of PROPS) (r as unknown as Record<string, number>)[k] = o[k];
+  // Пойманный кристалл — в кисти той позы, что рисуется (и когда лапы уже идут в покой).
+  if (r.gem >= 0 && t >= CATCH) {
+    const g = add(skel(r).paw[1], GEM_ON);
+    r.gx = g[0];
+    r.gy = g[1];
+    r.gz = g[2];
+  }
   return r;
 }
 const PROPS = [
   'rock',
   'crack',
   'pick',
-  'pickA',
-  'pickF',
+  'pdx',
+  'pdy',
+  'pdz',
   'stuck',
   'gem',
   'gx',
@@ -1045,6 +1272,7 @@ export function skel(o: Pose): Skel {
   const up = (p: V3): V3 => {
     let q: V3 = [p[0] * (1 + sq * 0.5), p[1] * (1 + sq * 0.4), p[2] * (1 - sq)];
     q = pitchX(q, o.bow, [0, 0, 4]);
+    if (o.yaw) q = yawZ0(q, o.yaw);
     q = rollY(q, o.lean, [0, 0, 0]);
     q = mul(q, s);
     return add(q, [o.x, o.y, o.z - o.cz]);
@@ -1056,7 +1284,9 @@ export function skel(o: Pose): Skel {
     pl,
     k: s,
     bc: up(pl.body),
-    bax: axes(rollY([1, 0, 0], o.lean), pitchX([0, 0, 1], o.bow * 0.5)),
+    bax: o.yaw
+      ? axes(rollY(yawZ0([1, 0, 0], o.yaw), o.lean), yawZ0(pitchX([0, 0, 1], o.bow * 0.5), o.yaw))
+      : axes(rollY([1, 0, 0], o.lean), pitchX([0, 0, 1], o.bow * 0.5)),
     br: mul([BODY_R[0] * (1 + 0.03 * ch), BODY_R[1] * (1 + 0.05 * ch), BODY_R[2]], s),
     head: up(add(pl.head, [o.hx, o.hy, o.hz])),
     sh: [up([-pl.sh[0], pl.sh[1], pl.sh[2]]), up([pl.sh[0], pl.sh[1], pl.sh[2]])],
@@ -1078,19 +1308,29 @@ export function skel(o: Pose): Skel {
       [0, 0, 0],
     ],
     foot: [
-      [-pl.foot[0] * s, pl.foot[1] * s + o.fLy * G + o.y, pl.foot[2] * s + o.fLz * G + lift],
-      [pl.foot[0] * s, pl.foot[1] * s + o.fRy * G + o.y, pl.foot[2] * s + o.fRz * G + lift],
+      [
+        -pl.foot[0] * s + o.fLx * G,
+        pl.foot[1] * s + o.fLy * G + o.y,
+        pl.foot[2] * s + o.fLz * G + lift,
+      ],
+      [
+        pl.foot[0] * s + o.fRx * G,
+        pl.foot[1] * s + o.fRy * G + o.y,
+        pl.foot[2] * s + o.fRz * G + lift,
+      ],
     ],
   };
+  // Повёрнутый корпус уносит за собой и направления локтей и коленей.
+  const yw = (v: V3): V3 => (o.yaw ? yawZ0(v, o.yaw) : v);
   for (const j of [0, 1]) {
     const side = j === 0 ? -1 : 1;
     // Локоть — наружу и назад.
-    const [el, paw] = ik(r.sh[j], r.paw[j], ARM1 * s, ARM2 * s, norm([side, -0.5, -0.4]));
+    const [el, paw] = ik(r.sh[j], r.paw[j], ARM1 * s, ARM2 * s, yw(norm([side, -0.5, -0.4])));
     r.el[j] = el;
     r.paw[j] = paw;
     // Щиколотка над ступнёй (сидит — позади поднятой ступни); колено — вперёд и наружу.
     const ank = add(r.foot[j], mul(lerp3([0, -0.3, 1.5], [0, -1.6, 0.6], pl.sole), s));
-    const [kn, an] = ik(r.hip[j], ank, LEG1 * s, LEG2 * s, norm([side * 0.35, 1, 0.2]));
+    const [kn, an] = ik(r.hip[j], ank, LEG1 * s, LEG2 * s, yw(norm([side * 0.35, 1, 0.2])));
     r.knee[j] = kn;
     r.ank[j] = an;
   }
@@ -1182,18 +1422,13 @@ interface HeadF {
   hat: (p: V3) => V3;
   hdir: (v: V3) => V3;
 }
-const yawZ0 = (p: V3, a: number): V3 => [
-  p[0] * Math.cos(a) + p[1] * Math.sin(a),
-  -p[0] * Math.sin(a) + p[1] * Math.cos(a),
-  p[2],
-];
 /** Центр полей каски в осях головы. */
 const HAT_P: V3 = [0, 0, 4.5];
 
 function headF(o: Pose, S: Skel, lag: Lag): HeadF {
   const nb = o.nod + o.bow;
   const tl = o.tilt + o.lean;
-  const dir = (v: V3): V3 => rollY(yawZ0(pitchX(v, nb), o.turn), tl);
+  const dir = (v: V3): V3 => rollY(yawZ0(pitchX(v, nb), o.turn + o.yaw), tl);
   // На малой голова чуть крупнее: глаза, нос и полосы должны поместиться.
   const k = S.k * (HI ? 1.06 : 1.12);
   const hc: V3 = [lag.headX, S.head[1], lag.headZ];
@@ -1293,10 +1528,12 @@ function legs(out: PartF[], rods: Rod[], c: Ctx): void {
     limb(out, S.hip[j], S.knee[j], 2.5 * k, 2.6 * k, P_BLK, lid, { bias: 0.02 });
     limb(out, S.knee[j], S.ank[j], 2.2 * k, 2.3 * k, P_BLK, lid, { bias: 0.04 });
     // Ступня: длинная, носком к зрителю; сидя — подошвой к зрителю.
-    const fd = norm(lerp3([side * 0.14, 1, 0], [side * 0.12, 0.25, 1], sole));
+    // Носки — за корпусом наполовину: стойка в замахе.
+    const fy = (v: V3): V3 => (c.o.yaw ? yawZ0(v, 0.85 * c.o.yaw) : v);
+    const fd = fy(norm(lerp3([side * 0.14, 1, 0], [side * 0.12, 0.25, 1], sole)));
     const fu = norm(lerp3([0, 0, 1], [0, 1, -0.2], sole));
     const fax = axes(fd, fu);
-    const fc = add(S.foot[j], mul(lerp3([0, 0.9, 1.15], [0, 0.4, 2.5], sole), k));
+    const fc = add(S.foot[j], mul(fy(lerp3([0, 0.9, 1.15], [0, 0.4, 2.5], sole)), k));
     out.push({
       c: fc,
       ax: fax,
@@ -1694,9 +1931,13 @@ function hatParts(out: PartF[], c: Ctx): void {
   });
 }
 
-/** Камень: два валуна; трещина спереди (светится лиловым, когда кристалл рвётся наружу). */
+/**
+ * Камень: валун впереди справа, на длину рукояти и руки, и голыш у его подножия; трещина
+ * от места удара вниз по передней стороне (светится лиловым, когда кристалл рвётся наружу).
+ */
 function rockParts(out: PartF[], c: Ctx): void {
   const { o } = c;
+  const H = hitGeo();
   const vis = o.rock;
   const cr = o.crack;
   const tex = (qx: number, qy: number, qz: number) => {
@@ -1704,9 +1945,9 @@ function rockParts(out: PartF[], c: Ctx): void {
     return n < 0.25 ? -0.08 : n > 0.85 ? 0.05 : 0;
   };
   out.push({
-    c: mul([ROCK_C[0], ROCK_C[1], 1.2], G),
+    c: H.rc,
     ax: axes([1, 0.15, 0], [0, 0, 1]),
-    r: mul([4.6, 3.8, 4.4], G),
+    r: H.rr,
     pal: P_ROCK,
     id: nid(),
     tex,
@@ -1714,8 +1955,8 @@ function rockParts(out: PartF[], c: Ctx): void {
     floor: true,
     pick: (qx, qy, qz) => {
       PICK_T = 0;
-      if (cr < 0.5 || qy < 0.1 || qz < -0.2) return P_ROCK;
-      const cx = -0.12 + 0.1 * Math.sin(qz * 9);
+      if (cr < 0.5 || qy < -0.2 || qz < -0.2) return P_ROCK;
+      const cx = -0.14 + 0.1 * Math.sin(qz * 9);
       const d = Math.abs(qx - cx);
       if (cr > 1.5 && d < (HI ? 0.045 : 0.06)) {
         PICK_T = 0.2;
@@ -1726,9 +1967,9 @@ function rockParts(out: PartF[], c: Ctx): void {
     },
   });
   out.push({
-    c: mul([ROCK_C[0] - 3.8, ROCK_C[1] + 1.3, 0.5], G),
+    c: add(H.rc, mul([-4.4, 2.6, -0.4 * H.rr[2] / G + 0.2], G)),
     ax: axes([1, -0.3, 0], [0.2, 0, 1]),
-    r: mul([2.6, 2.4, 2.3], G),
+    r: mul([2.4, 2.2, 2.1], G),
     pal: P_ROCK,
     id: nid(),
     bias: -0.04,
@@ -1738,18 +1979,19 @@ function rockParts(out: PartF[], c: Ctx): void {
   });
 }
 
-/** Кайло: рукоять от кисти (или застряло в камне), головка поперёк рукояти в плоскости замаха. */
+/**
+ * Кайло: рукоять от хвата левой лапы (или как вошло в камень), головка поперёк рукояти
+ * в плоскости замаха, ведущий зуб — по ходу удара.
+ */
 function pickRods(rods: Rod[], c: Ctx): void {
   const { o, S } = c;
-  const [d, n] = pickAxes(o.pickA, o.pickF);
+  const [d, n] = pickAxes([o.pdx, o.pdy, o.pdz]);
   const k = o.stuck ? G : S.k;
-  const grip = o.stuck
-    ? sub(mul(ROCK_TOP, G), mul(sub(mul(d, HANDLE), mul(n, HEAD_W)), G))
-    : S.paw[1];
+  const grip = o.stuck ? hitGeo().B : sub(S.paw[1], mul(d, 0.2 * k));
   const vis = o.pick;
   const end = add(grip, mul(d, HANDLE * k));
   rods.push({
-    a: sub(grip, mul(d, 1.2 * k)),
+    a: sub(grip, mul(d, 0.9 * k)),
     b: end,
     w: HI ? 1.1 : 0.5,
     pal: P_WOOD,
@@ -1758,7 +2000,7 @@ function pickRods(rods: Rod[], c: Ctx): void {
   });
   for (const s of [-1, 1]) {
     const mid = add(end, add(mul(n, s * HEAD_W * 0.55 * k), mul(d, 0.25 * k)));
-    const tip = add(end, add(mul(n, s * HEAD_W * k), mul(d, -0.7 * k)));
+    const tip = add(end, add(mul(n, s * HEAD_W * k), mul(d, -HEAD_B * k)));
     rods.push({ a: end, b: mid, w: HI ? 1.3 : 1.9, pal: P_STEEL, tone: HI ? 5 : 6, vis });
     rods.push({ a: mid, b: tip, w: HI ? 0.9 : 0.5, pal: P_STEEL, tone: HI ? 6 : 7, vis });
   }
@@ -2100,19 +2342,20 @@ function workFx(p: Px, c: Ctx): void {
   const white = hx('#ffffff');
   const warm = hx('#ffe08a', 230);
   if (o.hit >= 0) {
-    const [x, y] = scr(mul(ROCK_TOP, G));
+    const [x, y] = scr(hitGeo().T);
     star(p, x, y - 1, Math.round((1 - o.hit) * (HI ? 6 : 3)) + 1, white, warm);
   }
   if (c.a === 'work' && o.rock > 0.01) {
     const rk = PAL[P_ROCK];
+    const T0 = hitGeo().T;
     for (const th of [HIT1, HIT2]) {
       const dt = t - th;
       if (dt <= 0 || dt > 0.34) continue;
       CHIPS.forEach((v, n) => {
         const q: V3 = [
-          ROCK_TOP[0] * G + v[0] * dt,
-          ROCK_TOP[1] * G + v[1] * dt,
-          ROCK_TOP[2] * G + v[2] * dt - 0.5 * 90 * dt * dt,
+          T0[0] + v[0] * dt,
+          T0[1] + v[1] * dt,
+          T0[2] + v[2] * dt - 0.5 * 90 * dt * dt,
         ];
         if (q[2] < 0) return;
         const [x, y] = scr(q);
@@ -2124,7 +2367,7 @@ function workFx(p: Px, c: Ctx): void {
     }
   }
   if (o.glint > 0.05 && o.gem >= 0) {
-    const [x, y] = scr(add(c.S.up([o.gx, o.gy, o.gz]), [-0.7 * G, 0, 1.5 * G]));
+    const [x, y] = scr(add([o.gx, o.gy, o.gz], [-0.7 * G, 0, 1.5 * G]));
     const L = Math.round(o.glint * (HI ? 6 : 3));
     if (L >= 1) star(p, x, y, L, white, hx('#e8ccff', 230));
   }
@@ -2219,7 +2462,7 @@ export function badgerFrame(a: Anim, i: number, res: Res = 's', v = 0): Px {
   drawPartsF(f, toRes(parts), PAL, OX, OY);
   if (o.pick > 0.01) pickRods(rods, c);
   for (const r of rods) rodF(f, r);
-  if (o.gem >= 0.01) gemDraw(f, S.up([o.gx, o.gy, o.gz]), o.gem);
+  if (o.gem >= 0.01) gemDraw(f, [o.gx, o.gy, o.gz], o.gem);
   seams(f, 1.2 * RR, 1);
   rimLight(
     f,
