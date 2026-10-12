@@ -185,10 +185,10 @@ export const PET_PX: Record<string, PetPx> = {
   },
   owl: {
     box: 48,
-    rev: 'dedf57f446',
+    rev: '28df1c7fd6',
     anims: {
       idle: { n: 72, fps: 24, x: 8, y: -3, w: 33, h: 54 },
-      walk: { n: 24, fps: 24, x: 3, y: -5, w: 42, h: 56 },
+      walk: { n: 24, fps: 24, x: 4, y: -5, w: 40, h: 56 },
       happy: { n: 26, fps: 24, x: -6, y: -11, w: 60, h: 62 },
       work: { n: 48, fps: 24, x: 2, y: -8, w: 51, h: 63 },
       attack: { n: 22, fps: 24, x: -14, y: -3, w: 76, h: 59 },
@@ -198,7 +198,7 @@ export const PET_PX: Record<string, PetPx> = {
       box: 112,
       anims: {
         idle: { n: 72, fps: 24, x: 24, y: 1, w: 64, h: 113 },
-        walk: { n: 24, fps: 24, x: 13, y: -3, w: 86, h: 117 },
+        walk: { n: 24, fps: 24, x: 17, y: -3, w: 78, h: 117 },
         happy: { n: 26, fps: 24, x: -8, y: -17, w: 128, h: 131 },
         work: { n: 48, fps: 24, x: 10, y: -11, w: 109, h: 134 },
         attack: { n: 22, fps: 24, x: -27, y: 1, w: 166, h: 125 },
@@ -231,7 +231,7 @@ export const PET_PX: Record<string, PetPx> = {
   },
   raccoon: {
     box: 48,
-    rev: 'f61c6de466',
+    rev: '16c5185d53',
     anims: {
       idle: { n: 72, fps: 24, x: 8, y: 4, w: 38, h: 46 },
       walk: { n: 24, fps: 24, x: 7, y: 7, w: 41, h: 43 },

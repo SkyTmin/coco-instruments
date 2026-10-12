@@ -467,8 +467,10 @@ function walkPose(t: number): Pose {
     [0.8, -0.95],
     [1.0, 0],
   ]);
-  o.x = -0.8 * sway;
-  o.lean = -0.1 * sway;
+  // Вес — над ОПОРНОЙ лапой: левая в воздухе (sway > 0) — тело и крен к правой
+  // (+x), и наоборот. Стоящие лапы не едут (`fz` 0).
+  o.x = 0.8 * sway;
+  o.lean = 0.1 * sway;
   const hop = loopK(h, T, [
     [0, 0],
     [0.06, -0.4, 'o'],
@@ -490,8 +492,8 @@ function walkPose(t: number): Pose {
   o.fRx = 0.6 * liftR;
   // Голова держит горизонт: наклон против крена тела.
   o.nod = 0.08 * hop;
-  o.tilt = 0.12 * sway;
-  o.hx = 0.4 * sway;
+  o.tilt = -0.12 * sway;
+  o.hx = -0.4 * sway;
   // Крылья чуть раскрыты для равновесия — сильнее со стороны поднятой лапы.
   o.thL = REST_TH + 0.3 + 0.22 * Math.max(0, sway);
   o.thR = REST_TH + 0.3 + 0.22 * Math.max(0, -sway);

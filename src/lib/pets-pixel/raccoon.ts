@@ -368,6 +368,8 @@ export interface Pose {
   crack: number;
   /** Головка стетоскопа в левой руке (0…1); молоточек: видимость, угол. */
   bell: number;
+  /** Оливы стетоскопа: 0 — дуга на шее, 1 — в ушах (слушает валун). */
+  phones: number;
   ham: number;
   hamA: number;
   /** Удар (искра), блеск руды, «слушает» — волны звука. */
@@ -430,6 +432,7 @@ const REST: Pose = {
   split: 0,
   crack: 0,
   bell: 0,
+  phones: 0,
   ham: 0,
   hamA: 0,
   tap: 0,
@@ -648,6 +651,15 @@ function workPose(t: number): Pose {
     [0.86, 1],
     [1.02, 0, 's'],
   ]);
+  // Оливы — в уши, пока слушает (раньше, чем головка легла на валун), и обратно
+  // на шею до замаха молоточком.
+  o.phones = kf(t, [
+    [0, 0],
+    [0.04, 0],
+    [0.26, 1, 'o'],
+    [0.86, 1],
+    [1.0, 0, 's'],
+  ]);
   const L0: V3 = [-HAND0[0], HAND0[1], HAND0[2]];
   const Lw = lerp3(L0, add(BELL_AT, [-1.8, -2.6, 3.8]), o.bell);
   // Правая (точки мира): к скрутке (0,9) → замах (1,04) → удар (1,12) → отскок → доволен.
@@ -743,6 +755,7 @@ function workPose(t: number): Pose {
     o.ham = 0;
     o.hamA = REST.hamA;
     o.bell = 0;
+    o.phones = 0;
     o.ticks = -1;
   }
   return o;
@@ -2162,7 +2175,39 @@ function rods(f: Frame, pts: V3[], wid: number, pal: number, tone: number, vis =
   for (let i = 0; i + 1 < pts.length; i++) rod(f, pts[i], pts[i + 1], wid, pal, tone, vis);
 }
 
-/** Трубки стетоскопа: от шеи по груди к развилке, от неё — к головке. */
+/** Голова (полуоси части головы в `headParts`) и щека — для олив стетоскопа. */
+const HRX = 8.0;
+const HRY = 6.6;
+const HRZ = 7.0;
+
+/** Точка на лицевой стороне головы (в координатах головы) и на `out` перед ней. */
+function headFront(x: number, z: number, out: number): V3 {
+  const e = 1 - (x / HRX) ** 2 - (z / HRZ) ** 2;
+  return [x, HRY * Math.sqrt(Math.max(0, e)) + out, z];
+}
+
+/**
+ * Опорные точки дуги стетоскопа стороны `side`: на шее (`phones` 0) — от шеи по
+ * груди к развилке; слушает (1) — от оливы в ухе (бок головы под ухом, на щеке)
+ * по щеке вниз к развилке. Между ними оливы идут ПЕРЕД лицом: точку толкаем
+ * к зрителю вдоль взгляда (на кадре она не сдвигается, только глубже вперёд).
+ */
+function binaural(c: Ctx, side: number): V3[] {
+  const { o, S, h } = c;
+  const Y = frontAt(S, 0, 14.0, 0.7);
+  const N0 = frontAt(S, side * 4.6, 20.6, 0.5);
+  const M0 = frontAt(S, side * 6.3, 17.4, 0.6);
+  const J0 = frontAt(S, side * 2.2, 14.6, 0.7);
+  const ph = o.phones;
+  if (ph <= 0) return [N0, M0, J0, Y];
+  const E = h.at(headFront(side * 0.9 * HRX, -0.1 * HRZ, 0.7));
+  const C = h.at([side * 6.4, 5.0, -4.9]);
+  const J1 = frontAt(S, side * 2.8, 16.0, 0.8);
+  const push = mul(VIEW, 4.0 * Math.sin(Math.PI * ph) * S.k);
+  return [add(lerp3(N0, E, ph), push), add(lerp3(M0, C, ph), push), lerp3(J0, J1, ph), Y];
+}
+
+/** Трубки стетоскопа: от шеи (или олив в ушах) по груди к развилке, от неё — к головке. */
 function stethoscope(f: Frame, c: Ctx): void {
   const { o, S } = c;
   if (o.curl > 0.5) return;
@@ -2170,13 +2215,17 @@ function stethoscope(f: Frame, c: Ctx): void {
   const tn = HI ? 3 : 4;
   const Y = frontAt(S, 0, 14.0, 0.7);
   for (const side of [-1, 1]) {
-    const N0 = frontAt(S, side * 4.6, 20.6, 0.5);
-    const M0 = frontAt(S, side * 6.3, 17.4, 0.6);
-    const J0 = frontAt(S, side * 2.2, 14.6, 0.7);
+    const ctl = binaural(c, side);
     const pts: V3[] = [];
     const n = HI ? 12 : 7;
-    for (let i = 0; i <= n; i++) pts.push(catmull([N0, M0, J0, Y], i / n));
+    for (let i = 0; i <= n; i++) pts.push(catmull(ctl, i / n));
     rods(f, pts, wid, P_RUBBER, tn);
+    // Олива в ухе: стальной наконечник дуги, когда слушает.
+    if (o.phones > 0.5) {
+      const tip = ctl[0];
+      const back = add(tip, mul(norm(sub(ctl[1], tip)), (HI ? 1.6 : 1.0) * S.k));
+      rod(f, tip, back, HI ? 1.3 : 0.7, P_STEEL, HI ? 6 : 7);
+    }
   }
   // Ствол к головке: провисает, когда головка в руке.
   const B = bellPos(c);
@@ -2566,6 +2615,29 @@ function headF(o: Pose, S: Skel, lag: Lag): HeadF {
 function toRes(parts: PartF[]): PartF[] {
   if (RR === 1) return parts;
   return parts.map((pt) => ({ ...pt, c: mul(pt.c, RR), r: mul(pt.r, RR) }));
+}
+
+/**
+ * Для теста: концы дуги стетоскопа (оливы), точки на шее, основания ушей, центр и
+ * масштаб головы в момент `t` анимации `a` (единицы малой полосы).
+ */
+export function earTips(
+  a: Anim,
+  t: number,
+): { tips: V3[]; neck: V3[]; ears: V3[]; head: V3; k: number } {
+  RR = 1;
+  HI = false;
+  const o = poseAt(a, t);
+  const S = skel(o);
+  const lag = lagOf(a, t);
+  const c: Ctx = { o, S, h: headF(o, S, lag), lag, t };
+  return {
+    tips: [-1, 1].map((s) => binaural(c, s)[0]),
+    neck: [-1, 1].map((s) => frontAt(S, s * 4.6, 20.6, 0.5)),
+    ears: [-1, 1].map((s) => c.h.at([s * 4.9, -1.2, 4.4])),
+    head: c.h.at([0, 0, 0]),
+    k: c.h.k,
+  };
 }
 
 /** Кадр `i` анимации `a` полосы `res`, вариант окраса `v` (0 — обычный, 1 — золотой). */
