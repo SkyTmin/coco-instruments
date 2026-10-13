@@ -6,7 +6,7 @@
    Formats (armory.ts → arm--one|two|three):
    - one   phone portrait: top / showcase (≥ half the height) / list (own scroll) / actions;
    - two   tablet portrait: top / showcase over the full width (≥ half) / list | details;
-   - three landscape, tablet landscape, desktop: top / list | showcase (half the width) | details.
+   - three landscape, tablet landscape, desktop: top / list | showcase (13/25 > half) | details.
    Nothing jumps when the selection changes: every track is a fixed fraction, the name keeps two
    lines, the stats row and the action bar have fixed heights, long content scrolls inside. */
 
@@ -59,7 +59,7 @@
   grid-template:
     'top top top' auto
     'list show side' minmax(0, 1fr)
-    / minmax(0, 6fr) minmax(0, 12fr) minmax(0, 7fr);
+    / minmax(0, 6fr) minmax(0, 13fr) minmax(0, 6fr);
 }
 /* Embedded (books in the camp sheet): no own top bar. */
 .arm.is-embed {
@@ -264,6 +264,15 @@ html[data-ff='phone-landscape'] .arm-name {
 }
 .arm-stat > .arm-delta {
   grid-area: delta;
+}
+/* «/400» after a big count: the limit, smaller and beside it. */
+.arm-stat > .arm-of {
+  grid-area: delta;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 .arm-delta {
   font: 400 var(--px-fs) / 1 var(--px-head);

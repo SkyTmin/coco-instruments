@@ -112,6 +112,12 @@ export const inv: Translation<typeof ru> = {
   shelfFull: 'Shelf full',
   pouchFull: 'Pouch full',
   nowhere: 'No room',
+  statHave: 'Owned',
+  statPrice: 'Price each',
+  filterAll: 'All',
+  sortRarity: 'By rarity',
+  gone: 'No longer here',
+  whereHead: 'Where it is',
   dg: {
     statDmg: 'Damage {v}',
     statArmor: 'Armor {v}',

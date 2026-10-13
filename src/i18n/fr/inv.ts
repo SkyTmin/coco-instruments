@@ -116,6 +116,12 @@ export const inv: Translation<typeof ru> = {
   shelfFull: 'Étagère pleine',
   pouchFull: 'Bourse pleine',
   nowhere: 'Pas de place',
+  statHave: 'Possédé',
+  statPrice: 'Prix unitaire',
+  filterAll: 'Tout',
+  sortRarity: 'Par rareté',
+  gone: 'N’est plus là',
+  whereHead: 'Où c’est rangé',
   dg: {
     statDmg: 'Dégâts {v}',
     statArmor: 'Armure {v}',

@@ -112,6 +112,12 @@ export const inv: Translation<typeof ru> = {
   shelfFull: 'Raf dolu',
   pouchFull: 'Kese dolu',
   nowhere: 'Yer yok',
+  statHave: 'Elinde',
+  statPrice: 'Tane fiyatı',
+  filterAll: 'Hepsi',
+  sortRarity: 'Nadirliğe göre',
+  gone: 'Artık burada değil',
+  whereHead: 'Nerede duruyor',
   dg: {
     statDmg: 'Hasar {v}',
     statArmor: 'Zırh {v}',

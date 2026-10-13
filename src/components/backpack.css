@@ -1,0 +1,169 @@
+/* Backpack and bunk chest (components/Inventory.tsx) on the pixel kit — the screen's own parts.
+   Skeleton (columns, showcase, stats, actions) — armory.css. Kit rules: .claude/rules/ui-px.md. */
+
+/* The showcased thing: a square box sized from the stage, the icon centred in it. */
+.ivx-hero {
+  display: grid;
+  place-items: center;
+}
+.ivx-hero :is(img, canvas, svg) {
+  image-rendering: pixelated;
+}
+.ivx-hero.is-ghost {
+  filter: grayscale(1) brightness(0.55);
+}
+/* Two lines reserved under the name: a long line never pushes the art or the stats. */
+.ivx-sub {
+  margin: 0;
+  max-width: 100%;
+  min-height: calc(2 * 1.2 * var(--px-fs));
+  font: 400 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+/* The third cell holds «used/max» — a little wider than the other two. */
+.ivx .arm-stats {
+  grid-template-columns: minmax(0, 4fr) minmax(0, 4fr) minmax(0, 5fr);
+}
+.arm-stat.is-risk > i,
+.ivx-details .is-risk {
+  color: var(--px-red);
+}
+
+/* List column: section tabs stay on top, the grids scroll under them. */
+.ivx-list {
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: calc(4 * var(--u));
+}
+.ivx-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.ivx-tabs {
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding-top: calc(3 * var(--u));
+}
+.ivx-tabs::-webkit-scrollbar {
+  display: none;
+}
+.ivx-tabs > .px-tab {
+  flex: none;
+}
+/* Wide formats: the narrow list column wraps the tabs instead of hiding them off-screen. */
+.arm--two .ivx-tabs,
+.arm--three .ivx-tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.ivx-tab {
+  display: inline-grid;
+  place-items: center;
+}
+.ivx-scroll {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: calc(6 * var(--u));
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+.ivx-sec .px-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+
+/* Section limits under the heading: label + numbers over a bar, side by side. */
+.ivx-sec > .arm-head {
+  display: grid;
+  justify-content: stretch;
+}
+.ivx-lims {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(50 * var(--u)), 1fr));
+  gap: calc(2 * var(--u)) calc(6 * var(--u));
+}
+.ivx-lim {
+  display: grid;
+  gap: var(--u);
+  min-width: 0;
+  font: 400 var(--px-fs-sm) / 1.15 var(--px-font);
+  color: var(--px-text);
+}
+.ivx-lim.is-full b {
+  color: var(--px-gold);
+}
+
+/* Readiness bar inside a cell (egg in a nest, parcel under the field). */
+.ivx-slot-bar {
+  position: absolute;
+  left: calc(3 * var(--u));
+  right: calc(3 * var(--u));
+  bottom: calc(3 * var(--u));
+  z-index: 1;
+}
+
+/* Bunk chest: nine in a row like Minecraft, cells follow the column width. */
+.ivx-chest {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+}
+.ivx-chest > .px-slot {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+.ivx-lock {
+  margin-top: calc(2 * var(--u));
+  font-size: var(--px-fs-sm);
+}
+
+/* Details column. */
+.ivx-details p {
+  margin: 0;
+}
+.ivx-where {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.ivx-where p,
+.ivx-price {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.ivx-price {
+  color: var(--px-gold);
+}
+.ivx-price.is-short {
+  color: var(--px-red);
+}
+.ivx-hide {
+  visibility: hidden;
+}
+
+/* View-only (from the dungeon run): the action bar is one hint line of the same height. */
+.ivx-acts.is-hint {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: calc(26 * var(--u));
+  text-align: center;
+}
+.arm-note.is-bad {
+  color: var(--px-red);
+}

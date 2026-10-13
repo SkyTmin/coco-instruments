@@ -121,6 +121,12 @@ export const inv = {
   shelfFull: 'Полка полна',
   pouchFull: 'Мешочек полон',
   nowhere: 'Некуда',
+  statHave: 'В наличии',
+  statPrice: 'Цена штуки',
+  filterAll: 'Всё',
+  sortRarity: 'По редкости',
+  gone: 'Здесь больше нет',
+  whereHead: 'Где лежит',
   /** The run's inventory (`src/components/DungeonInventory.tsx`). */
   dg: {
     statDmg: 'Урон {v}',
