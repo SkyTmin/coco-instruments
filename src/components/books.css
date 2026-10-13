@@ -49,6 +49,7 @@
 .bkx-fx {
   margin: 0;
   hyphens: auto;
+  overflow-wrap: break-word; /* a word wider than the narrow plate breaks where no dictionary */
   max-width: 100%;
   min-height: calc(2 * 1.2 * var(--px-fs));
   font: 500 var(--px-fs) / 1.2 var(--px-font);
@@ -73,6 +74,13 @@
 }
 .bkx.arm--one .arm-name {
   --nfs: var(--px-fs);
+}
+/* …and only ~13 characters wide: «+42% к скорости копки» took three lines and lost its end to
+   «…» — three lines reserved there (the plate is far shorter than the book beside it). */
+.bkx.arm--one .arm-stage .bkx-fx {
+  min-height: calc(3 * 1.2 * var(--px-fs-sm));
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 /* The plate beside the art (phone portrait, a wide low stage) is narrow: the smaller step. */
 .arm--one .bkx-fx {

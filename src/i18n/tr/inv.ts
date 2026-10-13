@@ -96,7 +96,7 @@ export const inv: Translation<typeof ru> = {
   take1: '1 al',
   takeN: '{n} al',
   take: 'Al',
-  sellBag: 'Çantayı sat {price}',
+  sellBag: 'Çantayı sat',
   bagToBox: 'Çanta — sandığa',
   hintView: "Sadece bakmak için: sandık Koğuş 1'de, ranzanın yanında.",
   hintBunk: 'Bir eşyaya dokun — sandığa koy ya da geri al.',

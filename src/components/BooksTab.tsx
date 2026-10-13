@@ -17,7 +17,7 @@ import './books.css';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
-import { heroFit, nameFit, useArmLayout, useBox } from '@/components/armory';
+import { heroFit, nameFit, numFit, useArmLayout, useBox, useFirstFrame } from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
 import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
@@ -474,6 +474,7 @@ export function BooksTab() {
   // ---- Showcase ---------------------------------------------------------------------------------
   const roomRef = useRef<HTMLSpanElement>(null);
   const roomBox = useBox(roomRef);
+  const painted = useFirstFrame(); // the shelf grid comes a frame after the window
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const pedOf = (a: number) => Math.max(u, Math.round((a * 0.8 * dpr) / 112) / dpr);
   const art = heroFit(roomBox, u, 112 * u, pedOf);
@@ -657,24 +658,26 @@ export function BooksTab() {
         {t('books.mageName')}
       </span>
     );
-    fx = mageLine(0);
+    fx = t('books.tierFx');
     stats = (
       <div className="arm-stats">
         <span className={`arm-stat${p.tokens < bt.price ? ' is-short' : ''}`}>
-          <b>
+          <b style={numFit(fmtShort(bt.price), true)}>
             <TokenIcon size={u * 8} />
             {fmtShort(bt.price)}
           </b>
           <i>{t('books.statPrice')}</i>
         </span>
         <span className="arm-stat">
-          <b>
+          <b style={numFit(`${ROMAN[bt.lvl[0] - 1]}–${ROMAN[bt.lvl[1] - 1]}`)}>
             {ROMAN[bt.lvl[0] - 1]}–{ROMAN[bt.lvl[1] - 1]}
           </b>
           <i>{t('books.statLevel')}</i>
         </span>
         <span className="arm-stat">
-          <b>{t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] })}</b>
+          <b style={numFit(t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] }))}>
+            {t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] })}
+          </b>
           <i>{t('books.statChance')}</i>
         </span>
       </div>
@@ -738,7 +741,8 @@ export function BooksTab() {
             ? t('books.sure')
             : starMax
               ? t('books.starMax')
-              : t('books.star', { n: p.pickStars + 1 })}
+              : // the short verb: «Spitzhacke umschmieden ★3» took three lines on a phone
+                `${t('books.reforge')} ★${p.pickStars + 1}`}
         </span>
       ),
       kind: 'primary',
@@ -818,7 +822,7 @@ export function BooksTab() {
                 kind="secondary"
                 on={dustOn && p.dust > 0}
                 off={p.dust <= 0}
-                className="bkx-dustbtn"
+                className={p.dust <= 0 ? 'bkx-dustbtn px-dark' : 'bkx-dustbtn'}
                 onClick={toggleDust}
               >
                 <DustIcon size={u * 7} />
@@ -1047,7 +1051,7 @@ export function BooksTab() {
         <p className="arm-muted">{t('books.shelfEmpty')}</p>
       ) : (
         <div className="arm-grid bkx-grid" role="group">
-          {order.map((i) => {
+          {(painted ? order : []).map((i) => {
             const x = p.books[i];
             const ck = canApply(p.ench, slots, x);
             const mt = anvilMate(p.books, i) >= 0;
@@ -1089,7 +1093,7 @@ export function BooksTab() {
           key={a.id}
           kind={a.kind}
           off={a.off}
-          className={`${a.hide ? 'is-hidden' : ''}${a.armed ? ' is-armed' : ''}`}
+          className={`${a.hide ? 'is-hidden' : ''}${a.armed ? ' is-armed' : ''}${a.off ? ' px-dark' : ''}`}
           aria-hidden={a.hide || undefined}
           tabIndex={a.hide ? -1 : undefined}
           hint={a === main ? 'inspect' : undefined}
@@ -1183,6 +1187,7 @@ export function BooksTab() {
               kind="confirm"
               wide
               off={!replace}
+              className={replace ? undefined : 'px-dark'}
               onClick={() => {
                 if (!replace) {
                   uiError();

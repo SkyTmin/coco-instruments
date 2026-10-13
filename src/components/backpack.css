@@ -13,6 +13,19 @@
   filter: grayscale(1) brightness(0.55);
 }
 /* Two lines reserved under the name: a long line never pushes the art or the stats. */
+/* Phone portrait has no side column, the plate carries the whole line: three lines of the small
+   size («Zehn Minuten zählt jeder zweite Block als nächsthöheres Gestein» lost its end). */
+.arm--one .ivx-sub {
+  min-height: calc(3 * 1.2 * var(--px-fs-sm));
+  font-size: var(--px-fs-sm);
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+/* Two and three columns: the side column says it in full (beside the art on a phone held sideways
+   the plate is 165 px — five lines); the plate keeps the name. */
+:is(.arm--two, .arm--three) .ivx-sub {
+  display: none;
+}
 .ivx-sub {
   margin: 0;
   hyphens: auto;
@@ -59,6 +72,7 @@
 }
 .ivx-tabs > .px-tab {
   flex: none;
+  min-height: var(--gx-hit); /* kit tab is 34 px on a phone — under the 44-px finger */
 }
 /* Wide formats: the narrow list column wraps the tabs instead of hiding them off-screen. */
 .arm--two .ivx-tabs,
@@ -106,7 +120,7 @@ html[data-ff='phone-landscape'] .arm .ivx-tabs {
   display: grid;
   gap: var(--u);
   min-width: 0;
-  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
   color: var(--px-text);
 }
 .ivx-lim.is-full b {

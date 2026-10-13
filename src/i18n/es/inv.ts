@@ -100,7 +100,7 @@ export const inv: Translation<typeof ru> = {
   take1: 'Coger 1',
   takeN: 'Coger {n}',
   take: 'Coger',
-  sellBag: 'Vender mochila {price}',
+  sellBag: 'Vender mochila',
   bagToBox: 'Mochila a la caja',
   hintView: 'Solo para mirar: el cofre está junto a la litera del Barracón 1.',
   hintBunk: 'Toca un objeto: guárdalo en el cofre o sácalo.',

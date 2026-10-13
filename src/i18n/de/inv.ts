@@ -96,7 +96,7 @@ export const inv: Translation<typeof ru> = {
   take1: '1 nehmen',
   takeN: '{n} nehmen',
   take: 'Nehmen',
-  sellBag: 'Rucksack verkaufen {price}',
+  sellBag: 'Erz verkaufen',
   bagToBox: 'Rucksack — in die Kiste',
   hintView: 'Nur zum Ansehen: Die Truhe steht am Bett in Baracke 1.',
   hintBunk: 'Tippe ein Ding an — in die Truhe legen oder rausnehmen.',

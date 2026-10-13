@@ -17,6 +17,8 @@
   gap: var(--gap);
   min-height: 0;
   color: var(--px-text);
+  /* the camp body (books) passes an old 800 down — Rubik has 500/700 only and Coco Title one weight */
+  font-weight: 500;
 }
 .arm *,
 .arm *::before,
@@ -112,6 +114,7 @@
 }
 .arm-num {
   font-family: var(--px-head);
+  font-weight: 400; /* Coco Title has one weight: a bold parent made it a smeared fake bold */
   font-variant-numeric: tabular-nums;
 }
 .arm-muted {
@@ -316,6 +319,14 @@ html[data-ff='phone-landscape'] .arm-name {
   color: var(--px-text);
   white-space: nowrap;
 }
+/* A long value shrinks to its cell instead of sticking out of the stage (a tier's «35–75 %» was
+   15 px wider than its cell on a phone); --nlen from numFit(), the row height stays fixed. */
+.arm-stat {
+  container: arm-stat / inline-size;
+}
+.arm-stat > b[style*='--nlen'] {
+  font-size: max(var(--px-fs-sm), min(var(--px-fs-big), calc(100cqi / (var(--nlen) * 0.66))));
+}
 .arm-stat > b > :is(.px-i, .gx-icon) {
   color: var(--px-gold);
 }
@@ -323,9 +334,11 @@ html[data-ff='phone-landscape'] .arm-name {
   grid-area: lbl;
   /* two lines reserved: a long label («blocks a minute», German) wraps instead of «…» */
   min-height: calc(2 * 1.15 * var(--px-fs-sm));
-  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
   color: var(--px-text);
   overflow: hidden;
+  overflow-wrap: break-word;
+  hyphens: auto;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -484,7 +497,9 @@ html[data-ff='phone-landscape'] .arm-info__name {
 .arm-acts > .px-btn {
   height: calc(26 * var(--u));
   min-height: 0;
-  overflow: hidden;
+  /* not overflow: hidden — it cut off the kit's focus ring (::after, 3 u outside the face) and the
+     keyboard / gamepad player lost focus on the action bar; the clip keeps that ring only */
+  clip-path: inset(calc(-3 * var(--u)));
   white-space: normal;
   text-align: center;
   line-height: 1.1;
@@ -494,6 +509,58 @@ html[data-ff='phone-landscape'] .arm-info__name {
 }
 .arm-btn-txt {
   min-width: 0;
+}
+/* Only the words wrap: the coin, the icon and the key cap keep their size (the sell coin shrank to
+   8 px and its label ran three lines on a phone in landscape). */
+.arm-acts > .px-btn > :not(.arm-btn-txt) {
+  flex: none;
+}
+/* A label with a price: the price drops under the words when both don't fit on one line. */
+.arm-acts > .px-btn:has(> .arm-btn-price) {
+  flex-wrap: wrap;
+  align-content: center;
+  row-gap: 0;
+}
+/* …and the key cap follows the price, so the words get the whole first line. */
+.arm-acts > .px-btn:has(> .arm-btn-price) > .px-keyhint {
+  order: 1;
+}
+/* Phone landscape: the side column is ~180 px, words plus price take two lines of the small size
+   («Vender mochila» alone needed two lines of the base size, the price a third). */
+html[data-ff='phone-landscape'] .arm-acts > .px-btn:has(> .arm-btn-price) {
+  font-size: var(--px-fs-sm);
+}
+/* A greyed button still says why («В руке», «Откроется на этаже U», a weaker book): the kit's
+   ash label (#b5b0a6 on the #606068 face) is 2.9:1. Such buttons get .px-dark (the ash face is a
+   dark surface) and the cream --px-muted — 4.6:1, plus the kit's ink shadow. */
+:is(.arm, .bkx-replace) .px-btn.px-dark[aria-disabled='true'] {
+  color: var(--px-muted);
+}
+/* Icons beside text follow the text, not --u (critic: an icon ≥ 1.3× the cap height of its text;
+   8 u on a phone was 0.9–1.1×). 1em = 1.43× the cap of the text they stand in, never smaller than
+   before. !important: GxIcon sets its size inline. */
+.arm
+  :is(.arm-purse > span, .arm-stat > b, .arm-head .px-h, .px-btn, .arm-btn-price)
+  > :is(.gx-icon, .coin-ico, .ptoken-ico) {
+  width: max(calc(8 * var(--u)), 1em) !important;
+  height: max(calc(8 * var(--u)), 1em) !important;
+}
+/* Phone landscape: the side column is ~250 px — the word is the action, the icon goes («Verschmelzen»
+   + anvil + the X key cap ran 11 px past the button). */
+html[data-ff='phone-landscape'] .arm-acts > .px-btn > .gx-icon {
+  display: none;
+}
+/* The kit's 9×9 pixel icons in a stat cell: whole CSS px per art px, ≥ 1.3× the number's cap. */
+.arm-stat > b > .px-i {
+  --ip: max(var(--u), round(up, calc(var(--px-fs-big) * 0.1012), 1px));
+  width: calc(var(--i-w, 9) * var(--ip));
+  height: calc(var(--i-h, 9) * var(--ip));
+}
+/* Finger-size targets on phones (44 px): the back button and the small buttons of the side. */
+.arm-top__back,
+.arm .px-btn--sm {
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
 }
 .arm-btn-price {
   display: inline-flex;

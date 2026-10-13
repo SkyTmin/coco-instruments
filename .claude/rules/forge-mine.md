@@ -251,6 +251,14 @@ Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventor
   minmax(0, 1fr)`: an auto column grew to the widest row and the side panel scrolled sideways,
   cutting words. `.arm .rchip` is restyled as the kit pill (ink on `--rc`) — the old chip read
   1.4:1 on the light panels.
+- **Critic pass** (`armory.ts`/`.css`): `useFirstFrame()` — the window paints first, the slot grid
+  a frame later (open 400–600 → 110–220 ms at 4× CPU); `numFit(s)` + container `arm-stat` fits a
+  long stat number into its cell (`--nlen`, cqi); a greyed action button gets `.px-dark` (kit ash
+  label is 2.9:1 → cream 4.6:1); the action bar clips with `clip-path: inset(-3u)`, not
+  `overflow: hidden` (that ate the kit focus ring); words wrap, coin / icon / key cap are
+  `flex: none`, a button with `.arm-btn-price` wraps the price under the words (small size on
+  phone landscape); text icons are `max(8u, 1em)`; the camp's bold rule skips `.px *` (Coco Title
+  has one weight — it was fake-bolded).
 - Old CSS removed (`.fg*` in `game-ui.css`, the old `.inv*` layout in `inventory.css`) by
   `{SCR}/cleancss.py`: a rule goes when its scoped class is in no `src/**/*.ts*`; template
   prefixes (`mcinv__set`, `inv-px`, `pench-bulk__b`, `fgr`) protected.

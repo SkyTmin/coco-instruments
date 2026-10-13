@@ -61,6 +61,7 @@ export const books: Translation<typeof ru> = {
   pct: '%{v}',
   pctRange: '%{a}–{b}',
   mageName: 'Büyücü',
+  tierFx: 'Hangi büyü? Sürpriz',
   dust: '{v} toz',
   onPick: 'Kazmadaki kitap: {a}/{b}',
   offState: 'kapalı',

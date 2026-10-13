@@ -1,7 +1,7 @@
 // Shared bits of the inventory-style screens (forge, backpack, books) on the pixel kit: the
 // layout by the shell's format and the measured hero stage. Styles — `armory.css`.
 
-import { useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useFormFactor } from '@/game-shell';
 
@@ -16,6 +16,20 @@ export function useArmLayout(): { layout: ArmLayout; u: number } {
 }
 
 /** Size of an element's content box, kept in state: the hero art is sized from it. */
+/**
+ * false on the first render, true from the next frame. The window (frames, titles, showcase,
+ * buttons) paints right after the tap, the slot grids follow a frame later: their render was most
+ * of the 0.3–0.6 s between a tap and the first frame on a slow phone (critic, 4× CPU).
+ */
+export function useFirstFrame(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const r = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(r);
+  }, []);
+  return ready;
+}
+
 export function useBox(ref: RefObject<HTMLElement | null>, on = true) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -61,6 +75,12 @@ export function heroFit(
  * The name plate's size hint: the longest word of the name (`--wlen`). `armory.css` shrinks the
  * name so that word fits one line of the plate — «Goldspitzhacke» no longer breaks inside.
  */
+/** `--nlen` for a stat value that can be long («35–75 %», «IV–VII»): characters, an icon counts 2.
+ *  CSS shrinks such a value to its cell (armory.css, `.arm-stat > b[style]`). */
+export function numFit(s: string, icon = false): CSSProperties {
+  return { '--nlen': Math.max(4, s.length + (icon ? 2 : 0)) } as CSSProperties;
+}
+
 export function nameFit(name: ReactNode): CSSProperties {
   const s = typeof name === 'string' ? name : '';
   const w = Math.max(8, ...s.split(/\s+/).map((x) => x.length));

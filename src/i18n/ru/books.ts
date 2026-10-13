@@ -69,6 +69,8 @@ export const books = {
   pct: '{v}%',
   pctRange: '{a}–{b}%',
   mageName: 'Чародей',
+  /** Tier on the showcase: two short lines under the name (the mage line didn't fit). */
+  tierFx: 'Какая чара внутри — сюрприз',
   dust: '{v} пыли',
   onPick: 'Книг в кирке: {a} из {b}',
   offState: 'выключена',

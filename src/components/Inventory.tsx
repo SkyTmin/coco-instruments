@@ -22,7 +22,7 @@ import { ItemIcon, KeyIcon, OreIcon, RuneIcon, TokenIcon } from '@/components/Pr
 import { EggArt } from '@/components/PetArt';
 import { BookArt, DustIcon, TIER_RARITY } from '@/components/BooksTab';
 import { RarityChip, rarityVars } from '@/components/PickArt';
-import { heroSize, nameFit, useArmLayout, useBox } from '@/components/armory';
+import { heroSize, nameFit, useArmLayout, useBox, useFirstFrame } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import {
   actsOf,
@@ -534,8 +534,10 @@ export function Inventory({
         label:
           bagSell > 0 ? (
             <>
-              <span className="arm-btn-txt">{t('inv.sellBag', { price: fmtShort(bagSell) })}</span>
-              <CoinIcon size={u * 7} />
+              <span className="arm-btn-txt">{t('inv.sellBag')}</span>
+              <span className="arm-btn-price">
+                {fmtShort(bagSell)} <CoinIcon size={u * 7} />
+              </span>
             </>
           ) : (
             t('inv.bagToBox')
@@ -551,6 +553,7 @@ export function Inventory({
   // ---- Витрина ----------------------------------------------------------------
   const roomRef = useRef<HTMLSpanElement>(null);
   const roomBox = useBox(roomRef);
+  const ready = useFirstFrame();
   const stage = heroSize(roomBox, u, 160 * u);
   const art = Math.max(u, Math.floor((stage * 0.72) / u) * u);
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -599,7 +602,19 @@ export function Inventory({
         {(isBig || lim) && (
           <span className="arm-of">/{big(isBig ? bunkSec.limits[0].max : lim!.max)}</span>
         )}
-        <i>{isBig ? t('inv.chest') : item ? t(`inv.where.${item.where}`) : t('inv.tabs')}</i>
+        {/* the short name of what the count fills (Рюкзак, Полка…): the place's full name («Посылки
+            под полем шахты») took three lines in a phone cell — it stays in the title and details */}
+        <i>
+          {isBig
+            ? t('inv.chest')
+            : lim
+              ? lim.label
+              : sec
+                ? sec.name
+                : item
+                  ? t(`inv.where.${item.where}`)
+                  : t('inv.tabs')}
+        </i>
       </span>
     </div>
   );
@@ -772,8 +787,8 @@ export function Inventory({
         />
       </div>
       <div className="ivx-scroll">
-        {chest}
-        {shown.map((s) => (
+        {ready && chest}
+        {(ready ? shown : []).map((s) => (
           <section key={s.id} className="ivx-sec">
             <div className="arm-head">
               <Heading>
@@ -804,7 +819,7 @@ export function Inventory({
             )}
           </section>
         ))}
-        {shown.length === 0 && <p className="arm-muted">{t('inv.empty')}</p>}
+        {ready && shown.length === 0 && <p className="arm-muted">{t('inv.empty')}</p>}
       </div>
     </div>
   );
@@ -826,7 +841,7 @@ export function Inventory({
             kind={a.kind}
             off={a.off}
             hint={a === main ? 'inspect' : undefined}
-            className={a.id === 'buy' && armed ? 'is-armed' : undefined}
+            className={a.id === 'buy' && armed ? 'is-armed' : a.off ? 'px-dark' : undefined}
             onClick={a.run}
           >
             {a.label}

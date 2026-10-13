@@ -105,7 +105,8 @@ export const inv = {
   take1: 'Забрать 1',
   takeN: 'Забрать {n}',
   take: 'Забрать',
-  sellBag: 'Продать рюкзак {price}',
+  /** The price stands beside it with a coin (it wraps to its own line on a narrow button). */
+  sellBag: 'Продать руду',
   bagToBox: 'Рюкзак — в ящик',
   hintView: 'Здесь только посмотреть: сундук — у койки в Бараке 1.',
   hintBunk: 'Тап по вещи — переложить в сундук или забрать.',

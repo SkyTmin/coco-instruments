@@ -23,9 +23,9 @@
 }
 .frg-ing__txt > b {
   color: var(--px-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* wraps, never «…»: «Granatspitzhacke» in the narrow side column was cut to «Granatsp…» */
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 .frg-ing.is-ok .frg-ing__txt > b {
   color: var(--px-green);

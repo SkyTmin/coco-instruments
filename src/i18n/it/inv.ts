@@ -100,7 +100,7 @@ export const inv: Translation<typeof ru> = {
   take1: 'Prendi 1',
   takeN: 'Prendi {n}',
   take: 'Prendi',
-  sellBag: 'Vendi zaino {price}',
+  sellBag: 'Vendi zaino',
   bagToBox: 'Zaino — nella cassa',
   hintView: 'Solo da guardare: il forziere è accanto alla branda nella Baracca 1.',
   hintBunk: 'Tocca un oggetto — mettilo nel forziere o riprendilo.',

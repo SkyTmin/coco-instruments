@@ -61,6 +61,7 @@ export const books: Translation<typeof ru> = {
   pct: '{v}%',
   pctRange: '{a}–{b}%',
   mageName: 'Enchanter',
+  tierFx: 'Which enchant? A surprise',
   dust: '{v} dust',
   onPick: 'Books in the pickaxe: {a} of {b}',
   offState: 'off',

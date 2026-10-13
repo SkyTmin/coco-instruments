@@ -26,7 +26,7 @@ import {
   rarityVars,
 } from '@/components/PickArt';
 import { preloadPx, PxStrip } from '@/components/PxStrip';
-import { heroFit, nameFit, useArmLayout, useBox } from '@/components/armory';
+import { heroFit, nameFit, useArmLayout, useBox, useFirstFrame } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
 import { nameIn, pickTitle } from '@/i18n/data-mine';
@@ -307,6 +307,7 @@ export function ForgeScreen({
   // ---- Витрина: кирка крупно, имя, ступень, состояние, три цифры ----------------------------
   const roomRef = useRef<HTMLSpanElement>(null);
   const room = useBox(roomRef);
+  const painted = useFirstFrame(); // the picks grid comes a frame after the window
   const art = heroFit(room, u, 64 * u * 4, (a) => pedPx(a, u));
   const dim = st === 'locked' || (st === 'next' && !ready);
   const selSpeed = pickSpeed(floor, sel, m);
@@ -533,7 +534,7 @@ export function ForgeScreen({
         </Heading>
       </div>
       <div className="arm-grid frg-grid" role="group">
-        {PICKS.map((pk, i) => {
+        {(painted ? PICKS : []).map((pk, i) => {
           const s = statusOf(i);
           return (
             <Slot
@@ -592,6 +593,7 @@ export function ForgeScreen({
             kind="primary"
             size="sm"
             off={balance < bagCost(p.bagLevel)}
+            className={balance < bagCost(p.bagLevel) ? 'px-dark' : undefined}
             onClick={() => (balance < bagCost(p.bagLevel) ? notifyWarning() : buy('bag'))}
           >
             {fmtShort(bagCost(p.bagLevel))} <CoinIcon size={u * 7} />
@@ -615,6 +617,7 @@ export function ForgeScreen({
             kind="primary"
             size="sm"
             off={p.tokens < AUTOSELL_TOKENS}
+            className={p.tokens < AUTOSELL_TOKENS ? 'px-dark' : undefined}
             onClick={() => (p.tokens < AUTOSELL_TOKENS ? notifyWarning() : buy('cart'))}
           >
             {fmtShort(AUTOSELL_TOKENS)} <TokenIcon size={u * 7} />
@@ -634,12 +637,21 @@ export function ForgeScreen({
         wide
         hint={st === 'have' ? 'confirm' : undefined}
         off={st !== 'have'}
-        className={st === 'next' || st === 'locked' ? 'is-hidden' : undefined}
+        className={
+          st === 'next' || st === 'locked' ? 'is-hidden' : st !== 'have' ? 'px-dark' : undefined
+        }
         onClick={() => equip(sel)}
       >
         {st === 'hand' ? t('forge.inHandBtn') : t('forge.equip')}
       </Button>
-      <Button kind="primary" wide off={!ready} hint="inspect" onClick={forge} className="frg-go">
+      <Button
+        kind="primary"
+        wide
+        off={!ready}
+        hint="inspect"
+        onClick={forge}
+        className={ready ? 'frg-go' : 'frg-go px-dark'}
+      >
         {ready && <GxIcon name="anvil" size={u * 9} />}
         <span className="arm-btn-txt">{cta}</span>
         {ready && coins > 0 && (

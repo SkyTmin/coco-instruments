@@ -164,4 +164,9 @@ and the scenes (`RevealScene`, `ApplyScene`, `BookLift`, portaled) are as before
 - **Window**: the books open as a one-tab camp, so `.gx-camp.is-single:has(.bkx)` takes the whole
   screen (C's 250u camp height left the showcase 24 % of a tablet-portrait screen); on two/three
   layouts the purse heads the side column (no top row).
+- **Critic pass**: the plate's effect line holds 3 lines on a phone (`.bkx.arm--one`), the tier
+  shows `books.tierFx` (the mage line didn't fit), reforge is `books.reforge ★n` (the de phrase took
+  3 lines), tier stats go through `numFit` («35–75 %» stuck out of the stage). Greyed buttons and
+  the replace confirm get `.px-dark`. de/fr stat labels shortened. The shelf mounts a frame after
+  the window (`useFirstFrame`).
 - Not verified on a phone / webview / gamepad hardware.

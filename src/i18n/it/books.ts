@@ -61,6 +61,7 @@ export const books: Translation<typeof ru> = {
   pct: '{v}%',
   pctRange: '{a}–{b}%',
   mageName: 'Incantatore',
+  tierFx: 'Quale incantesimo? Sorpresa',
   dust: 'Polvere {v}',
   onPick: 'Libri nel piccone: {a} su {b}',
   offState: 'disattivato',

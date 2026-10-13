@@ -925,7 +925,8 @@
   color: var(--text);
   font-family: 'GxRubik', system-ui, sans-serif;
 }
-.gx-camp .gx-sheet__body :is(b, strong, h3, h4) {
+/* Not inside kit content (`.px`): Coco Title has one weight — 800 smeared it into a fake bold. */
+.gx-camp .gx-sheet__body :is(b, strong, h3, h4):where(:not(.px *)) {
   font-weight: 800;
 }
 .gx-camp .pforge__row,
