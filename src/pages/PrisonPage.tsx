@@ -2589,7 +2589,7 @@ export function PrisonPage() {
   return (
     <div
       ref={rootRef}
-      className={`gx px mn ${wide ? 'mn--wide' : 'mn--tall'}`}
+      className={`gx px mn ${wide ? 'mn--wide' : 'mn--tall'}${screen || forgeOpen || invOpen ? ' is-under' : ''}`}
       style={cell ? ({ '--cell': `${cell}px` } as CSSProperties) : undefined}
     >
       <div className="prison-scene pxt-stone" aria-hidden="true" />

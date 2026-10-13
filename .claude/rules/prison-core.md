@@ -366,17 +366,25 @@ Field drawing, mining, timings, critters and their animations are untouched.
 - **Field is the hero.** `useFieldCell` (bottom of `PrisonPage.tsx`) measures the frame chrome and
   the free slot and sets inline `--cell` (20…160 px); wide reserves 2 × (84 + 4) u for the side
   columns. Cell per format (was → now): 390×844 50 → 50, 844×390 32 + page scroll → 37, 820×1180
-  60 → 72, 1180×820 52 → 81, 1440×900 60 → 90, 1920×1080 60 → 107.
+  60 → 67, 1180×820 52 → 81, 1440×900 60 → 90, 1920×1080 60 → 107, 360×740 → 40 (round 2:
+  taller rank row and phone dock cost tp 72 → 67).
 - **Tall order:** HUD (back · money · tokens → books · keys → chests · ⚙) → rank row (floor chip +
   rank bar) → quest (guide only) → field (streak strip on the top edge, buffs bottom-left, parcels
   bottom-right, pets bottom-centre) → items → backpack → dock 3 × 2.
-- **Wide:** left column = HUD (back · floor · ⚙ / money full width / tokens + keys — they wrap
-  into two rows in a narrow column instead of clipping), rank, streak panel, quest; right column
-  = items (3 per row), backpack (sell button under the bar), dock (`auto-fit` min 60u: two per row
-  or one in a narrow column — tablet landscape). Columns: basis 132u, min 88u.
-- **Dock** — six iron buttons, icon + label: forge, books, chests, pets, backpack (inventory moved
-  here from the header), more (camp). Labels wrap by words, never ellipsis; tr labels carry soft
-  hyphens (`Demir\u00adhane`, `Hay\u00advan\u00adlar`).
+- **Wide (critic round 2):** left column = HUD (back · floor · ⚙ / money / tokens + keys), rank
+  (bar row + needs row), streak panel, quest, items («Расходники» heading; hidden on phone
+  landscape while the quest shows). Tablet/desktop (`roomy`): the backpack joins the left
+  column and the dock fills the right one — one button per row, rows `minmax(21u, 36u)`, icons
+  24u (painted 12×12 at ×2), side text ×1.15 (`--px-fs*` re-derived from C's `:root` copies
+  `--gx-fs*`), desktop items 28u slots (4 per row) unless the quest shows. Phone landscape:
+  right column = backpack + dock 2 × 3. Columns: basis 132u, min 88u, gap 2u. Measured empty
+  height per column ≤ 15 % (pl 11 %, tl 10 %, d1 15 %, d2 6 %).
+- **Dock** — six iron buttons, icon + label: forge, books, chests, pets, inventory
+  (`input.action.inventory`), camp (`mineHud.dock.camp`). Books / inventory / camp icons are
+  painted kit pieces `m-dock-books|bag|camp` (`paint.ts`, `// wave 2 — M`, char maps). Labels
+  never break mid-word: `DockLabel` sets `--lw` (longest word) and the size is
+  `min(fs, (100cqi − icon − 2u) / (lw · 0.64))`; tr labels keep soft hyphens. Phone tall: tiles
+  24u (48 px), gap 3u; elsewhere 21u.
 - **Hotkeys** (`useHotkeys`, scope = dock): F B C P I M L, E sell, R rank, 1–6 items; pad VIEW /
   X / Y. `KeyHint` is hidden by CSS for `data-input` touch / mouse.
 - **Nothing jumps:** fixed heights for stats, rank box, needs row, streak strip, backpack, dock;
@@ -389,9 +397,32 @@ Field drawing, mining, timings, critters and their animations are untouched.
   app uses `?t=…`; a bare `/src/store.ts` is a second store) and raise the resource-timing
   buffer first. Old mine `.pmx-*` CSS (35 classes) was pruned from `game-ui.css`; shared `.pmx`
   / `.pstrip` / `.pmx .prison` stay for Forest and Fishing.
+- **Background:** light sandstone (`.prison-scene.pxt-stone` + a cream veil): dark pixels
+  (L < 0.02) 6.9–10.8 % of the screen (was 21–46 %). Owner rejected the dark palette.
+- **HUD numbers fit by size, not clipping:** `.mn-stat` is a size container (no `overflow`,
+  the kit focus ring must show) and `.mn-stat__n` = `min(--fs-n, (100cqi − icon − 2u) /
+  (--len · 0.64))`, `--len` = string length (`lenVar`). Coin = painted `m-coin` (12×12) /
+  `m-coin-s` (8×8) via `.mn-coin`; token/tear 12u. Floor chip: ore 16u + letter as a kit
+  `Badge`, tip = the floor's name. Rank cost uses `shortCount` (until Q's `fmtCompact`).
+- **Press:** N2's `usePress()` (`.is-down` on pointerdown) on every non-kit pressable (stats,
+  rank, quest, parcels, bag, raw `.px-btn`s); content moves 1u down, never a filter.
+  **No `squashPop`** on kit panels: `hop(el)` moves only `[data-hop]` icons by −1/−2 art px in
+  `steps` (160 ms), skipped on reduced motion.
+- **Rank ready** = child `<i class="mn-rank__ready">` (select frame, blink 1 ↔ 0.45, steps(2)) —
+  `::after` belongs to the focus ring.
+- **Re-renders:** `Keep` (memo with a `deps` array of primitives) wraps HUD, items, bag and
+  dock; handlers that read state go through `live.current`. Digging re-renders 23 components
+  per commit instead of 83 (`{SCR}/fibers.mjs`). Window openers use `startTransition`.
+- **Under a camp / forge / inventory window** the root gets `is-under`: CSS animations of the
+  screen parts (pets, parcels, frame, rank blink) are paused — the window lives INSIDE `.mn`,
+  so the pause is scoped to `.mn-field, .mn-hud, .mn-side, …`, not `.mn *`. Style + pre-paint
+  under the pets camp at 4×: 78 → 4 ms per 4 s. Left under the camp: PrisonCamp/Nursery
+  re-render once a second (≈ 170 ms React per 4 s at 4×) — not the mine's code.
+- **Short phones (portrait, ≤ 760 px high):** stack gap 1u, dock row gap 2u → 360×740 cell 40.
 - Sheets (floors, rank, prestige, settings) are `GxModal` with kit rows (`.mn-sheet`, portal ⇒
   unscoped classes); the rank-up scene (`prank`) keeps its animations, the look is kit (wood
-  frame, ribbon that wraps, gold badge letter, gold button).
+  frame, one-line ribbon = horizon name, 40u gold badge letter, icon row `[ore] K · [coin] 14 ·
+  [block] 1 000` with the sentence as `aria-label`, key line, gold button).
 - **Sheet content is a `.px` root** (`<div className="px mn-sheet …">` inside the body): C's
   chrome then treats it as kit content — no ×2 body zoom at scale ≥ 4 (icons sized in px from
   `shell.scale` doubled to 88 px over the text at 1920×1080) and the kit well; the div scrolls

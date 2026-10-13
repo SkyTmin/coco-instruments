@@ -1179,6 +1179,19 @@ html[data-ff^='phone'] .mn--tall .mn-dock__btn {
   bottom: calc(2 * var(--u));
 }
 
+/* Лагерь, кузница или инвентарь закрывают поле — шахта стоит: её CSS-анимации (отряд,
+   посылки, рамка, ранг) на паузе, кадр не пересчитывается под окном (N2: ≈ 50 мс стиля и
+   отрисовки за 4 с при 4×). Окно живёт внутри .mn — пауза только для частей экрана. */
+.mn.is-under
+  :is(.mn-field, .mn-hud, .mn-rankrow, .mn-side, .mn-items, .mn-bag, .mn-dock, .mn-quest)
+  :is(*, ::before, ::after),
+.mn.is-under
+  :is(.mn-field, .mn-hud, .mn-rankrow, .mn-side, .mn-items, .mn-bag, .mn-dock, .mn-quest),
+.mn.is-under
+  :is(.mn-field, .mn-hud, .mn-rankrow, .mn-side, .mn-items, .mn-bag, .mn-dock, .mn-quest)::after {
+  animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mn-frame::after,
   .mn-parcel.is-ready,
