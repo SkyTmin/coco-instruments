@@ -244,7 +244,10 @@ agent (`.claude/agents/critic.md`, checklist `.claude/critic/checklist.md`) revi
 anything ships. It looks at every UI agent's AFTER shots and at every batch of owner screenshots.
 It returns prioritised, measured fixes per agent and does not touch code. The lead relays the
 fixes to the agent (SendMessage while its cache is alive, else a new agent with the fix list).
-A screen ships only when the critic's P0 list is empty. Until a session reloads the agent
+A screen ships only when the critic's P0 list is empty. One exception: an interim ship is allowed
+when the build is strictly better than prod (the critic's earlier P0s are fixed, and no
+regression against prod remains). The remaining P0s must already exist in prod; they become the
+next round's first items. Until a session reloads the agent
 types, run it as `general-purpose` whose first step is to read `critic.md` as its role.
 
 ### Owner's verdicts on the v1 look (13.10, iPhone screenshots) — binding for every screen
