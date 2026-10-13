@@ -434,6 +434,7 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
             anim={base}
             joy={joy}
             play={show}
+            focusable
             onClick={
               srec
                 ? () => {

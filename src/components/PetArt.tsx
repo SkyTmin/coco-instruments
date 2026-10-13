@@ -99,6 +99,7 @@ export function PetArt({
   play: show = null,
   className,
   onClick,
+  focusable = false,
 }: {
   id: PetId;
   size?: number;
@@ -120,6 +121,9 @@ export function PetArt({
   play?: { anim: PetAnim; k: number } | null;
   className?: string;
   onClick?: () => void;
+  /** Reachable by Tab / arrows / D-pad (kit focus ring `px-f`); Enter / Space click it, pad A
+   *  clicks it through the shell. The Nursery stage only: lists have their own focusable cells. */
+  focusable?: boolean;
 }) {
   const def = petOf(id);
   const px = PET_PX[id];
@@ -194,6 +198,7 @@ export function PetArt({
     still || ghost ? 'is-still' : '',
     px ? 'is-pxpet' : '',
     fit?.crisp ? 'is-px' : '',
+    focusable && onClick ? 'px-f' : '',
     className ?? '',
   ]
     .filter(Boolean)
@@ -210,6 +215,16 @@ export function PetArt({
       style={style}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
+      tabIndex={focusable && onClick ? 0 : undefined}
+      onKeyDown={
+        focusable && onClick
+          ? (e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              if (!e.repeat) onClick();
+            }
+          : undefined
+      }
       aria-label={ghost ? undefined : def.name}
     >
       {!ghost && def.rarity >= 1 && <i className="pet__aura" aria-hidden="true" />}
