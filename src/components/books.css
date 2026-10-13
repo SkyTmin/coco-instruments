@@ -132,8 +132,12 @@
   display: grid;
   gap: calc(2 * var(--u));
 }
+/* the dust toggle: as wide as its words, but never wider than the narrow side column */
 .bkx-block > .px-btn {
   justify-self: start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 .bkx-note {
   display: flex;
