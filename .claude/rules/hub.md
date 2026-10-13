@@ -2,6 +2,7 @@
 paths:
   - "src/lib/{hub-maps,hub-sim,hub-render,hub-dialog,hub-time,walk}.ts"
   - "src/pages/YardPage.tsx"
+  - "src/pages/hub.css"
   - "scripts/hub/**"
   - "src/components/FloatingStick.tsx"
   - "public/hub/**"
@@ -135,3 +136,48 @@ paths:
 
 Строить на плитках 0x72 подземелья не стали: см. «Площадь v2.80» выше —
 пиксели Ninja Adventure и Kenney в одной палитре, жители — листы NA.
+
+## Square wave 3 — camera, layered render, kit text (agent Q, 13.10.2026)
+
+Owner: «Когда альбомный, персонаж и всё его окружение слишком близкое.» Critic: the walk ran at
+~10 fps on a 4× CPU.
+
+- **Camera:** `resize()` takes `scale = max(1, min(floor(w/192), floor(h/176)))` in DEVICE px per
+  art px (was width-only, so landscape zoomed in to 13). Portrait is unchanged; landscape and
+  desktop show more. Table in the wave-3 report (`scratchpad/ui3Q`). `BOTTOM_INSET` is 0 in
+  landscape (stick and pad stand at the sides there), so the hero sits mid-height.
+- **Layered render (why):** a full-resolution canvas (1170×2532 on a DPR-3 phone) that changes
+  every frame was the whole cost: raster/composite, 88 % «(program)» in the profile, not our JS.
+  A smaller backing store dropped the frame to ~17 ms at once. Now (`hub.css`, YardPage):
+  1. `.hub__canvas` world: 1 art px = 1 canvas px (`ceil(gw)+1` × `ceil(gh)+1`), scaled by CSS
+     width/height with `image-rendering: pixelated`. The camera origin `ox/oy` is a WHOLE art px
+     (`floor(camL)`); the sub-art-px remainder goes into a `translate3d` rounded to whole device
+     px (`place()`).
+  2. `.hub__light` darkness: its own art-px canvas, scaled SMOOTHLY (`image-rendering: auto`),
+     `display:none` while `dark.a ≤ 0.004` (all day). Glows and cones still go `lighter` into
+     the world canvas.
+  3. `.hub__marks` «!» bangs: cleared only when something was drawn before or is due now.
+  4. `.hub__names` NPC names: DOM `.hub-name` spans (screen-sharp text with an ink outline),
+     created once per NPC, moved by transform. They are still 11.5 px fixed: not kit type.
+  `setCss` caches transform/display/opacity per element (no style writes when nothing moved).
+- **Trade-off:** sprites (hero included) sit on whole art px of the world, so the hero may wobble
+  up to ±0.5 art px on screen while the camera glides (measured 3.6–4 device px on a scale-6
+  phone; old renderer 4.1). Smooth camera, no off-grid sprites.
+- **Numbers (pp 390×844 DPR 3, 4× CPU, day, same walk right then down):** old p50 83 ms, 100 %
+  of frames > 33 ms, 95 long tasks; new p50 16.5 ms, 1.6–3.5 % > 33 ms, 0–1 long tasks; camera
+  steps on whole art px 176/176. Landscape 844×390: p50 16.5, 0.3 % > 33 ms.
+- **Kit text over the square (`hub.css`):** the event pill, toast and map pins are kit plates
+  (`--pxk-frame-obsidian` — its fill is PARCHMENT, so the ink is `--px-text`, not cream: cream on
+  it was unreadable); pill/toast/pins `--px-fs-sm`, talk name + text `--px-fs`. Map pins at kit
+  size collided (Шахта / Особая шахта): `HubMapSheet` lays them out in a layout effect — clamp
+  into the frame, push below an overlapped pin above, offsets in the frame's own units
+  (`offsetLeft/Top`; the window body may be zoomed ×2).
+- **Press:** `usePress()` on the pad buttons, the event pill and map pins (`.is-down` in the first
+  frame; pad button 17.6 ms from pointerdown on the stand).
+- **Stick ring** shows idle only for `html[data-input='touch']`.
+- **Stand:** `window.__hub` (DEV) has `sim`, `r`, `go(to, at)`, `phase(p)`, `say(text)` (toast).
+  Scripts must import the store by the URL the app loaded (`performance.getEntriesByType
+  ('resource')` → `/src/store.ts?t=…`), or they write into a second store instance.
+- **Left:** per-language sign art (ШАХТА, ЛИФТ, ПИТОМНИК, КПП are drawn Russian in
+  `scripts/hub`); NPC names in kit type; a real phone / Telegram webview / iOS Safari check of
+  `image-rendering: pixelated` on a CSS-scaled canvas (Chromium only on the stand).

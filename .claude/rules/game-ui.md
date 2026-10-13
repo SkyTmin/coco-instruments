@@ -116,9 +116,20 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   `aria-label`; a left rail (`vertical`) on landscape / tablet / desktop, a top strip on phone
   portrait; compact phones hide the label and put the tab name in the ribbon. The camp row is
   `main`: an inner kit tab row (PetsTab) then leaves Tab / Shift+Tab / LB / RB to it.
-- **GameTop:** back `Button`, kit ribbon title, chips, right buttons in one row; a
-  ResizeObserver sets `is-tight` when the row overflows and the title goes (sr-only), never
-  wrapping into a second row.
+- **GameTop:** back `Button`, kit ribbon title, chips, right buttons in one row, never wrapping.
+  Fit levels (wave 3, Q) on `.gx-top__row[data-fit]`, set on the DOM (no render) by a layout
+  effect each render + ResizeObserver + `document.fonts` `loadingdone` (fit before the web font
+  loads cut the casino title): 0 all; 1 title goes (sr-only, `is-tight`; a title cut to «…» counts
+  as not fitting); 2 the `right` group folds into one ⚙ `.gx-top__gear` that opens
+  `GameSettings` on the Sound tab (lazy import: `@/settings` imports gx); 3 `data-pri='3'` chips
+  hide; 4 `data-pri='2'` too. Priority 1 (money) never hides. On phone portrait chips are
+  `--px-fs-sm`. Pass chips as `TopChip[]` (`id, icon, value, name, pri, ch, onClick`): values go
+  through `fmtCompact` (i18n/core: `Intl` compact ≥ 10 000, «511 млн», «9,8 Mio.»), the exact
+  value is in `data-tip` / `aria-label`, `ch` sets a `min-width` so a changing number doesn't
+  move neighbours. A chip with `onClick` is a button (`.gx-chip--btn`); the first pri-1 chip with
+  a value opens the wallet popover (`.gx-wallet`, exact values of all chips, Esc / outside tap
+  closes). A ReactNode `chips` still works (old callers). Measured: yard / casino / dungeon rows
+  fit at 360/390/440 portrait and 6 formats × ru/de/tr with 510 812 345 coins.
 - **Widgets:** `gx-btn` / `gx-round` → kit button frames via `--b/--bs/--bw` (gold default;
   iron for `--grey/--dark/--steel`; red; green; `:disabled` / `.is-off` ash), text colours
   `--gx-on-*` = the `.px-btn` face pairs. `gx-badge` → kit badge (1-art-px bob), `gx-bar` → kit
