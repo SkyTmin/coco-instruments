@@ -2,7 +2,7 @@
 // layout by the shell's format and the measured hero stage. Styles — `armory.css`.
 
 import { useLayoutEffect, useState } from 'react';
-import type { RefObject } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useFormFactor } from '@/game-shell';
 
 /** `one` phone portrait, `two` tablet portrait, `three` landscape / tablet landscape / desktop. */
@@ -55,4 +55,14 @@ export function heroFit(
   let s = heroSize(box, u, max, min);
   while (s > min && s + 3 * pedOf(s) > box.h) s -= u;
   return s;
+}
+
+/**
+ * The name plate's size hint: the longest word of the name (`--wlen`). `armory.css` shrinks the
+ * name so that word fits one line of the plate — «Goldspitzhacke» no longer breaks inside.
+ */
+export function nameFit(name: ReactNode): CSSProperties {
+  const s = typeof name === 'string' ? name : '';
+  const w = Math.max(8, ...s.split(/\s+/).map((x) => x.length));
+  return { '--wlen': w } as CSSProperties;
 }

@@ -17,7 +17,7 @@ import './books.css';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
-import { heroFit, useArmLayout, useBox } from '@/components/armory';
+import { heroFit, nameFit, useArmLayout, useBox } from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
 import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
@@ -763,7 +763,9 @@ export function BooksTab() {
           )}
         </span>
         <div className="arm-id px-dark">
-          <h2 className="arm-name">{name}</h2>
+          <h2 className="arm-name" style={nameFit(name)}>
+            {name}
+          </h2>
           <div className="arm-sub">{status}</div>
           <p className="bkx-fx">{fx}</p>
         </div>
@@ -777,6 +779,14 @@ export function BooksTab() {
   if (cur.k === 'book' && b) {
     details = (
       <div className="arm-details bkx-details">
+        {/* Phone portrait: three buttons don't fit a 390-px bar with German words, so the
+            anvil (only when there is a pair) stands here, at the top of the details. */}
+        {mate >= 0 && layout === 'one' && (
+          <Button kind="secondary" size="sm" className="bkx-anvil" onClick={doAnvil}>
+            <GxIcon name="anvil" size={u * 8} />
+            {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
+          </Button>
+        )}
         <div className="bkx-block">
           <Heading sub>{t('books.inPickHead')}</Heading>
           <p>
@@ -822,7 +832,7 @@ export function BooksTab() {
             <p className="arm-muted">{t('books.warn')}</p>
           </div>
         )}
-        {mate >= 0 && (
+        {mate >= 0 && layout !== 'one' && (
           <p className="bkx-note">
             <GxIcon name="anvil" size={u * 8} />{' '}
             {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
@@ -1074,7 +1084,7 @@ export function BooksTab() {
 
   const actBar = (
     <div className="arm-acts bkx-acts">
-      {acts.map((a) => (
+      {(layout === 'one' ? [acts[0], acts[2]] : acts).map((a) => (
         <Button
           key={a.id}
           kind={a.kind}
@@ -1089,6 +1099,21 @@ export function BooksTab() {
         </Button>
       ))}
     </div>
+  );
+
+  // Tokens and dust: a row of their own on phone portrait; elsewhere on top of the side column,
+  // so the showcase gets that row's height too.
+  const purse = (
+    <span className="arm-purse">
+      <span>
+        <TokenIcon size={u * 8} />
+        <b className="arm-num">{fmt(p.tokens)}</b>
+      </span>
+      <span className="bkx-dust">
+        <DustIcon size={u * 8} />
+        <b className="arm-num">{fmt(p.dust)}</b>
+      </span>
+    </span>
   );
 
   const list = (
@@ -1106,24 +1131,14 @@ export function BooksTab() {
       className={`px arm arm--${layout} is-embed bkx`}
       style={{ '--slot': `${cell + 6 * u}px` } as CSSProperties}
     >
-      <header className="arm-top bkx-top">
-        <span className="arm-purse">
-          <span>
-            <TokenIcon size={u * 8} />
-            <b className="arm-num">{fmt(p.tokens)}</b>
-          </span>
-          <span className="bkx-dust">
-            <DustIcon size={u * 8} />
-            <b className="arm-num">{fmt(p.dust)}</b>
-          </span>
-        </span>
-      </header>
+      {layout === 'one' && <header className="arm-top bkx-top">{purse}</header>}
       {showcase}
       {list}
       {layout === 'one' ? (
         actBar
       ) : (
         <aside className="arm-side">
+          {purse}
           <Panel material="obsidian" className="arm-info">
             <div className="arm-info__head">
               <h3 className="arm-info__name">{name}</h3>

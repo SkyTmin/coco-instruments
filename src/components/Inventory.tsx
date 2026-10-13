@@ -22,7 +22,7 @@ import { ItemIcon, KeyIcon, OreIcon, RuneIcon, TokenIcon } from '@/components/Pr
 import { EggArt } from '@/components/PetArt';
 import { BookArt, DustIcon, TIER_RARITY } from '@/components/BooksTab';
 import { RarityChip, rarityVars } from '@/components/PickArt';
-import { heroSize, useArmLayout, useBox } from '@/components/armory';
+import { heroSize, nameFit, useArmLayout, useBox } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import {
   actsOf,
@@ -620,7 +620,9 @@ export function Inventory({
           )}
         </span>
         <div className="arm-id px-dark">
-          <h2 className="arm-name">{name}</h2>
+          <h2 className="arm-name" style={nameFit(name)}>
+            {name}
+          </h2>
           <p className="ivx-sub">{sub}</p>
         </div>
         {stats}

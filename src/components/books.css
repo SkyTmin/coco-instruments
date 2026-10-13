@@ -19,6 +19,21 @@
 .bkx-dust {
   color: var(--px-violet);
 }
+/* Landscape / tablet / desktop: no top row — the purse heads the side column. */
+.bkx.arm--two {
+  grid-template:
+    'show show' minmax(0, 13fr)
+    'list side' minmax(0, 7fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.bkx.arm--three {
+  grid-template:
+    'list show side' minmax(0, 1fr)
+    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 6fr);
+}
+.bkx .arm-side > .arm-purse {
+  flex: none;
+}
 
 /* Status under the name: can enchant / weaker / no room. */
 .arm-status.is-ok {
@@ -43,6 +58,32 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+}
+/* Phone portrait: a book is tall and narrow — beside the plate it stands taller (168 px on
+   390x844) than over a plate of name, state and effect (~145). Picks and items stack. */
+.bkx.arm--one .arm-stage {
+  grid-template:
+    'room id' minmax(0, 1fr)
+    'stats stats' auto
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.bkx.arm--one .arm-stage > .arm-id {
+  align-self: center;
+  padding: calc(3 * var(--u));
+}
+.bkx.arm--one .arm-name {
+  --nfs: var(--px-fs);
+}
+/* The plate beside the art (phone portrait, a wide low stage) is narrow: the smaller step. */
+.arm--one .bkx-fx {
+  min-height: calc(2 * 1.2 * var(--px-fs-sm));
+  font-size: var(--px-fs-sm);
+}
+@container arm-show (aspect-ratio > 23 / 20) {
+  .arm-stage .bkx-fx {
+    min-height: calc(2 * 1.2 * var(--px-fs-sm));
+    font-size: var(--px-fs-sm);
+  }
 }
 
 /* The chance cell is a toggle for dust (tap = add / remove dust). Same box as the other cells. */

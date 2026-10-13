@@ -26,7 +26,7 @@ import {
   rarityVars,
 } from '@/components/PickArt';
 import { preloadPx, PxStrip } from '@/components/PxStrip';
-import { heroFit, useArmLayout, useBox } from '@/components/armory';
+import { heroFit, nameFit, useArmLayout, useBox } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
 import { nameIn, pickTitle } from '@/i18n/data-mine';
@@ -336,7 +336,8 @@ export function ForgeScreen({
           <GxIcon name="energy" size={u * 8} />
           {fmt(selSpeed)}
         </b>
-        <i>{t('forge.perMin')}</i>
+        {/* a break allowed after «/»: «Blöcke/Min.» broke inside a word in the narrow cell */}
+        <i>{t('forge.perMin').replace('/', '/​')}</i>
         <Delta v={st === 'hand' ? 0 : selSpeed - speed} />
       </span>
       {st === 'hand' ? (
@@ -370,7 +371,7 @@ export function ForgeScreen({
           )}
         </span>
         <div className="arm-id px-dark">
-          <h2 className="arm-name" style={{ color: 'var(--rc)' }}>
+          <h2 className="arm-name" style={nameFit(pickTitle(sel))}>
             {pickTitle(sel)}
           </h2>
           <div className="arm-sub">

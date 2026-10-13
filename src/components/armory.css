@@ -140,17 +140,11 @@
   gap: calc(3 * var(--u));
   overflow: hidden;
 }
-/* Phone portrait: the art beside the name plate (as the Nursery), stats under both — the art
-   gets the stage's full height instead of what the text leaves. */
-.arm--one .arm-stage {
-  grid-template:
-    'room id' minmax(0, 1fr)
-    'stats stats' auto
-    / minmax(0, 11fr) minmax(0, 9fr);
-}
-/* A wide, low showcase (phone landscape, tablet portrait): the same — under the plate the art
-   would get a sliver. */
-@container arm-show (aspect-ratio > 7 / 5) {
+/* A wide, low showcase (phone landscape): the art beside the name plate (as the Nursery), stats
+   under both — under the plate the art would get a sliver. Phone portrait and the rest stack:
+   since the showcase got half the screen, art over a full-width plate is the bigger art (forge
+   on 390x844: 240 px against 180 beside the plate) and the name fits without breaking. */
+@container arm-show (aspect-ratio > 23 / 20) {
   .arm-stage {
     grid-template:
       'room id' minmax(0, 1fr)
@@ -160,7 +154,24 @@
   .arm-stage > .arm-id {
     align-self: center;
   }
-  /* `.arm-stage` in front: the base rules below would win on order alone */
+}
+/* A narrow plate (a phone's width, or beside the art): state and effect wrap into two reserved
+   lines of the smaller step. `.arm-stage` in front: the base rules below would win on order. */
+.arm--one .arm-stage .arm-status {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.arm--one .arm-stage .arm-status > :is(.px-i, .gx-icon) {
+  margin-right: var(--u);
+}
+.arm--one .arm-stage .arm-sub {
+  flex-wrap: wrap;
+  white-space: normal;
+  min-height: calc(2 * 1.2 * var(--px-fs-sm));
+  font-size: var(--px-fs-sm);
+  line-height: 1.2;
+}
+@container arm-show (aspect-ratio > 23 / 20) {
   .arm-stage .arm-status {
     display: block;
     overflow-wrap: anywhere;
@@ -171,32 +182,10 @@
   .arm-stage .arm-sub {
     flex-wrap: wrap;
     white-space: normal;
-    min-height: calc(2 * 1.2 * var(--px-fs));
+    min-height: calc(2 * 1.2 * var(--px-fs-sm));
+    font-size: var(--px-fs-sm);
     line-height: 1.2;
   }
-}
-.arm--one .arm-id {
-  align-self: center;
-  padding: calc(3 * var(--u));
-}
-.arm--one .arm-name {
-  min-height: calc(2 * 1.1 * var(--px-fs));
-  font-size: var(--px-fs);
-  align-items: center;
-}
-.arm--one .arm-status {
-  display: block;
-  overflow-wrap: anywhere;
-}
-.arm--one .arm-status > :is(.px-i, .gx-icon) {
-  margin-right: var(--u);
-}
-.arm--one .arm-sub {
-  flex-wrap: wrap;
-  white-space: normal;
-  min-height: calc(2 * 1.2 * var(--px-fs-sm));
-  font-size: var(--px-fs-sm);
-  line-height: 1.2;
 }
 /* The measured box of the art: its size comes from the grid only (contain), the art is sized
    from it in the component and never feeds back. */
@@ -222,41 +211,45 @@
    colours read on it at full strength. */
 .arm-id {
   grid-area: id;
+  /* the name sizes itself from the plate's width (cqi) */
+  container: arm-id / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: calc(2 * var(--u));
   min-width: 0;
   padding: calc(3 * var(--u)) calc(4 * var(--u));
-  background: color-mix(in srgb, var(--px-ink) 74%, transparent);
+  background: color-mix(in srgb, var(--px-ink) 90%, transparent);
+  border: var(--u) solid var(--px-ink);
   text-align: center;
   text-shadow: 0 var(--u) 0 var(--px-ink);
 }
-/* Two lines reserved for the name: a long name never pushes the art or the stats. */
+/* Two lines reserved for the name: a long name never pushes the art or the stats. `--nfs` is the
+   size per format; the longest word (`--wlen`, set by `nameFit`) shrinks it to fit one line of
+   the plate, as the Nursery's name — so words break between words, never inside. */
 .arm-name {
+  --nfs: var(--px-fs-big);
   margin: 0;
   display: grid;
   align-items: end;
   justify-self: stretch;
   min-width: 0;
-  min-height: calc(2 * 1.1 * var(--px-fs-big));
+  min-height: calc(2 * 1.1 * var(--nfs));
   max-width: 100%;
-  font: 400 var(--px-fs-big) / 1.1 var(--px-head);
+  font: 400 var(--nfs) / 1.1 var(--px-head);
+  font-size: max(var(--px-fs-sm), min(var(--nfs), calc(100cqi / (var(--wlen, 8) * 0.66))));
   color: var(--rc, var(--px-gold));
-  /* `anywhere`: the text is an anonymous grid item, `break-word` would not lower its min size;
-     `hyphens` puts a hyphen where the browser knows the language. */
+  /* last resort only (a word longer than the hint): the text is an anonymous grid item, so
+     `break-word` would not lower its min size */
   overflow-wrap: anywhere;
   hyphens: auto;
 }
 html:not([data-ff='phone-portrait']) .arm-name {
-  min-height: calc(2 * 1.1 * var(--px-fs-hero));
-  font-size: var(--px-fs-hero);
+  --nfs: var(--px-fs-hero);
 }
-/* Phone landscape: the plate beside the art is narrow — «Эффективность» at the big size broke
-   inside the word. */
+/* Phone landscape: the plate beside the art is narrow. */
 html[data-ff='phone-landscape'] .arm-name {
-  min-height: calc(2 * 1.1 * var(--px-fs));
-  font-size: var(--px-fs);
+  --nfs: var(--px-fs);
 }
 .arm-sub {
   display: flex;
@@ -424,6 +417,21 @@ html[data-ff='phone-landscape'] .arm-name {
    rarity chip next to it carries the colour. */
 /* The showcase plate already names the thing big; here it only heads the column (a narrow one —
    «Эффективность» at the big size broke inside the word). */
+/* Rarity word: ink on the rarity colour (the kit's pill, as `.nur-rar`) — the old dark chip with
+   the colour as text read 1.4:1 on the light panels. */
+.arm .rchip {
+  height: calc(var(--px-fs-sm) * 1.45);
+  padding: 0 calc(3 * var(--u));
+  border-radius: 0;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--px-ink);
+  background: var(--rc);
+  border: var(--u) solid var(--px-ink);
+  box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.45);
+  text-shadow: none;
+}
 .arm-info__name {
   margin: 0;
   font: 400 var(--px-fs) / 1.15 var(--px-head);

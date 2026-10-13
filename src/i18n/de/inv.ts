@@ -113,7 +113,7 @@ export const inv: Translation<typeof ru> = {
   pouchFull: 'Beutel voll',
   nowhere: 'Kein Platz',
   statHave: 'Vorrat',
-  statPrice: 'Stückpreis',
+  statPrice: 'Preis pro Stück',
   filterAll: 'Alles',
   sortRarity: 'Nach Seltenheit',
   gone: 'Nicht mehr hier',
