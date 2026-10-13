@@ -1216,16 +1216,18 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   font-size: var(--px-fs);
 }
 
-/* ==== Skins sheet (SkinSheet): kit cards; the skin's own palette plate stays its showcase ==== */
+/* ==== Skins sheet (SkinSheet): the art is the card ========================================== */
+/* critic K2 #11: previews were 3 symbols of 20–25 px under a 20-px name and 2–5 lines of text.
+   Now each card is a row: the skin's palette plate with three 20-u symbols (≥ 40 px, most of the
+   card's height) | the name on one line and one state line. The description is the tooltip. */
 .skn {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(calc(72 * var(--u)), 1fr));
-  gap: calc(4 * var(--u));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(150 * var(--u))), 1fr));
+  /* Every card as tall as the tallest (the relic's progress bar): one even list. */
+  grid-auto-rows: 1fr;
+  gap: calc(3 * var(--u));
   /* Room for the select frame drawn outside the first row. */
-  padding: calc(3 * var(--u)) var(--u) 0;
-}
-html[data-ff='phone-portrait'] .skn {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: calc(3 * var(--u)) calc(3 * var(--u)) 0;
 }
 .skn-card {
   position: relative;
@@ -1239,11 +1241,14 @@ html[data-ff='phone-portrait'] .skn {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   display: grid;
-  grid-template-rows: auto auto 1fr;
-  align-content: start;
-  gap: calc(2 * var(--u));
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  grid-template-areas: 'art name' 'art state';
+  align-content: center;
+  column-gap: calc(4 * var(--u));
+  row-gap: calc(2 * var(--u));
   min-width: 0;
-  padding: calc(3 * var(--u));
+  padding: calc(2 * var(--u));
   border-width: var(--u);
   border-style: solid;
   border-color: transparent;
@@ -1271,47 +1276,71 @@ html[data-ff='phone-portrait'] .skn {
   image-rendering: pixelated;
   pointer-events: none;
 }
-/* The showcase plate keeps the old card's palette; only its shape follows the kit. */
-.skn-card__art.skin-card {
-  width: 100%;
+/* The showcase plate keeps the old card's palette; only its shape follows the kit. One class
+   deeper than theme.css `.skin-card.is-relic` (its 28-px top padding was room for the old badge). */
+.skn-card .skn-card__art.skin-card {
+  grid-area: art;
+  position: relative;
+  overflow: hidden;
+  width: auto;
   border-radius: 0;
   border: 0;
-  padding: calc(4 * var(--u));
-  gap: calc(2 * var(--u));
-}
-.skn-card__art.skin-card.is-relic {
-  padding-top: calc(14 * var(--u));
+  padding: calc(2 * var(--u));
+  gap: 0;
 }
 .skn-card__art .skin-card__reels {
+  gap: var(--u);
+  padding: var(--u) calc(2 * var(--u));
   border-radius: 0;
 }
+/* Fixed box, even before the images come (`art` false on the first frame): nothing jumps. */
 .skn-card__art .skin-card__reels img {
-  width: calc(13 * var(--u));
-  height: calc(13 * var(--u));
+  width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
 }
-.skn-card__art .skin-card__name {
-  margin: 0;
-  font-family: var(--px-head);
-  font-weight: 400;
-  font-size: var(--px-fs);
-  line-height: 1.15;
+.skn-card__art .skin-card__reels:empty {
+  width: calc(64 * var(--u));
+  height: calc(22 * var(--u));
 }
-.skn-card__hint {
-  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
-  color: var(--px-muted);
-  text-wrap: pretty;
+.skn-card__name {
+  grid-area: name;
+  align-self: end;
+  min-width: 0;
+  font: 400 var(--px-fs) / 1.1 var(--px-head);
+  color: var(--px-text);
+  white-space: nowrap;
+  overflow: clip;
+}
+/* A long name on a narrow (phone) card: a step smaller; over 20 letters («Notte di mezza
+   estate») it may take two lines. By length class, not by measuring: 13 measurements forced
+   13 layouts while the sheet opened. */
+.skn-card {
+  container: skn / inline-size;
+}
+@container skn (max-width: 420px) {
+  .skn-card__name:is(.is-long, .is-xlong) {
+    font-size: var(--px-fs-sm);
+  }
+  .skn-card__name.is-xlong {
+    white-space: normal;
+  }
 }
 .skn-card__state {
-  display: grid;
-  align-content: end;
-  gap: var(--u);
-  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+  grid-area: state;
+  align-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--u) calc(2 * var(--u));
+  min-width: 0;
+  font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
 }
 .skn-on,
 .skn-lock {
   display: inline-flex;
   align-items: center;
   gap: calc(2 * var(--u));
+  white-space: nowrap;
 }
 .skn-on {
   color: var(--px-green);
@@ -1319,22 +1348,38 @@ html[data-ff='phone-portrait'] .skn {
 .skn-lock {
   color: var(--px-muted);
 }
-.skn-earned {
-  color: var(--px-green);
-  font-weight: 600;
+/* Relic badge: an ink pill on gold, 17 px (it was 9 px / 900 over the art). */
+.skn-badge {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--px-fs-sm) * 1.45);
+  padding: 0 calc(3 * var(--u));
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-ink);
+  background: #ffc94d;
+  border: var(--u) solid var(--px-ink);
+  box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.5);
+  white-space: nowrap;
 }
+/* Locked relic: lock + «×83 / ×200» on one line, the progress bar under it. */
 .skn-quest {
   display: grid;
-  gap: var(--u);
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico x' 'bar bar';
+  align-items: center;
+  flex: 1 1 auto;
+  gap: var(--u) calc(2 * var(--u));
+  min-width: 0;
   color: var(--px-gold);
 }
-.skn-quest > i {
-  font-style: normal;
+.skn-quest > .px-bar {
+  grid-area: bar;
 }
 .skn-quest > em {
-  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
   font-style: normal;
-  color: var(--px-muted);
+  color: var(--px-gold);
+  white-space: nowrap;
 }
 .skn-note {
   margin: calc(4 * var(--u)) 0 0;

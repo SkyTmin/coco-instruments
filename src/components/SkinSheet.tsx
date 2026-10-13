@@ -60,93 +60,140 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
     if (cur && !isSkinAvailable(cur, level, topX, granted)) setPrefs({ skin: 'classic' });
   }, [skin, level, topX, granted, owner, setPrefs]);
 
+  // Первые карточки — сразу, картинки остальных — кадром позже: лист открывался одной
+  // длинной задачей (294 мс), и его 160-мс появление терялось (critic K2 #11). Коробки
+  // карточек стоят с первого кадра, так что ничего не прыгает.
+  const [warm, setWarm] = useState(false);
+  useEffect(() => {
+    let id = requestAnimationFrame(() => {
+      id = requestAnimationFrame(() => setWarm(true));
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   return (
     <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
       <div className="skn px">
-        {[...SKINS].sort(order).map((sk) => {
-          const available = isSkinAvailable(sk, level, topX, granted);
-          const active = sk.id === skin;
-          // Выдан владельцу, а не добыт спином: подпись должна говорить
-          // правду, иначе карточка приписывает игроку чужой рекорд.
-          const byGrant = !!sk.earn && granted && topX < sk.earn.topX;
-          return (
-            <button
-              key={sk.id}
-              type="button"
-              className={`skn-card px-f${active ? ' is-on' : ''}${available ? '' : ' is-locked'}`}
-              aria-pressed={active}
-              aria-disabled={available ? undefined : true}
-              data-autofocus={active ? '' : undefined}
-              onClick={() => available && pick(sk.id)}
-            >
-              {/* Витрина скина — в его же палитре (как раньше). У заработанного
-                  она живёт своей жизнью: ореол крутится, имя переливается.
-                  Всё это — только здесь: если так выглядит каждая карточка,
-                  ни одна не выглядит редкой. */}
-              <span
-                className={`skn-card__art skin-card${available ? '' : ' is-locked'}${
-                  sk.earn ? ' is-relic' : ''
-                }`}
-                data-skin={sk.id}
-              >
-                {sk.earn && <i className="skin-card__halo" aria-hidden="true" />}
-                {sk.earn && (
-                  <span className="skin-card__limit is-relic">
-                    {byGrant
-                      ? t('slots.skin.granted')
-                      : available
-                        ? t('slots.skin.earned')
-                        : t('slots.skin.relic')}
-                  </span>
-                )}
-                <span className="skin-card__reels">
-                  <img src={symbolSrc(sk.id, 'seven')} alt="" />
-                  <img src={symbolSrc(sk.id, 'star')} alt="" />
-                  <img src={symbolSrc(sk.id, 'bell')} alt="" />
-                </span>
-                <span className="skin-card__name">{skinText(sk.id, 'name')}</span>
-              </span>
-              <span className="skn-card__hint">{skinText(sk.id, 'hint')}</span>
-              {/* Строка состояния стоит всегда: выбран / заперт / условие. */}
-              <span className="skn-card__state">
-                {sk.earn && !available && !byGrant ? (
-                  <span className="skn-quest">
-                    <i>{t('slots.skin.relicWhat', { x: sk.earn.topX })}</i>
-                    {/* Прогресс обязателен: условие без «сколько уже» — это
-                        не цель, а отказ. */}
-                    <Bar value={Math.min(1, topX / sk.earn.topX)} />
-                    <em className="px-num">
-                      {t('slots.skin.yourBest', { x: fmtX(topX), goal: sk.earn.topX })}
-                    </em>
-                  </span>
-                ) : !available ? (
-                  <span className="skn-lock">
-                    <Icon name="lock" />
-                    {t('slots.skin.fromLevel', { n: SKIN_UNLOCK[sk.id] })}
-                  </span>
-                ) : (
-                  <>
-                    {active && (
-                      <span className="skn-on">
-                        <Icon name="check" />
-                        {t('slots.skin.current')}
-                      </span>
-                    )}
-                    {sk.earn && (
-                      <span className="skn-earned">
-                        {byGrant
-                          ? t('slots.skin.grantedNote')
-                          : t('slots.skin.earnedBy', { x: fmtX(topX) })}
-                      </span>
-                    )}
-                  </>
-                )}
-              </span>
-            </button>
-          );
-        })}
+        {[...SKINS].sort(order).map((sk, i) => (
+          <SkinCard
+            key={sk.id}
+            sk={sk}
+            art={warm || i < FIRST}
+            available={isSkinAvailable(sk, level, topX, granted)}
+            active={sk.id === skin}
+            // Выдан владельцу, а не добыт спином: подпись должна говорить
+            // правду, иначе карточка приписывает игроку чужой рекорд.
+            byGrant={!!sk.earn && granted && topX < sk.earn.topX}
+            topX={topX}
+            onPick={pick}
+          />
+        ))}
       </div>
       <p className="skn-note">{t('slots.skin.note')}</p>
     </GxSheet>
+  );
+}
+
+/** Сколько карточек видно на телефоне сразу — их картинки грузятся первыми. */
+const FIRST = 6;
+
+/**
+ * Карточка скина (critic K2 #11): витрина — три символа ≥ 40 px, больше половины высоты
+ * карточки; имя в одну строку (на узкой карточке длинное — на ступень меньше); под ним строка
+ * состояния. Описание скина и условия — в подсказке (`data-tip`: наведение, долгое нажатие).
+ */
+function SkinCard({
+  sk,
+  art,
+  available,
+  active,
+  byGrant,
+  topX,
+  onPick,
+}: {
+  sk: Skin;
+  art: boolean;
+  available: boolean;
+  active: boolean;
+  byGrant: boolean;
+  topX: number;
+  onPick: (id: SkinId) => void;
+}) {
+  const t = useT();
+  const name = skinText(sk.id, 'name');
+  // Длина имени — классом, а не замером: 13 замеров ширины давали лишние раскладки при открытии.
+  const long = name.length > 20 ? ' is-xlong' : name.length > 14 ? ' is-long' : '';
+  const quest = !!sk.earn && !available && !byGrant;
+  const tip = [
+    skinText(sk.id, 'hint'),
+    quest && sk.earn && t('slots.skin.relicWhat', { x: sk.earn.topX }),
+    quest && sk.earn && t('slots.skin.yourBest', { x: fmtX(topX), goal: sk.earn.topX }),
+    sk.earn &&
+      available &&
+      (byGrant ? t('slots.skin.grantedNote') : t('slots.skin.earnedBy', { x: fmtX(topX) })),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <button
+      type="button"
+      className={`skn-card px-f${active ? ' is-on' : ''}${available ? '' : ' is-locked'}`}
+      aria-pressed={active}
+      aria-disabled={available ? undefined : true}
+      aria-label={`${name}. ${tip}`}
+      data-tip={tip}
+      data-autofocus={active ? '' : undefined}
+      onClick={() => available && onPick(sk.id)}
+    >
+      {/* Витрина скина — в его же палитре. У заработанного она живёт своей жизнью: ореол
+          крутится, имя переливается. Всё это — только здесь: если так выглядит каждая
+          карточка, ни одна не выглядит редкой. */}
+      <span
+        className={`skn-card__art skin-card${available ? '' : ' is-locked'}${
+          sk.earn ? ' is-relic' : ''
+        }`}
+        data-skin={sk.id}
+        aria-hidden="true"
+      >
+        {sk.earn && art && <i className="skin-card__halo" />}
+        <span className="skin-card__reels">
+          {art &&
+            (['seven', 'star', 'bell'] as const).map((id) => (
+              <img key={id} src={symbolSrc(sk.id, id)} alt="" loading="lazy" decoding="async" />
+            ))}
+        </span>
+      </span>
+      <b className={`skn-card__name${long}`}>{name}</b>
+      {/* Строка состояния стоит всегда: выбран / заперт / условие. */}
+      <span className="skn-card__state">
+        {sk.earn && !quest && (
+          <span className="skn-badge">
+            {byGrant ? t('slots.skin.granted') : t('slots.skin.earned')}
+          </span>
+        )}
+        {quest && sk.earn ? (
+          // Прогресс обязателен: условие без «сколько уже» — это не цель, а отказ.
+          <span className="skn-quest">
+            <Icon name="lock" />
+            <em className="px-num">
+              {fmtX(topX)} / ×{fmtNum(sk.earn.topX)}
+            </em>
+            <Bar value={Math.min(1, topX / sk.earn.topX)} />
+          </span>
+        ) : !available ? (
+          <span className="skn-lock">
+            <Icon name="lock" />
+            {t('slots.skin.fromLevel', { n: SKIN_UNLOCK[sk.id] })}
+          </span>
+        ) : (
+          active && (
+            <span className="skn-on">
+              <Icon name="check" />
+              {t('slots.skin.current')}
+            </span>
+          )
+        )}
+      </span>
+    </button>
   );
 }
