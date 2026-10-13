@@ -1,0 +1,43 @@
+import type { Translation } from '../types';
+import type { chests as ru } from '../ru/chests';
+
+export const chests: Translation<typeof ru> = {
+  tier: { common: 'Comune', rare: 'Raro', epic: 'Epico', legend: 'Leggendario' },
+  full: {
+    common: 'Forziere comune',
+    rare: 'Forziere raro',
+    epic: 'Forziere epico',
+    legend: 'Forziere leggendario',
+  },
+  key: 'Chiave',
+  keys: { one: '{n} chiave', many: '{n} di chiavi', other: '{n} chiavi' },
+  treat: 'Bocconcino',
+  treats: 'Bocconcino ×{n}',
+  sub: {
+    book: 'libro · probabilità {v}%',
+    rune: 'runa · nel sacchetto',
+    find: 'scoperta · nella collezione',
+    pet: 'nuovo animale',
+    egg: 'uovo · nel nido',
+    keys: 'un altro forziere',
+    item: 'tra i consumabili',
+  },
+  openAria: 'Apri un forziere',
+  open: 'Apri',
+  all: 'Tutti · {n}',
+  hint: 'Le chiavi cadono dai blocchi: una per grado, un mazzo per prestigio',
+  recent: 'Ultimi dai forzieri',
+  shattered: 'Sacchetto delle rune pieno: la runa si spezza in {n} ✦',
+  shatteredMany: 'Sacchetto delle rune pieno: quelle in più si spezzano in {n} ✦',
+  again: 'Ancora · {key} {n}',
+  skipOpen: 'tocca per aprire subito',
+  skipSum: 'tocca per vedere il totale',
+  opened: {
+    one: '{n} forziere aperto',
+    many: '{n} di forzieri aperti',
+    other: '{n} forzieri aperti',
+  },
+  total: 'Totale',
+  newPets: 'Nuovo animale: {names}',
+  takeAll: 'Prendi tutto',
+};

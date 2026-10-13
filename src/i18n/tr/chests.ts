@@ -1,0 +1,39 @@
+import type { Translation } from '../types';
+import type { chests as ru } from '../ru/chests';
+
+export const chests: Translation<typeof ru> = {
+  tier: { common: 'Yaygın', rare: 'Nadir', epic: 'Destansı', legend: 'Efsanevi' },
+  full: {
+    common: 'Yaygın Sandık',
+    rare: 'Nadir Sandık',
+    epic: 'Destansı Sandık',
+    legend: 'Efsanevi Sandık',
+  },
+  key: 'Anahtar',
+  keys: { one: '{n} anahtar', other: '{n} anahtar' },
+  treat: 'Ödül maması',
+  treats: 'Ödül maması ×{n}',
+  sub: {
+    book: 'kitap · şans %{v}',
+    rune: 'rün · keseye',
+    find: 'buluntu · koleksiyona',
+    pet: 'yeni hayvan',
+    egg: 'yumurta · yuvaya',
+    keys: 'bir sandık daha',
+    item: 'sarf malzemelerine',
+  },
+  openAria: 'Sandık aç',
+  open: 'Aç',
+  all: 'Hepsi · {n}',
+  hint: 'Anahtarlar bloklardan düşer; her rütbede bir, her prestijde bir deste verilir',
+  recent: 'Sandıklardan son çıkanlar',
+  shattered: 'Rün kesesi dolu — rün {n} ✦ olarak kırıldı',
+  shatteredMany: 'Rün kesesi dolu — fazlalar {n} ✦ olarak kırıldı',
+  again: 'Tekrar · {key} {n}',
+  skipOpen: 'dokun — hemen aç',
+  skipSum: 'dokun — sonucu göster',
+  opened: { one: '{n} sandık açıldı', other: '{n} sandık açıldı' },
+  total: 'Toplam',
+  newPets: 'Yeni hayvan: {names}',
+  takeAll: 'Hepsini al',
+};

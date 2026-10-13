@@ -1,0 +1,43 @@
+import type { Translation } from '../types';
+import type { chests as ru } from '../ru/chests';
+
+export const chests: Translation<typeof ru> = {
+  tier: { common: 'Commun', rare: 'Rare', epic: 'Épique', legend: 'Légendaire' },
+  full: {
+    common: 'Coffre commun',
+    rare: 'Coffre rare',
+    epic: 'Coffre épique',
+    legend: 'Coffre légendaire',
+  },
+  key: 'Clé',
+  keys: { one: '{n} clé', many: '{n} de clés', other: '{n} clés' },
+  treat: 'Friandise',
+  treats: 'Friandise ×{n}',
+  sub: {
+    book: 'livre · {v} % de réussite',
+    rune: 'rune · dans la bourse',
+    find: 'trouvaille · dans la collection',
+    pet: 'nouvel animal',
+    egg: 'œuf · au nid',
+    keys: 'un coffre de plus',
+    item: 'avec tes consommables',
+  },
+  openAria: 'Ouvrir un coffre',
+  open: 'Ouvrir',
+  all: 'Tous · {n}',
+  hint: 'Les clés tombent des blocs : une par rang, un paquet par prestige',
+  recent: 'Derniers butins des coffres',
+  shattered: 'Bourse à runes pleine — la rune est brisée en {n} ✦',
+  shatteredMany: 'Bourse à runes pleine — le surplus est brisé en {n} ✦',
+  again: 'Encore · {key} {n}',
+  skipOpen: 'touche pour ouvrir tout de suite',
+  skipSum: 'touche pour voir le bilan',
+  opened: {
+    one: '{n} coffre ouvert',
+    many: '{n} de coffres ouverts',
+    other: '{n} coffres ouverts',
+  },
+  total: 'Bilan',
+  newPets: 'Nouvel animal : {names}',
+  takeAll: 'Tout prendre',
+};

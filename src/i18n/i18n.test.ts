@@ -156,7 +156,6 @@ const INSTRUMENT_DIRS = ['src/pages/clothing/', 'src/pages/finance/', 'src/pages
  * test — new game code is written with `t()` from the start.
  */
 const NOT_YET_TRANSLATED = [
-  'src/components/BooksTab.tsx',
   'src/components/ChestTab.tsx',
   'src/components/CreativePanel.tsx',
   'src/components/Critters.tsx',
