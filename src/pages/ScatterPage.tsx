@@ -1915,7 +1915,7 @@ export function ScatterPage() {
                 }}
               >
                 <b>Ante</b>
-                <i>{tr('slots.cascade.anteHint', { n: ANTE_COST })}</i>
+                <i className="cas-bonus__sub">{tr('slots.cascade.anteHint', { n: ANTE_COST })}</i>
               </Button>
               <Button
                 kind="primary"

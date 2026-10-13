@@ -1108,9 +1108,7 @@ export function SlotsPage() {
             tone="gold"
             icon={
               <span className="cas-777">
-                <Sym id="seven" skin={skin} size={14} />
-                <Sym id="seven" skin={skin} size={14} />
-                <Sym id="seven" skin={skin} size={14} />
+                <Sym id="seven" skin={skin} size={24} />
               </span>
             }
             value={
@@ -1146,6 +1144,7 @@ export function SlotsPage() {
               <p className="cas-broke">{tr('slots.brokeHint')}</p>
             ) : (
               <div className="cas-hist__row">
+                {history.length === 0 && <div className="cas-hchip cas-well is-empty" aria-hidden />}
                 {history.map((h) => (
                   <div key={h.id} className={`cas-hchip cas-well${h.payout > 0 ? ' is-win' : ''}`}>
                     <span className="cas-hchip__reels">

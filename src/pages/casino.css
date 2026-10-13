@@ -248,6 +248,11 @@
 .cas-hchip.is-win .cas-hchip__sum {
   color: var(--px-green);
 }
+.cas-hchip.is-empty {
+  align-self: stretch;
+  width: calc(22 * var(--u));
+  opacity: 0.5;
+}
 .cas-broke {
   margin: 0;
   font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
@@ -409,6 +414,17 @@
 }
 [data-lay='tall'] .cas-stat__k {
   font-size: var(--px-fs-tiny);
+  white-space: normal;
+  line-height: 1.05;
+}
+/* The ante hint may take two lines rather than lose its tail. */
+.cas-bonus .px-btn > i.cas-bonus__sub {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  text-align: center;
+  font-size: var(--px-fs-tiny);
 }
 
 /* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
@@ -554,4 +570,55 @@ html[data-ff='phone-landscape'] .cas-spin__t {
 }
 html[data-ff='phone-landscape'] .cas-bonus .px-btn > b {
   font-size: var(--px-fs-sm);
+}
+
+/* ---- Tablet portrait: the stage takes the whole width on top; info | deck share the bottom -- */
+html[data-ff='tablet'] .cas[data-lay='tall'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: 'stage stage' 'info deck';
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] > .cas-info {
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  padding: calc(8 * var(--u));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'lvl' 'jp' 'best' 'sp' 'hist';
+  align-content: space-between;
+}
+html[data-ff='tablet'] .cas--scatter[data-lay='tall'] > .cas-info {
+  grid-template-areas: 'lvl' 'best' 'sp';
+  align-content: start;
+  row-gap: calc(5 * var(--u));
+}
+/* One line per fact there: icon, caption, the number at the right edge. */
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'ico k v';
+  column-gap: calc(3 * var(--u));
+  padding: 0;
+  border-image-source: none;
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-spin__t {
+  font-size: var(--px-fs-big);
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__k {
+  font-size: var(--px-fs-sm);
+  white-space: normal;
+  line-height: 1.05;
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__v {
+  font-size: var(--px-fs-head);
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__ico .px-i {
+  --i-w: 12;
+  --i-h: 12;
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-777 .sym {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
+  height: calc(16 * var(--u));
 }
