@@ -196,63 +196,68 @@ export function SessionCard() {
 
         <div className="sesk__grade px-ribbon">{tr(`slots.session.grade.${grade}`)}</div>
 
-        {/* Пик — единственное, что здесь по-настоящему крупно. Заход должен
-            вспоминаться одним кадром, а не таблицей достижений. Плита тёмная:
-            цвет редкости читается только на тёмном. */}
-        <div className={`sesk__peak sesk__peak--${tone} pxk-frame-iron px-nofill px-dark`}>
-          <div className="sesk__peak-label">
-            {peak.kind === 'none' ? tr('slots.session.noPeak') : tr('slots.session.peak')}
+        {/* Две колонки — только на низком экране (телефон лёжа); иначе обёртки прозрачны. */}
+        <div className="sesk__col">
+          {/* Пик — единственное, что здесь по-настоящему крупно. Заход должен
+              вспоминаться одним кадром, а не таблицей достижений. Плита тёмная:
+              цвет редкости читается только на тёмном. */}
+          <div className={`sesk__peak sesk__peak--${tone} pxk-frame-iron px-nofill px-dark`}>
+            <div className="sesk__peak-label">
+              {peak.kind === 'none' ? tr('slots.session.noPeak') : tr('slots.session.peak')}
+            </div>
+            <div className="sesk__peak-title">{text.title}</div>
+            <div className="sesk__peak-detail">{text.detail}</div>
           </div>
-          <div className="sesk__peak-title">{text.title}</div>
-          <div className="sesk__peak-detail">{text.detail}</div>
+
+          <div className={`sesk__net px-num${net >= 0 ? ' is-up' : ' is-down'}`}>
+            {net >= 0 ? '+' : '−'}
+            <AnimatedNumber value={Math.abs(net)} format={(n) => fmt(n)} duration={900} />
+            <CoinIcon size={24} />
+          </div>
+
+          {rankLine && <div className="sesk__rank">{rankLine}</div>}
         </div>
 
-        <div className={`sesk__net px-num${net >= 0 ? ' is-up' : ' is-down'}`}>
-          {net >= 0 ? '+' : '−'}
-          <AnimatedNumber value={Math.abs(net)} format={(n) => fmt(n)} duration={900} />
-          <CoinIcon size={24} />
-        </div>
+        <div className="sesk__col">
+          <div className="sesk__stats">
+            <span className="cas-well">
+              <b className="px-num">{fmt(session.spins)}</b>
+              <i>{tr('slots.session.spins')}</i>
+            </span>
+            <span className="cas-well">
+              <b className="px-num">{fmt(session.bestWin)}</b>
+              <i>{tr('slots.session.bestSpin')}</i>
+            </span>
+            <span className="cas-well">
+              <b className="px-num">{sessionLength(session)}</b>
+              <i>{tr('slots.session.played')}</i>
+            </span>
+          </div>
 
-        {rankLine && <div className="sesk__rank">{rankLine}</div>}
+          {/* Крючок на возврат — честный и без восклицаний: просто сколько
+              осталось до следующего уровня. */}
+          <div className="sesk__hook">
+            {tr('slots.session.hook', { lvl: level.level + 1, xp: toNext })}
+          </div>
 
-        <div className="sesk__stats">
-          <span className="cas-well">
-            <b className="px-num">{fmt(session.spins)}</b>
-            <i>{tr('slots.session.spins')}</i>
-          </span>
-          <span className="cas-well">
-            <b className="px-num">{fmt(session.bestWin)}</b>
-            <i>{tr('slots.session.bestSpin')}</i>
-          </span>
-          <span className="cas-well">
-            <b className="px-num">{sessionLength(session)}</b>
-            <i>{tr('slots.session.played')}</i>
-          </span>
-        </div>
-
-        {/* Крючок на возврат — честный и без восклицаний: просто сколько
-            осталось до следующего уровня. */}
-        <div className="sesk__hook">
-          {tr('slots.session.hook', { lvl: level.level + 1, xp: toNext })}
-        </div>
-
-        <div className="sesk__actions">
-          <Button
-            kind="primary"
-            wide
-            data-autofocus=""
-            onClick={() => {
-              primeAudio();
-              tapLight();
-              dismiss();
-              navigate(back);
-            }}
-          >
-            {tr('slots.session.again')}
-          </Button>
-          <Button wide onClick={close}>
-            {tr('slots.session.enough')}
-          </Button>
+          <div className="sesk__actions">
+            <Button
+              kind="primary"
+              wide
+              data-autofocus=""
+              onClick={() => {
+                primeAudio();
+                tapLight();
+                dismiss();
+                navigate(back);
+              }}
+            >
+              {tr('slots.session.again')}
+            </Button>
+            <Button wide onClick={close}>
+              {tr('slots.session.enough')}
+            </Button>
+          </div>
         </div>
       </Panel>
     </div>

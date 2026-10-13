@@ -375,16 +375,20 @@
 .cas-spin {
   min-height: calc(26 * var(--u));
   min-width: 0;
-  overflow: hidden;
 }
 .cas-spin__t {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   font: 400 var(--px-fs-big) / 1.05 var(--px-head);
   text-transform: uppercase;
 }
-.cas-spin .px-keyhint {
-  flex: none;
+/* The key sits on the corner like on the small buttons: the label keeps the whole width. */
+.cas-spin > .px-keyhint {
+  position: absolute;
+  right: calc(-2 * var(--u));
+  bottom: calc(-2 * var(--u));
+  z-index: 2;
 }
 
 /* Cascade: ante + buy bonus — two equal plates, fixed height. */
@@ -404,7 +408,10 @@
   min-width: 0;
 }
 .cas-bonus .px-btn > b {
+  max-width: 100%;
   font: 700 var(--px-fs) / 1.05 var(--px-font);
+  white-space: normal;
+  text-align: center;
 }
 .cas-bonus .px-btn > i {
   display: inline-flex;
@@ -565,6 +572,15 @@ html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chip
 .cas[data-lay='wide'] .cas-deck__go > .cas-spin {
   grid-area: spin;
 }
+/* The two bonus plates are narrow — thinner side padding and up to three lines for the ante
+   hint, so it is never cut (the height is set by the language, not by play). */
+.cas .cas-bonus .px-btn {
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+.cas .cas-bonus .px-btn > i.cas-bonus__sub {
+  -webkit-line-clamp: 3;
+}
 html[data-ff='phone-landscape'] .cas-mini {
   min-height: var(--gx-hit);
 }
@@ -649,13 +665,17 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
 }
 
 /* ==== Hall (GamesPage): wallet on top, three big game cards ================================= */
+/* The hall takes the height the screen gives (never more): the cards share it and the pictures
+   fit inside them, so the last card's «Play» never goes under the edge. */
 .cas-hall .gs__main {
-  flex: 1 0 auto;
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 .hall {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   max-width: calc(400 * var(--u));
   margin: 0 auto;
@@ -869,23 +889,80 @@ html .hall[data-lay='wide'] .hall-card__go {
 html[data-ff='phone-landscape'] .hall {
   gap: calc(3 * var(--u));
 }
-html[data-ff='phone-landscape'] .hall-wallet {
-  padding: calc(8 * var(--u)) calc(10 * var(--u));
-}
-/* Phone portrait: the cards share the height the wallet leaves. */
+/* Phone portrait / tablet portrait: the cards share the height the wallet leaves; the picture
+   column is as tall as the card and the symbols fit it (contain), whatever the language. */
 html .hall[data-lay='tall'] {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 html .hall[data-lay='tall'] .hall-cards {
   grid-auto-rows: minmax(0, 1fr);
 }
-html[data-ff='phone-landscape'] .hall-wallet__v {
-  font-size: var(--px-fs-big);
-}
-html[data-ff='phone-landscape'] .hall-card__art {
-  aspect-ratio: auto;
+html .hall[data-lay='tall'] .hall-card__art,
+html[data-ff='phone-landscape'] .hall .hall-card__art {
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   min-height: 0;
-  height: calc(34 * var(--u));
+}
+html .hall[data-lay='tall'] .hall-card__reels {
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  height: 100%;
+}
+html .hall[data-lay='tall'] .hall-card__grid {
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  height: 100%;
+}
+html .hall[data-lay='tall'] .hall-card__reels img,
+html .hall[data-lay='tall'] .hall-card__grid img,
+html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__reels img,
+html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+/* Phone lying: the wallet is one line, the note gives its line to the cards, and the picture
+   gives way first (it takes the room the text leaves). */
+html[data-ff='phone-landscape'] .hall {
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+}
+html[data-ff='phone-landscape'] .hall-note {
+  display: none;
+}
+html[data-ff='phone-landscape'] .hall-cards {
+  grid-auto-rows: minmax(0, 1fr);
+}
+html[data-ff='phone-landscape'] .hall-wallet {
+  align-items: center;
+  padding: calc(6 * var(--u)) calc(10 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall-wallet__money {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: calc(4 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall-wallet__v {
+  font-size: var(--px-fs-head);
+}
+html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card {
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall .hall-card__art {
+  aspect-ratio: auto;
+  height: auto;
+  padding: calc(3 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__reels,
+html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  height: 100%;
+}
+html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
 }
 html[data-ff='phone-landscape'] .hall-card__tags {
   display: none;
@@ -1192,9 +1269,18 @@ html[data-ff='phone-portrait'] .skn {
   --sesk-plate: var(--px-text);
 }
 /* Everything over the rays of the unforgettable session. */
-.sesk > *:not(.ses__rays) {
+.sesk > *:not(.ses__rays),
+.sesk__col > * {
   position: relative;
   z-index: 1;
+}
+/* The veil row is definite, so the card's max-height: 100% holds (it scrolls inside, never off-screen). */
+.ses {
+  grid-template-rows: minmax(0, 1fr);
+}
+/* Column wrappers are see-through unless the screen is low (below). */
+.sesk__col {
+  display: contents;
 }
 .sesk__grade {
   max-width: 100%;
@@ -1298,6 +1384,27 @@ html[data-ff='phone-portrait'] .skn {
   justify-self: stretch;
   display: grid;
   gap: calc(2 * var(--u));
+}
+/* Low screen (phone lying): peak and net on the left, stats and the buttons on the right. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .ses > .sesk {
+    width: min(100%, calc(330 * var(--u, 2px)));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    column-gap: calc(6 * var(--u));
+  }
+  .sesk__grade {
+    grid-column: 1 / -1;
+  }
+  .sesk__col {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: calc(3 * var(--u));
+  }
+  .sesk__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .ses > .sesk,
