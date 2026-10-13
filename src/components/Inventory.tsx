@@ -898,8 +898,12 @@ export function Inventory({
     </div>
   );
 
-  // Мест под кнопки — всегда одно и то же число на это место; лишние спрятаны (ничего не прыгает).
-  const slots = ACT_SLOTS[place] ? Math.max(1, Math.min(acts.length, ACT_SLOTS[place])) : 0;
+  // Places for the buttons. A side column keeps the same number for this place, spare ones hidden
+  // above the buttons (the details box above them must not move between items: −87 px at the bunk
+  // with one action). The phone bar is one row: as many places as actions, so one button doesn't
+  // stand in the right quarter with three empty places beside it (critic P0-6).
+  const cap = ACT_SLOTS[place];
+  const slots = !cap ? 0 : layout === 'one' ? Math.max(1, Math.min(acts.length, cap)) : cap;
   const pad = Math.max(0, slots - acts.length);
   const actBar =
     slots > 0 ? (
