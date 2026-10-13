@@ -9,6 +9,7 @@
 // и герой по глубине → частицы и следы ударов → свет → растяжка → цифры.
 // Анимируем только то, что в канве: DOM страницы этот цикл не трогает.
 
+import { t as tr } from '@/i18n/core';
 import { areaOf, MOBS, stackOf } from './dungeon';
 import type { AreaId, Gear, MobId } from './dungeon';
 import {
@@ -705,8 +706,8 @@ export class DungeonRenderer {
     const names: Record<string, [string, string]> = {
       coin: [`+${n}`, '#ffd24a'],
       token: [`+${n}✦`, '#7fe6d0'],
-      key: ['+ключ', '#9fe6f0'],
-      crown: ['КОРОНА', '#ffd24a'],
+      key: [tr('dungeon.float.key'), '#9fe6f0'],
+      crown: [tr('dungeon.float.crown'), '#ffd24a'],
     };
     const t = names[what];
     if (!t) return;

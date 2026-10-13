@@ -1,5 +1,11 @@
 import { cash } from './cash';
 import { common } from './common';
+import { dfloors } from './dfloors';
+import { dgear } from './dgear';
+import { dlines } from './dlines';
+import { dmats } from './dmats';
+import { dmobs } from './dmobs';
+import { dungeon } from './dungeon';
 import { field } from './field';
 import { hall } from './hall';
 import { input } from './input';
@@ -18,6 +24,12 @@ import { ui } from './ui';
 export const ru = {
   cash,
   common,
+  dfloors,
+  dgear,
+  dlines,
+  dmats,
+  dmobs,
+  dungeon,
   field,
   hall,
   input,

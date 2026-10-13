@@ -2,6 +2,7 @@ import type { Catalog } from '../core';
 import type { Translation } from '../types';
 import { cash } from './cash';
 import { common } from './common';
+import { dungeon } from './dungeon';
 import { field } from './field';
 import { hall } from './hall';
 import { input } from './input';
@@ -16,6 +17,7 @@ import { ui } from './ui';
 const fr: Translation<Catalog> = {
   cash,
   common,
+  dungeon,
   field,
   hall,
   input,

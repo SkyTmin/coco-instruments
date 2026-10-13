@@ -22,14 +22,12 @@ import {
   canPay,
   entryArea,
   floorOf,
-  matDef,
   MOBS,
   stackOf,
   DEEP_MINES,
   heroOf,
   levelOf,
   liftCost,
-  MATS,
   meatCount,
   meatValue,
   sackSlots,
@@ -52,7 +50,6 @@ import {
   packAtMine,
   snapshot,
   stepSim,
-  streakName,
   takeDelta,
   usableNear,
   useObject as interact,
@@ -67,6 +64,8 @@ import { registerEscape } from '@/lib/escape-stack';
 import { useAction, useGameplayCapture, useHotkeys, useMoveAxis } from '@/input/hooks';
 import { playTotem } from '@/lib/totem';
 import { rainCoins } from '@/lib/coins';
+import { fmtNum, streakName, t, upper, useT } from '@/i18n';
+import { areaLead, areaName, bossName, dl, matName, mobName } from '@/i18n/data-dungeon';
 import { FLOORS } from '@/lib/dungeon-floors';
 import {
   bagFull,
@@ -131,13 +130,13 @@ import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } f
 const STEP = 1 / 60;
 const SAVE_MS = 5000;
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 const clock = (ms: number) => {
-  const t = Math.max(0, Math.ceil(ms / 1000));
-  const m = Math.floor(t / 60);
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(s / 60);
   return m >= 60
-    ? `${Math.floor(m / 60)} ч ${String(m % 60).padStart(2, '0')} мин`
-    : `${m}:${String(t % 60).padStart(2, '0')}`;
+    ? t('dungeon.clockH', { h: String(Math.floor(m / 60)), m: String(m % 60).padStart(2, '0') })
+    : `${m}:${String(s % 60).padStart(2, '0')}`;
 };
 
 export type RunEnd =
@@ -192,14 +191,6 @@ interface Sign {
  */
 type CoachStep = 'move' | 'attack' | 'bag' | 'dash' | 'spin' | 'eat';
 const COACH_KEY = 'dg.coach.v1';
-const COACH_TEXT: Record<CoachStep, string> = {
-  move: 'Веди пальцем — идти',
-  attack: 'Бей!',
-  bag: 'Добыча — в рюкзаке',
-  dash: 'Рывок — увернуться',
-  spin: 'Вихрь готов!',
-  eat: 'Съешь — лечит',
-};
 function coachDone(): Set<string> {
   try {
     return new Set(JSON.parse(localStorage.getItem(COACH_KEY) ?? '[]') as string[]);
@@ -243,29 +234,20 @@ function signRows(sim: Sim, o: WorldObj, lifts: readonly string[]): SignRow[] {
     });
   };
   const lift = nearest('lift');
-  add(lift, 'lift', lift && !lifts.includes(lift.area) ? 'Лифт (сломан)' : 'Лифт');
-  add(nearest('mine'), 'minecart', 'Шахта');
-  if (sim.boss) add(sim.boss.obj, 'crown', `Логово: ${sim.boss.def.name}`);
+  add(
+    lift,
+    'lift',
+    lift && !lifts.includes(lift.area) ? t('dungeon.sign.liftBroken') : t('dungeon.lift'),
+  );
+  add(nearest('mine'), 'minecart', t('dungeon.mine'));
+  if (sim.boss)
+    add(sim.boss.obj, 'crown', t('dungeon.sign.lair', { name: bossName(sim.boss.def.id) }));
   return rows;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  poison: 'яд',
-  burn: 'ожог',
-  slow: 'вязнешь',
-  chill: 'холод',
-  stun: 'оглушён',
-  charm: 'очарован',
-};
-
-const STATUS_NOTE: Record<string, string> = {
-  poison: 'Отравлен — здоровье тает',
-  burn: 'Горишь — отойди от огня',
-  slow: 'Замедлен',
-  chill: 'Холод сковывает',
-  stun: 'Оглушён!',
-  charm: 'Очарован — ноги идут наоборот',
-};
+const STATUSES = ['poison', 'burn', 'slow', 'chill', 'stun', 'charm'] as const;
+type StatusId = (typeof STATUSES)[number];
+const isStatus = (k: string): k is StatusId => (STATUSES as readonly string[]).includes(k);
 
 /**
  * Звуки своих событий этажей (`boss.what`), у которых нет общего окончания
@@ -740,6 +722,7 @@ export function DungeonRun({
   /** Ушёл с экрана посреди вылазки: она сохранена и ждёт внизу. */
   onLeave: () => void;
 }) {
+  useT();
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mapRef = useRef<HTMLCanvasElement>(null);
@@ -887,7 +870,7 @@ export function DungeonRun({
     const ro = new ResizeObserver(fit);
     if (rootRef.current) ro.observe(rootRef.current);
     const a = areaOf(sim.area);
-    say(a.name, run.x >= 0 ? 'Продолжаем' : a.lead);
+    say(areaName(a.id), run.x >= 0 ? t('dungeon.goOn') : areaLead(a.id));
     lastSave.current = performance.now();
 
     let raf = 0;
@@ -1157,10 +1140,10 @@ export function DungeonRun({
           ratDie((MOBS[e.mob]?.mass ?? 1) >= 2);
           if (MOBS[e.mob]?.coins) {
             coinDing();
-            note(`${MOBS[e.mob].name} — мешок монет!`);
+            note(t('dungeon.coinBag', { name: mobName(e.mob) }));
           }
-          if (e.albino) say('АЛЬБИНОС', 'редкая крыса — добыча ×10', 'gold', 1800);
-          else if (e.elite) note('Вожак стаи повержен');
+          if (e.albino) say(t('dungeon.albino'), t('dungeon.albinoSub'), 'gold', 1800);
+          else if (e.elite) note(t('dungeon.eliteDown'));
           break;
         // Движок 3: героя дёрнуло (крюк, течение), моб сорвался в пропасть.
         case 'pull':
@@ -1185,14 +1168,14 @@ export function DungeonRun({
           if (!coach.current.bagAt) coach.current.bagAt = Date.now();
           if (e.what === 'key') playTotem(sackRef.current);
           if (e.what !== 'coin' && e.what !== 'token' && e.what !== 'key' && stackOf(e.what) === 1)
-            say('ТРОФЕЙ', matDef(e.what).name, 'gold', 2200);
+            say(t('dungeon.trophy'), matName(e.what), 'gold', 2200);
           break;
         case 'full':
           if (now - lastFull.current > 3000) {
             lastFull.current = now;
             bagFull();
             notifyWarning();
-            note('Рюкзак полон — неси добычу к лифту');
+            note(t('dungeon.bagFull'));
           }
           break;
         case 'dash':
@@ -1202,7 +1185,7 @@ export function DungeonRun({
         case 'dodge':
           perfectDodge();
           tapMedium();
-          say('УКЛОН', 'следующий удар — крит', 'dodge', 900);
+          say(t('dungeon.dodge'), t('dungeon.dodgeSub'), 'dodge', 900);
           break;
         case 'boom':
           boom(e.r > 0 ? 2 : 1);
@@ -1220,7 +1203,7 @@ export function DungeonRun({
         case 'break':
           if (e.kind === 'crack') {
             boom(1);
-            note('Стена осыпалась — проход открыт');
+            note(t('dungeon.crack'));
           } else crateBreak();
           break;
         case 'cart':
@@ -1235,7 +1218,12 @@ export function DungeonRun({
         case 'level': {
           levelUp();
           notifySuccess();
-          say(`УРОВЕНЬ ${e.level}`, 'здоровье и урон выросли', 'gold', 1800);
+          say(
+            t('dungeon.level', { n: String(e.level) }),
+            t('dungeon.levelSub'),
+            'gold',
+            1800,
+          );
           // Новый уровень — сильнее сразу, прямо в бою.
           const st = useFinanceStore.getState();
           const hpK = sim.hero.hp / sim.stats.maxHp;
@@ -1250,17 +1238,20 @@ export function DungeonRun({
         case 'rumble':
           deepRumble();
           tapMedium();
-          if (e.what === 'horde') say('ОРДА', 'лезут стаей — к стене спиной', 'danger', 1800);
-          else note('Вагонетка сорвалась!');
+          if (e.what === 'horde') say(t('dungeon.horde'), t('dungeon.hordeSub'), 'danger', 1800);
+          else note(t('dungeon.cartLoose'));
           break;
         case 'area': {
           const a = areaOf(e.area);
-          say(a.name, a.lead);
+          say(areaName(a.id), areaLead(a.id));
           save();
           break;
         }
         case 'boss': {
-          const name = sim.boss?.def.name ?? 'Босс';
+          const name = sim.boss ? bossName(sim.boss.def.id) : t('dungeon.boss');
+          // Строки движков этажей — по-русски в lib, на экран — переводом.
+          const text = dl(e.text);
+          const sub = dl(e.sub);
           // С 6-го этажа боссы — звери и демоны, не крысы: в `kingRoar`
           // слышна крысиная свита.
           const roar = world.floor >= 6 ? () => beastRoar() : kingRoar;
@@ -1268,34 +1259,34 @@ export function DungeonRun({
             roar();
             gateSlam();
             notifyWarning();
-            say(e.text ?? name.toUpperCase(), e.sub ?? 'ворота закрылись', 'danger', 2600);
+            say(text ?? upper(name), sub ?? t('dungeon.gateShut'), 'danger', 2600);
           } else if (e.what === 'split') {
             roar();
             say(
-              e.text ?? 'КОРОЛЬ РАСКОЛОЛСЯ',
-              e.sub ?? 'три малых — бей по очереди',
+              text ?? t('dungeon.kingSplit'),
+              sub ?? t('dungeon.kingSplitSub'),
               'danger',
               2000,
             );
           } else if (e.what === 'phase') {
             roar();
             tapMedium();
-            say(e.text ?? 'ЯРОСТЬ', e.sub ?? name, 'danger', 2000);
+            say(text ?? t('dungeon.rage'), sub ?? name, 'danger', 2000);
           } else if (e.what === 'dead') {
             jackpotFanfare();
             notifySuccess();
-            say('ПОБЕДА', e.sub ?? `${name} — сундук и дорога вниз`, 'gold', 3000);
+            say(t('dungeon.victory'), sub ?? t('dungeon.victorySub', { name }), 'gold', 3000);
             save();
           } else if (e.what === 'seal') {
             gateSlam();
-            note('Печати пали — лестница вниз открыта', 3000);
+            note(t('dungeon.sealsDown'), 3000);
           } else if (e.what === 'reset') {
             gateSlam();
-            note(`${name} ушёл отдыхать — ворота открыты`);
+            note(t('dungeon.bossRests', { name }));
           } else if (e.what === 'roar') {
             roar();
             tapMedium();
-            if (e.text) say(e.text, e.sub, 'danger', 1800);
+            if (text) say(text, sub, 'danger', 1800);
           } else if (e.what === 'finale') {
             // Последний босс пал: победа отзвучала — пауза — церемония.
             const stats = {
@@ -1316,7 +1307,7 @@ export function DungeonRun({
             FLOOR_SOUND[e.what]();
             const alarm = e.what.endsWith('_trap') || e.what.endsWith('_heal');
             if (e.what.endsWith('_trap')) notifyWarning();
-            if (e.text) say(e.text, e.sub, alarm ? 'danger' : 'area', 1600);
+            if (text) say(text, sub, alarm ? 'danger' : 'area', 1600);
           } else if (e.what === 'roll') deepRumble();
           else if (e.what === 'whip') swordSwing(2, true);
           else if (e.what === 'summon') {
@@ -1325,15 +1316,15 @@ export function DungeonRun({
           } else if (e.what.endsWith('_dive') || e.what.endsWith('_splash')) {
             // Нырок и прыжок из воды — всплеск (бездна, омуты).
             fishSplash(1.4);
-            if (e.text) say(e.text, e.sub, 'danger', 1600);
+            if (text) say(text, sub, 'danger', 1600);
           } else if (e.what.endsWith('_call')) {
             // Чужой голос из темноты — тихое стекло, без мелодии.
             softChime(-5);
-            if (e.text) say(e.text, e.sub, 'area', 2000);
+            if (text) say(text, sub, 'area', 2000);
           } else if (e.what.endsWith('_trap')) {
             gateSlam();
             notifyWarning();
-            if (e.text) say(e.text, e.sub, 'danger', 1800);
+            if (text) say(text, sub, 'danger', 1800);
           } else if (e.what.endsWith('_wall')) {
             // Босс врезался в стену — тяжёлый глухой удар и дрожь в руке.
             deepRumble();
@@ -1342,26 +1333,26 @@ export function DungeonRun({
           } else if (e.what.endsWith('_fall')) {
             // Враг сорвался в пропасть — удача игрока, а не опасность.
             softChime(0);
-            if (e.text) say(e.text, e.sub, 'gold', 1600);
+            if (text) say(text, sub, 'gold', 1600);
           } else if (e.what.endsWith('_stone')) {
             // Окаменел (горгулья, статуя) — сухой стук камня.
             bedrockClink();
-            if (e.text) say(e.text, e.sub, 'area', 1400);
-          } else if (e.text) say(e.text, e.sub, 'danger', 1800);
+            if (text) say(text, sub, 'area', 1400);
+          } else if (text) say(text, sub, 'danger', 1800);
           break;
         }
         case 'strike':
           if (e.big) boom(1);
           break;
         case 'status':
-          note(STATUS_NOTE[e.kind] ?? 'Ты под ударом', 1400);
+          note(isStatus(e.kind) ? t(`dungeon.statusNote.${e.kind}`) : t('dungeon.underAttack'), 1400);
           break;
         case 'streak':
           streakUp(e.tier);
           tapMedium();
           say(
-            streakName(e.tier).toUpperCase(),
-            `серия ${sim.streak} — добыча больше`,
+            upper(streakName(Math.min(e.tier, 4))),
+            t('dungeon.streakSub', { n: String(sim.streak) }),
             'streak',
             1300,
           );
@@ -1374,7 +1365,11 @@ export function DungeonRun({
           break;
         case 'gold':
           coinDing();
-          note(`${MOBS[e.mob]?.name ?? 'Беглец'} с мешком! Догони — убежит`);
+          note(
+            t('dungeon.runnerNote', {
+              name: MOBS[e.mob] ? mobName(e.mob) : t('dungeon.runner'),
+            }),
+          );
           break;
         case 'fuse':
           fuseTick();
@@ -1581,25 +1576,25 @@ export function DungeonRun({
     }
     if (u.kind === 'seal') {
       if (!st.dungeonSpendProp()) {
-        note('Нужна крепь — её делают на лесопилке в лесу');
+        note(t('dungeon.needProp'));
         return;
       }
       if (interact(sim, u)) {
         crateBreak();
-        note('Нора заколочена крепью');
+        note(t('dungeon.sealed'));
       }
       return;
     }
     if (interact(sim, u)) {
       if (u.kind === 'light') {
         liftClank();
-        note('Фонарь горит — свет держит крыс поодаль');
+        note(t('dungeon.lampLit'));
       } else if (u.kind === 'grate') {
         gateSlam();
-        say('КОРОТКИЙ ПУТЬ', 'решётка открыта навсегда', 'area', 1800);
+        say(t('dungeon.shortcut'), t('dungeon.shortcutSub'), 'area', 1800);
       } else if (u.kind === 'secret') {
         coinDing();
-        say('ТАЙНИК', 'монеты, токены и ключ', 'gold', 1800);
+        say(t('dungeon.stash'), t('dungeon.stashSub'), 'gold', 1800);
       }
       save();
     }
@@ -1611,7 +1606,7 @@ export function DungeonRun({
     const sim = simRef.current;
     if (!sim || ended.current) return;
     if (!floorReady(world.floor + 1)) {
-      note('Ниже ещё не пройти — этаж достраивают');
+      note(t('dungeon.notBuilt'));
       return;
     }
     ended.current = true;
@@ -1622,7 +1617,7 @@ export function DungeonRun({
     if (!ok) {
       ended.current = false;
       paused.current = false;
-      note('Лестница закрыта — сперва победи босса');
+      note(t('dungeon.stairsShut'));
       return;
     }
     liftClank();
@@ -1652,8 +1647,8 @@ export function DungeonRun({
     if (packs > 0) {
       packAtMine(sim, m.obj, packs);
       say(
-        'У ВХОДА ЖДУТ',
-        packs > 1 ? `шумел — собралось ${packs} стаи` : 'шумел — собралась стая',
+        t('dungeon.waiting'),
+        t('dungeon.waitingSub', { n: String(packs) }),
         'danger',
         1800,
       );
@@ -1717,7 +1712,7 @@ export function DungeonRun({
         <button
           type="button"
           className="gx-round gx-round--steel dgx-pause"
-          aria-label="Пауза"
+          aria-label={t('dungeon.pause')}
           onClick={() => {
             tapLight();
             setSheet('pause');
@@ -1740,10 +1735,10 @@ export function DungeonRun({
           {hud?.status && (
             <div className="dgx-status">
               {hud.status.split(',').map((x) => {
-                const [k, t] = x.split(':');
+                const [k, sec] = x.split(':');
                 return (
                   <span key={k} className={`dgx-status__chip is-${k}`}>
-                    {STATUS_LABEL[k] ?? k} {t}
+                    {isStatus(k) ? t(`dungeon.status.${k}`) : k} {sec}
                   </span>
                 );
               })}
@@ -1773,7 +1768,7 @@ export function DungeonRun({
           type="button"
           ref={sackRef}
           className={`gx-round gx-round--grey dgx-bag${hud && hud.sackN >= hud.cap ? ' is-full' : ''}`}
-          aria-label="Рюкзак"
+          aria-label={t('dungeon.bag')}
           onClick={() => {
             tapLight();
             if (coach.current.bagAt) {
@@ -1797,7 +1792,7 @@ export function DungeonRun({
         <button
           type="button"
           className="dgx-mini"
-          aria-label="Карта"
+          aria-label={t('dungeon.map')}
           onClick={() => {
             tapLight();
             setSheet('map');
@@ -1810,7 +1805,7 @@ export function DungeonRun({
       {hud?.bossHp != null && (
         <div className="dgx-boss">
           <GxIcon name="crown" />
-          <b>{simRef.current?.boss?.def.name}</b>
+          <b>{simRef.current?.boss && bossName(simRef.current.boss.def.id)}</b>
           <span className="dgx-boss__bar">
             <GxBar value={hud.bossHp} />
             {hud.bossMarks.map((v) => (
@@ -1827,11 +1822,16 @@ export function DungeonRun({
         <div className="gx-panel gx-panel--wood dgx-card">
           <GxIcon name="crown" size={28} />
           <span>
-            <b>Логово пусто</b>
+            <b>{t('dungeon.lairEmpty')}</b>
             <i>
               {hud.plaque > 0
-                ? `${simRef.current?.boss?.def.name ?? 'Босс'} вернётся через ${clock(hud.plaque)}`
-                : 'вот-вот вернётся'}
+                ? t('dungeon.returnsIn', {
+                    name: simRef.current?.boss
+                      ? bossName(simRef.current.boss.def.id)
+                      : t('dungeon.boss'),
+                    time: clock(hud.plaque),
+                  })
+                : t('dungeon.returnsSoon')}
             </i>
           </span>
         </div>
@@ -1843,7 +1843,7 @@ export function DungeonRun({
               <GxIcon name={r.icon} size={22} />
               <span>{r.label}</span>
               <KIcon name="arrowUp" size={18} style={{ transform: `rotate(${r.angle}deg)` }} />
-              <b>{r.dist} м</b>
+              <b>{t('dungeon.meters', { n: String(r.dist) })}</b>
             </div>
           ))}
         </div>
@@ -1866,26 +1866,26 @@ export function DungeonRun({
           <div className="dg-finale__cup">
             <GxIcon name="laurels" />
           </div>
-          <b className="dg-finale__title">ПОДЗЕМЕЛЬЕ ПОКОРЕНО</b>
-          <span className="dg-finale__sub">Хозяин подземелья пал — его сердце у тебя</span>
+          <b className="dg-finale__title">{t('dungeon.finale.title')}</b>
+          <span className="dg-finale__sub">{t('dungeon.finale.sub')}</span>
           <div className="dg-finale__stats">
             <div>
               <b>{finale.floors}</b>
-              <span>этажей</span>
+              <span>{t('dungeon.finale.floors')}</span>
             </div>
             <div>
               <b>
                 {Math.floor(finale.fight / 60)}:{String(finale.fight % 60).padStart(2, '0')}
               </b>
-              <span>бой</span>
+              <span>{t('dungeon.finale.fight')}</span>
             </div>
             <div>
               <b>{finale.kills}</b>
-              <span>убито за вылазку</span>
+              <span>{t('dungeon.finale.kills')}</span>
             </div>
           </div>
           <button type="button" className="gx-btn gx-btn--big" onClick={() => setFinale(null)}>
-            Дальше
+            {t('dungeon.finale.next')}
           </button>
         </div>
       )}
@@ -1904,14 +1904,14 @@ export function DungeonRun({
             }}
           >
             <GxIcon name={USE_ICON[u.kind]} />
-            {u.label}
+            {dl(u.label)}
           </button>
         )}
         <button
           type="button"
           ref={eatRef}
           className={`gx-round gx-round--green dgx-eat${hud?.eat ? '' : ' is-off'}`}
-          aria-label="Съесть мясо"
+          aria-label={t('dungeon.eatMeat')}
           onPointerDown={press('eat')}
         >
           <GxIcon name="eat" />
@@ -1921,7 +1921,7 @@ export function DungeonRun({
           type="button"
           ref={spinRef}
           className={`gx-round gx-round--dark dgx-spin${skillReady ? ' is-ready' : ''}`}
-          aria-label="Вихрь"
+          aria-label={t('dungeon.spin')}
           style={{ '--fill': hud?.skill ?? 0 } as CSSProperties}
           onPointerDown={press('skill')}
         >
@@ -1932,7 +1932,7 @@ export function DungeonRun({
           type="button"
           ref={dashRef}
           className={`gx-round gx-round--steel dgx-dash${hud?.dash === false ? ' is-off' : ''}`}
-          aria-label="Рывок"
+          aria-label={t('dungeon.dash')}
           onPointerDown={press('dash')}
         >
           <GxIcon name="dash" />
@@ -1941,7 +1941,7 @@ export function DungeonRun({
           type="button"
           ref={atkRef}
           className="gx-round dgx-atk"
-          aria-label="Удар"
+          aria-label={t('dungeon.strike')}
           onPointerDown={atkDown}
           onPointerMove={atkMove}
           onPointerUp={atkUp}
@@ -1967,7 +1967,7 @@ export function DungeonRun({
             style={{ left: hintAt.x, top: hintAt.y }}
           >
             <GxIcon name="pointing" />
-            <b>{COACH_TEXT[step]}</b>
+            <b>{t(`dungeon.coach.${step}`)}</b>
           </div>
         </>
       )}
@@ -1975,14 +1975,14 @@ export function DungeonRun({
       {dying && (
         <div className="dg-dying">
           <GxIcon name="skull" size={64} />
-          <b>Ты погиб</b>
+          <b>{t('dungeon.dead')}</b>
         </div>
       )}
 
       {mine && <DungeonMine id={mine.id} sim={simRef.current!} onExit={leaveMine} onToast={note} />}
 
       {sheet === 'pause' && (
-        <GxModal title="Пауза" onClose={() => setSheet(null)}>
+        <GxModal title={t('dungeon.pause')} onClose={() => setSheet(null)}>
           <SackList sack={simRef.current?.sack} />
           <div className="dgx-menu">
             <AudioToggles className="dgx-menu__audio" />
@@ -1992,20 +1992,20 @@ export function DungeonRun({
               onClick={() => setSheet(null)}
             >
               <KIcon name="arrowRight" />
-              Продолжить
+              {t('dungeon.resume')}
             </button>
             <div className="dgx-menu__row">
               <button className="gx-btn" onClick={() => setSheet('inv')}>
                 <GxIcon name="backpack" />
-                Рюкзак
+                {t('dungeon.bag')}
               </button>
               <button className="gx-btn" onClick={() => setSheet('map')}>
                 <GxIcon name="map" />
-                Карта
+                {t('dungeon.map')}
               </button>
               <button className="gx-btn" onClick={() => setSheet('board')}>
                 <GxIcon name="joystick" />
-                Кнопки
+                {t('dungeon.buttons')}
               </button>
             </div>
             {creativeOn && (
@@ -2018,7 +2018,7 @@ export function DungeonRun({
                     onClick={() => {
                       const sim = simRef.current;
                       if (!sim || !creativeWarp(sim, to)) {
-                        note(to === 'boss' ? 'Логова на этаже нет' : 'Лифта на этаже нет');
+                        note(to === 'boss' ? t('dungeon.noLair') : t('dungeon.noLift'));
                         return;
                       }
                       setSheet(null);
@@ -2027,7 +2027,7 @@ export function DungeonRun({
                     }}
                   >
                     <GxIcon name={to === 'boss' ? 'crown' : 'lift'} />
-                    {to === 'boss' ? 'ТП к боссу' : 'ТП к лифту'}
+                    {to === 'boss' ? t('dungeon.tpBoss') : t('dungeon.tpLift')}
                   </button>
                 ))}
               </div>
@@ -2041,8 +2041,8 @@ export function DungeonRun({
               }}
             >
               <KIcon name="exitLeft" />
-              Выйти из игры
-              <small>вернёшься на это же место</small>
+              {t('dungeon.quit')}
+              <small>{t('dungeon.quitSub')}</small>
             </button>
           </div>
         </GxModal>
@@ -2092,7 +2092,7 @@ export function DungeonRun({
             if (useFinanceStore.getState().dungeonLiftRepair(liftArea)) {
               liftClank();
               notifySuccess();
-              note('Лифт починен — теперь можно спускаться прямо сюда');
+              note(t('dungeon.liftFixed'));
             }
           }}
           onUp={() => {
@@ -2104,19 +2104,19 @@ export function DungeonRun({
       )}
 
       {sheet === 'board' && (
-        <GxModal title="Управление" onClose={() => setSheet(null)}>
+        <GxModal title={t('dungeon.controls')} onClose={() => setSheet(null)}>
           <Controls />
         </GxModal>
       )}
 
       {sheet === 'plaque' && (
-        <GxModal title="Логово" kind="wood" onClose={() => setSheet(null)}>
+        <GxModal title={t('dungeon.lair')} kind="wood" onClose={() => setSheet(null)}>
           <PlaqueBody floor={world.floor} />
         </GxModal>
       )}
 
       {sheet === 'map' && simRef.current && (
-        <GxModal title="Карта" onClose={() => setSheet(null)}>
+        <GxModal title={t('dungeon.map')} onClose={() => setSheet(null)}>
           <BigMap sim={simRef.current} />
         </GxModal>
       )}
@@ -2130,6 +2130,7 @@ export function DungeonRun({
 
 /** Что в рюкзаке и сколько за это дадут наверху — картинками. */
 function SackList({ sack }: { sack: Sim['sack'] | undefined }) {
+  useT();
   if (!sack) return null;
   const mv = meatValue(sack);
   const mats = Object.entries(sack.mats) as [MatId, number][];
@@ -2138,14 +2139,14 @@ function SackList({ sack }: { sack: Sim['sack'] | undefined }) {
     return (
       <div className="dgx-sack dgx-sack--empty">
         <GxIcon name="backpack" size={26} />
-        Рюкзак пока пуст
+        {t('dungeon.sackEmpty')}
       </div>
     );
   return (
     <div className="dgx-sack">
       {mv.pieces > 0 && (
-        <span title="Мясо">
-          <img src={itemUrl('meat')} alt="Мясо" />
+        <span title={t('dungeon.meat')}>
+          <img src={itemUrl('meat')} alt={t('dungeon.meat')} />
           <b>{mv.pieces}</b>
           <i>
             ≈{fmt(mv.value)} <CoinIcon size={10} />
@@ -2153,25 +2154,25 @@ function SackList({ sack }: { sack: Sim['sack'] | undefined }) {
         </span>
       )}
       {mats.map(([id, n]) => (
-        <span key={id} title={MATS[id].name}>
-          <img src={itemUrl(id)} alt={MATS[id].name} />
+        <span key={id} title={matName(id)}>
+          <img src={itemUrl(id)} alt={matName(id)} />
           <b>{n}</b>
         </span>
       ))}
       {sack.coins > 0 && (
-        <span title="Монеты">
+        <span title={t('dungeon.coins')}>
           <CoinIcon size={24} />
           <b>{fmt(sack.coins)}</b>
         </span>
       )}
       {sack.tokens > 0 && (
-        <span title="Токены">
+        <span title={t('dungeon.tokens')}>
           <TokenIcon size={24} />
           <b>{sack.tokens}</b>
         </span>
       )}
       {sack.keys > 0 && (
-        <span title="Ключи">
+        <span title={t('dungeon.keys')}>
           <KeyIcon size={24} />
           <b>{sack.keys}</b>
         </span>
@@ -2201,25 +2202,26 @@ function LiftSheet({
   onUp: () => void;
   onClose: () => void;
 }) {
+  useT();
   const a = areaOf(area);
   if (!repaired) {
     const cost = liftCost(area);
     const ok = canRepair(cost);
     return (
-      <GxModal title="Лифт сломан" kind="iron" onClose={onClose}>
+      <GxModal title={t('dungeon.liftBrokenTitle')} kind="iron" onClose={onClose}>
         <div className="dgx-lift">
           <GxIcon name="lift" size={56} />
-          <p>Почини — и сможешь спускаться сразу в «{a.name}» и подниматься отсюда с добычей.</p>
+          <p>{t('dungeon.liftFixText', { area: areaName(a.id) })}</p>
         </div>
         <div className="gx-panel dgx-cost">
           <div className={`gx-row${balance >= cost.coins ? '' : ' is-short'}`}>
             <CoinIcon size={26} />
-            <span>Монеты</span>
+            <span>{t('dungeon.coins')}</span>
             <b>{fmt(cost.coins)}</b>
           </div>
           <div className={`gx-row${(stash.skin ?? 0) >= (cost.mats.skin ?? 0) ? '' : ' is-short'}`}>
             <img src={itemUrl('skin')} alt="" />
-            <span>Шкурки со склада</span>
+            <span>{t('dungeon.pelts')}</span>
             <b>
               {stash.skin ?? 0} / {cost.mats.skin}
             </b>
@@ -2231,20 +2233,20 @@ function LiftSheet({
           onClick={onRepair}
         >
           <GxIcon name="hammer" />
-          Починить
+          {t('dungeon.repair')}
         </button>
       </GxModal>
     );
   }
   return (
-    <GxModal title="Лифт" kind="iron" onClose={onClose}>
+    <GxModal title={t('dungeon.lift')} kind="iron" onClose={onClose}>
       <SackList sack={sack} />
       <button className="gx-btn gx-btn--red gx-btn--big gx-btn--block dgx-cta" onClick={onUp}>
         <KIcon name="arrowUp" />
-        Подняться с добычей
+        {t('dungeon.liftUp')}
       </button>
       <button className="gx-btn gx-btn--block dgx-cta2" onClick={onClose}>
-        Остаться внизу
+        {t('dungeon.stay')}
       </button>
     </GxModal>
   );
@@ -2252,14 +2254,15 @@ function LiftSheet({
 
 /** Кнопки игры картинками: что нажать — и что будет. */
 function Controls() {
+  useT();
   const rows: [GxIconName, string, string][] = [
-    ['move', 'Левая половина экрана', 'веди пальцем — идти'],
-    ['sword', 'Удар', 'жми — серия; держи — сильный удар'],
-    ['dash', 'Рывок', 'проскакивает сквозь укус'],
-    ['spin', 'Вихрь', 'копится от ударов, бьёт всех вокруг'],
-    ['eat', 'Мясо', 'лечит; запах мяса зовёт крыс'],
-    ['backpack', 'Рюкзак', 'добыча и улучшение снаряжения'],
-    ['lift', 'Лифт', 'только им можно вынести добычу'],
+    ['move', t('dungeon.ctl.move.name'), t('dungeon.ctl.move.what')],
+    ['sword', t('dungeon.ctl.sword.name'), t('dungeon.ctl.sword.what')],
+    ['dash', t('dungeon.ctl.dash.name'), t('dungeon.ctl.dash.what')],
+    ['spin', t('dungeon.ctl.spin.name'), t('dungeon.ctl.spin.what')],
+    ['eat', t('dungeon.ctl.eat.name'), t('dungeon.ctl.eat.what')],
+    ['backpack', t('dungeon.ctl.backpack.name'), t('dungeon.ctl.backpack.what')],
+    ['lift', t('dungeon.ctl.lift.name'), t('dungeon.ctl.lift.what')],
   ];
   return (
     <div className="dgx-controls">
@@ -2279,6 +2282,7 @@ function Controls() {
 }
 
 function PlaqueBody({ floor }: { floor: number }) {
+  useT();
   const d = useFinanceStore((s) => s.dungeon);
   const def = bossOfFloor(floor);
   const [now, setNow] = useState(() => Date.now());
@@ -2294,25 +2298,26 @@ function PlaqueBody({ floor }: { floor: number }) {
   return (
     <div className="dgx-lair">
       <GxIcon name="crown" size={64} className={home ? 'is-home' : ''} />
-      <b>{home ? `${def.name} в логове` : 'Логово пусто'}</b>
+      <b>{home ? t('dungeon.inLair', { name: bossName(def.id) }) : t('dungeon.lairEmpty')}</b>
       <span>
-        {home ? 'Войдёшь — ворота закроются за тобой' : `вернётся через ${clock(ready - now)}`}
+        {home ? t('dungeon.enterShut') : t('dungeon.backIn', { time: clock(ready - now) })}
       </span>
       <div className="dgx-lair__loot">
         {trophies.map((id) => (
-          <img key={id} src={itemUrl(id)} alt={matDef(id).name} />
+          <img key={id} src={itemUrl(id)} alt={matName(id)} />
         ))}
         <TokenIcon size={24} />
         <CoinIcon size={24} />
         <KeyIcon size={24} />
       </div>
-      {b && b.kills > 0 && <i>Побеждён: {b.kills}</i>}
+      {b && b.kills > 0 && <i>{t('dungeon.beaten', { n: String(b.kills) })}</i>}
     </div>
   );
 }
 
 /** Вся карта, разведанное — светлым. Масштаб — по ширине окна. */
 function BigMap({ sim }: { sim: Sim }) {
+  useT();
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current;
@@ -2343,7 +2348,7 @@ function BigMap({ sim }: { sim: Sim }) {
     g.textAlign = 'center';
     for (const band of sim.world.bands) {
       g.fillStyle = 'rgba(255,241,210,0.7)';
-      g.fillText(band.def.name, (W * s) / 2, band.top * s + 28);
+      g.fillText(areaName(band.def.id), (W * s) / 2, band.top * s + 28);
       g.fillStyle = 'rgba(255,241,210,0.2)';
       g.fillRect(0, band.top * s, W * s, 2);
     }
@@ -2384,16 +2389,16 @@ function BigMap({ sim }: { sim: Sim }) {
       </div>
       <div className="dgx-bigmap__legend">
         <span>
-          <i style={{ background: '#fff' }} /> ты
+          <i style={{ background: '#fff' }} /> {t('dungeon.legend.you')}
         </span>
         <span>
-          <i style={{ background: '#5ca2e0' }} /> лифт
+          <i style={{ background: '#5ca2e0' }} /> {t('dungeon.legend.lift')}
         </span>
         <span>
-          <i style={{ background: '#ffd257' }} /> шахта
+          <i style={{ background: '#ffd257' }} /> {t('dungeon.legend.mine')}
         </span>
         <span>
-          <i style={{ background: '#e2665b' }} /> логово
+          <i style={{ background: '#e2665b' }} /> {t('dungeon.legend.lair')}
         </span>
       </div>
     </>
