@@ -23,6 +23,7 @@ export const nursery = {
     sleep: 'Сон',
   },
   lvMax: 'Предел',
+  lvPct: '{n} ур. · {p} %',
   patXp: '+{n} опыта',
   power: 'Сила',
   gold: 'Золотой',
@@ -34,6 +35,7 @@ export const nursery = {
   take: 'Взять с собой',
   leave: 'Оставить дома',
   details: 'Подробнее',
+  anims: 'Движения',
   unknown: 'Кто это?',
   from: 'Из яиц',
   /** Chance of this very pet from one egg. */
@@ -57,6 +59,15 @@ export const nursery = {
     token: { name: 'Токенщик', text: '+{v}% к токенам' },
     luck: { name: 'Счастливчик', text: '+{v}% к ключам и находкам' },
     rate: { name: 'Непоседа', text: '+{v}% к частоте ударов' },
+  },
+  /** Stat nouns of the details table (one line per stat: icon, noun, value). */
+  stat: {
+    loot: 'Добыча',
+    sell: 'Продажа',
+    dmg: 'Копка',
+    token: 'Токены',
+    luck: 'Удача',
+    rate: 'Темп',
   },
   egg: { moss: 'Мшистое', stone: 'Каменное', crystal: 'Кристальное', dragon: 'Драконье' },
 } as const;

@@ -1,0 +1,868 @@
+/* Inventory-style screens on the pixel kit (forge, backpack, books) — the shared skeleton.
+   Screen parts: forge.css, inventory.css, books.css. Kit rules: .claude/rules/ui-px.md.
+   Every size is a whole number of art pixels (var(--u)); colours and fonts only from the kit
+   (--px-* vars, kit frames, rarity colours from lib/rarity via --rc).
+
+   Formats (armory.ts → arm--one|two|three):
+   - one   phone portrait: top / showcase (≥ half the height) / list (own scroll) / actions;
+   - two   tablet portrait: top / showcase over the full width (≥ half) / list | details;
+   - three landscape, tablet landscape, desktop: top / list | showcase (13/25 > half) | details.
+   Nothing jumps when the selection changes: every track is a fixed fraction, the name keeps two
+   lines, the stats row and the action bar have fixed heights, long content scrolls inside. */
+
+.arm {
+  --gap: calc(4 * var(--u));
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--gap);
+  min-height: 0;
+  color: var(--px-text);
+  /* the camp body (books) passes an old 800 down — Rubik has 500/700 only and Coco Title one weight */
+  font-weight: 500;
+}
+.arm *,
+.arm *::before,
+.arm *::after {
+  box-sizing: border-box;
+}
+/* A full-screen window (forge, backpack): a wood frame over the whole viewport. */
+.arm.is-window {
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  padding: calc(var(--safe-top, 0px) + 6 * var(--u)) calc(6 * var(--u))
+    calc(var(--safe-bottom, 0px) + 6 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: repeat;
+  image-rendering: pixelated;
+  animation: px-fade 120ms steps(3, jump-none);
+}
+.arm--one {
+  grid-template:
+    'top' auto
+    'show' minmax(0, 13fr)
+    'list' minmax(0, 7fr)
+    'acts' auto
+    / minmax(0, 1fr);
+}
+.arm--two {
+  grid-template:
+    'top top' auto
+    'show show' minmax(0, 13fr)
+    'list side' minmax(0, 7fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.arm--three {
+  grid-template:
+    'top top top' auto
+    'list show side' minmax(0, 1fr)
+    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 6fr);
+}
+/* Embedded (books in the camp sheet): no own top bar. */
+.arm.is-embed {
+  flex: 1 1 auto;
+}
+.arm--one.is-embed {
+  grid-template:
+    'top' auto
+    'show' minmax(0, 7fr)
+    'list' minmax(0, 3fr)
+    'acts' auto
+    / minmax(0, 1fr);
+}
+
+/* ---- Top bar: back · ribbon title · purse ---------------------------------------------------- */
+.arm-top {
+  grid-area: top;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  min-width: 0;
+}
+.arm-top__title {
+  justify-self: center;
+  max-width: 100%;
+}
+.arm-purse {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(2 * var(--u));
+}
+.arm-purse > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-height: calc(15 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  color: var(--px-gold);
+  white-space: nowrap;
+}
+.arm-num {
+  font-family: var(--px-head);
+  font-weight: 400; /* Coco Title has one weight: a bold parent made it a smeared fake bold */
+  font-variant-numeric: tabular-nums;
+}
+.arm-muted {
+  margin: 0;
+  color: var(--px-muted);
+}
+
+/* ---- Showcase: the selected thing BIG on its stage ------------------------------------------- */
+.arm-show {
+  grid-area: show;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  /* its size comes from the screen's grid only — the stage below picks its arrangement from it */
+  container: arm-show / size;
+}
+.arm-stage {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template:
+    'room' minmax(0, 1fr)
+    'id' auto
+    'stats' auto
+    / minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+  overflow: hidden;
+}
+/* A wide, low showcase (phone landscape): the art beside the name plate (as the Nursery), stats
+   under both — under the plate the art would get a sliver. Phone portrait and the rest stack:
+   since the showcase got half the screen, art over a full-width plate is the bigger art (forge
+   on 390x844: 240 px against 180 beside the plate) and the name fits without breaking. */
+@container arm-show (aspect-ratio > 23 / 20) {
+  .arm-stage {
+    grid-template:
+      'room id' minmax(0, 1fr)
+      'stats stats' auto
+      / minmax(0, 11fr) minmax(0, 9fr);
+  }
+  .arm-stage > .arm-id {
+    align-self: center;
+  }
+}
+/* Phone landscape (282 px of stage height): the art takes the whole height and the wider share of
+   the width (≥ 234 px on 844x390, critic: ≥ 60 % of the short side); the plate and the numbers
+   stack beside it, one number per row (number · delta · label). */
+html[data-ff='phone-landscape'] .arm-stage {
+  grid-template:
+    'room id' auto
+    'room stats' minmax(0, 1fr)
+    / minmax(0, 3fr) minmax(0, 2fr);
+}
+html[data-ff='phone-landscape'] .arm-stage > .arm-id {
+  align-self: start;
+}
+html[data-ff='phone-landscape'] .arm-stage > .arm-stats {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--u);
+}
+/* Number · delta on one line, the label one line under them the cell's whole width (beside the
+   number it had 45–62 px and split «блоков/мин», «Chance», «Состояние»); `useWordFit` takes a
+   long label to the small step. Compact rows: the books' three stats under a three-part plate get
+   136 px (44 each with the well frame). */
+html[data-ff='phone-landscape'] .arm-stage .arm-stat {
+  grid-template:
+    'num delta' calc(1.15 * var(--px-fs))
+    'lbl lbl' var(--px-fs-sm)
+    / auto minmax(0, 1fr);
+  align-items: center;
+  padding: 0 calc(2 * var(--u));
+}
+html[data-ff='phone-landscape'] .arm-stage .arm-stat > b {
+  font-size: var(--px-fs);
+}
+html[data-ff='phone-landscape'] .arm-stage .arm-stat > i {
+  display: block;
+  min-height: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* A narrow plate (a phone's width, or beside the art): state and effect wrap into two reserved
+   lines of the smaller step. `.arm-stage` in front: the base rules below would win on order. */
+.arm--one .arm-stage .arm-status {
+  display: block;
+  /* never inside a word («Kazmadakin|den»): the dictionary hyphenates where there is one */
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+.arm--one .arm-stage .arm-status > :is(.px-i, .gx-icon) {
+  margin-right: var(--u);
+}
+/* the plate spans the stage on a phone: one line of state, a fixed height */
+.arm--one .arm-stage .arm-sub {
+  flex-wrap: nowrap;
+  height: calc(1.2 * var(--px-fs-sm));
+  min-height: 0;
+  font-size: var(--px-fs-sm);
+  line-height: 1.2;
+}
+@container arm-show (aspect-ratio > 23 / 20) {
+  .arm-stage .arm-status {
+    display: block;
+    overflow-wrap: normal;
+    hyphens: auto;
+  }
+  .arm-stage .arm-status > :is(.px-i, .gx-icon) {
+    margin-right: var(--u);
+  }
+  .arm-stage .arm-sub {
+    flex-wrap: wrap;
+    white-space: normal;
+    height: calc(2 * 1.2 * var(--px-fs-sm));
+    min-height: 0;
+    font-size: var(--px-fs-sm);
+    line-height: 1.2;
+  }
+}
+/* The measured box of the art: its size comes from the grid only (contain), the art is sized
+   from it in the component and never feeds back. */
+.arm-room {
+  grid-area: room;
+  min-height: 0;
+  contain: size;
+  display: grid;
+  place-items: center;
+}
+/* Pedestal under the art at the UI pixel. */
+.arm-ped {
+  display: grid;
+  place-items: center;
+  padding-bottom: calc(3 * var(--ped, var(--u)));
+  background: var(--pximg-pedestal) no-repeat center bottom /
+    calc(var(--pximg-pedestal-w) * var(--ped, var(--u)))
+    calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
+  image-rendering: pixelated;
+}
+/* Name, state and effect sit on a dark plate over the light stage (the kit's «plate over a
+   stage»: the element also carries `.px-dark`, so the text vars are the light ones); rarity
+   colours read on it at full strength. */
+.arm-id {
+  grid-area: id;
+  /* the name sizes itself from the plate's width (cqi) */
+  container: arm-id / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--u);
+  min-width: 0;
+  /* fitted to its content (critic: the plate took 118–170 px of the stage, the art 168–198) */
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  background: color-mix(in srgb, var(--px-ink) 90%, transparent);
+  border: var(--u) solid var(--px-ink);
+  text-align: center;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+/* The name on one line: the whole name (`--nlen`, set by `nameFit`) shrinks it to the plate's
+   width down to the small step; a name longer still takes two lines of the small step. The box
+   has that fixed height, so a long name never pushes the art or the stats. */
+.arm-name {
+  --nfs: var(--px-fs-big);
+  margin: 0;
+  display: grid;
+  align-items: center;
+  justify-self: stretch;
+  min-width: 0;
+  height: max(calc(1.1 * var(--nfs)), calc(2 * 1.1 * var(--px-fs-sm)));
+  max-width: 100%;
+  font: 400 var(--nfs) / 1.1 var(--px-head);
+  font-size: max(var(--px-fs-sm), min(var(--nfs), calc(100cqi / (var(--nlen, 8) * 0.62))));
+  color: var(--rc, var(--px-gold));
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+/* Beside the art (a wide low stage) the plate is narrow: two lines of the name size, the longest
+   word (`--wlen`) fits one line — words break between words, never inside. */
+@container arm-show (aspect-ratio > 23 / 20) {
+  .arm-stage .arm-name {
+    height: calc(2 * 1.1 * var(--nfs));
+    font-size: max(var(--px-fs-sm), min(var(--nfs), calc(100cqi / (var(--wlen, 8) * 0.66))));
+  }
+}
+html:not([data-ff='phone-portrait']) .arm-name {
+  --nfs: var(--px-fs-hero);
+}
+/* Phone landscape: the plate beside the art is narrow. */
+html[data-ff='phone-landscape'] .arm-name {
+  --nfs: var(--px-fs);
+}
+.arm-sub {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-height: calc(11 * var(--u));
+  white-space: nowrap;
+}
+.arm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--px-text);
+}
+.arm-status.is-hand {
+  color: var(--px-green);
+}
+.arm-status.is-locked {
+  color: var(--px-red);
+}
+.arm-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  color: var(--px-gold);
+  font-family: var(--px-head);
+}
+
+/* Three big numbers under the art: fixed cells, tabular digits, deltas in green/red. */
+.arm-stats {
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+}
+.arm-stat {
+  display: grid;
+  grid-template:
+    /* a fixed number row: a delta aligned to an icon's baseline grew it by 2 px on some picks */
+    'num delta' calc(1.15 * var(--px-fs-big))
+    'lbl lbl' auto
+    / auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: calc(2 * var(--u));
+  min-width: 0;
+  /* compact (critic: the row took 90 px of the stage) — the label is the small step under it */
+  padding: calc(2 * var(--u)) calc(3 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+}
+.arm-stat > b {
+  grid-area: num;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  /* 1.15 = the row: at 1 a tablet's 1em icon stuck 3 px out of the 29-px number box */
+  font: 400 var(--px-fs-big) / 1.15 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.arm-stat > i[data-tight] {
+  font-size: var(--px-fs-tiny);
+}
+/* A long value shrinks to its cell instead of sticking out of the stage (a tier's «35–75 %» was
+   15 px wider than its cell on a phone); --nlen from numFit(), the row height stays fixed. */
+.arm-stat {
+  container: arm-stat / inline-size;
+}
+.arm-stat > b[style*='--nlen'] {
+  font-size: max(var(--px-fs-sm), min(var(--px-fs-big), calc(100cqi / (var(--nlen) * 0.66))));
+}
+.arm-stat > b > :is(.px-i, .gx-icon) {
+  color: var(--px-gold);
+}
+.arm-stat > i {
+  grid-area: lbl;
+  /* two lines reserved: a long label («blocks a minute», German) wraps instead of «…» */
+  min-height: calc(2 * 1.1 * var(--px-fs-sm));
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  color: var(--px-text);
+  overflow: hidden;
+  /* a word that doesn't fit takes the small step (`useWordFit` → data-tight), not a break or
+     a hyphen («Состояние» in an 84-px cell, «Chance» beside a phone-landscape number) */
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.arm-stat > .arm-delta {
+  grid-area: delta;
+}
+/* «/400» after a big count: the limit, smaller and beside it. */
+.arm-stat > .arm-of {
+  grid-area: delta;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.arm-delta {
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.arm-delta.is-up {
+  color: var(--px-green);
+}
+.arm-delta.is-down {
+  color: var(--px-red);
+}
+
+/* ---- List column: headings, grids --------------------------------------------------------- */
+.arm-list {
+  grid-area: list;
+  /* one column the list's width: an auto column grew to the forge's 17-slot strip (992 px in a
+     374-px list) and the whole list scrolled sideways, cutting its words */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: calc(6 * var(--u));
+  /* room for the focus ring and the corner badges inside the scroller */
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+.arm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+  margin-bottom: calc(3 * var(--u));
+}
+.arm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--slot, calc(26 * var(--u))));
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+}
+
+/* ---- Details column (two, three) ----------------------------------------------------------- */
+.arm-side {
+  grid-area: side;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.arm-info {
+  flex: 1 1 auto;
+  /* never squeezed to a sliver by the buttons under it (books on a tablet: ~30 px, name cut) */
+  min-height: calc(5 * var(--px-fs));
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  scrollbar-width: thin;
+}
+.arm-info__head {
+  display: grid;
+  justify-items: start;
+  gap: calc(2 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+  border-bottom: var(--u) solid var(--px-dim);
+}
+/* The name in dark ink on the parchment column (rarity colours are too light there); the
+   rarity chip next to it carries the colour. */
+/* The showcase plate already names the thing big; here it only heads the column (a narrow one —
+   «Эффективность» at the big size broke inside the word). */
+/* Rarity word: ink on the rarity colour (the kit's pill, as `.nur-rar`) — the old dark chip with
+   the colour as text read 1.4:1 on the light panels. */
+:is(.arm, .arm-scn, .arm-tip) .rchip {
+  height: calc(var(--px-fs-sm) * 1.45);
+  padding: 0 calc(3 * var(--u));
+  border-radius: 0;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--px-ink);
+  background: var(--rc);
+  border: var(--u) solid var(--px-ink);
+  box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.45);
+  text-shadow: none;
+}
+.arm-info__name {
+  margin: 0;
+  font: 400 var(--px-fs) / 1.15 var(--px-head);
+  color: var(--px-text);
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+/* A phone held sideways: the column is ~150 px — the plate beside the art names it already. */
+html[data-ff='phone-landscape'] .arm-info__name {
+  display: none;
+}
+.arm-details {
+  display: grid;
+  /* one column the width of the panel: an auto column grew to the widest row and the panel
+     scrolled sideways, cutting words off */
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: calc(5 * var(--u));
+  min-width: 0;
+}
+/* Phone portrait: the details sit in the list column at a fixed height (scroll inside). */
+.arm--one .arm-details {
+  height: calc(60 * var(--u));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+}
+
+/* ---- Action bar: thumb zone on phones, bottom of the details column elsewhere ------------- */
+.arm-acts {
+  grid-area: acts;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+  align-items: stretch;
+}
+.arm-side > .arm-acts {
+  flex: none;
+  grid-auto-flow: row;
+}
+/* Fixed height for two lines of label: a longer label wraps inside, never grows the bar. */
+.arm-acts > .px-btn {
+  height: calc(26 * var(--u));
+  min-height: 0;
+  /* not overflow: hidden — it cut off the kit's focus ring (::after, 3 u outside the face) and the
+     keyboard / gamepad player lost focus on the action bar; the clip keeps that ring only */
+  clip-path: inset(calc(-3 * var(--u)));
+  white-space: normal;
+  text-align: center;
+  line-height: 1.1;
+}
+.arm-acts > .px-btn.is-hidden {
+  visibility: hidden;
+}
+.arm-btn-txt {
+  min-width: 0;
+}
+/* Only the words wrap: the coin, the icon and the key cap keep their size (the sell coin shrank to
+   8 px and its label ran three lines on a phone in landscape). */
+.arm-acts > .px-btn > :not(.arm-btn-txt) {
+  flex: none;
+}
+/* A label with a price: the price drops under the words when both don't fit on one line. */
+.arm-acts > .px-btn:has(> .arm-btn-price) {
+  flex-wrap: wrap;
+  align-content: center;
+  row-gap: 0;
+}
+/* …and the key cap follows the price, so the words get the whole first line. */
+.arm-acts > .px-btn:has(> .arm-btn-price) > .px-keyhint {
+  order: 1;
+}
+/* Phone landscape: the side column is ~180 px, words plus price take two lines of the small size
+   («Vender mochila» alone needed two lines of the base size, the price a third). */
+html[data-ff='phone-landscape'] .arm-acts > .px-btn:has(> .arm-btn-price) {
+  font-size: var(--px-fs-sm);
+}
+/* A greyed button still says why («В руке», «Откроется на этаже U», a weaker book): the kit's
+   ash label (#b5b0a6 on the #606068 face) is 2.9:1. Such buttons get .px-dark (the ash face is a
+   dark surface) and the cream --px-muted — 4.6:1, plus the kit's ink shadow. */
+:is(.arm, .bkx-replace) .px-btn.px-dark[aria-disabled='true'] {
+  color: var(--px-muted);
+}
+/* Icons beside text follow the text, not --u (critic: an icon ≥ 1.3× the cap height of its text;
+   8 u on a phone was 0.9–1.1×). 1em = 1.43× the cap of the text they stand in, never smaller than
+   before. !important: GxIcon sets its size inline. */
+.arm
+  :is(.arm-purse > span, .arm-stat > b, .arm-head .px-h, .px-btn, .arm-btn-price)
+  > :is(.gx-icon, .coin-ico, .ptoken-ico) {
+  width: max(calc(8 * var(--u)), 1em) !important;
+  height: max(calc(8 * var(--u)), 1em) !important;
+}
+/* Phone landscape: the side column is ~250 px — the word is the action, the icon goes («Verschmelzen»
+   + anvil + the X key cap ran 11 px past the button). */
+html[data-ff='phone-landscape'] .arm-acts > .px-btn > .gx-icon {
+  display: none;
+}
+/* The kit's 9×9 pixel icons in a stat cell: whole CSS px per art px, ≥ 1.3× the number's cap. */
+.arm-stat > b > .px-i {
+  --ip: max(var(--u), round(up, calc(var(--px-fs-big) * 0.1012), 1px));
+  width: calc(var(--i-w, 9) * var(--ip));
+  height: calc(var(--i-h, 9) * var(--ip));
+}
+/* Finger-size targets on phones (44 px): the back button and the small buttons of the side. */
+.arm-top__back,
+.arm .px-btn--sm {
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+}
+.arm-btn-price {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font-family: var(--px-head);
+  white-space: nowrap;
+}
+
+/* ---- Toast and tooltip --------------------------------------------------------------------- */
+.arm-note {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom, 0px) + 40 * var(--u));
+  z-index: 90;
+  width: min(calc(100% - 12 * var(--u)), calc(200 * var(--u)));
+  transform: translateX(-50%);
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  font: 500 var(--px-fs) / 1.25 var(--px-font);
+  color: var(--px-text);
+  text-align: center;
+  pointer-events: none;
+  animation: px-fade 120ms steps(3, jump-none);
+}
+.arm-tip {
+  display: grid;
+  gap: var(--u);
+  text-align: left;
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-text);
+}
+.arm-tip > b {
+  font-family: var(--px-head);
+  color: var(--px-text);
+}
+.arm-tip > i {
+  color: var(--px-muted);
+}
+.arm-tip > .rchip {
+  justify-self: start;
+}
+.arm-tip__row {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  white-space: nowrap;
+}
+.arm-tip__vs {
+  color: var(--px-muted) !important;
+  font-size: var(--px-fs-sm);
+}
+
+/* ---- Result scenes: forge (`.fgr`), book reveal / anvil (`.pbks`), apply (`.pbka`) ----------
+   Dark only while the hammer strikes, the strip plays and the flash fires; `.is-lit` (the result
+   is known) fades the dark away to the kit veil and lights a parchment card under the art and the
+   text (critic: 13–15 px text on rgb(10,6,4), a 53×16 «В шахту» span). The card and the text are
+   laid out from the first frame, hidden — nothing moves when they appear. Motion and the strips
+   themselves stay in game-ui.css. */
+.arm-scn {
+  --scn-tone: var(--px-gold);
+  isolation: isolate;
+  padding: calc(var(--safe-top, 0px) + 4 * var(--u)) calc(4 * var(--u))
+    calc(var(--safe-bottom, 0px) + 4 * var(--u));
+  overflow: auto;
+  background: color-mix(in srgb, var(--px-ink) 72%, transparent);
+  color: var(--px-text);
+}
+.pbks.arm-scn,
+.pbka.arm-scn {
+  --scn-tone: var(--px-violet);
+}
+/* The forge or the shelf under a scene already shows what came out: opaque until the reveal. */
+.arm-scn::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+      90% 60% at 50% 42%,
+      color-mix(in srgb, var(--scn-tone) 22%, var(--px-ink)),
+      var(--px-ink) 70%
+    )
+    var(--px-ink);
+  transition: opacity 260ms steps(4, jump-none);
+}
+.arm-scn.is-lit::before {
+  opacity: 0;
+}
+.arm-scn__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  width: min(100%, calc(150 * var(--u)));
+  margin: auto;
+  padding: calc(6 * var(--u));
+}
+.arm-scn__card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  image-rendering: pixelated;
+  opacity: 0;
+  transition: opacity 260ms steps(4, jump-none);
+}
+.arm-scn.is-lit .arm-scn__card::before {
+  opacity: 1;
+}
+.arm-scn__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  width: 100%;
+  text-align: center;
+  animation: arm-scn-in 320ms 80ms steps(4, jump-none) both;
+}
+.arm-scn__text.is-wait {
+  visibility: hidden;
+  animation: none;
+}
+/* Apply: the caption changes at `hit` — the box holds the longest one (name on two lines, the
+   effect and the crumbled enchant on two lines each, the button) from the first frame. */
+.pbka .arm-scn__text {
+  min-height: calc(
+    2 * 1.15 * var(--px-fs-big) + 4 * 1.2 * var(--px-fs-sm) + var(--gx-hit) + 9 * var(--u)
+  );
+  animation: none;
+}
+@keyframes arm-scn-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(4 * var(--u)));
+  }
+}
+.arm-scn .rname,
+.pbka__lost {
+  font: 400 var(--px-fs-big) / 1.15 var(--px-head);
+  overflow-wrap: normal;
+  hyphens: auto;
+  text-wrap: balance;
+}
+/* The rarity colour reads on the parchment only inside a hard ink outline (as `.px-inspect__name`). */
+.arm-scn .rname {
+  color: var(--rc);
+  background: none;
+  filter: none;
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
+}
+.pbka__lost {
+  color: var(--px-red);
+}
+.arm-scn__line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--u) calc(2 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-text);
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+/* Chance to write in: a kit pill in the tone's ink colour (on the parchment ≥ 5:1). */
+.pbks__ch {
+  padding: 0 calc(3 * var(--u));
+  border: var(--u) solid currentColor;
+  font: 700 var(--px-fs-sm) / 1.4 var(--px-font);
+}
+.pbks__ch.is-hi {
+  color: var(--px-green);
+}
+.pbks__ch.is-mid {
+  color: var(--px-gold);
+}
+.pbks__ch.is-lo {
+  color: var(--px-red);
+}
+.pbka__odds {
+  font: 700 var(--px-fs-hero) / 1.1 var(--px-font);
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+.arm-scn__cta {
+  min-width: min(100%, calc(70 * var(--u)));
+  min-height: var(--gx-hit);
+  margin-top: var(--u);
+}
+.arm-scn__cta.is-wait {
+  visibility: hidden;
+}
+/* Phone landscape: 390 px high — the art beside the text. */
+html[data-ff='phone-landscape'] .arm-scn__card {
+  flex-direction: row;
+  width: auto;
+  max-width: 100%;
+}
+html[data-ff='phone-landscape'] .arm-scn__text {
+  width: calc(120 * var(--u));
+}
+@media (prefers-reduced-motion: reduce) {
+  .arm-scn__text {
+    animation: none;
+  }
+}
+
+/* While a full-screen window or a scene is up (`useFullWin`), the mine under it stops painting;
+   under a scene the camp too. The window and the scene themselves stay visible even when they
+   are rendered inside one of them. */
+html[data-fullwin] .pmx,
+html[data-fullscene] .gx-win {
+  visibility: hidden;
+}
+html[data-fullwin] :is(.arm.is-window, .arm-scn) {
+  visibility: visible;
+}
+
+/* List sections after the first are laid out and painted only when scrolled near: the window's
+   first frame does not pay for the books, gear and items below the fold (critic: open latency).
+   `auto` keeps the real height once seen, so the scroll bar does not jump back. */
+.arm-list > section ~ section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(80 * var(--u));
+  /* its paint containment clips at the box: the focus rings and badges (3 u outside a cell) get
+     the list's own ring room back */
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+}

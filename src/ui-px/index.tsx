@@ -11,6 +11,7 @@ import type {
   ButtonHTMLAttributes,
   CSSProperties,
   HTMLAttributes,
+  PointerEvent as ReactPointerEvent,
   PropsWithChildren,
   ReactNode,
 } from 'react';
@@ -105,6 +106,64 @@ export function Panel({
   );
 }
 
+// ---- Press -----------------------------------------------------------------------------------
+// The pressed look shows on POINTERDOWN, in the first frame. `:active` alone came late on touch
+// (Android waits for its show-press delay, iOS WebKit needs a touch listener; on the stand it
+// appeared 80–90 ms AFTER the finger was lifted). The class goes straight onto the element —
+// no React render — and comes off on pointerup / pointercancel / leaving it / any scroll / blur.
+// Style it as `.your-button.is-down` (no transition: the change must land in one frame).
+
+const DOWN = 'is-down';
+let downEl: HTMLElement | null = null;
+
+function pressUp(): void {
+  downEl?.classList.remove(DOWN);
+  downEl = null;
+  window.removeEventListener('pointerup', pressUp, true);
+  window.removeEventListener('pointercancel', pressUp, true);
+  window.removeEventListener('scroll', pressUp, true);
+  window.removeEventListener('blur', pressUp);
+}
+
+function pressDown(e: ReactPointerEvent<HTMLElement>): void {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const el = e.currentTarget;
+  // Greyed buttons stay flat (they only explain themselves), like `[aria-disabled]:active`.
+  if (el.matches(':disabled, [aria-disabled="true"]')) return;
+  pressUp();
+  downEl = el;
+  el.classList.add(DOWN);
+  window.addEventListener('pointerup', pressUp, true);
+  window.addEventListener('pointercancel', pressUp, true);
+  window.addEventListener('scroll', pressUp, { capture: true, passive: true });
+  window.addEventListener('blur', pressUp);
+}
+
+function pressLeave(e: ReactPointerEvent<HTMLElement>): void {
+  if (e.currentTarget === downEl) pressUp();
+}
+
+export interface PressProps<T extends HTMLElement = HTMLElement> {
+  onPointerDown: (e: ReactPointerEvent<T>) => void;
+  onPointerLeave: (e: ReactPointerEvent<T>) => void;
+}
+const PRESS: PressProps = { onPointerDown: pressDown, onPointerLeave: pressLeave };
+
+/** Visible press for any button (kit or not): spread the returned props on it and style
+ *  `.is-down`. The handlers are stable (one pair for the whole app). Pass the element's `ref` if
+ *  the component may re-render DURING a press with a new `className` (a slot that selects on
+ *  focus): React rewrites `className` and would drop the class — the layout effect puts it back
+ *  before the frame is painted. With handlers of your own, call `press.onPointerDown(e)` first. */
+export function usePress<T extends HTMLElement = HTMLElement>(
+  ref?: RefObject<T | null>,
+): PressProps<T> {
+  useLayoutEffect(() => {
+    const el = ref?.current;
+    if (el && el === downEl) el.classList.add(DOWN);
+  });
+  return PRESS as unknown as PressProps<T>;
+}
+
 // ---- Button ----------------------------------------------------------------------------------
 
 export type ButtonKind = 'primary' | 'secondary' | 'danger' | 'confirm';
@@ -142,12 +201,25 @@ export function Button({
   className,
   children,
   onClick,
+  onPointerDown,
+  onPointerLeave,
   ...rest
 }: ButtonProps) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const press = usePress(ref);
   return (
     <button
+      ref={ref}
       type="button"
       {...rest}
+      onPointerDown={(e) => {
+        press.onPointerDown(e);
+        onPointerDown?.(e);
+      }}
+      onPointerLeave={(e) => {
+        press.onPointerLeave(e);
+        onPointerLeave?.(e);
+      }}
       aria-label={icon && !children ? label : rest['aria-label']}
       aria-pressed={on === undefined ? undefined : on}
       aria-disabled={off || undefined}
@@ -207,6 +279,8 @@ export function Tabs<K extends string>({
   main?: boolean;
 }) {
   const scope = useRef<HTMLDivElement>(null);
+  // The press shows on pointerdown like every kit button (the selection only changes on click).
+  const press = usePress<HTMLButtonElement>();
   // Keyboard: Tab cycles (one hint on the right); gamepad: LB / RB on both sides.
   const pad = useInputDevice() === 'gamepad';
   useAction(
@@ -239,6 +313,7 @@ export function Tabs<K extends string>({
           aria-label={it.name}
           data-tip={it.name}
           className="px-tab px-f"
+          {...press}
           onClick={() => it.id !== value && onChange(it.id)}
         >
           {it.icon ? <Icon name={it.icon} /> : it.art}
@@ -324,6 +399,8 @@ export function Slot({
   tip,
   className,
   children,
+  onPointerDown,
+  onPointerLeave,
   ...rest
 }: {
   rarity?: number;
@@ -336,16 +413,26 @@ export function Slot({
   corner?: ReactNode;
   /** Red dot / badge on the corner («new», «can merge»). */
   dot?: ReactNode;
-  /** Rich tooltip (mouse hover, long press on touch). */
-  tip?: ReactNode;
+  /** Rich tooltip (mouse hover, long press on touch). A function is called only when the tip
+   *  shows — a grid of slots doesn't build its tips on every render. */
+  tip?: ReactNode | (() => ReactNode);
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & { children?: ReactNode }) {
   const ref = useRef<HTMLButtonElement>(null);
   const tipState = useTip(ref, tip);
+  const press = usePress(ref);
   return (
     <button
       ref={ref}
       type="button"
       {...rest}
+      onPointerDown={(e) => {
+        press.onPointerDown(e);
+        onPointerDown?.(e);
+      }}
+      onPointerLeave={(e) => {
+        press.onPointerLeave(e);
+        onPointerLeave?.(e);
+      }}
       className={cx(
         'px-slot px-f',
         `px-slot--r${Math.max(0, Math.min(6, rarity))}`,
@@ -374,7 +461,10 @@ export function Slot({
 
 /** Rich tooltip for `ref`: mouse hover (after 300 ms) or a long press on touch (450 ms, until
  *  release). Returns the portal to render. */
-export function useTip(ref: RefObject<HTMLElement>, content: ReactNode): ReactNode {
+export function useTip(
+  ref: RefObject<HTMLElement>,
+  content: ReactNode | (() => ReactNode),
+): ReactNode {
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null);
   // Content is new JSX on every render — subscribe once per element, not per render (a
   // re-subscription hid the tip on each store tick).
@@ -419,7 +509,10 @@ export function useTip(ref: RefObject<HTMLElement>, content: ReactNode): ReactNo
     };
   }, [ref, has]);
   if (!pos || !has) return null;
-  return createPortal(<Tooltip {...pos}>{content}</Tooltip>, document.body);
+  return createPortal(
+    <Tooltip {...pos}>{typeof content === 'function' ? content() : content}</Tooltip>,
+    document.body,
+  );
 }
 
 export function Tooltip({

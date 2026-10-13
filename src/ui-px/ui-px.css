@@ -346,6 +346,27 @@ html[data-game][data-input] .px-f:focus-visible {
   color: #2a1405;
   text-shadow: 0 var(--u) 0 #e3a25c;
 }
+/* Pressed (`usePress`, on pointerdown, no transition): the tab goes 1 u down; an unselected one
+   also one iron ramp step darker (#404853 → #2a3039) — a veil between its baked face and the
+   label (the face is a border-image fill, so a background can't darken it). No `isolation` on
+   the tab: the focus ring (`.px-f::after`, z 3) must stay above the neighbouring tabs. */
+.px-tab.is-down {
+  translate: 0 var(--u);
+}
+.px-tab.is-down:not([aria-selected='true'])::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: 0;
+  background: rgb(26 30 37 / 0.57);
+  pointer-events: none;
+}
+.px-tab.is-down:not([aria-selected='true']) > * {
+  z-index: 1;
+}
+.px-tab.is-down:not([aria-selected='true']) > :not(.px-badge) {
+  position: relative;
+}
 .px-tab .ip-prompt {
   font-size: var(--px-fs-tiny);
 }
@@ -413,6 +434,17 @@ html[data-game][data-input] .px-f:focus-visible {
 }
 .px-slot.is-locked > .px-slot__art {
   opacity: 0.85;
+}
+/* Pressed (`.is-down` on pointerdown from `usePress`, `:active` for Space): the well one ramp
+   step darker (obsidian 2 over the fill 1) and the art one art pixel lower — no transition, so
+   it lands in the first frame. The well is painted on the art box, inset to the frame's inner
+   edge (the slot frame is 4/3/3/4 art px, the art box starts 1 px in). */
+.px-slot:is(:active, .is-down):not([aria-disabled='true']) > .px-slot__art {
+  background: linear-gradient(#e4cc9c, #e4cc9c) calc(3 * var(--u)) calc(3 * var(--u)) /
+    calc(100% - 5 * var(--u)) calc(100% - 5 * var(--u)) no-repeat;
+}
+.px-slot:is(:active, .is-down):not([aria-disabled='true']) > .px-slot__art > * {
+  translate: 0 var(--u);
 }
 .px-slot__n {
   position: absolute;

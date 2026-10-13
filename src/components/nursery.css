@@ -8,6 +8,9 @@
   --gap: calc(4 * var(--u));
   /* chip background: a shade of the surface it sits on */
   --chip: rgb(90 61 34 / 0.13);
+  /* a row that holds a stat picture: the type's row or the picture + 2 px, whichever is taller
+     (`--st` = 24 CSS px, 36 at ui-scale ≥ 4 — set by Nursery.tsx in whole device px) */
+  --row-st: max(calc(var(--px-fs-sm) * 1.65), calc(var(--st, 24px) + 4px));
   position: relative;
   display: grid;
   gap: var(--gap);
@@ -18,6 +21,11 @@
 .nur .px-dark {
   --chip: rgb(255 244 220 / 0.1);
 }
+/* two weights on the screen: 700 for text and numbers, the headings' own (critic P2) — the camp
+   sheet's `.gx-camp .gx-sheet__body :is(b, …)` (0,2,1) made the numbers 800 */
+.px.nur .px-num {
+  font-weight: 700;
+}
 /* Phone portrait: the stage takes all the height the squad, the strip and the actions leave. */
 .nur--one {
   --gap: calc(3 * var(--u));
@@ -26,15 +34,18 @@
     'side' auto
     / minmax(0, 1fr);
 }
-/* Phone landscape: the stage on the left half, full height. */
+/* Phone landscape: the stage on the left half, full height. The pet is limited by the height
+   here, so the side column gets half the width: the squad grid stands beside the slots. */
 .nur--land {
-  grid-template: 'show side' minmax(0, 1fr) / minmax(0, 11fr) minmax(0, 9fr);
+  grid-template: 'show side' minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1fr);
 }
-/* Tablet portrait: the stage on top (11/20 of the height), squad | collection under it. */
+/* Tablet portrait: the stage on top, squad | collection under it. 33/53 of the height (round 4,
+   was 16/25): on 820 × 1180 the room keeps 372 px (the 336-px pet needs 362) and the collection
+   shows three whole rows again, as in prod. */
 .nur--tall {
   grid-template:
-    'show' minmax(0, 3fr)
-    'side' minmax(0, 2fr)
+    'show' minmax(0, 33fr)
+    'side' minmax(0, 20fr)
     / minmax(0, 1fr);
 }
 /* Tablet landscape, desktop: the stage is the hero, 55 % of the width. */
@@ -50,23 +61,14 @@
   display: grid;
 }
 /* A lit stage (owner 13.10: «на её фоне не особо всё хорошо видно»): the sandstone wall under a
-   warm veil, a pool of light behind the pet in hard bands (no smooth glow on pixel art) and a
-   lighter floor — the pet's ink outline reads against it. */
+   warm veil and a lighter floor — the pet's ink outline reads against it. No light pool: a CSS
+   ellipse is drawn at screen resolution, its curved edges are mixels next to the pixel art
+   (critic round 2, P1-6 / P2-10); a baked pool would go in paint.ts. */
 .nur-stage {
   --st-veil: rgb(255 244 222 / 0.4);
-  --st-s1: rgb(255 250 240 / 0.95);
-  --st-s2: rgb(251 239 214 / 0.7);
-  --st-s3: rgb(242 222 182 / 0.45);
   --st-floor: rgb(200 170 125 / 0.6);
   --st-seam: rgb(110 80 50 / 0.6);
   background-image:
-    radial-gradient(
-      ellipse 50% 46% at 50% 54%,
-      var(--st-s1) 0 52%,
-      var(--st-s2) 52% 74%,
-      var(--st-s3) 74% 100%,
-      transparent 100%
-    ),
     linear-gradient(
       to bottom,
       transparent 0 calc(100% - 22 * var(--u)),
@@ -77,13 +79,14 @@
   background-size:
     100% 100%,
     100% 100%,
-    100% 100%,
     calc(var(--tile-w) * var(--u)) calc(var(--tile-h) * var(--u));
-  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+  background-repeat: no-repeat, no-repeat, repeat;
   display: grid;
   min-width: 0;
   min-height: 0;
-  gap: calc(3 * var(--u));
+  /* 1 u: the pet grows in whole steps and each room sits just below its next step (critic
+     round 2: a 3-u gap cost the 1080p pet 448 → 336) */
+  gap: var(--u);
   /* the animation buttons stand in a column on the right: the pet keeps the whole height */
   grid-template:
     'room anims' minmax(0, 1fr)
@@ -96,6 +99,66 @@
   flex-direction: column;
   justify-content: center;
   gap: calc(2 * var(--u));
+}
+/* Round 3 (critic P0-1): the pet as big as each format allows. Phones have no anims column (one
+   ▶ toggle in the room's corner instead); phone landscape and wide screens carry the plate in
+   the side column, so the room is the whole stage. */
+.nur--one .nur-stage {
+  grid-template:
+    'room' minmax(0, 1fr)
+    'plate' auto
+    / minmax(0, 1fr);
+}
+.nur--land .nur-stage {
+  grid-template: 'room' minmax(0, 1fr) / minmax(0, 1fr);
+  /* 5 u, not the frame's 6: the room is 280 high on 844 × 390 and the pet steps 224 → 261
+     (critic round 3, item 4) */
+  padding-block: calc(5 * var(--u));
+}
+.nur--wide .nur-stage {
+  grid-template: 'room anims' minmax(0, 1fr) / minmax(0, 1fr) auto;
+}
+/* The phone toggle stands in the room's top-right corner over the pet; its hit area (≥ 46 × 50
+   at u 2) reaches into the stage's frame. */
+.nur .nur-anim-tog {
+  grid-area: room;
+  justify-self: end;
+  align-self: start;
+  z-index: 3;
+}
+.nur-anim-tog::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-5 * var(--u)) calc(-4 * var(--u));
+}
+/* …and opens the six as a 3 × 2 menu under it: 19-u buttons, 3-u gaps = a 44-px pitch on a
+   phone (critic P1-4). An ink plate under them, like the name plate. */
+.nur .nur-anims--pop {
+  grid-area: room;
+  justify-self: end;
+  align-self: start;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: calc(3 * var(--u));
+  margin-top: calc(17 * var(--u));
+  padding: calc(2 * var(--u));
+  background: #2a190c;
+  border: var(--u) solid var(--px-ink);
+  box-shadow:
+    inset 0 var(--u) 0 #6b4a2c,
+    inset 0 calc(-1 * var(--u)) 0 #1a0f07;
+  animation: nur-drop 80ms steps(2, jump-none);
+}
+@keyframes nur-drop {
+  from {
+    translate: 0 calc(-2 * var(--u));
+  }
+}
+/* the slim level bar of phone portrait: 4 u, no label (numbers = its tip + the details sheet) */
+.nur-xp {
+  display: block;
 }
 /* The measured room: its size comes from the grid only (contain), the pet is sized from it in
    Nursery.tsx and stands on a pedestal of the room's size (--ped, whole screen dots). */
@@ -114,11 +177,34 @@
     calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
   image-rendering: pixelated;
 }
+/* cold switch: the picked pet's thumbnail until its strip is decoded (`thumbOnly`) */
+.nur-pet > .nur-ph {
+  position: absolute;
+  bottom: var(--lift, 0);
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: nur-pop 80ms steps(2, jump-none);
+}
 .nur-pet > .pet {
   position: absolute;
   left: var(--x, 0);
   bottom: var(--lift, 0);
   cursor: pointer;
+  /* a new pet arrives with a 2-step pixel pop: 1 art px down, then home (`translate` only) */
+  animation: nur-pop 80ms steps(2, jump-none);
+}
+@keyframes nur-pop {
+  from {
+    translate: 0 var(--u);
+  }
+  to {
+    translate: 0 0;
+  }
+}
+/* No soft vector glow on the pixel stage (kit: no blur, no soft masks): the aura and the
+   rotating rays are off here. Rarity already shows on the pill, the name and the slot frame. */
+.nur-stage :is(.pet__aura, .pet__rays) {
+  display: none;
 }
 .nur-stage__xp {
   grid-area: room;
@@ -163,36 +249,86 @@
     inset 0 var(--u) 0 #6b4a2c,
     inset 0 calc(-1 * var(--u)) 0 #1a0f07;
 }
-/* `.nur` in front: the camp sheet's `.gx-panel--wood h3` shadow must not win. One line, the
-   size shrinks for long names (container width ÷ length) so the row height never changes. */
-.nur .nur-plate__name {
-  margin: 0;
-  height: calc(var(--px-fs-hero) * 1.15);
+/* Top row: the name (its own size container) and the power on the right. */
+.nur-plate__top {
   display: flex;
   align-items: center;
-  font: 400 var(--px-fs-head) / 1 var(--px-head);
-  font-size: min(var(--px-fs-hero), calc(100cqi / (var(--len, 12) * 0.64)));
+  gap: calc(3 * var(--u));
+  /* one line of the hero size, or two lines of the label size (a long name on a narrow plate) */
+  height: max(calc(var(--px-fs-hero) * 1.15), calc(var(--px-fs-sm) * 2.05), var(--row-st));
+  min-width: 0;
+}
+.nur-plate__nm {
+  flex: 1 1 auto;
+  min-width: 0;
+  container: nur-name / inline-size;
+}
+/* `.nur` in front: the camp sheet's `.gx-panel--wood h3` shadow must not win. One line, the
+   size shrinks for long names (container width ÷ length); never below the label size — a name
+   that still doesn't fit wraps to two lines of it («Panzerknacker-Waschbär» at 360). The row
+   height is fixed either way. */
+.nur .nur-plate__name {
+  margin: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font: 400 var(--px-fs-hero) / 1 var(--px-head);
+  font-size: max(var(--px-fs-sm), min(var(--px-fs-hero), calc(100cqi / (var(--len, 12) * 0.67))));
   color: var(--rc, var(--px-gold));
   text-shadow: 0 var(--u) 0 #000;
-  white-space: nowrap;
   overflow: hidden;
+  overflow-wrap: break-word;
 }
 .nur-plate__row,
 .nur-plate__roles {
   display: flex;
   align-items: center;
   gap: calc(3 * var(--u));
-  /* text rows: their height follows the type, not the art scale */
-  height: calc(var(--px-fs-sm) * 1.65);
+  /* text rows: their height follows the type (and the stat picture), not the art scale */
+  height: var(--row-st);
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
 }
 .nur-plate__roles {
   gap: calc(2 * var(--u));
+  /* the «+N» hit area reaches above and below the row; the chips never overflow (see below) */
+  overflow: visible;
+  container: nur-roles / inline-size;
+  font-size: var(--px-fs-sm);
 }
-.nur-plate > .px-bar {
-  height: calc(var(--px-fs-sm) * 1.3);
+/* Three chips + «+N» need ≈ 17.2 em of the label size (de «+42 %»); a narrower plate (360-px
+   phones, the large text size) shows two chips + «+N+1» — both variants are rendered, CSS picks
+   one. Three-digit values need ≈ 19 em (`is-big`). */
+.nur-chip.nur-chip--more2 {
+  display: none;
+}
+@container nur-roles (max-width: 17.2em) {
+  .nur-chip.nur-chip--3,
+  .nur-chip.nur-chip--more:not(.nur-chip--more2) {
+    display: none;
+  }
+  .nur-chip.nur-chip--more2 {
+    display: inline-flex;
+  }
+}
+@container nur-roles (max-width: 19em) {
+  .is-big > .nur-chip.nur-chip--3,
+  .is-big > .nur-chip.nur-chip--more:not(.nur-chip--more2) {
+    display: none;
+  }
+  .is-big > .nur-chip.nur-chip--more2 {
+    display: inline-flex;
+  }
+}
+.nur-lv {
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-text);
+}
+/* right-aligned under the power: the ★ badge comes and goes and the rarity pill changes width —
+   the level must not move with them (critic round 3, item 6) */
+.nur-plate__row > .nur-lv {
+  margin-inline-start: auto;
 }
 /* Rarity as a pill: ink on the rarity colour reads on any surface (≥ 4.5:1 for every rarity). */
 .nur-rar {
@@ -207,26 +343,18 @@
   box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.45);
   text-shadow: none;
 }
+/* Power: its own picture (not the dig bolt), the number in the body size; an unhatched pet keeps
+   the box (picture dimmed, no number) so the name never changes its width. */
 .nur-pow {
-  margin-left: auto;
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--u);
-  font: 600 var(--px-fs-sm) / 1 var(--px-font);
-  color: var(--px-muted);
-}
-.nur-pow > .px-i,
-.nur-pow > b {
+  font: 700 var(--px-fs) / 1 var(--px-font);
   color: var(--px-gold);
 }
-.nur-pow > b {
-  font-size: var(--px-fs);
-  margin-left: var(--u);
-}
-@container nur-plate (max-width: 300px) {
-  .nur-pow__w {
-    display: none;
-  }
+.nur-pow.is-none > .nur-st {
+  visibility: hidden;
 }
 /* Gold: a star (as on the collection slots) + the word where the plate is wide. The threshold is
    in em of the plate's text, so a larger text size drops the word too: the row never overflows
@@ -245,13 +373,50 @@
     display: none;
   }
 }
+/* A baked 12 × 12 stat picture (paint.ts, wave 3 — N2) at `--st`: whole device px per art px. */
+.nur-st {
+  display: inline-block;
+  flex: none;
+  width: var(--st, 24px);
+  height: var(--st, 24px);
+  background: no-repeat center / 100% 100%;
+  image-rendering: pixelated;
+}
+.nur-st--loot {
+  background-image: var(--pximg-st-loot);
+}
+.nur-st--sell {
+  background-image: var(--pximg-st-sell);
+}
+.nur-st--dmg {
+  background-image: var(--pximg-st-dmg);
+}
+.nur-st--token {
+  background-image: var(--pximg-st-token);
+}
+.nur-st--luck {
+  background-image: var(--pximg-st-luck);
+}
+.nur-st--rate {
+  background-image: var(--pximg-st-rate);
+}
+.nur-st--power {
+  background-image: var(--pximg-st-power);
+}
+/* a stat the squad lacks: the picture stays (its box too), grey and faint */
+.nur-st.is-dim {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+/* Chip: the picture is the biggest part, the whole percent beside it. */
 .nur-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   flex: none;
   gap: var(--u);
-  height: calc(var(--px-fs-sm) * 1.5);
-  padding: 0 calc(2 * var(--u));
+  height: calc(var(--st, 24px) + 4px);
+  padding: 0 var(--u);
   margin: 0;
   border: 0;
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
@@ -259,26 +424,50 @@
   background: var(--chip);
   white-space: nowrap;
 }
-.nur-chip > .px-i {
-  color: var(--px-gold);
+/* «+N»: 36 × 28 visible, the hit area ≥ 48 × 48 (Android 48 dp). The row paints above the bar
+   (z 2), so the bar doesn't cover the area's lower part; to the left the area only reaches into
+   the gap (the chip before it paints over the rest), to the right the row is free. */
+.nur-plate__roles {
+  position: relative;
+  /* above the bar's label too (z 1 in the kit) */
+  z-index: 2;
 }
 .nur-chip--more {
+  justify-content: center;
+  min-width: 36px;
   cursor: pointer;
   color: var(--px-gold);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+.nur-chip--more::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: min(-10px, calc((100% - 48px) / 2)) -12px min(-10px, calc((100% - 48px) / 2))
+    calc(-2 * var(--u));
+}
+/* pressed on pointerdown (`usePress`): one step darker, the face 1 u down, no transition */
+.nur-chip--more:is(:active, .is-down) {
+  background: rgb(0 0 0 / 0.35);
+  translate: 0 var(--u);
 }
 .nur-chip--note {
   background: none;
   padding: 0;
-  font-weight: 600;
   color: var(--px-muted);
 }
 
-/* ---- Squad: three BIG cells, the summed bonuses small under them ---------------------------- */
+/* ---- Squad: three BIG cells, all six summed bonuses in a fixed grid under them -------------- */
 .nur-squad {
   display: grid;
   gap: calc(2 * var(--u));
   min-width: 0;
+  /* the grid's columns follow this width (em of the label size: 6 cells need ≈ 36 em) */
+  container: nur-squad / inline-size;
+  font-size: var(--px-fs-sm);
 }
 .nur-squad__head {
   display: flex;
@@ -286,11 +475,14 @@
   align-items: baseline;
   gap: 0 calc(3 * var(--u));
 }
-.nur .nur-squad__title {
+/* three type sizes on the screen (name, body, label): headings take the body size */
+.nur .nur-squad__title,
+.nur .nur-coll__head .px-h {
   margin: 0;
+  font-size: var(--px-fs);
 }
 .nur-squad__hint {
-  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-muted);
 }
 .nur-squad__row {
@@ -299,9 +491,13 @@
   gap: calc(5 * var(--u));
   padding: calc(2 * var(--u)) calc(3 * var(--u)) 0;
 }
-.nur--land .nur-squad__row {
+:is(.nur--land, .nur--wide) .nur-squad__row {
   --slot: calc(26 * var(--u));
   gap: calc(4 * var(--u));
+}
+/* phone portrait: 30 u (60 px) — still 2.5 × the bonus rows, and the room gets 8 px */
+.nur--one .nur-squad__row {
+  --slot: calc(30 * var(--u));
 }
 /* Empty place: a dashed outline and a big plus — «tap to add». */
 .nur-squad__row > .nur-squad__add {
@@ -349,54 +545,45 @@
   text-align: center;
   overflow-wrap: anywhere;
 }
+/* All six stats in a fixed order (loot sell dmg / token luck rate), 3 columns — 6 only where six
+   cells fit, never 4 or 5; it never scrolls. A stat the squad lacks keeps its cell (dim, «—»). */
 .nur-squad__sum {
-  display: flex;
-  gap: calc(2 * var(--u));
-  height: calc(var(--px-fs-sm) * 1.5);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  grid-auto-rows: var(--row-st);
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+  padding: 0 calc(3 * var(--u));
 }
-.nur-chip--sm {
-  height: calc(var(--px-fs-sm) * 1.4);
+@container nur-squad (min-width: 36em) {
+  .nur-squad__sum {
+    --cols: 6;
+  }
 }
-
-/* ---- Collection: strip + drawer (phones), grid (tablets, desktop) --------------------------- */
-.nur-strip {
+.nur-sum {
   display: flex;
   align-items: center;
-  gap: calc(3 * var(--u));
+  gap: var(--u);
   min-width: 0;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-text);
+  white-space: nowrap;
 }
+.nur-sum.is-none {
+  color: var(--px-dim);
+}
+.nur-chip--sm {
+  height: calc(var(--st, 24px) + 4px);
+}
+
+/* ---- Collection: drawer (phones, opened from the action bar), grid (tablets, desktop) -------- */
 .nur-strip__open {
   flex: none;
-  min-height: calc(26 * var(--u));
-  flex-direction: column;
   gap: var(--u);
   padding-left: calc(3 * var(--u));
   padding-right: calc(3 * var(--u));
 }
 .nur-strip__open .px-num {
   font-size: var(--px-fs-sm);
-}
-.nur-strip__row {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  gap: calc(3 * var(--u));
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-  /* room for the focus ring and the corner badges inside the scroller */
-  padding: calc(3 * var(--u));
-  margin: calc(-3 * var(--u)) 0;
-}
-.nur-strip__row::-webkit-scrollbar {
-  display: none;
-}
-.nur-strip__row > .px-slot {
-  flex: none;
 }
 .nur-coll {
   display: flex;
@@ -450,6 +637,18 @@
   min-width: 0;
   animation: nur-up 120ms steps(3, jump-none);
 }
+/* Phone portrait: from the room's bottom edge (`--nur-dtop`, set by Nursery.tsx) down over the
+   plate and the side column — the pet stays in view, all the cells fit. */
+.nur.nur--one .nur-drawer {
+  grid-area: show-start / 1 / side-end / 2;
+  top: var(--nur-dtop, 0);
+  /* the grid's own 3-u padding is the gap under the head: on a 360-px phone the head takes three
+     lines (ru/de/tr) and these 8 px are the fourth row of cells */
+  gap: 0;
+}
+.nur--one .nur-drawer > .nur-coll__head {
+  row-gap: var(--u);
+}
 /* drawer head: the title on its own line (beside the close button), chip + tools under it */
 .nur-drawer > .nur-coll__head > .px-h {
   flex-basis: 100%;
@@ -459,6 +658,25 @@
   position: absolute !important;
   top: calc(3 * var(--u));
   right: calc(3 * var(--u));
+}
+/* Small framed buttons keep their 15-u frame; the hit area reaches around it (≥ 48 × 48 px on a
+   phone: Android 48 dp, critic R13). The hit areas lie UNDER the visible frames (z-index −1 in
+   an isolated row): a neighbour's extension never steals a tap on a frame. */
+.nur-drawer__close::before,
+.nur-anim::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  /* from the padding box: the frame's 1-u border is inside these numbers */
+  inset: calc(-5 * var(--u)) calc(-4 * var(--u));
+}
+.nur-anims,
+.nur-acts,
+.nur-plate__roles {
+  isolation: isolate;
+}
+.nur-anim {
+  position: relative;
 }
 @keyframes nur-up {
   from {
@@ -492,17 +710,69 @@
 }
 .nur--land .nur-side {
   justify-content: space-between;
+  gap: calc(2 * var(--u));
+}
+/* Phone landscape (critic's sketch) and wide (round 3, item 3 — the collection got its rows
+   back): the squad title over the slots on the left, the six stats beside them (2 × 3, the same
+   order down the columns); the hint is the title's tip. */
+:is(.nur--land, .nur--wide) .nur-squad {
+  grid-template:
+    'head sum' auto
+    'row sum' auto
+    / auto minmax(0, 1fr);
+  gap: var(--u) calc(3 * var(--u));
+  align-items: center;
+}
+:is(.nur--land, .nur--wide) .nur-squad__head {
+  grid-area: head;
+}
+:is(.nur--land, .nur--wide) .nur-squad__row {
+  grid-area: row;
+  padding: var(--u) 0 0 var(--u);
   gap: calc(3 * var(--u));
 }
-.nur--land .nur-plate__roles {
-  display: none;
+:is(.nur--land, .nur--wide) .nur-squad__sum {
+  grid-area: sum;
+  --cols: 2;
+  grid-template-rows: repeat(3, calc(var(--st, 24px) + 2px));
+  grid-auto-flow: column;
+  gap: var(--u) calc(2 * var(--u));
+  padding: 0;
 }
-.nur--land .nur-strip__open {
-  min-height: calc(19 * var(--u));
-  flex-direction: row;
+.nur--land .nur-plate {
+  padding-top: calc(2 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+  gap: var(--u);
 }
-.nur--wide .nur-side > .nur-coll {
+/* Wide: plate on top, the action bar at the bottom, the squad and the whole collection scroll
+   between them as one list (round 3: with the plate in this column a grid-only scroll showed
+   0.2 row on 1180 × 820). Padding keeps the focus rings and the selected ring inside. */
+.nur-side__mid {
   flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+}
+.nur--tall .nur-coll {
+  gap: calc(2 * var(--u));
+}
+.nur-side__mid > .nur-coll {
+  flex: none;
+  gap: calc(2 * var(--u));
+}
+.nur--wide .nur-side__mid {
+  gap: calc(3 * var(--u));
+}
+.nur-side__mid > .nur-coll > .nur-grid {
+  flex: none;
+  overflow: visible;
+  /* the list's own 3-u padding already keeps the rings in (round 4: the collection's rows) */
+  padding-block: 0;
 }
 .nur--tall .nur-side {
   display: grid;
@@ -546,19 +816,35 @@
   display: grid;
   gap: calc(2 * var(--u));
 }
+/* Stats table: picture, noun, a dotted leader, the value right-aligned — one line per stat; the
+   full sentence is the row's tip. */
 .nur-role {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: calc(2 * var(--u));
+  gap: calc(3 * var(--u));
+  min-height: var(--row-st, 28px);
+  --row-st: max(calc(var(--px-fs-sm) * 1.65), calc(var(--st, 24px) + 4px));
 }
-.nur-role > .px-i {
-  color: var(--px-gold);
+.nur-role__k {
+  display: flex;
+  align-items: baseline;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  font-weight: 700;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.nur-role__k::after {
+  content: '';
+  flex: 1 1 auto;
+  min-width: calc(4 * var(--u));
+  height: var(--u);
+  background: linear-gradient(to right, var(--px-dim) 0 var(--u), transparent 0) 0 0 /
+    calc(3 * var(--u)) var(--u) repeat-x;
+  opacity: 0.6;
 }
 .nur-role > b {
-  color: var(--px-text);
-}
-.nur-role > span {
   color: var(--px-text);
   text-align: right;
 }
@@ -603,15 +889,39 @@
   display: flex;
   gap: calc(3 * var(--u));
   align-items: stretch;
+  container: nur-acts / inline-size;
+}
+/* a narrow phone: the grid button drops its count (it is the drawer's title) so «take along /
+   leave home» stays on one line */
+@container nur-acts (max-width: 16em) {
+  .nur-strip__open .px-num {
+    display: none;
+  }
 }
 .nur-acts > .px-btn--wide {
   flex: 1 1 auto;
   min-width: 0;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
+}
+/* The key cap sits on the button's corner, out of the flow: the box is the same with and without
+   key hints (critic round 2, P0-3 — the first key press grew the bar 57 → 77 px on tablets). */
+.nur-acts .px-btn > .px-keyhint {
+  position: absolute;
+  inset-block-start: calc(-3 * var(--u));
+  inset-inline-end: calc(-2 * var(--u));
+  z-index: 2;
+  pointer-events: none;
 }
 .nur--wide .nur-side > .nur-acts {
   margin-top: auto;
+}
+/* the action bar is 40 px high (critic's budget); the hit areas reach 48 (into the gaps) */
+.nur-acts .px-btn::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-4px - var(--u)) calc(-5px - var(--u));
 }
 .nur-acts__info {
   position: relative;
@@ -688,7 +998,49 @@
   right: calc(-2 * var(--u));
   z-index: 2;
 }
-/* Large text on a phone: the word wins over the icon (Turkish «Yumurtalar» at 23 px). */
-html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i {
+/* A word that doesn't fit beside its icon (PetsTab measures it: Turkish «Yumurtalar» on a
+   360-px phone, any long word at the large text size): the word wins, the row drops its icons. */
+html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i,
+.ppn__tabs.is-tight > .px-tab > .px-i {
   display: none;
+}
+
+/* Phone landscape (critic round 2 (d)): «Питомцы / Яйца» as a rail of two icon tabs on the left
+   of both tabs (the word is the tip and the aria name), so the stage gets the 44 px the
+   full-width row took. Absolutely placed: the eggs tab's blocks keep their own flow. */
+.ppn.ppn--rail {
+  padding-left: calc(27 * var(--u));
+}
+.ppn.ppn--rail > .ppn__tabs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(24 * var(--u));
+  margin: 0;
+  gap: calc(3 * var(--u));
+}
+.ppn--rail > .ppn__tabs > .px-tab {
+  justify-content: center;
+  min-height: calc(24 * var(--u));
+  padding: calc(2 * var(--u));
+}
+.ppn--rail > .ppn__tabs .px-tab__label {
+  display: none;
+}
+/* the key cap (Tab / RB) hangs under the rail, out of its box: a key press moves nothing */
+.ppn--rail > .ppn__tabs > .px-keyhint {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  translate: -50% calc(3 * var(--u));
+}
+/* gamepad: LB (before the tabs) stacks under RB */
+.ppn--rail > .ppn__tabs > .px-keyhint:first-child {
+  translate: -50% calc(18 * var(--u));
+}
+.ppn--rail > .ppn__note {
+  position: absolute;
+  left: 50%;
+  bottom: calc(4 * var(--u));
+  translate: -50% 0;
 }

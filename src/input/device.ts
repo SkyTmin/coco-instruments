@@ -36,13 +36,28 @@ export function padStyleOf(id: string): PadStyle {
   return 'xbox';
 }
 
-export function setInputDevice(d: InputDevice, padStyle?: PadStyle): void {
+let later = 0;
+const notify = () => {
+  later = 0;
+  apply();
+  for (const fn of subs) fn();
+};
+
+/** `defer` (a pointer press): `getInputDevice()` changes now, but `data-input` and the React
+ *  subscribers (every key prompt re-renders) only after the next frame. Flipping the root
+ *  attribute restyles the whole page (~40 ms at 4× CPU throttle) and the prompt renders add
+ *  ~50 ms: the first tap after a key press showed its pressed look 60–120 ms late (Nursery
+ *  critic, round 2, P1-7). */
+export function setInputDevice(d: InputDevice, padStyle?: PadStyle, defer = false): void {
   const changed = d !== device || (padStyle !== undefined && padStyle !== pad);
   device = d;
   if (padStyle) pad = padStyle;
   if (!changed) return;
-  apply();
-  for (const fn of subs) fn();
+  if (!defer || typeof requestAnimationFrame !== 'function') {
+    notify();
+    return;
+  }
+  if (!later) later = requestAnimationFrame(() => setTimeout(notify, 0));
 }
 
 export function subscribeInputDevice(fn: () => void): () => void {
@@ -66,8 +81,8 @@ export function installDeviceTracking(): () => void {
       // Мышь — только настоящим движением: браузер шлёт синтетический
       // mousemove после прокрутки клавиатурой.
       if (e.type === 'pointermove' && !e.movementX && !e.movementY) return;
-      setInputDevice('mouse');
-    } else setInputDevice('touch');
+      setInputDevice('mouse', undefined, true);
+    } else setInputDevice('touch', undefined, true);
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Unidentified') return;

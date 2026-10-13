@@ -69,6 +69,16 @@ export const books = {
   pct: '{v}%',
   pctRange: '{a}–{b}%',
   mageName: 'Чародей',
+  /** Tier on the showcase: two short lines under the name (the mage line didn't fit). */
+  tierFx: 'Какая чара внутри — сюрприз',
+  /** State under the name on the showcase plate (one short line; the rest is in the details). */
+  noRoomShort: 'Мест нет',
+  /** Verdict chip of the book-vs-pick compare row. */
+  weakerShort: 'Слабее',
+  /** The «no room» window: the one line above the enchant cells. */
+  replacePick: 'Выбей одну:',
+  /** The «no room» window: the greyed confirm until an enchant is chosen. */
+  replaceFirst: 'Выбери книгу',
   dust: '{v} пыли',
   onPick: 'Книг в кирке: {a} из {b}',
   offState: 'выключена',
@@ -122,4 +132,25 @@ export const books = {
   starText:
     'Уровень кирки — в ноль, зато каждая книга сильнее на {cap}%, скорость копки +{dmg}%, {tokens} токенов и {keys} ключа.',
   reforge: 'Перековать',
+  statChance: 'Шанс',
+  statLevel: 'Уровень',
+  statDust: 'В пыль',
+  statPrice: 'Цена',
+  statState: 'Состояние',
+  statStars: 'Звёзды',
+  statSlots: 'Книг в кирке',
+  weaker: 'Слабее, чем в кирке',
+  fullPick: 'Мест нет — выбьет другую',
+  inPickNow: 'В кирке',
+  inPickHead: 'В кирке',
+  toggleOn: 'Включить',
+  toggleOff: 'Выключить',
+  wipeBtn: 'Снять · +{n} пыли',
+  wipeInfo: 'Снятая с кирки книга рассыпается в пыль.',
+  buy: 'Купить',
+  replaceTitle: 'Мест нет',
+  lockedBy: 'Это место откроет {pick}',
+  sortLevel: 'По уровню',
+  starNeed: 'Перековка — с {n} уровня кирки',
+  starMax: 'Все звёзды собраны',
 } as const;

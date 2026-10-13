@@ -1,6 +1,7 @@
 ---
 paths:
-  - "src/components/{ForgeScreen,PickArt,MineField}.tsx"
+  - "src/components/{ForgeScreen,PickArt,MineField,Inventory}.tsx"
+  - "src/components/{armory.ts,armory.css,forge.css,backpack.css}"
   - "src/lib/{crack-stages,rarity}.ts"
 ---
 
@@ -203,3 +204,105 @@ paths:
   `drop-shadow` у обычной и необычной (`.ppick-ico:is(.r0,.r1)`): у
   редких и выше свечение цвета редкости уже есть. Головка ржавой темнее
   (`#8c4a2e`), железной — стальная, а не рыжая.
+
+### UI v2 — the armory skeleton: forge and backpack (wave 2 — F, 13.10.2026)
+
+Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventory`, `BooksTab`),
+`forge.css`, `backpack.css`. Logic, costs, confirmations and scenes (`ForgeReveal`, `PickArt`,
+`PxStrip`) are unchanged — only the layout is the kit's.
+
+- **Layouts** — `useArmLayout()`: `one` phone portrait (top / showcase 13fr / list 7fr / action
+  bar), `two` tablet portrait (showcase 13fr over list | side 7fr), `three` landscape, tablet
+  landscape, desktop (list | showcase | side = 6fr 15fr 6fr). The page never scrolls; the list
+  and the side column scroll inside. Measured showcase share (bbox script): forge/backpack
+  54 % of the height on 390×844, 58 % on 820×1180, 52–53 % of the width elsewhere.
+- **Showcase** `.arm-show` (size container `arm-show`) → `Panel stone stage` `.arm-stage`:
+  `.arm-room` (`contain: size`, measured by `useBox`) / `.arm-id` ink plate with `.px-dark`
+  (90 % ink + ink border: rarity colours ≥ 6:1) / `.arm-stats` (three fixed cells, big tabular
+  numbers, green/red deltas vs the pick in hand). Art size `heroFit(box, u, max, pedOf)`:
+  `heroSize` alone ignored the 3 pedestal pixels under the art and the art ran 9 px into the plate.
+- **Plate beside or under the art** — by the showcase's own aspect:
+  `@container arm-show (aspect-ratio > 23 / 20)` → beside (phone landscape, books on tablet
+  portrait); otherwise stacked. Since the showcase got half the screen, stacked is the bigger
+  art for picks and items on phone portrait (forge 390×844: 202 px against 180 beside).
+- **Name fits by its longest word**: `--nfs` per format, font-size
+  `max(fs-sm, min(--nfs, 100cqi / (--wlen × 0.66)))`, `--wlen` from `nameFit(name)`, `.arm-id`
+  is an inline-size container; two lines reserved. «Goldspitzhacke» / «Эффективность» no longer
+  break inside the word. The side column's `.arm-info__name` is `--px-fs` (the plate names the
+  thing big already; hidden on phone landscape).
+- **Nothing jumps** (owner): stat number row fixed at `1.25 × fs-big` (a delta baseline-aligned to
+  an icon grew the row 2 px on some picks); two reserved lines for name, state, effect and stat
+  labels; the action bar is a row of FIXED places (absent action = `visibility: hidden`
+  placeholder), buttons 26u high with two-line labels. Check: `{SCR}/bbox.mjs <forge|inv|bunk|books>
+  [formats]` clicks every slot and prints the drift of showcase, room, pedestal, plate, name,
+  stats, each button, list and side — 0 px on all six formats.
+- **Forge**: picks grid = kit `Slot`s (★ corner, power count, silhouettes for not forged); side =
+  rarity pill, what it mines, level bar (wraps on a narrow column), enchantments as name over
+  effect (side by side the effect squeezed the name to nothing). Compare tooltip on slots.
+- **Backpack** (`Inventory.tsx`): sections as kit `Tabs` (icon + count badge, one scrolling row on
+  phones incl. landscape, wrapped elsewhere), sort by rarity, slots with a where-from corner mark
+  and «!»; rarity per item `rarityOfIcon` (ore/block → the pick that opens it, book → tier, egg,
+  rune tier, parcel). A sold/moved item stays in the showcase as a ghost (count 0, no actions).
+  Action places per place `ACT_SLOTS` (bunk 4, mine 1, yard 1, view 0 = hint line). Bunk chest:
+  9 columns of kit slots, the locked big chest says what unlocks it. X = the first confirm action
+  (selling in the mine is one tap, as before).
+- **Kit pitfalls**: rules inside `@container` don't gain specificity — base rules later in the
+  file won (prefix them with `.arm-stage`). `.arm-details` needs `grid-template-columns:
+  minmax(0, 1fr)`: an auto column grew to the widest row and the side panel scrolled sideways,
+  cutting words. `.arm .rchip` is restyled as the kit pill (ink on `--rc`) — the old chip read
+  1.4:1 on the light panels.
+- **Critic pass** (`armory.ts`/`.css`): `useFirstFrame()` — the window paints first, the slot grid
+  a frame later (open 400–600 → 110–220 ms at 4× CPU); `numFit(s)` + container `arm-stat` fits a
+  long stat number into its cell (`--nlen`, cqi); a greyed action button gets `.px-dark` (kit ash
+  label is 2.9:1 → cream 4.6:1); the action bar clips with `clip-path: inset(-3u)`, not
+  `overflow: hidden` (that ate the kit focus ring); words wrap, coin / icon / key cap are
+  `flex: none`, a button with `.arm-btn-price` wraps the price under the words (small size on
+  phone landscape); text icons are `max(8u, 1em)`; the camp's bold rule skips `.px *` (Coco Title
+  has one weight — it was fake-bolded).
+- Old CSS removed (`.fg*` in `game-ui.css`, the old `.inv*` layout in `inventory.css`) by
+  `{SCR}/cleancss.py`: a rule goes when its scoped class is in no `src/**/*.ts*`; template
+  prefixes (`mcinv__set`, `inv-px`, `pench-bulk__b`, `fgr`) protected.
+- **Critic round 2** (13.10, `critic-armory.md`; forge, backpack, books, bunk chest):
+  - `.arm-list` is one `minmax(0, 1fr)` column — the forge's 17-pick strip scrolls inside
+    `.frg-grid`, not the whole list (992 px in a 374-px list).
+  - Phone landscape stage: the art takes the full stage height on the left, the plate and the
+    stats (number · delta, the label under them — see below) stack on the right.
+  - Plate: name on one line shrinking by its whole length (`--nlen` from `nameFit`; beside the
+    art by the longest word `--wlen`), `overflow-wrap: normal; hyphens: auto` — no breaks inside
+    a word. Fixed heights for name, state and effect.
+  - Touch: a second tap on the selected slot does nothing — keys act (`fromKeys(e)` =
+    `e.detail === 0`), fingers use the action button. Two-tap confirms ignore a tap < 400 ms after
+    arming (`useArmGuard`, `ARM_GUARD_MS`).
+  - `useFullWin(on, scene)` → `html[data-fullwin]` (and `data-fullscene` for a scene): `.pmx` and,
+    under a scene, `.gx-win` get `visibility: hidden`; `.arm.is-window` / `.arm-scn` set
+    `visible` back (a scene may live inside the camp). `predecodeArmory(pick)` runs from
+    `PrisonPage` in `requestIdleCallback`: kit frame PNGs (read from `--pxk-*` on `:root`), the
+    pick spin, pick icons, book idle strips, ore icons — 4 at a time.
+  - `content-visibility: auto` on list sections after the first, with `padding: 3u; margin:
+    -3u` — its paint containment clipped the focus rings and corner badges.
+  - Result scenes `.arm-scn` (`ForgeReveal`, `RevealScene`, `ApplyScene`): the dark backdrop is
+    `::before` and fades at `.is-lit` to the kit veil; a parchment card (`.arm-scn__card`, frame
+    on its `::before`, so it fades in without moving anything) holds the art and the text;
+    lines `--px-fs-sm`, name `--px-fs-big` with an ink outline, CTA = kit primary `Button`
+    (`--gx-hit` high, `data-autofocus`, root `data-ui-layer`). Phone landscape: art beside text.
+  - Backpack: «Всё» is one grid with a marker cell per section (`SecMark`: section icon + bar of
+    its first limit, tap = that tab) instead of heading lines; tabs are 44×44 icon tabs that wrap
+    on phones, the count in ink on a well frame at the corner (positioned against `.px-tab`: the
+    kit label clips). Bunk chest: kit-size cells `repeat(auto-fill, --slot)`; action places —
+    see below. Tooltip icons 24 px, rarity as the kit pill.
+  - Phone portrait forge list: the 17-pick strip first, the 72u details under it — details first
+    left 0 of 17 picks on screen at 360×800. Stat number line-height = its row (1.15): at 1 a
+    tablet's 1em icon stuck 3 px out. Phone-landscape backpack tabs: `grid-auto-columns:
+    max-content` (an auto track shrank to the kit label's `min-width: 0` and cut «Alles»).
+  - `useWordFit(root)` (all three screens): a stat label, a forge ingredient or enchant name
+    whose word would split over two lines gets `data-tight` — one kit step smaller (label → tiny,
+    name → sm). MutationObserver + ResizeObserver, so it runs before paint; break points are
+    space, ZWSP, hyphen and slash. Was «Состояние», «Buchplätze», «Chance», «Kazmadaki»,
+    «Granatspitzhacke» split on 360 px and in phone landscape.
+  - Phone-landscape stats: number · delta on one line, the label one nowrap line under them
+    (`'num delta' 1.15fs / 'lbl lbl' fs-sm`, padding-block 0 — 44 px a stat: the books' three
+    stats under a three-part plate have exactly 136 px). Beside the number the label had 45–62 px.
+  - Bunk chest: the phone bar has as many places as actions; a side column keeps `ACT_SLOTS`
+    places (spare ones hidden above the buttons) — fewer places moved the details by 58–87 px.
+- **Not verified**: a real phone / Telegram webview, hyphenation (the stand's Linux Chromium has no
+  dictionaries — `hyphens: auto` is for phones), gamepad hardware (actions emitted on the bus).
