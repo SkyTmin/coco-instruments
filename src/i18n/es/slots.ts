@@ -66,10 +66,12 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'un premio de ×{x} en un solo giro',
     yourBest: 'tu mejor: {x} de ×{goal}',
     fromLevel: 'desde el nivel {n}',
+    current: 'elegido',
     note: 'La «Reliquia» no se desbloquea por nivel: se gana con un solo giro gordo y se queda para siempre. Símbolos: Twemoji (CC-BY 4.0, Twitter Inc. y colaboradores).',
   },
   hud: {
     balance: 'Saldo',
+    betLabel: 'Apuesta',
     jackpot: 'Bote',
     best: 'Mejor giro',
     lvl: 'Niv. {n}',

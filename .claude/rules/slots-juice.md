@@ -3,6 +3,8 @@ paths:
   - "src/pages/{SlotsPage,ScatterPage,GamesPage}.tsx"
   - "src/lib/{rollup,juice,reel-motion,orb-merge,orb-rarity,scatter,slots,slots-meta,use-exit,confetti,coins}.ts"
   - "src/components/{MoneyCounter,slot-art}.tsx"
+  - "src/pages/{casino-ui.tsx,casino.css}"
+  - "src/components/{SessionCard,SkinSheet,CashDesk}.tsx"
   - "public/slots/**"
 ---
 
@@ -339,3 +341,68 @@ paths:
   новый ход стартует с показанного значения. Монеты дождя падают с
   ускорением, а не тормозят у низа экрана. Вспышка взрыва выигрышной рамки —
   слоем по прозрачности вместо `filter: brightness()` в кадрах.
+
+## UI v2 — the casino frame on the kit (wave 2 — K, 13.10.2026)
+
+Files: `pages/casino-ui.tsx` (`useFit`/`fitStyles`, `useCasLayout`, `CasStat`, `KitIcon`, `CasDeck`,
+`CasToggles`, `CasAutoPicker`, `CasBetPicker`) and `pages/casino.css` (page grid, deck, hall,
+skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins and juice in
+`theme.css` are untouched — only the frame around them changed.
+
+- **The cabinet scales as one piece.** Reel motion moves in fixed pixel cells (Slots `CELL` 74,
+  Cascade `SCELL` 68; `.cas.scatter { --scell: 68px }` beats the old 56-px landscape rule), so the
+  cabinet keeps its old natural width (358 / 372 px) and `useFit` sets the CSS `scale` property
+  (centre origin) to fill `.cas-stage` (`contain: size`). `scale` composes with juice.ts's
+  `style.transform` shake; dust (`startDust`) coordinates are divided by the scale. Never give
+  the cabinet a responsive width — the strip would run in the wrong pixels.
+- **Layouts** — `data-lay` on `.cas` from `useCasLayout`: `tall` = phone portrait and tablet
+  portrait (info / stage / deck in the thumb zone; tablet portrait: full-width stage, info | deck
+  side by side under it); `wide` = phone landscape, tablet landscape, desktop (info | stage |
+  deck). The page never scrolls (all 6 formats).
+- **Nothing jumps** — checked with a Playwright script (not in the repo) that compares rects
+  (info, stage, deck, balance, bet, spin, auto, turbo, bonus) across bet ±,
+  Minus/Equal/Tab/Shift+Tab, Space spin, ante, auto 10 on/off.
+  Bet value has a fixed width; the recent-spins row always exists (an empty well before the
+  first spin); the bonus row hides with `visibility`; auto/turbo have a fixed width in `tall` and
+  their key hint / counter are absolute badges — an inline key hint once pushed Spin by 18 px.
+  Spin's own key hint is a corner badge too (inline it cut «DREHEN · 10» on desktop); Spin has no
+  `overflow: hidden` — it clipped the kit focus frame (`.px-f::after` sits 3u outside).
+- **Long words:** bonus plates have 2u side padding, the buy label wraps, the ante hint gets up
+  to 3 lines (fr/it need them). Measure every language, not only ru: a text check over
+  `.cas-deck *` / `.cas-info *` (box outside its button, or clipped with ellipsis/line-clamp).
+- **Deck input:** Space/Enter (pad A) = spin (page `confirm`, scoped to the page); Tab/Shift+Tab
+  (RB/LB), ←/→ (when nothing is focused) and −/+ (Minus/Equal/Numpad) = bet; X (pad Y,
+  `inspect`) = auto sheet. Pad checked by firing `emitAction(…, 'gamepad', …, 'pad:0')`.
+- **Dark surfaces:** the session card's peak sits on an ink plate (`--sesk-plate: var(--px-text)`
+  resolved on the light card, then `.px-dark` on the plate) — rarity colours read only on dark.
+  The hall note over the yard background is `.px-dark`.
+- Touch targets ≥ `--gx-hit` (44 px): bet −/+/value, auto/turbo in landscape, bonus buttons;
+  in `tall` the bet −/+/value are 24u (48 px on phones, critic R13). Landscape keeps 44 — the
+  deck has no height to spare there (Spin ends 2 px above the edge).
+- Hall: wallet (coins + casino level) and three cards — Slots, Cascade, «Каторга» (→ `/prison`,
+  rank letter + tokens). A card is one button; «Играть» is drawn, not a nested button. The hall
+  gets the screen height and no more (`.gs__main` / `.hall` flex 1 1 + `min-height: 0`); the
+  cards share it and the art is what gives way: symbols are `object-fit: contain` in a definite
+  grid cell. Phone landscape: the wallet is one line and the note is hidden — else «Play» fell
+  under the edge. Watch `.gs__main` scrollHeight, not `#root`: the shell clips, it does not scroll.
+  Long skin names («Nuit des citrouilles») get `.is-long` (> 10 letters): a step smaller, two
+  lines. Fact values: ≥ 100 000 compact without decimals below a million («988 тыс.»), and
+  `CasStat fit` steps the font down (`data-fit` 1–2, the coin goes at 2) instead of clipping —
+  only in the hall: in play a changing font would move the info strip. Stress values used for the
+  check: spins 12 345, best 987 654, tokens 1 234 567, balance 123 456 789, in all 7 languages.
+- Session card: on a low screen (`orientation: landscape` and `max-height: 520px`) it is two
+  columns (peak + net | stats + buttons via `.sesk__col`, `display: contents` elsewhere); the
+  veil row is `minmax(0, 1fr)` so `max-height: 100%` holds.
+- Skins sheet: kit cards; the old `.skin-card` palette plate stays as the showcase (the relic's
+  halo and shimmer live there); current skin = kit select frame; locked = `aria-disabled`
+  (focusable, shows why). Cash desk: kit buttons with the row icon in front (a per-button coin
+  did not fit «+1 000 000» on phones; the million is `fmtShort`); CreativeRow (another
+  section's) is dressed as an iron kit button through `.cash__creative`.
+- Settings / auto / bet sheets of both games share `CasToggles` / `CasAutoPicker` /
+  `CasBetPicker`; handlers stay in the pages. New kit icons: `auto`, `buzz` (vibration).
+- Dead CSS of the old HUD, sheets and session card was removed from `theme.css` with a postcss
+  script (not in the repo): a class counts as used if any src file mentions it or a template
+  prefix `foo-${`; selectors with dead classes dropped, emptied rules removed. Do the same rather
+  than deleting by eye.
+- Not verified: a real phone / Telegram webview, a real gamepad, the big-win totem in the new
+  frame (the rig reached only combo ×2).

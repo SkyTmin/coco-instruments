@@ -67,10 +67,12 @@ export const slots = {
     relicWhat: 'выигрыш ×{x} за один спин',
     yourBest: 'ваш лучший — {x} из ×{goal}',
     fromLevel: 'с {n} уровня',
+    current: 'выбран',
     note: '«Реликвию» не открывает уровень — её зарабатывают одним крупным спином, и она остаётся навсегда. Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).',
   },
   hud: {
     balance: 'Баланс',
+    betLabel: 'Ставка',
     jackpot: 'Джекпот',
     best: 'Лучший спин',
     lvl: 'Ур. {n}',

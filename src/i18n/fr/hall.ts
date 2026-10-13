@@ -4,6 +4,12 @@ import type { hall as ru } from '../ru/hall';
 export const hall: Translation<typeof ru> = {
   title: 'Casino',
   cascade: 'Cascade',
+  prison: 'Le Bagne',
+  wallet: 'Porte-monnaie commun',
+  play: 'Jouer',
+  main: 'Jeu principal',
+  rank: 'rang',
+  tokens: 'jetons',
   reels: {
     one: '{n} rouleau',
     many: '{n} de rouleaux',

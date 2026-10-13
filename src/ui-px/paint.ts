@@ -1043,6 +1043,30 @@ const ICONS: Record<string, string[]> = {
     '.........',
     '.........',
   ],
+  // wave 2 — K: auto-spin (a ring that runs round to its own arrowhead, top right).
+  auto: [
+    '..####.#.',
+    '.##..####',
+    '##....###',
+    '##...####',
+    '##.......',
+    '##.....##',
+    '.##...##.',
+    '..#####..',
+    '.........',
+  ],
+  // wave 2 — K: vibration (a phone between buzz ticks).
+  buzz: [
+    '..#####..',
+    '#.#...#.#',
+    '#.#...#.#',
+    '..#...#..',
+    '#.#...#.#',
+    '#.#...#.#',
+    '..#...#..',
+    '..#.#.#..',
+    '..#####..',
+  ],
 };
 
 function icon(rows: string[]): Pix {

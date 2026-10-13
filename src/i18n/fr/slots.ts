@@ -66,10 +66,12 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'un gain de ×{x} en un seul tour',
     yourBest: 'votre record : {x} sur ×{goal}',
     fromLevel: 'dès le niveau {n}',
+    current: 'choisi',
     note: '« Relique » ne se débloque pas au niveau : on la gagne en un seul gros tour, et elle reste pour toujours. Symboles : Twemoji (CC-BY 4.0, Twitter Inc. et contributeurs).',
   },
   hud: {
     balance: 'Solde',
+    betLabel: 'Mise',
     jackpot: 'Jackpot',
     best: 'Meilleur tour',
     lvl: 'Niv. {n}',

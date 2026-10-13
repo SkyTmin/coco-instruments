@@ -63,10 +63,12 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'a ×{x} win in one spin',
     yourBest: 'your best: {x} of ×{goal}',
     fromLevel: 'from level {n}',
+    current: 'selected',
     note: '“Relic” isn’t unlocked by level — you earn it with one big spin, and it stays forever. Symbols: Twemoji (CC-BY 4.0, Twitter Inc. and contributors).',
   },
   hud: {
     balance: 'Balance',
+    betLabel: 'Bet',
     jackpot: 'Jackpot',
     best: 'Best spin',
     lvl: 'Lv. {n}',
