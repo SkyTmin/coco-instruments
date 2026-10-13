@@ -102,6 +102,9 @@ Release history (full former texts of the rules) lives in `.claude/archive/*.md`
 | Dungeon П1: camera, dash, sprites, tiles, rats | `dungeon-p1.md` |
 | Boss and mob animations (animation engine, merge pitfalls, reference recipe) | `dungeon-boss-anim.md` |
 | Game UI | `game-ui.md` |
+| Pixel UI kit (`src/ui-px`, frames, fonts) + Nursery | `ui-px.md` |
+| Game shell (form factors, `--ui-scale`) + input (keyboard, gamepad, focus, bindings) | `game-shell-input.md` |
+| Translations (`t()`, 7 languages, guard test) + game settings; signature words | `i18n.md`, `i18n-glossary.md` |
 | Sound and music | `audio.md` |
 | Network, deploy, backups — full version | `deploy-network.md` |
 
@@ -157,6 +160,9 @@ tokens. Hence the rules:
 - Agent-facing docs (rules, briefs, agent notes and reports) are written in English to
   save tokens; user-facing replies, game text and commit messages stay in Russian; the
   archive in `.claude/archive/` stays as is.
+- **Every new player-facing game string goes through `t()` in all 7 languages** (ru, en, fr, tr,
+  de, es, it) in the same change — `src/i18n/i18n.test.ts` fails on hard-coded Cyrillic. How and
+  which slang: `.claude/rules/i18n.md`, `i18n-glossary.md`.
 - Do not commit secrets. `dist/` and `node_modules/` are build artifacts (git-ignored).
 - The app runs inside Telegram's webview (mobile-first); the calculator pins itself to
   the viewport and uses pointer gestures — test touch behaviour, not just desktop.
