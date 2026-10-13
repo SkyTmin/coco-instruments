@@ -113,7 +113,7 @@ import {
 } from '@/lib/prison-art';
 import { plainPlan, runRollup } from '@/lib/rollup';
 import { rarityOf } from '@/lib/rarity';
-import { flashFrame, squashPop, stopShake } from '@/lib/juice';
+import { flashFrame, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
@@ -187,6 +187,24 @@ const shortCount = (n: number) =>
  */
 const chipMoney = (n: number) => (n >= 1e5 ? shortCount(n) : fmtNum(n));
 
+/** Длина строки числа — фишка шапки ужимает кегль под неё (`--len` в mine.css). */
+const lenVar = (text: string) => ({ '--len': text.length }) as CSSProperties;
+
+/** Размер пикселя арта для `hop` — страница пишет его из оболочки. */
+let hopU = 2;
+/**
+ * «Пришло»: значки внутри `el` (с `data-hop`, иначе первый ребёнок) подпрыгивают на
+ * 1–2 пикселя арта ступенями. Панели набора не масштабируются — рамка и текст на месте
+ * (критик, волна 2: squashPop растягивал рюкзак на 23 px вбок).
+ */
+function hop(el: Element | null | undefined) {
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const marked = el.matches('[data-hop]') ? [el] : [...el.querySelectorAll('[data-hop]')];
+  const list = marked.length ? marked : el.firstElementChild ? [el.firstElementChild] : [];
+  const y = (n: number) => ({ translate: `0 ${-n * hopU}px`, easing: 'steps(1, jump-end)' });
+  for (const n of list) n.animate([y(1), y(2), y(2), y(1), y(0)], { duration: 160 });
+}
+
 /** Минуты и секунды: 7:05. */
 const clockMs = (ms: number) => {
   const t = Math.max(0, Math.ceil(ms / 1000));
@@ -257,6 +275,19 @@ const SCREENS: Record<Screen, { only: CampTab[]; title: Key }> = {
 };
 
 /** Условия ранга фишками: кирка, выработка (блоков сломано) и блоки этажа. */
+/**
+ * Подпись кнопки дока. Самое длинное слово (`--lw`) влезает по ширине кеглем, а не рвётся
+ * посередине («Инвентар-ь» на 390 px); мягкие переносы (tr) делят слово на части.
+ */
+function DockLabel({ text }: { text: string }) {
+  const lw = Math.max(...text.split(/[\s\u00ad-]+/).map((w) => w.length));
+  return (
+    <span className="mn-dock__label" style={{ '--lw': lw } as CSSProperties}>
+      {text}
+    </span>
+  );
+}
+
 function RankChips({ need, floor }: { need: RankNeeds; floor: number }) {
   const workOk = need.work >= need.workNeed;
   const blocksOk = need.blocks >= need.blocksNeed;
@@ -551,7 +582,7 @@ export function PrisonPage() {
 
   /** Добыча летит дугой из клетки в рюкзак. */
   const flyLoot = (c: number, rock: number) =>
-    field.current?.fly(c, rockTexture(rock), bagRef.current, () => squashPop(bagRef.current, 0.22));
+    field.current?.fly(c, rockTexture(rock), bagRef.current, () => hop(bagRef.current));
 
   const scheduleReset = () => {
     if (resetTimer.current) return;
@@ -613,7 +644,7 @@ export function PrisonPage() {
     floatText(c, `${upper(streakName(ti))}!`, 'pfloat--streak');
     tierBreak(Math.min(3, ti));
     tapMedium();
-    squashPop(stripRef.current, 0.35 + 0.1 * ti);
+    hop(stripRef.current);
     if (ti >= 3) field.current?.trauma(0.2);
     if (first)
       say(t('mineHud.say.streakFirst', { name: streakName(ti), pct: Math.round(tier.loot * 100) }));
@@ -670,7 +701,7 @@ export function PrisonPage() {
     field.current?.chips(c, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
     // Слеза долетела до сундуков — только отскок кнопки, без звука: сцена
     // и так громкая, а ключ падает раз в несколько минут.
-    const played = playTotem(chestRef.current, () => squashPop(chestRef.current, 0.6));
+    const played = playTotem(chestRef.current, () => hop(chestRef.current));
     if (!played) {
       floatText(
         c,
@@ -717,7 +748,7 @@ export function PrisonPage() {
       floatText(c, t('mineHud.float.parcel'), 'pfloat--parcel', 200);
       softChime(1);
       tapMedium();
-      squashPop(parcelsRef.current, 0.5);
+      hop(parcelsRef.current);
     }
     if (res.parcelTokens) floatText(c, `+${res.parcelTokens} ✦`, 'pfloat--token', 260);
     if (res.parcelsReady) {
@@ -728,12 +759,12 @@ export function PrisonPage() {
     if (res.petUp) {
       say(t('mineHud.say.petLevel', { name: petName(res.petUp.id), n: res.petUp.level }));
       softChime(2);
-      squashPop(petRef.current, 0.6);
+      hop(petRef.current);
     }
     if (res.eggsReady) {
       say(t('mineHud.say.eggWarm'));
       softChime(5);
-      squashPop(petRef.current, 0.6);
+      hop(petRef.current);
     }
     if (res.normDone) {
       tierBreak(2);
@@ -746,7 +777,7 @@ export function PrisonPage() {
       bagFullSound();
       notifyWarning();
       say(t('mineHud.say.bagFull'));
-      squashPop(bagRef.current, 0.5);
+      hop(bagRef.current);
     }
     if (res.sold) {
       // Вагонетка сама отвезла рюкзак.
@@ -756,7 +787,7 @@ export function PrisonPage() {
       floatText(c, `+${fmtShort(res.sold)}`, 'pfloat--coin');
     }
     // Вагонетка (или спецзона) отложила руду для кирки — кузница кивнула.
-    if (res.boxed > 0) squashPop(forgeRef.current, 0.45);
+    if (res.boxed > 0) hop(forgeRef.current);
     const dug = useFinanceStore.getState().prison.mine.dug;
     if (minedShare(dug) >= MINE_RESET_AT) scheduleReset();
   };
@@ -859,8 +890,7 @@ export function PrisonPage() {
     const f = field.current;
     if (t.role === 'loot' && t.ore) {
       const c = nearPets();
-      if (c >= 0)
-        f?.fly(c, rockTexture(t.ore.rock), bagRef.current, () => squashPop(bagRef.current, 0.3));
+      if (c >= 0) f?.fly(c, rockTexture(t.ore.rock), bagRef.current, () => hop(bagRef.current));
     } else if (t.role === 'sell' && t.coins) {
       coinDing();
     } else if (t.role === 'dmg') {
@@ -916,7 +946,7 @@ export function PrisonPage() {
     if (v.coins) floatText(c, `+${fmtShort(v.coins)}`, 'pfloat--coin');
     if (v.tokens) {
       floatText(c, `+${v.tokens} ✦`, 'pfloat--token');
-      squashPop(tokenRef.current, 0.3);
+      hop(tokenRef.current);
     }
     if (v.keys) totemKey(c, v.keys);
   };
@@ -934,11 +964,11 @@ export function PrisonPage() {
     }
     if (r.kind === 'tokens') {
       coinDing();
-      squashPop(tokenRef.current, 0.6);
+      hop(tokenRef.current);
       say(t('mineHud.say.tokens', { n: Math.round(r.amount) }));
     } else if (r.kind === 'keys') {
       keyFound();
-      squashPop(chestRef.current, 0.6);
+      hop(chestRef.current);
       say(r.amount > 1 ? t('mineHud.say.chestKeys', { n: r.amount }) : t('mineHud.say.chestKey'));
     } else if (r.kind === 'rune') {
       tierBreak(2);
@@ -1377,7 +1407,7 @@ export function PrisonPage() {
     const value = got.coins;
     if (got.boxed > 0) {
       // Руда для следующей кирки не продана — легла в ящик кузнеца.
-      squashPop(forgeRef.current, 0.7);
+      hop(forgeRef.current);
       say(t('mineHud.say.boxed', { n: fmt(got.boxed) }));
     }
     if (!value) {
@@ -1392,7 +1422,7 @@ export function PrisonPage() {
     rollBalance(from, from + value);
     coinDing();
     notifySuccess();
-    squashPop(bagRef.current, 0.6);
+    hop(bagRef.current);
     const cost = rankCost(Math.min(rank, LAST_RANK - 1), prestige);
     if (value >= cost * 0.3) {
       rainCoins(Math.min(30, 8 + Math.round((value / cost) * 20)));
@@ -1642,14 +1672,20 @@ export function PrisonPage() {
 
   // Раскладка (UI v2): высокий экран — стопкой, широкий — три колонки.
   const shell = useFormFactor();
+  useEffect(() => {
+    hopU = shell.scale;
+  }, [shell.scale]);
   const wide = shell.w > shell.h;
+  /** Широкий экран не телефона: колонки высокие — крупнее значки и расходники, рюкзак
+   *  переезжает влево, док занимает правую колонку целиком (критик: без пустых полос). */
+  const roomy = wide && !shell.ff.startsWith('phone');
   const rootRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const cell = useFieldCell(rootRef, slotRef, frameRef, wide, shell.scale);
   // Отряд на кромке рамы растёт вместе с клеткой; на телефоне — прежние 44.
   const petSize = Math.max(44, Math.min(112, Math.round(cell * 0.9)));
-  const dockIco = 12 * shell.scale;
+  const dockIco = (roomy ? 24 : 12) * shell.scale;
 
   // Горячие клавиши шахты (слой действий src/input): I инвентарь, P питомцы,
   // F кузница, B книги, C сундуки, M этажи, L лагерь, E продать рюкзак,
@@ -1705,7 +1741,7 @@ export function PrisonPage() {
   if (!hydrated) {
     return (
       <div className="gx pmx">
-        <div className="prison-scene" aria-hidden="true" />
+        <div className="prison-scene pxt-stone" aria-hidden="true" />
       </div>
     );
   }
@@ -1750,24 +1786,25 @@ export function PrisonPage() {
   const u = shell.scale;
   const rankOk = atTop ? progress >= 1 : rankReady;
 
+  const floorName = prison.zone.on
+    ? t('mineHud.hud.floorZone')
+    : t('mineHud.hud.floor', { rank: rankLetter(mine.id), rock: rockName(mine.id) });
   const floorBtn = (
     <button
       key="floor"
       type="button"
       className="mn-stat mn-stat--btn mn-floor px-f"
-      data-tip={t('input.action.mines')}
+      data-tip={floorName}
       data-tip-key="mines"
-      aria-label={
-        prison.zone.on
-          ? t('mineHud.hud.floorZone')
-          : t('mineHud.hud.floor', { rank: rankLetter(mine.id), rock: rockName(mine.id) })
-      }
+      aria-label={floorName}
       onClick={() => openSheet('mines')}
     >
       <img className="mn-floor__ore" src={rockTexture(mine.id)} alt="" />
-      <b className="px-num">
-        {prison.zone.on ? <GxIcon name="stairs" size={8 * u} /> : rankLetter(mine.id)}
-      </b>
+      <span className="mn-floor__badge">
+        <Badge>
+          {prison.zone.on ? <GxIcon name="stairs" size={6 * u} /> : rankLetter(mine.id)}
+        </Badge>
+      </span>
       <KeyHint action="mines" />
     </button>
   );
@@ -1785,8 +1822,12 @@ export function PrisonPage() {
       >
         <i className="px-i pxi-left" aria-hidden="true" />
       </button>
-      <span className="mn-stat mn-stat--coins" title={t('mineHud.norm.coins')}>
-        <CoinIcon size={9 * u} />
+      <span
+        className="mn-stat mn-stat--coins"
+        title={t('mineHud.norm.coins')}
+        style={lenVar(chipMoney(shownBalance))}
+      >
+        <i className="mn-coin" aria-hidden="true" />
         <MoneyCounter
           ref={moneyRef}
           value={shownBalance}
@@ -1800,9 +1841,10 @@ export function PrisonPage() {
         className="mn-stat mn-stat--btn mn-stat--tokens px-f"
         aria-label={t('mineHud.hud.tokens')}
         data-tip={t('mineHud.hud.tokens')}
+        style={lenVar(shortCount(prison.tokens))}
         onClick={() => openScreen('enchant')}
       >
-        <TokenIcon size={8 * u} />
+        <TokenIcon size={12 * u} />
         <b className="px-num mn-stat__n">{shortCount(prison.tokens)}</b>
       </button>
       <button
@@ -1810,9 +1852,10 @@ export function PrisonPage() {
         className="mn-stat mn-stat--btn mn-stat--keys px-f"
         aria-label={t('mineHud.pres.keys')}
         data-tip={t('mineHud.pres.keys')}
+        style={lenVar(shortCount(prison.keys))}
         onClick={() => openScreen('cases')}
       >
-        <KeyIcon size={8 * u} />
+        <KeyIcon size={12 * u} />
         <b className="px-num mn-stat__n">{shortCount(prison.keys)}</b>
       </button>
       {wide && floorBtn}
@@ -1869,7 +1912,7 @@ export function PrisonPage() {
               )
             ) : (
               <span className={`mn-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
-                {fmtShort(cost)} <CoinIcon size={6 * u} />
+                {shortCount(cost)} <i className="mn-coin mn-coin--s" aria-hidden="true" />
               </span>
             )
           }
@@ -1881,6 +1924,7 @@ export function PrisonPage() {
       <span className="mn-hex mn-hex--next px-num">
         {atTop ? <GxIcon name="stairs" size={8 * u} /> : rankLetter(rank + 1)}
       </span>
+      {rankOk && <i className="mn-rank__ready" aria-hidden="true" />}
       <KeyHint action="rank" />
     </button>
   );
@@ -1902,7 +1946,7 @@ export function PrisonPage() {
       </span>
       <span className="mn-strip__streak">
         <span className="mn-strip__name">
-          <i className="px-i pxi-m-flame" aria-hidden="true" />
+          <i className="px-i pxi-m-flame" data-hop="" aria-hidden="true" />
           <b>{sTier >= 0 ? streakName(sTier) : t('mineHud.hud.streak')}</b>
           {sTier >= 0 && <em className="px-num">+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
         </span>
@@ -1913,8 +1957,8 @@ export function PrisonPage() {
           <>
             <span>{t('mineHud.hud.paceBlocks', { n: shortCount(pace.blocks) })}</span>
             <span>
-              {fmtShort(pace.coins)}
-              <CoinIcon size={5 * u} />
+              {shortCount(pace.coins)}
+              <i className="mn-coin mn-coin--s" aria-hidden="true" />
               {t('mineHud.perMin')}
             </span>
           </>
@@ -2042,7 +2086,7 @@ export function PrisonPage() {
                   })}
                   onClick={() => openParcel(i)}
                 >
-                  <img src={parcelTexture(tier.color)} alt="" />
+                  <img src={parcelTexture(tier.color)} alt="" data-hop="" />
                   {!ready && (
                     <Bar value={1 - x.left / PARCEL_NEED[x.tier]} tone="green" height={3} />
                   )}
@@ -2208,7 +2252,7 @@ export function PrisonPage() {
   // Расходники: цифры 1–6 на клавиатуре — по порядку на экране.
   const itemsRow = (
     <div key="items" className="mn-items" role="group" aria-label={t('inv.section.items')}>
-      {wide && <h3 className="px-h px-dark mn-side__h">{t('inv.section.items')}</h3>}
+      {roomy && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
       <div className="mn-items__row">
         {shownItems.map((it, i) => {
           const n = prison.items[it.id];
@@ -2224,7 +2268,7 @@ export function PrisonPage() {
               data-tip-key={`item${i + 1}`}
               onClick={() => applyItem(it.id)}
             >
-              <ItemIcon id={it.id} size={13 * u} />
+              <ItemIcon id={it.id} size={(roomy ? 16 : 13) * u} />
               {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
               <KeyHint action={`item${i + 1}` as Action} />
             </Slot>
@@ -2245,7 +2289,7 @@ export function PrisonPage() {
       data-tip={t('input.action.sell')}
       data-tip-key="sell"
     >
-      <i className="px-i pxi-m-bag mn-bag__ico" aria-hidden="true" />
+      <i className="mn-pic mn-pic--bag mn-bag__ico" data-hop="" aria-hidden="true" />
       <span className="mn-bag__mid">
         <span className="mn-bag__title">{t('inv.lim.bag')}</span>
         <Bar
@@ -2262,7 +2306,7 @@ export function PrisonPage() {
         {count && value ? (
           <>
             <span>{t('mineHud.bag.sell', { sum: fmtShort(value) })}</span>
-            <CoinIcon size={7 * u} />
+            <i className="mn-coin mn-coin--s" aria-hidden="true" />
           </>
         ) : count ? (
           <>
@@ -2291,10 +2335,10 @@ export function PrisonPage() {
           setForgeOpen(true);
         }}
       >
-        <span className="mn-dock__ico">
+        <span className="mn-dock__ico" data-hop="">
           <PickIcon pick={pick} size={dockIco} />
         </span>
-        <span className="mn-dock__label">{t('mineHud.dock.forge')}</span>
+        <DockLabel text={t('mineHud.dock.forge')} />
         {forgeReady && (
           <span className="mn-dock__badge">
             <Badge gold>!</Badge>
@@ -2310,9 +2354,9 @@ export function PrisonPage() {
         onClick={() => openScreen('enchant')}
       >
         <span className="mn-dock__ico">
-          <i className="px-i pxi-m-book mn-dock__mask is-book" aria-hidden="true" />
+          <i className="mn-pic mn-pic--books" aria-hidden="true" />
         </span>
-        <span className="mn-dock__label">{t('mineHud.dock.books')}</span>
+        <DockLabel text={t('mineHud.dock.books')} />
         {enchReady && (
           <span className="mn-dock__badge">
             <Badge>!</Badge>
@@ -2328,10 +2372,10 @@ export function PrisonPage() {
         data-tip-key="chests"
         onClick={() => openScreen('cases')}
       >
-        <span className="mn-dock__ico">
+        <span className="mn-dock__ico" data-hop="">
           <ChestIcon size={dockIco} />
         </span>
-        <span className="mn-dock__label">{t('mineHud.dock.chests')}</span>
+        <DockLabel text={t('mineHud.dock.chests')} />
         {prison.keys > 0 && (
           <span className="mn-dock__badge">
             <Badge gold>{shortCount(prison.keys)}</Badge>
@@ -2358,7 +2402,7 @@ export function PrisonPage() {
             <i className="px-i pxi-paw mn-dock__mask" aria-hidden="true" />
           )}
         </span>
-        <span className="mn-dock__label">{t('mineHud.dock.pets')}</span>
+        <DockLabel text={t('mineHud.dock.pets')} />
         {prison.nest.some((x) => x.left <= 0) && (
           <span className="mn-dock__badge">
             <Badge>!</Badge>
@@ -2377,9 +2421,9 @@ export function PrisonPage() {
         }}
       >
         <span className="mn-dock__ico">
-          <i className="px-i pxi-m-bag mn-dock__mask is-bag" aria-hidden="true" />
+          <i className="mn-pic mn-pic--bag" aria-hidden="true" />
         </span>
-        <span className="mn-dock__label">{t('inv.lim.bag')}</span>
+        <DockLabel text={t('input.action.inventory')} />
         <KeyHint action="inventory" />
       </button>
       <button
@@ -2390,9 +2434,9 @@ export function PrisonPage() {
         onClick={() => openScreen('more')}
       >
         <span className="mn-dock__ico">
-          <i className="px-i pxi-m-fire mn-dock__mask is-fire" aria-hidden="true" />
+          <i className="mn-pic mn-pic--camp" aria-hidden="true" />
         </span>
-        <span className="mn-dock__label">{t('mineHud.dock.more')}</span>
+        <DockLabel text={t('mineHud.dock.camp')} />
         {campBadge && (
           <span className="mn-dock__badge">
             <Badge>!</Badge>
@@ -2410,11 +2454,12 @@ export function PrisonPage() {
           {rankBox}
           <div className="mn-panel">{streakBox}</div>
           {questBox}
+          {itemsRow}
+          {roomy && bagBox}
         </div>,
         fieldBox,
         <div key="r" className="mn-side mn-side--r">
-          {itemsRow}
-          {bagBox}
+          {!roomy && bagBox}
           {dock}
         </div>,
       ]
@@ -2437,7 +2482,7 @@ export function PrisonPage() {
       className={`gx px mn ${wide ? 'mn--wide' : 'mn--tall'}`}
       style={cell ? ({ '--cell': `${cell}px` } as CSSProperties) : undefined}
     >
-      <div className="prison-scene" aria-hidden="true" />
+      <div className="prison-scene pxt-stone" aria-hidden="true" />
       {layout}
 
       {screen && (

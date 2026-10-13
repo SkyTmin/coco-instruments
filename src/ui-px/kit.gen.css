@@ -121,6 +121,21 @@
   --pxk-tab-side-on: url('/ui/kit/tab-side-on.png?v=5bddf810');
   --pxk-tab-side-on-s: 2 1 2 2 fill;
   --pxk-tab-side-on-w: 2 1 2 2;
+  --pximg-m-coin: url('/ui/kit/m-coin.png?v=0ebb5f94');
+  --pximg-m-coin-w: 12;
+  --pximg-m-coin-h: 12;
+  --pximg-m-coin-s: url('/ui/kit/m-coin-s.png?v=572bd325');
+  --pximg-m-coin-s-w: 8;
+  --pximg-m-coin-s-h: 8;
+  --pximg-m-dock-books: url('/ui/kit/m-dock-books.png?v=9ac3234e');
+  --pximg-m-dock-books-w: 12;
+  --pximg-m-dock-books-h: 12;
+  --pximg-m-dock-bag: url('/ui/kit/m-dock-bag.png?v=bbe2aa27');
+  --pximg-m-dock-bag-w: 12;
+  --pximg-m-dock-bag-h: 12;
+  --pximg-m-dock-camp: url('/ui/kit/m-dock-camp.png?v=f4b5c28f');
+  --pximg-m-dock-camp-w: 12;
+  --pximg-m-dock-camp-h: 12;
 }
 
 .pxk-frame-stone {

@@ -27,6 +27,22 @@
 .mn :is(button) {
   -webkit-tap-highlight-color: transparent;
 }
+/* Фон — светлый песчаник набора (тёмную палитру владелец отверг): плитка камня под
+   светлой вуалью, чтобы не спорить с полем. Класс .pxt-stone даёт --tile. */
+.mn > .prison-scene {
+  background:
+    linear-gradient(#f8ecd266, #f8ecd266),
+    var(--tile) 0 0 / calc(32 * var(--u)) calc(32 * var(--u)),
+    #c4a985;
+  image-rendering: pixelated;
+}
+/* Невидимая зона нажатия вокруг мелких кнопок (::after занят кольцом фокуса). */
+.mn-hud .px-btn--icon::before,
+.mn-parcel::before {
+  content: '';
+  position: absolute;
+  inset: calc(-3 * var(--u));
+}
 /* Подсказки клавиш — только клавиатуре и геймпаду (мышь видит всплывашку). */
 html[data-input='mouse'] .mn .px-keyhint,
 html[data-input='touch'] .mn .px-keyhint {
@@ -42,9 +58,15 @@ html[data-input='touch'] .mn .px-keyhint {
   padding-left: calc(1 * var(--u));
   padding-right: calc(1 * var(--u));
 }
+/* Низкий телефон (360×740): зазоры 1u — полю нужна каждая точка (клетка ≥ 40 px). */
+@media (orientation: portrait) and (max-height: 760px) {
+  .mn--tall {
+    gap: var(--u);
+  }
+}
 /* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
-.mn--tall :is(.mn-stat--tokens, .mn-stat--keys) .mn-stat__n {
-  font-size: var(--px-fs);
+.mn--tall :is(.mn-stat--tokens, .mn-stat--keys) {
+  --fs-n: var(--px-fs);
 }
 .mn--tall > .mn-field {
   flex: 1 1 0;
@@ -74,7 +96,7 @@ html[data-input='touch'] .mn .px-keyhint {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: calc(3 * var(--u));
+  gap: calc(2 * var(--u));
   /* Страница не прокручивается; если колонке на низком экране не хватит
      высоты, прокрутится только она. */
   overflow-x: hidden;
@@ -89,8 +111,54 @@ html[data-input='touch'] .mn .px-keyhint {
 .mn-side::-webkit-scrollbar {
   display: none;
 }
+/* Правая колонка: рюкзак сверху, док заполняет остаток — по кнопке в ряд, ряды растут
+   до 32u (критик: без пустых полос, ≤ 15 % пустоты в колонке). */
 .mn-side--r > .mn-dock {
-  margin-top: auto;
+  flex: 1 1 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(calc(21 * var(--u)), calc(36 * var(--u)));
+}
+/* Телефон лёжа: колонка низкая — по две кнопки в ряд, три ряда. */
+html[data-ff^='phone'] .mn-side--r > .mn-dock {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Вне телефона кнопки дока высокие: значок вдвое (24u — ровно 2 точки на пиксель). */
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__btn {
+  --dock-ico: calc(24 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__ico {
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-pic {
+  --pic-w: 24;
+  --pic-h: 24;
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__mask {
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__btn {
+  gap: calc(3 * var(--u));
+  padding-left: calc(4 * var(--u));
+}
+/* На компьютере колонка 118–126u: четыре крупные ячейки в ряд (на планшете 85u — три обычные). */
+html[data-ff='desktop'] .mn--wide .mn-side--l:not(:has(.mn-quest)) .mn-items {
+  --slot: calc(28 * var(--u));
+}
+.mn-side--r .mn-dock__btn {
+  height: auto;
+  min-height: 0;
+}
+/* Вне телефона в боковых колонках текст на ступень крупнее (как «крупный» в настройках):
+   размеры набора пересчитаны от копий с :root (--gx-fs*, см. gx-px.css). */
+html:not([data-ff^='phone']) .mn--wide .mn-side {
+  --px-fs: calc(var(--gx-fs) * 1.15);
+  --px-fs-sm: calc(var(--gx-fs-sm) * 1.15);
+  --px-fs-tiny: calc(var(--gx-fs-tiny) * 1.15);
+  --px-fs-head: calc(var(--gx-fs-head) * 1.15);
+  --px-fs-big: calc(var(--gx-fs-big) * 1.15);
+  --px-fs-hero: calc(var(--gx-fs-hero) * 1.15);
 }
 .mn-side__h {
   margin: 0 0 calc(2 * var(--u));
@@ -149,7 +217,7 @@ html[data-input='touch'] .mn .px-keyhint {
    ступени или темп не сдвигают полосы. */
 .mn-strip {
   display: grid;
-  grid-template-columns: calc(30 * var(--u)) minmax(0, 1fr) calc(40 * var(--u));
+  grid-template-columns: calc(30 * var(--u)) minmax(0, 1fr) calc(46 * var(--u));
   align-items: center;
   gap: calc(3 * var(--u));
   box-sizing: border-box;
@@ -163,11 +231,15 @@ html[data-input='touch'] .mn .px-keyhint {
   line-height: 1.1;
   color: var(--px-text);
 }
+/* Полоса на верхней кромке рамы. Рама узкая, когда поле упирается в высоту (360×740:
+   263 px) — тогда полоса шире рамы, до 150u, но не шире экрана; по центру, на целом px. */
 .mn-frame > .mn-strip {
+  --sw: max(calc(100% - 20 * var(--u)), min(calc(100vw - 8 * var(--u)), calc(150 * var(--u))));
   position: absolute;
   z-index: 9;
-  left: calc(10 * var(--u));
-  right: calc(10 * var(--u));
+  left: calc((100% - var(--sw)) / 2);
+  left: round(down, calc((100% - var(--sw)) / 2), 1px);
+  width: var(--sw);
   top: calc(-10 * var(--u));
 }
 .mn-panel > .mn-strip {
@@ -242,9 +314,11 @@ html[data-input='touch'] .mn .px-keyhint {
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
-  gap: calc(1 * var(--u));
+  gap: 0;
   min-width: 0;
   font-size: var(--px-fs-sm);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
   color: var(--px-text);
   white-space: nowrap;
 }
@@ -459,7 +533,7 @@ html[data-input='touch'] .mn .px-keyhint {
 .mn-hud {
   display: grid;
   grid-template-columns:
-    calc(19 * var(--u)) minmax(0, 1.55fr) minmax(0, 1.15fr) minmax(0, 0.8fr)
+    calc(19 * var(--u)) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.74fr)
     calc(19 * var(--u));
   grid-template-areas: 'back money tokens keys gear';
   align-items: center;
@@ -467,7 +541,7 @@ html[data-input='touch'] .mn .px-keyhint {
 }
 .mn-hud:has(.mn-hud__forest) {
   grid-template-columns:
-    calc(19 * var(--u)) minmax(0, 1.55fr) minmax(0, 1.15fr) minmax(0, 0.8fr)
+    calc(19 * var(--u)) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.74fr)
     calc(19 * var(--u)) calc(19 * var(--u));
   grid-template-areas: 'back money tokens keys forest gear';
 }
@@ -504,14 +578,14 @@ html[data-input='touch'] .mn .px-keyhint {
 }
 .mn--wide .mn-stat--tokens {
   order: 6;
-  flex: 1 1 calc(52 * var(--u));
+  flex: 1 1 calc(42 * var(--u));
 }
 .mn--wide .mn-stat--keys {
   order: 7;
-  flex: 1 1 calc(34 * var(--u));
+  flex: 1 1 calc(30 * var(--u));
 }
-.mn--wide .mn-stat--coins .mn-stat__n {
-  font-size: var(--px-fs-hero);
+.mn--wide .mn-stat--coins {
+  --fs-n: var(--px-fs-hero);
 }
 .mn-hud__back {
   grid-area: back;
@@ -539,7 +613,7 @@ html[data-input='touch'] .mn .px-keyhint {
   min-width: 0;
   height: calc(19 * var(--u));
   margin: 0;
-  padding: 0 calc(3 * var(--u));
+  padding: 0 calc(2 * var(--u));
   box-sizing: border-box;
   border: var(--u) solid transparent;
   border-image-source: var(--pxk-frame-well);
@@ -549,7 +623,11 @@ html[data-input='touch'] .mn .px-keyhint {
   background: none;
   color: var(--px-text);
   font: inherit;
-  overflow: hidden;
+  /* Число ужимается под ширину фишки (cqi), а не обрезается; рамка фокуса набора
+     снаружи — overflow тут нельзя. */
+  container-type: inline-size;
+  --ico: calc(12 * var(--u));
+  --fs-n: var(--px-fs-big);
 }
 .mn-stat--coins {
   grid-area: money;
@@ -563,17 +641,30 @@ html[data-input='touch'] .mn .px-keyhint {
 .mn-stat--btn {
   cursor: pointer;
 }
-.mn-stat--btn:active {
-  filter: brightness(1.2);
-}
 .mn-stat > :not(.mn-stat__n) {
   flex: none;
+}
+.mn-stat--btn:active > :not(.px-keyhint),
+.mn-stat--btn.is-down > :not(.px-keyhint),
+.mn-rank:active > :not(.px-keyhint, .mn-rank__ready),
+.mn-rank.is-down > :not(.px-keyhint, .mn-rank__ready),
+.mn-quest:active > *,
+.mn-quest.is-down > *,
+.mn-item:active > .px-slot__art,
+.mn-item.is-down > .px-slot__art,
+.mn-parcel:active > img,
+.mn-parcel.is-down > img,
+.mn-bag:active > :not(.px-keyhint, .mn-bag__sell),
+.mn-bag.is-down > :not(.px-keyhint, .mn-bag__sell) {
+  translate: 0 var(--u);
 }
 .mn-stat__n {
   min-width: 0;
   overflow: hidden;
-  /* Цифры — текстовым шрифтом набора: заголовочный вдвое шире. */
-  font: 400 var(--px-fs-big) / 1 var(--px-font);
+  /* Цифры — текстовым шрифтом набора: заголовочный вдвое шире. Кегль — не больше,
+     чем помещается: --len (длина строки) ставит страница. */
+  font: 700 min(var(--fs-n), calc((100cqi - var(--ico) - 2 * var(--u)) / (var(--len, 5) * 0.64))) /
+    1 var(--px-font);
   font-variant-numeric: tabular-nums;
   color: var(--px-text);
   text-shadow: 0 var(--u) 0 var(--px-ink);
@@ -582,19 +673,60 @@ html[data-input='touch'] .mn .px-keyhint {
 .mn-stat--coins .mn-stat__n {
   color: var(--px-gold);
 }
+.mn-coin,
+.mn-pic {
+  display: inline-block;
+  flex: none;
+  width: calc(var(--pic-w) * var(--u));
+  height: calc(var(--pic-h) * var(--u));
+  background: var(--pic) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+.mn-coin {
+  --pic: var(--pximg-m-coin);
+  --pic-w: var(--pximg-m-coin-w);
+  --pic-h: var(--pximg-m-coin-h);
+}
+.mn-coin--s {
+  --pic: var(--pximg-m-coin-s);
+  --pic-w: var(--pximg-m-coin-s-w);
+  --pic-h: var(--pximg-m-coin-s-h);
+}
+.mn-pic {
+  --pic-w: 12;
+  --pic-h: 12;
+}
+.mn-pic--books {
+  --pic: var(--pximg-m-dock-books);
+}
+.mn-pic--bag {
+  --pic: var(--pximg-m-dock-bag);
+}
+.mn-pic--camp {
+  --pic: var(--pximg-m-dock-camp);
+}
 .mn-floor {
   position: relative;
   grid-area: floor;
   gap: calc(1 * var(--u));
 }
 .mn-floor__ore {
-  width: calc(10 * var(--u));
-  height: calc(10 * var(--u));
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
   image-rendering: pixelated;
 }
-.mn-floor > b {
-  font: 400 var(--px-fs-big) / 1 var(--px-head);
-  color: var(--px-text);
+/* Буква этажа — значок набора в углу руды (критик: руда главная, буква — подпись). */
+.mn-floor__badge {
+  position: absolute;
+  z-index: 3;
+  right: calc(-2 * var(--u));
+  bottom: calc(-3 * var(--u));
+  line-height: 0;
+  pointer-events: none;
+}
+.mn-floor__badge .px-badge {
+  font-size: var(--px-fs-sm);
 }
 .mn-floor > .px-keyhint,
 .mn-rank > .px-keyhint,
@@ -606,8 +738,8 @@ html[data-input='touch'] .mn .px-keyhint {
   pointer-events: none;
 }
 .mn-floor > .px-keyhint {
-  right: calc(-2 * var(--u));
-  bottom: calc(-3 * var(--u));
+  left: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
 }
 
 /* ---- Ранг: буква, полоса с ценой, условия, следующая буква ---------------------------- */
@@ -627,9 +759,9 @@ html[data-input='touch'] .mn .px-keyhint {
   align-items: center;
   gap: calc(3 * var(--u));
   box-sizing: border-box;
-  height: calc(24 * var(--u));
+  height: calc(26 * var(--u));
   margin: 0;
-  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  padding: calc(1 * var(--u)) calc(4 * var(--u));
   border: var(--u) solid transparent;
   border-image-source: var(--pxk-frame-parch);
   border-image-slice: var(--pxk-frame-parch-s);
@@ -641,8 +773,9 @@ html[data-input='touch'] .mn .px-keyhint {
   text-align: left;
   cursor: pointer;
 }
-.mn-rank.is-ready::after {
-  content: '';
+/* Ранг готов — мигающая рамка выбора отдельным элементом: ::after занят кольцом
+   фокуса набора. Мигает до 0,45, а не гаснет. */
+.mn-rank__ready {
   position: absolute;
   inset: calc(-2 * var(--u));
   border: var(--u) solid transparent;
@@ -651,7 +784,15 @@ html[data-input='touch'] .mn .px-keyhint {
   border-image-width: var(--pxk-select-w);
   image-rendering: pixelated;
   pointer-events: none;
-  animation: mn-blink 1s steps(2, jump-none) infinite;
+  animation: mn-ready 1s steps(2, jump-none) infinite;
+}
+@keyframes mn-ready {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
 }
 .mn-hex {
   display: grid;
@@ -692,8 +833,25 @@ html[data-input='touch'] .mn .px-keyhint {
    осталось, полоса не прыгает. */
 .mn-rank__needs {
   display: block;
-  height: calc(8 * var(--u));
+  height: calc(10 * var(--u));
   overflow: hidden;
+}
+/* Широкий: полоса с буквами — первой строкой, условия — второй во всю ширину
+   (в узкой колонке планшета «520/1 000» и «1/5» не помещались рядом с буквами). */
+.mn--wide .mn-rank {
+  grid-template-rows: auto auto;
+  row-gap: calc(2 * var(--u));
+  height: auto;
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+.mn--wide .mn-rank__mid {
+  display: contents;
+}
+.mn--wide .mn-rank__needs {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  overflow: visible;
 }
 .mn-rank .pquota {
   display: flex;
@@ -705,12 +863,12 @@ html[data-input='touch'] .mn .px-keyhint {
   display: inline-flex;
   align-items: center;
   gap: calc(1 * var(--u));
-  height: calc(8 * var(--u));
+  height: calc(10 * var(--u));
   padding: 0;
   border: 0;
   border-radius: 0;
   background: none;
-  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-ink);
   white-space: nowrap;
 }
@@ -722,13 +880,13 @@ html[data-input='touch'] .mn .px-keyhint {
   color: var(--px-ink);
 }
 .mn-rank .pquota__chip img {
-  width: calc(7 * var(--u));
-  height: calc(7 * var(--u));
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
   image-rendering: pixelated;
 }
 .mn-rank .pquota__chip .gx-icon {
-  width: calc(6 * var(--u));
-  height: calc(6 * var(--u));
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
 }
 .mn-rank > .px-keyhint {
   right: calc(-1 * var(--u));
@@ -805,12 +963,14 @@ html[data-input='touch'] .mn .px-keyhint {
 .mn-items__row {
   display: flex;
   justify-content: center;
-  gap: calc(3 * var(--u));
+  gap: calc(4 * var(--u));
 }
+/* Слева под заданием: сколько влезает в ряд (5 на телефоне лёжа). */
 .mn--wide .mn-items__row {
   display: grid;
-  grid-template-columns: repeat(3, var(--slot));
-  justify-content: start;
+  grid-template-columns: repeat(auto-fill, var(--slot));
+  justify-content: space-between;
+  gap: calc(2 * var(--u));
 }
 .mn-item {
   flex: none;
@@ -854,11 +1014,8 @@ html[data-input='touch'] .mn .px-keyhint {
   cursor: pointer;
 }
 .mn-bag__ico {
-  width: calc(14 * var(--u));
-  height: calc(14 * var(--u));
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  color: var(--px-gold);
+  position: relative;
+  justify-self: center;
 }
 .mn-bag__mid {
   display: flex;
@@ -884,12 +1041,13 @@ html[data-input='touch'] .mn .px-keyhint {
   height: 100%;
   min-width: 0;
   box-sizing: border-box;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
   line-height: 1.1;
   font-size: var(--px-fs-sm);
   pointer-events: none;
 }
+.mn-bag.is-down .mn-bag__sell,
 .mn-bag:active .mn-bag__sell {
   padding-top: calc(3 * var(--u));
   padding-bottom: calc(2 * var(--u));
@@ -919,7 +1077,7 @@ html[data-input='touch'] .mn .px-keyhint {
 .mn-dock {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: calc(2 * var(--u));
+  gap: calc(3 * var(--u));
   /* Без рамы-панели: у каждой кнопки своя рама, а высота нужна полю. */
   padding: 0;
   border: 0;
@@ -927,14 +1085,12 @@ html[data-input='touch'] .mn .px-keyhint {
 }
 /* В боковой колонке — по две кнопки в ряд, а в узкой колонке (планшет лёжа)
    по одной: подпись важнее, слово не рвётся посередине. */
-.mn--wide .mn-dock {
-  grid-template-columns: repeat(auto-fit, minmax(calc(60 * var(--u)), 1fr));
-}
 .mn-dock__btn {
   justify-content: flex-start;
   gap: calc(1 * var(--u));
   min-width: 0;
-  height: calc(21 * var(--u));
+  height: calc(24 * var(--u));
+  align-items: center;
   padding-left: calc(2 * var(--u));
   padding-right: 0;
   white-space: normal;
@@ -962,18 +1118,17 @@ html[data-input='touch'] .mn .px-keyhint {
   mask-size: 100% 100%;
   color: var(--px-text);
 }
-.mn-dock__mask.is-book {
-  color: var(--px-blue);
-}
-.mn-dock__mask.is-bag {
-  color: var(--px-gold);
-}
-.mn-dock__mask.is-fire {
-  color: var(--px-red);
+.mn-dock__btn {
+  container-type: inline-size;
 }
 .mn-dock__label {
   min-width: 0;
-  font-size: var(--px-fs-sm);
+  /* Не больше, чем влезает самое длинное слово (--lw ставит DockLabel): 100cqi — ширина
+     содержимого кнопки за вычетом значка и зазора. */
+  font-size: min(
+    var(--dock-fs, var(--px-fs-sm)),
+    calc((100cqi - var(--dock-ico, calc(12 * var(--u))) - 2 * var(--u)) / (var(--lw, 8) * 0.64))
+  );
   line-height: 1.05;
   text-align: left;
   /* Длинное слово (de, tr) переносится по слогам, а не режется. */
@@ -985,7 +1140,7 @@ html[data-input='touch'] .mn .px-keyhint {
   position: absolute;
   z-index: 4;
   top: calc(-5 * var(--u));
-  right: calc(-3 * var(--u));
+  right: 0;
   pointer-events: none;
 }
 .mn-dock__btn > .px-keyhint {
@@ -996,15 +1151,18 @@ html[data-input='touch'] .mn .px-keyhint {
 @media (prefers-reduced-motion: reduce) {
   .mn-frame::after,
   .mn-parcel.is-ready,
-  .mn-rank.is-ready::after,
+  .mn-rank__ready,
   .mn-strip.is-cooling .mn-strip__streak .px-bar {
     animation: none;
   }
 }
 
 /* Вне телефона места хватает — подписи на ступень крупнее. */
-html:not([data-ff^='phone']) .mn :is(.mn-dock__label, .mn-bag__title, .mn-strip__name),
-html:not([data-ff^='phone']) .mn :is(.mn-rank, .mn-bag) .px-bar__label,
+html:not([data-ff^='phone']) .mn .mn-dock__label {
+  --dock-fs: var(--px-fs);
+}
+html:not([data-ff^='phone']) .mn :is(.mn-bag__title, .mn-strip__name),
+html:not([data-ff^='phone']) .mn .mn-bag .px-bar__label,
 html:not([data-ff^='phone']) .mn .mn-bag__sell {
   font-size: var(--px-fs);
 }
