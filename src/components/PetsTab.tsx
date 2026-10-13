@@ -15,14 +15,15 @@ import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
 import { Nursery } from '@/components/Nursery';
 import { Tabs } from '@/ui-px';
-import { useT } from '@/i18n';
+import { fmtNum, fmtShort, petName, t as tl, useT } from '@/i18n';
+import { eggName } from '@/i18n/data-books';
 import { PxStrip, preloadPx } from '@/components/PxStrip';
 import { CoinIcon } from '@/components/slot-art';
 import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import type { HatchResult } from '@/store';
 import { rarityOf } from '@/lib/rarity';
-import { rankLetter, shortMoney } from '@/lib/prison';
+import { rankLetter } from '@/lib/prison';
 import {
   canMerge,
   eggChances,
@@ -35,11 +36,9 @@ import {
   hatchNowCost,
   MERGE_NEED,
   NEST_SLOTS,
-  PET_RARITY_NAME,
+  PET_TREAT_XP,
   petBonus,
   petLook,
-  petOf,
-  ROLE,
 } from '@/lib/pets';
 import type { EggId, PetId, PetStat } from '@/lib/pets';
 import { burstConfetti } from '@/lib/confetti';
@@ -48,9 +47,9 @@ import { registerEscape } from '@/lib/escape-stack';
 import { eggCrack, eggHatch, eggWobble, primeAudio, uiBuy, uiError } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
-const pct = (x: number) =>
-  `+${(Math.round(x * 1000) / 10).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`;
+const fmt = (n: number) => fmtNum(n);
+/** Bonus share → percent with one decimal, as the Nursery shows it. */
+const pctV = (x: number) => Math.round(x * 1000) / 10;
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -62,7 +61,9 @@ export const EGG_RARITY: Record<EggId, number> = { moss: 2, stone: 3, crystal: 4
 /** Прибавки питомца словами: «+6% к добыче · +3% к скорости копки». */
 export function petLine(id: PetId, rec: { xp: number; v: number }): string {
   const b = petBonus(id, rec);
-  return (Object.keys(b) as PetStat[]).map((k) => `${pct(b[k] ?? 0)} ${ROLE[k].text}`).join(' · ');
+  return (Object.keys(b) as PetStat[])
+    .map((k) => tl(`nursery.role.${k}.text`, { v: pctV(b[k] ?? 0) }))
+    .join(' · ');
 }
 
 /** Полоска шансов яйца: доли редкостей их цветами. */
@@ -75,7 +76,7 @@ function OddsBar({ egg }: { egg: EggId }) {
           <i
             key={r}
             style={{ flexGrow: Math.max(c, 0.04), background: rarityOf(r).color }}
-            title={`${PET_RARITY_NAME[r]} ${Math.round(c * 1000) / 10}%`}
+            title={`${tl(`nursery.rarity.r${r}` as 'nursery.rarity.r0')} ${tl('nursery.eggPct', { v: pctV(c) })}`}
           />
         ) : null,
       )}
@@ -155,14 +156,19 @@ export function PetsTab() {
       const coin = have.filter((id) => !eggOf(id).tokens).map((id) => eggOf(id).price);
       const tok = have.filter((id) => eggOf(id).tokens).map((id) => eggOf(id).tokens ?? 0);
       const miss: string[] = [];
-      if (coin.length) miss.push(`${shortMoney(Math.min(...coin) - balance)} монет`);
-      if (tok.length) miss.push(`${fmt(Math.min(...tok) - p.tokens)} токенов`);
-      say(`Не хватает ${miss.join(' или ')}`);
+      if (coin.length) miss.push(t('eggs.missCoins', { v: fmtShort(Math.min(...coin) - balance) }));
+      if (tok.length)
+        miss.push(t('eggs.missTokens', { n: Math.round(Math.min(...tok) - p.tokens) }));
+      say(
+        t('eggs.miss', {
+          what: miss.length > 1 ? t('eggs.missOr', { a: miss[0], b: miss[1] }) : (miss[0] ?? ''),
+        }),
+      );
       return;
     }
     if ((plan.coins || plan.tokens) && !arm('all')) {
       tapLight();
-      say('Нажми ещё раз — вылупятся все сразу');
+      say(t('eggs.armAll'));
       return;
     }
     setArmed(null);
@@ -195,7 +201,7 @@ export function PetsTab() {
       />
       {view === 'pets' && <Nursery say={say} />}
 
-      <h4 className="ppn__h">Гнёзда</h4>
+      <h4 className="ppn__h">{t('eggs.nests')}</h4>
       <div className="ppn__nests">
         {Array.from({ length: NEST_SLOTS }, (_, i) => {
           const n = p.nest[i];
@@ -208,11 +214,11 @@ export function PetsTab() {
                 onClick={() => {
                   tapLight();
                   if (eggCount(p.eggs) > 0) setNestAt(i);
-                  else say('Корзина пуста');
+                  else say(t('eggs.basketEmpty'));
                 }}
               >
                 <i className="ppn__straw" aria-hidden="true" />
-                <em>{eggCount(p.eggs) > 0 ? 'Положить яйцо' : 'Пусто'}</em>
+                <em>{eggCount(p.eggs) > 0 ? t('eggs.putEgg') : t('eggs.empty')}</em>
               </button>
             );
           const need = eggOf(n.egg).need;
@@ -236,7 +242,7 @@ export function PetsTab() {
                 <EggArt egg={n.egg} size={72} />
               </span>
               {ready ? (
-                <b className="ppn__go">Вылупить!</b>
+                <b className="ppn__go">{t('eggs.hatch')}</b>
               ) : (
                 <GxBar tone="green" value={1 - n.left / need} label={fmt(n.left)} />
               )}
@@ -246,7 +252,7 @@ export function PetsTab() {
       </div>
       {eggCount(p.eggs) > 0 && (
         <div className="ppn__basket">
-          <span>Ждут гнезда:</span>
+          <span>{t('eggs.waiting')}</span>
           {EGG_IDS.filter((id) => p.eggs[id] > 0).map((id) => (
             <button
               key={id}
@@ -256,10 +262,10 @@ export function PetsTab() {
                 primeAudio();
                 if (p.nest.length < NEST_SLOTS && place(id)) {
                   selectionChanged();
-                  say(`${eggOf(id).name} — в гнездо`);
+                  say(t('eggs.toNest', { name: eggName(id) }));
                 } else {
                   tapLight();
-                  say('Гнёзда заняты — нажми на гнездо, чтобы поменять');
+                  say(t('eggs.nestsBusy'));
                 }
               }}
             >
@@ -277,14 +283,16 @@ export function PetsTab() {
           onClick={doHatchAll}
         >
           <span>
-            {armed === 'all' ? 'Точно? ' : 'Вылупить все '}
-            {plan.picks.length && plan.picks.length < eggsAll
-              ? `${plan.picks.length} из ${eggsAll}`
-              : `(${eggsAll})`}
+            {t(armed === 'all' ? 'eggs.sureAll' : 'eggs.hatchAll', {
+              count:
+                plan.picks.length && plan.picks.length < eggsAll
+                  ? t('eggs.someOf', { a: plan.picks.length, b: eggsAll })
+                  : `(${eggsAll})`,
+            })}
           </span>
           {price.coins > 0 && (
             <span className="ppn__price">
-              <CoinIcon size={14} /> {shortMoney(price.coins)}
+              <CoinIcon size={14} /> {fmtShort(price.coins)}
             </span>
           )}
           {price.tokens > 0 && (
@@ -295,7 +303,7 @@ export function PetsTab() {
         </button>
       )}
 
-      <h4 className="ppn__h">Яйца</h4>
+      <h4 className="ppn__h">{t('nursery.tabEggs')}</h4>
       <div className="ppn__shop">
         {EGGS.map((e) => {
           const tok = e.tokens ?? 0;
@@ -316,48 +324,54 @@ export function PetsTab() {
                 if (locked) {
                   uiError();
                   notifyWarning();
-                  say(`Откроется с ранга ${rankLetter(e.from)}`);
+                  say(t('eggs.fromRank', { r: rankLetter(e.from) }));
                   return;
                 }
                 if (!room) {
                   uiError();
-                  say('Корзина полна — вылупи кого-нибудь');
+                  say(t('eggs.basketFullHatch'));
                   return;
                 }
                 if (!rich) {
                   uiError();
                   notifyWarning();
                   say(
-                    tok
-                      ? `Не хватает ${fmt(tok - p.tokens)} токенов`
-                      : `Не хватает ${shortMoney(e.price - balance)} монет`,
+                    t('eggs.miss', {
+                      what: tok
+                        ? t('eggs.missTokens', { n: Math.round(tok - p.tokens) })
+                        : t('eggs.missCoins', { v: fmtShort(e.price - balance) }),
+                    }),
                   );
                   return;
                 }
                 if (tok && !arm(e.id)) {
                   tapLight();
-                  say(`${e.name} за ${fmt(tok)} токенов — нажми ещё раз`);
+                  say(t('eggs.buyArm', { name: eggName(e.id), n: tok }));
                   return;
                 }
                 setArmed(null);
                 if (buyEgg(e.id)) {
                   uiBuy();
                   tapMedium();
-                  say(`${e.name} — ${p.nest.length < NEST_SLOTS ? 'в гнездо' : 'в корзину'}`);
+                  say(
+                    t(p.nest.length < NEST_SLOTS ? 'eggs.toNest' : 'eggs.toBasket', {
+                      name: eggName(e.id),
+                    }),
+                  );
                 }
               }}
             >
               <EggArt egg={e.id} size={58} />
-              <b>{e.name.replace(' яйцо', '')}</b>
+              <b>{t(`nursery.egg.${e.id}`)}</b>
               <OddsBar egg={e.id} />
               {locked ? (
                 <i>
-                  <KIcon name="locked" /> ранг {rankLetter(e.from)}
+                  <KIcon name="locked" /> {t('eggs.rank', { r: rankLetter(e.from) })}
                 </i>
               ) : (
                 <span className="ppn__price">
                   {tok ? <TokenIcon size={14} /> : <CoinIcon size={14} />}{' '}
-                  {shortMoney(tok || e.price)}
+                  {fmtShort(tok || e.price)}
                 </span>
               )}
             </button>
@@ -431,6 +445,7 @@ function NestSheet({
   onHatch: (i: number) => void;
   say: (t: string) => void;
 }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const pull = useFinanceStore((s) => s.prisonEggPull);
   const place = useFinanceStore((s) => s.prisonEggPlace);
@@ -450,7 +465,7 @@ function NestSheet({
     return () => clearTimeout(t);
   }, [armed]);
   return (
-    <GxModal title={n ? eggOf(n.egg).name : 'Гнездо'} onClose={onClose}>
+    <GxModal title={n ? eggName(n.egg) : t('eggs.nest')} onClose={onClose}>
       <div className="ppn-nest">
         {n && (
           <div className="ppn-nest__now" style={rarityVars(EGG_RARITY[n.egg])}>
@@ -458,7 +473,9 @@ function NestSheet({
             <GxBar
               tone="green"
               value={1 - n.left / eggOf(n.egg).need}
-              label={n.left > 0 ? `ещё ${fmt(n.left)} блоков` : 'готово'}
+              label={
+                n.left > 0 ? t('books.blocksLeft', { n: Math.round(n.left) }) : t('eggs.ready')
+              }
             />
             <div className="ppn-nest__acts">
               {price > 0 && n.left > 0 && (
@@ -472,9 +489,11 @@ function NestSheet({
                       uiError();
                       notifyWarning();
                       say(
-                        cost.coins
-                          ? `Не хватает ${shortMoney(short)} монет`
-                          : `Не хватает ${fmt(short)} токенов`,
+                        t('eggs.miss', {
+                          what: cost.coins
+                            ? t('eggs.missCoins', { v: fmtShort(short) })
+                            : t('eggs.missTokens', { n: Math.round(short) }),
+                        }),
                       );
                       return;
                     }
@@ -486,8 +505,8 @@ function NestSheet({
                     if (now(i)) onHatch(i);
                   }}
                 >
-                  {armed ? 'Точно? ' : 'Вылупить сразу '}
-                  {cost.coins ? shortMoney(price) : fmt(price)}{' '}
+                  {armed ? t('eggs.sure') : t('eggs.hatchNow')}{' '}
+                  {cost.coins ? fmtShort(price) : fmt(price)}{' '}
                   {cost.coins ? <CoinIcon size={13} /> : <TokenIcon size={13} />}
                 </button>
               )}
@@ -499,21 +518,21 @@ function NestSheet({
                   primeAudio();
                   if (!pull(i)) {
                     uiError();
-                    say('Корзина полна');
+                    say(t('eggs.basketFull'));
                     return;
                   }
                   selectionChanged();
                   onClose();
                 }}
               >
-                В корзину
+                {t('eggs.toBasketBtn')}
               </button>
             </div>
           </div>
         )}
         {basket.length > 0 ? (
           <>
-            <h5 className="ppn-nest__h">{n ? 'Положить вместо' : 'Положить в гнездо'}</h5>
+            <h5 className="ppn-nest__h">{t(n ? 'eggs.putInstead' : 'eggs.putInNest')}</h5>
             <div className="ppn-nest__basket">
               {basket.map((id) => (
                 <button
@@ -536,7 +555,7 @@ function NestSheet({
             </div>
           </>
         ) : (
-          !n && <p className="ppn-sheet__from">Корзина пуста</p>
+          !n && <p className="ppn-sheet__from">{t('eggs.basketEmpty')}</p>
         )}
       </div>
     </GxModal>
@@ -562,9 +581,9 @@ function HatchScene({
   onAgain: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const r = res.rarity;
-  const def = petOf(res.id);
   const rec = p.pets[res.id];
   const [phase, setPhase] = useState<HPhase>(() => (reduceMotion() ? 'done' : 'egg'));
   const closeRef = useRef(onClose);
@@ -601,12 +620,12 @@ function HatchScene({
   const moreReady = p.nest.some((x) => x.left <= 0);
   const label =
     res.kind === 'new'
-      ? 'Новый питомец!'
+      ? t('eggs.newPet')
       : res.kind === 'dup'
         ? rec && rec.v < MERGE_NEED.length
-          ? `Копия · ${Math.min(rec.dup, MERGE_NEED[rec.v])}/${MERGE_NEED[rec.v]} до золотого`
-          : 'Копия'
-        : 'Лакомство: +400 опыта';
+          ? t('eggs.copyTo', { a: Math.min(rec.dup, MERGE_NEED[rec.v]), b: MERGE_NEED[rec.v] })
+          : t('eggs.copy')
+        : t('eggs.treat', { n: PET_TREAT_XP });
 
   return (
     <div
@@ -617,8 +636,10 @@ function HatchScene({
       }}
     >
       <div className="phs__head">
-        {shown && <RarityName rarity={r}>{PET_RARITY_NAME[r]}</RarityName>}
-        {shown && <b className="phs__name">{def.name}</b>}
+        {shown && (
+          <RarityName rarity={r}>{t(`nursery.rarity.r${r}` as 'nursery.rarity.r0')}</RarityName>
+        )}
+        {shown && <b className="phs__name">{petName(res.id)}</b>}
       </div>
       <div className="phs__stage">
         {hatched && <i className="phs__rays" aria-hidden="true" />}
@@ -635,7 +656,7 @@ function HatchScene({
               poster={`idle-${res.egg}`}
               onMark={onMark}
               onEnd={() => setPhase('done')}
-              label={eggOf(res.egg).name}
+              label={eggName(res.egg)}
             />
           </div>
         )}
@@ -647,17 +668,17 @@ function HatchScene({
       </div>
       <div className="phs__label">
         {shown && <b>{label}</b>}
-        {shown && res.forced && <i>Гарантия: двадцать пятое яйцо</i>}
+        {shown && res.forced && <i>{t('eggs.pity')}</i>}
       </div>
       {phase === 'done' ? (
         <div className="phs__btns" onClick={(e) => e.stopPropagation()}>
           {moreReady && (
             <button type="button" className="gx-btn gx-btn--red" onClick={onAgain}>
-              Ещё яйцо
+              {t('eggs.again')}
             </button>
           )}
           <button type="button" className="gx-btn" onClick={onClose}>
-            Готово
+            {t('common.ok')}
           </button>
         </div>
       ) : (
@@ -671,13 +692,6 @@ function HatchScene({
 
 /** Сколько яиц показать волной; остальные — «+N». */
 const BATCH_TILES = 24;
-
-const petsWord = (n: number) =>
-  n % 10 === 1 && n % 100 !== 11
-    ? 'питомец'
-    : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)
-      ? 'питомца'
-      : 'питомцев';
 
 /**
  * Итог «вылупить все»: яйца волной лопаются в питомцев, потом лучший —
@@ -726,6 +740,7 @@ function HatchBatch({
   tokens: number;
   onClose: () => void;
 }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const [done, setDone] = useState(false);
   const shown = list.slice(0, BATCH_TILES);
@@ -799,9 +814,7 @@ function HatchBatch({
       }}
     >
       <div className="phb__card" onClick={(e) => done && e.stopPropagation()}>
-        <span className="phb__title">
-          Вылупилось {fmt(list.length)} {petsWord(list.length)}
-        </span>
+        <span className="phb__title">{t('eggs.hatched', { n: list.length })}</span>
         {!done && (
           <div className="phb__grid">
             {shown.map((r, i) => (
@@ -826,8 +839,10 @@ function HatchBatch({
             <div className="phb__best" style={rarityVars(best.rarity)}>
               <i className="phb__rays" aria-hidden="true" />
               <PetArt id={best.id} size={150} v={petLook(bestRec)} intro="happy" />
-              <RarityName rarity={best.rarity}>{PET_RARITY_NAME[best.rarity]}</RarityName>
-              <b>{petOf(best.id).name}</b>
+              <RarityName rarity={best.rarity}>
+                {t(`nursery.rarity.r${best.rarity}` as 'nursery.rarity.r0')}
+              </RarityName>
+              <b>{petName(best.id)}</b>
             </div>
             <div className="phb__list">
               {rows.map((x) => (
@@ -835,13 +850,15 @@ function HatchBatch({
                   <PetArt id={x.id} size={44} v={petLook(p.pets[x.id])} still />
                   <span>
                     <b>
-                      {petOf(x.id).name}
+                      {petName(x.id)}
                       {x.n > 1 && <em> ×{x.n}</em>}
                     </b>
                     <i>
                       {[
-                        x.dup > 0 && (x.dup > 1 ? `копии ×${x.dup}` : 'копия'),
-                        x.treat > 0 && (x.treat > 1 ? `лакомства ×${x.treat}` : 'лакомство'),
+                        x.dup > 0 &&
+                          (x.dup > 1 ? t('eggs.copies', { n: x.dup }) : t('eggs.copyOne')),
+                        x.treat > 0 &&
+                          (x.treat > 1 ? t('eggs.treats', { n: x.treat }) : t('eggs.treatOne')),
                       ]
                         .filter(Boolean)
                         .join(' · ') || (p.pets[x.id] ? petLine(x.id, p.pets[x.id]!) : '')}
@@ -853,19 +870,19 @@ function HatchBatch({
             </div>
             <span className="phb__note">
               {[
-                fresh > 0 && `новых ${fresh}`,
-                dups > 0 && `копий ${dups}`,
-                treats > 0 && `лакомств ${treats}`,
+                fresh > 0 && t('eggs.freshN', { n: fresh }),
+                dups > 0 && t('eggs.dupsN', { n: dups }),
+                treats > 0 && t('eggs.treatsN', { n: treats }),
               ]
                 .filter(Boolean)
                 .join(' · ')}
             </span>
             {(coins > 0 || tokens > 0) && (
               <span className="phb__note">
-                Потрачено:{' '}
+                {t('eggs.spent')}{' '}
                 {coins > 0 && (
                   <>
-                    {shortMoney(coins)} <CoinIcon size={12} />
+                    {fmtShort(coins)} <CoinIcon size={12} />
                   </>
                 )}
                 {coins > 0 && tokens > 0 && ' · '}
@@ -876,16 +893,14 @@ function HatchBatch({
                 )}
               </span>
             )}
-            {forced && <span className="phb__note">Сработала гарантия: двадцать пятое яйцо</span>}
-            {merge && (
-              <span className="phb__note">Есть кого слить в золотого — «!» в коллекции</span>
-            )}
+            {forced && <span className="phb__note">{t('eggs.pityFired')}</span>}
+            {merge && <span className="phb__note">{t('eggs.mergeHint')}</span>}
             <button type="button" className="gx-btn gx-btn--red gx-btn--big" onClick={onClose}>
-              Готово
+              {t('common.ok')}
             </button>
           </>
         )}
-        {!done && <span className="phb__skip">тап — показать итог</span>}
+        {!done && <span className="phb__skip">{t('chests.skipSum')}</span>}
       </div>
     </div>
   );

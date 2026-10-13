@@ -81,6 +81,8 @@ describe('runtime', () => {
     expect(tIn('ru', 'common.coins', { n: 25 })).toBe('25 монет');
     expect(fmtNum(12345, 'de')).toBe('12.345');
     expect(fmtNum(12345, 'en')).toBe('12,345');
+    // fr: no-break space, not the narrow one the game font can't show
+    expect(fmtNum(54321, 'fr')).toBe('54\u00a0321');
   });
 
   it('Turkish casing keeps the dotted İ', () => {
@@ -156,18 +158,9 @@ const INSTRUMENT_DIRS = ['src/pages/clothing/', 'src/pages/finance/', 'src/pages
  * test — new game code is written with `t()` from the start.
  */
 const NOT_YET_TRANSLATED = [
-  'src/components/BooksTab.tsx',
-  'src/components/ChestTab.tsx',
-  'src/components/Critters.tsx',
   'src/components/FishingCamp.tsx',
-  'src/components/ForgeScreen.tsx',
-  'src/components/PetsTab.tsx',
-  'src/components/PrisonCamp.tsx',
-  'src/components/YardBits.tsx',
   'src/pages/FishingPage.tsx',
   'src/pages/ForestPage.tsx',
-  'src/pages/PrisonPage.tsx',
-  'src/pages/YardPage.tsx',
 ];
 /** The list as it was on 12.10.2026 — never extend, only the list above shrinks. */
 const ORIGINAL_COUNT = 29;

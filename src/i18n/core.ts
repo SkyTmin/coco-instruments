@@ -200,10 +200,16 @@ function nf(l: Lang, digits: number): Intl.NumberFormat {
   return f;
 }
 
+/**
+ * French groups digits with a narrow no-break space (U+202F); the game font draws it
+ * almost zero-wide («54 321» reads «54321»), so it becomes a normal no-break space.
+ */
+const wide = (s: string) => s.replace(/\u202f/g, '\u00a0');
+
 /** Whole number with the language's grouping: ru «1 234», en «1,234», de «1.234». */
 export function fmtNum(n: number, l: Lang = lang): string {
   if (!Number.isFinite(n)) return '—';
-  return nf(l, 0).format(Math.round(n));
+  return wide(nf(l, 0).format(Math.round(n)));
 }
 
 /**
@@ -213,15 +219,15 @@ export function fmtNum(n: number, l: Lang = lang): string {
 export function fmtShort(n: number, l: Lang = lang): string {
   if (!Number.isFinite(n)) return '—';
   if (Math.abs(n) < 1e4) return fmtNum(n, l);
-  return new Intl.NumberFormat(LOCALE[l], { notation: 'compact', maximumFractionDigits: 1 }).format(
-    n,
+  return wide(
+    new Intl.NumberFormat(LOCALE[l], { notation: 'compact', maximumFractionDigits: 1 }).format(n),
   );
 }
 
 /** Number with up to `digits` decimals in the language's style («1,5» / «1.5»). */
 export function fmtDec(n: number, digits = 1, l: Lang = lang): string {
   if (!Number.isFinite(n)) return '—';
-  return nf(l, digits).format(n);
+  return wide(nf(l, digits).format(n));
 }
 
 /** Date/time in the language's style. */

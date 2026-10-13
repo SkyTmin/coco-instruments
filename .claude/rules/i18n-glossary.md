@@ -144,6 +144,82 @@ PAZZESCA», ES «Partidón» / IT «Partitona» for a great session, ES «tres e
 (tic-tac-toe = three in a row). Orb tiers are adjectives agreeing with the orb's gender (FR/IT
 feminine, ES masculine «el orbe»); the top tier stays a noun («Relic»), as in Russian.
 
+## Wave 2 — Шахта и кузня (T1: `mineHud`, `forge`, `finds`, `miles`, `guide`)
+| ru | en | fr | tr | de | es | it |
+|---|---|---|---|---|---|---|
+| Сила (pick power) | Power | Force | Güç | Kraft | Fuerza | Forza |
+| Выработка (work quota) | Work quota | Quota de travail | Çalışma kotası | Arbeitssoll | Cuota de trabajo | Quota di lavoro |
+| Спецзона | special zone | zone spéciale | özel bölge | Sonderzone | zona especial | zona speciale |
+| Лагерь (dock «more» sheet) | Camp | Camp | Kamp | Lager | Campo | Campo |
+| Питомник | Nursery | Nurserie | Kuluçka | Zucht | Criadero | Allevamento |
+| Находка | find | trouvaille | buluntu | Fund | hallazgo | reperto |
+| Смена (5-min summary) | Shift | Poste | Vardiya | Schicht | Turno | Turno |
+| Вагонетка | Minecart | Wagonnet | Vagon | Lore | Vagoneta | Carrello |
+| Навыки / очки навыков | Skills / skill points | Talents / points de talent | Yetenekler / yetenek puanı | Talente / Talentpunkte | Talentos / puntos de talento | Talenti / punti talento |
+| Гарантия (pity block) | guaranteed | garanti | garanti | Garantie | garantizado | garantito |
+
+Pick TITLES (forge header, books tab) are the full names `books.pick` via `pickTitle(i)` /
+`pickFull(i)`: «Rusty Pickaxe», «Eisenspitzhacke», «Pioche en opale» (lead's choice after the
+merge — T1's «Spitzhacke Eisen» read like a model code). Inside sentences (`hardHave`, `hardNeed`,
+`norm.pick`, `forge.say.equip`) the short modifier `mine.pick` still goes into «{name}», because
+Russian declines «кирку/кирка» around it; DE reads «die Spitzhacke Eisen» there. Names inside a sentence go through `nameIn()` (`src/i18n/data-mine.ts`):
+lower case everywhere except German. FR strings use a no-break space before `: ! ? ; %` and
+inside « » (as in round 1). Skills follow the MMO «talent» word in fr/de/es/it (lead unified T1 and T2). DE «Kumpel» stays the pet; the dock's «Питомцы» is «Tiere» (short).
+
+## Wave 2 — Books, chests, eggs (T4: `books`, `chests`, `eggs`)
+| ru | en | fr | tr | de | es | it | why |
+|---|---|---|---|---|---|---|---|
+| пыль (чар) | dust | poussière | toz | Staub | polvo | polvere | the plain word; «Dust 37» on the purse |
+| Вписать (книгу) | Enchant | Enchanter | Büyüle | Verzaubern | Encantar | Incanta | the Minecraft enchanting-table verb players know |
+| Склеить (две книги) | Merge | Fusionner | Birleştir | Verschmelzen | Fusionar | Fondi | merge-game word, short |
+| В пыль | To dust | En poussière | Toza çevir | Zu Staub | A polvo | In polvere | |
+| Перековать (кирку ★) | Reforge | Reforger | Yeniden döv | Umschmieden | Reforjar | Riforgia | |
+| Полка | Shelf | Étagère | Raf | Regal | Estante | Scaffale | |
+| Простая / Редкая / Эпическая / Легендарная книга | Simple / Rare / Epic / Legendary | Simple / Rare / Épique / Légendaire | Basit / Nadir / Destansı / Efsanevi | Einfach / Selten / Episch / Legendär | Simple / Raro / Épico / Legendario | Semplice / Raro / Epico / Leggendario | book tiers follow the rarity ladder; «Простая» ≠ «Обычная» kept |
+| Лакомство питомцу | Pet treat | Friandise | Ödül maması | Leckerli | Chuche para mascota | Bocconcino | what you give a dog; short where the icon says «pet» |
+| Вылупить | Hatch | Éclore | Çatlat | Schlüpfen | Eclosionar | Schiudi | TR «çatlat» = crack open, the egg-game verb |
+| Гнездо / корзина | Nest / basket | Nid / panier | Yuva / sepet | Nest / Korb | Nido / cesta | Nido / cesto | |
+| Ключ (сундука) | Key | Clé | Anahtar | Schlüssel | Llave | Chiave | as in round 1 |
+
+Full pick names of the books tab (`books.pick`, «Опаловая кирка») are Minecraft-style material
+names: en «Opal Pickaxe», fr «Pioche en opale», de compounds «Opalspitzhacke», es «Pico de ópalo»,
+it «Piccone di opale», tr «Opal Kazma». Enchant effects (`enchantEffect` in `data-books.ts`) keep
+the number first, TR puts % before it («%8 3×3 patlatma şansı»). Bare chip percents go through
+`books.pct` / `books.pctRange` (tr «%40», fr/de/es «40 %» with a no-break space).
+
+## Wave 2 — Лагерь и двор (T2: `camp`, `campData`, `yard`, `yardData`, `hub`, `critters`)
+| ru | en | fr | tr | de | es | it | why |
+|---|---|---|---|---|---|---|---|
+| Площадь | Square | Place | Meydan | Platz | Plaza | Piazza | the hub map |
+| Штаб | HQ | QG | Karargâh | Zentrale | Cuartel | Comando | short: door labels and map pins |
+| Каптёрка / Каптёрщик | Storeroom / Quartermaster | Réserve / Magasinier | Depo / Depocu | Kammer / Kammerwart | Almacén / Almacenero | Magazzino / Magazziniere | army storeroom; DE from «Kleiderkammer» |
+| Ларёк | Kiosk | Kiosque | Büfe | Kiosk | Quiosco | Chiosco | |
+| Барак 1 | Barracks 1 | Baraque 1 | Koğuş 1 | Baracke 1 | Barracón 1 | Baracca 1 | TR «koğuş» = prison/army dormitory |
+| Доска (объявлений) | Board | Tableau | Pano | Schwarzes Brett | Tablón | Bacheca | |
+| Начальник | Warden | Directeur | Müdür | Direktor | Alcaide | Direttore | ES «alcaide» = prison governor |
+| Дневальный | Orderly | Planton | Nöbetçi | Stubendienst | Celador | Piantone | FR/IT: the barracks orderly |
+| Лифтёр | Liftman | Liftier | Asansörcü | Liftführer | Ascensorista | Ascensorista | |
+| Смотрительница | Keeper | Soigneuse | Bakıcı | Pflegerin | Cuidadora | Custode | the Nursery keeper |
+| Продавщица | Shopkeeper | Vendeuse | Satıcı | Verkäuferin | Dependienta | Commessa | |
+| Бригадир / Кузнец | Foreman / Smith | Contremaître / Forgeron | Ustabaşı / Demirci | Vorarbeiter / Schmied | Capataz / Herrero | Caposquadra / Fabbro | |
+| Особая шахта | Special mine | Mine spéciale | Özel maden | Sondermine | Mina especial | Miniera speciale | same as T1 |
+| Крысиный король | Rat King | Roi des rats | Fare Kral | Rattenkönig | Rey Rata | Re dei ratti | T3 should match |
+| Мешочек (рун) / гнездо | Pouch / socket | Bourse / emplacement | Kese / yuva | Beutel / Sockel | Bolsa / engaste | Sacchetto / incastro | |
+| Сдающий (risk game) | Dealer | Croupier | Krupiye | Geber | Crupier | Banco | |
+
+Yard events: Получка → Payday / Jour de paie / Maaş Günü / Zahltag / Día de paga / Giorno di
+paga; Сорока-воровка → Thieving Magpie / La Pie voleuse / Hırsız Saksağan / Diebische Elster /
+Urraca ladrona / Gazza ladra (Rossini's opera title — every FR/DE/IT player knows it); Хозяин
+тайги → Lord of the Taiga (and the same «lord» in each language); Куйва stays «Kuiva» (a name).
+Card letters of the risk game follow each country's own deck: en/es/it J Q K A, fr V D R A
+(valet, dame, roi), de B D K A (Bube, Dame, König), tr V K P A (vale, kız, papaz). Chainsaws
+«Дружба» / «Урал» are model names: «Дружба» is translated (Buddy, Freundschaft…), «Урал» stays.
+Wood after «доски» (`campData.species.<id>.gen`): the form each language puts after «boards»
+(en «birch», de «aus Birke», fr «de bouleau»). Open for the lead: the camp tab «Навыки» is
+Talente / Talentos / Talenti, while T1's «очки навыков» are Skillpunkte / puntos de habilidad /
+punti abilità — pick one. The square's pixel signposts (ШАХТА, ЛИФТ, ПИТОМНИК, КПП) are baked
+into `public/hub` art and stay Russian until `scripts/hub` draws per-language signs.
+
 ## Wave 2 — Dungeon (T3: `dungeon`, `inv`, `creative`, `dfloors`, `dmobs`, `dmats`, `dgear`, `dlines`)
 Data areas are generated from `src/lib/dungeon*.ts` + `src/lib/dungeon-floors/`; helpers in
 `src/i18n/data-dungeon.ts` (`floorName`, `bossName`, `mobName`, `matName`, `setItem`, `dl(text)` —

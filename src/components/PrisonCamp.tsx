@@ -18,7 +18,6 @@ import { BookArt, BooksTab } from '@/components/BooksTab';
 import { ChestTab } from '@/components/ChestTab';
 import { EggArt, PetArt } from '@/components/PetArt';
 import { PetsTab } from '@/components/PetsTab';
-import { eggOf } from '@/lib/pets';
 import {
   CASE_TIERS,
   CREW_MAX,
@@ -33,17 +32,14 @@ import {
   crewRate,
   crewYield,
   bonusOf,
-  bookTitle,
   CASE_TIERS as TIERS_OF,
   fusePlan,
   MILES,
   mileReady,
   milesReady,
-  petOf,
   RUNE_BAG,
   RUNE_ROMAN,
   RUNE_SHATTER,
-  runeOf,
   runePower,
   SOCKET_UNLOCK,
   runesIdle,
@@ -59,7 +55,6 @@ import {
   perkPointsFree,
   PICKS,
   rankLetter,
-  shortMoney,
 } from '@/lib/prison';
 import type {
   Bonus,
@@ -133,10 +128,40 @@ import {
   uiTab,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
+import {
+  chestName,
+  crewName,
+  crewText,
+  fmtDec,
+  fmtNum,
+  fmtShort,
+  itemName,
+  itemText,
+  perkName,
+  perkText,
+  petLore,
+  petName,
+  rich,
+  runeName,
+  runeText,
+  t,
+  useT,
+} from '@/i18n';
+import {
+  axeEnchName,
+  axeEnchPer,
+  axeName,
+  benchName,
+  benchWho,
+  handleName,
+  speciesName,
+  woodOf,
+} from '@/i18n/data-camp';
+import { eggName } from '@/i18n/data-books';
+import { bookName, findName, findText, mileText, mileTitle, nameIn } from '@/i18n/data-mine';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
-const pct = (x: number) =>
-  `${(Math.round(x * 1000) / 10).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}%`;
+const fmt = (n: number) => fmtNum(n);
+const pct = (x: number) => `${fmtDec(Math.round(x * 1000) / 10, 2)}%`;
 
 // ---------------------------------------------------------------------------
 // Иконки.
@@ -235,27 +260,6 @@ export type CampTab =
   | 'miles'
   | 'perks';
 
-const TAB_NAMES: Record<CampTab, string> = {
-  gear: 'Снаряжение',
-  beasts: 'Враги',
-  stash: 'Склад',
-  rods: 'Снасти',
-  trophies: 'Журнал',
-  axes: 'Топоры',
-  axench: 'Чары',
-  mill: 'Лесопилка',
-  bench: 'Верстак',
-  enchant: 'Книги',
-  runes: 'Руны',
-  pets: 'Питомцы',
-  shop: 'Лавка',
-  cases: 'Сундуки',
-  crew: 'Рабочие',
-  finds: 'Коллекция',
-  miles: 'Достижения',
-  perks: 'Навыки',
-};
-
 /** Картинка вкладки: вкладку узнают по ней раньше, чем прочтут. */
 const TAB_ICONS: Record<CampTab, GxIconName> = {
   gear: 'helmet',
@@ -342,6 +346,7 @@ export function PrisonCamp({
   /** Монеты ушли (покупка) — табло встаёт на новое значение. */
   onSpend: () => void;
 }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const f = useFinanceStore((s) => s.forest);
   const now = useNow(1000);
@@ -360,16 +365,7 @@ export function PrisonCamp({
   return (
     <GxSheet
       className={`gx-camp${tabs.length === 1 ? ' is-single' : ''}`}
-      title={
-        title ??
-        (place === 'forest'
-          ? 'Лагерь лесоруба'
-          : place === 'dungeon'
-            ? 'Снаряжение'
-            : place === 'fish'
-              ? 'Лагерь рыбака'
-              : 'Лагерь')
-      }
+      title={title ?? t(`camp.title.${place}`)}
       onClose={onClose}
       tabs={
         tabs.length > 1 && (
@@ -388,7 +384,7 @@ export function PrisonCamp({
                 }}
               >
                 <GxIcon name={TAB_ICONS[id]} />
-                {TAB_NAMES[id]}
+                {t(`camp.tab.${id}`)}
                 {badge[id] != null && <span className="gx-badge">{badge[id]}</span>}
               </button>
             ))}
@@ -480,13 +476,13 @@ function Buy({
       }}
     >
       {count > 1 && <small className="pforge__count">×{count}</small>}
-      {shortMoney(price)} {token ? <TokenIcon size={12} /> : <CoinIcon size={12} />}
+      {fmtShort(price)} {token ? <TokenIcon size={12} /> : <CoinIcon size={12} />}
     </button>
   );
 }
 
-const Done = ({ children = 'Есть' }: { children?: ReactNode }) => (
-  <span className="pforge__done">{children}</span>
+const Done = ({ children }: { children?: ReactNode }) => (
+  <span className="pforge__done">{children ?? t('camp.have')}</span>
 );
 
 // ---- Кузница: за монеты ------------------------------------------------------
@@ -518,8 +514,9 @@ const BULK: { n: number; label: string }[] = [
   { n: 1, label: '+1' },
   { n: 5, label: '+5' },
   { n: 25, label: '+25' },
-  { n: 1e9, label: 'Макс' },
+  { n: 1e9, label: 'max' },
 ];
+const bulkLabel = (b: { label: string }) => (b.label === 'max' ? t('camp.bulkMax') : b.label);
 
 // ---- Иконки расходников -------------------------------------------------------
 
@@ -552,6 +549,7 @@ const SHOP_PACKS = [1, 5, 10] as const;
 let shopPack: number = 1;
 
 function ShopTab() {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const prisonBuyItem = useFinanceStore((s) => s.prisonBuyItem);
   const [pack, setPack] = useState(shopPack);
@@ -563,8 +561,9 @@ function ShopTab() {
   return (
     <div className="pforge">
       <div className="pcamp-purse">
-        <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
-        <div className="pshop-pack" role="group" aria-label="Сколько брать">
+        <TokenIcon size={18} />{' '}
+        {rich('camp.purseTokens', { n: p.tokens, v: <b>{fmt(p.tokens)}</b> })}
+        <div className="pshop-pack" role="group" aria-label={t('camp.shop.pack')}>
           {SHOP_PACKS.map((n) => (
             <button
               key={n}
@@ -586,11 +585,11 @@ function ShopTab() {
             icon={<ItemIcon id={it.id} size={30} />}
             title={
               <>
-                {it.name}{' '}
+                {itemName(it.id)}{' '}
                 {p.items[it.id] > 0 && <span className="pench-lvl">×{p.items[it.id]}</span>}
               </>
             }
-            text={it.text}
+            text={itemText(it.id)}
             action={
               <Buy
                 token
@@ -620,27 +619,28 @@ function ShopTab() {
 export function rewardLabel(r: Reward): string {
   switch (r.kind) {
     case 'coins':
-      return `${shortMoney(r.amount)} монет`;
+      return t('camp.reward.coins', { n: r.amount, v: fmtShort(r.amount) });
     case 'tokens':
-      return `${fmt(r.amount)} токенов`;
-    case 'item': {
-      const it = ITEMS.find((i) => i.id === r.id)!;
-      return r.amount > 1 ? `${it.name} ×${r.amount}` : it.name;
-    }
+      return t('camp.reward.tokens', { n: r.amount });
+    case 'item':
+      return r.amount > 1 ? `${itemName(r.id)} ×${r.amount}` : itemName(r.id);
     case 'find':
-      return FINDS.find((f) => f.id === r.id)!.name;
+      return findName(r.id);
     case 'keys':
-      return r.amount > 1 ? `${r.amount} ключа` : 'Ключ';
+      return r.amount > 1 ? t('camp.reward.keys', { n: r.amount }) : t('camp.reward.key');
     case 'rune':
-      return `Руна ${runeOf(r.rune.kind).name} ${RUNE_ROMAN[r.rune.tier - 1]}`;
+      return t('camp.reward.rune', {
+        name: runeName(r.rune.kind),
+        tier: RUNE_ROMAN[r.rune.tier - 1],
+      });
     case 'pet':
-      return petOf(r.id).name;
+      return petName(r.id);
     case 'egg':
-      return eggOf(r.egg).name;
+      return eggName(r.egg);
     case 'treat':
-      return 'Лакомство питомцу';
+      return t('camp.reward.treat');
     case 'book':
-      return `Книга «${bookTitle(r.book)}»`;
+      return t('camp.reward.book', { title: bookName(r.book) });
   }
 }
 
@@ -686,6 +686,7 @@ function CrewTab({
   onGain: (from: number, to: number) => void;
   onSpend: () => void;
 }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonCrewUp = useFinanceStore((s) => s.prisonCrewUp);
@@ -725,7 +726,7 @@ function CrewTab({
     const got = prisonCrewShift(id);
     if (got) {
       onGain(from, from + got.coins);
-      setNote(`Прошлая смена сдана: +${shortMoney(got.coins)} монет, +${fmt(got.tokens)} ✦`);
+      setNote(t('camp.crew.handed', { coins: fmtShort(got.coins), tokens: fmt(got.tokens) }));
     } else setNote(null);
   };
 
@@ -745,28 +746,35 @@ function CrewTab({
               />
             ))
           ) : (
-            <span className="pcrew-scene__sign">Рабочих нет</span>
+            <span className="pcrew-scene__sign">{t('camp.crew.none')}</span>
           )}
         </span>
-        {y.capped && <span className="pcrew-scene__zzz">смена кончилась — ждут</span>}
+        {y.capped && <span className="pcrew-scene__zzz">{t('camp.crew.idle')}</span>}
       </div>
       <div className="pcrew__info pcrew__head">
-        <b>{p.crew ? `Рабочие · ${p.crew} ур. · смена «${sh.name}»` : 'Нанять рабочих'}</b>
+        <b>
+          {p.crew
+            ? t('camp.crew.head', { lv: p.crew, shift: crewName(sh.id) })
+            : t('camp.crew.hire')}
+        </b>
         <i>
           {p.crew
-            ? `${rate.toFixed(1)} блока в минуту в шахте ${rankLetter(p.rank)}, смена ${cap.toLocaleString('ru-RU')} ч${p.crewFed ? ' · сыты, +30%' : ''}`
-            : `Копает в лучшей шахте и когда ты в игре, и когда нет. Отдаёт ${Math.round(CREW_SHARE * 100)}% добытого.`}
+            ? t('camp.crew.rate', {
+                rate: rate.toFixed(1),
+                mine: rankLetter(p.rank),
+                cap: fmtDec(cap, 3),
+              }) + (p.crewFed ? t('camp.crew.fedTag') : '')
+            : t('camp.crew.pitch', { pct: Math.round(CREW_SHARE * 100) })}
         </i>
       </div>
       {p.crew > 0 && (
         <div className="pcrew__yield">
           <div className="pcrew__row">
             <span>
-              {hh} ч {String(mm).padStart(2, '0')} мин из {cap.toLocaleString('ru-RU')}
+              {t('camp.crew.time', { h: hh, m: String(mm).padStart(2, '0'), cap: fmtDec(cap, 3) })}
             </span>
             <b>
-              +{shortMoney(y.coins)} <CoinIcon size={13} /> · +{fmt(y.tokens)}{' '}
-              <TokenIcon size={12} />
+              +{fmtShort(y.coins)} <CoinIcon size={13} /> · +{fmt(y.tokens)} <TokenIcon size={12} />
             </b>
           </div>
           <span className="pcrew__bar">
@@ -778,14 +786,16 @@ function CrewTab({
             disabled={y.blocks <= 0}
             onClick={collect}
           >
-            {y.blocks > 0 ? `Принять смену · ${fmt(y.blocks)} блоков` : 'Смена только началась'}
+            {y.blocks > 0
+              ? t('camp.crew.collect', { n: y.blocks, v: fmt(y.blocks) })
+              : t('camp.crew.justStarted')}
           </button>
         </div>
       )}
       {note && <p className="msaw__note">{note}</p>}
       {p.crew > 0 && (
         <>
-          <h4 className="pcamp-h">Наряд на смену</h4>
+          <h4 className="pcamp-h">{t('camp.crew.shiftsH')}</h4>
           <div className="pcrew-shifts">
             {CREW_SHIFTS.map((c) => (
               <button
@@ -794,28 +804,30 @@ function CrewTab({
                 className={`pcrew-shift${c.id === p.crewShift ? ' is-on' : ''}`}
                 onClick={() => pickShift(c.id)}
               >
-                <b>{c.name}</b>
-                <i>{c.text}</i>
+                <b>{crewName(c.id)}</b>
+                <i>{crewText(c.id)}</i>
                 <em>
-                  {(c.hours + c.perHour * p.perks.shift).toLocaleString('ru-RU')} ч · ×
-                  {c.rate.toLocaleString('ru-RU')}
+                  {t('camp.crew.shiftMeta', {
+                    h: fmtDec(c.hours + c.perHour * p.perks.shift, 3),
+                    x: fmtDec(c.rate, 3),
+                  })}
                 </em>
               </button>
             ))}
           </div>
           <Row
             icon={<span className="pforge__glyph">🍲</span>}
-            title={p.crewFed ? 'Рабочие сыты' : 'Накормить'}
+            title={p.crewFed ? t('camp.crew.fed') : t('camp.crew.feed')}
             text={
               p.crewFed
-                ? '+30% выработки до конца этой смены'
+                ? t('camp.crew.fedText')
                 : canFeed
-                  ? '+30% выработки на всю смену — кормят в начале смены'
-                  : `Кормят в первые ${CREW_FEED_WINDOW_MIN} минут смены: прими смену — и накорми`
+                  ? t('camp.crew.feedText')
+                  : t('camp.crew.feedLate', { n: CREW_FEED_WINDOW_MIN })
             }
             action={
               p.crewFed ? (
-                <Done>Сыты</Done>
+                <Done>{t('camp.crew.fedDone')}</Done>
               ) : (
                 <Buy
                   price={feed}
@@ -839,8 +851,11 @@ function CrewTab({
       {p.crew < CREW_MAX ? (
         <Row
           icon={<img className="pmill-hico" src={workerTexture(p.crew)} alt="" />}
-          title={p.crew ? `Нанять ещё одного · ${p.crew + 1} ур.` : 'Нанять рабочих'}
-          text={`${crewRate(p.crew + 1).toFixed(1)} блока в минуту на норме${p.crew ? `, сейчас ${crewRate(p.crew).toFixed(1)}` : ''}`}
+          title={p.crew ? t('camp.crew.hireMore', { lv: p.crew + 1 }) : t('camp.crew.hire')}
+          text={
+            t('camp.crew.hireRate', { rate: crewRate(p.crew + 1).toFixed(1) }) +
+            (p.crew ? t('camp.crew.hireNow', { rate: crewRate(p.crew).toFixed(1) }) : '')
+          }
           action={
             <Buy
               price={price}
@@ -859,7 +874,7 @@ function CrewTab({
           }
         />
       ) : (
-        <p className="pcamp-note">Все места заняты.</p>
+        <p className="pcamp-note">{t('camp.crew.full')}</p>
       )}
       {unload && <CrewUnload got={unload} rock={p.rank} onClose={() => setUnload(null)} />}
     </div>
@@ -888,6 +903,7 @@ function CrewUnload({
   const coinsShown = all ? got.coins : Math.round((got.coins * n) / carts);
   const tokensShown = all ? got.tokens : Math.round((got.tokens * n) / carts);
   const sh = crewShiftOf(got.shift);
+  const t = useT();
 
   const tip = (i: number) => {
     if (tipped[i]) return;
@@ -911,7 +927,7 @@ function CrewUnload({
     pickHit('stone', i === carts - 1);
     coinDing();
     tapLight();
-    const next = tipped.map((t, k) => t || k === i);
+    const next = tipped.map((x, k) => x || k === i);
     setTipped(next);
     if (next.every(Boolean)) {
       tierBreak(2);
@@ -928,11 +944,16 @@ function CrewUnload({
       onClick={() => all && onClose()}
     >
       <div className="pcases__card" onClick={(e) => e.stopPropagation()}>
-        <span className="pcases__title">Приём смены</span>
+        <span className="pcases__title">{t('camp.unload.title')}</span>
         <span className="pcases__tiers">
           <i>
-            Наряд «{sh.name}» · {fmt(got.blocks)} блоков за {Math.floor(got.minutes / 60)} ч{' '}
-            {String(Math.floor(got.minutes % 60)).padStart(2, '0')} мин
+            {t('camp.unload.sub', {
+              shift: crewName(sh.id),
+              n: got.blocks,
+              v: fmt(got.blocks),
+              h: Math.floor(got.minutes / 60),
+              m: String(Math.floor(got.minutes % 60)).padStart(2, '0'),
+            })}
           </i>
         </span>
         <div className="pcrew-carts">
@@ -945,7 +966,7 @@ function CrewUnload({
               }}
               className={`pcrew-cart${tipped[i] ? ' is-tipped' : ''}`}
               onClick={() => tip(i)}
-              aria-label="Разгрузить вагонетку"
+              aria-label={t('camp.unload.cart')}
             >
               <img src={cartTexture(rock)} alt="" />
             </button>
@@ -953,7 +974,7 @@ function CrewUnload({
         </div>
         <div className="pcrew-count">
           <b>
-            +{shortMoney(coinsShown)} <CoinIcon size={16} />
+            +{fmtShort(coinsShown)} <CoinIcon size={16} />
           </b>
           <b>
             +{fmt(tokensShown)} <TokenIcon size={15} />
@@ -961,7 +982,7 @@ function CrewUnload({
         </div>
         {!all ? (
           <>
-            <span className="pcases__skip">Тапай по вагонеткам — разгружай</span>
+            <span className="pcases__skip">{t('camp.unload.hint')}</span>
             <button
               type="button"
               className="btn btn--block"
@@ -973,24 +994,22 @@ function CrewUnload({
                 if (got.keys) keyFound();
               }}
             >
-              Разгрузить всё
+              {t('camp.unload.all')}
             </button>
           </>
         ) : (
           <div className="pcases__sum">
             {(got.keys > 0 || got.parcels.length > 0) && (
               <>
-                <b>Разведка нашла</b>
+                <b>{t('camp.unload.found')}</b>
                 {got.keys > 0 && (
                   <span className="pcases__row">
                     <KeyIcon size={22} />
-                    <em>
-                      {got.keys} {got.keys === 1 ? 'ключ' : got.keys < 5 ? 'ключа' : 'ключей'}
-                    </em>
+                    <em>{t('camp.keysN', { n: got.keys })}</em>
                   </span>
                 )}
-                {got.parcels.map((t, i) => {
-                  const tier = CASE_TIERS.find((x) => x.id === t)!;
+                {got.parcels.map((id, i) => {
+                  const tier = CASE_TIERS.find((x) => x.id === id)!;
                   return (
                     <span key={i} className="pcases__row">
                       <img
@@ -1000,7 +1019,7 @@ function CrewUnload({
                         height={24}
                         style={{ imageRendering: 'pixelated' }}
                       />
-                      <em>Посылка · {tier.name.toLowerCase()} — легла под поле шахты</em>
+                      <em>{t('camp.unload.parcel', { tier: nameIn(chestName(tier.id)) })}</em>
                     </span>
                   );
                 })}
@@ -1008,11 +1027,11 @@ function CrewUnload({
             )}
             {got.parcelTokens > 0 && (
               <span className="pcases__note">
-                Мест под посылки нет — сданы за {fmt(got.parcelTokens)} ✦
+                {t('camp.unload.noRoom', { v: fmt(got.parcelTokens) })}
               </span>
             )}
             <button type="button" className="btn btn--primary btn--block" onClick={onClose}>
-              Бригаду — снова в забой
+              {t('camp.unload.back')}
             </button>
           </div>
         )}
@@ -1025,6 +1044,7 @@ function CrewUnload({
 // ---- Коллекция -----------------------------------------------------------------
 
 function FindsTab() {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const found = findsFound(p.finds);
   return (
@@ -1033,7 +1053,7 @@ function FindsTab() {
         <b>
           {found} / {FINDS.length}
         </b>{' '}
-        находок · продажа +{Math.round((findsMult(p.finds) - 1) * 100)}%
+        {t('camp.finds.purse', { pct: Math.round((findsMult(p.finds) - 1) * 100) })}
       </div>
       <div className="pfinds">
         {FINDS.map((f) => {
@@ -1041,8 +1061,14 @@ function FindsTab() {
           return (
             <div key={f.id} className={`pfinds__cell${n ? ' is-found' : ''}`}>
               <img src={findTexture(f.id, !n)} alt="" />
-              <b>{n ? f.name : '???'}</b>
-              <i>{n ? (n > 1 ? `×${n} · ${f.text}` : f.text) : `с шахты ${rankLetter(f.from)}`}</i>
+              <b>{n ? findName(f.id) : '???'}</b>
+              <i>
+                {n
+                  ? n > 1
+                    ? `×${n} · ${findText(f.id)}`
+                    : findText(f.id)
+                  : t('camp.finds.from', { mine: rankLetter(f.from) })}
+              </i>
             </div>
           );
         })}
@@ -1054,6 +1080,7 @@ function FindsTab() {
 // ---- Перки ---------------------------------------------------------------------
 
 function PerksTab() {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const prisonPerk = useFinanceStore((s) => s.prisonPerk);
   const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
@@ -1063,8 +1090,8 @@ function PerksTab() {
       <div className="pforge">
         <div className="pcamp-lock">
           <GxIcon name="upgrade" size={40} />
-          <b>Откроются после престижа</b>
-          <span>Ранг {rankLetter(p.rank)} → Z</span>
+          <b>{t('camp.perks.locked')}</b>
+          <span>{t('camp.perks.lockedRank', { rank: rankLetter(p.rank) })}</span>
         </div>
       </div>
     );
@@ -1072,7 +1099,7 @@ function PerksTab() {
   return (
     <div className="pforge">
       <div className="pcamp-purse">
-        <b>{free}</b> свободных очков · престиж {p.prestige}
+        <b>{free}</b> {t('camp.perks.free', { n: free, prestige: p.prestige })}
       </div>
       {PERKS.filter((k) => CREW_ON || k.id !== 'shift').map((k) => (
         <Row
@@ -1080,16 +1107,16 @@ function PerksTab() {
           icon={<span className="pforge__glyph">★</span>}
           title={
             <>
-              {k.name}{' '}
+              {perkName(k.id)}{' '}
               <span className="pench-lvl">
                 {p.perks[k.id]}/{k.max}
               </span>
             </>
           }
-          text={k.per}
+          text={perkText(k.id)}
           action={
             p.perks[k.id] >= k.max ? (
-              <Done>Макс.</Done>
+              <Done>{t('camp.maxDone')}</Done>
             ) : (
               <button
                 type="button"
@@ -1118,7 +1145,7 @@ function PerksTab() {
           tapLight();
         }}
       >
-        Сбросить перки — бесплатно
+        {t('camp.perks.reset')}
       </button>
     </div>
   );
@@ -1156,27 +1183,20 @@ export function RuneIcon({
   );
 }
 
-const pctText = (x: number) =>
-  `+${(Math.round(x * 1000) / 10).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`;
+const pctText = (x: number) => `+${fmtDec(Math.round(x * 1000) / 10, 1)}%`;
 
 /** Руна словами: «Феху III · +7,1% к продаже». */
 export function runeLine(r: { kind: RuneKind; tier: number; roll: number }): string {
-  return `${pctText(runePower(r))} ${runeOf(r.kind).text}`;
+  return `${pctText(runePower(r))} ${runeText(r.kind)}`;
 }
 
-const BONUS_TEXT: { k: keyof Bonus; text: string }[] = [
-  { k: 'sell', text: 'к продаже' },
-  { k: 'dmg', text: 'к скорости копки' },
-  { k: 'rate', text: 'к частоте ударов' },
-  { k: 'loot', text: 'к добыче' },
-  { k: 'token', text: 'к токенам' },
-  { k: 'proc', text: 'к шансам чар' },
-  { k: 'luck', text: 'к ключам и посылкам' },
-];
+const BONUS_KEYS: (keyof Bonus)[] = ['sell', 'dmg', 'rate', 'loot', 'token', 'proc', 'luck'];
 
 function bonusSummary(b: Bonus): string {
-  const parts = BONUS_TEXT.filter((x) => b[x.k] > 0).map((x) => `${pctText(b[x.k])} ${x.text}`);
-  return parts.length ? parts.join(' · ') : 'пока ничего';
+  const parts = BONUS_KEYS.filter((k) => b[k] > 0).map(
+    (k) => `${pctText(b[k])} ${t(`camp.bonus.${k}`)}`,
+  );
+  return parts.length ? parts.join(' · ') : t('camp.bonus.none');
 }
 
 /**
@@ -1313,6 +1333,7 @@ const AMULET_SLOTS: [number, number][] = [
 ];
 
 function RunesTab({ axeLevel }: { axeLevel: number }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const socket = useFinanceStore((s) => s.prisonRuneSocket);
   const fuse = useFinanceStore((s) => s.prisonRuneFuse);
@@ -1355,11 +1376,7 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
     const empty = p.sockets.findIndex((id, i) => i < open && !id);
     if (empty < 0) {
       notifyWarning();
-      setNote(
-        open
-          ? 'Гнёзда заняты — тапни по гнезду, чтобы заменить'
-          : `Первое гнездо откроется с ${SOCKET_UNLOCK[0]} уровня кирки или топора`,
-      );
+      setNote(open ? t('camp.runes.full') : t('camp.runes.firstAt', { lv: SOCKET_UNLOCK[0] }));
       return;
     }
     socket(empty, rune.id);
@@ -1409,10 +1426,10 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
               }${rune && !worn && !locked ? ' is-target' : ''}`}
               aria-label={
                 r
-                  ? `${runeOf(r.kind).name}, ${runeLine(r)}`
+                  ? `${runeName(r.kind)}, ${runeLine(r)}`
                   : locked
-                    ? 'Гнездо закрыто'
-                    : 'Пустое гнездо'
+                    ? t('camp.runes.slotLocked')
+                    : t('camp.runes.slotEmpty')
               }
               onClick={() => tapSocket(i)}
             >
@@ -1426,31 +1443,31 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
                   ? pctText(runePower(r))
                   : locked
                     ? i < SOCKET_UNLOCK.length
-                      ? `${SOCKET_UNLOCK[i]} ур.`
-                      : 'престиж 10'
-                    : 'пусто'}
+                      ? t('common.level', { n: SOCKET_UNLOCK[i] })
+                      : t('camp.runes.prestige10')
+                    : t('camp.runes.empty')}
               </i>
             </button>
           );
         })}
       </div>
       <div className="prunes-head">
-        <b>Оберег — и в шахте, и в лесу</b>
-        <span>{bonusSummary(bonusOf(p)) || 'Руны не вставлены — оберег пока пустой'}</span>
+        <b>{t('camp.runes.amulet')}</b>
+        <span>{bonusSummary(bonusOf(p)) || t('camp.runes.amuletEmpty')}</span>
       </div>
       {rune ? (
         <div className="prune-card">
           <RuneIcon kind={rune.kind} tier={rune.tier} size={80} />
           <span className="prune-card__info">
             <b>
-              {runeOf(rune.kind).name} {RUNE_ROMAN[rune.tier - 1]}
+              {runeName(rune.kind)} {RUNE_ROMAN[rune.tier - 1]}
             </b>
             <i>{runeLine(rune)}</i>
-            <em>сила {rune.roll} из 100 внутри ступени</em>
+            <em>{t('camp.runes.roll', { n: rune.roll })}</em>
           </span>
           <span className="prune-card__btns">
             <button type="button" className="btn btn--sm pforge__buy" onClick={wear}>
-              {worn ? 'Вынуть' : 'В оберег'}
+              {worn ? t('camp.runes.takeOut') : t('camp.runes.wear')}
             </button>
             <button
               type="button"
@@ -1458,7 +1475,7 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
               disabled={!plan}
               onClick={doFuse}
             >
-              Сплавить
+              {t('camp.runes.fuse')}
             </button>
             <button
               type="button"
@@ -1471,20 +1488,22 @@ function RunesTab({ axeLevel }: { axeLevel: number }) {
           </span>
           {!plan && rune.tier < RUNE_ROMAN.length && (
             <span className="prune-card__hint">
-              Для сплава нужны ещё две свободные руны {RUNE_ROMAN[rune.tier - 1]}
+              {t('camp.runes.fuseNeed', { tier: RUNE_ROMAN[rune.tier - 1] })}
             </span>
           )}
           {plan && (
             <span className="prune-card__hint">
-              Уйдут:{' '}
-              {plan.with.map((r) => `${runeOf(r.kind).name} ${pctText(runePower(r))}`).join(', ')} →{' '}
-              {runeOf(rune.kind).name} {RUNE_ROMAN[rune.tier]}
+              {t('camp.runes.fuseGo')}{' '}
+              {plan.with.map((r) => `${runeName(r.kind)} ${pctText(runePower(r))}`).join(', ')} →{' '}
+              {runeName(rune.kind)} {RUNE_ROMAN[rune.tier]}
             </span>
           )}
         </div>
       ) : (
         <p className="pcamp-note" style={{ margin: 0 }}>
-          {p.runes.length ? `Мешочек ${p.runes.length}/${RUNE_BAG} · тапни руну` : 'Рун пока нет'}
+          {p.runes.length
+            ? t('camp.runes.bag', { n: p.runes.length, max: RUNE_BAG })
+            : t('camp.runes.none')}
         </p>
       )}
       {note && <p className="pcamp-note prune-note">{note}</p>}
@@ -1534,16 +1553,16 @@ function mileRewardText(m: (typeof MILES)[number]): string {
   const r = m.reward;
   const out: string[] = [];
   if (r.tokens) out.push(`+${fmt(r.tokens)} ✦`);
-  if (r.keys) out.push(`${r.keys} ключ${r.keys === 1 ? '' : r.keys < 5 ? 'а' : 'ей'}`);
-  if (r.parcel)
-    out.push(`посылка «${TIERS_OF.find((t) => t.id === r.parcel)!.name.toLowerCase()}»`);
-  if (r.rune) out.push(`руна ${RUNE_ROMAN[r.rune - 1]}`);
-  if (r.socket) out.push('четвёртое гнездо');
-  if (r.egg) out.push(eggOf(r.egg).name.toLowerCase());
+  if (r.keys) out.push(t('camp.keysN', { n: r.keys }));
+  if (r.parcel) out.push(t('camp.mile.parcel', { tier: nameIn(chestName(r.parcel)) }));
+  if (r.rune) out.push(t('camp.mile.rune', { tier: RUNE_ROMAN[r.rune - 1] }));
+  if (r.socket) out.push(t('camp.mile.socket'));
+  if (r.egg) out.push(nameIn(eggName(r.egg)));
   return out.join(' · ');
 }
 
 function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const claim = useFinanceStore((s) => s.prisonMileClaim);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
@@ -1581,9 +1600,9 @@ function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
               <span className="pforge__glyph">{done ? '✓' : ready ? '★' : '☆'}</span>
             </span>
             <span className="pforge__info">
-              <b>{m.title}</b>
+              <b>{mileTitle(m.id)}</b>
               <i>
-                {m.text} · {mileRewardText(m)}
+                {mileText(m.id)} · {mileRewardText(m)}
               </i>
               {!done && (
                 <span className="ppet-bar">
@@ -1592,14 +1611,14 @@ function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
               )}
             </span>
             {done ? (
-              <Done>Взято</Done>
+              <Done>{t('camp.mile.taken')}</Done>
             ) : ready ? (
               <button type="button" className="btn btn--sm pforge__buy" onClick={() => take(m.id)}>
-                Забрать
+                {t('camp.take')}
               </button>
             ) : (
               <Done>
-                {shortMoney(v)}/{shortMoney(goal)}
+                {fmtShort(v)}/{fmtShort(goal)}
               </Done>
             )}
           </div>
@@ -1620,7 +1639,8 @@ function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
 const SHAKES: Record<CaseTier, number> = { common: 2, rare: 3, epic: 4, legend: 5 };
 
 export function ParcelReveal({ open, onClose }: { open: ParcelOpen; onClose: () => void }) {
-  const tier = TIERS_OF.find((t) => t.id === open.tier)!;
+  const t = useT();
+  const tier = TIERS_OF.find((x) => x.id === open.tier)!;
   const shakes = SHAKES[open.tier];
   const [stage, setStage] = useState<'shake' | 'shown'>('shake');
   useEffect(() => {
@@ -1662,7 +1682,9 @@ export function ParcelReveal({ open, onClose }: { open: ParcelOpen; onClose: () 
         <img className="preveal__box" src={parcelTexture(tier.color)} alt="" />
       ) : (
         <div className="preveal__card">
-          <span className="preveal__tier">Посылка · {tier.name.toLowerCase()}</span>
+          <span className="preveal__tier">
+            {t('camp.reveal.tier', { tier: nameIn(chestName(tier.id)) })}
+          </span>
           <span className="preveal__icon">
             <RewardIcon r={open.reward} size={64} />
           </span>
@@ -1670,12 +1692,16 @@ export function ParcelReveal({ open, onClose }: { open: ParcelOpen; onClose: () 
           {open.reward.kind === 'rune' && (
             <i className="preveal__sub">{runeLine(open.reward.rune)}</i>
           )}
-          {open.newPet && <i className="preveal__sub">Новый питомец! {petOf(open.newPet).lore}</i>}
-          {open.reward.kind === 'treat' && <i className="preveal__sub">Опыт тому, кто с тобой</i>}
-          {open.shattered > 0 && (
-            <i className="preveal__sub">Мешочек полон — руна разбита на {open.shattered} ✦</i>
+          {open.newPet && (
+            <i className="preveal__sub">
+              {t('camp.reveal.newPet', { lore: petLore(open.newPet) })}
+            </i>
           )}
-          <span className="preveal__cta">Забрать</span>
+          {open.reward.kind === 'treat' && <i className="preveal__sub">{t('camp.reveal.treat')}</i>}
+          {open.shattered > 0 && (
+            <i className="preveal__sub">{t('camp.reveal.shattered', { n: open.shattered })}</i>
+          )}
+          <span className="preveal__cta">{t('camp.take')}</span>
         </div>
       )}
     </div>,
@@ -1758,6 +1784,7 @@ export function AxeIcon({ axe, size = 30 }: { axe: number; size?: number }) {
 }
 
 function AxesTab({ onSpend }: { onSpend: () => void }) {
+  const t = useT();
   const f = useFinanceStore((s) => s.forest);
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
@@ -1782,19 +1809,27 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
       <div className="pforge__now">
         <AxeIcon axe={f.axe} size={40} />
         <span>
-          <b>{cur.name}</b>
+          <b>{axeName(f.axe)}</b>
           <i>
-            урон {dmg.toFixed(dmg < 10 ? 1 : 0)} · {(cur.rate * fm.rate).toFixed(1)} удара в секунду
+            {t('camp.axes.now', {
+              dmg: dmg.toFixed(dmg < 10 ? 1 : 0),
+              rate: (cur.rate * fm.rate).toFixed(1),
+            })}
           </i>
         </span>
       </div>
       <Row
         icon={<AxeIcon axe={next ? f.axe + 1 : f.axe} size={30} />}
-        title={next ? next.name : 'Лучше не бывает'}
+        title={next ? axeName(f.axe + 1) : t('camp.axes.best')}
         text={
           next
-            ? `урон ${cur.dmg} → ${next.dmg}, скорость ${cur.rate} → ${next.rate}`
-            : '«Урал» — вершина'
+            ? t('camp.axes.next', {
+                dmg: String(cur.dmg),
+                dmg2: String(next.dmg),
+                rate: String(cur.rate),
+                rate2: String(next.rate),
+              })
+            : t('camp.axes.top')
         }
         action={
           next ? (
@@ -1806,11 +1841,11 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
       />
       <Row
         icon={<span className="pforge__glyph">⟋</span>}
-        title={`Правка ${f.sharp}/${AXE_SHARP_MAX}`}
+        title={t('camp.axes.sharp', { n: f.sharp, max: AXE_SHARP_MAX })}
         text={
           f.sharp < AXE_SHARP_MAX
-            ? `+${Math.round(AXE_SHARP_STEP * 100)}% урона топору и пиле`
-            : 'Острее некуда'
+            ? t('camp.axes.sharpText', { pct: Math.round(AXE_SHARP_STEP * 100) })
+            : t('camp.axes.sharpMax')
         }
         action={
           f.sharp < AXE_SHARP_MAX ? (
@@ -1826,11 +1861,14 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
       />
       <Row
         icon={<span className="pforge__glyph">🪵</span>}
-        title={`Штабель ${pileCapacity(f.pileLevel)}`}
+        title={t('camp.axes.pile', { n: pileCapacity(f.pileLevel) })}
         text={
           f.pileLevel < PILE_MAX
-            ? `${pileCapacity(f.pileLevel)} → ${pileCapacity(f.pileLevel + 1)} брёвен`
-            : 'Больше не уложить'
+            ? t('camp.axes.pileText', {
+                a: pileCapacity(f.pileLevel),
+                n: pileCapacity(f.pileLevel + 1),
+              })
+            : t('camp.axes.pileMax')
         }
         action={
           f.pileLevel < PILE_MAX ? (
@@ -1846,8 +1884,8 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
       />
       <Row
         icon={<span className="pforge__glyph">🚛</span>}
-        title="Лесовоз"
-        text="Сам увозит штабель, когда он полон"
+        title={t('camp.axes.truck')}
+        text={t('camp.axes.truckText')}
         action={
           f.truck ? (
             <Done />
@@ -1862,8 +1900,11 @@ function AxesTab({ onSpend }: { onSpend: () => void }) {
         }
       />
       <p className="pcamp-note">
-        Повалено деревьев: {fmt(f.felled)} · срублено брёвен: {fmt(f.logs)} · выручено:{' '}
-        {fmt(f.earned)} монет
+        {t('camp.axes.stats', {
+          felled: fmt(f.felled),
+          logs: fmt(f.logs),
+          earned: fmt(f.earned),
+        })}
       </p>
     </div>
   );
@@ -1874,43 +1915,47 @@ function axeEnchNow(id: AxeEnchId, f: ForestState, p: PrisonState): string {
   const fm = forestMods(p, f);
   switch (id) {
     case 'chips':
-      return `+${4 * l}% лишних брёвен`;
+      return t('camp.axench.chips', { pct: 4 * l });
     case 'resin':
-      return `токен с ${pct(fm.tokenChance)} брёвен`;
+      return t('camp.axench.resin', { pct: pct(fm.tokenChance) });
     case 'sense':
-      return `${pct(fm.dodge)} увернуться · опасный сучок светится`;
+      return t('camp.axench.sense', { pct: pct(fm.dodge) });
     case 'swing':
-      return `${pct(fm.swing)} · два бревна разом`;
+      return t('camp.axench.swing', { pct: pct(fm.swing) });
     case 'fell':
-      return `${pct(fm.fell)} · дерево с одного удара`;
+      return t('camp.axench.fell', { pct: pct(fm.fell) });
     case 'storm':
-      return `${pct(fm.storm)} · падающее валит соседнее`;
+      return t('camp.axench.storm', { pct: pct(fm.storm) });
   }
 }
 
 /** Чары топора: те же токены, что у кирки, свой уровень — от брёвен. */
 function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
+  const t = useT();
   const forestEnchant = useFinanceStore((s) => s.forestEnchant);
   const [bulk, setBulk] = useState(1);
   const lvl = axeLevelOf(f.logs);
   return (
     <div className="pforge">
       <div className="pcamp-purse">
-        <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b> токенов
-        <span>общие с киркой: падают и с брёвен, Живица — чаще</span>
+        <TokenIcon size={18} />{' '}
+        {rich('camp.purseTokens', { n: p.tokens, v: <b>{fmt(p.tokens)}</b> })}
+        <span>{t('camp.axench.shared', { resin: axeEnchName('resin') })}</span>
       </div>
       <div className="pench-pick">
         <span className="pench-pick__lv">
-          <AxeIcon axe={f.axe} size={20} /> Топор ур. {lvl.level}
+          <AxeIcon axe={f.axe} size={20} /> {t('camp.axench.level', { n: lvl.level })}
         </span>
         <span className="pench-pick__bar">
           <i style={{ transform: `scaleX(${lvl.need ? lvl.into / lvl.need : 1})` }} />
         </span>
         <span className="pench-pick__txt">
-          {lvl.need ? `ещё ${fmt(lvl.need - lvl.into)} брёвен` : 'максимум'}
+          {lvl.need
+            ? t('camp.axench.more', { n: lvl.need - lvl.into, v: fmt(lvl.need - lvl.into) })
+            : t('camp.axench.max')}
         </span>
       </div>
-      <div className="pench-bulk" role="radiogroup" aria-label="Сколько уровней брать">
+      <div className="pench-bulk" role="radiogroup" aria-label={t('camp.axench.bulk')}>
         {BULK.map((b) => (
           <button
             key={b.n}
@@ -1923,7 +1968,7 @@ function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
               setBulk(b.n);
             }}
           >
-            {b.label}
+            {bulkLabel(b)}
           </button>
         ))}
       </div>
@@ -1951,28 +1996,28 @@ function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
             </span>
             <span className="pforge__info">
               <b>
-                {e.name}{' '}
+                {axeEnchName(e.id)}{' '}
                 <span className="pench-lvl">
                   {l}/{maxed || locked ? e.max : cap}
                 </span>
               </b>
               <i>
                 {locked
-                  ? `Откроется на ${e.unlock} уровне топора`
+                  ? t('camp.axench.unlock', { n: e.unlock })
                   : l
                     ? axeEnchNow(e.id, f, p)
-                    : e.per}
+                    : axeEnchPer(e.id)}
                 {!locked && !maxed && l >= cap && (
-                  <span className="pench-cap"> · потолок растёт с уровнем топора</span>
+                  <span className="pench-cap">{t('camp.axench.capGrows')}</span>
                 )}
               </i>
             </span>
             {maxed ? (
-              <Done>Макс.</Done>
+              <Done>{t('camp.maxDone')}</Done>
             ) : locked ? (
-              <Done>ур. {e.unlock}</Done>
+              <Done>{t('camp.axench.lv', { n: e.unlock })}</Done>
             ) : l >= cap ? (
-              <Done>Потолок</Done>
+              <Done>{t('camp.axench.cap')}</Done>
             ) : (
               <button
                 type="button"
@@ -1990,7 +2035,7 @@ function AxeEnchSection({ f, p }: { f: ForestState; p: PrisonState }) {
                 }}
               >
                 {k > 1 && <em className="pforge__k">+{k}</em>}
-                {shortMoney(k ? price : nextCost)} <TokenIcon size={12} />
+                {fmtShort(k ? price : nextCost)} <TokenIcon size={12} />
               </button>
             )}
           </div>
@@ -2041,6 +2086,7 @@ type Craft = { kind: 'prop' } | { kind: 'handle' } | { kind: 'order'; i: number 
  * владелец не понимал, что делается из досок и что с этим потом.
  */
 function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: number) => void }) {
+  const t = useT();
   const f = useFinanceStore((s) => s.forest);
   const p = useFinanceStore((s) => s.prison);
   const forestCraftProp = useFinanceStore((s) => s.forestCraftProp);
@@ -2064,28 +2110,26 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
     if (c.kind === 'prop')
       return {
         tex: benchTexture('prop', Math.max(0, propSpecies)),
-        name: 'Крепь',
+        name: itemName('prop'),
         need: PROP_STRIKES,
         can: boards >= PROP_BOARDS,
-        where: `Легла в шахту, в ряд расходников (теперь ×${p.items.prop + 1}). Тапни её там — 10 минут каждый второй блок считается породой выше.`,
+        where: t('camp.bench.propWhere', { n: p.items.prop + 1 }),
         finish: () => forestCraftProp(),
       };
     if (c.kind === 'handle')
       return {
         tex: benchTexture('handle', nextH?.species ?? 3),
-        name: nextH?.name ?? 'Рукоять',
+        name: nextH ? handleName(nextH.id) : t('camp.bench.handle'),
         need: HANDLE_STRIKES,
         can: !!nextH && mill.boards[nextH.species] >= nextH.boards,
-        where: nextH
-          ? `Надета на кирку и топор навсегда: удар быстрее на ${Math.round(nextH.rate * 100)}%.`
-          : '',
+        where: nextH ? t('camp.bench.handleWhere', { pct: Math.round(nextH.rate * 100) }) : '',
         finish: () => forestCraftHandle(),
       };
     const o = orders[c.i];
     const item = benchItemOf(o.item);
     return {
       tex: benchTexture(o.item, o.species),
-      name: `${item.name} ${item.who}`,
+      name: `${benchName(item.id)} ${benchWho(item.id)}`,
       need: item.strikes,
       can: now >= o.at && benchCan(mill.boards, o, reserve),
       where: '',
@@ -2096,8 +2140,8 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
         onGain(from, from + r.coins);
         setDone({
           tex: benchTexture(o.item, o.species),
-          title: `${item.name} сдан заказчику`,
-          where: `+${shortMoney(r.coins)} монет и +${r.tokens} ✦ — уже в кошельке. Новый заказ появится через 10 минут.`,
+          title: t('camp.bench.delivered', { name: benchName(item.id) }),
+          where: t('camp.bench.paid', { coins: fmtShort(r.coins), tokens: r.tokens }),
         });
         return true;
       },
@@ -2159,13 +2203,14 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
     tierBreak(2);
     notifySuccess();
     burstConfetti(40, ['#e8c89a', '#ffe08a', '#fff']);
-    if (craft.kind !== 'order') setDone({ tex: m.tex, title: `${m.name} готова`, where: m.where });
+    if (craft.kind !== 'order')
+      setDone({ tex: m.tex, title: t('camp.bench.ready', { name: m.name }), where: m.where });
   };
 
   const cur = craft ? meta(craft) : null;
   const clock = (ms: number) => {
-    const t = Math.max(0, Math.ceil(ms / 1000));
-    return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   };
 
   if (f.mill.level <= 0)
@@ -2173,8 +2218,8 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
       <div className="pforge">
         <div className="pcamp-lock">
           <GxIcon name="saw" size={40} />
-          <b>Нужна пилорама</b>
-          <span>Доски для верстака пилит она</span>
+          <b>{t('camp.bench.needMill')}</b>
+          <span>{t('camp.bench.needMillText')}</span>
         </div>
       </div>
     );
@@ -2201,7 +2246,7 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
           ) : done ? (
             <img className="bench__item is-done" src={done.tex} alt="" />
           ) : (
-            <span className="bench__idle">Выбери ниже, что собрать</span>
+            <span className="bench__idle">{t('camp.bench.idle')}</span>
           )}
         </span>
         <button
@@ -2209,15 +2254,15 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
           className="bench__hammer"
           disabled={!cur}
           onClick={strike}
-          aria-label="Ударить молотком"
+          aria-label={t('camp.bench.strike')}
         >
           <span ref={hammerRef} className="bench__hammerart">
             <HammerIcon size={46} />
           </span>
-          <em>{cur ? `Бей! ${hits}/${cur.need}` : 'молоток'}</em>
+          <em>{cur ? t('camp.bench.hit', { n: hits, max: cur.need }) : t('camp.bench.hammer')}</em>
         </button>
       </div>
-      {cur && <p className="msaw__status">Собираешь: {cur.name}</p>}
+      {cur && <p className="msaw__status">{t('camp.bench.making', { name: cur.name })}</p>}
       {done && (
         <p className="msaw__note">
           <b>{done.title}.</b> {done.where}
@@ -2229,21 +2274,24 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
           alt=""
           className="bench__purseimg"
         />
-        <b>{fmt(boards)}</b> досок на складе
-        <span>доски режет пилорама; здесь они становятся вещами</span>
+        <b>{fmt(boards)}</b> {t('camp.bench.stock', { n: boards })}
+        <span>{t('camp.bench.stockText')}</span>
       </div>
 
-      <h4 className="pcamp-h">Для себя</h4>
+      <h4 className="pcamp-h">{t('camp.bench.forMe')}</h4>
       <Row
         icon={
           <img className="pmill-hico" src={benchTexture('prop', Math.max(0, propSpecies))} alt="" />
         }
         title={
           <>
-            Крепь {p.items.prop > 0 && <span className="pench-lvl">в шахте ×{p.items.prop}</span>}
+            {itemName('prop')}{' '}
+            {p.items.prop > 0 && (
+              <span className="pench-lvl">{t('camp.bench.inMine', { n: p.items.prop })}</span>
+            )}
           </>
         }
-        text={`${PROP_BOARDS} досок любых → в ряд расходников шахты: 10 минут каждый второй блок — порода выше`}
+        text={t('camp.bench.propText', { n: PROP_BOARDS })}
         action={
           <button
             type="button"
@@ -2251,15 +2299,28 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
             disabled={boards < PROP_BOARDS || !!craft}
             onClick={() => start({ kind: 'prop' })}
           >
-            Собрать
+            {t('camp.bench.make')}
           </button>
         }
       />
       {nextH ? (
         <Row
           icon={<img className="pmill-hico" src={benchTexture('handle', nextH.species)} alt="" />}
-          title={nextH.name}
-          text={`${fmt(Math.min(mill.boards[nextH.species], nextH.boards))}/${nextH.boards} досок ${SPECIES[nextH.species].gen} → на кирку и топор навсегда, +${Math.round(nextH.rate * 100)}% к скорости${curH ? ` (сейчас ${curH.name.toLowerCase()}, +${Math.round(handleRate(p.handle) * 100)}%)` : ''}`}
+          title={handleName(nextH.id)}
+          text={
+            t('camp.bench.handleText', {
+              have: fmt(Math.min(mill.boards[nextH.species], nextH.boards)),
+              n: nextH.boards,
+              wood: woodOf(nextH.species),
+              pct: Math.round(nextH.rate * 100),
+            }) +
+            (curH
+              ? t('camp.bench.handleNow', {
+                  name: nameIn(handleName(curH.id)),
+                  pct: Math.round(handleRate(p.handle) * 100),
+                })
+              : '')
+          }
           action={
             <button
               type="button"
@@ -2267,20 +2328,20 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
               disabled={mill.boards[nextH.species] < nextH.boards || !!craft}
               onClick={() => start({ kind: 'handle' })}
             >
-              Собрать
+              {t('camp.bench.make')}
             </button>
           }
         />
       ) : (
         <Row
           icon={<img className="pmill-hico" src={benchTexture('handle', 9)} alt="" />}
-          title="Рукоять из карельской берёзы"
-          text="Надета — лучше рукояти не бывает"
+          title={handleName('karelian')}
+          text={t('camp.bench.handleBest')}
           action={<Done />}
         />
       )}
 
-      <h4 className="pcamp-h">Заказы на продажу</h4>
+      <h4 className="pcamp-h">{t('camp.bench.orders')}</h4>
       {orders.map((o, i) => {
         const item = benchItemOf(o.item);
         const wait = o.at - now;
@@ -2294,12 +2355,18 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
             </span>
             <span className="pforge__info">
               <b>
-                {item.name} <span className="bench__who">{item.who}</span>
+                {benchName(item.id)} <span className="bench__who">{benchWho(item.id)}</span>
               </b>
               <i>
                 {wait > 0
-                  ? `Заказчик придёт через ${clock(wait)}`
-                  : `${fmt(Math.min(have, o.boards))}/${o.boards} досок ${o.species >= 0 ? SPECIES[o.species].gen : 'любых'} · заплатит ${shortMoney(o.coins)} монет и ${o.tokens} ✦`}
+                  ? t('camp.bench.wait', { time: clock(wait) })
+                  : t(o.species >= 0 ? 'camp.bench.orderWood' : 'camp.bench.orderAny', {
+                      have: fmt(Math.min(have, o.boards)),
+                      n: o.boards,
+                      wood: o.species >= 0 ? woodOf(o.species) : '',
+                      coins: fmtShort(o.coins),
+                      tokens: o.tokens,
+                    })}
               </i>
             </span>
             <button
@@ -2308,7 +2375,7 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
               disabled={!can || !!craft}
               onClick={() => start({ kind: 'order', i })}
             >
-              {wait > 0 ? clock(wait) : 'Собрать'}
+              {wait > 0 ? clock(wait) : t('camp.bench.make')}
             </button>
           </div>
         );
@@ -2341,10 +2408,10 @@ export function MillIcon({ size = 30 }: { size?: number }) {
 
 const minutes = (m: number) =>
   m < 1
-    ? 'меньше минуты'
+    ? t('camp.mill.lessMin')
     : m < 60
-      ? `${Math.ceil(m)} мин`
-      : `${Math.floor(m / 60)} ч ${Math.ceil(m % 60)} мин`;
+      ? t('camp.mill.min', { n: Math.ceil(m) })
+      : t('camp.mill.hm', { h: Math.floor(m / 60), m: Math.ceil(m % 60) });
 
 /** Самая дорогая порода в ряду (пила берёт её первой), −1 — ряд пуст. */
 const topOf = (row: number[]): number => {
@@ -2374,6 +2441,7 @@ function MillScene({
   onFeed: () => { species: number } | null;
   stockRef?: React.Ref<HTMLSpanElement>;
 }) {
+  const t = useT();
   const discRef = useRef<HTMLSpanElement>(null);
   const outRef = useRef<HTMLSpanElement>(null);
   const bladeRef = useRef<HTMLButtonElement>(null);
@@ -2483,7 +2551,7 @@ function MillScene({
           <img src={barkTexture(inTop)} alt="" />
         </span>
         <b>{fmt(queued)}</b>
-        <i>брёвен</i>
+        <i>{t('camp.mill.logs', { n: queued })}</i>
       </span>
       <span className="msaw__belt" aria-hidden="true">
         {busy && (
@@ -2498,14 +2566,14 @@ function MillScene({
         ref={bladeRef}
         onClick={feed}
         disabled={level <= 0}
-        aria-label="Подать бревно в пилу"
+        aria-label={t('camp.mill.feed')}
       >
         <span className="msaw__spin">
           <span className="msaw__disc" ref={discRef}>
             <MillIcon size={58} />
           </span>
         </span>
-        <em>{level > 0 ? 'тапни' : 'нет пилы'}</em>
+        <em>{level > 0 ? t('camp.mill.tap') : t('camp.mill.noSaw')}</em>
       </button>
       <span className="msaw__belt is-out" aria-hidden="true" ref={outRef}>
         {busy && (
@@ -2520,7 +2588,7 @@ function MillScene({
           <img src={boardTexture(outTop)} alt="" />
         </span>
         <b>{fmt(made)}</b>
-        <i>досок</i>
+        <i>{t('camp.mill.boards', { n: made })}</i>
       </span>
     </div>
   );
@@ -2537,6 +2605,7 @@ function MillTab({
   onSpend: () => void;
   onBench: () => void;
 }) {
+  const t = useT();
   const f = useFinanceStore((s) => s.forest);
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
@@ -2582,20 +2651,24 @@ function MillTab({
     squashPop(stockRef.current, 0.6);
     setNote(
       r.premium
-        ? `${fmt(r.loaded)} брёвен легли в очередь. За свиль, капокорень и дрова с кроны — сразу +${shortMoney(r.premium)}`
-        : `${fmt(r.loaded)} брёвен легли в очередь — пила режет их сама`,
+        ? t('camp.mill.loadedPremium', {
+            n: r.loaded,
+            v: fmt(r.loaded),
+            coins: fmtShort(r.premium),
+          })
+        : t('camp.mill.loaded', { n: r.loaded, v: fmt(r.loaded) }),
     );
   };
   const feed = () => {
     const from = useFinanceStore.getState().slotsBalance;
     const r = forestMillFeed();
     if (!r) {
-      setNote('Пилить нечего: сруби брёвен и загрузи штабель');
+      setNote(t('camp.mill.nothing'));
       return null;
     }
     if (r.loaded) {
       squashPop(stockRef.current, 0.6);
-      setNote(`Штабель лёг в очередь: ${fmt(r.loaded)} брёвен`);
+      setNote(t('camp.mill.pileLoaded', { n: r.loaded, v: fmt(r.loaded) }));
     }
     if (r.premium) onGain(from, from + r.premium);
     return r;
@@ -2626,8 +2699,11 @@ function MillTab({
         />
         <Row
           icon={<MillIcon size={30} />}
-          title="Поставить пилораму"
-          text={`${Math.round(millRate(1))} брёвен в минуту, доска в ${BOARD_MULT.toLocaleString('ru-RU')} раза дороже бревна`}
+          title={t('camp.mill.build')}
+          text={t('camp.mill.buildText', {
+            n: Math.round(millRate(1)),
+            x: fmtDec(BOARD_MULT, 3),
+          })}
           action={<Buy price={millCost(0)} can={balance >= millCost(0)} onClick={up} />}
         />
       </div>
@@ -2645,8 +2721,8 @@ function MillTab({
         stockRef={stockRef}
       />
       <p className="msaw__status">
-        {Math.round(rate)} брёвен/мин
-        {queued ? ` · готово через ${minutes(queued / rate)}` : ' · стоит'}
+        {t('camp.mill.rate', { n: Math.round(rate) })}
+        {queued ? t('camp.mill.eta', { time: minutes(queued / rate) }) : t('camp.mill.stopped')}
       </p>
       <button
         type="button"
@@ -2655,10 +2731,10 @@ function MillTab({
         onClick={load}
       >
         {!f.pile.n
-          ? 'Штабель пуст — сначала сруби'
+          ? t('camp.mill.pileEmpty')
           : queued >= cap
-            ? 'Очередь полна — пусть пила догонит'
-            : `Штабель → в пилу · ${fmt(f.pile.n)} брёвен`}
+            ? t('camp.mill.queueFull')
+            : t('camp.mill.load', { n: f.pile.n, v: fmt(f.pile.n) })}
       </button>
       {note && <p className="msaw__note">{note}</p>}
       {/* Разбивка по породам — только когда пород больше одной: одну и так
@@ -2667,9 +2743,9 @@ function MillTab({
         <div className="pmill-boards">
           {mill.boards.map((k, i) =>
             k > 0 ? (
-              <span key={i} className="pmill-board" title={SPECIES[i].name}>
+              <span key={i} className="pmill-board" title={speciesName(i)}>
                 <img src={boardTexture(i)} alt="" />
-                {fmt(k)} · {SPECIES[i].name.toLowerCase()}
+                {fmt(k)} · {nameIn(speciesName(i))}
               </span>
             ) : null,
           )}
@@ -2683,22 +2759,25 @@ function MillTab({
       >
         {saleValue ? (
           <>
-            Продать доски · {shortMoney(saleValue)} <CoinIcon size={13} />
+            {t('camp.mill.sell', { coins: fmtShort(saleValue) })} <CoinIcon size={13} />
           </>
         ) : (
-          'Продавать пока нечего'
+          t('camp.mill.sellNone')
         )}
       </button>
       {kept > 0 && nextH && (
         <p className="pmill-keep">
-          {fmt(kept)} досок {SPECIES[nextH.species].gen} отложено на рукоять — продажа их не трогает
+          {t('camp.mill.kept', { n: kept, v: fmt(kept), wood: woodOf(nextH.species) })}
         </p>
       )}
       {mill.level < MILL_MAX ? (
         <Row
           icon={<MillIcon size={30} />}
-          title={`Пилорама ${mill.level + 1} ур.`}
-          text={`${Math.round(rate)} → ${Math.round(millRate(mill.level + 1))} брёвен в минуту`}
+          title={t('camp.mill.up', { n: mill.level + 1 })}
+          text={t('camp.mill.upText', {
+            a: Math.round(rate),
+            n: Math.round(millRate(mill.level + 1)),
+          })}
           action={
             <Buy price={millCost(mill.level)} can={balance >= millCost(mill.level)} onClick={up} />
           }
@@ -2706,14 +2785,14 @@ function MillTab({
       ) : (
         <Row
           icon={<MillIcon size={30} />}
-          title="Пилорама на пределе"
-          text="Быстрее пилит только «Урал» в руках"
+          title={t('camp.mill.max')}
+          text={t('camp.mill.maxText')}
           action={<Done />}
         />
       )}
 
       <button type="button" className="btn btn--block msaw__tobench" onClick={onBench}>
-        Из досок — вещи на верстаке: крепь, рукояти, заказы на продажу →
+        {t('camp.mill.toBench')}
       </button>
     </div>
   );

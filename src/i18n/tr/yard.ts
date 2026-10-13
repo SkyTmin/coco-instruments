@@ -1,0 +1,71 @@
+import type { Translation } from '../types';
+import type { yard as ru } from '../ru/yard';
+
+export const yard: Translation<typeof ru> = {
+  sec: '{n} sn',
+  title: 'Avlu',
+  rankTip: 'Madendeki rütbe',
+  creative: 'Yaratıcı',
+  inventory: 'Envanter',
+  map: 'Harita',
+  mapTitle: 'Kamp haritası',
+  board: 'Pano',
+  bye: 'Görüşürüz',
+  talk: 'Konuş',
+  open: 'Aç',
+  locked: 'Kilitli',
+  liftFrom: 'Aşağı asansör — {r} rütbesinden',
+  zoneOver: 'Özel madende bugünkü süren doldu',
+  zoneAfter: 'Özel maden — {n}. prestijden sonra',
+  toMine: 'Madene',
+  toForest: 'Ormana',
+  term: {
+    title: 'Yeni ceza',
+    prices: 'Sabit fiyatlar: cevher, blok, rütbe, kazma',
+    fromE: 'E rütbesinden itibaren: çalışma kotası ve kat bloğu',
+    picks: 'Kazmalar cevherden dövülür',
+    login: 'Artık giriş ödülü yok — altın sadece çalışarak',
+    reset: 'Bütün oyunlar baştan başladı.',
+  },
+  quiet: {
+    rank: 'Avlu olayları {r} rütbesinde başlar',
+    next: 'Sessiz. Sonraki olay {n} dk sonra, sen çalışırken',
+    soon: 'Olay her an başlayabilir — kazmaya başla',
+  },
+  tag: 'Avluda',
+  end: {
+    meteor: 'Göktaşı soğudu ve kayaya gömüldü',
+    kuiva: 'Kuiva kayaya geri döndü',
+    convoy: 'Konvoy yüksüz gitti',
+    bear: {
+      one: 'Ayı {n} kütük kaptı',
+      other: 'Ayı {n} kütük kaptı',
+    },
+    bearNone: 'Ayı eli boş gitti',
+    magpie: 'Saksağan uçup gitti — hiçbir şey toplamadın',
+  },
+  prize: {
+    coins: {
+      one: '+{n} altın',
+      other: '+{n} altın',
+    },
+    key: '+1 anahtar',
+    keys: {
+      one: '+{n} anahtar',
+      other: '+{n} anahtar',
+    },
+    parcel: 'koli',
+  },
+  trader: {
+    title: 'Tüccar',
+    motto: '“Her şey var, hepsi altına.”',
+    nextHm: 'Yeni mal {h} sa {m} dk sonra',
+    nextM: 'Yeni mal {m} dk sonra',
+    left: '{n} kaldı',
+    gone: 'tükendi',
+    none: 'Yok',
+    shattered: 'Rün kesesi dolu — rün {n} ✦ olarak kırıldı',
+    took: 'Alındı: {what}',
+    note: 'Altın sadece burada jetona ve anahtara dönüşür. İndirimli mal tükenene kadar.',
+  },
+};

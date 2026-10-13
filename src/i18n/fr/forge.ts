@@ -1,0 +1,54 @@
+import type { Translation } from '../types';
+import type { forge as ru } from '../ru/forge';
+
+export const forge: Translation<typeof ru> = {
+  title: 'Forge',
+  listAnd: '{a} et {b}',
+  power: 'Force',
+  perMin: 'blocs/min',
+  level: 'niveau',
+  next: 'Suivante',
+  ore: '{rock} : {have} sur {need}',
+  gainPower: 'Force ⛏ {a} → {b}',
+  takes: '· casse {list}',
+  gainSpeed: '{a} → {b} blocs/min',
+  paid: '· payé',
+  bestBeforePrestige: 'Meilleure pioche avant le prestige. {name} — après le prestige {n}',
+  best: 'Aucune pioche ne fait mieux',
+  rungHand: '{name}, en main',
+  rungTake: '{name}, prendre en main',
+  rungPrestige: 'P{n}',
+  hand: 'en main',
+  bag: 'Sac {n}',
+  cart: 'Wagonnet',
+  cartOn: 'vend le sac plein pour toi',
+  cartOff: 'vend le sac plein tout seul',
+  stats: '⛏ {power} · {speed} blocs/min',
+  opens: 'Casse {list}',
+  toMine: 'À la mine',
+  cta: {
+    prestige: 'Après le prestige {n}',
+    floor: 'S’ouvre à l’étage {rank}',
+    ore: 'Pas assez de minerai',
+    coins: 'Il manque {sum}',
+    go: 'Forger',
+  },
+  say: {
+    prestige: 'S’ouvre après le prestige {n}',
+    floor: 'Se forge à l’étage {rank} : c’est là qu’on trouve {rock}',
+    ore: 'Il manque : {rock} ×{n}',
+    coins: {
+      one: 'Il manque {n} pièce',
+      many: 'Il manque {n} de pièces',
+      other: 'Il manque {n} pièces',
+    },
+    oreLeft:
+      '{rock} : {box} dans la caisse, {bag} dans le sac, encore {left}. Vends le sac — le minerai utile ira tout seul dans la caisse',
+    oreAll: '{rock} : tout y est — {box} dans la caisse, {bag} dans le sac',
+    inHand: 'Pioche {name} en main · {rarity} · ⛏{power}',
+    equip: 'En main : pioche {name} · ⛏{power}',
+    ladderPrestige:
+      '{name} · {rarity} · après le prestige {n}, avec le minerai de la mine spéciale',
+    ladderFloor: '{name} · {rarity} · ⛏{power} : se forge à l’étage {rank}, casse {list}',
+  },
+};
