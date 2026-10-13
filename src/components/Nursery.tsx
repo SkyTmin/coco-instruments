@@ -20,8 +20,17 @@
 // stats; at most three chips per pet; the stage swaps to another pet only once its strip is
 // decoded; cells and squad slots are memoised.
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react';
 import { useFinanceStore } from '@/store';
 import { fmtNum, useT } from '@/i18n';
 import { useFormFactor } from '@/game-shell';
@@ -42,6 +51,7 @@ import {
   PAT_XP,
   petBonus,
   petLevelOf,
+  isPetId,
   petLook,
   petOf,
   PETS,
@@ -318,20 +328,41 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   };
   // Decode before swap: the stage (art + plate) keeps the pet it shows until the picked one's
   // strip is decoded. Already decoded (preloaded neighbours) → the same render.
-  const want = artFor(sel);
-  const shownRef = useRef<PetId>(sel);
+  // Cold switch (a slow link: the strip isn't decoded 100 ms after the pick): the plate switches
+  // and the pet's 1-KB thumbnail stands on the pedestal until the strip is ready — the right pet
+  // at once instead of the old one for half a second (critic round 2, P1-5).
+  // The pick paints first (selection ring, action bar), the stage and the plate follow as a
+  // deferred render: on the production build at 4× a switch was one ~150-ms task (P2-8).
+  const stageSel = useDeferredValue(sel);
+  const want = artFor(stageSel);
+  const shownRef = useRef<PetId>(stageSel);
   const [, setDecodedTick] = useState(0);
+  const [cold, setCold] = useState<PetId | null>(null);
   const ready = !want.src || decoded.has(want.src);
-  if (ready) shownRef.current = sel;
+  if (ready || cold === stageSel) shownRef.current = stageSel;
   const stageId = shownRef.current;
+  const thumbOnly = !ready && stageId === stageSel && !!p.pets[stageSel];
   useEffect(() => {
     if (ready) return undefined;
     let live = true;
     void decodeArt(want.src).then(() => live && setDecodedTick((n) => n + 1));
+    const late = window.setTimeout(() => live && setCold(stageSel), 100);
     return () => {
       live = false;
+      window.clearTimeout(late);
     };
-  }, [ready, want.src]);
+  }, [ready, want.src, stageSel]);
+  // A pet is fetched from the press on its slot, not from the click 100–300 ms later.
+  const artRef = useRef(artFor);
+  artRef.current = artFor;
+  const warm = useCallback((id: PetId) => {
+    const a = artRef.current(id);
+    if (a.src) void decodeArt(a.src);
+  }, []);
+  const warmFrom = (e: ReactPointerEvent) => {
+    const id = (e.target as Element).closest?.('[data-pet]')?.getAttribute('data-pet');
+    if (id && isPetId(id) && id !== sel) warm(id);
+  };
   // Preload the squad and ±3 neighbours of the selection in the collection order, one by one
   // and after the switch itself has painted.
   useEffect(() => {
@@ -357,7 +388,10 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const sdef = petOf(stageId);
   const srec = p.pets[stageId];
   const slv = petLevelOf(srec?.xp ?? 0);
-  const size = stageId === sel ? want.size : artFor(stageId).size;
+  const size = stageId === stageSel ? want.size : artFor(stageId).size;
+  // the thumbnail (48 art px) at the biggest whole upscale inside the strip's frame, feet down
+  const phBox = PET_PX[stageId]?.box ?? 48;
+  const phS = (Math.max(1, Math.floor((size * dpr) / phBox)) * phBox) / dpr;
   // Slot art: the drawer/grid cell is 26 art px, the squad cells bigger (nursery.css `--slot`).
   const thumb = 20 * u;
   const big = (layout === 'land' ? 20 : layout === 'one' ? 22 : 26) * u;
@@ -378,27 +412,41 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
         } as CSSProperties
       }
     >
-      {size > 0 && (
-        <PetArt
-          id={stageId}
-          size={size}
-          v={petLook(srec)}
-          ghost={!srec}
-          anim={base}
-          joy={joy}
-          play={show}
-          onClick={
-            srec
-              ? () => {
-                  primeAudio();
-                  petPat();
-                  tapLight();
-                  setJoy((j) => j + 1);
-                  if (canPat(srec, Date.now()) && pat(stageId)) setXpPop((x) => x + 1);
-                }
-              : undefined
-          }
+      {size > 0 && thumbOnly ? (
+        <img
+          className="nur-ph"
+          src={petArtSrc(stageId, size, petLook(srec), true)}
+          alt=""
+          draggable={false}
+          style={{
+            width: phS,
+            height: phS,
+            left: `calc(var(--x) + ${Math.round(((size - phS) / 2) * dpr) / dpr}px)`,
+          }}
         />
+      ) : (
+        size > 0 && (
+          <PetArt
+            id={stageId}
+            size={size}
+            v={petLook(srec)}
+            ghost={!srec}
+            anim={base}
+            joy={joy}
+            play={show}
+            onClick={
+              srec
+                ? () => {
+                    primeAudio();
+                    petPat();
+                    tapLight();
+                    setJoy((j) => j + 1);
+                    if (canPat(srec, Date.now()) && pat(stageId)) setXpPop((x) => x + 1);
+                  }
+                : undefined
+            }
+          />
+        )
       )}
     </span>
   );
@@ -780,6 +828,32 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       if ((d === 'keyboard' || d === 'gamepad') && open) focusEl(open);
     };
   }, [drawer]);
+  // The drawer's first visible row is fetched one by one once it has painted: those are the
+  // pets the next tap picks.
+  useEffect(() => {
+    if (!drawer) return undefined;
+    let live = true;
+    const timer = window.setTimeout(async () => {
+      const box = drawerRef.current?.querySelector('.nur-grid');
+      if (!box) return;
+      const top = box.getBoundingClientRect().top;
+      const cells = [...box.querySelectorAll<HTMLElement>('[data-pet]')].filter(
+        (c) => c.getBoundingClientRect().top >= top - 1,
+      );
+      const row = cells.length ? cells[0].getBoundingClientRect().top : 0;
+      for (const c of cells) {
+        if (!live || c.getBoundingClientRect().top > row + 1) return;
+        const id = c.dataset.pet;
+        if (!id || !isPetId(id)) continue;
+        const a = artRef.current(id);
+        if (a.src) await decodeArt(a.src);
+      }
+    }, 150);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [drawer]);
   useEffect(() => {
     if (!drawerMode) {
       setDrawer(false);
@@ -848,7 +922,12 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   );
 
   return (
-    <div ref={root} className={`px nur nur--${layout}`} style={{ '--st': stPx } as CSSProperties}>
+    <div
+      ref={root}
+      className={`px nur nur--${layout}`}
+      style={{ '--st': stPx } as CSSProperties}
+      onPointerDownCapture={warmFrom}
+    >
       {showcase}
       <div className="nur-side">
         {plateSide && plate}

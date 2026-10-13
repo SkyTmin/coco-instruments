@@ -173,6 +173,14 @@
     calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
   image-rendering: pixelated;
 }
+/* cold switch: the picked pet's thumbnail until its strip is decoded (`thumbOnly`) */
+.nur-pet > .nur-ph {
+  position: absolute;
+  bottom: var(--lift, 0);
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: nur-pop 80ms steps(2, jump-none);
+}
 .nur-pet > .pet {
   position: absolute;
   left: var(--x, 0);
