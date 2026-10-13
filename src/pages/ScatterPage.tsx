@@ -13,8 +13,10 @@ import {
   CasToggles,
   fitStyles,
   KitIcon,
+  SKIP_TEMPO,
   useCasLayout,
   useFit,
+  useReelSpin,
 } from './casino-ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
@@ -59,7 +61,7 @@ import { fmtDec, fmtNum, orbName, rich, t, useT, winStepName } from '@/i18n';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
 import type { OrbTier } from '@/lib/orb-rarity';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
-import { planReel, restReel, spinReel } from '@/lib/reel-motion';
+import { planReel, restReel } from '@/lib/reel-motion';
 import { MERGE, planMerge } from '@/lib/orb-merge';
 import type { ReelPlan } from '@/lib/reel-motion';
 import type { WinTier } from '@/lib/rollup';
@@ -447,21 +449,17 @@ interface SpinColProps {
   /** Колонка решает судьбу бонуса: тянет время и светится. */
   anticipate: boolean;
   onStop: () => void;
+  /** Растёт по «Пропустить»: колонка встаёт сразу (useReelSpin). */
+  slam: number;
 }
 
 /** Колонка перерисовывается только при новой ленте — см. `Reel` в «Слотах». */
 const SpinCol = memo(
-  function SpinCol({ plan, skin, spinId, anticipate, onStop }: SpinColProps) {
+  function SpinCol({ plan, skin, spinId, anticipate, onStop, slam }: SpinColProps) {
     const ref = useRef<HTMLDivElement>(null);
-    const stopRef = useRef(onStop);
-    stopRef.current = onStop;
-
     // До отрисовки, а не после: иначе первый кадр спина успевал показать
     // ленту в исходном положении, ещё без анимации.
-    useLayoutEffect(
-      () => spinReel(ref.current, plan, spinId, () => stopRef.current()),
-      [spinId, plan],
-    );
+    useReelSpin(ref, plan, spinId, onStop, slam);
 
     return (
       <div className={`sboard__col${anticipate ? ' is-anticipate' : ''}`}>
@@ -488,7 +486,8 @@ const SpinCol = memo(
     a.plan === b.plan &&
     a.skin === b.skin &&
     a.spinId === b.spinId &&
-    a.anticipate === b.anticipate,
+    a.anticipate === b.anticipate &&
+    a.slam === b.slam,
 );
 
 export function ScatterPage() {
@@ -521,6 +520,12 @@ export function ScatterPage() {
   const [spinning, setSpinning] = useState(false);
   /** Какие колонки тянут время: на поле уже три скаттера из четырёх. */
   const [anti, setAnti] = useState<boolean[]>(EMPTY_ANTI);
+  // «Пропустить» (кнопка «Крутить» во время спина): `slam` ставит колонки на место, `hurry` —
+  // темп оставшихся звеньев, сбора сфер и счёта, `reelsDone` — досрочный конец вращения.
+  const [slam, setSlam] = useState(0);
+  const [hurried, setHurried] = useState(false);
+  const hurry = useRef(1);
+  const reelsDone = useRef<(() => void) | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
   /** Поле, каким оно отрисовано сейчас, — для досыпки после сбора сфер. */
   const boardNow = useRef<Board | null>(null);
@@ -764,7 +769,7 @@ export function ScatterPage() {
         return;
       }
       const plan = rollupPlan(start, to, Math.max(1, bet));
-      const speed = turbo ? TURBO : 1;
+      const speed = (turbo ? TURBO : 1) * hurry.current;
       const topBeats = plan.top?.beats ?? 0;
 
       setCounting(true);
@@ -924,7 +929,7 @@ export function ScatterPage() {
   const runStep = useCallback(
     (res: ScatterSpinOutcome, i: number) => {
       const step = res.steps[i];
-      const scale = turbo ? TURBO : 1;
+      const scale = (turbo ? TURBO : 1) * hurry.current;
       const show = SHOW_MS * scale;
       const burst = BURST_MS * scale;
       const drop = DROP_MS * scale;
@@ -1041,7 +1046,7 @@ export function ScatterPage() {
    */
   const finale = useCallback(
     (res: ScatterSpinOutcome) => {
-      const scale = turbo ? TURBO : 1;
+      const scale = (turbo ? TURBO : 1) * hurry.current;
       // Каскад отыграл — дальше деньги. Счёт стартует ровно с той суммы,
       // которую счётчик показывает прямо сейчас.
       const toPayout = () => {
@@ -1350,9 +1355,10 @@ export function ScatterPage() {
     shownGrid.current = res.grid;
     setAnti(antiCols);
     // Нарастающий вой начинается ровно тогда, когда тормозит колонка.
+    const antiTimers: ReturnType<typeof setTimeout>[] = [];
     antiCols.forEach((on, c) => {
       if (!on) return;
-      timers.current.push(
+      antiTimers.push(
         setTimeout(
           () => {
             antiSound();
@@ -1362,6 +1368,7 @@ export function ScatterPage() {
         ),
       );
     });
+    timers.current.push(...antiTimers);
     setBoard(null);
     dustStop.current?.();
     setResult(null);
@@ -1386,37 +1393,61 @@ export function ScatterPage() {
     setPending(res.total);
     setSpinId((n) => n + 1);
     setSpinning(true);
+    hurry.current = 1;
+    setHurried(false);
 
     stopReelSound();
     if (!reduceMotion()) startReelSound(turbo);
 
-    timers.current.push(
-      setTimeout(
-        () => {
-          stopReelSound();
-          // Подменять поле на сетку здесь больше НЕ НУЖНО и не нужно снова:
-          // сферы приехали в самой ленте и уже стоят в своих клетках — это те
-          // же клетки, которые только что крутились. Остаётся озвучить находку
-          // и дать её разглядеть, прежде чем начнётся каскад.
-          const landed = res.steps[0]?.orbs ?? res.orbs;
-          if (landed.length) playOrbs(landed);
-          const pause = landed.length ? 460 * (turbo ? TURBO : 1) : 0;
-          if (res.steps.length) {
-            timers.current.push(setTimeout(() => stepRef.current(res, 0), pause));
-          } else {
-            // Каскада не было — но скаттеры могли заплатить, и это тоже
-            // деньги: считаем их тем же ходом. Если платить нечего, payout
-            // сам сведёт спин к `finish`.
-            //
-            // Камень при этом просто остаётся лежать на поле до следующего
-            // вращения: он честно выпал, просто рядом ничего не собралось.
-            payoutRef.current(res, 0);
-          }
-        },
-        durs[durs.length - 1] + 60,
-      ),
-    );
+    // Колонки отъехали (или их остановил «Пропустить») — дальше сферы, каскад или деньги.
+    const landAt = durs[durs.length - 1] + 60;
+    const landTimer = setTimeout(() => reelsDone.current?.(), landAt);
+    timers.current.push(landTimer);
+    reelsDone.current = () => {
+      reelsDone.current = null;
+      clearTimeout(landTimer);
+      // Вой предвкушения ещё не начался — и не начнётся.
+      antiTimers.forEach(clearTimeout);
+      stopReelSound();
+      // Подменять поле на сетку здесь больше НЕ НУЖНО и не нужно снова:
+      // сферы приехали в самой ленте и уже стоят в своих клетках — это те
+      // же клетки, которые только что крутились. Остаётся озвучить находку
+      // и дать её разглядеть, прежде чем начнётся каскад.
+      const landed = res.steps[0]?.orbs ?? res.orbs;
+      if (landed.length) playOrbs(landed);
+      const pause = landed.length ? 460 * (turbo ? TURBO : 1) * hurry.current : 0;
+      if (res.steps.length) {
+        timers.current.push(setTimeout(() => stepRef.current(res, 0), pause));
+      } else {
+        // Каскада не было — но скаттеры могли заплатить, и это тоже
+        // деньги: считаем их тем же ходом. Если платить нечего, payout
+        // сам сведёт спин к `finish`.
+        //
+        // Камень при этом просто остаётся лежать на поле до следующего
+        // вращения: он честно выпал, просто рядом ничего не собралось.
+        payoutRef.current(res, 0);
+      }
+    };
   }, [hydrated, spinning, balance, stake, playScatter, turbo, playOrbs]);
+
+  /**
+   * «Пропустить» — та же кнопка «Крутить», пока спин идёт: исход уже решён, правила не
+   * тронуты. Первое нажатие ставит колонки на место сразу; следующие досчитывают текущий ход
+   * (и дожимают слияние сфер), а оставшиеся звенья и счёт идут в темпе SKIP_TEMPO.
+   */
+  const skip = useCallback(() => {
+    if (!spinning) return;
+    const land = reelsDone.current;
+    if (land) {
+      tapLight();
+      setSlam((n) => n + 1);
+      land();
+      return;
+    }
+    hurry.current = SKIP_TEMPO;
+    setHurried(true);
+    if (!skipCount()) tapLight();
+  }, [spinning, skipCount]);
 
   // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
   useAction(
@@ -1424,7 +1455,10 @@ export function ScatterPage() {
     (e) => {
       const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
       if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
-      spin();
+      // Тот же путь, что у кнопки: стоп автоспина, «Пропустить» во время спина, иначе спин.
+      if (auto > 0) stopAuto();
+      else if (spinning) skip();
+      else spin();
       return true;
     },
     { scope: pageRef },
@@ -1533,7 +1567,9 @@ export function ScatterPage() {
         data-skin={skin}
         ref={pageRef}
         data-lay={lay}
-        style={{ '--speed': turbo ? TURBO : 1 } as React.CSSProperties}
+        style={
+          { '--speed': (turbo ? TURBO : 1) * (hurried ? SKIP_TEMPO : 1) } as React.CSSProperties
+        }
       >
         <section className="cas-info px">
           <div className="cas-lvl">
@@ -1698,6 +1734,7 @@ export function ScatterPage() {
                           skin={skin}
                           spinId={spinId}
                           anticipate={anti[i] ?? false}
+                          slam={slam}
                           onStop={() => {
                             reelStop(i);
                             if (i === SCATTER_COLS - 1) selectionChanged();
@@ -1834,7 +1871,7 @@ export function ScatterPage() {
                         сменялись три разных числа с тремя разными анимациями —
                         отсюда и ощущение «проскакивает». */}
                     <span className={`status__win${counting ? ' is-counting' : ''}`} ref={winRef}>
-                      +<MoneyCounter ref={winOdo} value={0} />
+                      +<MoneyCounter ref={winOdo} value={0} format={fmt} />
                       <CoinIcon size={20} />
                     </span>
                   </>
@@ -1871,7 +1908,7 @@ export function ScatterPage() {
               {/* Баланс — тот же механический счётчик, и во время выплаты он
                   крутится В ОДИН ХОД с выигрышем: видно, как деньги прибывают
                   в карман, а не появляются там задним числом. */}
-              <MoneyCounter ref={balOdo} value={shownBalance} />
+              <MoneyCounter ref={balOdo} value={shownBalance} format={fmt} />
               <CoinIcon size={22} />
             </>
           }
@@ -1887,24 +1924,26 @@ export function ScatterPage() {
           spinDisabled={!canSpin && auto === 0}
           busy={spinning}
           onSpin={() => (auto > 0 ? stopAuto() : spin())}
+          onSkip={skip}
           spinLabel={
             auto > 0
-              ? auto === Infinity
-                ? tr('slots.btn.stopInf')
-                : tr('slots.btn.stopN', { n: auto })
-              : cascade
-                ? chain >= 2
-                  ? tr('slots.btn.chain', { n: chain })
-                  : tr('slots.btn.cascade')
-                : spinning
-                  ? tr('slots.status.spinning')
-                  : inBonus && fs
-                    ? tr('slots.btn.bonus', { n: fs.left })
-                    : broke
-                      ? tr('slots.btn.broke')
-                      : freeSpins > 0
-                        ? tr('slots.btn.free', { n: freeSpins })
-                        : tr('slots.btn.spin', { bet: stake })
+              ? tr('slots.btn.stopShort')
+              : inBonus && fs
+                ? tr('slots.btn.bonusShort')
+                : broke
+                  ? tr('slots.btn.brokeShort')
+                  : freeSpins > 0
+                    ? tr('slots.btn.freeShort')
+                    : tr('slots.btn.spinShort')
+          }
+          spinBadge={
+            auto > 0
+              ? undefined
+              : inBonus && fs
+                ? fmt(fs.left)
+                : freeSpins > 0
+                  ? fmt(freeSpins)
+                  : undefined
           }
           auto={auto}
           autoDisabled={!canSpin && auto === 0}

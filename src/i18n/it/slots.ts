@@ -113,6 +113,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: 'Raccogli {n} uguali',
   },
   btn: {
+    spinShort: 'Gira',
+    freeShort: 'Gratis',
+    brokeShort: 'Al verde',
+    bonusShort: 'Bonus',
+    stopShort: 'Stop',
+    skip: 'Salta',
     stopInf: 'Stop · ∞',
     stopN: 'Stop ({n})',
     combo: 'Combo ×{n}…',
@@ -128,6 +134,7 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'giri',
   statBestWin: 'vincita migliore',
   pay: {
+    introShort: '5 linee, da sinistra a destra · 3 in fila = vincita',
     title: 'Vincite e linee',
     intro:
       'Cinque linee, ognuna paga da sinistra a destra: tre uguali sono la vincita grossa, i primi due ridanno qualcosa. Il moltiplicatore della tabella vale per la puntata ÷ {unit}: con una puntata di {bet} fa {line}.',
@@ -174,6 +181,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Si ferma da solo se mancano monete',
     h10: 'dieci giri',
     h25: 'venticinque',
     h50: 'cinquanta',
@@ -192,6 +200,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Giri e cascate il doppio più veloci',
   },
   bet: {
+    short: '{min}–{max}, passo {step}',
+    lineShort: 'linea = puntata ÷ {unit}',
     less: 'Meno',
     more: 'Più',
     note: 'Da {min} a {max} monete, a passi di {step}. Una linea paga sulla puntata ÷ {unit}: ora fa {line}.',
@@ -219,6 +229,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MASSIMO',
   },
   cascade: {
+    howShort: '{n} uguali ovunque = vincita, il campo crolla',
+    anteChip: '×{n}',
     subtitle: 'Griglia {cols}×{rows} · {n} uguali ovunque',
     bonus: 'BONUS',
     left: 'ancora {n}',

@@ -3,6 +3,7 @@ import type { cash as ru } from '../ru/cash';
 
 export const cash: Translation<typeof ru> = {
   title: 'Caja',
+  hintShort: 'No cambia el retorno de la máquina',
   meta: 'monedas virtuales',
   hint: 'El pago de la máquina no cambia: los giros los sigue decidiendo un generador aleatorio honesto, y también se pierde. Es solo una forma de no esperar los bonus diarios.',
   telegram: 'Conexión con Telegram',

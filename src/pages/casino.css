@@ -302,8 +302,9 @@
   align-items: center;
   justify-content: center;
   gap: var(--u);
-  /* fixed width: 5 and 500 take the same room — nothing moves when the bet changes */
-  width: calc(34 * var(--u));
+  /* fixed width, sized for «500» + coin: 5 and 500 take the same room — nothing moves when the
+     bet changes, nothing overflows the well */
+  width: calc(3ch + 18px + 8 * var(--u));
   height: var(--gx-hit);
   margin: 0;
   padding: 0 calc(2 * var(--u));
@@ -316,6 +317,23 @@
 .cas-bet__v:disabled {
   color: var(--px-dim);
   cursor: default;
+}
+/* Pressed (`usePress` → `.is-down` on pointerdown, `:active` for the keyboard): the well one
+   ramp step darker and its content one art pixel lower, in the first frame. */
+.cas-bet__v {
+  isolation: isolate;
+}
+.cas-bet__v:is(:active, .is-down):not(:disabled) {
+  padding-top: calc(2 * var(--u));
+}
+/* The well's fill is painted over the element's own background — the darker step is a layer
+   between the fill and the digits. */
+.cas-bet__v:is(:active, .is-down):not(:disabled)::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: -1;
+  background: #c9a56d;
 }
 /* Key prompts for the bet (Tab / LB …) sit over the caption, right-aligned; nothing on touch. */
 .cas-bet__keys {
@@ -376,12 +394,37 @@
   min-height: calc(26 * var(--u));
   min-width: 0;
 }
+/* The verb only, never cut: a long word steps the font down (`useFitText`: big → body →
+   small), and only the smallest step may wrap to two lines — inside the plate's fixed height. */
 .cas-spin__t {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 100%;
   font: 400 var(--px-fs-big) / 1.05 var(--px-head);
   text-transform: uppercase;
+  white-space: nowrap;
+}
+.cas-spin__t[data-fit='1'] {
+  font-size: var(--px-fs);
+}
+.cas-spin__t[data-fit='2'] {
+  font-size: var(--px-fs-sm);
+  line-height: 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+/* Free spins / bonus spins left: a gold counter on the plate's corner (like auto's). */
+.cas-spin > .cas-spin__n {
+  right: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
+  z-index: 2;
+}
+/* Skip: the same gold plate (a press always does something), the skip arrows in front. */
+.cas-spin.is-skip {
+  gap: calc(2 * var(--u));
+}
+.cas-spin.is-skip > .px-i {
+  flex: none;
 }
 /* The key sits on the corner like on the small buttons: the label keeps the whole width. */
 .cas-spin > .px-keyhint {
@@ -425,6 +468,37 @@
 }
 
 /* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
+/* Money in rows, each caption inline on the left: «Баланс … 510 812 345 🪙», «Ставка … [−] [10] [+]».
+   The balance box is sized for the maximum (11 tabular digits + coin), so a growing balance is
+   never cut and never moves anything (critic R19). Phone and tablet portrait alike. */
+.cas[data-lay='tall'] .cas-deck__money {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+}
+.cas[data-lay='tall'] .cas-bal,
+.cas[data-lay='tall'] .cas-bet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  justify-self: stretch;
+}
+.cas[data-lay='tall'] :is(.cas-bal, .cas-bet) > .cas-cap {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.cas[data-lay='tall'] .cas-bal__v {
+  flex: none;
+  justify-content: flex-end;
+  min-width: calc(11ch + 22px + 2 * var(--u));
+  height: calc(15 * var(--u));
+}
+.cas[data-lay='tall'] .cas-bet__keys {
+  top: auto;
+  right: auto;
+  left: 0;
+  bottom: calc(-3 * var(--u));
+}
 [data-lay='tall'] > .cas-info {
   border-image-source: var(--pxk-frame-parch);
   border-image-slice: var(--pxk-frame-parch-s);
@@ -565,6 +639,7 @@ html[data-ff='tablet'] .cas-bal__v {
 .cas[data-lay='wide'] .cas-bet__v {
   flex: 1 1 auto;
   width: auto;
+  min-width: calc(3ch + 18px + 8 * var(--u));
 }
 /* Quick bets (the old chip row) on roomy formats: 3 × 2 under the stepper. */
 html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chips {

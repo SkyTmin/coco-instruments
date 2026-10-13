@@ -113,6 +113,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: 'Junta {n} iguales',
   },
   btn: {
+    spinShort: 'Girar',
+    freeShort: 'Gratis',
+    brokeShort: 'Sin monedas',
+    bonusShort: 'Bonus',
+    stopShort: 'Parar',
+    skip: 'Saltar',
     stopInf: 'Parar · ∞',
     stopN: 'Parar ({n})',
     combo: 'Combo ×{n}…',
@@ -128,6 +134,7 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'giros',
   statBestWin: 'mejor premio',
   pay: {
+    introShort: '5 líneas, de izquierda a derecha · 3 en raya = pago',
     title: 'Pagos y líneas',
     intro:
       'Cinco líneas, cada una paga de izquierda a derecha: tres iguales son el premio gordo, los dos primeros devuelven algo. El multiplicador de la tabla se aplica a la apuesta ÷ {unit}: con una apuesta de {bet}, son {line}.',
@@ -174,6 +181,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Se detiene solo si faltan monedas',
     h10: 'diez giros',
     h25: 'veinticinco',
     h50: 'cincuenta',
@@ -192,6 +200,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Giros y cascadas el doble de rápidos',
   },
   bet: {
+    short: '{min}–{max}, paso {step}',
+    lineShort: 'línea = apuesta ÷ {unit}',
     less: 'Menos',
     more: 'Más',
     note: 'De {min} a {max} monedas, de {step} en {step}. Una línea paga sobre la apuesta ÷ {unit}: ahora son {line}.',
@@ -219,6 +229,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MÁXIMO',
   },
   cascade: {
+    howShort: '{n} iguales en cualquier sitio = premio, el tablero cae',
+    anteChip: '×{n}',
     subtitle: 'Tablero {cols}×{rows} · {n} iguales en cualquier sitio',
     bonus: 'BONUS',
     left: 'quedan {n}',

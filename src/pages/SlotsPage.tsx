@@ -14,8 +14,10 @@ import {
   CasToggles,
   fitStyles,
   KitIcon,
+  SKIP_TEMPO,
   useCasLayout,
   useFit,
+  useReelSpin,
 } from './casino-ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
@@ -49,7 +51,7 @@ import {
 } from '@/lib/slots';
 import type { CascadeStep, LineWin, SlotGrid, SlotSymbolId, SpinResult } from '@/lib/slots';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
-import { planReel, restReel, spinReel } from '@/lib/reel-motion';
+import { planReel, restReel } from '@/lib/reel-motion';
 import type { ReelPlan } from '@/lib/reel-motion';
 import type { WinTier } from '@/lib/rollup';
 import {
@@ -214,6 +216,8 @@ interface ReelProps {
   skin: SkinId;
   spinId: number;
   onStop: () => void;
+  /** Растёт по «Пропустить»: лента встаёт сразу (useReelSpin). */
+  slam: number;
 }
 
 /**
@@ -223,15 +227,9 @@ interface ReelProps {
  * `onStop` в сравнении не участвует — он и так читается через ref.
  */
 const Reel = memo(
-  function Reel({ plan, skin, spinId, onStop }: ReelProps) {
+  function Reel({ plan, skin, spinId, onStop, slam }: ReelProps) {
     const ref = useRef<HTMLDivElement>(null);
-    const stopRef = useRef(onStop);
-    stopRef.current = onStop;
-
-    useLayoutEffect(
-      () => spinReel(ref.current, plan, spinId, () => stopRef.current()),
-      [spinId, plan],
-    );
+    useReelSpin(ref, plan, spinId, onStop, slam);
 
     return (
       <div className="reel">
@@ -248,7 +246,7 @@ const Reel = memo(
       </div>
     );
   },
-  (a, b) => a.plan === b.plan && a.skin === b.skin && a.spinId === b.spinId,
+  (a, b) => a.plan === b.plan && a.skin === b.skin && a.spinId === b.spinId && a.slam === b.slam,
 );
 
 /**
@@ -436,6 +434,12 @@ export function SlotsPage() {
   } | null>(null);
   const [totem, totemLeaving] = useExit(celebration, 300);
   const [jackpotWin, setJackpotWin] = useState(0);
+  // «Пропустить» (кнопка «Крутить» во время спина): `slam` ставит ленты на место, `hurry` —
+  // темп оставшихся звеньев и счёта, `reelsDone` — досрочный конец вращения.
+  const [slam, setSlam] = useState(0);
+  const [hurried, setHurried] = useState(false);
+  const hurry = useRef(1);
+  const reelsDone = useRef<(() => void) | null>(null);
 
   const reelsRef = useRef<HTMLDivElement>(null);
 
@@ -591,7 +595,7 @@ export function SlotsPage() {
         return;
       }
       const plan = rollupPlan(start, to, Math.max(1, bet));
-      const speed = turbo ? 0.55 : 1;
+      const speed = (turbo ? 0.55 : 1) * hurry.current;
       const topBeats = plan.top?.beats ?? 0;
 
       setCounting(true);
@@ -727,7 +731,7 @@ export function SlotsPage() {
   const runStep = useCallback(
     (res: SlotsSpinOutcome, i: number) => {
       const step = res.steps[i];
-      const scale = turbo ? 0.55 : 1;
+      const scale = (turbo ? 0.55 : 1) * hurry.current;
       const show = SHOW_MS * scale;
       const burst = BURST_MS * scale;
       const drop = DROP_MS * scale;
@@ -907,24 +911,49 @@ export function SlotsPage() {
       winOdo.current?.set(0);
       setSpinId((n) => n + 1);
       setSpinning(true);
+      hurry.current = 1;
+      setHurried(false);
 
+      // Барабаны отъехали (или их остановил «Пропустить») — дальше каскад или деньги.
+      const reelTimers: ReturnType<typeof setTimeout>[] = [];
+      const afterReels = () => {
+        reelsDone.current = null;
+        reelTimers.forEach(clearTimeout);
+        stopReelSound();
+        if (res.steps.length) stepRef.current(res, 0);
+        else payoutRef.current(res, 0);
+      };
       // Пока барабаны в движении — дробный стрёкот механики.
       stopReelSound();
       if (!reduceMotion()) {
         startReelSound(turbo);
-        if (drama) timers.current.push(setTimeout(() => antiSound(), durs[1]));
+        if (drama) reelTimers.push(setTimeout(() => antiSound(), durs[1]));
       }
-
-      timers.current.push(
-        setTimeout(() => {
-          stopReelSound();
-          if (res.steps.length) stepRef.current(res, 0);
-          else payoutRef.current(res, 0);
-        }, durs[2] + 40),
-      );
+      reelTimers.push(setTimeout(afterReels, durs[2] + 40));
+      timers.current.push(...reelTimers);
+      reelsDone.current = afterReels;
     },
     [hydrated, spinning, balance, bet, freeSpins, playSlots, turbo, pullLever],
   );
+
+  /**
+   * «Пропустить» — та же кнопка «Крутить», пока спин идёт: исход уже решён, правила не
+   * тронуты. Первое нажатие ставит барабаны на место сразу; следующие досчитывают текущий
+   * ход, а оставшиеся звенья и счёт идут в темпе SKIP_TEMPO (обычный спин — как турбо).
+   */
+  const skip = useCallback(() => {
+    if (!spinning) return;
+    const land = reelsDone.current;
+    if (land) {
+      tapLight();
+      setSlam((n) => n + 1);
+      land();
+      return;
+    }
+    hurry.current = SKIP_TEMPO;
+    setHurried(true);
+    if (!skipCount()) tapLight();
+  }, [spinning, skipCount]);
 
   // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
   useEffect(() => {
@@ -1009,7 +1038,10 @@ export function SlotsPage() {
     (e) => {
       const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
       if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
-      spin();
+      // Тот же путь, что у кнопки: стоп автоспина, «Пропустить» во время спина, иначе спин.
+      if (auto > 0) stopAuto();
+      else if (spinning) skip();
+      else spin();
       return true;
     },
     { scope: pageRef },
@@ -1099,7 +1131,9 @@ export function SlotsPage() {
         data-skin={skin}
         ref={pageRef}
         data-lay={lay}
-        style={{ '--speed': turbo ? 0.55 : 1 } as React.CSSProperties}
+        style={
+          { '--speed': (turbo ? 0.55 : 1) * (hurried ? SKIP_TEMPO : 1) } as React.CSSProperties
+        }
       >
         <SlotArtDefs />
         {/* Сводка: уровень, джекпот, спины, лучший выигрыш, последние спины.
@@ -1223,6 +1257,7 @@ export function SlotsPage() {
                           plan={plan}
                           skin={skin}
                           spinId={spinId}
+                          slam={slam}
                           onStop={() => onReelStop(i)}
                         />
                       ))
@@ -1338,7 +1373,7 @@ export function SlotsPage() {
                     {/* Один счётчик на весь спин: набирает базу за каскад, а
                         потом с неё же уезжает к итогу. */}
                     <span className={`status__win${counting ? ' is-counting' : ''}`} ref={winRef}>
-                      +<MoneyCounter ref={winOdo} value={0} />
+                      +<MoneyCounter ref={winOdo} value={0} format={fmt} />
                       <CoinIcon size={20} />
                     </span>
                     {!counting && stepCombo > 1 && (
@@ -1391,7 +1426,7 @@ export function SlotsPage() {
             <>
               {/* Баланс — тот же механический счётчик, и во время выплаты он
                   крутится В ОДИН ХОД с выигрышем. */}
-              <MoneyCounter ref={balOdo} value={shownBalance} />
+              <MoneyCounter ref={balOdo} value={shownBalance} format={fmt} />
               <CoinIcon size={22} />
             </>
           }
@@ -1407,23 +1442,17 @@ export function SlotsPage() {
           spinDisabled={!canSpin && auto === 0}
           busy={spinning}
           onSpin={() => (auto > 0 ? stopAuto() : spin())}
+          onSkip={skip}
           spinLabel={
             auto > 0
-              ? auto === Infinity
-                ? tr('slots.btn.stopInf')
-                : tr('slots.btn.stopN', { n: auto })
-              : cascade
-                ? chain >= 2
-                  ? tr('slots.btn.combo', { n: chain })
-                  : tr('slots.btn.cascade')
-                : spinning
-                  ? tr('slots.status.spinning')
-                  : broke
-                    ? tr('slots.btn.broke')
-                    : freeSpins > 0
-                      ? tr('slots.btn.free', { n: freeSpins })
-                      : tr('slots.btn.spin', { bet })
+              ? tr('slots.btn.stopShort')
+              : broke
+                ? tr('slots.btn.brokeShort')
+                : freeSpins > 0
+                  ? tr('slots.btn.freeShort')
+                  : tr('slots.btn.spinShort')
           }
+          spinBadge={auto === 0 && freeSpins > 0 ? fmt(freeSpins) : undefined}
           auto={auto}
           autoDisabled={!canSpin && auto === 0}
           onAuto={() => {

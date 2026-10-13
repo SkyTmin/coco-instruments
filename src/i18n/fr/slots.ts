@@ -113,6 +113,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: 'Réunissez {n} identiques',
   },
   btn: {
+    spinShort: 'Lancer',
+    freeShort: 'Gratuit',
+    brokeShort: 'Fauché',
+    bonusShort: 'Bonus',
+    stopShort: 'Stop',
+    skip: 'Passer',
     stopInf: 'Stop · ∞',
     stopN: 'Stop ({n})',
     combo: 'Combo ×{n}…',
@@ -128,6 +134,7 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'tours',
   statBestWin: 'meilleur gain',
   pay: {
+    introShort: '5 lignes, de gauche à droite · 3 alignés = gain',
     title: 'Gains et lignes',
     intro:
       'Cinq lignes, chacune paie de gauche à droite : trois identiques, c’est le gros gain, les deux premiers rendent un peu. Le multiplicateur du tableau s’applique à la mise ÷ {unit} — pour une mise de {bet}, ça fait {line}.',
@@ -174,6 +181,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'S’arrête tout seul à court de pièces',
     h10: 'dix tours',
     h25: 'vingt-cinq',
     h50: 'cinquante',
@@ -192,6 +200,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Tours et cascades deux fois plus rapides',
   },
   bet: {
+    short: '{min}–{max}, pas de {step}',
+    lineShort: 'ligne = mise ÷ {unit}',
     less: 'Moins',
     more: 'Plus',
     note: 'De {min} à {max} pièces par pas de {step}. Une ligne paie sur la mise ÷ {unit} — là, ça fait {line}.',
@@ -219,6 +229,8 @@ export const slots: Translation<typeof ru> = {
     max: 'GAIN MAX',
   },
   cascade: {
+    howShort: '{n} identiques n’importe où = gain, la grille s’effondre',
+    anteChip: '×{n}',
     subtitle: 'Grille {cols}×{rows} · {n} identiques n’importe où',
     bonus: 'BONUS',
     left: 'encore {n}',

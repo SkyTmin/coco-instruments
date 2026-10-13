@@ -108,6 +108,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: '{n} aynısını toplayın',
   },
   btn: {
+    spinShort: 'Çevir',
+    freeShort: 'Bedava',
+    brokeShort: 'Altın bitti',
+    bonusShort: 'Bonus',
+    stopShort: 'Dur',
+    skip: 'Geç',
     stopInf: 'Dur · ∞',
     stopN: 'Dur ({n})',
     combo: 'Kombo ×{n}…',
@@ -123,6 +129,7 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'spin',
   statBestWin: 'en iyi kazanç',
   pay: {
+    introShort: '5 hat, soldan sağa · 3 aynı = ödeme',
     title: 'Ödemeler ve hatlar',
     intro:
       'Beş hat var, her biri soldan sağa öder: üç aynı sembol asıl kazançtır, ilk ikisi küçük bir geri ödeme verir. Tablodaki çarpan bahis ÷ {unit} ile çarpılır — {bet} bahiste bu {line} eder.',
@@ -166,6 +173,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Altın bitince kendiliğinden durur',
     h10: 'on spin',
     h25: 'yirmi beş',
     h50: 'elli',
@@ -184,6 +192,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Spinler ve şelaleler iki kat hızlı',
   },
   bet: {
+    short: '{min}–{max}, adım {step}',
+    lineShort: 'hat = bahis ÷ {unit}',
     less: 'Azalt',
     more: 'Artır',
     note: '{min} ile {max} altın arası, {step} adımla. Hat ödemesi bahis ÷ {unit} üzerinden hesaplanır — şu an {line}.',
@@ -211,6 +221,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MAKSİMUM',
   },
   cascade: {
+    howShort: 'Her yerde {n} aynı sembol = kazanç, alan çöker',
+    anteChip: '×{n}',
     subtitle: '{cols}×{rows} alan · her yerde {n} aynı',
     bonus: 'BONUS',
     left: '{n} kaldı',
