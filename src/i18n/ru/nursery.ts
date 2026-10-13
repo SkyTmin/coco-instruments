@@ -2,7 +2,9 @@
 export const nursery = {
   tabPets: 'Питомцы',
   tabEggs: 'Яйца',
-  squad: 'С собой',
+  squad: 'Отряд',
+  squadHint: 'Идут с тобой в шахту',
+  notYet: 'Ещё не вылупился',
   pick: 'Кого взять?',
   lockRank: 'Ранг {rank}',
   lockPrestige: 'Престиж',
@@ -36,6 +38,8 @@ export const nursery = {
   from: 'Из яиц',
   /** Chance of this very pet from one egg. */
   eggPct: '{v}%',
+  /** A role bonus on a chip: icon + this. */
+  bonus: '+{v}%',
   allWithYou: 'Все питомцы уже с тобой',
   hatchFirst: 'Сначала вырасти питомца из яйца',
   rarity: {

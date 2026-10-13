@@ -60,9 +60,17 @@ html[data-ff='phone-portrait'] .gx-win {
 .gx-win__box:has([role='tablist']) {
   --gx-mw: 300;
 }
-/* Kit content lays itself out in columns (the Nursery: list | stage | details) — give it room. */
-.gx-win__box:has(.gx-win__body .px) {
+/* Kit content lays itself out in columns (the Nursery: list | stage | details) — give it room.
+   A camp with a tab rail gets the same width on EVERY tab (one tab is kit, the next is old, and
+   the window must not change size when the tab changes — owner: «чтобы картинка не дёргалась»);
+   kit tabs inside the body (PetsTab: pets | eggs) count as kit content for the same reason. */
+.gx-win__box:is(.gx-camp.has-tabs, :has(.gx-win__body .px, .gx-win__body .px-tabs)) {
   --gx-mw: 420;
+}
+/* Old tab content in such a wide window: a phone-made column, so a sane width, centred. */
+.gx-camp .gx-win__body:not(:has(.px, .px-tabs)) > .pcamp-body {
+  max-width: 720px;
+  margin-inline: auto;
 }
 /* Beats callers' old px widths (they were for a phone; the body is zoomed on big screens). */
 .gx-win > .gx-win__box.px-panel {
@@ -110,26 +118,41 @@ html[data-ff='phone-portrait'] .gx-win__box:is(.gx-camp, :has([role='tablist']))
   inset: calc(-4 * var(--u));
 }
 
-/* ---- Body: parchment (old content, dark text) or a dark well (kit content) ------------------ */
+/* ---- Body: parchment (old content, dark text) or the kit well (kit content) ------------------ */
 .gx-win__body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 8px 10px 10px;
+  padding: calc(4 * var(--u));
   scrollbar-width: thin;
   scrollbar-color: var(--px-dim, #7e735f) transparent;
   /* Old screens are drawn in CSS px for a phone: on big scales (≥ 4) the body is zoomed by a
      whole 2 (set by GxWindow as --gx-z) and the kit unit is divided back, so frames inside stay
-     one art pixel = --ui-px. */
+     one art pixel = --ui-px. The kit type sizes are px too (and a custom property is resolved
+     where it is declared — :root), so they are divided back the same way from copies taken at
+     :root; kit pieces inside old content (PetsTab's tabs, gx widgets, a nested window's ribbon)
+     keep their size. A new kit size var needs a line here. */
   zoom: var(--gx-z, 1);
   --u: calc(var(--ui-px, 2px) / var(--gx-z, 1));
+  --px-fs: calc(var(--gx-fs) / var(--gx-z, 1));
+  --px-fs-sm: calc(var(--gx-fs-sm) / var(--gx-z, 1));
+  --px-fs-tiny: calc(var(--gx-fs-tiny) / var(--gx-z, 1));
+  --px-fs-head: calc(var(--gx-fs-head) / var(--gx-z, 1));
+  --px-fs-big: calc(var(--gx-fs-big) / var(--gx-z, 1));
+  --px-fs-hero: calc(var(--gx-fs-hero) / var(--gx-z, 1));
 }
-/* Kit content (a `.px` root inside — the Nursery, wave-3 tabs): no zoom, dark well, the content
-   lays itself out in the full height (its columns scroll on their own). */
+/* Kit content (a `.px` root inside — the Nursery, wave-3 tabs): no zoom, the kit well (light
+   interior, dark ink); the content lays itself out in the full height (its columns scroll). */
 .gx-win .gx-win__body:has(.px) {
   zoom: 1;
   --u: var(--ui-px, 2px);
+  --px-fs: var(--gx-fs);
+  --px-fs-sm: var(--gx-fs-sm);
+  --px-fs-tiny: var(--gx-fs-tiny);
+  --px-fs-head: var(--gx-fs-head);
+  --px-fs-big: var(--gx-fs-big);
+  --px-fs-hero: var(--gx-fs-hero);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -237,6 +260,14 @@ span.gx-top__side {
 .gx-top :is(.gx-round, .gx-audio__btn) {
   --gx-size: var(--gx-hit);
 }
+/* Sound and music (AudioToggles): two square kit buttons, a full touch target everywhere. */
+.gx-audio {
+  display: inline-flex;
+  gap: calc(3 * var(--u));
+}
+.gx-audio__btn {
+  --gx-size: var(--gx-hit);
+}
 /* No room for everything in one row (GameTop measures it: `is-tight`) — the title goes, the
    screen names itself; it stays for screen readers. Chips and buttons never shrink. */
 .gx-top__row.is-tight .gx-top__title {
@@ -275,52 +306,88 @@ span.gx-top__side {
   justify-content: center;
   padding-inline: calc(2 * var(--u));
 }
-/* Rail: as wide as the longest word allows, never wider than a third of the window. */
+/* The phone strip: every tab gets an equal share — all of them visible, none cut at the edge. */
+.gx-camp.is-compact .gx-camp__tabs:not(.px-tabs--rail) .px-tab {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Rail: as wide as the longest word, at most ~a quarter of the camp; a longer word (de, tr)
+   wraps with hyphens onto a second line — never an ellipsis on a tab name. */
 .gx-camp__tabs.px-tabs--rail {
   gap: calc(2 * var(--u));
-  max-width: calc(78 * var(--u));
+  max-width: calc(104 * var(--u));
   padding: calc(1 * var(--u)) 0;
+}
+.gx-camp__tabs.px-tabs--rail .px-tab__label {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  line-height: 1.1;
+  text-align: start;
 }
 .gx-camp.is-compact .gx-camp__tabs.px-tabs--rail {
   max-width: none;
 }
 .gx-camp__tabs.px-tabs--rail .px-tab {
-  padding: calc(3 * var(--u)) calc(5 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+  /* the right end keeps room for a badge on EVERY tab: a badge coming or going never resizes
+     the rail (and so never moves the body) */
+  padding: calc(3 * var(--u)) calc(10 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+}
+.gx-camp.is-compact .gx-camp__tabs.px-tabs--rail .px-tab {
+  padding-inline: calc(2 * var(--u));
 }
 
 /* ==============================================================================================
    Old gx widgets in kit clothes (class names unchanged — callers keep styling them):
-   `gx-btn` and `gx-round` → kit button frames, `gx-bar` → kit trough, `gx-chip` → a dark well
+   `gx-btn` and `gx-round` → kit button frames, `gx-bar` → kit trough, `gx-chip` → a light well
    plaque, `gx-badge` → kit badge. Sizes stay in CSS px (they live in old layouts); frames and
    the pressed shift are in art pixels. Material: gold (default), iron (`--dark`, `--grey`,
    `--steel`), red, green; `.is-off` / `:disabled` → ash.
    ============================================================================================== */
+:root {
+  /* The kit type sizes as resolved at :root — the zoomed body divides these (see the body). */
+  --gx-fs: var(--px-fs);
+  --gx-fs-sm: var(--px-fs-sm);
+  --gx-fs-tiny: var(--px-fs-tiny);
+  --gx-fs-head: var(--px-fs-head);
+  --gx-fs-big: var(--px-fs-big);
+  --gx-fs-hero: var(--px-fs-hero);
+  /* Text on the kit button faces: the same pairs as `.px-btn` / `.px-btn--gold` / disabled in
+     ui-px.css (faces are their own material, so not the panel text vars). */
+  --gx-on-face: #fff6e0;
+  --gx-on-gold: #3a2105;
+  --gx-on-gold-lip: #ffe9a6;
+  --gx-on-ash: #b5b0a6;
+}
 :where(.gx-btn, .gx-round) {
   --b: var(--pxk-btn-gold-n);
   --bs: var(--pxk-btn-gold-n-s);
   --bw: var(--pxk-btn-gold-n-w);
-  color: var(--px-ink);
-  text-shadow: none;
+  color: var(--gx-on-gold);
+  text-shadow: 0 var(--u) 0 var(--gx-on-gold-lip);
 }
 :where(.gx-btn--grey, .gx-round--dark, .gx-round--grey, .gx-round--steel) {
   --b: var(--pxk-btn-iron-n);
   --bs: var(--pxk-btn-iron-n-s);
   --bw: var(--pxk-btn-iron-n-w);
-  color: var(--px-text);
+  color: var(--gx-on-face);
   text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 :where(.gx-btn--red, .gx-round--red) {
   --b: var(--pxk-btn-red-n);
   --bs: var(--pxk-btn-red-n-s);
   --bw: var(--pxk-btn-red-n-w);
-  color: var(--px-text);
+  color: var(--gx-on-face);
   text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 :where(.gx-round--green) {
   --b: var(--pxk-btn-green-n);
   --bs: var(--pxk-btn-green-n-s);
   --bw: var(--pxk-btn-green-n-w);
-  color: var(--px-text);
+  color: var(--gx-on-face);
   text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 @media (hover: hover) and (pointer: fine) {
@@ -370,7 +437,7 @@ span.gx-top__side {
   --b: var(--pxk-btn-iron-d);
   --bs: var(--pxk-btn-iron-d-s);
   --bw: var(--pxk-btn-iron-d-w);
-  color: var(--px-muted);
+  color: var(--gx-on-ash);
   text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 
@@ -507,8 +574,8 @@ span.gx-top__side {
   background: none;
   box-shadow: none;
   box-sizing: border-box;
-  color: var(--px-text);
-  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--gx-on-face);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
   text-shadow: 0 var(--u) 0 var(--px-ink);
   pointer-events: none;
   animation: gx-badge-bob 1.6s steps(1, jump-none) infinite;
@@ -576,8 +643,9 @@ span.gx-top__side {
   z-index: 1;
   display: grid;
   place-items: center;
-  color: var(--px-text);
-  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--gx-on-face);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
   text-shadow:
     var(--u) 0 0 var(--px-ink),
     0 var(--u) 0 var(--px-ink),
@@ -603,8 +671,12 @@ span.gx-top__side {
 .gx-bar--thin {
   height: calc(5 * var(--u));
 }
+/* A bar with words on it is as tall as the (readable) label needs. */
+.gx-bar:has(> b) {
+  height: max(calc(8 * var(--u)), calc(var(--px-fs-sm) + 4 * var(--u)));
+}
 
-/* Coin / token plaque — a dark well with a light number. */
+/* Coin / token plaque — the kit well with a dark number. */
 .gx-chip {
   display: inline-flex;
   align-items: center;
@@ -622,9 +694,9 @@ span.gx-top__side {
   background: none;
   box-shadow: none;
   color: var(--px-text);
-  font: 400 var(--px-fs) / 1 var(--px-font);
+  font: 700 var(--px-fs) / 1 var(--px-font);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 var(--u) 0 var(--px-ink);
+  text-shadow: none;
   white-space: nowrap;
 }
 .gx-chip .gx-icon {
