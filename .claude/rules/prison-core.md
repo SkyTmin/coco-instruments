@@ -382,9 +382,10 @@ Field drawing, mining, timings, critters and their animations are untouched.
 - **Dock** — six iron buttons, icon + label: forge, books, chests, pets, inventory
   (`input.action.inventory`), camp (`mineHud.dock.camp`). Books / inventory / camp icons are
   painted kit pieces `m-dock-books|bag|camp` (`paint.ts`, `// wave 2 — M`, char maps). Labels
-  never break mid-word: `DockLabel` sets `--lw` (longest word) and the size is
-  `min(fs, (100cqi − icon − 2u) / (lw · 0.64))`; tr labels keep soft hyphens. Phone tall: tiles
-  24u (48 px), gap 3u; elsewhere 21u.
+  never break mid-word. Phone tall (M3): the tile is a COLUMN (icon over label), 26u high,
+  label fixed `--px-fs-sm` (17 px), `nowrap; hyphens: none` — no `--lw` size formula (it gave
+  13.7–17 px per label). Elsewhere `DockLabel`'s `--lw` formula still sizes the side-column
+  labels; tr labels keep soft hyphens.
 - **Hotkeys** (`useHotkeys`, scope = dock): F B C P I M L, E sell, R rank, 1–6 items; pad VIEW /
   X / Y. `KeyHint` is hidden by CSS for `data-input` touch / mouse.
 - **Nothing jumps:** fixed heights for stats, rank box, needs row, streak strip, backpack, dock;
@@ -399,9 +400,14 @@ Field drawing, mining, timings, critters and their animations are untouched.
   / `.pstrip` / `.pmx .prison` stay for Forest and Fishing.
 - **Background:** light sandstone (`.prison-scene.pxt-stone` + a cream veil): dark pixels
   (L < 0.02) 6.9–10.8 % of the screen (was 21–46 %). Owner rejected the dark palette.
-- **HUD numbers fit by size, not clipping:** `.mn-stat` is a size container (no `overflow`,
-  the kit focus ring must show) and `.mn-stat__n` = `min(--fs-n, (100cqi − icon − 2u) /
-  (--len · 0.64))`, `--len` = string length (`lenVar`). Coin = painted `m-coin` (12×12) /
+- **HUD numbers (M3): one size per chip, compact notation instead of a smaller font.**
+  `lenVar` is gone. `.mn-stat` keeps a reserved width `--res` (coins 8, others 6 chars) and
+  `.mn-stat__n` = `max(16px, min(--fs-n, (100cqi − icon − 2u) / (--res · 0.55)))` → coins 26,
+  tokens/tear 20 on phones for 0…1e10. Formatters in `PrisonPage.tsx`: `chipMoney` (full below
+  1e5, then `shortCount`), `chipCount` (≤ 4 visible chars: 9 999 / 98,7к / 987к / 1,2м / 999м /
+  1 млрд), `paceCount`; `mineHud.g` = billions in 7 languages («1 млрд», «1 Mrd.», «1 Mr»).
+  Tall layouts show no keys chip (tear count is on the chests tile badge); wide keeps it.
+  Coin = painted `m-coin` (12×12) /
   `m-coin-s` (8×8) via `.mn-coin`; token/tear 12u. Floor chip: ore 16u + letter as a kit
   `Badge`, tip = the floor's name. Rank cost uses `shortCount` (until Q's `fmtCompact`).
 - **Press:** N2's `usePress()` (`.is-down` on pointerdown) on every non-kit pressable (stats,
@@ -418,7 +424,8 @@ Field drawing, mining, timings, critters and their animations are untouched.
   so the pause is scoped to `.mn-field, .mn-hud, .mn-side, …`, not `.mn *`. Style + pre-paint
   under the pets camp at 4×: 78 → 4 ms per 4 s. Left under the camp: PrisonCamp/Nursery
   re-render once a second (≈ 170 ms React per 4 s at 4×) — not the mine's code.
-- **Short phones (portrait, ≤ 760 px high):** stack gap 1u, dock row gap 2u → 360×740 cell 40.
+- **Short phones (portrait, ≤ 760 px high):** stack gap 1u, dock row gap 1u, HUD 18u, backpack
+  22u, item slots 22u → 360×740 cell 40 (39 without the HUD/bag/slot trims).
 - Sheets (floors, rank, prestige, settings) are `GxModal` with kit rows (`.mn-sheet`, portal ⇒
   unscoped classes); the rank-up scene (`prank`) keeps its animations, the look is kit (wood
   frame, one-line ribbon = horizon name, 40u gold badge letter, icon row `[ore] K · [coin] 14 ·
@@ -428,3 +435,33 @@ Field drawing, mining, timings, critters and their animations are untouched.
   `shell.scale` doubled to 88 px over the text at 1920×1080) and the kit well; the div scrolls
   itself (the kit body is `overflow: hidden`). Kit content also gets C's 420u width — the mine
   sheets put it back to 200u (`.gx-win .gx-win__box:has(.gx-win__body > .mn-sheet)`).
+- **Round 3 (M3, critic r2 fixes).**
+  - Quest (`.mn-quest`, tall): FIXED 26u box above the field — hex 16u | title clamped to 2
+    lines | end column `max-content` (one `RewardChip` + the count/«Забрать» stacked in one grid
+    cell, the unused one `visibility: hidden`). The full sentence is `data-tip` + aria-label.
+    Field rect and `--cell` are identical over guide 0…14, ready / not ready, ru/de/tr, 390×844 and
+    360×740 (`{SCR}/ui4M/m3.mjs … quest` → `uniqueFrames 1`). Wide: auto height, 2 rows.
+  - Pace (`.mn-strip__pace`): its own `max-content` column whose width is set by an invisible
+    ghost copy of the LONGEST strings («999 бл», «99,9к/мин») in the same grid cell; the live
+    text has `contain: inline-size`, so live numbers never widen it. «N подряд» is not in the
+    ghost (de «99,9k am Stück» made the column huge) — it wraps inside the live box.
+  - Streak strip on phones spans the screen (`--sw: max(100% − 20u, 100vw − 8u)`); the tier
+    `+N%` sits right of the streak bar (`.mn-strip__barrow`), not after the name — «Легенда
+    забоя» needs the width.
+  - Rank: the floor-letter badge on the floor chip shows only when the floor ≠ the rank (or in
+    the zone), neutral tone (slot frame), never red. Wide + ready: «Новый ранг — жми!» moves to
+    the needs row (`.mn-rank__go`) — in the bar between the hexes it wrapped into 3 lines. The
+    «blocks mined» chip uses the painted 10×10 `m-dock-work` pick (fits the 10u needs row); rank,
+    prestige sheets and the shift card use `.mn-coin`, no vector `CoinIcon`.
+  - Dock inventory icon = painted `m-dock-inv` (open crate + gem + potion + coin), not the
+    backpack briefcase. Camp «!» opens the tab that holds it (`openCamp`: miles → perks → crew).
+  - Windows: openers call `freeze()` (adds `is-under` synchronously) then `startTransition`.
+    ForgeScreen / BooksTab / Inventory / PrisonCamp are static imports — there is no chunk to
+    prefetch.
+  - Hit areas ≥ 44: parcels `::before` inset −5u −4u (47×51), tokens chip `::before` −4u
+    vertical only (R43), back/gear 45–47. Confetti on rank-up: 40 on phones, 80 elsewhere.
+  - Desktop items: `.mn-items` is a size container, slots `min(28u, (100cqi − 8u) / 5)` → 5 per
+    row (critic: 4 + 1 wrap).
+  - **Stand pitfall:** a Vite started with `watch.ignored: ['**/.claude/**']` ignores EVERY file
+    of a worktree under `.claude/worktrees/` — the page silently keeps old CSS/TSX. Ignore by a
+    function relative to the root (`{SCR}/ui4M/vite.mjs`) and check the served file with curl.
