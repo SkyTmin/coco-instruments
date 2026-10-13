@@ -1,7 +1,7 @@
 /** Camp tabs on the pixel kit (`src/components/CampTabs.tsx`): shop, runes, finds, achievements, skills. */
 export const ctabs = {
   shop: {
-    title: 'Расходники за токены',
+    title: 'Расходники',
     hint: 'Купленное — сразу с тобой в шахте',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Не хватает {v} ✦',
@@ -13,6 +13,8 @@ export const ctabs = {
     pouchHint: 'выбери руну',
     pick: 'Выбери руну — тут будет, что она даёт',
     shatter: 'Разбить на токены',
+    /** Short roll line under the rune name in the inspect panel. */
+    roll: 'сила {n}/100',
   },
   finds: {
     title: 'Находки',
@@ -33,5 +35,8 @@ export const ctabs = {
     next: 'Дальше',
     learn: 'Изучить',
     noPoints: 'Нет свободных очков — их дают престижи',
+    /** Secondary reset button (full wording stays in camp.perks.reset as its tooltip). */
+    reset: 'Сбросить',
+    free: 'бесплатно',
   },
 } as const;

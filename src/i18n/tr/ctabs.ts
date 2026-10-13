@@ -3,7 +3,7 @@ import type { ctabs as ru } from '../ru/ctabs';
 
 export const ctabs: Translation<typeof ru> = {
   shop: {
-    title: 'Jetonla malzeme',
+    title: 'Malzemeler',
     hint: 'Aldıkların madende hemen yanında',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: '{v} ✦ eksik',
@@ -15,6 +15,8 @@ export const ctabs: Translation<typeof ru> = {
     pouchHint: 'bir rün seç',
     pick: 'Ne verdiğini görmek için bir rün seç',
     shatter: 'Jeton için kır',
+    /** Short roll line under the rune name in the inspect panel. */
+    roll: 'güç {n}/100',
   },
   finds: {
     title: 'Buluntular',
@@ -35,5 +37,8 @@ export const ctabs: Translation<typeof ru> = {
     next: 'Sonra',
     learn: 'Öğren',
     noPoints: 'Boş puan yok — prestij verir',
+    /** Secondary reset button (full wording stays in camp.perks.reset as its tooltip). */
+    reset: 'Sıfırla',
+    free: 'ücretsiz',
   },
 };

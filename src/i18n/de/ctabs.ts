@@ -3,7 +3,7 @@ import type { ctabs as ru } from '../ru/ctabs';
 
 export const ctabs: Translation<typeof ru> = {
   shop: {
-    title: 'Vorräte für Tokens',
+    title: 'Vorräte',
     hint: 'Was du kaufst, hast du gleich in der Mine',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Es fehlen {v} ✦',
@@ -15,6 +15,8 @@ export const ctabs: Translation<typeof ru> = {
     pouchHint: 'wähl eine Rune',
     pick: 'Wähl eine Rune – hier steht, was sie bringt',
     shatter: 'Für Tokens zerschlagen',
+    /** Short roll line under the rune name in the inspect panel. */
+    roll: 'Kraft {n}/100',
   },
   finds: {
     title: 'Funde',
@@ -35,5 +37,8 @@ export const ctabs: Translation<typeof ru> = {
     next: 'Danach',
     learn: 'Lernen',
     noPoints: 'Keine freien Punkte – die gibt es fürs Prestige',
+    /** Secondary reset button (full wording stays in camp.perks.reset as its tooltip). */
+    reset: 'Zurücksetzen',
+    free: 'kostenlos',
   },
 };

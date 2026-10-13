@@ -392,11 +392,12 @@
 .ctab-good__text {
   font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-muted);
-  height: calc(var(--px-fs-sm) * 2.4);
+  /* two lines kept even for a short text; German may take a third (the row is that tall for good) */
+  min-height: calc(var(--px-fs-sm) * 2.4);
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 .ctab-good__buy {
   grid-area: buy;
@@ -413,27 +414,19 @@
 .ctab--land .ctab-goods {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.ctab--land .ctab-good {
-  grid-template:
-    'art info' auto
-    'art buy' auto
-    / auto minmax(0, 1fr);
-  gap: calc(2 * var(--u)) calc(3 * var(--u));
+.ctab--land .ctab-good__art {
+  --slot: calc(24 * var(--u));
 }
-.ctab--land .ctab-good__text {
-  height: var(--ln-sm);
-  -webkit-line-clamp: 1;
+.ctab--land .ctab-good__art .gx-icon {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
 }
-.ctab--land .ctab-good__buy {
-  justify-self: start;
-}
-/* Tablet, desktop: a counter of goods — cards with a big picture, the price button under it. */
-.ctab--tall .ctab-goods,
+/* Tablet landscape, desktop: a counter of goods — cards with a big picture, the price button under
+   it (two rows of three fit the 214u-high body without scrolling). */
 .ctab--wide .ctab-goods {
   grid-template-columns: repeat(auto-fill, minmax(calc(84 * var(--u)), 1fr));
   gap: calc(4 * var(--u));
 }
-.ctab--tall .ctab-good,
 .ctab--wide .ctab-good {
   grid-template:
     'art' auto
@@ -442,23 +435,19 @@
     / minmax(0, 1fr);
   justify-items: center;
   text-align: center;
-  padding: calc(5 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u));
+  padding: calc(4 * var(--u)) calc(4 * var(--u)) calc(3 * var(--u));
 }
-.ctab--tall .ctab-good__art,
 .ctab--wide .ctab-good__art {
-  --slot: calc(40 * var(--u));
+  --slot: calc(34 * var(--u));
 }
-.ctab--tall .ctab-good__art .gx-icon,
 .ctab--wide .ctab-good__art .gx-icon {
-  width: calc(28 * var(--u));
-  height: calc(28 * var(--u));
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
 }
-.ctab--tall .ctab-good__info,
 .ctab--wide .ctab-good__info {
   align-items: center;
   width: 100%;
 }
-.ctab--tall .ctab-good__buy,
 .ctab--wide .ctab-good__buy {
   width: 100%;
 }
@@ -506,11 +495,74 @@
     'insp' auto
     / minmax(0, 1fr);
 }
+/* Tablet portrait's body is narrow AND short (163×217u): sockets 2×2 beside the pouch, the bonus
+   chips on a full-width row under both (the amulet section dissolves into the grid). */
+.ctab-runes.ctab--tall {
+  grid-template:
+    'ahead pouch' auto
+    'stage pouch' minmax(0, 1fr)
+    'bonus bonus' auto
+    'insp insp' auto
+    / minmax(0, 9fr) minmax(0, 11fr);
+}
+.ctab-runes.ctab--tall > .ctab-amulet {
+  display: contents;
+}
+.ctab--tall .ctab-amulet > .ctab-head {
+  grid-area: ahead;
+}
+.ctab--tall .ctab-amulet > .ctab-stage {
+  grid-area: stage;
+  align-self: start;
+}
+.ctab--tall .ctab-amulet > .ctab-bonus {
+  grid-area: bonus;
+}
+.ctab--tall .ctab-amulet .ctab-head__hint {
+  display: none;
+}
+/* Phone landscape is short: three columns, the inspect panel full height with its buttons at the
+   bottom (wear on its own row, fuse + shatter under it — the same grid whatever the labels). */
 .ctab-runes.ctab--land {
   grid-template:
-    'amulet pouch' minmax(0, 1fr)
-    'amulet insp' auto
-    / minmax(0, 9fr) minmax(0, 11fr);
+    'ahead pouch insp' auto
+    'stage pouch insp' minmax(0, 1fr)
+    'stage bonus insp' auto
+    / minmax(0, 7fr) minmax(0, 9fr) minmax(0, 10fr);
+}
+.ctab-runes.ctab--land > .ctab-amulet {
+  display: contents;
+}
+.ctab--land .ctab-amulet > .ctab-head {
+  grid-area: ahead;
+}
+.ctab--land .ctab-amulet > .ctab-stage {
+  grid-area: stage;
+}
+.ctab--land .ctab-amulet > .ctab-bonus {
+  grid-area: bonus;
+}
+.ctab-runes.ctab--land .ctab-insp__body {
+  flex: 1 1 auto;
+}
+.ctab-runes.ctab--land .ctab-insp__gives {
+  height: calc(var(--px-fs) * 1.25 * 2);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ctab-runes.ctab--land .ctab-insp__line {
+  height: calc(var(--ln-sm) * 3);
+  -webkit-line-clamp: 3;
+}
+.ctab-runes.ctab--land .ctab-insp__acts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: auto;
+}
+.ctab-runes.ctab--land .ctab-insp__acts > :first-child {
+  grid-column: 1 / -1;
 }
 .ctab-runes.ctab--wide {
   grid-template:
@@ -546,11 +598,15 @@
 /* Sockets: a row on phones / tablet portrait, a cross around the pick-and-axe medallion on
    wide screens (the amulet works for both tools). */
 .ctab-socks {
-  display: flex;
-  justify-content: space-between;
-  gap: calc(3 * var(--u));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-items: center;
+  gap: calc(2 * var(--u));
   width: 100%;
-  max-width: calc(4 * var(--slot) + 30 * var(--u));
+}
+.ctab-socks.is-quad {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: calc(3 * var(--u));
 }
 .ctab-socks.is-cross {
   display: grid;
@@ -598,7 +654,13 @@
   flex-direction: column;
   align-items: center;
   gap: var(--u);
+  width: 100%;
   min-width: 0;
+}
+/* In the cross the side captions may spill past their slot column (centred, into the gaps). */
+.ctab-socks.is-cross .ctab-sock__cap {
+  max-width: none;
+  overflow: visible;
 }
 .ctab-sock .px-slot.is-empty .px-i {
   color: var(--px-gold);
@@ -613,23 +675,44 @@
   }
 }
 .ctab-sock__cap {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   height: var(--ln-sm);
   font: 700 var(--px-fs-sm) / 1.25 var(--px-font);
   color: var(--px-muted);
   white-space: nowrap;
   text-shadow: 0 var(--u) 0 rgb(255 246 224 / 0.8);
 }
+/* Row and 2×2: a socket column is narrower than «престиж 10» — the caption breaks at every space
+   (min-content: «престиж / 10») and a long word spills centred into the gaps. Only a locked
+   socket's caption takes two lines, and locks don't change inside this tab: nothing jumps. */
+.ctab-socks:not(.is-cross) .ctab-sock__cap {
+  width: min-content;
+  max-width: none;
+  height: auto;
+  min-height: var(--ln-sm);
+  overflow: visible;
+  white-space: normal;
+  text-align: center;
+}
+.ctab--tall .ctab-pouch .ctab-grid {
+  gap: calc(2 * var(--u));
+  padding: var(--u) 0;
+}
 .ctab-sock__cap.is-on {
   color: var(--px-green);
 }
-/* Bonus of the worn runes: chips, two lines kept (socketing changes the words, not the box). */
+/* Bonus of the worn runes: chips in a box of two lines (socketing changes the words, not the box;
+   a rare third line scrolls instead of pushing the pouch). */
 .ctab-bonus {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
   gap: calc(2 * var(--u));
   height: calc(var(--px-fs-sm) * 3 + 2 * var(--u));
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 .ctab-bonus__none {
   font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
@@ -688,9 +771,6 @@
 .ctab-insp--find .ctab-insp__gives {
   color: var(--px-text);
   font-weight: 500;
-}
-.ctab--land .ctab-insp--find .ctab-insp__gives,
-.ctab--wide .ctab-insp--find .ctab-insp__gives {
   height: calc(var(--px-fs) * 2.5);
   white-space: normal;
   display: -webkit-box;
@@ -782,17 +862,20 @@
 .ctab-mile.is-done {
   opacity: 0.62;
 }
-.ctab--one .ctab-mile {
+.ctab--one .ctab-mile,
+.ctab--tall .ctab-mile {
   grid-template:
     'art info' auto
     'bar bar' auto
     'end end' auto
     / auto minmax(0, 1fr);
 }
-.ctab--one .ctab-mile__end:empty {
+.ctab--one .ctab-mile__end:empty,
+.ctab--tall .ctab-mile__end:empty {
   display: none;
 }
-.ctab--one .ctab-mile__end > .px-btn {
+.ctab--one .ctab-mile__end > .px-btn,
+.ctab--tall .ctab-mile__end > .px-btn {
   width: 100%;
 }
 
@@ -810,6 +893,10 @@
     'head head' auto
     'tree insp' minmax(0, 1fr)
     / minmax(0, 11fr) minmax(0, 9fr);
+}
+/* Phone landscape: the tree wide enough for all skills in one row, so it never scrolls. */
+.ctab-perks.ctab--land {
+  grid-template-columns: minmax(0, 13fr) minmax(0, 7fr);
 }
 .ctab-perks > .ctab-head {
   grid-area: head;
@@ -856,21 +943,23 @@
 .ctab-tree > .ctab-scroll {
   flex: 1 1 auto;
 }
+/* Nodes wrap as wide as their names (German «Lange Schicht» never gets an ellipsis); the wrap
+   depends on the language only, never on levels or selection. */
 .ctab-nodes {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(calc(var(--slot) + 10 * var(--u)), 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-evenly;
+  align-content: flex-start;
   gap: calc(4 * var(--u)) calc(2 * var(--u));
-  justify-items: center;
-  align-content: start;
   padding: calc(2 * var(--u));
 }
 .ctab-node {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: calc(2 * var(--u));
-  width: 100%;
-  min-width: 0;
+  min-width: calc(var(--slot) + 10 * var(--u));
 }
 .ctab-node .px-slot .gx-icon {
   width: calc(var(--slot) - 12 * var(--u));
@@ -884,8 +973,6 @@
   font: 700 var(--px-fs-sm) / 1.3 var(--px-font);
   text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   background: rgb(255 246 224 / 0.82);
 }
 .ctab-pips {
@@ -902,14 +989,50 @@
   background: #ffd25e;
   box-shadow: inset var(--u) var(--u) 0 #fff3c4;
 }
+/* Reset is secondary: a small plain button in the tree's corner, «free» said beside it. */
 .ctab-reset {
   flex: none;
-  align-self: flex-end;
-  white-space: normal;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(3 * var(--u));
+}
+.ctab-reset__free {
+  padding: 0 calc(2 * var(--u));
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
+  color: var(--px-muted);
+  background: rgb(255 246 224 / 0.82);
 }
 .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
+}
+.ctab-insp__acts > .ctab-reset__btn {
+  flex: none;
+}
+.ctab--tall .ctab-insp--perk .ctab-insp__line {
+  height: var(--ln-sm);
+  -webkit-line-clamp: 1;
+}
+/* French «+8 % de vitesse de pioche» does not fit one line beside «Suivant» — the effect and the
+   now / next values keep two lines each, for every skill (the panel never changes height).
+   Tablet portrait is too short for that, and its full-width panel fits one line. */
+.ctab:not(.ctab--tall) .ctab-insp--perk :is(.ctab-insp__sub, .ctab-insp__v) {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__sub {
+  height: calc(var(--ln-sm) * 2);
+}
+.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__rows {
+  align-items: start;
+}
+.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__v {
+  height: calc(var(--px-fs) * 1.3 * 2);
+}
+.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__k {
+  padding-top: calc((var(--px-fs) - var(--px-fs-sm)) * 0.65);
 }
 .ctab--land .ctab-insp--perk .ctab-insp__acts,
 .ctab--wide .ctab-insp--perk .ctab-insp__acts {

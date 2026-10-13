@@ -280,7 +280,8 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const bag = p.runes
     .slice()
     .sort((a, b) => b.tier - a.tier || runePower(b) - runePower(a) || a.id - b.id);
-  const cross = lay === 'land' || lay === 'wide';
+  const cross = lay === 'wide';
+  const quad = lay === 'land' || lay === 'tall';
 
   const tapSocket = (i: number) => {
     if (i >= open) {
@@ -367,11 +368,11 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
       : t('camp.runes.prestige10');
 
   // Sizes: runes are 40-texel pictures — whole device pixels per texel.
-  const bagPx = fit(40, 22, scale, dpr);
+  const bagPx = fit(40, lay === 'tall' ? 20 : 22, scale, dpr);
   const bagSlot = slotFor(bagPx, scale, 6);
-  const sockPx = fit(40, lay === 'wide' ? 30 : 26, scale, dpr);
+  const sockPx = fit(40, lay === 'wide' ? 30 : lay === 'one' ? 26 : lay === 'tall' ? 18 : 22, scale, dpr);
   const sockSlot = slotFor(sockPx, scale, 6);
-  const inspPx = fit(40, lay === 'one' || lay === 'land' ? 24 : 30, scale, dpr);
+  const inspPx = fit(40, lay === 'wide' ? 30 : 24, scale, dpr);
 
   const b = bonusOf(p);
   const bonus = BONUS_KEYS.filter((k) => b[k] > 0);
@@ -380,7 +381,10 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
     <section className="ctab-amulet">
       <Head title={t('ctabs.runes.amulet')} hint={t('ctabs.runes.amuletHint')} />
       <Panel material="stone" stage className="ctab-stage">
-      <div className={`ctab-socks${cross ? ' is-cross' : ''}`} style={slotVar(sockSlot)}>
+      <div
+        className={`ctab-socks${cross ? ' is-cross' : quad ? ' is-quad' : ''}`}
+        style={slotVar(sockSlot)}
+      >
         {cross && (
           <span className="ctab-socks__core" aria-hidden="true">
             <GxIcon name="pick" />
@@ -500,7 +504,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
               {runeName(shown.kind)} {RUNE_ROMAN[shown.tier - 1]}
             </span>
             <span className="ctab-insp__gives">{runeLine(shown)}</span>
-            <span className="ctab-insp__sub">{t('camp.runes.roll', { n: shown.roll })}</span>
+            <span className="ctab-insp__sub">{t('ctabs.runes.roll', { n: shown.roll })}</span>
           </span>
         </div>
         <div className={`ctab-insp__line${note ? ' is-note' : ''}`}>{note ?? fuseLine}</div>
@@ -551,7 +555,7 @@ export function FindsTab() {
   const [sel, setSel] = useState(() => FINDS.find((f) => p.finds[f.id])?.id ?? FINDS[0].id);
   const f = FINDS.find((x) => x.id === sel) ?? FINDS[0];
   const n = p.finds[f.id] ?? 0;
-  const small = lay === 'one' || lay === 'land';
+  const small = lay !== 'wide';
   const px = fit(16, small ? 26 : 32, scale, dpr);
   const slot = slotFor(px, scale, 2);
   const bigPx = fit(16, small ? 30 : 40, scale, dpr);
@@ -885,7 +889,28 @@ export function PerksTab() {
     setSel(id);
   };
 
-  const nodeSlot = lay === 'one' || lay === 'land' ? 30 : scale >= 4 ? 34 : 38;
+  const nodeSlot = lay === 'tall' ? 24 : 30;
+  // Tablet portrait and phone landscape are short: the reset rides in the action row (still small
+  // and grey) instead of taking a row under the tree.
+  const resetInActs = lay === 'tall' || lay === 'land';
+  const reset = (
+    <>
+      {!resetInActs && <span className="ctab-reset__free">{t('ctabs.perks.free')}</span>}
+      <Button
+        size="sm"
+        className="ctab-reset__btn"
+        title={t('camp.perks.reset')}
+        aria-label={t('camp.perks.reset')}
+        onClick={() => {
+          prisonPerksReset();
+          tapLight();
+          setNote(null);
+        }}
+      >
+        {t('ctabs.perks.reset')}
+      </Button>
+    </>
+  );
   const now = perkAt(k.id, lv);
   const next = perkAt(k.id, lv + 1);
 
@@ -893,7 +918,7 @@ export function PerksTab() {
     <div ref={root} className={`px ctab ctab-perks ctab--${lay}`}>
       <Head
         title={t('camp.tab.perks')}
-        hint={locked ? t('camp.perks.locked') : t('ctabs.perks.hint')}
+        hint={locked ? t('camp.perks.locked') : lay === 'land' || lay === 'tall' ? undefined : t('ctabs.perks.hint')}
         right={
           locked ? (
             <span className="px-dark ctab-points is-locked">
@@ -946,19 +971,7 @@ export function PerksTab() {
             })}
           </div>
         </div>
-        {!locked && (
-          <Button
-            size="sm"
-            className="ctab-reset"
-            onClick={() => {
-              prisonPerksReset();
-              tapLight();
-              setNote(null);
-            }}
-          >
-            {t('camp.perks.reset')}
-          </Button>
-        )}
+        {!locked && !resetInActs && <div className="ctab-reset">{reset}</div>}
       </Panel>
       <Panel material="obsidian" className="ctab-insp ctab-insp--perk" aria-live="polite">
         <div className="ctab-insp__top">
@@ -994,6 +1007,7 @@ export function PerksTab() {
               {t('ctabs.perks.learn')}
             </Button>
           )}
+          {!locked && resetInActs && reset}
         </div>
       </Panel>
     </div>
