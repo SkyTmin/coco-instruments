@@ -55,7 +55,16 @@ export type PxIconName =
   | 'gem'
   | 'clock'
   | 'key'
-  | 'egg';
+  | 'egg'
+  // wave 2 — C
+  | 'gear'
+  | 'sound'
+  | 'mute'
+  | 'music'
+  | 'nomusic'
+  | 'question'
+  | 'excl'
+  | 'minus';
 
 /** A 9×9 pixel icon (mask), colour = currentColor. */
 export function Icon({ name, className }: { name: PxIconName; className?: string }) {

@@ -287,3 +287,353 @@ span.gx-top__side {
 .gx-camp__tabs.px-tabs--rail .px-tab {
   padding: calc(3 * var(--u)) calc(5 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
 }
+
+/* ==============================================================================================
+   Old gx widgets in kit clothes (class names unchanged — callers keep styling them):
+   `gx-btn` and `gx-round` → kit button frames, `gx-bar` → kit trough, `gx-chip` → a dark well
+   plaque, `gx-badge` → kit badge. Sizes stay in CSS px (they live in old layouts); frames and
+   the pressed shift are in art pixels. Material: gold (default), iron (`--dark`, `--grey`,
+   `--steel`), red, green; `.is-off` / `:disabled` → ash.
+   ============================================================================================== */
+:where(.gx-btn, .gx-round) {
+  --b: var(--pxk-btn-gold-n);
+  --bs: var(--pxk-btn-gold-n-s);
+  --bw: var(--pxk-btn-gold-n-w);
+  color: var(--px-ink);
+  text-shadow: none;
+}
+:where(.gx-btn--grey, .gx-round--dark, .gx-round--grey, .gx-round--steel) {
+  --b: var(--pxk-btn-iron-n);
+  --bs: var(--pxk-btn-iron-n-s);
+  --bw: var(--pxk-btn-iron-n-w);
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+:where(.gx-btn--red, .gx-round--red) {
+  --b: var(--pxk-btn-red-n);
+  --bs: var(--pxk-btn-red-n-s);
+  --bw: var(--pxk-btn-red-n-w);
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+:where(.gx-round--green) {
+  --b: var(--pxk-btn-green-n);
+  --bs: var(--pxk-btn-green-n-s);
+  --bw: var(--pxk-btn-green-n-w);
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  :where(.gx-btn, .gx-round):hover {
+    --b: var(--pxk-btn-gold-h);
+    --bs: var(--pxk-btn-gold-h-s);
+    --bw: var(--pxk-btn-gold-h-w);
+  }
+  :where(.gx-btn--grey, .gx-round--dark, .gx-round--grey, .gx-round--steel):hover {
+    --b: var(--pxk-btn-iron-h);
+    --bs: var(--pxk-btn-iron-h-s);
+    --bw: var(--pxk-btn-iron-h-w);
+  }
+  :where(.gx-btn--red, .gx-round--red):hover {
+    --b: var(--pxk-btn-red-h);
+    --bs: var(--pxk-btn-red-h-s);
+    --bw: var(--pxk-btn-red-h-w);
+  }
+  :where(.gx-round--green):hover {
+    --b: var(--pxk-btn-green-h);
+    --bs: var(--pxk-btn-green-h-s);
+    --bw: var(--pxk-btn-green-h-w);
+  }
+}
+:where(.gx-btn, .gx-round):is(:active, .is-down) {
+  --b: var(--pxk-btn-gold-p);
+  --bs: var(--pxk-btn-gold-p-s);
+  --bw: var(--pxk-btn-gold-p-w);
+}
+:where(.gx-btn--grey, .gx-round--dark, .gx-round--grey, .gx-round--steel):is(:active, .is-down) {
+  --b: var(--pxk-btn-iron-p);
+  --bs: var(--pxk-btn-iron-p-s);
+  --bw: var(--pxk-btn-iron-p-w);
+}
+:where(.gx-btn--red, .gx-round--red):is(:active, .is-down) {
+  --b: var(--pxk-btn-red-p);
+  --bs: var(--pxk-btn-red-p-s);
+  --bw: var(--pxk-btn-red-p-w);
+}
+:where(.gx-round--green):is(:active, .is-down) {
+  --b: var(--pxk-btn-green-p);
+  --bs: var(--pxk-btn-green-p-s);
+  --bw: var(--pxk-btn-green-p-w);
+}
+:where(.gx-btn):disabled,
+:where(.gx-round).is-off {
+  --b: var(--pxk-btn-iron-d);
+  --bs: var(--pxk-btn-iron-d-s);
+  --bw: var(--pxk-btn-iron-d-w);
+  color: var(--px-muted);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+
+.gx-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 0;
+  /* Face + the 3-art-px lip at the bottom; pressed — the face moves 2 art px down. */
+  padding: calc(2 * var(--u)) 14px calc(5 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--b);
+  border-image-slice: var(--bs);
+  border-image-width: var(--bw);
+  border-image-repeat: stretch;
+  border-radius: 0;
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  /* Old content's own type (GxRubik) until its screen moves to the kit. */
+  font:
+    800 15px/1.1 'GxRubik',
+    system-ui,
+    sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.gx-btn:active:not(:disabled),
+.gx-btn.is-down {
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+.gx-btn:disabled {
+  cursor: default;
+}
+.gx-btn--big {
+  min-height: 56px;
+  font-size: 19px;
+  padding-left: 22px;
+  padding-right: 22px;
+}
+.gx-btn--block {
+  display: flex;
+  width: 100%;
+}
+.gx-btn--sm {
+  min-height: 34px;
+  font-size: 13px;
+  padding: calc(1 * var(--u)) 10px calc(4 * var(--u));
+}
+.gx-btn--sm:active:not(:disabled) {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+.gx-btn .gx-icon {
+  width: 22px;
+  height: 22px;
+}
+.gx-btn--big .gx-icon {
+  width: 28px;
+  height: 28px;
+}
+.gx-btn small {
+  font-weight: 600;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* Round control → a square kit button (pixel art has no round frames); same `--gx-size`. */
+.gx-round {
+  --gx-size: 56px;
+  --gx-round-shadow: var(--px-ink);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--gx-size);
+  height: var(--gx-size);
+  margin: 0;
+  padding: calc(1 * var(--u)) 0 calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--b);
+  border-image-slice: var(--bs);
+  border-image-width: var(--bw);
+  border-image-repeat: stretch;
+  border-radius: 0;
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.gx-round:active,
+.gx-round.is-down {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+.gx-round .gx-icon {
+  width: 56%;
+  height: 56%;
+}
+
+/* «!» — something to do. Kit badge; a one-art-pixel bob instead of a fractional scale. */
+.gx-badge {
+  position: absolute;
+  top: calc(-3 * var(--u));
+  right: calc(-3 * var(--u));
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-badge);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  box-sizing: border-box;
+  color: var(--px-text);
+  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  pointer-events: none;
+  animation: gx-badge-bob 1.6s steps(1, jump-none) infinite;
+}
+.gx-badge--gold {
+  border-image-source: var(--pxk-badge-gold);
+  color: var(--px-ink);
+  text-shadow: none;
+}
+@keyframes gx-badge-bob {
+  50% {
+    translate: 0 calc(-1 * var(--u));
+  }
+}
+/* Kept for old callers that animate their own marks with it. */
+@keyframes gx-badge {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+/* Bar: kit trough, three-band fill (light top row, colour, dark bottom row). */
+.gx-bar {
+  --c: #d2432d;
+  --hi: #ff8466;
+  --lo: #6a1714;
+  position: relative;
+  height: calc(8 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-trough);
+  border-image-slice: var(--pxk-trough-s);
+  border-image-width: var(--pxk-trough-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  overflow: hidden;
+}
+.gx-bar > i {
+  position: absolute;
+  left: var(--u);
+  right: var(--u);
+  top: var(--u);
+  bottom: var(--u);
+  border-radius: 0;
+  box-shadow: none;
+  background: linear-gradient(
+    to bottom,
+    var(--hi) 0 var(--u),
+    var(--c) var(--u) calc(100% - var(--u)),
+    var(--lo) calc(100% - var(--u))
+  );
+  transform-origin: left center;
+  transition: transform 180ms steps(6, jump-end);
+}
+.gx-bar > b {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: var(--px-text);
+  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
+  white-space: nowrap;
+}
+.gx-bar--green {
+  --c: #4cb84a;
+  --hi: #b6f09a;
+  --lo: #23702a;
+}
+.gx-bar--blue {
+  --c: #4a9cf0;
+  --hi: #bfe0ff;
+  --lo: #23589c;
+}
+.gx-bar--gold {
+  --c: #e8a52a;
+  --hi: #ffe08a;
+  --lo: #a8661a;
+}
+.gx-bar--thin {
+  height: calc(5 * var(--u));
+}
+
+/* Coin / token plaque — a dark well with a light number. */
+.gx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-height: calc(14 * var(--u));
+  padding: 0 calc(4 * var(--u)) 0 calc(3 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  color: var(--px-text);
+  font: 400 var(--px-fs) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  white-space: nowrap;
+}
+.gx-chip .gx-icon {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gx-badge {
+    animation: none;
+  }
+}

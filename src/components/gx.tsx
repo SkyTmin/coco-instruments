@@ -11,7 +11,7 @@ import { uiClose, uiOpen, uiTap } from '@/lib/sound';
 import { useT } from '@/i18n';
 import { useFormFactor } from '@/game-shell';
 import { Button, Panel } from '@/ui-px';
-import type { Material } from '@/ui-px';
+import type { Material, PxIconName } from '@/ui-px';
 import './gx-px.css';
 
 /** Иконки game-icons.net — имена файлов в public/ui/icons. */
@@ -167,6 +167,37 @@ export function GxIcon({
   );
 }
 
+/** Kenney значки, у которых есть пиксельная пара в наборе (`@/ui-px` ICONS): рисуются ею —
+ *  маска 9×9, цвет `currentColor`, размер — целое число точек экрана на точку рисунка. */
+const KIT_ICON: Partial<Record<KIconName, PxIconName>> = {
+  cross: 'x',
+  arrowLeft: 'left',
+  arrowRight: 'right',
+  arrowUp: 'up',
+  arrowDown: 'down',
+  checkmark: 'check',
+  plus: 'plus',
+  minus: 'minus',
+  star: 'star',
+  locked: 'lock',
+  information: 'info',
+  pause: 'pause',
+  gear: 'gear',
+  audioOn: 'sound',
+  audioOff: 'mute',
+  musicOn: 'music',
+  musicOff: 'nomusic',
+  question: 'question',
+  exclamation: 'excl',
+};
+
+/** `size` CSS px → a box of 9 art pixels, each a whole number of device pixels. */
+function kitIconBox(size: number): CSSProperties {
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
+  const a = Math.max(1, Math.round((size * dpr) / 9)) / dpr;
+  return { width: a * 9, height: a * 9 };
+}
+
 export function KIcon({
   name,
   size,
@@ -178,6 +209,15 @@ export function KIcon({
   className?: string;
   style?: CSSProperties;
 }) {
+  const kit = KIT_ICON[name];
+  if (kit)
+    return (
+      <i
+        className={`px-i pxi-${kit} gx-kicon${className ? ` ${className}` : ''}`}
+        aria-hidden="true"
+        style={size ? { ...kitIconBox(size), ...style } : style}
+      />
+    );
   return (
     <i
       className={`gx-icon${className ? ` ${className}` : ''}`}
