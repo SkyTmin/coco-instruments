@@ -17,7 +17,16 @@ import './books.css';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
-import { heroFit, nameFit, numFit, useArmLayout, useBox, useFirstFrame } from '@/components/armory';
+import {
+  fromKeys,
+  heroFit,
+  nameFit,
+  numFit,
+  useArmGuard,
+  useArmLayout,
+  useBox,
+  useFirstFrame,
+} from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
 import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
@@ -310,6 +319,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const [fresh, setFresh] = useState<Book | null>(null);
   /** The armed two-tap action («В пыль», «Снять», «Перековать»): its id. */
   const [armed, setArmed] = useState<string | null>(null);
+  const guard = useArmGuard();
   const [dustOn, setDustOn] = useState(true);
   const [asking, setAsking] = useState(false);
   const [replace, setReplace] = useState<EnchantId | null>(null);
@@ -431,9 +441,11 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     if (!b) return;
     if (armed !== 'salvage') {
       tapLight();
+      guard.mark();
       setArmed('salvage');
       return;
     }
+    if (guard.tooSoon()) return; // a double tap is not a confirmation
     setArmed(null);
     const name = bookName(b);
     const got = salvage(bi);
@@ -444,9 +456,11 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const doWipe = (id: EnchantId) => {
     if (armed !== 'wipe') {
       tapLight();
+      guard.mark();
       setArmed('wipe');
       return;
     }
+    if (guard.tooSoon()) return;
     setArmed(null);
     const got = wipe(id);
     softThud();
@@ -463,9 +477,11 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     }
     if (armed !== 'star') {
       tapLight();
+      guard.mark();
       setArmed('star');
       return;
     }
+    if (guard.tooSoon()) return;
     setArmed(null);
     if (!prisonPickStar()) {
       notifyWarning();
@@ -1036,9 +1052,10 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
                 tip={`${bookTierBook(bt.id)} · ${fmt(bt.price)}`}
                 data-autofocus={on ? '' : undefined}
                 onPointerDown={() => can && preloadBookReveal(bt.id)}
-                onClick={() => {
-                  // A tap on the tier already on the showcase buys it (as the forge: tap again).
-                  if (!select({ k: 'tier', id: bt.id })) onBuy(bt.id);
+                onClick={(e) => {
+                  // Enter / Space / the pad on the tier already on the showcase buys it; a finger
+                  // buys with the button (a double tap or a long press bought on release).
+                  if (!select({ k: 'tier', id: bt.id }) && fromKeys(e)) onBuy(bt.id);
                 }}
                 onFocus={() => select({ k: 'tier', id: bt.id })}
               >

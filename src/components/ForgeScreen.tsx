@@ -26,7 +26,14 @@ import {
   rarityVars,
 } from '@/components/PickArt';
 import { preloadPx, PxStrip } from '@/components/PxStrip';
-import { heroFit, nameFit, useArmLayout, useBox, useFirstFrame } from '@/components/armory';
+import {
+  fromKeys,
+  heroFit,
+  nameFit,
+  useArmLayout,
+  useBox,
+  useFirstFrame,
+} from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
 import { nameIn, pickTitle } from '@/i18n/data-mine';
@@ -281,13 +288,18 @@ export function ForgeScreen({
     );
   };
 
-  /** Тап по ячейке: выбрать; по уже выбранной — то, что сделал бы тап по лестнице раньше. */
-  const pickTap = (i: number) => {
+  /**
+   * Тап по ячейке: выбрать. По уже выбранной действуют только клавиши (Enter, Space, геймпад):
+   * палец действует кнопкой внизу — долгое нажатие, чтобы прочесть подсказку, выковывало кирку
+   * на отпускании (критик), а двойной тап выбирал и сразу действовал.
+   */
+  const pickTap = (i: number, keys: boolean) => {
     if (i !== sel) {
       selectionChanged();
       setSel(i);
       return;
     }
+    if (!keys) return;
     if (i === n) forge();
     else equip(i);
   };
@@ -555,7 +567,7 @@ export function ForgeScreen({
                     : pickName(i)
               }
               tip={<PickTip i={i} hand={p.pick} speedOf={(k) => pickSpeed(floor, k, m)} />}
-              onClick={() => pickTap(i)}
+              onClick={(e) => pickTap(i, fromKeys(e))}
               onFocus={() => {
                 if (i !== sel) setSel(i);
               }}
