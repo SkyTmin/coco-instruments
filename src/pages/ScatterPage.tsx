@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useAction } from '@/input/hooks';
 import { AnimatedNumber } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
