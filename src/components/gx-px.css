@@ -1,0 +1,289 @@
+/* ==============================================================================================
+   Window chrome (GxModal, GxSheet, the camp) and the screen header (GameTop) on the pixel kit
+   (`@/ui-px`). Agent C, UI wave 2. Rules: .claude/rules/game-ui.md («Окна и шапка»).
+   Sizes in art pixels (`--u`); fonts and colours only through the kit vars.
+   ============================================================================================== */
+
+:root {
+  /* Height of a screen header row. Windows start BELOW it (phone portrait, tablet, desktop), so
+     a window's ✕ never lands on the header's ⚙ / sound buttons. A header must fit in it. */
+  --gx-top-h: max(48px, calc(22 * var(--u)));
+  /* Smallest touch target on phones. */
+  --gx-hit: max(44px, calc(19 * var(--u)));
+}
+
+/* ---- Veil ------------------------------------------------------------------------------------ */
+.gx-win {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--gs-safe-top, var(--safe-top, 0px)) + var(--gx-top-h))
+    calc(var(--gs-safe-right, 0px) + 4 * var(--u))
+    calc(var(--gs-safe-bottom, var(--safe-bottom, 0px)) + 4 * var(--u))
+    calc(var(--gs-safe-left, 0px) + 4 * var(--u));
+  background: rgba(10, 7, 12, 0.72);
+  animation: px-fade 120ms steps(3, jump-none);
+  -webkit-tap-highlight-color: transparent;
+}
+/* Phone landscape: the header row would eat a third of the height. The window is centred and
+   narrow there, so its ✕ is far from the header's right-hand buttons anyway. */
+html[data-ff='phone-landscape'] .gx-win {
+  padding-top: calc(var(--gs-safe-top, var(--safe-top, 0px)) + 6 * var(--u));
+}
+/* Phone portrait: docked to the bottom, full width (thumb zone), own scroll inside. */
+html[data-ff='phone-portrait'] .gx-win {
+  align-items: flex-end;
+  padding: calc(var(--gs-safe-top, var(--safe-top, 0px)) + var(--gx-top-h)) 0 0;
+}
+
+/* ---- Box: the kit Panel (wood or iron) ------------------------------------------------------- */
+.gx-win__box {
+  --gx-mw: 200;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, calc(var(--gx-mw) * var(--u)));
+  max-height: 100%;
+  min-height: 0;
+  /* Top: the frame + a row for the ribbon and the ✕ (they never overlap the body). */
+  padding: calc(15 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u));
+  color: var(--px-text);
+  animation: px-rise 160ms steps(4, jump-none);
+}
+.gx-win--sheet .gx-win__box {
+  --gx-mw: 230;
+}
+.gx-win__box.has-tabs,
+.gx-win__box:has([role='tablist']) {
+  --gx-mw: 300;
+}
+/* Kit content lays itself out in columns (the Nursery: list | stage | details) — give it room. */
+.gx-win__box:has(.gx-win__body .px) {
+  --gx-mw: 420;
+}
+/* Beats callers' old px widths (they were for a phone; the body is zoomed on big screens). */
+.gx-win > .gx-win__box.px-panel {
+  width: min(100%, calc(var(--gx-mw) * var(--u)));
+}
+html[data-ff='phone-portrait'] .gx-win__box {
+  width: 100%;
+  padding-bottom: calc(6 * var(--u) + var(--gs-safe-bottom, var(--safe-bottom, 0px)));
+}
+/* Nothing jumps: windows with tabs inside (the camp, settings) keep one height per format;
+   switching a tab scrolls the body, the frame, ribbon and tab bar stay put. */
+.gx-win__box:is(.gx-camp, :has([role='tablist'])) {
+  height: min(100%, calc(250 * var(--u)));
+}
+html[data-ff='phone-portrait'] .gx-win__box:is(.gx-camp, :has([role='tablist'])) {
+  height: 100%;
+}
+
+/* ---- Ribbon title (kit ribbon, sits on the top frame band) and the ✕ ------------------------- */
+.gx-win__title {
+  position: absolute;
+  top: calc(-4 * var(--u));
+  left: 0;
+  right: 0;
+  z-index: 2;
+  width: fit-content;
+  max-width: calc(100% - 44 * var(--u));
+  margin: 0 auto;
+}
+.gx-win__title > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gx-win__close {
+  position: absolute !important;
+  top: calc(-2 * var(--u));
+  right: calc(1 * var(--u));
+  z-index: 3;
+}
+/* A bigger hit area than the art (≥ 44 px on phones) without a bigger red button. */
+.gx-win__close::before {
+  content: '';
+  position: absolute;
+  inset: calc(-4 * var(--u));
+}
+
+/* ---- Body: parchment (old content, dark text) or a dark well (kit content) ------------------ */
+.gx-win__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 8px 10px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--px-dim, #7e735f) transparent;
+  /* Old screens are drawn in CSS px for a phone: on big scales (≥ 4) the body is zoomed by a
+     whole 2 (set by GxWindow as --gx-z) and the kit unit is divided back, so frames inside stay
+     one art pixel = --ui-px. */
+  zoom: var(--gx-z, 1);
+  --u: calc(var(--ui-px, 2px) / var(--gx-z, 1));
+}
+/* Kit content (a `.px` root inside — the Nursery, wave-3 tabs): no zoom, dark well, the content
+   lays itself out in the full height (its columns scroll on their own). */
+.gx-win .gx-win__body:has(.px) {
+  zoom: 1;
+  --u: var(--ui-px, 2px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: calc(4 * var(--u));
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  color: var(--px-text);
+}
+.gx-win__body:has(.px) > .pcamp-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* A window opened from inside a zoomed body is already zoomed by it: no second zoom, and the
+   unit it inherited is already the divided one. */
+.gx-win__body .gx-win__body {
+  zoom: 1;
+  --u: inherit;
+}
+
+/* ---- Tabs beside the body (the camp): a strip on phone portrait, a rail elsewhere --------- */
+.gx-win__tabs {
+  flex: none;
+  min-width: 0;
+  margin-bottom: calc(2 * var(--u));
+}
+html:not([data-ff='phone-portrait']) .gx-win__box.has-tabs {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+html:not([data-ff='phone-portrait']) .gx-win__box.has-tabs > .gx-win__tabs {
+  margin: 0 calc(-1 * var(--u)) 0 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gx-win,
+  .gx-win__box {
+    animation: none;
+  }
+}
+
+/* ==============================================================================================
+   Screen header (GameTop): one row — back, ribbon title, chips, right-hand buttons.
+   ============================================================================================== */
+.gx-top {
+  position: relative;
+  z-index: 2;
+  margin-bottom: calc(4 * var(--u));
+}
+.gx-top__row {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  height: var(--gx-top-h);
+  min-width: 0;
+}
+.gx-top__side {
+  flex: none;
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+}
+span.gx-top__side {
+  visibility: hidden;
+}
+.gx-top__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0 auto;
+}
+.gx-top.has-chips .gx-top__title {
+  flex: none;
+}
+.gx-top__title > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gx-top.has-chips .gx-top__title {
+  margin: 0;
+}
+.gx-top__chips {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.gx-top__right {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(3 * var(--u));
+}
+.gx-top__right:empty {
+  min-width: var(--gx-hit);
+}
+.gx-top :is(.gx-round, .gx-audio__btn) {
+  --gx-size: var(--gx-hit);
+}
+/* No room for everything in one row (GameTop measures it: `is-tight`) — the title goes, the
+   screen names itself; it stays for screen readers. Chips and buttons never shrink. */
+.gx-top__row.is-tight .gx-top__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ==============================================================================================
+   The camp (PrisonCamp): kit tabs with game-icons pictures. Phones — icons only (the word is
+   the tip / aria-label, the ribbon names the open tab); elsewhere — a rail of icon + word.
+   ============================================================================================== */
+.gx-camp__tabs .px-tab {
+  position: relative;
+  min-height: var(--gx-hit);
+  gap: calc(3 * var(--u));
+  font-size: var(--px-fs);
+}
+.gx-camp__tabs .px-tab .gx-icon {
+  width: calc(11 * var(--u));
+  height: calc(11 * var(--u));
+}
+.gx-camp__tabs .px-tab .px-badge {
+  position: absolute;
+  top: calc(-2 * var(--u));
+  right: calc(-2 * var(--u));
+  z-index: 2;
+}
+.gx-camp.is-compact .gx-camp__tabs .px-tab__label {
+  display: none;
+}
+.gx-camp.is-compact .gx-camp__tabs .px-tab {
+  justify-content: center;
+  padding-inline: calc(2 * var(--u));
+}
+/* Rail: as wide as the longest word allows, never wider than a third of the window. */
+.gx-camp__tabs.px-tabs--rail {
+  gap: calc(2 * var(--u));
+  max-width: calc(78 * var(--u));
+  padding: calc(1 * var(--u)) 0;
+}
+.gx-camp.is-compact .gx-camp__tabs.px-tabs--rail {
+  max-width: none;
+}
+.gx-camp__tabs.px-tabs--rail .px-tab {
+  padding: calc(3 * var(--u)) calc(5 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+}
