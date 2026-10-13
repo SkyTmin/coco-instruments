@@ -284,3 +284,7 @@ Nepheline, Loparite, Astrophyllite, Aurora (Сполох) — Kola minerals by d
 «кошачье золото» → Fool's gold / DE «Katzengold». Places in the backpack (`inv.where`) reuse T1/T2
 words: Nursery = Nurserie / Kuluçka / Zucht / Criadero / Allevamento, Barracks 1 = Baraque 1 /
 Koğuş 1 / Baracke 1 / Barracón 1 / Baracca 1; book tiers follow T4 («simple», not «common»).
+
+Lead decisions after wave 2: TR «Fare Kral» stays (the Nutcracker's Mouse King) while the rats
+themselves are «sıçan»; TR «İblis» stays for fantasy demons — the usual Turkish game word, the
+Russian source says «демон» too; DE camp tab «Ausrüstung» → «Gear» (did not fit at 390 px).

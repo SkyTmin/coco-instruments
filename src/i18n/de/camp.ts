@@ -3,7 +3,7 @@ import type { camp as ru } from '../ru/camp';
 
 export const camp: Translation<typeof ru> = {
   tab: {
-    gear: 'Ausrüstung',
+    gear: 'Gear',
     beasts: 'Gegner',
     stash: 'Vorrat',
     rods: 'Ruten',
