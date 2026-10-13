@@ -2,6 +2,7 @@
 paths:
   - "src/lib/books.ts"
   - "src/components/{BooksTab,ChestTab}.tsx"
+  - "src/components/books.css"
   - "public/ui/books/**"
   - "public/ui/chests/**"
 ---
@@ -138,3 +139,29 @@ paths:
 - **Не проверено на телефоне**: стенд подтверждает вкладку, все фазы
   сцены (включая рост до легендарного подменой ГСЧ), «Открыть все» на 29
   сундуках и вёрстку на 375×667.
+
+## Books UI v2 (wave 2 — F, 13.10.2026) — `BooksTab.tsx`, `books.css`
+
+On the armory skeleton (`forge-mine.md` → «UI v2»). Store calls, costs, two-tap confirmations
+and the scenes (`RevealScene`, `ApplyScene`, `BookLift`, portaled) are as before.
+
+- **What can be selected** (`Sel`): a shelf book, an enchant in the pick (`slot`), an Enchanter
+  tier, the pick itself. Focus = selection; a tap/Enter on the already selected tier buys it.
+- **Action places are fixed**: book = to dust (two-tap) / anvil (only with a pair) / enchant
+  (`off` when weaker — the tap says why); slot = remove (two-tap) / — / on-off (toggle enchants
+  only); tier = buy; pick = reforge ★ (two-tap, `off` explains the level needed). Phone portrait
+  has two places — three don't fit German words on 390 px — so the anvil button stands at the
+  top of the details there. X / pad Y = the last enabled non-danger action.
+- **Showcase**: book art (glow) or the pick; plate = name, state (can enchant / weaker / no room
+  / in the pick / off), effect line; stats = chance (the cell toggles dust), level with a delta
+  vs the same enchant in the pick, dust value (tier: price, level range, chance range; pick:
+  level, ★, slots). On phone portrait the plate stands beside the tall book.
+- **Lists**: «Книг в кирке» (pick + enchants with roman level, zzz corner when off, empty places
+  with + that say what to do, locked ones say which pick opens them), Enchanter (portrait in a
+  wood frame, his line, 4 tier slots with price), shelf (count, sort by level, ↑ corner =
+  stronger than in the pick, anvil corner = has a pair, «!» = new, weaker ones desaturated).
+- **No room** → kit `Modal sheet` (`.bkx-replace`) with a chip per enchant in the pick.
+- **Window**: the books open as a one-tab camp, so `.gx-camp.is-single:has(.bkx)` takes the whole
+  screen (C's 250u camp height left the showcase 24 % of a tablet-portrait screen); on two/three
+  layouts the purse heads the side column (no top row).
+- Not verified on a phone / webview / gamepad hardware.
