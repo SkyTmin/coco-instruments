@@ -147,7 +147,6 @@ feminine, ES masculine «el orbe»); the top tier stays a noun («Relic»), as i
 ## Wave 2 — Шахта и кузня (T1: `mineHud`, `forge`, `finds`, `miles`, `guide`)
 | ru | en | fr | tr | de | es | it |
 |---|---|---|---|---|---|---|
-| «{name} кирка» (pick title) | {name} pickaxe | Pioche {name} | {name} kazma | Spitzhacke {name} | Pico {name} | Piccone {name} |
 | Сила (pick power) | Power | Force | Güç | Kraft | Fuerza | Forza |
 | Выработка (work quota) | Work quota | Quota de travail | Çalışma kotası | Arbeitssoll | Cuota de trabajo | Quota di lavoro |
 | Спецзона | special zone | zone spéciale | özel bölge | Sonderzone | zona especial | zona speciale |
@@ -159,9 +158,11 @@ feminine, ES masculine «el orbe»); the top tier stays a noun («Relic»), as i
 | очки навыков | skill points | points de talent | yetenek puanı | Skillpunkte | puntos de habilidad | punti abilità |
 | Гарантия (pity block) | guaranteed | garanti | garanti | Garantie | garantizado | garantito |
 
-Pick names (`mine.pick`) are standalone modifiers, so the title puts the noun where each language
-wants it; German keeps them as a model name («Spitzhacke Rostig») because «Rostig»/«Geschmiedet»
-cannot be compounded. Names inside a sentence go through `nameIn()` (`src/i18n/data-mine.ts`):
+Pick TITLES (forge header, books tab) are the full names `books.pick` via `pickTitle(i)` /
+`pickFull(i)`: «Rusty Pickaxe», «Eisenspitzhacke», «Pioche en opale» (lead's choice after the
+merge — T1's «Spitzhacke Eisen» read like a model code). Inside sentences (`hardHave`, `hardNeed`,
+`norm.pick`, `forge.say.equip`) the short modifier `mine.pick` still goes into «{name}», because
+Russian declines «кирку/кирка» around it; DE reads «die Spitzhacke Eisen» there. Names inside a sentence go through `nameIn()` (`src/i18n/data-mine.ts`):
 lower case everywhere except German. FR strings use a no-break space before `: ! ? ; %` and
 inside « » (as in round 1). DE «Kumpel» stays the pet; the dock's «Питомцы» is «Tiere» (short).
 

@@ -5,7 +5,7 @@
  */
 import { getLang, lower, t } from './core';
 import type { Key } from './core';
-import { enchantName, pickName } from './data';
+import { enchantName } from './data';
 import { BOOK_LEVELS, ROMAN } from '@/lib/books';
 
 const k = (s: string) => s as Key;
@@ -21,8 +21,11 @@ export const guideHint = (id: string) => t(k(`guide.${id}.hint`));
 export const bookName = (b: { id: string; lvl: number }) =>
   `${enchantName(b.id)} ${ROMAN[Math.max(0, Math.min(BOOK_LEVELS, b.lvl) - 1)]}`;
 
-/** «Ржавая кирка», «Rusty pickaxe», «Spitzhacke Rostig». */
-export const pickTitle = (i: number) => t('forge.pick', { name: pickName(i) });
+/**
+ * «Ржавая кирка», «Rusty Pickaxe», «Eisenspitzhacke», «Pioche en opale» — the full names of
+ * the books tab (`books.pick`), so the forge and the books say the same.
+ */
+export const pickTitle = (i: number) => t(k(`books.pick.${i}`));
 
 /**
  * A standalone name (rock, pick, item, rarity…) inside a sentence: lower case,

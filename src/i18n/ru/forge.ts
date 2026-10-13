@@ -2,7 +2,6 @@
 export const forge = {
   title: 'Кузница',
   /** A pick by its name (`mine.pick.*`): «Ржавая кирка». */
-  pick: '{name} кирка',
   /** «a, b и c»: the last two ore names. */
   listAnd: '{a} и {b}',
   power: 'Сила',

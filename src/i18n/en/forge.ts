@@ -3,7 +3,6 @@ import type { forge as ru } from '../ru/forge';
 
 export const forge: Translation<typeof ru> = {
   title: 'Forge',
-  pick: '{name} pickaxe',
   listAnd: '{a} and {b}',
   power: 'Power',
   perMin: 'blocks/min',

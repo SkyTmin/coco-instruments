@@ -21,6 +21,7 @@ import { useFinanceStore } from '@/store';
 import type { CasesOpened } from '@/store';
 import { fmtNum, fmtShort, itemName, petName, rich, runeName, t, useT } from '@/i18n';
 import { bookName, eggName } from '@/i18n/data-books';
+import { findName } from '@/i18n/data-mine';
 import { rarityOf } from '@/lib/rarity';
 import { caseClimb, caseTierOf, RUNE_ROMAN } from '@/lib/prison';
 import type { CaseRoll, CaseTier, ItemId, Reward } from '@/lib/prison';
@@ -129,6 +130,8 @@ function cardText(r: Reward): string {
       return r.amount > 1 ? `${itemName(r.id)} ×${r.amount}` : itemName(r.id);
     case 'treat':
       return t('chests.treat');
+    case 'find':
+      return findName(r.id);
     default:
       return rewardLabel(r);
   }
