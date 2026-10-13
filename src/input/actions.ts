@@ -85,7 +85,7 @@ export const PAD = {
 
 export const DEFAULT_BINDINGS: Bindings = {
   keys: {
-    confirm: ['Enter', 'NumpadEnter', 'Space'],
+    confirm: ['Enter', 'Space', 'NumpadEnter'],
     back: ['Escape'],
     up: ['ArrowUp', 'KeyW'],
     down: ['ArrowDown', 'KeyS'],
@@ -250,6 +250,52 @@ export function rebind(
   return next;
 }
 
+/**
+ * Поставить в ячейку `slot` новое значение ВМЕСТО старого (экран клавиш:
+ * «нажми клавишу» в ячейке). `null` — стереть ячейку. Если значение было у
+ * другого действия той же группы, они МЕНЯЮТСЯ: тому достаётся старое
+ * значение ячейки — так ни одно действие не остаётся без клавиши молча.
+ */
+export function assignBinding(
+  b: Bindings,
+  action: Action,
+  device: 'keys' | 'pad',
+  value: string | number | null,
+  slot = 0,
+): Bindings {
+  const next = normalizeBindings(b);
+  if (device === 'keys') assignIn(next.keys, action, value === null ? null : String(value), slot);
+  else assignIn(next.pad, action, value === null ? null : Number(value), slot);
+  return next;
+}
+
+function assignIn<T extends string | number>(
+  map: Record<Action, T[]>,
+  action: Action,
+  value: T | null,
+  slot: number,
+): void {
+  const old = map[action][slot];
+  const own = map[action].filter((_, i) => i !== slot);
+  if (value === null) {
+    map[action] = own;
+    return;
+  }
+  const group = groupOf(action);
+  for (const a of ACTIONS) {
+    if (a === action || groupOf(a) !== group) continue;
+    const i = map[a].indexOf(value);
+    if (i < 0) continue;
+    const rest = [...map[a]];
+    if (old !== undefined && old !== value && !rest.includes(old)) rest[i] = old;
+    else rest.splice(i, 1);
+    map[a] = rest;
+  }
+  const mine = own.filter((v) => v !== value);
+  mine.splice(Math.min(slot, mine.length), 0, value);
+  map[action] = mine;
+}
+
 export function groupOf(a: Action): 'ui' | 'game' | 'hotkey' {
   if ((UI_ACTIONS as readonly string[]).includes(a)) return 'ui';
   if ((GAME_ACTIONS as readonly string[]).includes(a)) return 'game';
@@ -261,7 +307,7 @@ export function groupOf(a: Action): 'ui' | 'game' | 'hotkey' {
 const NAMED: Record<string, string> = {
   Space: 'Space',
   Enter: 'Enter',
-  NumpadEnter: 'Enter',
+  NumpadEnter: 'Num Enter',
   Escape: 'Esc',
   Tab: 'Tab',
   Backspace: '⌫',

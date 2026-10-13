@@ -104,3 +104,26 @@ export function usePadStyle(): PadStyle {
 export function useBindings(): Bindings {
   return useSyncExternalStore(subscribeBindings, getBindings, getBindings);
 }
+
+function padConnected(): boolean {
+  try {
+    const list = typeof navigator !== 'undefined' ? navigator.getGamepads?.() : null;
+    return !!list && Array.from(list).some((p) => !!p && p.connected);
+  } catch {
+    return false;
+  }
+}
+
+function subscribePads(fn: () => void): () => void {
+  window.addEventListener('gamepadconnected', fn);
+  window.addEventListener('gamepaddisconnected', fn);
+  return () => {
+    window.removeEventListener('gamepadconnected', fn);
+    window.removeEventListener('gamepaddisconnected', fn);
+  };
+}
+
+/** Геймпад подключён. Браузер видит его только после первого нажатия. */
+export function usePadConnected(): boolean {
+  return useSyncExternalStore(subscribePads, padConnected, () => false);
+}

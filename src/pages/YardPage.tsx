@@ -60,7 +60,10 @@ import {
 } from '@/lib/sound';
 import { tapLight } from '@/lib/haptics';
 import { registerEscape } from '@/lib/escape-stack';
-import { useAction, useGameplayCapture, useMoveAxis } from '@/input/hooks';
+import { useAction, useGameplayCapture, useHotkeys, useMoveAxis } from '@/input/hooks';
+import { inTopLayer } from '@/input/focus-nav';
+import { Prompt } from '@/input/Prompt';
+import { useT } from '@/i18n';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 const clock = (ms: number) => {
@@ -150,6 +153,7 @@ export function YardPage() {
 }
 
 function HubWorld() {
+  const t = useT();
   const nav = useNavigate();
   const owner = useOwner();
   const prison = useFinanceStore((s) => s.prison);
@@ -551,6 +555,28 @@ function HubWorld() {
     actNear();
     return true;
   });
+  // I — рюкзак (пока площадь на верхнем слое), Tab/Shift+Tab (LB/RB) —
+  // вкладки открытого экрана лагеря.
+  useHotkeys({
+    inventory: () => {
+      if (busyRef.current) return;
+      tapLight();
+      setInv('yard');
+    },
+  });
+  useAction(
+    ['tabPrev', 'tabNext'],
+    (e) => {
+      if (!camp || camp.tabs.length < 2) return false;
+      if (!inTopLayer(document.querySelector('.gx-camp'))) return false;
+      const i = Math.max(0, camp.tabs.indexOf(camp.tab));
+      const n = camp.tabs.length;
+      const next = camp.tabs[(i + (e.action === 'tabNext' ? 1 : -1) + n) % n];
+      if (next) setCamp({ ...camp, tab: next });
+      return true;
+    },
+    { enabled: !!camp, phases: ['down', 'repeat'] },
+  );
 
   // ---- Табло --------------------------------------------------------------
 
@@ -638,6 +664,8 @@ function HubWorld() {
           type="button"
           className="gx-round gx-round--dark hub-pad__map"
           aria-label="Инвентарь"
+          data-tip={t('input.action.inventory')}
+          data-tip-key="inventory"
           onClick={() => {
             tapLight();
             setInv('yard');
@@ -666,6 +694,7 @@ function HubWorld() {
           >
             <GxIcon name={use.kind === 'npc' ? 'scroll' : 'gate'} />
             {use.label}
+            <Prompt action="interact" className="hub-pad__key" />
           </button>
         )}
       </div>

@@ -49,6 +49,9 @@ const STICK_HOLDERS: Record<'up' | 'down' | 'left' | 'right', number> = {
 export class GamepadPoller {
   /** Нажатые «кнопки» (настоящие 0–16 и стик-направления 100–103). */
   private down = new Set<number>();
+  /** Первый опрос только запоминает, что уже зажато: кнопка, зажатая до
+   *  запуска (или до перехода), — не новое нажатие. */
+  private primed = false;
   private nextRepeat = new Map<number, number>();
 
   step(now: number): void {
@@ -81,6 +84,10 @@ export class GamepadPoller {
     }
     if (active) setInputDevice('gamepad', padStyleOf((active as PadLike).id));
 
+    if (!this.primed) {
+      this.primed = true;
+      for (const i of pressed) this.down.add(i);
+    }
     for (const i of pressed) {
       if (this.down.has(i)) continue;
       this.down.add(i);
@@ -109,6 +116,7 @@ export class GamepadPoller {
   }
 
   reset(): void {
+    this.primed = false;
     this.down.clear();
     this.nextRepeat.clear();
     releaseAll('gamepad');
@@ -138,18 +146,29 @@ export function installGamepad(): () => void {
   let raf = 0;
   let stopped = false;
   const prevButtons = new Set<number>();
+  let capFn: typeof capture = null;
   const loop = (t: number) => {
     raf = 0;
     if (stopped) return;
     if (capture) {
-      // Режим переназначения: первая новая кнопка уходит в перехват.
+      // Режим переназначения: первая НОВАЯ кнопка уходит в перехват. «A»,
+      // которой нажали саму ячейку, ещё зажата — её в первый кадр запоминаем.
       const pads = readPads();
       const now = new Set<number>();
       for (const p of pads) p.buttons.forEach((b, i) => b?.pressed && now.add(i));
-      for (const i of now) if (!prevButtons.has(i) && capture(i)) break;
+      const fresh = capFn !== capture;
+      capFn = capture;
+      if (!fresh) for (const i of now) if (!prevButtons.has(i) && capture(i)) break;
       prevButtons.clear();
       for (const i of now) prevButtons.add(i);
-    } else poller.step(t);
+    } else {
+      // Перехват кончился: зажатое сейчас — не новое нажатие.
+      if (capFn) {
+        capFn = null;
+        poller.reset();
+      }
+      poller.step(t);
+    }
     if (poller.connected() > 0 && !document.hidden) raf = requestAnimationFrame(loop);
     else poller.reset();
   };

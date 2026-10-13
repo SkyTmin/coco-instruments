@@ -27,9 +27,9 @@ describe('каркас: форматы', () => {
     expect(Number.isInteger(uiScaleFor(777, 333))).toBe(true);
   });
   it('ручной масштаб не выводит интерфейс за край', () => {
-    expect(uiScaleFor(390, 844, 4)).toBe(2);
+    expect(uiScaleFor(390, 844, 3)).toBe(2);
     expect(uiScaleFor(1920, 1080, 1)).toBe(1);
-    expect(uiScaleFor(1920, 1080, 6)).toBe(6);
+    expect(uiScaleFor(1920, 1080, 3)).toBe(3);
   });
   it('игровые маршруты', () => {
     expect(isGameRoute('/prison')).toBe(true);

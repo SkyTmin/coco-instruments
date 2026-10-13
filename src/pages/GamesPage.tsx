@@ -12,6 +12,7 @@ import type { SlotSymbolId } from '@/lib/slots';
 import { tapLight } from '@/lib/haptics';
 import { useGameAudio } from '@/lib/use-game-audio';
 import { AudioToggles } from '@/components/AudioToggles';
+import { GameScreen } from '@/game-shell/GameScreen';
 import { fmtNum as fmt, useT } from '@/i18n';
 import { GameSettings } from '@/settings';
 
@@ -44,10 +45,14 @@ export function GamesPage() {
   const reels = (ids: SlotSymbolId[]) =>
     ids.map((id) => <img key={id} src={symbolSrc(skin, id)} alt="" />);
 
+  // Каркас игры (src/game-shell): безопасные зоны и в альбомной ориентации,
+  // карточки в два столбца на широком экране; стрелками/крестовиной — по
+  // карточкам, Enter/«A» — войти.
   return (
-    <div className="gx gxh">
-      <div className="yard-scene-bg" aria-hidden="true" />
-      <div className="gxh__wrap">
+    <GameScreen
+      className="gx gxh"
+      bg={<div className="yard-scene-bg" />}
+      top={
         <GameTop
           title={t('hall.title')}
           onBack={() => nav(-1)}
@@ -79,8 +84,11 @@ export function GamesPage() {
             </>
           }
         />
-
+      }
+    >
+      <div className="gxh__cards">
         <GameCard
+          autoFocus
           title={t(`skins.${theme.id}.title`)}
           art={<span className="gxh-card__reels">{reels(['seven', 'star', 'bell'])}</span>}
           tags={[t('hall.reels', { n: 3 }), t('hall.lines', { n: 5 })]}
@@ -97,10 +105,10 @@ export function GamesPage() {
           stat={scatterSpins ? t('hall.stat', { n: scatterSpins, best: fmt(scatterBest) }) : null}
           onClick={() => go('/scatter')}
         />
-        <p className="gxh__note">{t('hall.note')}</p>
       </div>
+      <p className="gxh__note">{t('hall.note')}</p>
       {settingsOpen && <GameSettings onClose={() => setSettingsOpen(false)} />}
-    </div>
+    </GameScreen>
   );
 }
 
@@ -110,6 +118,7 @@ function GameCard({
   tags,
   stat,
   dark,
+  autoFocus,
   onClick,
 }: {
   title: string;
@@ -117,10 +126,17 @@ function GameCard({
   tags: string[];
   stat: string | null;
   dark?: boolean;
+  /** Первая цель фокуса с клавиатуры и геймпада. */
+  autoFocus?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="gx-panel gx-panel--wood-fancy gxh-card" onClick={onClick}>
+    <button
+      type="button"
+      className="gx-panel gx-panel--wood-fancy gxh-card"
+      data-autofocus={autoFocus ? '' : undefined}
+      onClick={onClick}
+    >
       <span className={`gxh-card__art${dark ? ' is-dark' : ''}`}>{art}</span>
       <span className="gxh-card__body">
         <b>{title}</b>

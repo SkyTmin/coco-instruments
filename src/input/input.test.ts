@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   actionsForButton,
+  assignBinding,
   actionsForCode,
   actionsForKey,
   DEFAULT_BINDINGS,
@@ -76,6 +77,16 @@ describe('ввод: переназначение', () => {
     const b = rebind(B, 'skill', 'pad', PAD.RB);
     expect(b.pad.skill[0]).toBe(PAD.RB);
     expect(b.pad.tabNext).toContain(PAD.RB); // меню — другая группа
+  });
+  it('ячейка экрана клавиш: новое вместо старого, обмен с соседом, null стирает', () => {
+    const b = assignBinding(B, 'up', 'keys', 'KeyU', 1); // было ArrowUp, KeyW
+    expect(b.keys.up).toEqual(['ArrowUp', 'KeyU']);
+    const c = assignBinding(b, 'up', 'keys', null, 0);
+    expect(c.keys.up).toEqual(['KeyU']);
+    const d = assignBinding(B, 'attack', 'pad', PAD.X, 0); // X был у «действия»
+    expect(d.pad.attack[0]).toBe(PAD.X);
+    expect(d.pad.attack).not.toContain(PAD.A);
+    expect(d.pad.interact).toEqual([PAD.A]); // поменялись: «действию» — бывшая A удара
   });
   it('старое сохранение без нового действия получает значение по умолчанию; мусор выброшен', () => {
     const b = normalizeBindings({ keys: { up: ['KeyU', 5, ''] }, pad: { up: [3, -1, 'x', 99] } });
@@ -205,14 +216,30 @@ describe('ввод: геймпад (поддельный navigator.getGamepads)'
 
   it('крестовина — и движение, и меню; отключённый геймпад отпускает всё', () => {
     const p = new GamepadPoller();
-    btn(PAD.LEFT, true);
     p.step(0);
+    btn(PAD.LEFT, true);
+    p.step(16);
     expect(isHeld('moveLeft')).toBe(true);
     expect(getMoveAxis()).toEqual({ x: -1, y: 0 });
     pad.connected = false;
     p.reset();
     expect(isHeld('moveLeft')).toBe(false);
     expect(getMoveAxis()).toEqual({ x: 0, y: 0 });
+  });
+
+  it('кнопка, зажатая до первого опроса, — не нажатие', () => {
+    const seen: string[] = [];
+    onAction((e) => void seen.push(`${e.action}:${e.phase}`));
+    btn(PAD.B, true);
+    const p = new GamepadPoller();
+    p.step(0);
+    p.step(16);
+    expect(seen).toEqual([]);
+    btn(PAD.B, false);
+    p.step(32);
+    btn(PAD.B, true);
+    p.step(48);
+    expect(seen).toEqual(['back:down', 'dash:down']);
   });
 
   it('мёртвая зона пересчитывает ход от нуля', () => {

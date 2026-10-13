@@ -80,16 +80,18 @@ export function topLayer(): HTMLElement {
   if (last) return last;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  // Ближайший к точке «экран поверх»: окно паузы лежит ВНУТРИ экрана
+  // подземелья, а тот тоже fixed во весь экран, — берём самый внутренний
+  // такой слой, где есть что фокусировать (слой холста без кнопок — мимо).
   let el = document.elementFromPoint(vw / 2, vh / 2) as HTMLElement | null;
-  let found: HTMLElement | null = null;
   while (el && el !== document.body && el !== document.documentElement) {
     if (getComputedStyle(el).position === 'fixed') {
       const r = el.getBoundingClientRect();
-      if (r.width * r.height >= vw * vh * 0.5) found = el;
+      if (r.width * r.height >= vw * vh * 0.5 && focusablesIn(el).length > 0) return el;
     }
     el = el.parentElement;
   }
-  return found ?? document.body;
+  return document.body;
 }
 
 /** Элемент на верхнем слое (горячие клавиши страницы молчат под окном). */
@@ -137,8 +139,13 @@ export function focusEl(el: HTMLElement): void {
   el.addEventListener('blur', off);
 }
 
+/** Крестик окна не берёт фокус первым: закрыть можно и «Назад». */
+function closer(el: HTMLElement): boolean {
+  return el.hasAttribute('data-focus-last') || /(^|\s)[\w-]+__close(\s|$)/.test(el.className);
+}
+
 /** Первая цель в слое: `data-autofocus`, иначе выбранная вкладка/кнопка
- *  (`aria-current`, `aria-selected`), иначе верхняя-левая. */
+ *  (`aria-current`, `aria-selected`), иначе верхняя-левая (крестик — последним). */
 export function firstFocusable(root: HTMLElement): HTMLElement | null {
   const list = focusablesIn(root);
   if (!list.length) return null;
@@ -149,7 +156,8 @@ export function firstFocusable(root: HTMLElement): HTMLElement | null {
         el.getAttribute('aria-current') === 'true' || el.getAttribute('aria-current') === 'page',
     );
   if (pref) return pref;
-  return [...list].sort((a, b) => {
+  const open = list.filter((el) => !closer(el));
+  return [...(open.length ? open : list)].sort((a, b) => {
     const A = boxOf(a);
     const B = boxOf(b);
     return Math.abs(A.y - B.y) > 8 ? A.y - B.y : A.x - B.x;

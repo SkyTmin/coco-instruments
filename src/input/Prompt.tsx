@@ -3,7 +3,8 @@
 // Nintendo. На сенсорном экране — ничего (кнопки там нажимают пальцем).
 
 import type { ReactNode } from 'react';
-import { keyLabel, PAD, type Action, type Bindings } from './actions';
+import { t, useT } from '@/i18n';
+import { codeOfChord, keyLabel, PAD, type Action, type Bindings } from './actions';
 import { getBindings } from './bindings';
 import type { InputDevice, PadStyle } from './device';
 import { useBindings, useInputDevice, usePadStyle } from './hooks';
@@ -64,6 +65,19 @@ const DPAD: Record<number, string> = {
   [PAD.RIGHT]: '→',
 };
 
+/** Подпись клавиши на языке игрока: «Пробел», «Shift+Tab», «I». */
+export function keyText(chord: string): string {
+  const s = keyLabel(chord);
+  return codeOfChord(chord) === 'Space' ? s.replace('Space', t('input.space')) : s;
+}
+
+/** Подпись кнопки геймпада в стиле контроллера: «A», «✕», «LB», «↑». */
+export function padLabel(btn: number, pad: PadStyle = 'xbox'): string {
+  if (DPAD[btn]) return DPAD[btn]!;
+  const map = pad === 'ps' ? PS : pad === 'nintendo' ? NIN : XBOX;
+  return map[btn] ?? `#${btn}`;
+}
+
 /** Текст подсказки (для title, aria-label, тостов): «I», «A», «✕», «LB». */
 export function promptText(
   action: PromptAction,
@@ -74,20 +88,17 @@ export function promptText(
   if (device === 'gamepad') {
     if (action === 'move') return 'L';
     const btn = b.pad[action][0];
-    if (btn === undefined) return '';
-    if (DPAD[btn]) return DPAD[btn]!;
-    const map = pad === 'ps' ? PS : pad === 'nintendo' ? NIN : XBOX;
-    return map[btn] ?? `#${btn}`;
+    return btn === undefined ? '' : padLabel(btn, pad);
   }
   if (action === 'move') return 'WASD';
   const k = b.keys[action][0];
-  return k ? keyLabel(k) : '';
+  return k ? keyText(k) : '';
 }
 
 /** Подпись для всплывающей подсказки мыши: «Инвентарь · I». */
 export function hintTitle(text: string, action: Action, b: Bindings = getBindings()): string {
   const k = b.keys[action][0];
-  return k ? `${text} · ${keyLabel(k)}` : text;
+  return k ? `${text} · ${keyText(k)}` : text;
 }
 
 // Фигуры PlayStation точками 9×9 — шрифт игры их не знает, а системный
@@ -111,7 +122,8 @@ const DPAD_ARM: Record<string, string> = {
   '→': 'M6 3h3v3h-3z',
 };
 
-function Glyph({ text, device, pad }: { text: string; device: InputDevice; pad: PadStyle }) {
+/** Сам значок по готовой подписи (экран клавиш рисует им каждую ячейку). */
+export function Glyph({ text, device, pad }: { text: string; device: InputDevice; pad: PadStyle }) {
   if (device !== 'gamepad') return <kbd className="ip ip--key">{text}</kbd>;
   if (DPAD_ARM[text])
     return (
@@ -155,6 +167,7 @@ export function Prompt({ action, label, always, device, pad, className }: Prompt
   const cur = useInputDevice();
   const curPad = usePadStyle();
   const b = useBindings();
+  useT(); // перерисовка при смене языка («Пробел»)
   const dev = device ?? cur;
   if (dev === 'touch' && !always) return null;
   const shown = dev === 'touch' ? 'keyboard' : dev === 'mouse' ? 'keyboard' : dev;

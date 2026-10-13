@@ -9,6 +9,7 @@ export {
   PAD,
   keyLabel,
   rebind,
+  assignBinding,
   groupOf,
   type Action,
   type UiAction,
@@ -58,8 +59,19 @@ export {
   useInputDevice,
   usePadStyle,
   useBindings,
+  usePadConnected,
   type UseActionOptions,
 } from './hooks';
-export { Prompt, promptText, hintTitle, type PromptAction, type PromptProps } from './Prompt';
+export {
+  Prompt,
+  Glyph,
+  promptText,
+  hintTitle,
+  keyText,
+  padLabel,
+  type PromptAction,
+  type PromptProps,
+} from './Prompt';
+export { BindingsPanel } from './BindingsPanel';
 export { captureNextBinding, type Captured } from './capture';
 export { InputRoot } from './InputRoot';

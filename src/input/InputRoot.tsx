@@ -13,6 +13,7 @@ import { installDeviceTracking } from './device';
 import { activateFocused, moveFocus, type Dir } from './focus-nav';
 import { installGamepad } from './gamepad';
 import { installKeyboard, isTypingTarget } from './keyboard';
+import './BindingsPanel'; // вкладка «Управление» в настройках игры
 
 const NATIVE = ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT', 'SUMMARY'];
 
@@ -26,6 +27,11 @@ export function InputRoot() {
   const { pathname } = useLocation();
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
+  // navigate меняется с каждым переходом (react-router 6): через ref, иначе
+  // эффект переставлял бы ввод на каждом экране, а новый опрос геймпада
+  // принял бы ещё зажатую «B» за новое нажатие — и шагнул назад дважды.
+  const navRef = useRef(navigate);
+  navRef.current = navigate;
 
   useEffect(() => {
     const offs = [installDeviceTracking(), installKeyboard(), installGamepad()];
@@ -45,7 +51,7 @@ export function InputRoot() {
             if (captured && e.source === 'gamepad') return false;
             if (closeTopOverlay()) return true;
             if (pathRef.current !== '/') {
-              navigate(-1);
+              navRef.current(-1);
               return true;
             }
             return false;
@@ -83,7 +89,7 @@ export function InputRoot() {
       }),
     );
     return () => offs.forEach((off) => off());
-  }, [navigate]);
+  }, []);
 
   return null;
 }

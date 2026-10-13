@@ -2,6 +2,7 @@ import { cash } from './cash';
 import { common } from './common';
 import { field } from './field';
 import { hall } from './hall';
+import { input } from './input';
 import { mine } from './mine';
 import { nursery } from './nursery';
 import { pets } from './pets';
@@ -19,6 +20,7 @@ export const ru = {
   common,
   field,
   hall,
+  input,
   mine,
   nursery,
   pets,
