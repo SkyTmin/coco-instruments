@@ -27,6 +27,7 @@ import {
   useBox,
   useFirstFrame,
   useFullWin,
+  useWordFit,
 } from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
 import { TokenIcon } from '@/components/PrisonCamp';
@@ -387,6 +388,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const prisonPickStar = useFinanceStore((s) => s.prisonPickStar);
   const { layout, u } = useArmLayout();
   const root = useRef<HTMLDivElement>(null);
+  useWordFit(root);
 
   const [sel, setSel] = useState<Sel>(() => (p.books.length ? { k: 'book', i: 0 } : { k: 'pick' }));
   const [scene, setScene] = useState<Scene | null>(null);

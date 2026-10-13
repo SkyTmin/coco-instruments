@@ -27,6 +27,13 @@
   overflow-wrap: anywhere;
   hyphens: auto;
 }
+/* a name that would split inside a word takes the small step (`useWordFit`) */
+:is(.frg-ing__txt, .frg-ench__row) > b[data-tight] {
+  font-size: var(--px-fs-sm);
+}
+:is(.frg-ing__txt, .frg-ench__row) > b[data-tight='2'] {
+  font-size: var(--px-fs-tiny);
+}
 .frg-ing.is-ok .frg-ing__txt > b {
   color: var(--px-green);
 }

@@ -30,6 +30,7 @@ import {
   useBox,
   useFirstFrame,
   useFullWin,
+  useWordFit,
 } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import {
@@ -310,6 +311,7 @@ export function Inventory({
   const prisonSell = useFinanceStore((s) => s.prisonSell);
   const { layout, u } = useArmLayout();
   const root = useRef<HTMLDivElement>(null);
+  useWordFit(root);
 
   const atBunk = place === 'bunk';
   const lang = useLang();

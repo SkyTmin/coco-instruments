@@ -34,6 +34,7 @@ import {
   useBox,
   useFirstFrame,
   useFullWin,
+  useWordFit,
 } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
@@ -128,6 +129,7 @@ export function ForgeScreen({
   const prisonEquip = useFinanceStore((s) => s.prisonEquip);
   const { layout, u } = useArmLayout();
   const root = useRef<HTMLDivElement>(null);
+  useWordFit(root);
   const [note, setNote] = useState<{ id: number; text: string } | null>(null);
   const [reveal, setReveal] = useState<number | null>(null);
   const noteSeq = useRef(0);

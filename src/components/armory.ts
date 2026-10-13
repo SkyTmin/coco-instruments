@@ -116,6 +116,71 @@ export const fromKeys = (e: { detail: number }) => e.detail === 0;
 
 let fullWins = 0;
 let fullScenes = 0;
+/** Short labels that must not break inside a word: a stat's label, the forge's ingredient and
+ *  enchant names. When a word would split over two lines (or a one-line label sticks out) the
+ *  element gets `data-tight` 1, then 2 — kit steps smaller (`armory.css`, `forge.css`); only a word
+ *  too long even then still breaks. */
+const FIT = '.arm-stat > i, .frg-ing__txt > b, .frg-ench__row > b';
+
+function splitsWord(el: Element): boolean {
+  if (el.scrollWidth > el.clientWidth + 1) return true;
+  const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+    const s = n.nodeValue ?? '';
+    // pieces between break opportunities (a space, a zero-width space, after a hyphen or slash)
+    const re = /[^\s\u200b/-]{3,}[/-]?/g;
+    for (let m = re.exec(s); m; m = re.exec(s)) {
+      const r = document.createRange();
+      r.setStart(n, m.index);
+      r.setEnd(n, m.index + m[0].length);
+      const rs = r.getClientRects();
+      if (rs.length > 1 && Math.abs(rs[rs.length - 1].top - rs[0].top) > 2) return true;
+    }
+  }
+  return false;
+}
+
+function fitWords(els: Element[]): void {
+  const list = els as HTMLElement[];
+  for (const e of list) delete e.dataset.tight;
+  let bad = list.filter(splitsWord); // one layout for all of them
+  for (const step of ['1', '2']) {
+    for (const e of bad) e.dataset.tight = step;
+    bad = bad.filter(splitsWord);
+  }
+}
+
+/**
+ * Keeps the `FIT` labels under `root` whole: checks them on mount, when their text changes
+ * (a MutationObserver runs before the frame is painted, so a split word never shows) and when the
+ * window resizes. Unrelated mutations (a counter in the purse) cost nothing.
+ */
+export function useWordFit(root: RefObject<HTMLElement | null>): void {
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return undefined;
+    const all = () => fitWords([...el.querySelectorAll(FIT)]);
+    all();
+    const mo = new MutationObserver((recs) => {
+      const hit = new Set<Element>();
+      for (const r of recs) {
+        const t = r.target instanceof Element ? r.target : r.target.parentElement;
+        const own = t?.closest(FIT);
+        if (own) hit.add(own);
+        else if (t) for (const x of t.querySelectorAll(FIT)) hit.add(x);
+      }
+      if (hit.size) fitWords([...hit]);
+    });
+    mo.observe(el, { subtree: true, childList: true, characterData: true });
+    const ro = new ResizeObserver(all);
+    ro.observe(el);
+    return () => {
+      mo.disconnect();
+      ro.disconnect();
+    };
+  }, [root]);
+}
+
 /**
  * While a full-screen window (`.arm.is-window`) or a result scene is mounted: `html[data-fullwin]`
  * (and `data-fullscene` for a scene). The mine (`.pmx`) and a camp under a scene stop painting —

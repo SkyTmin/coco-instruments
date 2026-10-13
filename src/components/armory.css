@@ -175,13 +175,26 @@ html[data-ff='phone-landscape'] .arm-stage > .arm-stats {
   align-content: start;
   gap: var(--u);
 }
+/* Number · delta on one line, the label one line under them the cell's whole width (beside the
+   number it had 45–62 px and split «блоков/мин», «Chance», «Состояние»); `useWordFit` takes a
+   long label to the small step. Compact rows: the books' three stats under a three-part plate get
+   136 px (44 each with the well frame). */
 html[data-ff='phone-landscape'] .arm-stage .arm-stat {
-  grid-template: 'num delta lbl' calc(2 * 1.1 * var(--px-fs-sm)) / auto auto minmax(0, 1fr);
+  grid-template:
+    'num delta' calc(1.15 * var(--px-fs))
+    'lbl lbl' var(--px-fs-sm)
+    / auto minmax(0, 1fr);
   align-items: center;
-  padding: var(--u) calc(2 * var(--u));
+  padding: 0 calc(2 * var(--u));
 }
 html[data-ff='phone-landscape'] .arm-stage .arm-stat > b {
   font-size: var(--px-fs);
+}
+html[data-ff='phone-landscape'] .arm-stage .arm-stat > i {
+  display: block;
+  min-height: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 /* A narrow plate (a phone's width, or beside the art): state and effect wrap into two reserved
    lines of the smaller step. `.arm-stage` in front: the base rules below would win on order. */
@@ -358,6 +371,9 @@ html[data-ff='phone-landscape'] .arm-name {
   color: var(--px-text);
   white-space: nowrap;
 }
+.arm-stat > i[data-tight] {
+  font-size: var(--px-fs-tiny);
+}
 /* A long value shrinks to its cell instead of sticking out of the stage (a tier's «35–75 %» was
    15 px wider than its cell on a phone); --nlen from numFit(), the row height stays fixed. */
 .arm-stat {
@@ -376,8 +392,9 @@ html[data-ff='phone-landscape'] .arm-name {
   font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
   color: var(--px-text);
   overflow: hidden;
+  /* a word that doesn't fit takes the small step (`useWordFit` → data-tight), not a break or
+     a hyphen («Состояние» in an 84-px cell, «Chance» beside a phone-landscape number) */
   overflow-wrap: break-word;
-  hyphens: auto;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

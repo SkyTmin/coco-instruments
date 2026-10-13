@@ -288,11 +288,18 @@ Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventor
   - Backpack: «Всё» is one grid with a marker cell per section (`SecMark`: section icon + bar of
     its first limit, tap = that tab) instead of heading lines; tabs are 44×44 icon tabs that wrap
     on phones, the count in ink on a well frame at the corner (positioned against `.px-tab`: the
-    kit label clips). Bunk chest: kit-size cells `repeat(auto-fill, --slot)`; action places =
-    min(actions, `ACT_SLOTS`). Tooltip icons 24 px, rarity as the kit pill.
+    kit label clips). Bunk chest: kit-size cells `repeat(auto-fill, --slot)`; action places —
+    see below. Tooltip icons 24 px, rarity as the kit pill.
   - Phone portrait forge list: the 17-pick strip first, the 72u details under it — details first
     left 0 of 17 picks on screen at 360×800. Stat number line-height = its row (1.15): at 1 a
     tablet's 1em icon stuck 3 px out. Phone-landscape backpack tabs: `grid-auto-columns:
     max-content` (an auto track shrank to the kit label's `min-width: 0` and cut «Alles»).
+  - `useWordFit(root)` (all three screens): a stat label, a forge ingredient or enchant name
+    whose word would split over two lines gets `data-tight` — one kit step smaller (label → tiny,
+    name → sm). MutationObserver + ResizeObserver, so it runs before paint; break points are
+    space, ZWSP, hyphen and slash. Was «Состояние», «Buchplätze», «Chance», «Kazmadaki»,
+    «Granatspitzhacke» split on 360 px and in phone landscape.
+  - Bunk chest: the phone bar has as many places as actions; a side column keeps `ACT_SLOTS`
+    places (spare ones hidden above the buttons) — fewer places moved the details by 58–87 px.
 - **Not verified**: a real phone / Telegram webview, hyphenation (the stand's Linux Chromium has no
   dictionaries — `hyphens: auto` is for phones), gamepad hardware (actions emitted on the bus).
