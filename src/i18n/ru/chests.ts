@@ -9,6 +9,10 @@ export const chests = {
   },
   key: 'Ключ',
   keys: { one: '{n} ключ', few: '{n} ключа', many: '{n} ключей', other: '{n} ключа' },
+  /** Full reward labels (batch summary, tooltips). `v` = short money, `n` picks the plural. */
+  coins: { one: '{v} монета', few: '{v} монеты', many: '{v} монет', other: '{v} монеты' },
+  tokens: { one: '{n} токен', few: '{n} токена', many: '{n} токенов', other: '{n} токена' },
+  rune: 'Руна {name}',
   treat: 'Лакомство питомцу',
   treats: 'Лакомство питомцу ×{n}',
   /** Second line of a prize card: what it is and where it went. */

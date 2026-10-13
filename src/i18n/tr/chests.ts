@@ -11,6 +11,9 @@ export const chests: Translation<typeof ru> = {
   },
   key: 'Anahtar',
   keys: { one: '{n} anahtar', other: '{n} anahtar' },
+  coins: { one: '{v} altın', other: '{v} altın' },
+  tokens: { one: '{n} jeton', other: '{n} jeton' },
+  rune: '{name} rünü',
   treat: 'Ödül maması',
   treats: 'Ödül maması ×{n}',
   sub: {

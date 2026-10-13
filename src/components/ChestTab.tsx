@@ -134,6 +134,24 @@ function cardText(r: Reward): string {
   }
 }
 
+/** Полная подпись награды — итог «Открыть все» и подсказки. */
+function fullText(r: Reward): string {
+  switch (r.kind) {
+    case 'coins':
+      return t('chests.coins', { n: r.amount, v: fmtShort(r.amount) });
+    case 'tokens':
+      return t('chests.tokens', { n: r.amount });
+    case 'keys':
+      return t('chests.keys', { n: r.amount });
+    case 'treat':
+      return r.amount > 1 ? t('chests.treats', { n: r.amount }) : t('chests.treat');
+    case 'rune':
+      return t('chests.rune', { name: cardText(r) });
+    default:
+      return cardText(r);
+  }
+}
+
 /** Вторая строка приза: что это и куда легло. */
 function cardSub(r: Reward): string | null {
   switch (r.kind) {
@@ -280,7 +298,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
           <b>{t('chests.recent')}</b>
           <div>
             {recent.map((r, i) => (
-              <span key={i} title={rewardLabel(r)}>
+              <span key={i} title={fullText(r)}>
                 <RewardIcon r={r} size={30} />
               </span>
             ))}
@@ -763,9 +781,9 @@ function ChestsBatch({
             {sum.single.length > 0 && (
               <span className="pchb__singles">
                 {sum.single.map((r, i) => (
-                  <span key={i} className="pchb__single" title={rewardLabel(r)}>
+                  <span key={i} className="pchb__single" title={fullText(r)}>
                     <RewardIcon r={r} size={r.kind === 'book' ? 46 : 40} />
-                    <i>{r.kind === 'book' ? cardText(r) : rewardLabel(r)}</i>
+                    <i>{r.kind === 'book' ? cardText(r) : fullText(r)}</i>
                   </span>
                 ))}
               </span>
@@ -773,13 +791,7 @@ function ChestsBatch({
             {sum.summed.map((r, i) => (
               <span key={i} className="pchb__row">
                 <RewardIcon r={r} size={24} />
-                <em>
-                  {r.kind === 'treat'
-                    ? t('chests.treats', { n: r.amount })
-                    : r.kind === 'keys'
-                      ? t('chests.keys', { n: r.amount })
-                      : rewardLabel(r)}
-                </em>
+                <em>{fullText(r)}</em>
               </span>
             ))}
             {got.newPets.length > 0 && (
