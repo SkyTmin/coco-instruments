@@ -1,0 +1,21 @@
+/** Achievements (`MILES` in `src/lib/prison.ts`): title and what to do. GENERATED from the lib; `src/i18n/mine-data.test.ts` checks ru equals the lib. */
+export const miles = {
+  b1k: { title: 'Тысяча блоков', text: 'Сломать своими руками' },
+  b10k: { title: 'Десять тысяч', text: 'Сломать своими руками' },
+  b100k: { title: 'Сто тысяч', text: 'Сломать своими руками' },
+  b1m: { title: 'Миллион', text: 'Сломать своими руками' },
+  z: { title: 'Первый Z', text: 'Дойти до последнего ранга' },
+  p1: { title: 'Престиж 1', text: 'Начать второй срок' },
+  p5: { title: 'Престиж 5', text: 'Пятый срок' },
+  p10: { title: 'Престиж 10', text: 'Четвёртое гнездо для руны' },
+  p20: { title: 'Престиж 20', text: 'Двадцать сроков' },
+  legend: { title: 'Легенда забоя', text: 'Набрать серию до «Легенда забоя»' },
+  pets6: { title: 'Шесть видов', text: 'Вырастить из яиц шесть разных питомцев' },
+  hatch50: { title: 'Наседка', text: 'Высидеть пятьдесят яиц' },
+  golden: { title: 'Золотой питомец', text: 'Собрать пять одинаковых' },
+  zoo: { title: 'Весь зоопарк', text: 'Собрать всех 18' },
+  cases: { title: 'Сто сундуков', text: 'Открыть ключами' },
+  seid: { title: 'Хранитель сейдов', text: 'Разбить десять сейд-камней' },
+  bats: { title: 'Ловец мышей', text: 'Поймать тридцать летучих мышей' },
+  parcels: { title: 'Сто посылок', text: 'Вскрыть' },
+} as const;
