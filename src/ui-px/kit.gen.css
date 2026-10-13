@@ -812,6 +812,13 @@
   --i-h: 9;
 }
 
+.pxi-skip {
+  -webkit-mask-image: url('/ui/kit/i-skip.png?v=fbb41476');
+  mask-image: url('/ui/kit/i-skip.png?v=fbb41476');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .pxk-tab-side-on {
   border-image-source: var(--pxk-tab-side-on);
   border-image-slice: var(--pxk-tab-side-on-s);
