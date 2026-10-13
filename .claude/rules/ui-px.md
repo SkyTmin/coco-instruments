@@ -47,6 +47,11 @@ Moonlighter, Darkest Dungeon, Octopath, Diablo, PoE2). Study only — never copy
 - Defaults use `:where()` (zero specificity) so variant classes win regardless of order.
 - New piece: add to `PIECES` with its declared slice, bake, run `npx vitest run src/ui-px`
   (`paint.test.ts`: slice = measured, deterministic, icons 9×9 white, no half-alpha, unique names).
+- Several agents append pieces at once: add yours in a `// wave N — <letter>` block at the END
+  of `PIECES` / `ICONS`, never reorder; on a merge conflict keep both sides and re-bake.
+- Wave 2 — C added `tab-side-on` and the icons gear, sound, mute, music, nomusic, question,
+  excl, minus (for `KIcon`); `key` was redrawn upright (ring bow, shaft, two teeth) — the old
+  one read as a blob.
 
 ### Materials (5-tone ramps, dark → light; INK `#120a0e` outline everywhere)
 
@@ -101,7 +106,12 @@ slot 26 × 26 (`--slot`), small button min 15 × 15, button min 19 high.
 `Panel` (material, `stage` = stone floor tile), `Button` (primary gold / secondary iron / danger
 red / confirm green; `size="sm"`, `icon`, `on` toggle, `off` = aria-disabled but tappable to
 explain, `hint` = key prompt), `Tabs` (tabPrev/tabNext = Shift+Tab/Tab, LB/RB; shoulder prompts on
-gamepad), `Slot` (rarity frame, `selected`, `locked`, `empty`, `count`, `corner`, `dot`, `tip`),
+gamepad; wave 2 — C: item `art` (any node instead of a kit `icon`) and `name` (aria-label +
+`data-tip`, so an icon-only tab still says what it is), the label in `.px-tab__label`;
+`vertical` = a rail (`px-tabs--rail`, selected piece `tab-side-on` joins the panel on its
+right); `main` = the window's own row — an inner `Tabs` in the same `[data-ui-layer]` then
+passes tabPrev/tabNext on and hides its key hints, else the later-registered inner row eats
+LB/RB and the player is stuck), `Slot` (rarity frame, `selected`, `locked`, `empty`, `count`, `corner`, `dot`, `tip`),
 `Grid` (equal cells, auto-fill), `Bar`, `Badge`, `Heading` (`ribbon`), `Icon`, `KeyHint` (S's
 `<Prompt>` in a pixel keycap), `Tooltip`/`useTip` (mouse hover 300 ms, long press 450 ms on touch),
 `Inspect`/`InspectRow`, `Modal` (portal, `data-ui-layer`, escape stack, `sheet` = docked bottom on
@@ -157,10 +167,9 @@ disabled (`aria-disabled`: ash material, still clickable to show why).
   numbers, copies to gold + «make gold», skin choice for gold pets, eggs it hatches from.
 - Primary action «take along / leave home» (`inspect`: X / pad Y). Squad full → replaces the last
   (as before). Strings: area `nursery` (7 languages) + L's `pets.<id>.name/lore`.
-- The camp sheet chrome (GxSheet in `PrisonCamp`, not ours) is restyled only around the Nursery
-  via `.gx-camp.is-single:has(.ppn)`: pixel wood frame, kit ribbon, full height, wide on
-  landscape/tablet/desktop, dark well body on the pets tab. Inside the multi-tab camps (forest,
-  dungeon, fishing) the Nursery keeps the old chrome.
+- The camp window chrome is the kit for EVERY camp since wave 2 (C, `gx-px.css`; see
+  `game-ui.md` → «Window chrome on the kit»); `nursery.css` keeps only the Nursery's own fill
+  of the body (`.gx-camp:has(.nur) .pcamp-body`).
 - **Not checked on a real phone / Telegram webview / gamepad hardware** (stand: Playwright at
   390×844@3, 844×390@3, 820×1180@2, 1180×820@2, 1440×900, 1920×1080; keyboard by real key
   presses, gamepad by emitted actions).

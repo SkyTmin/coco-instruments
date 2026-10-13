@@ -3,6 +3,8 @@ paths:
   - "src/game-ui.css"
   - "src/inventory.css"
   - "src/components/{gx,icons,PrisonCamp,DungeonCamp}.tsx"
+  - "src/components/gx-px.css"
+  - "src/components/AudioToggles.tsx"
   - "public/ui/CREDITS.txt"
 ---
 
@@ -37,7 +39,9 @@ paths:
 - **Компоненты** (`components/gx.tsx`): `GxModal` (окно с лентой и
   крестиком снаружи прокрутки), `GxSheet` (лист снизу — лагерь, торговец),
   `GameTop` (назад, лента, фишки валют), `GxBar`, `GxIcon`, `KIcon`. Окна
-  встают в `escape-stack`: «Назад» Telegram закрывает сперва их.
+  встают в `escape-stack`: «Назад» Telegram закрывает сперва их. С волны 2
+  они на пиксельном наборе — см. «Window chrome on the kit» ниже (Kenney
+  остался только у `gx-panel`, `gx-ribbon`, `gx-hex`).
 - **Лагерь не переписан, а перекрашен.** Внутри `.gx-camp .gx-sheet__body`
   переопределены переменные темы приложения (`--surface-2`, `--text`,
   `--muted`…) под пергамент — все вкладки посветлели разом. Новую вкладку
@@ -79,3 +83,52 @@ paths:
 - Шестерёнка в правом верхнем углу на стенде — отладчик Eruda, она есть
   только в разработке и перекрывает правую кнопку шапки: кликайте в
   скриптах через `element.click()`.
+
+## Window chrome on the kit (wave 2 — C, 13.10.2026) — `gx.tsx`, `gx-px.css`
+
+Props of `GxModal`, `GxSheet`, `GameTop`, `GxBar`, `GxIcon`, `KIcon` are unchanged; the look is
+the pixel kit (`@/ui-px`). All chrome CSS lives in `components/gx-px.css`; `game-ui.css` lost
+the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
+
+- **One window shell** (`GxWindow`): veil `.gx-win.gx-win--modal|--sheet` (old classes
+  `gx-modal` / `gx-sheet` kept on it, `data-ui-layer`) → `Panel` box (`.gx-win__box`, also
+  `gx-modal__box` / `gx-sheet__box`) → kit ribbon `.gx-win__title` + kit red `Button` ✕
+  `.gx-win__close` (a `*__close` class: first focus skips it) → optional tabs `.gx-win__tabs` →
+  `Panel` body `.gx-win__body`. Escape stack untouched. Looks: `GxModal frame` paper → wood +
+  parch body, wood → wood + well, iron / iron-dark → iron + parch / well; sheets wood + parch.
+- **Header contract:** `--gx-top-h` (max(48 px, 22u)) is the GameTop row height; windows start
+  BELOW it (veil padding-top = safe top + `--gx-top-h`), so the ✕ never covers the header ⚙ /
+  money. Exception: phone landscape (no room) — windows are centred under 6u. Touch targets:
+  `--gx-hit` (max(44 px, 19u)).
+- **Sizes per format:** phone portrait — docked to the bottom, full width, safe-bottom padding;
+  elsewhere centred, width `min(100%, --gx-mw · u)`: modal 200, sheet 230, tablist window
+  (settings) 300, camp with a rail / any window with kit content or kit tabs in its body 420.
+  Camps and tablist windows have a FIXED height (`min(100%, 250u)`, 100 % on phone portrait):
+  switching tabs never moves the frame, ribbon or tab bar (checked by comparing rects across all
+  tabs — `{SCR}/jump.mjs`). Old tab content in a wide camp is centred at max 640 px.
+- **Zoom for old content:** at `--ui-scale` ≥ 4 the body gets `zoom: 2` (`--gx-z` on the veil)
+  and `--u` is divided back so art stays one `--ui-px`. Kit type sizes are px too, and a custom
+  property is resolved where it is declared (:root) — so the body re-derives `--px-fs*` from
+  copies taken at :root (`--gx-fs*`) divided by `--gx-z`. A NEW kit size var needs a line
+  there. Kit content (`.gx-win__body:has(.px)`) is NOT zoomed and gets the kit well. A window
+  opened inside a zoomed body (NestSheet) is a DOM child: its body is not zoomed again.
+- **Camp (`PrisonCamp`):** kit `Tabs` with `TAB_ICONS` art, the word in `data-tip` /
+  `aria-label`; a left rail (`vertical`) on landscape / tablet / desktop, a top strip on phone
+  portrait; compact phones hide the label and put the tab name in the ribbon. The camp row is
+  `main`: an inner kit tab row (PetsTab) then leaves Tab / Shift+Tab / LB / RB to it.
+- **GameTop:** back `Button`, kit ribbon title, chips, right buttons in one row; a
+  ResizeObserver sets `is-tight` when the row overflows and the title goes (sr-only), never
+  wrapping into a second row.
+- **Widgets:** `gx-btn` / `gx-round` → kit button frames via `--b/--bs/--bw` (gold default;
+  iron for `--grey/--dark/--steel`; red; green; `:disabled` / `.is-off` ash), text colours
+  `--gx-on-*` = the `.px-btn` face pairs. `gx-badge` → kit badge (1-art-px bob), `gx-bar` → kit
+  trough (taller when it carries a label), `gx-chip` → kit well. Old sizes stay in px. Callers'
+  `--gx-btn` URL overrides no longer do anything.
+- **`KIcon` → kit icons** where a 9×9 exists (cross→x, arrows, checkmark→check, plus, minus,
+  star, locked→lock, information→info, pause, gear, audioOn/Off→sound/mute, musicOn/Off→
+  music/nomusic, question, exclamation→excl), sized to whole device pixels per art pixel; other
+  names keep the Kenney mask.
+- **Pitfalls:** `@keyframes gx-pop` (game-ui.css) and `gx-badge` (gx-px.css) are still used by
+  old callers — don't delete them with their blocks. Settings' `.gx-modal__box:has(.gset)`
+  760-px width is beaten by `.gx-win > .gx-win__box.px-panel`. Stand: the Vite watcher must not
+  ignore `**/.claude/**` (a worktree lives under `.claude/`) — CSS edits looked dead.
