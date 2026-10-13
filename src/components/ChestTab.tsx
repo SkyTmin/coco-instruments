@@ -19,8 +19,10 @@ import { pxStrip } from '@/lib/props-pixel/manifest';
 import { KeyIcon, RewardIcon, rewardLabel } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import type { CasesOpened } from '@/store';
+import { fmtNum, fmtShort, itemName, petName, rich, runeName, t, useT } from '@/i18n';
+import { bookName, eggName } from '@/i18n/data-books';
 import { rarityOf } from '@/lib/rarity';
-import { caseClimb, caseTierOf, petOf, RUNE_ROMAN, runeOf, shortMoney } from '@/lib/prison';
+import { caseClimb, caseTierOf, RUNE_ROMAN } from '@/lib/prison';
 import type { CaseRoll, CaseTier, ItemId, Reward } from '@/lib/prison';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
@@ -42,7 +44,7 @@ import {
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, tapLight, tapMedium } from '@/lib/haptics';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -50,13 +52,6 @@ const reduceMotion = () =>
 
 /** Ярус сундука → ступень редкости (цвет): как у книг. */
 export const CHEST_RARITY: Record<CaseTier, number> = { common: 0, rare: 2, epic: 3, legend: 4 };
-/** Имя сундука: «сундук» мужского рода, а `CASE_TIERS` говорят про посылки. */
-export const CHEST_NAME: Record<CaseTier, string> = {
-  common: 'Обычный',
-  rare: 'Редкий',
-  epic: 'Эпический',
-  legend: 'Легендарный',
-};
 const TIER_ORDER: CaseTier[] = ['common', 'rare', 'epic', 'legend'];
 /** Сторона сундука в сцене: крупная полоса ровно ×2 CSS (×6 точек на DPR 3, ×4 на DPR 2). */
 const SCENE_PX = 240;
@@ -117,15 +112,25 @@ const prizeOf = (r: CaseRoll): Reward => r.rewards[r.rewards.length - 1];
 function cardText(r: Reward): string {
   switch (r.kind) {
     case 'coins':
-      return `+${shortMoney(r.amount)}`;
+      return `+${fmtShort(r.amount)}`;
     case 'tokens':
       return `+${fmt(r.amount)}`;
     case 'keys':
-      return r.amount > 1 ? `${r.amount} ключа` : 'Ключ';
+      return r.amount > 1 ? t('chests.keys', { n: r.amount }) : t('chests.key');
     case 'rune':
-      return `${runeOf(r.rune.kind).name} ${RUNE_ROMAN[r.rune.tier - 1]}`;
+      return `${runeName(r.rune.kind)} ${RUNE_ROMAN[r.rune.tier - 1]}`;
+    case 'book':
+      return bookName(r.book);
+    case 'pet':
+      return petName(r.id);
+    case 'egg':
+      return eggName(r.egg);
+    case 'item':
+      return r.amount > 1 ? `${itemName(r.id)} ×${r.amount}` : itemName(r.id);
+    case 'treat':
+      return t('chests.treat');
     default:
-      return rewardLabel(r).replace(/^Книга «(.*)»$/, '$1');
+      return rewardLabel(r);
   }
 }
 
@@ -133,19 +138,14 @@ function cardText(r: Reward): string {
 function cardSub(r: Reward): string | null {
   switch (r.kind) {
     case 'book':
-      return `книга · шанс ${r.book.chance}%`;
+      return t('chests.sub.book', { v: r.book.chance });
     case 'rune':
-      return 'руна · в мешочек';
     case 'find':
-      return 'находка · в коллекцию';
     case 'pet':
-      return 'новый питомец';
     case 'egg':
-      return 'яйцо · в гнездо';
     case 'keys':
-      return 'ещё сундук';
     case 'item':
-      return 'в ряд расходников';
+      return t(`chests.sub.${r.kind}`);
     default:
       return null;
   }
@@ -162,6 +162,7 @@ interface Scene {
 }
 
 export function ChestTab({ onGain }: { onGain: (from: number, to: number) => void }) {
+  const t = useT();
   const keys = useFinanceStore((s) => s.prison.keys);
   const openOne = useFinanceStore((s) => s.prisonOpenCase);
   const openAll = useFinanceStore((s) => s.prisonOpenCases);
@@ -211,7 +212,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
         <button
           type="button"
           className="pch-hero"
-          aria-label="Открыть сундук"
+          aria-label={t('chests.openAria')}
           onClick={() => {
             tapLight();
             start();
@@ -234,7 +235,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
             start();
           }}
         >
-          Открыть
+          {t('chests.open')}
         </button>
         {keys >= 2 && (
           <button
@@ -254,13 +255,13 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
               setBatch({ got, gain: to > from ? [from, to] : null });
             }}
           >
-            Все · {fmt(keys)}
+            {t('chests.all', { n: fmt(keys) })}
           </button>
         )}
       </div>
       {(keys <= 0 || hint > 0) && (
         <p key={hint} className={`pch-hint${hint ? ' is-shake' : ''}`}>
-          <KeyIcon size={14} /> Ключи падают с блоков, по одному дают за ранг, пачкой — за престиж
+          <KeyIcon size={14} /> {t('chests.hint')}
         </p>
       )}
 
@@ -268,7 +269,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
         {TIER_ORDER.map((id) => (
           <span key={id} className="pch-odd" style={rarityVars(CHEST_RARITY[id])}>
             <ChestArt tier={id} size={48} />
-            <b>{CHEST_NAME[id]}</b>
+            <b>{t(`chests.tier.${id}`)}</b>
             <i>{caseTierOf(id).weight}%</i>
           </span>
         ))}
@@ -276,7 +277,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
 
       {recent.length > 0 && (
         <div className="pch-recent">
-          <b>Последнее из сундуков</b>
+          <b>{t('chests.recent')}</b>
           <div>
             {recent.map((r, i) => (
               <span key={i} title={rewardLabel(r)}>
@@ -352,6 +353,7 @@ function ChestScene({
   onAgain: () => void;
   onClose: () => void;
 }) {
+  const tx = useT();
   const keys = useFinanceStore((s) => s.prison.keys);
   const tier = roll.tier;
   const k = caseClimb(tier);
@@ -501,7 +503,7 @@ function ChestScene({
       }}
     >
       <div className="pchs__head">
-        {known && <RarityName rarity={r}>{CHEST_NAME[tier]} сундук</RarityName>}
+        {known && <RarityName rarity={r}>{tx(`chests.full.${tier}`)}</RarityName>}
       </div>
       <div className="pchs__stage">
         <i className="pchs__rays" aria-hidden="true" />
@@ -582,9 +584,7 @@ function ChestScene({
       {phase === 'done' ? (
         <div className="pchs__btns" onClick={(e) => e.stopPropagation()}>
           {shattered > 0 && (
-            <span className="pchs__note">
-              Мешочек рун полон — руна разбита на {fmt(shattered)} ✦
-            </span>
+            <span className="pchs__note">{tx('chests.shattered', { n: fmt(shattered) })}</span>
           )}
           <button
             type="button"
@@ -599,7 +599,7 @@ function ChestScene({
               onAgain();
             }}
           >
-            Ещё · <KeyIcon size={18} /> {fmt(keys)}
+            {rich('chests.again', { key: <KeyIcon size={18} />, n: fmt(keys) })}
           </button>
           <button
             type="button"
@@ -609,11 +609,11 @@ function ChestScene({
               onClose();
             }}
           >
-            Готово
+            {tx('common.ok')}
           </button>
         </div>
       ) : (
-        <span className="pchs__skip">тап — сразу открыть</span>
+        <span className="pchs__skip">{tx('chests.skipOpen')}</span>
       )}
     </div>
   );
@@ -686,6 +686,7 @@ function ChestsBatch({
   onDone: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [done, setDone] = useState(false);
   const sum = sumCases(got.rolls);
   const shown = got.rolls.slice(0, BATCH_TILES);
@@ -724,13 +725,6 @@ function ChestsBatch({
     doneRef.current();
   }, [done, best]);
 
-  const count = (n: number) =>
-    n % 10 === 1 && n % 100 !== 11
-      ? 'сундук'
-      : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)
-        ? 'сундука'
-        : 'сундуков';
-
   return (
     <div
       className={`pchb${done ? ' is-done' : ''}`}
@@ -740,9 +734,7 @@ function ChestsBatch({
       }}
     >
       <div className="pchb__card" onClick={(e) => done && e.stopPropagation()}>
-        <span className="pchb__title">
-          Открыто {fmt(got.rolls.length)} {count(got.rolls.length)}
-        </span>
+        <span className="pchb__title">{t('chests.opened', { n: got.rolls.length })}</span>
         <span className="pchb__tiers">
           {TIER_ORDER.filter((t) => sum.tiers[t] > 0).map((t) => (
             <span key={t} style={rarityVars(CHEST_RARITY[t])}>
@@ -767,7 +759,7 @@ function ChestsBatch({
         </div>
         {done && (
           <div className="pchb__sum">
-            <b>Итого</b>
+            <b>{t('chests.total')}</b>
             {sum.single.length > 0 && (
               <span className="pchb__singles">
                 {sum.single.map((r, i) => (
@@ -783,29 +775,29 @@ function ChestsBatch({
                 <RewardIcon r={r} size={24} />
                 <em>
                   {r.kind === 'treat'
-                    ? `Лакомство питомцу ×${r.amount}`
+                    ? t('chests.treats', { n: r.amount })
                     : r.kind === 'keys'
-                      ? `${r.amount} ${r.amount === 1 ? 'ключ' : r.amount < 5 ? 'ключа' : 'ключей'}`
+                      ? t('chests.keys', { n: r.amount })
                       : rewardLabel(r)}
                 </em>
               </span>
             ))}
             {got.newPets.length > 0 && (
               <span className="pchb__note">
-                Новый питомец: {got.newPets.map((id) => petOf(id).name).join(', ')}
+                {t('chests.newPets', { names: got.newPets.map((id) => petName(id)).join(', ') })}
               </span>
             )}
             {got.shattered > 0 && (
               <span className="pchb__note">
-                Мешочек рун полон — лишние разбиты на {fmt(got.shattered)} ✦
+                {t('chests.shatteredMany', { n: fmt(got.shattered) })}
               </span>
             )}
             <button type="button" className="gx-btn gx-btn--red gx-btn--big" onClick={onClose}>
-              Забрать всё
+              {t('chests.takeAll')}
             </button>
           </div>
         )}
-        {!done && <span className="pchb__skip">тап — показать итог</span>}
+        {!done && <span className="pchb__skip">{t('chests.skipSum')}</span>}
       </div>
     </div>
   );
