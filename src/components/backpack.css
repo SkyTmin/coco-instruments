@@ -1,13 +1,13 @@
 /* Backpack and bunk chest (components/Inventory.tsx) on the pixel kit — the screen's own parts.
    Skeleton (columns, showcase, stats, actions) — armory.css. Kit rules: .claude/rules/ui-px.md. */
 
-/* The grid is this screen's content (critic ruling 1): on a phone it gets 9/20 of the height —
-   the tab rows and three full rows of cells on open at 390x844. */
+/* The grid is this screen's content (critic ruling 1): on a phone it gets 2/5 of the height — the
+   two tab rows and three full rows of cells on open at 390x844 — and the art keeps ≥ 234 px. */
 .ivx.arm--one {
   grid-template:
     'top' auto
-    'show' minmax(0, 11fr)
-    'list' minmax(0, 9fr)
+    'show' minmax(0, 3fr)
+    'list' minmax(0, 2fr)
     'acts' auto
     / minmax(0, 1fr);
 }
@@ -31,12 +31,17 @@
   filter: grayscale(1) brightness(0.55);
 }
 /* Two lines reserved under the name: a long line never pushes the art or the stats. */
-/* Phone portrait has no side column, the plate carries the line: two lines of the small size at a
-   fixed height (the whole line is in the cell's tip). */
+/* Phone portrait has no side column, the plate carries the line: one line of the small size at a
+   fixed height (the whole line is in the cell's tip) — the art needs the height. */
 .arm--one .ivx-sub {
-  height: calc(2 * 1.2 * var(--px-fs-sm));
+  height: calc(1.2 * var(--px-fs-sm));
   min-height: 0;
   font-size: var(--px-fs-sm);
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+.ivx.arm--one .ivx-list {
+  gap: calc(3 * var(--u));
 }
 /* Two and three columns: the side column says it in full (beside the art on a phone held sideways
    the plate is 165 px — five lines); the plate keeps the name. */
@@ -125,9 +130,13 @@
   flex-wrap: wrap;
   overflow: visible;
 }
-/* …except on a phone held sideways: four rows of tabs would leave no height for the cells. */
+/* …except on a phone held sideways: four rows of tabs would leave no height for the cells — two
+   rows that scroll sideways (one row showed 2 of 9 tabs). */
 html[data-ff='phone-landscape'] .arm .ivx-tabs {
-  flex-wrap: nowrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, auto);
+  justify-content: start;
   overflow-x: auto;
 }
 .ivx-tab {

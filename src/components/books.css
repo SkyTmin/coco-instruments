@@ -246,18 +246,19 @@
   margin: calc(-3 * var(--u));
   scrollbar-width: thin;
 }
-/* Phone portrait bar: «В пыль» · anvil (an icon, only with a pair) · «Вписать». */
-.bkx.arm--one .bkx-acts {
+/* Phone portrait bar and the tablet-portrait side column: «В пыль» · anvil (an icon, only with
+   a pair) · «Вписать» in one row (stacked on a tablet they took 252 of the side column's 347 px
+   and the details collapsed to ~30 px; three text buttons there cut «Verzaubern»). */
+.bkx:is(.arm--one, .arm--two) .bkx-acts {
   grid-template-columns: minmax(0, 1fr) calc(26 * var(--u)) minmax(0, 1fr);
   grid-auto-flow: row;
 }
+.bkx.arm--two .bkx-acts > .px-btn:not(.bkx-iconbtn) {
+  padding-inline: calc(2 * var(--u));
+  font-size: var(--px-fs-sm);
+}
 .bkx-acts > .px-btn.bkx-iconbtn {
   padding-inline: 0;
-}
-/* Tablet portrait: the three buttons in one row under the details (stacked they took 252 of the
-   347-px side column and the details collapsed to ~30 px). */
-.bkx.arm--two .arm-side > .arm-acts {
-  grid-auto-flow: column;
 }
 
 /* Details: the book against the same enchant in the pick — one row and a verdict chip; the

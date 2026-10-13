@@ -675,7 +675,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       id: 'salvage',
       label: (
         <>
-          {layout !== 'one' && <DustIcon size={u * 7} />}
+          {layout === 'three' && <DustIcon size={u * 7} />}
           <span className="arm-btn-txt">
             {armed === 'salvage'
               ? t('books.sureDust', { n: dustOf(b) })
@@ -690,7 +690,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     acts[1] = {
       id: 'anvil',
       label:
-        layout === 'one' ? (
+        layout !== 'three' ? (
           <GxIcon name="anvil" size={u * 11} />
         ) : (
           <>
@@ -1243,7 +1243,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
           key={a.id}
           kind={a.kind}
           off={a.off}
-          className={`${a.hide ? 'is-hidden' : ''}${a.armed ? ' is-armed' : ''}${a.off ? ' px-dark' : ''}${a.id === 'anvil' && layout === 'one' ? ' bkx-iconbtn' : ''}`}
+          className={`${a.hide ? 'is-hidden' : ''}${a.armed ? ' is-armed' : ''}${a.off ? ' px-dark' : ''}${a.id === 'anvil' && layout !== 'three' ? ' bkx-iconbtn' : ''}`}
           aria-label={a.aria}
           aria-hidden={a.hide || undefined}
           tabIndex={a.hide ? -1 : undefined}
