@@ -12,9 +12,25 @@
   position: absolute;
   inset: 0;
 }
-.cas-bg .slots-scene {
+/* Light warm ground (critic9 #5, owner «light palette»): the Nursery stage material — the kit's
+   stone tile under a warm veil (ink on it 8.9:1). The theme's dark scene and its device-px glow
+   are gone; dark stays only on the cabinet (skin art) and the recessed status plate. */
+.cas-ground {
   position: absolute;
-  z-index: 0;
+  inset: 0;
+  --cas-veil: rgb(255 244 222 / 0.4);
+  background-image: linear-gradient(var(--cas-veil), var(--cas-veil)), var(--tile);
+  background-size:
+    100% 100%,
+    calc(var(--tile-w) * var(--u)) calc(var(--tile-h) * var(--u));
+  background-repeat: no-repeat, repeat;
+  image-rendering: pixelated;
+}
+.cas-bg .slots-scene {
+  display: none;
+}
+.slots.cas-bg::before {
+  content: none;
 }
 /* The page never scrolls: the stage takes what the info and the deck leave. `html[data-ff]`
    because the shell's `html[data-ff='phone-landscape'] .gs__main { overflow-y: auto }` (0,2,1)
@@ -77,6 +93,11 @@ html[data-ff] .cas-page .gs__main,
   gap: 0 calc(3 * var(--u));
   font-family: var(--px-font);
   min-width: 0;
+}
+/* An opaque ink base under the skin's translucent plate: over the light ground the theme's
+   20–42 % black read as grey, cream text on it about 3:1. */
+html .slots.cas .cas-status {
+  background-color: #2a190c;
 }
 .cas .cas-status .status {
   min-width: 0;

@@ -1118,7 +1118,7 @@ export function SlotsPage() {
     <GameScreen
       className="gx cas-page"
       bg={
-        <div className="slots cas-bg" data-skin={skin}>
+        <div className="slots cas-bg cas-ground pxt-stone" data-skin={skin}>
           {/* Сцена темы: фон и декор за всем содержимым страницы */}
           <div className="slots-scene" aria-hidden="true">
             <span className="slots-scene__decor" />
