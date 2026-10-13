@@ -1,0 +1,937 @@
+/* Шахта «Каторги» в пиксельном наборе (UI v2) — PrisonPage.tsx.
+   Размеры — в пикселях арта: calc(N * var(--u)); текст — только --px-fs*;
+   рамки — материалы набора (kit.gen.css). Клетку поля (--cell) ставит JS
+   (useFieldCell): самая крупная, при которой поле влезает в своё место.
+   Правило владельца: ничего не прыгает — у всего, что меняется, своё место
+   фиксированного размера, а плашки висят поверх поля. */
+
+.mn {
+  /* До первого замера — разумная клетка (замер приходит до отрисовки). */
+  --cell: 40px;
+  /* Ширина рамы поля: 7 клеток + рама дерева (по 8 пикселей арта). */
+  --fw: calc(var(--cell) * 7 + 16 * var(--u));
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  padding: calc(var(--safe-top) + var(--content-top) + 3 * var(--u)) calc(3 * var(--u))
+    calc(var(--safe-bottom) + 3 * var(--u));
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.mn :is(button) {
+  -webkit-tap-highlight-color: transparent;
+}
+/* Подсказки клавиш — только клавиатуре и геймпаду (мышь видит всплывашку). */
+html[data-input='mouse'] .mn .px-keyhint,
+html[data-input='touch'] .mn .px-keyhint {
+  display: none;
+}
+
+/* ---- Высокий экран: стопкой, всё по ширине рамы поля --------------------------------- */
+.mn--tall > :not(.prison-scene, .mn-field) {
+  flex: none;
+  width: min(100%, max(var(--fw), calc(190 * var(--u))));
+}
+.mn--tall {
+  padding-left: calc(1 * var(--u));
+  padding-right: calc(1 * var(--u));
+}
+.mn--tall > .mn-field {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  /* Сверху на кромке рамы — строка-запал, снизу — отряд, баффы, посылки. */
+  padding: calc(10 * var(--u)) 0 calc(12 * var(--u));
+}
+
+/* ---- Широкий экран: сводка слева, поле в центре, док справа -------------------------- */
+.mn--wide {
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: calc(4 * var(--u));
+  padding-left: calc(env(safe-area-inset-left, 0px) + 3 * var(--u));
+  padding-right: calc(env(safe-area-inset-right, 0px) + 3 * var(--u));
+}
+.mn--wide > .mn-field {
+  flex: none;
+  padding: 0 0 calc(6 * var(--u));
+}
+.mn-side {
+  flex: 0 1 calc(124 * var(--u));
+  min-width: calc(84 * var(--u));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  /* Страница не прокручивается; если колонке на низком экране не хватит
+     высоты, прокрутится только она. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: calc(1 * var(--u));
+}
+.mn-side::-webkit-scrollbar {
+  display: none;
+}
+.mn-side--r > .mn-dock {
+  margin-top: auto;
+}
+.mn-side__h {
+  margin: 0 0 calc(2 * var(--u));
+  font-size: var(--px-fs);
+}
+.mn-panel {
+  flex: none;
+}
+
+/* ---- Поле -------------------------------------------------------------------------------- */
+.mn-field {
+  position: relative;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+}
+.mn-frame {
+  /* Дерево набора: рама 8 пикселей арта, сетка садится ровно в её проём. */
+  --pad: 7;
+  position: relative;
+  flex: none;
+  line-height: 0;
+}
+/* Кураж, энергетик, золотая жила, спецзона — рама светится (прозрачность
+   слоя ступенями, без смены размеров). */
+.mn-frame::after {
+  content: '';
+  position: absolute;
+  inset: calc(-2 * var(--u));
+  z-index: 0;
+  border: calc(2 * var(--u)) solid transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+.mn-frame.is-energy::after {
+  border-color: var(--px-blue);
+  animation: mn-glow 0.9s steps(3, jump-none) infinite alternate;
+}
+.mn-frame.is-frenzy::after,
+.mn-frame.is-gold::after {
+  border-color: var(--px-gold);
+  animation: mn-glow 0.5s steps(3, jump-none) infinite alternate;
+}
+.mn-frame.is-zone::after {
+  border-color: var(--px-violet);
+  opacity: 0.8;
+}
+@keyframes mn-glow {
+  to {
+    opacity: 0.95;
+  }
+}
+
+/* Строка-запал. Высокий экран — на верхней кромке рамы (над деревом, не над
+   клетками); широкий — панель слева. Колонки фиксированы: длинное название
+   ступени или темп не сдвигают полосы. */
+.mn-strip {
+  display: grid;
+  grid-template-columns: calc(30 * var(--u)) minmax(0, 1fr) calc(40 * var(--u));
+  align-items: center;
+  gap: calc(3 * var(--u));
+  box-sizing: border-box;
+  height: calc(20 * var(--u));
+  padding: 0 calc(3 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
+  image-rendering: pixelated;
+  line-height: 1.1;
+  color: var(--px-text);
+}
+.mn-frame > .mn-strip {
+  position: absolute;
+  z-index: 9;
+  left: calc(10 * var(--u));
+  right: calc(10 * var(--u));
+  top: calc(-10 * var(--u));
+}
+.mn-panel > .mn-strip {
+  height: calc(24 * var(--u));
+  grid-template-columns: calc(30 * var(--u)) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+}
+.mn-panel > .mn-strip .mn-strip__pace {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: calc(4 * var(--u));
+}
+.mn-strip__pick,
+.mn-strip__streak {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.mn-strip__lv {
+  display: flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  color: var(--px-blue);
+}
+.mn-strip__name {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  font-size: var(--px-fs-sm);
+  white-space: nowrap;
+}
+.mn-strip__name > b {
+  overflow: hidden;
+  color: var(--px-muted);
+}
+.mn-strip__name > em {
+  color: var(--px-gold);
+}
+.mn-strip__name > .px-i {
+  flex: none;
+  color: var(--px-muted);
+}
+.mn-strip[class*='is-t'] .mn-strip__name > b,
+.mn-strip[class*='is-t'] .mn-strip__name > .px-i {
+  color: var(--px-gold);
+}
+.mn-strip.is-t0 .px-bar,
+.mn-strip.is-t1 .px-bar {
+  --c: var(--px-red);
+}
+.mn-strip.is-t4 .mn-strip__name > b {
+  color: var(--px-text);
+}
+.mn-strip .mn-strip__pick .px-bar {
+  --c: var(--px-blue);
+}
+/* Простой: запал гаснет — полоса мигает, пока не поздно. */
+.mn-strip.is-cooling .mn-strip__streak .px-bar {
+  animation: mn-blink 0.7s steps(2, jump-none) infinite;
+}
+@keyframes mn-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+.mn-strip__pace {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+  font-size: var(--px-fs-sm);
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.mn-strip__pace > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+}
+
+/* Нижняя кромка рамы: баффы слева, отряд посередине, посылки справа. */
+.mn-buffs {
+  position: absolute;
+  z-index: 9;
+  left: calc(5 * var(--u));
+  bottom: calc(-6 * var(--u));
+  max-width: 38%;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: calc(2 * var(--u));
+  pointer-events: none;
+  line-height: 1;
+}
+.mn-buffs > * {
+  pointer-events: none;
+}
+.mn-buffs > button {
+  pointer-events: auto;
+}
+.mn-buff {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+  height: calc(12 * var(--u));
+  padding: 0 calc(3 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-badge);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  image-rendering: pixelated;
+  box-sizing: border-box;
+  font-size: var(--px-fs-sm);
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.mn-buff--frenzy {
+  border-image-source: var(--pxk-badge-gold);
+  color: var(--px-ink);
+}
+.mn-buff--energy {
+  color: var(--px-text);
+}
+.mn-zone-exit {
+  flex: none;
+}
+
+.mn-parcels {
+  position: absolute;
+  z-index: 9;
+  right: calc(5 * var(--u));
+  bottom: calc(-8 * var(--u));
+  display: flex;
+  gap: calc(2 * var(--u));
+}
+.mn-parcel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(17 * var(--u));
+  height: calc(17 * var(--u));
+  margin: 0;
+  padding: 0;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
+  image-rendering: pixelated;
+  background: none;
+  cursor: pointer;
+}
+.mn-parcel > img {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-parcel > .px-bar {
+  position: absolute;
+  left: calc(2 * var(--u));
+  right: calc(2 * var(--u));
+  bottom: calc(1 * var(--u));
+}
+.mn-parcel.is-ready {
+  border-image-source: var(--pxk-slot-r4);
+  animation: mn-bob 1.2s steps(2, jump-none) infinite;
+}
+@keyframes mn-bob {
+  50% {
+    translate: 0 calc(-1 * var(--u));
+  }
+}
+
+/* Отряд: на нижней кромке рамы посередине — питомцы крупнее текста рядом. */
+.mn .ppets {
+  bottom: calc(-12 * var(--u));
+  gap: calc(2 * var(--u));
+  line-height: 1;
+}
+.mn--wide .ppets {
+  bottom: calc(-6 * var(--u));
+}
+.mn .ppets__say {
+  padding: calc(1 * var(--u)) calc(3 * var(--u));
+  border-radius: 0;
+  background: var(--px-ink);
+  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-gold);
+}
+
+/* Плашки поверх поля — в шрифте и материалах набора. */
+.mn .pmine__toast,
+.mn .pmine__arm,
+.mn .pfindcard,
+.mn .pcrewnote,
+.mn .pshift {
+  border-radius: 0;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  font-family: var(--px-font);
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--px-text);
+}
+.mn .pmine__toast {
+  padding: calc(5 * var(--u)) calc(6 * var(--u));
+  font-size: var(--px-fs);
+}
+.mn .pmine__arm {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  top: calc(2 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  font-size: var(--px-fs);
+  color: var(--px-gold);
+}
+.mn .pfindcard,
+.mn .pcrewnote {
+  left: calc(2 * var(--u));
+  right: calc(2 * var(--u));
+  top: calc(2 * var(--u));
+  gap: calc(4 * var(--u));
+  padding: calc(5 * var(--u)) calc(6 * var(--u));
+}
+.mn .pfindcard img {
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+}
+.mn .pfindcard i,
+.mn .pfindcard em,
+.mn .pcrewnote i,
+.mn .pshift i,
+.mn .pshift em {
+  font-size: var(--px-fs-sm);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 1;
+}
+.mn .pfindcard i,
+.mn .pshift i {
+  color: var(--px-gold);
+}
+.mn .pfindcard em,
+.mn .pshift em {
+  color: var(--px-green);
+}
+.mn .pcrewnote i {
+  color: var(--px-muted);
+}
+.mn .pfindcard b,
+.mn .pcrewnote b,
+.mn .pshift b {
+  font: 400 var(--px-fs) / 1.15 var(--px-head);
+  color: var(--px-text);
+}
+.mn .pcrewnote__x {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  border-radius: 0;
+  font: 400 var(--px-fs-big) / 1 var(--px-head);
+  color: var(--px-text);
+}
+.mn .pshift {
+  left: calc(2 * var(--u));
+  right: calc(2 * var(--u));
+  bottom: calc(2 * var(--u));
+  gap: calc(1 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+}
+.mn .psense b {
+  font-family: var(--px-head);
+  font-weight: 400;
+}
+
+/* ---- Шапка: деньги, токены, ключи (+ этаж на широком), назад и настройки ------------ */
+.mn-hud {
+  display: grid;
+  grid-template-columns:
+    calc(19 * var(--u)) minmax(0, 1.55fr) minmax(0, 1.15fr) minmax(0, 0.8fr)
+    calc(19 * var(--u));
+  grid-template-areas: 'back money tokens keys gear';
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.mn-hud:has(.mn-hud__forest) {
+  grid-template-columns:
+    calc(19 * var(--u)) minmax(0, 1.55fr) minmax(0, 1.15fr) minmax(0, 0.8fr)
+    calc(19 * var(--u)) calc(19 * var(--u));
+  grid-template-areas: 'back money tokens keys forest gear';
+}
+/* Широкий: назад · деньги · настройки, ниже токены · ключи · этаж. */
+.mn--wide .mn-hud {
+  grid-template-columns:
+    calc(24 * var(--u)) minmax(0, 1fr) minmax(0, 1fr)
+    calc(24 * var(--u));
+  grid-template-areas:
+    'back money money gear'
+    'tokens tokens keys floor';
+  row-gap: calc(3 * var(--u));
+}
+.mn--wide .mn-hud:has(.mn-hud__forest) {
+  grid-template-areas:
+    'back money money gear'
+    'tokens forest keys floor';
+}
+.mn--wide .mn-hud__back {
+  justify-self: start;
+}
+.mn--wide .mn-hud__gear {
+  justify-self: end;
+}
+.mn--wide .mn-stat--coins .mn-stat__n {
+  font-size: var(--px-fs-hero);
+}
+.mn-hud__back {
+  grid-area: back;
+}
+.mn-hud__gear {
+  grid-area: gear;
+}
+.mn-hud__forest {
+  grid-area: forest;
+}
+.mn-hud__forest.is-locked {
+  filter: grayscale(1) brightness(0.8);
+}
+.mn-hud .px-btn--icon > .px-i {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+.mn-stat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  height: calc(19 * var(--u));
+  margin: 0;
+  padding: 0 calc(3 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-text);
+  font: inherit;
+  overflow: hidden;
+}
+.mn-stat--coins {
+  grid-area: money;
+}
+.mn-stat--tokens {
+  grid-area: tokens;
+}
+.mn-stat--keys {
+  grid-area: keys;
+}
+.mn-stat--btn {
+  cursor: pointer;
+}
+.mn-stat--btn:active {
+  filter: brightness(1.2);
+}
+.mn-stat > :not(.mn-stat__n) {
+  flex: none;
+}
+.mn-stat__n {
+  min-width: 0;
+  overflow: hidden;
+  /* Цифры — текстовым шрифтом набора: заголовочный вдвое шире. */
+  font: 400 var(--px-fs-big) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  white-space: nowrap;
+}
+.mn-stat--coins .mn-stat__n {
+  color: var(--px-gold);
+}
+.mn-floor {
+  position: relative;
+  grid-area: floor;
+  gap: calc(1 * var(--u));
+}
+.mn-floor__ore {
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-floor > b {
+  font: 400 var(--px-fs-big) / 1 var(--px-head);
+  color: var(--px-text);
+}
+.mn-floor > .px-keyhint,
+.mn-rank > .px-keyhint,
+.mn-bag > .px-keyhint,
+.mn-dock__btn > .px-keyhint,
+.mn-item > .px-slot__art > .px-keyhint {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+}
+.mn-floor > .px-keyhint {
+  right: calc(-2 * var(--u));
+  bottom: calc(-3 * var(--u));
+}
+
+/* ---- Ранг: буква, полоса с ценой, условия, следующая буква ---------------------------- */
+.mn-rankrow {
+  display: grid;
+  grid-template-columns: calc(26 * var(--u)) minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+}
+.mn-rankrow > .mn-floor {
+  grid-area: auto;
+  height: auto;
+}
+.mn-rank {
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(16 * var(--u)) minmax(0, 1fr) calc(16 * var(--u));
+  align-items: center;
+  gap: calc(3 * var(--u));
+  box-sizing: border-box;
+  height: calc(24 * var(--u));
+  margin: 0;
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mn-rank.is-ready::after {
+  content: '';
+  position: absolute;
+  inset: calc(-2 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-select);
+  border-image-slice: var(--pxk-select-s);
+  border-image-width: var(--pxk-select-w);
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: mn-blink 1s steps(2, jump-none) infinite;
+}
+.mn-hex {
+  display: grid;
+  place-items: center;
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  image-rendering: pixelated;
+  font: 400 var(--px-fs-big) / 1 var(--px-head);
+  color: var(--px-ink);
+}
+.mn-hex--next {
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
+  color: var(--px-text);
+}
+.mn-rank__mid {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.mn-rank__cost {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+}
+.mn-rank__cost.is-ok {
+  color: var(--px-gold);
+}
+/* Условия ранга одной строкой постоянной высоты: пропали (ранг готов) — место
+   осталось, полоса не прыгает. */
+.mn-rank__needs {
+  display: block;
+  height: calc(8 * var(--u));
+  overflow: hidden;
+}
+.mn-rank .pquota {
+  display: flex;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+  margin: 0;
+}
+.mn-rank .pquota__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+  height: calc(8 * var(--u));
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-ink);
+  white-space: nowrap;
+}
+.mn-rank .pquota__chip.is-done {
+  color: var(--px-ink);
+  opacity: 0.6;
+}
+.mn-rank .pquota__chip.is-pick {
+  color: var(--px-ink);
+}
+.mn-rank .pquota__chip img {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-rank .pquota__chip .gx-icon {
+  width: calc(6 * var(--u));
+  height: calc(6 * var(--u));
+}
+.mn-rank > .px-keyhint {
+  right: calc(-1 * var(--u));
+  top: calc(-4 * var(--u));
+}
+
+/* ---- Задание проводника --------------------------------------------------------------- */
+.mn-quest {
+  display: grid;
+  grid-template-columns: calc(16 * var(--u)) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  box-sizing: border-box;
+  min-height: calc(22 * var(--u));
+  margin: 0;
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mn-quest__body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.mn-quest__body > b {
+  font-size: var(--px-fs);
+  line-height: 1.1;
+}
+.mn-quest__body > em {
+  font-size: var(--px-fs-sm);
+  color: var(--px-green);
+}
+.mn-quest__n {
+  font: 400 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-gold);
+}
+.mn-quest.is-ready {
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  color: var(--px-ink);
+}
+.mn-quest.is-ready .mn-quest__body > em {
+  color: var(--px-ink);
+}
+
+/* ---- Расходники ----------------------------------------------------------------------- */
+.mn-items {
+  --slot: calc(23 * var(--u));
+}
+.mn-items__row {
+  display: flex;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+}
+.mn--wide .mn-items__row {
+  display: grid;
+  grid-template-columns: repeat(3, var(--slot));
+  justify-content: start;
+}
+.mn-item {
+  flex: none;
+}
+.mn-item .px-slot__n {
+  font-size: var(--px-fs-sm);
+}
+.mn-item.is-buy .gx-icon {
+  opacity: 0.45;
+}
+.mn-item__plus {
+  position: absolute;
+  right: calc(2 * var(--u));
+  bottom: calc(2 * var(--u));
+  color: var(--px-gold);
+}
+.mn-item > .px-slot__art > .px-keyhint {
+  left: calc(-1 * var(--u));
+  top: calc(-2 * var(--u));
+}
+
+/* ---- Рюкзак: значок, полоса заполнения, кнопка «Продать» ----------------------------- */
+.mn-bag {
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(14 * var(--u)) minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: calc(3 * var(--u));
+  box-sizing: border-box;
+  height: calc(23 * var(--u));
+  margin: 0;
+  padding: calc(2 * var(--u)) calc(4 * var(--u)) calc(2 * var(--u)) calc(5 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-text);
+  font: inherit;
+  cursor: pointer;
+}
+.mn-bag__ico {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  color: var(--px-gold);
+}
+.mn-bag__mid {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.mn-bag__title {
+  font-size: var(--px-fs-sm);
+  line-height: 1;
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mn-bag.is-full .mn-bag__bar {
+  --c: var(--px-red);
+}
+.mn-bag.is-full .mn-bag__title {
+  color: var(--px-red);
+}
+.mn-bag__sell {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.1;
+  font-size: var(--px-fs-sm);
+  pointer-events: none;
+}
+.mn-bag:active .mn-bag__sell {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+.mn-bag > .px-keyhint {
+  right: calc(-1 * var(--u));
+  top: calc(-4 * var(--u));
+}
+
+/* ---- Док ------------------------------------------------------------------------------ */
+.mn-dock {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: calc(1 * var(--u));
+  /* Без рамы-панели: у каждой кнопки своя рама, а высота нужна полю. */
+  padding: 0;
+  border: 0;
+  border-image: none;
+}
+.mn--wide .mn-dock {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.mn-dock__btn {
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+  height: calc(32 * var(--u));
+  padding-left: 0;
+  padding-right: 0;
+  white-space: normal;
+}
+.mn-dock__btn:active {
+  padding-left: 0;
+  padding-right: 0;
+}
+.mn-dock__ico {
+  display: grid;
+  place-items: center;
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  flex: none;
+  line-height: 0;
+}
+.mn-dock__mask {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  color: var(--px-text);
+}
+.mn-dock__mask.is-book {
+  color: var(--px-blue);
+}
+.mn-dock__mask.is-bag {
+  color: var(--px-gold);
+}
+.mn-dock__mask.is-fire {
+  color: var(--px-red);
+}
+.mn-dock__label {
+  /* Одна строка; длинное слово может зайти на кромку рамы кнопки, но не
+     обрезается многоточием. */
+  font-size: var(--px-fs-sm);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+.mn-dock__badge {
+  position: absolute;
+  z-index: 4;
+  top: calc(-3 * var(--u));
+  right: calc(-2 * var(--u));
+  pointer-events: none;
+}
+.mn-dock__btn > .px-keyhint {
+  left: calc(-1 * var(--u));
+  top: calc(-4 * var(--u));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-frame::after,
+  .mn-parcel.is-ready,
+  .mn-rank.is-ready::after,
+  .mn-strip.is-cooling .mn-strip__streak .px-bar {
+    animation: none;
+  }
+}

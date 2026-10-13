@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, RefObject } from 'react';
 import { GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
 import { ChestIcon } from '@/components/ChestTab';
@@ -166,6 +166,10 @@ import {
 } from '@/lib/haptics';
 import { useAction, useHotkeys } from '@/input/hooks';
 import { inTopLayer } from '@/input/focus-nav';
+import type { Action } from '@/input/actions';
+import { useFormFactor } from '@/game-shell';
+import { Badge, Bar, KeyHint, Slot } from '@/ui-px';
+import './mine.css';
 
 const fmt = (n: number) => fmtNum(n);
 /** Коротко для узкой ячейки табло: 12 345 → «12,3к». */
@@ -1631,10 +1635,30 @@ export function PrisonPage() {
     return cells;
   };
 
-  // Компьютер: горячие клавиши лагеря (слой действий src/input) — I рюкзак,
-  // P питомцы, F кузница, B книги, C сундуки, M этажи; работают, пока шахта
-  // на верхнем слое (под окном молчат). Tab/Shift+Tab (LB/RB) листают
-  // вкладки открытого экрана лагеря. Подсказки — по наведению мыши.
+  // Расходники в ряду: крепь — только когда её есть из чего сбить.
+  const shownItems = ITEMS.filter(
+    (it) => it.id !== 'prop' || prison.items.prop > 0 || (FOREST_ON && millLevel > 0),
+  );
+
+  // Раскладка (UI v2): высокий экран — стопкой, широкий — три колонки.
+  const shell = useFormFactor();
+  const wide = shell.w > shell.h;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const cell = useFieldCell(rootRef, slotRef, frameRef, wide, shell.scale);
+  // Отряд на кромке рамы растёт вместе с клеткой; на телефоне — прежние 44.
+  const petSize = Math.max(44, Math.min(112, Math.round(cell * 0.9)));
+  const dockIco = 16 * shell.scale;
+
+  // Горячие клавиши шахты (слой действий src/input): I инвентарь, P питомцы,
+  // F кузница, B книги, C сундуки, M этажи, L лагерь, E продать рюкзак,
+  // R ранг, 1–6 расходники; работают, пока шахта на верхнем слое (под окном
+  // молчат). Tab/Shift+Tab (LB/RB) листают вкладки открытого экрана лагеря.
+  const itemKey = (i: number) => () => {
+    const it = shownItems[i];
+    if (it) applyItem(it.id);
+  };
   useHotkeys(
     {
       inventory: () => {
@@ -1652,6 +1676,15 @@ export function PrisonPage() {
         tapLight();
         setSheet('mines');
       },
+      camp: () => openScreen('more'),
+      sell: () => sell(),
+      rank: () => rankUp(),
+      item1: itemKey(0),
+      item2: itemKey(1),
+      item3: itemKey(2),
+      item4: itemKey(3),
+      item5: itemKey(4),
+      item6: itemKey(5),
     },
     { scope: dockRef },
   );
@@ -1707,570 +1740,712 @@ export function PrisonPage() {
         need.pickOk ? 1 : 0.95,
       );
 
-  return (
-    <div className="gx pmx pmx--mine">
-      <div className="prison-scene" aria-hidden="true" />
-      <div className={`prison${guide ? ' has-guide' : ''}`}>
-        {/* Одна строка сверху (v2.67.2): лента с названием этажа и отдельный
-            ряд фишек съедали 78 px высоты, а поле шахты ограничено именно
-            высотой — на телефоне оно сжималось до 32 px клетки. Этаж теперь
-            фишкой с его рудой: тап — окно этажей. */}
-        <div className="pmx-top pmx-bar">
-          <button
-            type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
-            aria-label={t('common.back')}
-            onClick={() => {
-              tapLight();
-              nav(-1);
-            }}
-          >
-            <KIcon name="arrowLeft" />
-          </button>
-          <span className="gx-chip pmx-chip--coins">
-            <CoinIcon size={18} />
-            <MoneyCounter ref={moneyRef} value={shownBalance} format={chipMoney} />
-          </span>
-          <button
-            type="button"
-            ref={tokenRef}
-            className="gx-chip pmx-chip--btn"
-            aria-label={t('mineHud.hud.tokens')}
-            onClick={() => openScreen('enchant')}
-          >
-            <TokenIcon size={17} /> {shortCount(prison.tokens)}
-          </button>
-          <span className="pmx-chips__gap" />
-          <button
-            type="button"
-            className="gx-chip pmx-chip--btn pmx-floor"
-            data-tip={t('input.action.mines')}
-            data-tip-key="mines"
-            aria-label={
-              prison.zone.on
-                ? t('mineHud.hud.floorZone')
-                : t('mineHud.hud.floor', { rank: rankLetter(mine.id), rock: rockName(mine.id) })
-            }
-            onClick={() => openSheet('mines')}
-          >
-            <img className="pmx-floor__ore" src={rockTexture(mine.id)} alt="" />
-            {prison.zone.on ? <GxIcon name="stairs" size={16} /> : rankLetter(mine.id)}
-          </button>
-          {FOREST_ON && (
-            <button
-              type="button"
-              className={`gx-round gx-round--dark pmx-top__btn${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
-              aria-label={t('mineHud.hud.forest')}
-              onClick={goForest}
-            >
-              <GxIcon name="forest" />
-            </button>
-          )}
-          {/* Инвентарь — в той же строке, где была кнопка леса: высота над
-              полем не меняется (см. «Шахта v2.67.2», --below). */}
-          <button
-            type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
-            aria-label={t('mineHud.hud.inventory')}
-            data-tip={t('input.action.inventory')}
-            data-tip-key="inventory"
-            onClick={() => {
-              tapLight();
-              setInvOpen(true);
-            }}
-          >
-            <GxIcon name="backpack" />
-          </button>
-          <button
-            type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
-            aria-label={t('common.settings')}
-            onClick={() => openSheet('settings')}
-          >
-            <KIcon name="gear" />
-          </button>
-        </div>
+  // ---- Экран шахты (UI v2, пиксельный набор) ------------------------------
+  // Поле — герой: клетку меряет JS (useFieldCell) по месту, которое осталось
+  // после шапки и дока. Высокий экран — всё стопкой, док внизу под пальцем;
+  // широкий — поле в центре, слева сводка (деньги, ранг, серия), справа док,
+  // расходники и рюкзак. Всё, что меняется (числа, значки, плашки), стоит в
+  // своих местах фиксированного размера или висит поверх поля — ничего не
+  // сдвигается.
+  const u = shell.scale;
+  const rankOk = atTop ? progress >= 1 : rankReady;
 
+  const floorBtn = (
+    <button
+      key="floor"
+      type="button"
+      className="mn-stat mn-stat--btn mn-floor px-f"
+      data-tip={t('input.action.mines')}
+      data-tip-key="mines"
+      aria-label={
+        prison.zone.on
+          ? t('mineHud.hud.floorZone')
+          : t('mineHud.hud.floor', { rank: rankLetter(mine.id), rock: rockName(mine.id) })
+      }
+      onClick={() => openSheet('mines')}
+    >
+      <img className="mn-floor__ore" src={rockTexture(mine.id)} alt="" />
+      <b className="px-num">
+        {prison.zone.on ? <GxIcon name="stairs" size={8 * u} /> : rankLetter(mine.id)}
+      </b>
+      <KeyHint action="mines" />
+    </button>
+  );
+
+  const hud = (
+    <div key="hud" className="mn-hud">
+      <button
+        type="button"
+        className="px-btn px-btn--iron px-btn--icon px-f mn-hud__back"
+        aria-label={t('common.back')}
+        onClick={() => {
+          tapLight();
+          nav(-1);
+        }}
+      >
+        <i className="px-i pxi-left" aria-hidden="true" />
+      </button>
+      <span className="mn-stat mn-stat--coins" title={t('mineHud.norm.coins')}>
+        <CoinIcon size={9 * u} />
+        <MoneyCounter
+          ref={moneyRef}
+          value={shownBalance}
+          format={chipMoney}
+          className="px-num mn-stat__n"
+        />
+      </span>
+      <button
+        type="button"
+        ref={tokenRef}
+        className="mn-stat mn-stat--btn mn-stat--tokens px-f"
+        aria-label={t('mineHud.hud.tokens')}
+        data-tip={t('mineHud.hud.tokens')}
+        onClick={() => openScreen('enchant')}
+      >
+        <TokenIcon size={8 * u} />
+        <b className="px-num mn-stat__n">{shortCount(prison.tokens)}</b>
+      </button>
+      <button
+        type="button"
+        className="mn-stat mn-stat--btn mn-stat--keys px-f"
+        aria-label={t('mineHud.pres.keys')}
+        data-tip={t('mineHud.pres.keys')}
+        onClick={() => openScreen('cases')}
+      >
+        <KeyIcon size={8 * u} />
+        <b className="px-num mn-stat__n">{shortCount(prison.keys)}</b>
+      </button>
+      {wide && floorBtn}
+      {FOREST_ON && (
         <button
           type="button"
-          className={`gx-panel gx-panel--wood pmx-rank${(atTop ? progress >= 1 : rankReady) ? ' is-ready' : ''}`}
-          onClick={rankUp}
-          aria-label={
-            atTop
-              ? t('mineHud.hud.prestige', { n: prestige + 1 })
-              : t('mineHud.hud.rank', { rank: rankLetter(rank + 1) })
-          }
+          className={`px-btn px-btn--iron px-btn--icon px-f mn-hud__forest${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
+          aria-label={t('mineHud.hud.forest')}
+          data-tip={t('mineHud.hud.forest')}
+          onClick={goForest}
         >
-          <span className="gx-hex pmx-rank__hex">{rankLetter(rank)}</span>
-          <span className="pmx-rank__mid">
-            <GxBar
-              value={rankFill}
-              tone="gold"
-              label={
-                (atTop ? progress >= 1 : rankReady) ? (
-                  atTop ? (
-                    t('mineHud.hud.prestigeGo')
-                  ) : (
-                    t('mineHud.hud.rankGo')
-                  )
-                ) : (
-                  <span className={`pmx-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
-                    {fmtShort(cost)} <CoinIcon size={12} />
-                  </span>
-                )
-              }
-            />
-            {!atTop && !rankReady && <RankChips need={need} floor={rank} />}
-          </span>
-          <span className="gx-hex gx-hex--dark pmx-rank__hex">
-            {atTop ? <GxIcon name="stairs" size={16} /> : rankLetter(rank + 1)}
-          </span>
+          <GxIcon name="forest" size={9 * u} />
         </button>
+      )}
+      <button
+        type="button"
+        className="px-btn px-btn--iron px-btn--icon px-f mn-hud__gear"
+        aria-label={t('common.settings')}
+        data-tip={t('common.settings')}
+        data-mine-settings=""
+        onClick={() => openSheet('settings')}
+      >
+        <i className="px-i pxi-m-gear" aria-hidden="true" />
+      </button>
+    </div>
+  );
 
-        <div
-          className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
-        >
-          {/* Полоса запала сидит на верхней кромке рамы: отдельной строкой
-              она отнимала бы у поля высоту. */}
-          <div
-            className={`pstrip${sTier >= 0 ? ` is-t${sTier}` : ''}${cooling ? ' is-cooling' : ''}`}
-            ref={stripRef}
-          >
-            <span className="pstrip__pick" title={t('mineHud.hud.pickLevel')}>
-              <b>
-                <PickIcon pick={pick} size={13} />
-                {pickLv.level}
-              </b>
-              <span className="pstrip__xp">
-                <i
-                  style={{ transform: `scaleX(${pickLv.need ? pickLv.into / pickLv.need : 1})` }}
-                />
-              </span>
-            </span>
-            <span className="pstrip__streak">
-              <span className="pstrip__name">
-                <GxIcon name="flame" size={13} />
-                {sTier >= 0 && streakName(sTier)}
-                {sTier >= 0 && <em>+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
-              </span>
-              <span className="pstrip__bar">
-                <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, sFill))})` }} />
-              </span>
-            </span>
-            <span className="pstrip__pace">
-              {pace ? (
-                <>
-                  {t('mineHud.hud.paceBlocks', { n: shortCount(pace.blocks) })} ·{' '}
-                  {fmtShort(pace.coins)}
-                  <CoinIcon size={10} />
-                  <small>{t('mineHud.perMin')}</small>
-                </>
+  const rankBox = (
+    <button
+      key="rank"
+      type="button"
+      className={`mn-rank px-f${rankOk ? ' is-ready' : ''}`}
+      onClick={rankUp}
+      data-tip={t('input.action.rank')}
+      data-tip-key="rank"
+      aria-label={
+        atTop
+          ? t('mineHud.hud.prestige', { n: prestige + 1 })
+          : t('mineHud.hud.rank', { rank: rankLetter(rank + 1) })
+      }
+    >
+      <span className="mn-hex px-num">{rankLetter(rank)}</span>
+      <span className="mn-rank__mid">
+        <Bar
+          value={rankFill}
+          height={11}
+          className="mn-rank__bar"
+          label={
+            rankOk ? (
+              atTop ? (
+                t('mineHud.hud.prestigeGo')
               ) : (
-                streak > 0 && <small>{t('mineHud.hud.inARow', { n: fmt(streak) })}</small>
-              )}
+                t('mineHud.hud.rankGo')
+              )
+            ) : (
+              <span className={`mn-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
+                {fmtShort(cost)} <CoinIcon size={6 * u} />
+              </span>
+            )
+          }
+        />
+        <span className="mn-rank__needs">
+          {!atTop && !rankReady && <RankChips need={need} floor={rank} />}
+        </span>
+      </span>
+      <span className="mn-hex mn-hex--next px-num">
+        {atTop ? <GxIcon name="stairs" size={8 * u} /> : rankLetter(rank + 1)}
+      </span>
+      <KeyHint action="rank" />
+    </button>
+  );
+
+  // Строка-запал: уровень кирки, серия, темп. На высоком экране — на верхней
+  // кромке рамы (поле не теряет высоты), на широком — панелью слева.
+  const streakBox = (
+    <div
+      key="strip"
+      ref={stripRef}
+      className={`mn-strip${sTier >= 0 ? ` is-t${sTier}` : ''}${cooling ? ' is-cooling' : ''}`}
+    >
+      <span className="mn-strip__pick" data-tip={t('mineHud.hud.pickLevel')}>
+        <span className="mn-strip__lv">
+          <PickIcon pick={pick} size={8 * u} />
+          <b className="px-num">{pickLv.level}</b>
+        </span>
+        <Bar value={pickLv.need ? pickLv.into / pickLv.need : 1} tone="blue" height={4} />
+      </span>
+      <span className="mn-strip__streak">
+        <span className="mn-strip__name">
+          <i className="px-i pxi-m-flame" aria-hidden="true" />
+          <b>{sTier >= 0 ? streakName(sTier) : t('mineHud.hud.streak')}</b>
+          {sTier >= 0 && <em className="px-num">+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
+        </span>
+        <Bar value={Math.max(0, Math.min(1, streak > 0 ? sFill : 0))} height={4} />
+      </span>
+      <span className="mn-strip__pace">
+        {pace ? (
+          <>
+            <span>{t('mineHud.hud.paceBlocks', { n: shortCount(pace.blocks) })}</span>
+            <span>
+              {fmtShort(pace.coins)}
+              <CoinIcon size={5 * u} />
+              {t('mineHud.perMin')}
             </span>
-          </div>
-          {prison.zone.on && (
-            <button
-              type="button"
-              className="pzone-exit"
-              onClick={() => {
-                tapLight();
-                prisonZoneExit();
-                say(t('mineHud.say.zoneExit'));
-              }}
-            >
-              {t('mineHud.hud.zoneExit')}
-            </button>
+          </>
+        ) : (
+          streak > 0 && <span>{t('mineHud.hud.inARow', { n: fmt(streak) })}</span>
+        )}
+      </span>
+    </div>
+  );
+
+  // Задание проводника, пока они не пройдены. Подсказка — по тапу.
+  const questBox = guide ? (
+    <button
+      key="quest"
+      type="button"
+      className={`mn-quest px-f${guideOk ? ' is-ready' : ''}`}
+      onClick={() => {
+        if (guideOk) {
+          claimGuide();
+          return;
+        }
+        tapLight();
+        say(guideHint(guide.id));
+      }}
+    >
+      <span className="mn-hex mn-hex--next px-num">{prison.guide + 1}</span>
+      <span className="mn-quest__body">
+        <b>{guideTitle(guide.id)}</b>
+        {!guideOk && guideGoal > 1 ? (
+          <Bar value={guideV / guideGoal} tone="green" height={4} />
+        ) : (
+          <em>{rewardText(guide.reward)}</em>
+        )}
+      </span>
+      {guideOk ? (
+        <span className="px-btn px-btn--sm px-btn--gold mn-quest__go">
+          {t('mineHud.card.collect')}
+        </span>
+      ) : (
+        <span className="mn-quest__n">
+          {guideGoal > 1 ? (
+            `${fmt(guideV)}/${fmt(guideGoal)}`
+          ) : (
+            <i className="px-i pxi-info" aria-hidden="true" />
           )}
-          {(anyBuff || rush || yardEv || prison.zone.on) && (
-            <div className="pbuffs">
-              {prison.zone.on && (
-                <span className="pbuff pbuff--zone">
-                  <GxIcon name="hourglass" size={12} /> {clockMs(zoneLeft(prison.zone, Date.now()))}
-                  {ZONE_MS + prison.zone.bonus < ZONE_MAX_MS &&
-                    t('mineHud.hud.zoneMore', { n: ZONE_QUOTA - (prison.zone.have % ZONE_QUOTA) })}
-                </span>
-              )}
-              {yardEv && <EventPill ev={yardEv} now={yardNow} />}
-              {rush && (
-                <span className="pbuff pbuff--frenzy">
-                  <GxIcon name="paw" size={12} /> {t('mineHud.hud.rush')}
-                </span>
-              )}
-              {buffs.frenzy > 0 && (
-                <span className="pbuff pbuff--frenzy">
-                  <GxIcon name="sparkles" size={12} /> {sec(buffs.frenzy)}
-                </span>
-              )}
-              {buffs.energy > 0 && (
-                <span className="pbuff pbuff--energy">
-                  <ItemIcon id="energy" size={12} /> {sec(buffs.energy)}
-                </span>
-              )}
-              {buffs.lens > 0 && (
-                <span className="pbuff pbuff--lens">
-                  <ItemIcon id="lens" size={12} /> {sec(buffs.lens)}
-                </span>
-              )}
-              {buffs.prop > 0 && (
-                <span className="pbuff pbuff--prop">
-                  <ItemIcon id="prop" size={12} /> {sec(buffs.prop)}
-                </span>
-              )}
-            </div>
-          )}
-          {prison.parcels.length > 0 && (
-            <div className="pparcels" ref={parcelsRef}>
-              {prison.parcels.map((x, i) => {
-                const tier = CASE_TIERS.find((t) => t.id === x.tier)!;
-                const ready = x.left <= 0;
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`pparcel${ready ? ' is-ready' : ''}`}
-                    style={{ '--tier': tier.color } as CSSProperties}
-                    aria-label={t(ready ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
-                      tier: nameIn(chestName(tier.id)),
-                    })}
-                    onClick={() => openParcel(i)}
-                  >
-                    <img src={parcelTexture(tier.color)} alt="" />
-                    {!ready && (
-                      <span className="pparcel__bar">
-                        <i style={{ transform: `scaleX(${1 - x.left / PARCEL_NEED[x.tier]})` }} />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <MinePets onTrick={onPetTrick} />
-          <MineField
-            ref={field}
-            gridKey={mineKey}
-            cells={renderCells}
-            pick={<PickIcon pick={pick} size={38} />}
-            rate={() => liveRate(useFinanceStore.getState().prison)}
-            onHit={dig.strike}
-            onTap={onFieldTap}
-            className={arming ? 'is-arming' : undefined}
-            under={
-              <>
-                {yardEv?.id === 'meteor' && (
-                  <div
-                    className="ymeteor"
-                    ref={meteorRef}
-                    key={yardEv.from}
-                    style={{
-                      left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                      top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                      width: `${100 / MINE_COLS}%`,
-                      height: `${100 / MINE_ROWS}%`,
-                    }}
-                  >
-                    <i className="ymeteor__glow" />
-                    <img src={meteorTexture()} alt={t('mineHud.hud.meteor')} />
-                    <span className="ymeteor__pips">
-                      {Array.from({ length: METEOR_HITS }, (_, k) => (
-                        <i key={k} className={k < meteorN ? 'is-on' : undefined} />
-                      ))}
-                    </span>
-                  </div>
-                )}
-                {yardEv?.id === 'kuiva' && (
-                  <div
-                    className="ykuiva"
-                    ref={bossRef}
-                    key={yardEv.from}
-                    style={{
-                      left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                      top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                      width: `${(3 / MINE_COLS) * 100}%`,
-                      height: `${(3 / MINE_ROWS) * 100}%`,
-                    }}
-                  >
-                    <img src={kuivaTexture()} alt={t('mineHud.hud.kuiva')} />
-                    <span className="ykuiva__hp">
-                      <i style={{ transform: `scaleX(${bossFill})` }} />
-                    </span>
-                  </div>
-                )}
-              </>
-            }
-          >
-            <BatLayer ref={batRef} host={fieldEl} onCatch={onBatCatch} />
-            {sense && (
-              <span
-                key={sense.key}
-                className="psense"
-                style={{
-                  left: `${((sense.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                  top: `${(Math.floor(sense.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                  width: `${100 / MINE_COLS}%`,
-                  height: `${100 / MINE_ROWS}%`,
+        </span>
+      )}
+    </button>
+  ) : null;
+
+  const fieldBox = (
+    <div key="field" className="mn-field" ref={slotRef}>
+      <div
+        ref={frameRef}
+        className={`mn-frame px-panel px-panel--wood pxk-frame-wood${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
+      >
+        {!wide && streakBox}
+        {(anyBuff || rush || yardEv || prison.zone.on) && (
+          <div className="mn-buffs">
+            {prison.zone.on && (
+              <button
+                type="button"
+                className="px-btn px-btn--sm px-btn--iron px-f mn-zone-exit"
+                onClick={() => {
+                  tapLight();
+                  prisonZoneExit();
+                  say(t('mineHud.say.zoneExit'));
                 }}
               >
-                <b>{sense.below ? `↓${sense.below}` : '★'}</b>
-              </span>
-            )}
-            {yardEv?.id === 'magpie' && (
-              <MagpieLayer
-                key={yardEv.from}
-                ref={magRef}
-                ev={yardEv}
-                host={fieldEl}
-                canDrop={(c) => !yardShut(useFinanceStore.getState().prison).has(c)}
-                onPick={pickShiny}
-              />
-            )}
-            <TreasurePanel onGot={onTreasureGot} onLost={onRiskLost} />
-            {arming && (
-              <div className="pmine__arm">
-                <ItemIcon id={arming} size={18} /> {t('mineHud.hud.arm')}
-              </div>
-            )}
-            {toast && (
-              <div className="pmine__toast" key={toast.id}>
-                {toast.text}
-              </div>
-            )}
-            {cardShown && (
-              <div className={`pfindcard${cardLeaving ? ' is-out' : ''}`}>
-                <img src={findTexture(cardShown.id)} alt="" />
-                <span>
-                  <i>
-                    {cardShown.fresh
-                      ? t('mineHud.card.findNew')
-                      : t('mineHud.card.findDup', { n: cardShown.n })}
-                  </i>
-                  <b>{findName(cardShown.id)}</b>
-                  <em>
-                    {cardShown.fresh
-                      ? t('mineHud.card.findNewBonus')
-                      : t('mineHud.card.findDupBonus')}
-                  </em>
-                </span>
-              </div>
-            )}
-            {shiftShown && (
-              <div className={`pshift${shiftLeaving ? ' is-out' : ''}`}>
-                <i>{t('mineHud.card.shift')}</i>
-                <b>
-                  {t('mineHud.card.shiftBlocks', {
-                    n: Math.round(shiftShown.blocks),
-                    coins: fmtShort(shiftShown.coins),
-                  })}{' '}
-                  <CoinIcon size={12} />
-                </b>
-                <em>
-                  +{fmt(shiftShown.tokens)} ✦
-                  {shiftShown.keys ? t('mineHud.card.shiftKeys', { n: shiftShown.keys }) : ''}
-                </em>
-              </div>
-            )}
-            {crewNote && crewNow.blocks > 0 && (
-              <div className="pcrewnote">
-                <span>
-                  <b>{t('mineHud.card.crewDug', { n: Math.round(crewNow.blocks) })}</b>
-                  <i>
-                    {t('mineHud.card.crewLine', {
-                      coins: fmtShort(crewNow.coins),
-                      tokens: fmt(crewNow.tokens),
-                    })}
-                    {crewNow.capped ? t('mineHud.card.crewCapped') : ''}
-                  </i>
-                </span>
-                <button type="button" className="btn btn--sm pmines__go" onClick={collectCrew}>
-                  {t('mineHud.card.collect')}
-                </button>
-                <button
-                  type="button"
-                  className="pcrewnote__x"
-                  aria-label={t('mineHud.card.later')}
-                  onClick={() => setCrewNote(false)}
-                >
-                  ×
-                </button>
-              </div>
-            )}
-          </MineField>
-        </div>
-
-        <div className="pmx-items">
-          {ITEMS.filter(
-            (it) => it.id !== 'prop' || prison.items.prop > 0 || (FOREST_ON && millLevel > 0),
-          ).map((it) => {
-            const n = prison.items[it.id];
-            return (
-              <button
-                key={it.id}
-                type="button"
-                className={`gx-round pmx-item${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
-                aria-label={`${itemName(it.id)}: ${n}`}
-                onClick={() => applyItem(it.id)}
-              >
-                <ItemIcon id={it.id} />
-                <i className={`pmx-item__n${n ? '' : ' is-buy'}`}>{n || '+'}</i>
+                {t('mineHud.hud.zoneExit')}
               </button>
-            );
-          })}
-        </div>
-
-        <div className="pmx-foot">
-          <button
-            type="button"
-            ref={bagRef}
-            className={`gx-panel gx-panel--wood pmx-bag${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
-            onClick={sell}
-          >
-            <GxIcon name="backpack" className="pmx-bag__ico" />
-            <span className="pmx-bag__body">
-              <GxBar
-                value={count / cap}
-                tone={full ? 'red' : 'green'}
-                label={
-                  full
-                    ? t('mineHud.bag.full', { count: String(count), cap: String(cap) })
-                    : `${count} / ${cap}`
-                }
-              />
-              <span className={`gx-btn gx-btn--sm${count ? ' gx-btn--red' : ''} pmx-bag__sell`}>
-                {count && value ? (
-                  <>
-                    {t('mineHud.bag.sell', { sum: fmtShort(value) })} <CoinIcon size={13} />
-                  </>
-                ) : count ? (
-                  <>
-                    <GxIcon name="anvil" size={14} /> {t('mineHud.bag.toBox')}
-                  </>
-                ) : (
-                  t('mineHud.bag.empty')
-                )}
+            )}
+            {prison.zone.on && (
+              <span className="mn-buff mn-buff--zone">
+                <GxIcon name="hourglass" size={6 * u} />{' '}
+                {clockMs(zoneLeft(prison.zone, Date.now()))}
+                {ZONE_MS + prison.zone.bonus < ZONE_MAX_MS &&
+                  t('mineHud.hud.zoneMore', { n: ZONE_QUOTA - (prison.zone.have % ZONE_QUOTA) })}
               </span>
-            </span>
-          </button>
-        </div>
-
-        {/* Нижняя панель (v2.67) вместо листа «Лагерь» с десятью вкладками:
-            пять крупных кнопок, как в мобильных играх. Каждая открывает свой
-            экран. Кузница показывает кирку в руке — в цвете её редкости. */}
-        <nav
-          ref={dockRef}
-          className="gx-panel gx-panel--wood pmx-dock"
-          aria-label={t('mineHud.dock.camp')}
+            )}
+            {yardEv && <EventPill ev={yardEv} now={yardNow} />}
+            {rush && (
+              <span className="mn-buff mn-buff--frenzy">
+                <GxIcon name="paw" size={6 * u} /> {t('mineHud.hud.rush')}
+              </span>
+            )}
+            {buffs.frenzy > 0 && (
+              <span className="mn-buff mn-buff--frenzy">
+                <GxIcon name="sparkles" size={6 * u} /> {sec(buffs.frenzy)}
+              </span>
+            )}
+            {buffs.energy > 0 && (
+              <span className="mn-buff mn-buff--energy">
+                <ItemIcon id="energy" size={6 * u} /> {sec(buffs.energy)}
+              </span>
+            )}
+            {buffs.lens > 0 && (
+              <span className="mn-buff mn-buff--lens">
+                <ItemIcon id="lens" size={6 * u} /> {sec(buffs.lens)}
+              </span>
+            )}
+            {buffs.prop > 0 && (
+              <span className="mn-buff mn-buff--prop">
+                <ItemIcon id="prop" size={6 * u} /> {sec(buffs.prop)}
+              </span>
+            )}
+          </div>
+        )}
+        {prison.parcels.length > 0 && (
+          <div className="mn-parcels" ref={parcelsRef}>
+            {prison.parcels.map((x, i) => {
+              const tier = CASE_TIERS.find((t) => t.id === x.tier)!;
+              const ready = x.left <= 0;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className={`mn-parcel px-f${ready ? ' is-ready' : ''}`}
+                  style={{ '--tier': tier.color } as CSSProperties}
+                  aria-label={t(ready ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
+                    tier: nameIn(chestName(tier.id)),
+                  })}
+                  data-tip={t(ready ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
+                    tier: nameIn(chestName(tier.id)),
+                  })}
+                  onClick={() => openParcel(i)}
+                >
+                  <img src={parcelTexture(tier.color)} alt="" />
+                  {!ready && (
+                    <Bar value={1 - x.left / PARCEL_NEED[x.tier]} tone="green" height={3} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <MinePets onTrick={onPetTrick} size={petSize} />
+        <MineField
+          ref={field}
+          gridKey={mineKey}
+          cells={renderCells}
+          pick={<PickIcon pick={pick} size={Math.round(cell * 0.76) || 38} />}
+          rate={() => liveRate(useFinanceStore.getState().prison)}
+          onHit={dig.strike}
+          onTap={onFieldTap}
+          className={arming ? 'is-arming' : undefined}
+          under={
+            <>
+              {yardEv?.id === 'meteor' && (
+                <div
+                  className="ymeteor"
+                  ref={meteorRef}
+                  key={yardEv.from}
+                  style={{
+                    left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                    top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                    width: `${100 / MINE_COLS}%`,
+                    height: `${100 / MINE_ROWS}%`,
+                  }}
+                >
+                  <i className="ymeteor__glow" />
+                  <img src={meteorTexture()} alt={t('mineHud.hud.meteor')} />
+                  <span className="ymeteor__pips">
+                    {Array.from({ length: METEOR_HITS }, (_, k) => (
+                      <i key={k} className={k < meteorN ? 'is-on' : undefined} />
+                    ))}
+                  </span>
+                </div>
+              )}
+              {yardEv?.id === 'kuiva' && (
+                <div
+                  className="ykuiva"
+                  ref={bossRef}
+                  key={yardEv.from}
+                  style={{
+                    left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                    top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                    width: `${(3 / MINE_COLS) * 100}%`,
+                    height: `${(3 / MINE_ROWS) * 100}%`,
+                  }}
+                >
+                  <img src={kuivaTexture()} alt={t('mineHud.hud.kuiva')} />
+                  <span className="ykuiva__hp">
+                    <i style={{ transform: `scaleX(${bossFill})` }} />
+                  </span>
+                </div>
+              )}
+            </>
+          }
         >
-          <button
-            type="button"
-            ref={forgeRef}
-            className={`pmx-dock__btn${forgeReady ? ' is-ready' : ''}`}
-            data-tip={t('input.action.forge')}
-            data-tip-key="forge"
-            onClick={() => {
-              tapLight();
-              setForgeOpen(true);
-            }}
-          >
-            <PickIcon pick={pick} size={24} />
-            <b>{t('mineHud.dock.forge')}</b>
-            {forgeReady && <i className="gx-badge gx-badge--gold">!</i>}
-          </button>
-          <button
-            type="button"
-            className="pmx-dock__btn"
-            data-tip={t('input.action.books')}
-            data-tip-key="books"
-            onClick={() => openScreen('enchant')}
-          >
-            <GxIcon name="book" />
-            <b>{t('mineHud.dock.books')}</b>
-            {enchReady && <i className="gx-badge">!</i>}
-          </button>
-          <button
-            type="button"
-            ref={chestRef}
-            className="pmx-dock__btn"
-            data-tip={t('input.action.chests')}
-            data-tip-key="chests"
-            onClick={() => openScreen('cases')}
-          >
-            <ChestIcon size={30} />
-            <b>{t('mineHud.dock.chests')}</b>
-            {prison.keys > 0 && (
-              <i className="gx-badge gx-badge--gold">
-                <KeyIcon size={10} />
-                {prison.keys}
-              </i>
-            )}
-          </button>
-          <button
-            type="button"
-            className="pmx-dock__btn"
-            data-tip={t('input.action.pets')}
-            data-tip-key="pets"
-            onClick={() => openScreen('pets')}
-          >
-            <span className="pmx-dock__pets" ref={petRef}>
-              {prison.squad[0] ? (
-                <PetArt
-                  id={prison.squad[0]}
-                  size={30}
-                  v={petLook(prison.pets[prison.squad[0]])}
-                  still
-                />
-              ) : (
-                <GxIcon name="paw" />
-              )}
+          <BatLayer ref={batRef} host={fieldEl} onCatch={onBatCatch} />
+          {sense && (
+            <span
+              key={sense.key}
+              className="psense"
+              style={{
+                left: `${((sense.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                top: `${(Math.floor(sense.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                width: `${100 / MINE_COLS}%`,
+                height: `${100 / MINE_ROWS}%`,
+              }}
+            >
+              <b>{sense.below ? `↓${sense.below}` : '★'}</b>
             </span>
-            <b>{t('mineHud.dock.pets')}</b>
-            {prison.nest.some((x) => x.left <= 0) && <i className="gx-badge">!</i>}
-          </button>
-          <button type="button" className="pmx-dock__btn" onClick={() => openScreen('more')}>
-            <GxIcon name="campfire" />
-            <b>{t('mineHud.dock.more')}</b>
-            {campBadge && <i className="gx-badge">!</i>}
-          </button>
-        </nav>
-
-        {/* Задание, пока они не пройдены, стоит на месте строки с ценами
-            пород: высота под полем на счету, а цены есть и в окне шахт.
-            Подсказка к заданию — по тапу, а не строкой под ним. */}
-        {guide ? (
-          <button
-            type="button"
-            className={`gx-panel pmx-quest${guideOk ? ' is-ready' : ''}`}
-            onClick={() => {
-              if (guideOk) {
-                claimGuide();
-                return;
-              }
-              tapLight();
-              say(guideHint(guide.id));
-            }}
-          >
-            <span className="gx-hex gx-hex--dark pmx-quest__n">{prison.guide + 1}</span>
-            <span className="pmx-quest__body">
-              <b>{guideTitle(guide.id)}</b>
-              {guideOk ? (
-                <em>{rewardText(guide.reward)}</em>
-              ) : guideGoal > 1 ? (
-                <GxBar thin tone="green" value={guideV / guideGoal} className="pmx-quest__bar" />
-              ) : (
-                <em>{rewardText(guide.reward)}</em>
-              )}
-            </span>
-            {guideOk ? (
-              <span className="gx-btn gx-btn--red gx-btn--sm">{t('mineHud.card.collect')}</span>
-            ) : (
-              <span className="pmx-quest__n2">
-                {guideGoal > 1 ? `${fmt(guideV)}/${fmt(guideGoal)}` : <KIcon name="question" />}
+          )}
+          {yardEv?.id === 'magpie' && (
+            <MagpieLayer
+              key={yardEv.from}
+              ref={magRef}
+              ev={yardEv}
+              host={fieldEl}
+              canDrop={(c) => !yardShut(useFinanceStore.getState().prison).has(c)}
+              onPick={pickShiny}
+            />
+          )}
+          <TreasurePanel onGot={onTreasureGot} onLost={onRiskLost} />
+          {arming && (
+            <div className="pmine__arm">
+              <ItemIcon id={arming} size={18} /> {t('mineHud.hud.arm')}
+            </div>
+          )}
+          {toast && (
+            <div className="pmine__toast" key={toast.id}>
+              {toast.text}
+            </div>
+          )}
+          {cardShown && (
+            <div className={`pfindcard${cardLeaving ? ' is-out' : ''}`}>
+              <img src={findTexture(cardShown.id)} alt="" />
+              <span>
+                <i>
+                  {cardShown.fresh
+                    ? t('mineHud.card.findNew')
+                    : t('mineHud.card.findDup', { n: cardShown.n })}
+                </i>
+                <b>{findName(cardShown.id)}</b>
+                <em>
+                  {cardShown.fresh
+                    ? t('mineHud.card.findNewBonus')
+                    : t('mineHud.card.findDupBonus')}
+                </em>
               </span>
-            )}
-          </button>
-        ) : null}
+            </div>
+          )}
+          {shiftShown && (
+            <div className={`pshift${shiftLeaving ? ' is-out' : ''}`}>
+              <i>{t('mineHud.card.shift')}</i>
+              <b>
+                {t('mineHud.card.shiftBlocks', {
+                  n: Math.round(shiftShown.blocks),
+                  coins: fmtShort(shiftShown.coins),
+                })}{' '}
+                <CoinIcon size={12} />
+              </b>
+              <em>
+                +{fmt(shiftShown.tokens)} ✦
+                {shiftShown.keys ? t('mineHud.card.shiftKeys', { n: shiftShown.keys }) : ''}
+              </em>
+            </div>
+          )}
+          {crewNote && crewNow.blocks > 0 && (
+            <div className="pcrewnote">
+              <span>
+                <b>{t('mineHud.card.crewDug', { n: Math.round(crewNow.blocks) })}</b>
+                <i>
+                  {t('mineHud.card.crewLine', {
+                    coins: fmtShort(crewNow.coins),
+                    tokens: fmt(crewNow.tokens),
+                  })}
+                  {crewNow.capped ? t('mineHud.card.crewCapped') : ''}
+                </i>
+              </span>
+              <button type="button" className="btn btn--sm pmines__go" onClick={collectCrew}>
+                {t('mineHud.card.collect')}
+              </button>
+              <button
+                type="button"
+                className="pcrewnote__x"
+                aria-label={t('mineHud.card.later')}
+                onClick={() => setCrewNote(false)}
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </MineField>
       </div>
+    </div>
+  );
+
+  // Расходники: цифры 1–6 на клавиатуре — по порядку на экране.
+  const itemsRow = (
+    <div key="items" className="mn-items" role="group" aria-label={t('inv.section.items')}>
+      {wide && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
+      <div className="mn-items__row">
+        {shownItems.map((it, i) => {
+          const n = prison.items[it.id];
+          return (
+            <Slot
+              key={it.id}
+              className={`mn-item${n ? '' : ' is-buy'}`}
+              empty={!n}
+              selected={arming === it.id}
+              count={n || undefined}
+              aria-label={`${itemName(it.id)}: ${n}`}
+              data-tip={itemName(it.id)}
+              data-tip-key={`item${i + 1}`}
+              onClick={() => applyItem(it.id)}
+            >
+              <ItemIcon id={it.id} size={13 * u} />
+              {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
+              <KeyHint action={`item${i + 1}` as Action} />
+            </Slot>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const bagBox = (
+    <button
+      key="bag"
+      type="button"
+      ref={bagRef}
+      className={`mn-bag px-f${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
+      onClick={sell}
+      aria-label={t('input.action.sell')}
+      data-tip={t('input.action.sell')}
+      data-tip-key="sell"
+    >
+      <i className="px-i pxi-m-bag mn-bag__ico" aria-hidden="true" />
+      <span className="mn-bag__mid">
+        <span className="mn-bag__title">{t('inv.lim.bag')}</span>
+        <Bar
+          value={count / cap}
+          tone={full ? 'gold' : 'green'}
+          height={11}
+          className="mn-bag__bar"
+          label={
+            <span>{`${count} / ${cap}`}</span>
+          }
+        />
+      </span>
+      <span
+        className={`px-btn px-btn--sm ${count && value ? 'px-btn--gold' : 'px-btn--iron'} mn-bag__sell`}
+      >
+        {count && value ? (
+          <>
+            <span>{t('mineHud.bag.sell', { sum: fmtShort(value) })}</span>
+            <CoinIcon size={7 * u} />
+          </>
+        ) : count ? (
+          <>
+            <GxIcon name="anvil" size={7 * u} /> <span>{t('mineHud.bag.toBox')}</span>
+          </>
+        ) : (
+          <span>{t('mineHud.bag.empty')}</span>
+        )}
+      </span>
+      <KeyHint action="sell" />
+    </button>
+  );
+
+  // Док (v2.67 → UI v2): шесть крупных кнопок под большим пальцем. Каждая
+  // открывает свой экран; горячие клавиши — на кнопках (клавиатура, геймпад).
+  const dock = (
+    <nav
+      key="dock"
+      ref={dockRef}
+      className="mn-dock px-panel px-panel--wood pxk-frame-wood"
+      aria-label={t('mineHud.dock.camp')}
+    >
+      <button
+        type="button"
+        ref={forgeRef}
+        className={`px-btn px-btn--iron px-f mn-dock__btn${forgeReady ? ' is-ready' : ''}`}
+        data-tip={t('input.action.forge')}
+        data-tip-key="forge"
+        onClick={() => {
+          tapLight();
+          setForgeOpen(true);
+        }}
+      >
+        <span className="mn-dock__ico">
+          <PickIcon pick={pick} size={dockIco} />
+        </span>
+        <span className="mn-dock__label">{t('mineHud.dock.forge')}</span>
+        {forgeReady && (
+          <span className="mn-dock__badge">
+            <Badge gold>!</Badge>
+          </span>
+        )}
+        <KeyHint action="forge" />
+      </button>
+      <button
+        type="button"
+        className="px-btn px-btn--iron px-f mn-dock__btn"
+        data-tip={t('input.action.books')}
+        data-tip-key="books"
+        onClick={() => openScreen('enchant')}
+      >
+        <span className="mn-dock__ico">
+          <i className="px-i pxi-m-book mn-dock__mask is-book" aria-hidden="true" />
+        </span>
+        <span className="mn-dock__label">{t('mineHud.dock.books')}</span>
+        {enchReady && (
+          <span className="mn-dock__badge">
+            <Badge>!</Badge>
+          </span>
+        )}
+        <KeyHint action="books" />
+      </button>
+      <button
+        type="button"
+        ref={chestRef}
+        className="px-btn px-btn--iron px-f mn-dock__btn"
+        data-tip={t('input.action.chests')}
+        data-tip-key="chests"
+        onClick={() => openScreen('cases')}
+      >
+        <span className="mn-dock__ico">
+          <ChestIcon size={dockIco} />
+        </span>
+        <span className="mn-dock__label">{t('mineHud.dock.chests')}</span>
+        {prison.keys > 0 && (
+          <span className="mn-dock__badge">
+            <Badge gold>{shortCount(prison.keys)}</Badge>
+          </span>
+        )}
+        <KeyHint action="chests" />
+      </button>
+      <button
+        type="button"
+        className="px-btn px-btn--iron px-f mn-dock__btn"
+        data-tip={t('input.action.pets')}
+        data-tip-key="pets"
+        onClick={() => openScreen('pets')}
+      >
+        <span className="mn-dock__ico" ref={petRef}>
+          {prison.squad[0] ? (
+            <PetArt
+              id={prison.squad[0]}
+              size={dockIco}
+              v={petLook(prison.pets[prison.squad[0]])}
+              still
+            />
+          ) : (
+            <i className="px-i pxi-paw mn-dock__mask" aria-hidden="true" />
+          )}
+        </span>
+        <span className="mn-dock__label">{t('mineHud.dock.pets')}</span>
+        {prison.nest.some((x) => x.left <= 0) && (
+          <span className="mn-dock__badge">
+            <Badge>!</Badge>
+          </span>
+        )}
+        <KeyHint action="pets" />
+      </button>
+      <button
+        type="button"
+        className="px-btn px-btn--iron px-f mn-dock__btn"
+        data-tip={t('input.action.inventory')}
+        data-tip-key="inventory"
+        onClick={() => {
+          tapLight();
+          setInvOpen(true);
+        }}
+      >
+        <span className="mn-dock__ico">
+          <i className="px-i pxi-m-bag mn-dock__mask is-bag" aria-hidden="true" />
+        </span>
+        <span className="mn-dock__label">{t('inv.lim.bag')}</span>
+        <KeyHint action="inventory" />
+      </button>
+      <button
+        type="button"
+        className="px-btn px-btn--iron px-f mn-dock__btn"
+        data-tip={t('input.action.camp')}
+        data-tip-key="camp"
+        onClick={() => openScreen('more')}
+      >
+        <span className="mn-dock__ico">
+          <i className="px-i pxi-m-fire mn-dock__mask is-fire" aria-hidden="true" />
+        </span>
+        <span className="mn-dock__label">{t('mineHud.dock.more')}</span>
+        {campBadge && (
+          <span className="mn-dock__badge">
+            <Badge>!</Badge>
+          </span>
+        )}
+        <KeyHint action="camp" />
+      </button>
+    </nav>
+  );
+
+  const layout = wide
+    ? [
+        <div key="l" className="mn-side mn-side--l">
+          {hud}
+          {rankBox}
+          <div className="mn-panel">{streakBox}</div>
+          {questBox}
+        </div>,
+        fieldBox,
+        <div key="r" className="mn-side mn-side--r">
+          {itemsRow}
+          {bagBox}
+          {dock}
+        </div>,
+      ]
+    : [
+        hud,
+        <div key="rankrow" className="mn-rankrow">
+          {floorBtn}
+          {rankBox}
+        </div>,
+        questBox,
+        fieldBox,
+        itemsRow,
+        bagBox,
+        dock,
+      ];
+
+  return (
+    <div
+      ref={rootRef}
+      className={`gx px mn ${wide ? 'mn--wide' : 'mn--tall'}`}
+      style={cell ? ({ '--cell': `${cell}px` } as CSSProperties) : undefined}
+    >
+      <div className="prison-scene" aria-hidden="true" />
+      {layout}
 
       {screen && (
         <PrisonCamp
@@ -2629,6 +2804,56 @@ export function PrisonPage() {
       <EventAnnounce ev={yardSplash} onDone={closeSplash} />
     </div>
   );
+}
+
+/** Широкий экран: меньше этого (в пикселях арта) боковой колонке не дать. */
+const SIDE_MIN_U = 84;
+/** Зазор между колонками, в пикселях арта (как `gap` у `.mn--wide`). */
+const SIDE_GAP_U = 4;
+
+/**
+ * Клетка поля в целых пикселях: самая крупная, при которой 7×9 клеток с
+ * рамой влезают в место под поле. Высокий экран — место = ячейка `.mn-field`
+ * (растягивается между шапкой и доком), широкий — высота ячейки и ширина
+ * экрана минус две боковые колонки. Рама меряется с поля: ширина рамы минус
+ * ширина сетки, поэтому толщина рамы в CSS может меняться.
+ */
+function useFieldCell(
+  root: RefObject<HTMLDivElement>,
+  slot: RefObject<HTMLDivElement>,
+  frame: RefObject<HTMLDivElement>,
+  wide: boolean,
+  scale: number,
+): number {
+  const [cell, setCell] = useState(0);
+  useLayoutEffect(() => {
+    const r = root.current;
+    const s = slot.current;
+    const f = frame.current;
+    if (!r || !s || !f) return undefined;
+    const measure = () => {
+      const grid = f.querySelector<HTMLElement>('.pmine');
+      if (!grid || !grid.offsetWidth) return;
+      const cw = f.offsetWidth - grid.offsetWidth;
+      const ch = f.offsetHeight - grid.offsetHeight;
+      const ss = getComputedStyle(s);
+      const H = s.clientHeight - parseFloat(ss.paddingTop) - parseFloat(ss.paddingBottom);
+      let W = s.clientWidth - parseFloat(ss.paddingLeft) - parseFloat(ss.paddingRight);
+      if (wide) {
+        const rs = getComputedStyle(r);
+        const inner = r.clientWidth - parseFloat(rs.paddingLeft) - parseFloat(rs.paddingRight);
+        W = inner - 2 * (SIDE_MIN_U + SIDE_GAP_U) * scale;
+      }
+      const c = Math.floor(Math.min((W - cw) / 7, (H - ch) / 9));
+      setCell(Math.max(20, Math.min(160, c)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(r);
+    ro.observe(s);
+    return () => ro.disconnect();
+  }, [root, slot, frame, wide, scale]);
+  return cell;
 }
 
 /** Перерисовка раз в секунду, пока `on` — для таймеров баффов. */
