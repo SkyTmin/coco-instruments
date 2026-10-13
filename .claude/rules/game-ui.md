@@ -105,7 +105,7 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   (settings) 300, camp with a rail / any window with kit content or kit tabs in its body 420.
   Camps and tablist windows have a FIXED height (`min(100%, 250u)`, 100 % on phone portrait):
   switching tabs never moves the frame, ribbon or tab bar (checked by comparing rects across all
-  tabs — `{SCR}/jump.mjs`). Old tab content in a wide camp is centred at max 640 px.
+  tabs — `{SCR}/jump.mjs`). Old tab content in a wide camp is centred at max 720 px.
 - **Zoom for old content:** at `--ui-scale` ≥ 4 the body gets `zoom: 2` (`--gx-z` on the veil)
   and `--u` is divided back so art stays one `--ui-px`. Kit type sizes are px too, and a custom
   property is resolved where it is declared (:root) — so the body re-derives `--px-fs*` from
