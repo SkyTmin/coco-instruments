@@ -1052,6 +1052,161 @@ function icon(rows: string[]): Pix {
   return p;
 }
 
+// ---- wave 3 — N2: stat pictures (Nursery bonuses and power) ------------------------------------
+// 12 × 12 PICTURES, not masks — the owner found the 9×9 glyphs «толстые» and «маленькие»: a
+// 1-art-px ink outline (`k`), 2–4 tones of the icon's own colour lit from the upper left (`4`
+// light → `1` dark), `w` = a white glint. Shown at 24 CSS px (36 at ui-scale ≥ 4), about twice the
+// cap height of the label beside them; the 9×9 masks stay for UI glyphs. The rows came from a
+// shape mask + light + overlays (`{SCR}/icons.py` of agent N2) and live here as literals.
+const STAT_ART: Record<string, { pal: Record<string, string>; rows: string[] }> = {
+  loot: {
+    pal: { '1': '#1d4e8f', '2': '#2f7fd0', '3': '#6cc0ff', '4': '#cdeeff', w: '#ffffff' },
+    rows: [
+      '............',
+      '...kkkkkk...',
+      '..k4w3321k..',
+      '.k44433221k.',
+      'k4444332211k',
+      'k3333222111k',
+      '.k33222111k.',
+      '..k322211k..',
+      '...k3221k...',
+      '....k21k....',
+      '.....kk.....',
+      '............',
+    ],
+  },
+  sell: {
+    pal: { '1': '#84530e', '2': '#bf8318', '3': '#f0b136', '4': '#ffe189', w: '#fff8e0' },
+    rows: [
+      '....kkkk....',
+      '..kk4444kk..',
+      '.k4ww44333k.',
+      '.k44414333k.',
+      'k4444143322k',
+      'k4444143222k',
+      'k4443142111k',
+      'k4333141111k',
+      '.k33314111k.',
+      '.k33221111k.',
+      '..kk2211kk..',
+      '....kkkk....',
+    ],
+  },
+  dmg: {
+    pal: {
+      '1': '#404853',
+      '2': '#6f7a88',
+      '3': '#aeb8c4',
+      '4': '#e6ecf2',
+      a: '#3a2010',
+      b: '#bd7a3e',
+      c: '#7a4622',
+    },
+    rows: [
+      '...kkkkkk...',
+      '.kk444332kk.',
+      'k443kkkk321k',
+      'k3k.kbck.k2k',
+      'kk..kbck..kk',
+      '...kbck.....',
+      '..kbck......',
+      '..kbck......',
+      '.kbck.......',
+      '.kbck.......',
+      'kbck........',
+      'kkk.........',
+    ],
+  },
+  token: {
+    pal: { '1': '#1d5a50', '2': '#2f8a7a', '3': '#5cc4b0', '4': '#a8ecdc', w: '#f0fff9' },
+    rows: [
+      '....kkkk....',
+      '..kk4444kk..',
+      '.k444w4333k.',
+      '.k44www333k.',
+      'k4wwwwwww22k',
+      'k44wwwww222k',
+      'k444www2211k',
+      'k43ww2ww111k',
+      '.kww221ww1k.',
+      '.k32221122k.',
+      '..kk2211kk..',
+      '....kkkk....',
+    ],
+  },
+  luck: {
+    pal: { '1': '#56606e', '2': '#8e99a7', '3': '#c9d2dc', '4': '#f4f8fc' },
+    rows: [
+      '............',
+      '............',
+      '.kkkk.......',
+      'k4433kkkkkkk',
+      'k4kk3333333k',
+      'k3kk2222222k',
+      'k3221kkk2k2k',
+      '.kkkk..k1k1k',
+      '.......kkkkk',
+      '............',
+      '............',
+      '............',
+    ],
+  },
+  rate: {
+    pal: {
+      '1': '#6a1714',
+      '2': '#a0261c',
+      '3': '#d2432d',
+      '4': '#ff8466',
+      f: '#fff6e0',
+      F: '#e0cba8',
+    },
+    rows: [
+      '....k33k....',
+      '..kk4444kk..',
+      '.k44ffff33k.',
+      '.k4fFkfff3k.',
+      'k4fFfkffff2k',
+      'k4fffkkkff1k',
+      'k4ffffffff1k',
+      'k4ffffffff1k',
+      '.k3ffffff1k.',
+      '.k33ffff11k.',
+      '..kk2111kk..',
+      '....kkkk....',
+    ],
+  },
+  power: {
+    pal: { '1': '#9a3c0c', '2': '#e0761c', '3': '#ffb52e', '4': '#fff0a0' },
+    rows: [
+      '......kkkk..',
+      '.....k443k..',
+      '....k443k...',
+      '...k443k....',
+      '..k443kkkk..',
+      '.k4433332k..',
+      '.kkkk332k...',
+      '....k32k....',
+      '...k32k.....',
+      '..k32k......',
+      '..k2k.......',
+      '..kk........',
+    ],
+  },
+};
+
+function statArt(name: string): Pix {
+  const { pal, rows } = STAT_ART[name];
+  const p = new Pix(rows[0].length, rows.length);
+  rows.forEach((row, y) =>
+    [...row].forEach((ch, x) => {
+      if (ch === 'k') p.set(x, y, INK);
+      else if (pal[ch]) p.set(x, y, hex(pal[ch]));
+    }),
+  );
+  return p;
+}
+
 // ---- The kit ------------------------------------------------------------------------------------
 
 export const PIECES: Piece[] = [
@@ -1210,6 +1365,10 @@ export const PIECES: Piece[] = [
     fill: true,
     draw: tabSide,
   },
+  // wave 3 — N2: `--pximg-st-<stat>` (loot sell dmg token luck rate power)
+  ...Object.keys(STAT_ART).map(
+    (n): Piece => ({ name: `st-${n}`, kind: 'img', draw: () => statArt(n) }),
+  ),
 ];
 
 const same = (a: RGBA, b: RGBA) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
