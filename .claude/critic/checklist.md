@@ -21,6 +21,7 @@ The critic appends researched rules at the bottom: one line each, with a number,
 - Pet and bonus info «looks like a lot of text». Bonus lines wrap, and names wrap.
 - Square, phone portrait: the top HUD chips (money, tokens, rank) run past the right edge.
 - Square, phone landscape: the camera is too close; the hero and their surroundings fill the view.
+- Owner (13.10): the critic also tests animations, button presses, smoothness and speed.
 
 ## Baseline numbers (well-known; the critic re-verifies them and adds sources below)
 
@@ -31,5 +32,10 @@ The critic appends researched rules at the bottom: one line each, with a number,
   stroke weight across a screen.
 - At most 3 text sizes and 2 weights per screen. Numbers are tabular.
 - A phone page never scrolls (lists may). Nothing goes past the safe area.
+- Response limits (Nielsen): within 0.1 s feels instant, so press feedback comes within 1–2
+  frames; by 1 s the flow of thought breaks; after 10 s attention is lost.
+- Motion: 60 fps means 16.7 ms per frame. Animate only `transform` and `opacity`. UI
+  transitions are short and consistent (the critic verifies the exact ranges in Material and
+  Apple motion guidance). Pixel art moves by whole art pixels.
 
 ## Researched rules (critic appends here: `- <rule with number> — <source URL> (<date>)`)
