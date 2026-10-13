@@ -7,6 +7,9 @@ import { createPortal } from 'react-dom';
 import type { CSSProperties, ReactNode } from 'react';
 import { GxIcon, GxSheet } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
+import { useFormFactor } from '@/game-shell';
+import { Tabs } from '@/ui-px';
+import type { TabItem } from '@/ui-px';
 import { CoinIcon } from '@/components/slot-art';
 import { rarityOf } from '@/lib/rarity';
 import { CREW_ON } from '@/lib/features';
@@ -347,6 +350,7 @@ export function PrisonCamp({
   onSpend: () => void;
 }) {
   const t = useT();
+  const { ff } = useFormFactor();
   const p = useFinanceStore((s) => s.prison);
   const f = useFinanceStore((s) => s.forest);
   const now = useNow(1000);
@@ -362,33 +366,37 @@ export function PrisonCamp({
     miles: miles > 0 ? miles : null,
     runes: runesIdle(p, axeLevelOf(f.logs).level) ? '•' : null,
   };
+  // Wave 2 — C: the kit tab bar. Phones: icons only (the word is the tip / aria-label) and the
+  // window's ribbon names the open tab; landscape/tablet/desktop: a rail of icon + word on the
+  // left and the camp's own title on the ribbon. Tab / Shift+Tab, LB / RB switch tabs.
+  const multi = tabs.length > 1;
+  const compact = ff === 'phone-portrait' || ff === 'phone-landscape';
+  const items: TabItem<CampTab>[] = tabs.map((id) => ({
+    id,
+    label: t(`camp.tab.${id}`),
+    name: t(`camp.tab.${id}`),
+    art: <GxIcon name={TAB_ICONS[id]} />,
+    badge: badge[id] ?? undefined,
+  }));
   return (
     <GxSheet
-      className={`gx-camp${tabs.length === 1 ? ' is-single' : ''}`}
-      title={title ?? t(`camp.title.${place}`)}
+      className={`gx-camp${multi ? ' is-tabs' : ' is-single'}${compact ? ' is-compact' : ''}`}
+      title={multi && compact ? t(`camp.tab.${tab}`) : (title ?? t(`camp.title.${place}`))}
       onClose={onClose}
       tabs={
-        tabs.length > 1 && (
-          <div className="gx-tabs" role="tablist">
-            {tabs.map((id) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                className={`gx-tab${tab === id ? ' is-on' : ''}`}
-                onClick={() => {
-                  selectionChanged();
-                  uiTab();
-                  onTab(id);
-                }}
-              >
-                <GxIcon name={TAB_ICONS[id]} />
-                {t(`camp.tab.${id}`)}
-                {badge[id] != null && <span className="gx-badge">{badge[id]}</span>}
-              </button>
-            ))}
-          </div>
+        multi && (
+          <Tabs
+            items={items}
+            value={tab}
+            vertical={ff !== 'phone-portrait'}
+            main
+            className="gx-camp__tabs"
+            onChange={(id) => {
+              selectionChanged();
+              uiTab();
+              onTab(id);
+            }}
+          />
         )
       }
     >

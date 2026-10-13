@@ -102,7 +102,7 @@ function Gallery() {
     >
       <Sec title="Type">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'calc(2 * var(--u))' }}>
-          <Heading big>Coco Head — Питомник 123</Heading>
+          <Heading big>Coco Title — Питомник 123</Heading>
           <Heading>Heading · Коллекция 11/18</Heading>
           <span className="px-num" style={{ fontSize: 'var(--px-fs-tiny)' }}>
             tiny digits 0123456789 · 12 345

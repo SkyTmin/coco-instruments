@@ -52,12 +52,18 @@ export class Pix {
 export const INK = hex('#120a0e');
 const ramp = (...c: string[]): RGBA[] => c.map((s) => hex(s));
 
+// Wave 2 palette (owner 13.10: the dark look was «не особо всё хорошо видно»): light, warm.
+// `obsidian` is the INTERIOR ramp — the fill of every frame, wells, slot wells, tooltips — and is
+// now light parchment, so text inside is dark ink (`--px-text` in ui-px.css); `stone` is warm
+// sandstone (lit stages, pedestal), `wood` honey (window frames). Contrast table:
+// `.claude/rules/ui-px.md` → Materials.
+
 export const MAT = {
-  stone: ramp('#23242d', '#343643', '#4a4d5d', '#64687b', '#8a8fa2'),
+  stone: ramp('#6b5238', '#a08462', '#c4a985', '#e0cba8', '#f8ecd2'),
   iron: ramp('#1a1e25', '#2a3039', '#404853', '#5e6875', '#8e99a7'),
-  wood: ramp('#25140c', '#391f12', '#53301b', '#724527', '#986135'),
+  wood: ramp('#3a2010', '#6b3f20', '#94592e', '#bd7a3e', '#e3a25c'),
   parch: ramp('#73502c', '#a27b4b', '#caa56e', '#e3c893', '#f5e5bb'),
-  obsidian: ramp('#0a0810', '#14101c', '#201a2b', '#32283f', '#54466e'),
+  obsidian: ramp('#6a4526', '#f0dfba', '#e4cc9c', '#c9a56d', '#fff6e0'),
   gold: ramp('#4a2c06', '#84530e', '#bf8318', '#f0b136', '#ffe189'),
   red: ramp('#3a0a0c', '#6a1714', '#a0261c', '#d2432d', '#ff8466'),
   green: ramp('#0c2a12', '#17451c', '#25692a', '#3e9a3a', '#86d46c'),
@@ -470,6 +476,22 @@ function tab(on: boolean): Pix {
       if (k < 0) continue;
       const L = lit(x, y, 12, on ? 13 : 12);
       p.set(x, y, k === 0 ? INK : k === 1 ? (L ? tone[4] : tone[1]) : on ? tone[3] : tone[2]);
+    }
+  return p;
+}
+
+// wave 2 — C: a rail tab (camp windows on landscape/tablet/desktop). Same plaque as the selected
+// top tab, turned on its side: no right edge, it joins the panel to its right.
+function tabSide(): Pix {
+  const tone = MAT.wood;
+  const p = new Pix(12, 12);
+  const d = depthMap(13, 12, 2);
+  for (let y = 0; y < 12; y++)
+    for (let x = 0; x < 12; x++) {
+      const k = d[y * 13 + x];
+      if (k < 0) continue;
+      const L = lit(x, y, 13, 12);
+      p.set(x, y, k === 0 ? INK : k === 1 ? (L ? tone[4] : tone[1]) : tone[3]);
     }
   return p;
 }
@@ -896,16 +918,18 @@ const ICONS: Record<string, string[]> = {
     '.##...##.',
     '..#####..',
   ],
+  // Upright key (wave 2 — C): the old lying one read as the letters «От». Ring bow with a
+  // hole, a 2-px shaft, two teeth to the right.
   key: [
-    '.........',
-    '.........',
-    '.###.....',
-    '#...#....',
-    '#...#####',
-    '#...#.#.#',
-    '.###..#.#',
-    '.........',
-    '.........',
+    '...###...',
+    '..##.##..',
+    '..#...#..',
+    '..##.##..',
+    '...###...',
+    '....##...',
+    '....####.',
+    '....##...',
+    '....###..',
   ],
   egg: [
     '...###...',
@@ -917,6 +941,95 @@ const ICONS: Record<string, string[]> = {
     '#########',
     '.#######.',
     '..#####..',
+  ],
+  // wave 2 — C: system icons for the old Kenney `KIcon`s (settings, sound, music, ?, !, −).
+  gear: [
+    '...###...',
+    '.#.###.#.',
+    '.#######.',
+    '###...###',
+    '###...###',
+    '###...###',
+    '.#######.',
+    '.#.###.#.',
+    '...###...',
+  ],
+  sound: [
+    '.........',
+    '...#.....',
+    '..##..#..',
+    '####.#.#.',
+    '####.#.#.',
+    '####.#.#.',
+    '..##..#..',
+    '...#.....',
+    '.........',
+  ],
+  mute: [
+    '.........',
+    '...#.....',
+    '..##.....',
+    '####.#.#.',
+    '####..#..',
+    '####.#.#.',
+    '..##.....',
+    '...#.....',
+    '.........',
+  ],
+  music: [
+    '...#.....',
+    '...##....',
+    '...#.#...',
+    '...#..#..',
+    '...#..#..',
+    '.###.....',
+    '####.....',
+    '###......',
+    '.........',
+  ],
+  nomusic: [
+    '#..#.....',
+    '.#.##....',
+    '..##.#...',
+    '...##.#..',
+    '...#.#...',
+    '.###..#..',
+    '####...#.',
+    '###.....#',
+    '.........',
+  ],
+  question: [
+    '..####...',
+    '.##..##..',
+    '.....##..',
+    '....##...',
+    '...##....',
+    '...##....',
+    '.........',
+    '...##....',
+    '...##....',
+  ],
+  excl: [
+    '...##....',
+    '...##....',
+    '...##....',
+    '...##....',
+    '...##....',
+    '.........',
+    '...##....',
+    '...##....',
+    '.........',
+  ],
+  minus: [
+    '.........',
+    '.........',
+    '.........',
+    '.........',
+    '.#######.',
+    '.........',
+    '.........',
+    '.........',
+    '.........',
   ],
 };
 
@@ -1076,6 +1189,15 @@ export const PIECES: Piece[] = [
   ...Object.entries(ICONS).map(
     ([n, rows]): Piece => ({ name: `i-${n}`, kind: 'icon', draw: () => icon(rows) }),
   ),
+  // wave 2 — C
+  {
+    name: 'tab-side-on',
+    kind: 'frame',
+    slice: [2, 1, 2, 2],
+    repeat: 'stretch',
+    fill: true,
+    draw: tabSide,
+  },
 ];
 
 const same = (a: RGBA, b: RGBA) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
