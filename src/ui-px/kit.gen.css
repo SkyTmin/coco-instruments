@@ -805,6 +805,13 @@
   --i-h: 9;
 }
 
+.pxi-buzz {
+  -webkit-mask-image: url('/ui/kit/i-buzz.png?v=68702f4b');
+  mask-image: url('/ui/kit/i-buzz.png?v=68702f4b');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .pxk-tab-side-on {
   border-image-source: var(--pxk-tab-side-on);
   border-image-slice: var(--pxk-tab-side-on-s);

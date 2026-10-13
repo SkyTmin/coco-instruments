@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
 import { Bar } from '@/ui-px';
-import { CasDeck, CasStat, KitIcon, fitStyles, useCasLayout, useFit } from './casino-ui';
+import { CasAutoPicker, CasBetPicker, CasDeck, CasStat, CasToggles, fitStyles, KitIcon, useCasLayout, useFit } from './casino-ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
@@ -1479,147 +1479,67 @@ export function SlotsPage() {
 
       {autoSheet && (
         <GxSheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
-          <div className="stack slots" data-skin={skin}>
-            <div className="auto-grid">
-              {AUTO_OPTIONS.map((o) => (
-                <button
-                  key={o.label}
-                  className={`auto-card${o.value === Infinity ? ' is-endless' : ''}`}
-                  onClick={() => startAuto(o.value)}
-                >
-                  <span className="auto-card__num">{o.label}</span>
-                  <span className="auto-card__hint">{tr(`slots.auto.${o.hint}`)}</span>
-                </button>
-              ))}
-            </div>
-            <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-              {tr('slots.auto.note')}
-            </p>
-          </div>
+          <CasAutoPicker
+            options={AUTO_OPTIONS}
+            hint={(h) => tr(`slots.auto.${h}`)}
+            onPick={(v) => startAuto(v)}
+            note={tr('slots.auto.note')}
+          />
         </GxSheet>
       )}
 
       {settings && (
         <GxSheet title={tr('common.settings')} onClose={() => setSettings(false)}>
-          <div className="stack slots" data-skin={skin}>
-            <div className="toggles">
-              {[
-                {
-                  key: 'sound' as const,
-                  on: sound,
-                  icon: sound ? '🔊' : '🔇',
-                  name: tr('slots.toggle.sound'),
-                  hint: tr('slots.toggle.soundSlots'),
-                },
-                {
-                  key: 'music' as const,
-                  on: music,
-                  icon: music ? '🎵' : '🔕',
-                  name: tr('slots.toggle.music'),
-                  hint: tr('slots.toggle.musicHint'),
-                },
-                {
-                  key: 'haptics' as const,
-                  on: haptics,
-                  icon: haptics ? '📳' : '📴',
-                  name: tr('slots.toggle.haptics'),
-                  hint: tr('slots.toggle.hapticsHint'),
-                },
-                {
-                  key: 'turbo' as const,
-                  on: turbo,
-                  icon: '⚡',
-                  name: tr('slots.toggle.turbo'),
-                  hint: tr('slots.toggle.turboHint'),
-                },
-              ].map((t) => (
-                <button
-                  key={t.key}
-                  className={`toggle${t.on ? ' is-on' : ''}`}
-                  onClick={() => {
-                    primeAudio();
-                    // Вибрацию выключаем после отклика, включаем — до него.
-                    if (t.key === 'haptics' && !t.on) setHapticsMuted(false);
-                    selectionChanged();
-                    setPrefs({ [t.key]: !t.on });
-                  }}
-                  aria-pressed={t.on}
-                >
-                  <span className="toggle__icon">{t.icon}</span>
-                  <span className="toggle__text">
-                    <b>{t.name}</b>
-                    <i>{t.hint}</i>
-                  </span>
-                  <span className="toggle__switch" aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-            <CashDesk />
-          </div>
+          <CasToggles
+            items={[
+              { key: 'sound' as const, on: sound, icon: sound ? ('sound' as const) : ('mute' as const), name: tr('slots.toggle.sound'), hint: tr('slots.toggle.soundSlots') },
+              { key: 'music' as const, on: music, icon: music ? ('music' as const) : ('nomusic' as const), name: tr('slots.toggle.music'), hint: tr('slots.toggle.musicHint') },
+              { key: 'haptics' as const, on: haptics, icon: 'buzz' as const, name: tr('slots.toggle.haptics'), hint: tr('slots.toggle.hapticsHint') },
+              { key: 'turbo' as const, on: turbo, icon: 'bolt' as const, name: tr('slots.toggle.turbo'), hint: tr('slots.toggle.turboHint') },
+            ].map((it) => ({
+              ...it,
+              onClick: () => {
+                primeAudio();
+                // Вибрацию выключаем после отклика, включаем — до него.
+                if (it.key === 'haptics' && !it.on) setHapticsMuted(false);
+                selectionChanged();
+                setPrefs({ [it.key]: !it.on });
+              },
+            }))}
+          />
+          <CashDesk />
         </GxSheet>
       )}
 
       {betSheet && (
         <GxSheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
-          <div className="stack slots bet-sheet" data-skin={skin}>
-            <div className="bet-sheet__value">
-              {fmt(betDraft)}
-              <CoinIcon size={26} />
-            </div>
-            <div className="bet-sheet__row">
-              <button
-                className="bet-step"
-                onClick={() => {
-                  selectionChanged();
-                  setBetDraft((v) => clampBet(v - BET_STEP));
-                }}
-                aria-label={tr('slots.bet.less')}
-              >
-                −
-              </button>
-              <input
-                className="bet-slider"
-                type="range"
-                min={MIN_BET}
-                max={MAX_BET}
-                step={BET_STEP}
-                value={betDraft}
-                onChange={(e) => setBetDraft(clampBet(Number(e.target.value)))}
-              />
-              <button
-                className="bet-step"
-                onClick={() => {
-                  selectionChanged();
-                  setBetDraft((v) => clampBet(v + BET_STEP));
-                }}
-                aria-label={tr('slots.bet.more')}
-              >
-                +
-              </button>
-            </div>
-            <p className="reward-block__hint" style={{ textAlign: 'center' }}>
-              {tr('slots.bet.note', {
-                min: MIN_BET,
-                max: MAX_BET,
-                step: BET_STEP,
-                unit: LINE_UNIT,
-                line: fmt(betDraft / LINE_UNIT),
-              })}
-            </p>
-            <button
-              className="btn btn--block rewards-cta"
-              disabled={betDraft > balance && freeSpins <= 0}
-              onClick={() => {
-                tapMedium();
-                setBet(betDraft);
-                setBetSheet(false);
-              }}
-            >
-              {betDraft > balance && freeSpins <= 0
+          <CasBetPicker
+            value={betDraft}
+            min={MIN_BET}
+            max={MAX_BET}
+            step={BET_STEP}
+            onChange={(v) => setBetDraft(clampBet(v))}
+            lessLabel={tr('slots.bet.less')}
+            moreLabel={tr('slots.bet.more')}
+            note={tr('slots.bet.note', {
+              min: MIN_BET,
+              max: MAX_BET,
+              step: BET_STEP,
+              unit: LINE_UNIT,
+              line: fmt(betDraft / LINE_UNIT),
+            })}
+            cta={
+              betDraft > balance && freeSpins <= 0
                 ? tr('slots.bet.noCoins')
-                : tr('slots.bet.play', { bet: betDraft })}
-            </button>
-          </div>
+                : tr('slots.bet.play', { bet: betDraft })
+            }
+            ctaOff={betDraft > balance && freeSpins <= 0}
+            onConfirm={() => {
+              tapMedium();
+              setBet(betDraft);
+              setBetSheet(false);
+            }}
+          />
         </GxSheet>
       )}
 

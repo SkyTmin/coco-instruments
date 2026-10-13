@@ -1055,6 +1055,18 @@ const ICONS: Record<string, string[]> = {
     '..#####..',
     '.........',
   ],
+  // wave 2 — K: vibration (a phone between buzz ticks).
+  buzz: [
+    '..#####..',
+    '#.#...#.#',
+    '#.#...#.#',
+    '..#...#..',
+    '#.#...#.#',
+    '#.#...#.#',
+    '..#...#..',
+    '..#.#.#..',
+    '..#####..',
+  ],
 };
 
 function icon(rows: string[]): Pix {

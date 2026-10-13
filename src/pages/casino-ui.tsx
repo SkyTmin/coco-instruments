@@ -294,3 +294,154 @@ export function CasDeck(p: DeckProps) {
     </div>
   );
 }
+
+// ---- Sheet bodies shared by both games (the sheets themselves and their handlers stay in the
+// pages): settings toggles, auto-spin options, the bet picker.
+
+export interface CasToggleItem {
+  key: string;
+  on: boolean;
+  icon: PxIconName;
+  name: string;
+  hint: string;
+  onClick: () => void;
+}
+
+/** Settings rows: icon, name + hint, a kit check box at the right edge. */
+export function CasToggles({ items }: { items: CasToggleItem[] }) {
+  return (
+    <div className="cas-toggles px">
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          className={`cas-toggle px-f${it.on ? ' is-on' : ''}`}
+          aria-pressed={it.on}
+          onClick={it.onClick}
+        >
+          <span className="cas-toggle__ico">
+            <Icon name={it.icon} />
+          </span>
+          <span className="cas-toggle__text">
+            <b>{it.name}</b>
+            <i>{it.hint}</i>
+          </span>
+          <span className="cas-toggle__box cas-well" aria-hidden="true">
+            {it.on && <Icon name="check" />}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Auto-spin choices: a big number and what it is for. */
+export function CasAutoPicker<H extends string>({
+  options,
+  hint,
+  onPick,
+  note,
+}: {
+  options: { value: number; label: string; hint: H }[];
+  hint: (h: H) => string;
+  onPick: (value: number) => void;
+  note?: ReactNode;
+}) {
+  return (
+    <div className="cas-autos px">
+      <div className="cas-autos__grid">
+        {options.map((o, i) => (
+          <Button
+            key={o.label}
+            kind={o.value === Infinity ? 'primary' : 'secondary'}
+            className="cas-autos__opt"
+            data-autofocus={i === 0 ? '' : undefined}
+            onClick={() => onPick(o.value)}
+          >
+            <b className="cas-autos__n px-num">{o.label}</b>
+            <i className="cas-autos__h">{hint(o.hint)}</i>
+          </Button>
+        ))}
+      </div>
+      {note && <p className="cas-sheet-note">{note}</p>}
+    </div>
+  );
+}
+
+/** Bet picker: the value, −/slider/+, an optional note and the confirm button. */
+export function CasBetPicker({
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  lessLabel,
+  moreLabel,
+  note,
+  cta,
+  ctaOff,
+  onConfirm,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  lessLabel: string;
+  moreLabel: string;
+  note?: ReactNode;
+  cta: string;
+  ctaOff: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="cas-betpick px">
+      <div className="cas-betpick__v cas-well px-num">
+        {fmtNum(value)}
+        <CoinIcon size={26} />
+      </div>
+      <div className="cas-betpick__row">
+        <Button
+          icon="minus"
+          label={lessLabel}
+          onClick={() => {
+            selectionChanged();
+            onChange(value - step);
+          }}
+        />
+        <input
+          className="cas-betpick__range"
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={lessLabel + ' / ' + moreLabel}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        <Button
+          icon="plus"
+          label={moreLabel}
+          onClick={() => {
+            selectionChanged();
+            onChange(value + step);
+          }}
+        />
+      </div>
+      {note && <p className="cas-sheet-note">{note}</p>}
+      {/* Без монет кнопка серая, но жмётся (`off`): тап ничего не ставит — как раньше
+          отключённая. */}
+      <Button
+        kind="primary"
+        wide
+        off={ctaOff}
+        onClick={() => {
+          if (ctaOff) return;
+          onConfirm();
+        }}
+      >
+        {cta}
+      </Button>
+    </div>
+  );
+}
