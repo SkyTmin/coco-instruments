@@ -36,9 +36,38 @@
   min-width: 0;
   display: grid;
 }
+/* A lit stage (owner 13.10: «на её фоне не особо всё хорошо видно»): the stone wall under a warm
+   veil, a pool of light behind the pet in hard bands (no smooth glow on pixel art) and a lighter
+   floor — the pet's ink outline reads against it. */
 .nur-stage {
-  /* the wall dimmed by a flat veil: the pet and the text read first */
-  background-image: linear-gradient(rgb(12 10 18 / 0.55), rgb(12 10 18 / 0.55)), var(--tile);
+  --st-veil: rgb(255 244 222 / 0.4);
+  --st-s1: rgb(255 250 240 / 0.95);
+  --st-s2: rgb(251 239 214 / 0.7);
+  --st-s3: rgb(242 222 182 / 0.45);
+  --st-floor: rgb(200 170 125 / 0.6);
+  --st-seam: rgb(110 80 50 / 0.6);
+  background-image:
+    radial-gradient(
+      ellipse 50% 46% at 50% 54%,
+      var(--st-s1) 0 52%,
+      var(--st-s2) 52% 74%,
+      var(--st-s3) 74% 100%,
+      transparent 100%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 0 calc(100% - 22 * var(--u)),
+      var(--st-seam) calc(100% - 22 * var(--u)) calc(100% - 21 * var(--u)),
+      var(--st-floor) calc(100% - 21 * var(--u))
+    ),
+    linear-gradient(var(--st-veil), var(--st-veil)),
+    var(--tile);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    calc(var(--tile-w) * var(--u)) calc(var(--tile-h) * var(--u));
+  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
   display: grid;
   min-width: 0;
   gap: calc(3 * var(--u));
@@ -159,16 +188,21 @@
   grid-area: id;
 }
 .nur-id {
-  text-shadow: var(--u) var(--u) 0 var(--px-ink);
   display: grid;
   gap: calc(2 * var(--u));
   min-width: 0;
   align-content: start;
 }
-.nur-id__name {
+/* `.nur` in front: the camp sheet's `.gx-panel--wood h3` shadow must not win */
+.nur .nur-id__name {
   margin: 0;
-  font: 400 var(--px-fs-big) / 1 var(--px-font);
+  font: 400 var(--px-fs-big) / 1 var(--px-head);
   color: var(--rc, var(--px-gold));
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
   overflow-wrap: break-word;
 }
 .nur-id__sub {
@@ -422,80 +456,13 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
   color: var(--px-muted);
 }
 
-/* ==============================================================================================
-   The camp sheet around the Nursery. PrisonCamp's GxSheet is not ours to edit, so the Nursery
-   screen restyles it through :has(): pixel wood frame, ribbon title, dark body, full height,
-   wide on landscape/desktop. The eggs tab keeps the parchment body (its content is still drawn
-   for it); the frame and ribbon stay pixel on both tabs, so switching tabs doesn't flicker.
-   ============================================================================================== */
-.gx-camp.is-single:has(.ppn) {
-  height: calc(100% - var(--safe-top, 0px) - var(--content-top, 0px) - 26px);
-}
-html[data-ff='phone-landscape'] .gx-camp.is-single:has(.ppn),
-html[data-ff='desktop'] .gx-camp.is-single:has(.ppn),
-html[data-ff='tablet'] .gx-camp.is-single:has(.ppn) {
-  width: min(calc(100% - 4 * var(--u)), calc(420 * var(--u)));
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__frame {
-  flex: 1 1 auto;
-  border-width: var(--u);
-  border-style: solid;
-  border-color: transparent;
-  border-image-source: var(--pxk-frame-wood);
-  border-image-slice: var(--pxk-frame-wood-s);
-  border-image-width: var(--pxk-frame-wood-w);
-  border-image-repeat: repeat;
-  background: none;
-  image-rendering: pixelated;
-  padding: calc(12 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u) + var(--safe-bottom, 0px));
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__body {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  border-radius: 0;
-  box-shadow: none;
-  padding: calc(3 * var(--u));
-}
-.gx-camp.is-single:has(.ppn.is-pets) .gx-sheet__body {
-  overflow: hidden;
-  border-width: var(--u);
-  border-image-source: var(--pxk-frame-well);
-  border-image-slice: var(--pxk-frame-well-s);
-  border-image-width: var(--pxk-frame-well-w);
-  border-image-repeat: stretch;
-  padding: calc(4 * var(--u));
-}
+/* The camp window chrome (frame, ribbon, well body for kit content) lives in gx-px.css (agent C,
+   wave 2) for every camp; here only the Nursery's own fill of the body. */
 .gx-camp:has(.nur) .pcamp-body {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__title {
-  /* the kit ribbon instead of the Kenney one */
-  top: calc(-4 * var(--u));
-  height: calc(16 * var(--u));
-  display: flex;
-  align-items: center;
-  padding: 0 calc(10 * var(--u));
-  border-width: 0 var(--u);
-  border-style: solid;
-  border-color: transparent;
-  border-image-source: var(--pxk-ribbon);
-  border-image-slice: var(--pxk-ribbon-s);
-  border-image-width: var(--pxk-ribbon-w);
-  border-image-repeat: stretch;
-  background: none;
-  image-rendering: pixelated;
-  font: 400 var(--px-fs) / 1 var(--px-head);
-  color: #fff3d0;
-  text-shadow: var(--u) var(--u) 0 var(--px-ink);
-  filter: none;
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__close {
-  top: calc(-4 * var(--u));
-  right: calc(4 * var(--u));
 }
 
 /* PetsTab around the Nursery: tabs on top; the egg blocks hide on the pets tab. */
