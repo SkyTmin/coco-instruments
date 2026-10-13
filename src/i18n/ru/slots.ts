@@ -71,6 +71,7 @@ export const slots = {
   },
   hud: {
     balance: 'Баланс',
+    betLabel: 'Ставка',
     jackpot: 'Джекпот',
     best: 'Лучший спин',
     lvl: 'Ур. {n}',

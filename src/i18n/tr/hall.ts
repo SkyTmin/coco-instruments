@@ -4,6 +4,9 @@ import type { hall as ru } from '../ru/hall';
 export const hall: Translation<typeof ru> = {
   title: 'Kumarhane',
   cascade: 'Şelale',
+  prison: 'Kürek',
+  wallet: 'Ortak cüzdan',
+  play: 'Oyna',
   reels: {
     one: '{n} makara',
     other: '{n} makara',

@@ -1,13 +1,17 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAction } from '@/input/hooks';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
+import { AnimatedNumber } from '@/components/ui';
+import { useNavigate } from 'react-router-dom';
+import { GameScreen } from '@/game-shell/GameScreen';
+import { GameTop, GxSheet, KIcon } from '@/components/gx';
+import { Bar } from '@/ui-px';
+import { CasDeck, CasStat, KitIcon, fitStyles, useFit } from './casino-ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
 import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
-import { IconInfo } from '@/components/icons';
 import { CashDesk } from '@/components/CashDesk';
 import { SkinSheet } from '@/components/SkinSheet';
 import { useFinanceStore } from '@/store';
@@ -424,6 +428,7 @@ export function SlotsPage() {
   const [jackpotWin, setJackpotWin] = useState(0);
 
   const reelsRef = useRef<HTMLDivElement>(null);
+
   /**
    * Корпус автомата — его и трясёт (lib/juice.ts), как в «Каскаде». Раньше
    * здесь была CSS-тряска классом, и снимал её `onAnimationEnd` на корпусе —
@@ -431,7 +436,16 @@ export function SlotsPage() {
    * клетка обрывала тряску посреди размаха, и корпус щёлкал на место.
    */
   const cabinetRef = useRef<HTMLDivElement>(null);
-  /** Счётчик выигрыша: его толкает конец счёта. */
+  // Рамка страницы (казино, волна 2): корпус вписывается в сцену целиком.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const fit = useFit(stageRef, cabinetRef);
+  const fitCss = fitStyles(fit);
+  const nav = useNavigate();
+  const goBack = () => {
+    if (window.history.length > 1) nav(-1);
+    else nav('/');
+  };  /** Счётчик выигрыша: его толкает конец счёта. */
   const winRef = useRef<HTMLSpanElement>(null);
   /** Шток рычага: его дёргает и кнопка «Крутить», а не только палец. */
   const armRef = useRef<HTMLSpanElement>(null);
@@ -680,11 +694,14 @@ export function SlotsPage() {
         const img = host.querySelector<HTMLImageElement>(`[data-cell="${key}"] img`);
         if (!img) continue;
         const rect = img.getBoundingClientRect();
+        // Корпус масштабирован целиком (рамка казино): экранные точки делим
+        // на масштаб, чтобы пыль легла в координаты канвы поля.
+        const k = base.width / (host.offsetWidth || base.width) || 1;
         cells.push({
           img,
-          x: rect.left - base.left,
-          y: rect.top - base.top,
-          size: rect.width,
+          x: (rect.left - base.left) / k,
+          y: (rect.top - base.top) / k,
+          size: rect.width / k,
         });
       }
     }
@@ -981,7 +998,7 @@ export function SlotsPage() {
     if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
     spin();
     return true;
-  });
+  }, { scope: pageRef });
 
   const shownBalance = Math.max(0, balance - pending);
   // Подсветка живёт только на фазе показа звена: после схлопывания этих
@@ -997,33 +1014,64 @@ export function SlotsPage() {
   const tier = comboTier(chain);
 
   return (
-    <Screen
-      title={skinText(skin, 'title')}
-      subtitle={skinText(skin, 'subtitle')}
-      className={`slots-screen slots-screen--${skin}`}
-      action={
-        <div className="row" style={{ gap: 8 }}>
-          <button
-            className="icon-btn icon-btn--skin"
-            onClick={() => {
-              tapLight();
-              setSkinSheet(true);
-            }}
-            aria-label={tr('slots.a11y.skin')}
-          >
-            <Sym id={skinOf(skin).preview} skin={skin} size={22} />
-          </button>
-          <button
-            className="icon-btn"
-            onClick={() => {
-              tapLight();
-              setSheet(true);
-            }}
-            aria-label={tr('slots.a11y.rules')}
-          >
-            <IconInfo size={21} />
-          </button>
+    <GameScreen
+      className="gx cas-page"
+      bg={
+        <div className="slots cas-bg" data-skin={skin}>
+          {/* Сцена темы: фон и декор за всем содержимым страницы */}
+          <div className="slots-scene" aria-hidden="true">
+            <span className="slots-scene__decor" />
+          </div>
         </div>
+      }
+      top={
+        <GameTop
+          title={skinText(skin, 'title')}
+          onBack={goBack}
+          right={
+            <>
+              <button
+                type="button"
+                className="gx-round gx-round--dark cas-skin-btn"
+                onClick={() => {
+                  tapLight();
+                  setSkinSheet(true);
+                }}
+                aria-label={tr('slots.a11y.skin')}
+                data-tip={tr('slots.a11y.skin')}
+                data-act="skin"
+              >
+                <Sym id={skinOf(skin).preview} skin={skin} size={22} />
+              </button>
+              <button
+                type="button"
+                className="gx-round gx-round--dark"
+                onClick={() => {
+                  tapLight();
+                  setSheet(true);
+                }}
+                aria-label={tr('slots.a11y.rules')}
+                data-tip={tr('slots.a11y.rules')}
+              >
+                <KIcon name="information" />
+              </button>
+              <button
+                type="button"
+                className="gx-round gx-round--dark"
+                onClick={() => {
+                  tapLight();
+                  primeAudio();
+                  setSettings(true);
+                }}
+                aria-label={tr('common.settings')}
+                data-tip={tr('common.settings')}
+                data-act="settings"
+              >
+                <KIcon name="gear" />
+              </button>
+            </>
+          }
+        />
       }
     >
       {/* --speed уезжает во ВСЕ CSS-анимации страницы. Без него турбо сжимал
@@ -1032,280 +1080,308 @@ export function SlotsPage() {
           звеном. 0.55 — та же доля, что и у таймеров этой страницы
           (`scale` в runStep и `speed` в выплате), иначе CSS и JS разъедутся. */}
       <div
-        className="stack slots"
+        className="slots cas cas--slots"
         data-skin={skin}
+        ref={pageRef}
         style={{ '--speed': turbo ? 0.55 : 1 } as React.CSSProperties}
       >
-        {/* Сцена темы: фон и декор за всем содержимым страницы */}
-        <div className="slots-scene" aria-hidden="true">
-          <span className="slots-scene__decor" />
-        </div>
         <SlotArtDefs />
-        {/* Табло: баланс и текущий джекпот */}
-        <div className="slot-hud">
-          <div className="slot-hud__cell">
-            <span className="slot-hud__label">{tr('slots.hud.balance')}</span>
-            <span className="slot-hud__value">
+        {/* Сводка: уровень, джекпот, спины, лучший выигрыш, последние спины.
+            Все ячейки фиксированной высоты — числа меняются, рамки стоят. */}
+        <section className="cas-info px">
+          {/* Полоса уровня. Наград за уровень больше нет — только знак и скины. */}
+          <div className="cas-lvl">
+            <b className="cas-lvl__n px-num">{tr('slots.hud.lvl', { n: level.level })}</b>
+            <Bar value={level.into / level.need} />
+            <span
+              className={`cas-lvl__free px-num${freeSpins > 0 ? '' : ' is-none'}`}
+              data-tip={tr('slots.hud.free')}
+              aria-label={tr('slots.hud.free')}
+            >
+              🎟 {freeSpins}
+            </span>
+          </div>
+          <CasStat
+            className="cas-stat--jp"
+            tone="gold"
+            icon={
+              <span className="cas-777">
+                <Sym id="seven" skin={skin} size={14} />
+                <Sym id="seven" skin={skin} size={14} />
+                <Sym id="seven" skin={skin} size={14} />
+              </span>
+            }
+            value={
+              <>
+                <AnimatedNumber value={jackpotPrize} format={(n) => fmt(n)} duration={600} />
+                <CoinIcon size={16} />
+              </>
+            }
+            label={tr('slots.hud.jackpot')}
+          />
+          <CasStat
+            className="cas-stat--sp"
+            icon={<KitIcon name="play" />}
+            value={fmt(spins)}
+            label={tr('slots.statSpins')}
+          />
+          <CasStat
+            className="cas-stat--best"
+            icon={<KitIcon name="star" />}
+            value={
+              <>
+                {fmt(best)}
+                <CoinIcon size={14} />
+              </>
+            }
+            label={tr('slots.statBestWin')}
+          />
+          {/* Ряд последних спинов стоит всегда: появись он после первого
+              спина — поле над ним уехало бы. */}
+          <div className="cas-hist">
+            <i className="cas-cap">{tr('slots.recent')}</i>
+            {broke ? (
+              <p className="cas-broke">{tr('slots.brokeHint')}</p>
+            ) : (
+              <div className="cas-hist__row">
+                {history.map((h) => (
+                  <div key={h.id} className={`cas-hchip cas-well${h.payout > 0 ? ' is-win' : ''}`}>
+                    <span className="cas-hchip__reels">
+                      {h.reels.map((id, i) => (
+                        <Sym key={i} id={id} skin={skin} size={17} />
+                      ))}
+                    </span>
+                    <span className="cas-hchip__sum px-num">
+                      {h.payout > 0 ? `+${fmt(h.payout)}` : `−${fmt(h.bet)}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Сцена: корпус автомата рисуется в прежних пикселях и целиком
+            масштабируется под место (лента барабана ездит в тех же пикселях). */}
+        <div className="cas-stage" ref={stageRef}>
+          <div className="cas-fit" style={fitCss.wrap}>
+            {/* Корпус автомата */}
+            <div
+              className={`cabinet${result?.kind === 'jackpot' ? ' is-jackpot' : ''}${
+                spinning ? ' is-spinning' : ''
+              }`}
+              ref={cabinetRef}
+              style={fitCss.item}
+              // Тап по автомату досчитывает выплату: длинный счёт обязан быть
+              // пропускаемым, иначе награда превращается в ожидание.
+              onClick={() => skipCount()}
+              role="presentation"
+            >
+              <div className="cabinet__bulbs" aria-hidden="true">
+                {Array.from({ length: 14 }, (_, i) => (
+                  <i key={i} style={{ animationDelay: `${i * 0.11}s` }} />
+                ))}
+              </div>
+
+              <div className="cabinet__sign">
+                <span>{skinOf(skin).sign[0]}</span>
+                <b>{skinOf(skin).sign[1]}</b>
+              </div>
+
+              <div className="cabinet__body">
+                <div className="cabinet__window">
+                  <span className="cabinet__bolts" aria-hidden="true">
+                    <i />
+                    <i />
+                  </span>
+                  <div className="reels" ref={reelsRef}>
+                    {/* Вращение рисуют ленты, каскад — сетка: в каскаде исчезают
+                        ровно сыгравшие ячейки, а верхние съезжают в их места. */}
+                    {board ? (
+                      <BoardView board={board} skin={skin} dying={dyingCells} duration={dropDur} />
+                    ) : (
+                      plans.map((plan, i) => (
+                        <Reel
+                          key={i}
+                          plan={plan}
+                          skin={skin}
+                          spinId={spinId}
+                          onStop={() => onReelStop(i)}
+                        />
+                      ))
+                    )}
+                    {/* Живёт всегда и лишь гаснет — см. тот же приём в «Каскаде». */}
+                    <div
+                      className={`reels__dim${shownWins.length ? ' is-on' : ''}`}
+                      aria-hidden="true"
+                    />
+                    {shownWins.length > 0 && (
+                      <div className="reels__marks" aria-hidden="true">
+                        {[0, 1, 2].map((col) =>
+                          [0, 1, 2].map((row) =>
+                            winCells.has(`${col}-${row}`) ? (
+                              <span
+                                key={`${col}-${row}`}
+                                className={`reels__mark${bursting ? ' is-burst' : ''}`}
+                                style={{
+                                  left: `calc(${col} * (100% / 3))`,
+                                  top: `calc(${row} * (100% / 3))`,
+                                }}
+                              />
+                            ) : null,
+                          ),
+                        )}
+                      </div>
+                    )}
+                    {shownWins.length > 0 && <PaylineOverlay wins={shownWins} />}
+                    {/* Канва пыли: поверх поля, чтобы пиксели летели над символами */}
+                    <canvas className="dust" ref={dustRef} aria-hidden="true" />
+                    {/* Множитель звена крупно в центре — чтобы комбо читалось сразу.
+                        На первом звене множителя нет, и «×1» был бы шумом. */}
+                    {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
+                      <div className={`stamp stamp--t${tier}`} key={`st-${chain}`} aria-hidden="true">
+                        <i className="stamp__cap">{tr('slots.stamp')}</i>
+                        <b className="stamp__n">×{stepCombo}</b>
+                      </div>
+                    )}
+                    <div className="reels__glass" aria-hidden="true" />
+                    {/* Титул ступени. Он не появляется и не исчезает — он
+                        СМЕНЯЕТСЯ: по нему видно, что счёт пошёл выше. */}
+                    {counting && winStep && (
+                      <div
+                        className={`win-title win-title--b${winStep.beats}`}
+                        key={winStep.id}
+                        aria-hidden="true"
+                      >
+                        {winStepName(winStep.id)}
+                      </div>
+                    )}
+                  </div>
+                  {/* Счётчик комбо — над окном, чтобы не закрывать сыгравший ряд */}
+                  {chain >= 1 && cascade && (
+                    <div className={`combo combo--t${tier}`} key={chain}>
+                      <b>{chain >= 2 ? tr('slots.combo', { n: chain }) : tr('slots.anyWin')}</b>
+                      {stepCombo > 1 && <i>{tr('slots.payout', { n: stepCombo })}</i>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Рычаг */}
+                <div
+                  className={`lever${canSpin ? '' : ' is-off'}`}
+                  onPointerDown={leverDown}
+                  onPointerMove={leverMove}
+                  onPointerUp={leverUp}
+                  onPointerCancel={leverUp}
+                  role="button"
+                  tabIndex={-1}
+                  aria-label={tr('slots.a11y.lever')}
+                >
+                  <span className="lever__slot" />
+                  <span className="lever__base" />
+                  <span
+                    className="lever__arm"
+                    ref={armRef}
+                    style={{
+                      transform: `translateY(${lever * 44}px)`,
+                      transition: dragRef.current ? 'none' : 'transform .35s cubic-bezier(.3,1.5,.5,1)',
+                    }}
+                  >
+                    <span className="lever__knob" />
+                    <span className="lever__rod" />
+                  </span>
+                </div>
+              </div>
+
+              <div className="cabinet__tray" aria-hidden="true">
+                <span className="cabinet__slot-in" />
+                <span className="cabinet__vent" />
+              </div>
+
+              <div className="cabinet__status">
+                {cascade || counting ? (
+                  <>
+                    <span className={`status status--combo status--t${tier}`}>
+                      {/* Во время счёта строка говорит только, что идёт счёт.
+                          Название ступени несёт плашка над полем — дублировать
+                          его здесь значит забивать узкую строку длинным словом
+                          и сжимать сам счётчик. */}
+                      {counting
+                        ? tr('slots.status.counting')
+                        : chain >= 2
+                          ? tr('slots.status.combo', { n: chain })
+                          : tr('slots.status.win')}
+                    </span>
+                    {/* Один счётчик на весь спин: набирает базу за каскад, а
+                        потом с неё же уезжает к итогу. */}
+                    <span className={`status__win${counting ? ' is-counting' : ''}`} ref={winRef}>
+                      +<MoneyCounter ref={winOdo} value={0} />
+                      <CoinIcon size={20} />
+                    </span>
+                    {!counting && stepCombo > 1 && (
+                      <span className="status__mult">{tr('slots.payout', { n: stepCombo })}</span>
+                    )}
+                  </>
+                ) : spinning ? (
+                  <span className="status status--spin">
+                    {stopped === 2 ? tr('slots.status.lastReel') : tr('slots.status.spinning')}
+                  </span>
+                ) : result ? (
+                  <>
+                    <span className="status">
+                      {outcomeLabel(result).symbol && (
+                        <Sym id={outcomeLabel(result).symbol!} skin={skin} size={22} />
+                      )}
+                      {result.combo >= 2
+                        ? tr('slots.status.comboOf', { n: result.combo })
+                        : outcomeText(result)}
+                    </span>
+                    {result.total > 0 && (
+                      <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
+                        {/* Без анимации: сумму только что досчитали на глазах. */}+{fmt(result.total)}
+                        <CoinIcon size={20} />
+                      </span>
+                    )}
+                    {result.multiplier >= 3 && (
+                      <span className="status__mult">×{fmt(result.multiplier)}</span>
+                    )}
+                    {jackpotWin > 0 && <span className="status__pool">{tr('slots.status.pool')}</span>}
+                    {streak >= 2 && result.total > 0 && (
+                      <span className="status__streak">🔥 {streak}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="status status--hint">{tr('slots.status.hintLever')}</span>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <CasDeck
+          balance={
+            <>
               {/* Баланс — тот же механический счётчик, и во время выплаты он
                   крутится В ОДИН ХОД с выигрышем. */}
               <MoneyCounter ref={balOdo} value={shownBalance} />
-              <CoinIcon size={18} />
-            </span>
-          </div>
-          <div className="slot-hud__cell slot-hud__cell--jackpot">
-            <span className="slot-hud__label">
-              {tr('slots.hud.jackpot')}
-              <Sym id="seven" skin={skin} size={14} />
-              <Sym id="seven" skin={skin} size={14} />
-              <Sym id="seven" skin={skin} size={14} />
-            </span>
-            <span className="slot-hud__value slot-hud__value--jackpot">
-              <AnimatedNumber value={jackpotPrize} format={(n) => fmt(n)} duration={600} />
-              <CoinIcon size={18} />
-            </span>
-          </div>
-        </div>
-
-        {/* Полоса уровня. Наград за уровень больше нет — только знак и скины. */}
-        <div className="slot-level">
-          <span className="slot-level__lvl">{tr('slots.hud.lvl', { n: level.level })}</span>
-          <span className="slot-level__bar">
-            <i style={{ width: `${Math.min(100, (level.into / level.need) * 100)}%` }} />
-          </span>
-          {freeSpins > 0 && (
-            <span className="slot-level__free" title={tr('slots.hud.free')}>
-              🎟 {freeSpins}
-            </span>
-          )}
-        </div>
-
-        {/* Корпус автомата */}
-        <div
-          className={`cabinet${result?.kind === 'jackpot' ? ' is-jackpot' : ''}${
-            spinning ? ' is-spinning' : ''
-          }`}
-          ref={cabinetRef}
-          // Тап по автомату досчитывает выплату: длинный счёт обязан быть
-          // пропускаемым, иначе награда превращается в ожидание.
-          onClick={() => skipCount()}
-          role="presentation"
-        >
-          <div className="cabinet__bulbs" aria-hidden="true">
-            {Array.from({ length: 14 }, (_, i) => (
-              <i key={i} style={{ animationDelay: `${i * 0.11}s` }} />
-            ))}
-          </div>
-
-          <div className="cabinet__sign">
-            <span>{skinOf(skin).sign[0]}</span>
-            <b>{skinOf(skin).sign[1]}</b>
-          </div>
-
-          <div className="cabinet__body">
-            <div className="cabinet__window">
-              <span className="cabinet__bolts" aria-hidden="true">
-                <i />
-                <i />
-              </span>
-              <div className="reels" ref={reelsRef}>
-                {/* Вращение рисуют ленты, каскад — сетка: в каскаде исчезают
-                    ровно сыгравшие ячейки, а верхние съезжают в их места. */}
-                {board ? (
-                  <BoardView board={board} skin={skin} dying={dyingCells} duration={dropDur} />
-                ) : (
-                  plans.map((plan, i) => (
-                    <Reel
-                      key={i}
-                      plan={plan}
-                      skin={skin}
-                      spinId={spinId}
-                      onStop={() => onReelStop(i)}
-                    />
-                  ))
-                )}
-                {/* Живёт всегда и лишь гаснет — см. тот же приём в «Каскаде». */}
-                <div
-                  className={`reels__dim${shownWins.length ? ' is-on' : ''}`}
-                  aria-hidden="true"
-                />
-                {shownWins.length > 0 && (
-                  <div className="reels__marks" aria-hidden="true">
-                    {[0, 1, 2].map((col) =>
-                      [0, 1, 2].map((row) =>
-                        winCells.has(`${col}-${row}`) ? (
-                          <span
-                            key={`${col}-${row}`}
-                            className={`reels__mark${bursting ? ' is-burst' : ''}`}
-                            style={{
-                              left: `calc(${col} * (100% / 3))`,
-                              top: `calc(${row} * (100% / 3))`,
-                            }}
-                          />
-                        ) : null,
-                      ),
-                    )}
-                  </div>
-                )}
-                {shownWins.length > 0 && <PaylineOverlay wins={shownWins} />}
-                {/* Канва пыли: поверх поля, чтобы пиксели летели над символами */}
-                <canvas className="dust" ref={dustRef} aria-hidden="true" />
-                {/* Множитель звена крупно в центре — чтобы комбо читалось сразу.
-                    На первом звене множителя нет, и «×1» был бы шумом. */}
-                {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
-                  <div className={`stamp stamp--t${tier}`} key={`st-${chain}`} aria-hidden="true">
-                    <i className="stamp__cap">{tr('slots.stamp')}</i>
-                    <b className="stamp__n">×{stepCombo}</b>
-                  </div>
-                )}
-                <div className="reels__glass" aria-hidden="true" />
-                {/* Титул ступени. Он не появляется и не исчезает — он
-                    СМЕНЯЕТСЯ: по нему видно, что счёт пошёл выше. */}
-                {counting && winStep && (
-                  <div
-                    className={`win-title win-title--b${winStep.beats}`}
-                    key={winStep.id}
-                    aria-hidden="true"
-                  >
-                    {winStepName(winStep.id)}
-                  </div>
-                )}
-              </div>
-              {/* Счётчик комбо — над окном, чтобы не закрывать сыгравший ряд */}
-              {chain >= 1 && cascade && (
-                <div className={`combo combo--t${tier}`} key={chain}>
-                  <b>{chain >= 2 ? tr('slots.combo', { n: chain }) : tr('slots.anyWin')}</b>
-                  {stepCombo > 1 && <i>{tr('slots.payout', { n: stepCombo })}</i>}
-                </div>
-              )}
-            </div>
-
-            {/* Рычаг */}
-            <div
-              className={`lever${canSpin ? '' : ' is-off'}`}
-              onPointerDown={leverDown}
-              onPointerMove={leverMove}
-              onPointerUp={leverUp}
-              onPointerCancel={leverUp}
-              role="button"
-              tabIndex={-1}
-              aria-label={tr('slots.a11y.lever')}
-            >
-              <span className="lever__slot" />
-              <span className="lever__base" />
-              <span
-                className="lever__arm"
-                ref={armRef}
-                style={{
-                  transform: `translateY(${lever * 44}px)`,
-                  transition: dragRef.current ? 'none' : 'transform .35s cubic-bezier(.3,1.5,.5,1)',
-                }}
-              >
-                <span className="lever__knob" />
-                <span className="lever__rod" />
-              </span>
-            </div>
-          </div>
-
-          <div className="cabinet__tray" aria-hidden="true">
-            <span className="cabinet__slot-in" />
-            <span className="cabinet__vent" />
-          </div>
-
-          <div className="cabinet__status">
-            {cascade || counting ? (
-              <>
-                <span className={`status status--combo status--t${tier}`}>
-                  {/* Во время счёта строка говорит только, что идёт счёт.
-                      Название ступени несёт плашка над полем — дублировать
-                      его здесь значит забивать узкую строку длинным словом
-                      и сжимать сам счётчик. */}
-                  {counting
-                    ? tr('slots.status.counting')
-                    : chain >= 2
-                      ? tr('slots.status.combo', { n: chain })
-                      : tr('slots.status.win')}
-                </span>
-                {/* Один счётчик на весь спин: набирает базу за каскад, а
-                    потом с неё же уезжает к итогу. */}
-                <span className={`status__win${counting ? ' is-counting' : ''}`} ref={winRef}>
-                  +<MoneyCounter ref={winOdo} value={0} />
-                  <CoinIcon size={20} />
-                </span>
-                {!counting && stepCombo > 1 && (
-                  <span className="status__mult">{tr('slots.payout', { n: stepCombo })}</span>
-                )}
-              </>
-            ) : spinning ? (
-              <span className="status status--spin">
-                {stopped === 2 ? tr('slots.status.lastReel') : tr('slots.status.spinning')}
-              </span>
-            ) : result ? (
-              <>
-                <span className="status">
-                  {outcomeLabel(result).symbol && (
-                    <Sym id={outcomeLabel(result).symbol!} skin={skin} size={22} />
-                  )}
-                  {result.combo >= 2
-                    ? tr('slots.status.comboOf', { n: result.combo })
-                    : outcomeText(result)}
-                </span>
-                {result.total > 0 && (
-                  <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
-                    {/* Без анимации: сумму только что досчитали на глазах. */}+{fmt(result.total)}
-                    <CoinIcon size={20} />
-                  </span>
-                )}
-                {result.multiplier >= 3 && (
-                  <span className="status__mult">×{fmt(result.multiplier)}</span>
-                )}
-                {jackpotWin > 0 && <span className="status__pool">{tr('slots.status.pool')}</span>}
-                {streak >= 2 && result.total > 0 && (
-                  <span className="status__streak">🔥 {streak}</span>
-                )}
-              </>
-            ) : (
-              <span className="status status--hint">{tr('slots.status.hintLever')}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Ставки: быстрые кнопки и «⋯» для любой другой */}
-        <div className="slot-bets">
-          {BETS.map((b) => (
-            <button
-              key={b}
-              className={`slot-bet${b === bet ? ' is-active' : ''}`}
-              disabled={spinning || b > balance}
-              onClick={() => {
-                selectionChanged();
-                setBet(b);
-              }}
-            >
-              {fmt(b)}
-            </button>
-          ))}
-          <button
-            className={`slot-bet slot-bet--more${BETS.includes(bet) ? '' : ' is-active'}`}
-            disabled={spinning}
-            onClick={() => {
-              tapLight();
-              setBetDraft(bet);
-              setBetSheet(true);
-            }}
-            aria-label={tr('slots.a11y.bet')}
-          >
-            {BETS.includes(bet) ? '⋯' : fmt(bet)}
-          </button>
-        </div>
-
-        {/* Кнопки управления */}
-        <div className="slot-actions">
-          <button
-            className={`spin-btn${spinning ? ' is-busy' : ''}`}
-            disabled={!canSpin && auto === 0}
-            onClick={() => (auto > 0 ? stopAuto() : spin())}
-          >
-            {auto > 0
+              <CoinIcon size={22} />
+            </>
+          }
+          balanceNum={balance}
+          bet={bet}
+          freeSpins={freeSpins}
+          spinning={spinning}
+          setBet={setBet}
+          onCustomBet={() => {
+            setBetDraft(bet);
+            setBetSheet(true);
+          }}
+          spinDisabled={!canSpin && auto === 0}
+          busy={spinning}
+          onSpin={() => (auto > 0 ? stopAuto() : spin())}
+          spinLabel={
+            auto > 0
               ? auto === Infinity
                 ? tr('slots.btn.stopInf')
                 : tr('slots.btn.stopN', { n: auto })
@@ -1319,82 +1395,26 @@ export function SlotsPage() {
                     ? tr('slots.btn.broke')
                     : freeSpins > 0
                       ? tr('slots.btn.free', { n: freeSpins })
-                      : tr('slots.btn.spin', { bet })}
-          </button>
-          <button
-            className={`slot-mini${auto > 0 ? ' is-on' : ''}`}
-            disabled={!canSpin && auto === 0}
-            onClick={() => {
-              tapLight();
-              primeAudio();
-              if (auto > 0) stopAuto();
-              else setAutoSheet(true);
-            }}
-            aria-label={auto > 0 ? tr('slots.a11y.autoStop') : tr('slots.a11y.auto')}
-          >
-            {auto > 0 ? (auto === Infinity ? '↻∞' : `↻${auto}`) : '↻'}
-          </button>
-          <button
-            className={`slot-mini${turbo ? ' is-on' : ''}`}
-            onClick={() => {
-              selectionChanged();
-              setPrefs({ turbo: !turbo });
-            }}
-            aria-label={tr('slots.a11y.turbo')}
-          >
-            ⚡
-          </button>
-          <button
-            className="slot-mini"
-            onClick={() => {
-              tapLight();
-              primeAudio();
-              setSettings(true);
-            }}
-            aria-label={tr('common.settings')}
-          >
-            ⚙
-          </button>
-        </div>
-
-        {broke && <p className="slot-bonus-hint">{tr('slots.brokeHint')}</p>}
-
-        {history.length > 0 && (
-          <div className="slot-history">
-            <div className="slot-history__label">{tr('slots.recent')}</div>
-            <div className="slot-history__row">
-              {history.map((h) => (
-                <div key={h.id} className={`slot-chip${h.payout > 0 ? ' is-win' : ''}`}>
-                  <span className="slot-chip__reels">
-                    {h.reels.map((id, i) => (
-                      <Sym key={i} id={id} skin={skin} size={17} />
-                    ))}
-                  </span>
-                  <span className="slot-chip__sum">
-                    {h.payout > 0 ? `+${fmt(h.payout)}` : `−${fmt(h.bet)}`}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="slot-stats">
-          <div className="slot-stat">
-            <div className="slot-stat__num">{fmt(spins)}</div>
-            <div className="slot-stat__lbl">{tr('slots.statSpins')}</div>
-          </div>
-          <div className="slot-stat">
-            <div className="slot-stat__num">
-              {fmt(best)} <CoinIcon size={15} />
-            </div>
-            <div className="slot-stat__lbl">{tr('slots.statBestWin')}</div>
-          </div>
-        </div>
+                      : tr('slots.btn.spin', { bet })
+          }
+          auto={auto}
+          autoDisabled={!canSpin && auto === 0}
+          onAuto={() => {
+            tapLight();
+            primeAudio();
+            if (auto > 0) stopAuto();
+            else setAutoSheet(true);
+          }}
+          turbo={turbo}
+          onTurbo={() => {
+            selectionChanged();
+            setPrefs({ turbo: !turbo });
+          }}
+        />
       </div>
 
       {sheet && (
-        <Sheet title={tr('slots.pay.title')} onClose={() => setSheet(false)}>
+        <GxSheet title={tr('slots.pay.title')} onClose={() => setSheet(false)}>
           <div className="stack">
             <p className="muted" style={{ margin: 0 }}>
               {tr('slots.pay.intro', { unit: LINE_UNIT, bet, line: lineBet(bet) })}
@@ -1451,13 +1471,13 @@ export function SlotsPage() {
               {tr('slots.pay.note')}
             </p>
           </div>
-        </Sheet>
+        </GxSheet>
       )}
 
       {skinSheet && <SkinSheet onClose={() => setSkinSheet(false)} />}
 
       {autoSheet && (
-        <Sheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
+        <GxSheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
           <div className="stack slots" data-skin={skin}>
             <div className="auto-grid">
               {AUTO_OPTIONS.map((o) => (
@@ -1475,11 +1495,11 @@ export function SlotsPage() {
               {tr('slots.auto.note')}
             </p>
           </div>
-        </Sheet>
+        </GxSheet>
       )}
 
       {settings && (
-        <Sheet title={tr('common.settings')} onClose={() => setSettings(false)}>
+        <GxSheet title={tr('common.settings')} onClose={() => setSettings(false)}>
           <div className="stack slots" data-skin={skin}>
             <div className="toggles">
               {[
@@ -1535,11 +1555,11 @@ export function SlotsPage() {
             </div>
             <CashDesk />
           </div>
-        </Sheet>
+        </GxSheet>
       )}
 
       {betSheet && (
-        <Sheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
+        <GxSheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
           <div className="stack slots bet-sheet" data-skin={skin}>
             <div className="bet-sheet__value">
               {fmt(betDraft)}
@@ -1599,7 +1619,7 @@ export function SlotsPage() {
                 : tr('slots.bet.play', { bet: betDraft })}
             </button>
           </div>
-        </Sheet>
+        </GxSheet>
       )}
 
       {lvlShown && (
@@ -1681,6 +1701,6 @@ export function SlotsPage() {
           </div>
         </div>
       )}
-    </Screen>
+    </GameScreen>
   );
 }

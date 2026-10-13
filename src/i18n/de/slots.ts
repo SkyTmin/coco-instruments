@@ -67,6 +67,7 @@ export const slots: Translation<typeof ru> = {
   },
   hud: {
     balance: 'Guthaben',
+    betLabel: 'Einsatz',
     jackpot: 'Jackpot',
     best: 'Bester Spin',
     lvl: 'Lvl. {n}',

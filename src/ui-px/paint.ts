@@ -1031,6 +1031,18 @@ const ICONS: Record<string, string[]> = {
     '.........',
     '.........',
   ],
+  // wave 2 — K: auto-spin (a ring that runs round to its own arrowhead, top right).
+  auto: [
+    '..####.#.',
+    '.##..####',
+    '##....###',
+    '##...####',
+    '##.......',
+    '##.....##',
+    '.##...##.',
+    '..#####..',
+    '.........',
+  ],
 };
 
 function icon(rows: string[]): Pix {

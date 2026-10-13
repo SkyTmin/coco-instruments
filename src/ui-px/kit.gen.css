@@ -791,6 +791,13 @@
   --i-h: 9;
 }
 
+.pxi-auto {
+  -webkit-mask-image: url('/ui/kit/i-auto.png?v=c479d44b');
+  mask-image: url('/ui/kit/i-auto.png?v=c479d44b');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .pxk-tab-side-on {
   border-image-source: var(--pxk-tab-side-on);
   border-image-slice: var(--pxk-tab-side-on-s);

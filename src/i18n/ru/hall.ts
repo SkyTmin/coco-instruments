@@ -2,6 +2,9 @@
 export const hall = {
   title: 'Казино',
   cascade: 'Каскад',
+  prison: 'Каторга',
+  wallet: 'Общий кошелёк',
+  play: 'Играть',
   reels: {
     one: '{n} барабан',
     few: '{n} барабана',

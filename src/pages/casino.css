@@ -1,0 +1,603 @@
+/* Casino frame (UI wave 2 — K): the hall launcher, the Slots / Cascade page around the skin
+   cabinet, the deck. Kit materials and type only (src/ui-px); sizes in whole art pixels
+   (var(--u)). The cabinet, reels, grid and their skins live in theme.css and are untouched:
+   the page draws the cabinet at its old pixel size and scales it to the stage (casino-ui.tsx).
+   Frames are set by longhands (the `border` / `border-image` shorthands would reset them). */
+
+/* ---- Page shell ----------------------------------------------------------------------------- */
+.cas-page {
+  --cg: calc(3 * var(--u));
+}
+.cas-bg {
+  position: absolute;
+  inset: 0;
+}
+.cas-bg .slots-scene {
+  position: absolute;
+  z-index: 0;
+}
+/* The page never scrolls: the stage takes what the info and the deck leave. */
+.cas-page .gs__body,
+.cas-page .gs__main {
+  overflow: hidden;
+}
+.cas-page .gs__main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cas {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  gap: var(--cg);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'info' 'stage' 'deck';
+  padding: 0 calc(2 * var(--u)) calc(2 * var(--u));
+}
+/* The JS reel motion moves in 68-px cells: the old landscape rule (56 px) must not reach the
+   field now that the whole cabinet scales instead. */
+.cas.scatter {
+  --scell: 68px;
+}
+.cas > .cas-info {
+  grid-area: info;
+}
+.cas > .cas-stage {
+  grid-area: stage;
+}
+.cas > .cas-deck {
+  grid-area: deck;
+}
+
+/* Frames by material (longhands; widths are multiples of the 1-art-px border). */
+.cas-info,
+.cas-deck {
+  position: relative;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  padding: calc(8 * var(--u));
+  min-width: 0;
+  min-height: 0;
+}
+.cas-well {
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+
+/* ---- Stage: the cabinet, scaled as one piece -------------------------------------------------- */
+.cas-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  contain: size;
+  display: grid;
+  place-items: center;
+}
+.cas-fit {
+  position: relative;
+}
+.cas-fit > .cabinet {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: 0;
+}
+/* Natural widths = the old phone layout (a phone sees about ×1); other formats scale up. */
+.cas--slots .cas-fit > .cabinet {
+  width: 358px;
+}
+.cas--scatter .cas-fit > .cabinet {
+  width: 372px;
+}
+
+/* ---- Small caption over a value ------------------------------------------------------------- */
+.cas-cap {
+  display: block;
+  font: 600 var(--px-fs-sm) / 1.1 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Info: level, jackpot, stats, recent spins ------------------------------------------------ */
+.cas-info {
+  display: grid;
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    'lvl lvl lvl'
+    'jp sp best'
+    'hist hist hist';
+}
+.cas--scatter .cas-info {
+  grid-template-areas:
+    'lvl lvl lvl'
+    'best best sp';
+}
+.cas-info > .cas-lvl {
+  grid-area: lvl;
+}
+.cas-info > .cas-stat--jp {
+  grid-area: jp;
+}
+.cas-info > .cas-stat--sp {
+  grid-area: sp;
+}
+.cas-info > .cas-stat--best {
+  grid-area: best;
+}
+.cas-info > .cas-hist {
+  grid-area: hist;
+}
+
+.cas-lvl {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.cas-lvl__n {
+  flex: none;
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-gold);
+  white-space: nowrap;
+}
+.cas-lvl .px-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cas-lvl__free {
+  flex: none;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  white-space: nowrap;
+}
+.cas-lvl__free.is-none {
+  visibility: hidden;
+}
+
+.cas-stat {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico v' 'k k';
+  align-items: center;
+  column-gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.cas-stat__ico {
+  grid-area: ico;
+  display: inline-flex;
+  align-items: center;
+  color: var(--px-gold);
+}
+.cas-stat__k {
+  grid-area: k;
+  font: 600 var(--px-fs-sm) / 1.1 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cas-stat__v {
+  grid-area: v;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  min-width: 0;
+  font: 700 var(--px-fs) / 1.1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cas-stat--gold .cas-stat__v {
+  color: var(--px-gold);
+}
+.cas-777 {
+  display: inline-flex;
+}
+
+/* Recent spins: one fixed row; chips scroll sideways inside it. */
+.cas-hist {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(3 * var(--u));
+  height: calc(16 * var(--u));
+}
+.cas-hist__row {
+  display: flex;
+  gap: calc(2 * var(--u));
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  min-width: 0;
+}
+.cas-hchip {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  padding: var(--u) calc(2 * var(--u));
+}
+.cas-hchip__reels {
+  display: inline-flex;
+}
+.cas-hchip__sum {
+  font: 700 var(--px-fs-tiny) / 1 var(--px-font);
+  color: var(--px-red);
+}
+.cas-hchip.is-win .cas-hchip__sum {
+  color: var(--px-green);
+}
+.cas-broke {
+  margin: 0;
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
+  color: var(--px-red);
+}
+
+/* ---- Deck: balance, bet, Spin --------------------------------------------------------------- */
+.cas-deck {
+  display: grid;
+  gap: calc(3 * var(--u));
+  grid-template-columns: minmax(0, 1fr);
+  align-content: end;
+}
+.cas-deck__money {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: calc(4 * var(--u));
+}
+.cas-bal,
+.cas-bet {
+  position: relative;
+  min-width: 0;
+}
+.cas-bal__v {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  height: calc(17 * var(--u));
+  font: 700 var(--px-fs-big) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cas-bet {
+  justify-self: end;
+}
+.cas-bet__row {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.cas-bet__v {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--u);
+  /* fixed width: 5 and 500 take the same room — nothing moves when the bet changes */
+  width: calc(34 * var(--u));
+  height: calc(17 * var(--u));
+  margin: 0;
+  padding: 0 calc(2 * var(--u));
+  background: none;
+  font: 700 var(--px-fs-big) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  cursor: pointer;
+}
+.cas-bet__v:disabled {
+  color: var(--px-dim);
+  cursor: default;
+}
+/* Key prompts for the bet (Tab / LB …) sit over the caption, right-aligned; nothing on touch. */
+.cas-bet__keys {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: var(--u);
+}
+
+.cas-chips {
+  display: none;
+}
+.cas-chip {
+  width: 100%;
+}
+
+.cas-deck__go {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: calc(3 * var(--u));
+  align-items: stretch;
+}
+.cas-mini {
+  min-width: calc(24 * var(--u));
+  min-height: calc(26 * var(--u));
+}
+.cas-mini__n {
+  position: absolute;
+  right: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
+  min-width: calc(9 * var(--u));
+  padding: 0 var(--u);
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-gold-s);
+  border-image-width: var(--pxk-badge-gold-w);
+  border-image-repeat: stretch;
+  font: 700 var(--px-fs-tiny) / 1.2 var(--px-font);
+  color: var(--px-text);
+  text-shadow: none;
+}
+.cas-spin {
+  min-height: calc(26 * var(--u));
+  min-width: 0;
+  overflow: hidden;
+}
+.cas-spin__t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 400 var(--px-fs-big) / 1.05 var(--px-head);
+  text-transform: uppercase;
+}
+.cas-spin .px-keyhint {
+  position: absolute;
+  right: calc(3 * var(--u));
+  top: 50%;
+  translate: 0 -50%;
+}
+
+/* Cascade: ante + buy bonus — two equal plates, fixed height. */
+.cas-bonus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+}
+.cas-bonus .px-btn {
+  flex-direction: column;
+  gap: 0;
+  min-height: calc(21 * var(--u));
+  width: 100%;
+  min-width: 0;
+}
+.cas-bonus .px-btn > b {
+  font: 700 var(--px-fs) / 1.05 var(--px-font);
+}
+.cas-bonus .px-btn > i {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 600 var(--px-fs-sm) / 1.1 var(--px-font);
+  font-style: normal;
+}
+
+/* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
+html[data-ff='phone-portrait'] .cas-info {
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  padding: calc(4 * var(--u)) calc(5 * var(--u));
+}
+html[data-ff='phone-portrait'] .cas-stat__k {
+  font-size: var(--px-fs-tiny);
+}
+
+/* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
+html[data-ff='phone-landscape'] .cas,
+html[data-ff='desktop'] .cas,
+html[data-ff='tablet'] .cas {
+  grid-template-columns: minmax(0, var(--cas-l)) minmax(0, 1fr) minmax(0, var(--cas-r));
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: 'info stage deck';
+  --cas-l: calc(100 * var(--u));
+  --cas-r: calc(116 * var(--u));
+}
+html[data-ff='phone-landscape'] .cas {
+  --cas-l: calc(92 * var(--u));
+  --cas-r: calc(118 * var(--u));
+  gap: calc(2 * var(--u));
+}
+html[data-ff='phone-landscape'] .cas-info,
+html[data-ff='desktop'] .cas-info,
+html[data-ff='tablet'] .cas-info,
+html[data-ff='phone-landscape'] .cas--scatter .cas-info,
+html[data-ff='desktop'] .cas--scatter .cas-info,
+html[data-ff='tablet'] .cas--scatter .cas-info {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-areas: 'lvl' 'jp' 'best' 'sp' 'hist';
+  align-content: start;
+  gap: calc(4 * var(--u));
+  overflow: hidden;
+}
+html[data-ff='phone-landscape'] .cas-info {
+  gap: calc(2 * var(--u));
+}
+html[data-ff='phone-landscape'] .cas-lvl,
+html[data-ff='desktop'] .cas-lvl,
+html[data-ff='tablet'] .cas-lvl {
+  flex-wrap: wrap;
+}
+html[data-ff='phone-landscape'] .cas-lvl .px-bar,
+html[data-ff='desktop'] .cas-lvl .px-bar,
+html[data-ff='tablet'] .cas-lvl .px-bar {
+  order: 3;
+  flex-basis: 100%;
+}
+html[data-ff='phone-landscape'] .cas-lvl__free,
+html[data-ff='desktop'] .cas-lvl__free,
+html[data-ff='tablet'] .cas-lvl__free {
+  margin-left: auto;
+}
+/* Stats as wells with the caption on top and a big number under it. */
+html[data-ff='phone-landscape'] .cas-stat,
+html[data-ff='desktop'] .cas-stat,
+html[data-ff='tablet'] .cas-stat {
+  grid-template-areas: 'k k' 'ico v';
+  row-gap: var(--u);
+}
+html[data-ff='desktop'] .cas-stat,
+html[data-ff='tablet'] .cas-stat {
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+html[data-ff='desktop'] .cas-stat__v,
+html[data-ff='tablet'] .cas-stat__v,
+html[data-ff='desktop'] .cas-lvl__n,
+html[data-ff='tablet'] .cas-lvl__n {
+  font-size: var(--px-fs-big);
+}
+html[data-ff='desktop'] .cas-stat__ico .px-i,
+html[data-ff='tablet'] .cas-stat__ico .px-i {
+  --i-w: 18;
+  --i-h: 18;
+}
+html[data-ff='desktop'] .cas-777 .sym,
+html[data-ff='tablet'] .cas-777 .sym {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+/* Recent spins become a wrapped list there (newest first, scroll inside). */
+html[data-ff='phone-landscape'] .cas-hist,
+html[data-ff='desktop'] .cas-hist,
+html[data-ff='tablet'] .cas-hist {
+  height: auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: start;
+  align-self: stretch;
+}
+html[data-ff='phone-landscape'] .cas-hist__row,
+html[data-ff='desktop'] .cas-hist__row,
+html[data-ff='tablet'] .cas-hist__row {
+  flex-wrap: wrap;
+  align-content: flex-start;
+  overflow: hidden auto;
+  max-height: 100%;
+}
+
+html[data-ff='phone-landscape'] .cas-deck,
+html[data-ff='desktop'] .cas-deck,
+html[data-ff='tablet'] .cas-deck {
+  overflow: hidden;
+  align-content: space-between;
+}
+html[data-ff='phone-landscape'] .cas-deck__money,
+html[data-ff='desktop'] .cas-deck__money,
+html[data-ff='tablet'] .cas-deck__money {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+}
+html[data-ff='desktop'] .cas-bal__v,
+html[data-ff='tablet'] .cas-bal__v {
+  height: calc(20 * var(--u));
+  font-size: var(--px-fs-hero);
+}
+html[data-ff='phone-landscape'] .cas-bet,
+html[data-ff='desktop'] .cas-bet,
+html[data-ff='tablet'] .cas-bet {
+  justify-self: stretch;
+}
+html[data-ff='phone-landscape'] .cas-bet__row,
+html[data-ff='desktop'] .cas-bet__row,
+html[data-ff='tablet'] .cas-bet__row {
+  justify-content: space-between;
+}
+html[data-ff='phone-landscape'] .cas-bet__v,
+html[data-ff='desktop'] .cas-bet__v,
+html[data-ff='tablet'] .cas-bet__v {
+  flex: 1 1 auto;
+  width: auto;
+}
+/* Quick bets (the old chip row) on roomy formats: 3 × 2 under the stepper. */
+html[data-ff='desktop'] .cas-chips,
+html[data-ff='tablet'] .cas-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+}
+/* Spin gets a row of its own under the thumb; auto and turbo above it. */
+html[data-ff='phone-landscape'] .cas-deck__go,
+html[data-ff='desktop'] .cas-deck__go,
+html[data-ff='tablet'] .cas-deck__go {
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: 'auto turbo' 'spin spin';
+}
+html[data-ff='phone-landscape'] .cas-deck__go > .cas-spin,
+html[data-ff='desktop'] .cas-deck__go > .cas-spin,
+html[data-ff='tablet'] .cas-deck__go > .cas-spin {
+  grid-area: spin;
+}
+html[data-ff='phone-landscape'] .cas-mini {
+  min-height: calc(19 * var(--u));
+}
+html[data-ff='phone-landscape'] .cas-bonus .px-btn {
+  min-height: calc(19 * var(--u));
+}
+html[data-ff='phone-landscape'] .cas-bonus .px-btn > i {
+  display: none;
+}
+html[data-ff='desktop'] .cas-spin,
+html[data-ff='tablet'] .cas-spin {
+  min-height: calc(32 * var(--u));
+}
+html[data-ff='desktop'] .cas-spin__t,
+html[data-ff='tablet'] .cas-spin__t {
+  font-size: var(--px-fs-hero);
+}
+
+/* Tablet portrait: the stage on top across the width, info | deck under it. */
+@media (orientation: portrait) {
+  html[data-ff='tablet'] .cas {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: 'stage stage' 'info deck';
+  }
+  html[data-ff='tablet'] .cas-info,
+  html[data-ff='tablet'] .cas--scatter .cas-info {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas: 'lvl lvl' 'jp best' 'sp sp' 'hist hist';
+  }
+  html[data-ff='tablet'] .cas--scatter .cas-info {
+    grid-template-areas: 'lvl lvl' 'best sp';
+    grid-template-rows: auto auto;
+  }
+}
