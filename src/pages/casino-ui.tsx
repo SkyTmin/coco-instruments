@@ -2,7 +2,7 @@
 // the fit-to-box scaler, the control deck (balance, bet −/+, Spin, auto, turbo) and the info
 // cells. The cabinet itself (reels, grid, lever, skins) is untouched: it is drawn at its old
 // fixed pixel size and scaled as one piece, because the reel motion moves in those pixels.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode, RefObject } from 'react';
 import { Button, Icon, KeyHint, usePress } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
@@ -139,6 +139,52 @@ export function useCasLying(): boolean {
 }
 
 /** Круглая кнопка шапки (`gx-round`): нажатие видно в первый кадр (`usePress` → `.is-down`). */
+// Sheets of a game page (skins, rules) open through a tiny host, not page state: a page flag
+// re-rendered the whole page (board, deck, stats) inside the tap — 27 ms of the Cascade rules'
+// first frame at 4× (critic9 #8). One sheet at a time; closed again when its page leaves.
+let openSheetId: string | null = null;
+const sheetSubs = new Set<() => void>();
+const subscribeSheet = (f: () => void) => {
+  sheetSubs.add(f);
+  return () => {
+    sheetSubs.delete(f);
+  };
+};
+const setOpenSheet = (id: string | null) => {
+  openSheetId = id;
+  sheetSubs.forEach((f) => f());
+};
+export const openCasSheet = (id: string) => setOpenSheet(id);
+
+/** Renders `children(close)` while the sheet `id` is open (see `openCasSheet`). */
+export function CasSheet({
+  id,
+  children,
+}: {
+  id: string;
+  children: (close: () => void) => ReactNode;
+}) {
+  const on = useSyncExternalStore(subscribeSheet, () => openSheetId === id);
+  useEffect(
+    () => () => {
+      if (openSheetId === id) openSheetId = null;
+    },
+    [id],
+  );
+  return on ? <>{children(() => setOpenSheet(null))}</> : null;
+}
+
+/** «Подробнее» of the rules: the long paragraphs are mounted only when it is opened. */
+export function CasMore({ summary, children }: { summary: ReactNode; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="cas-more" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>{summary}</summary>
+      {open && children}
+    </details>
+  );
+}
+
 export function CasRound({ className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
   const ref = useRef<HTMLButtonElement>(null);
   const press = usePress(ref);
@@ -182,6 +228,10 @@ export function CasTools({ onBack, children }: { onBack: () => void; children: R
  */
 function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boolean) {
   const ref = useRef<T>(null);
+  // A node `dep` is a new object on every render: as a dependency it re-ran the effect — and a
+  // forced layout of the whole page — on every render of the page (opening the skins sheet
+  // spent 65 ms of its first frame here at 4×). Text changes come through the observer.
+  const key = typeof dep === 'object' ? null : dep;
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !on) return;
@@ -201,7 +251,7 @@ function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boole
       ro.disconnect();
       mo.disconnect();
     };
-  }, [dep, on]);
+  }, [key, on]);
   return ref;
 }
 

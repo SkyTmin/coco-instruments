@@ -60,7 +60,7 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
     if (cur && !isSkinAvailable(cur, level, topX, granted)) setPrefs({ skin: 'classic' });
   }, [skin, level, topX, granted, owner, setPrefs]);
 
-  // Первые карточки — сразу, картинки остальных — кадром позже: лист открывался одной
+  // Первые карточки — сразу, остальные (и их картинки) — кадром позже: лист открывался одной
   // длинной задачей (294 мс), и его 160-мс появление терялось (critic K2 #11). Коробки
   // карточек стоят с первого кадра, так что ничего не прыгает.
   const [warm, setWarm] = useState(false);
@@ -74,20 +74,26 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   return (
     <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
       <div className="skn px">
-        {[...SKINS].sort(order).map((sk, i) => (
-          <SkinCard
-            key={sk.id}
-            sk={sk}
-            art={warm || i < FIRST}
-            available={isSkinAvailable(sk, level, topX, granted)}
-            active={sk.id === skin}
-            // Выдан владельцу, а не добыт спином: подпись должна говорить
-            // правду, иначе карточка приписывает игроку чужой рекорд.
-            byGrant={!!sk.earn && granted && topX < sk.earn.topX}
-            topX={topX}
-            onPick={pick}
-          />
-        ))}
+        {[...SKINS].sort(order).map((sk, i) =>
+          // За краем первого экрана на первом кадре — пустые рамки той же сетки: лист должен
+          // показаться за ≤ 100 мс при 4× (critic9 #8), карточки дорисуются кадром позже.
+          !warm && i >= FIRST ? (
+            <span key={sk.id} className="skn-card skn-card--ph" aria-hidden="true" />
+          ) : (
+            <SkinCard
+              key={sk.id}
+              sk={sk}
+              art={warm || i < FIRST}
+              available={isSkinAvailable(sk, level, topX, granted)}
+              active={sk.id === skin}
+              // Выдан владельцу, а не добыт спином: подпись должна говорить
+              // правду, иначе карточка приписывает игроку чужой рекорд.
+              byGrant={!!sk.earn && granted && topX < sk.earn.topX}
+              topX={topX}
+              onPick={pick}
+            />
+          ),
+        )}
       </div>
       <p className="skn-note">{t('slots.skin.note')}</p>
     </GxSheet>

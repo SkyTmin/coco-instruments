@@ -13,10 +13,13 @@ import {
   CasStat,
   CasToggles,
   fitStyles,
+  CasMore,
   CasRound,
+  CasSheet,
   CasTools,
   keepDot,
   KitIcon,
+  openCasSheet,
   SKIP_GUARD_MS,
   SKIP_START_MS,
   SKIP_TEMPO,
@@ -418,8 +421,6 @@ export function SlotsPage() {
   const [pending, setPending] = useState(0);
   const [auto, setAuto] = useState(0);
   const [autoSheet, setAutoSheet] = useState(false);
-  const [sheet, setSheet] = useState(false);
-  const [skinSheet, setSkinSheet] = useState(false);
   const [settings, setSettings] = useState(false);
   const [betSheet, setBetSheet] = useState(false);
   const [betDraft, setBetDraft] = useState(BETS[0]);
@@ -1156,7 +1157,7 @@ export function SlotsPage() {
         className="cas-skin-btn"
         onClick={() => {
           tapLight();
-          setSkinSheet(true);
+          openCasSheet('skins');
         }}
         aria-label={tr('slots.a11y.skin')}
         data-tip={tr('slots.a11y.skin')}
@@ -1167,7 +1168,7 @@ export function SlotsPage() {
       <CasRound
         onClick={() => {
           tapLight();
-          setSheet(true);
+          openCasSheet('rules');
         }}
         aria-label={tr('slots.a11y.rules')}
         data-tip={tr('slots.a11y.rules')}
@@ -1567,74 +1568,77 @@ export function SlotsPage() {
         />
       </div>
 
-      {sheet && (
-        <GxSheet title={tr('slots.pay.title')} onClose={() => setSheet(false)}>
-          {/* Правила — одна строка на раздел и картинка (таблица, лестница, линии); длинные
+      <CasSheet id="rules">
+        {(close) => (
+          <GxSheet title={tr('slots.pay.title')} onClose={close}>
+            {/* Правила — одна строка на раздел и картинка (таблица, лестница, линии); длинные
               абзацы — под «Подробнее» (critic K2 #8: на пергаменте 12-px абзацы не читались). */}
-          <div className="cas-rules">
-            <p className="cas-rules__lead">{keepDot(tr('slots.pay.introShort'))}</p>
-            <div className="paytable">
-              {[...SLOT_SYMBOLS].reverse().map((s) => (
-                <div className="paytable__row cas-well" key={s.id}>
-                  <span className="paytable__syms">
-                    <Sym id={s.id} skin={skin} size={26} />
-                    <Sym id={s.id} skin={skin} size={26} />
-                    <Sym id={s.id} skin={skin} size={26} />
-                  </span>
-                  <span className="paytable__mult px-num">×{s.three}</span>
-                  <span className="paytable__pair">{tr('slots.pay.pair', { n: s.pair })}</span>
-                </div>
-              ))}
-            </div>
-            <div className="lines-grid">
-              {PAYLINES.map((line) => (
-                <div
-                  className="line-card cas-well"
-                  key={line.id}
-                  role="img"
-                  aria-label={lineName(line.id)}
-                  data-tip={lineName(line.id)}
-                >
-                  <svg viewBox="0 0 30 30" aria-hidden="true">
-                    {[0, 1, 2].map((col) =>
-                      [0, 1, 2].map((row) => (
-                        <rect
-                          key={`${col}-${row}`}
-                          x={col * 10 + 1}
-                          y={row * 10 + 1}
-                          width="8"
-                          height="8"
-                          className={line.rows[col] === row ? 'is-on' : ''}
-                        />
-                      )),
-                    )}
-                  </svg>
-                </div>
-              ))}
-            </div>
-            <section className="cas-rules__sec">
-              <h3 className="cas-rules__h">{tr('slots.pay.cascTitle')}</h3>
-              <p className="cas-rules__lead">{tr('slots.pay.cascShort')}</p>
-              <div className="combo-rules__ladder">
-                {COMBO_LADDER.map((m, i) => (
-                  <span key={i} className="combo-rules__step cas-well">
-                    <b className="px-num">{i + 1 === COMBO_LADDER.length ? `${i + 1}+` : i + 1}</b>
-                    <i className="px-num">×{m}</i>
-                  </span>
+            <div className="cas-rules">
+              <p className="cas-rules__lead">{keepDot(tr('slots.pay.introShort'))}</p>
+              <div className="paytable">
+                {[...SLOT_SYMBOLS].reverse().map((s) => (
+                  <div className="paytable__row cas-well" key={s.id}>
+                    <span className="paytable__syms">
+                      <Sym id={s.id} skin={skin} size={26} />
+                      <Sym id={s.id} skin={skin} size={26} />
+                      <Sym id={s.id} skin={skin} size={26} />
+                    </span>
+                    <span className="paytable__mult px-num">×{s.three}</span>
+                    <span className="paytable__pair">{tr('slots.pay.pair', { n: s.pair })}</span>
+                  </div>
                 ))}
               </div>
-            </section>
-            <details className="cas-more">
-              <summary>{tr('slots.pay.more')}</summary>
-              <p>{tr('slots.pay.intro', { unit: LINE_UNIT, bet, line: lineBet(bet) })}</p>
-              <p>{tr('slots.pay.cascText')}</p>
-              <p>{tr('slots.pay.note')}</p>
-            </details>
-          </div>
-        </GxSheet>
-      )}
+              <div className="lines-grid">
+                {PAYLINES.map((line) => (
+                  <div
+                    className="line-card cas-well"
+                    key={line.id}
+                    role="img"
+                    aria-label={lineName(line.id)}
+                    data-tip={lineName(line.id)}
+                  >
+                    <svg viewBox="0 0 30 30" aria-hidden="true">
+                      {[0, 1, 2].map((col) =>
+                        [0, 1, 2].map((row) => (
+                          <rect
+                            key={`${col}-${row}`}
+                            x={col * 10 + 1}
+                            y={row * 10 + 1}
+                            width="8"
+                            height="8"
+                            className={line.rows[col] === row ? 'is-on' : ''}
+                          />
+                        )),
+                      )}
+                    </svg>
+                  </div>
+                ))}
+              </div>
+              <section className="cas-rules__sec">
+                <h3 className="cas-rules__h">{tr('slots.pay.cascTitle')}</h3>
+                <p className="cas-rules__lead">{tr('slots.pay.cascShort')}</p>
+                <div className="combo-rules__ladder">
+                  {COMBO_LADDER.map((m, i) => (
+                    <span key={i} className="combo-rules__step cas-well">
+                      <b className="px-num">
+                        {i + 1 === COMBO_LADDER.length ? `${i + 1}+` : i + 1}
+                      </b>
+                      <i className="px-num">×{m}</i>
+                    </span>
+                  ))}
+                </div>
+              </section>
+              <CasMore summary={tr('slots.pay.more')}>
+                <p>{tr('slots.pay.intro', { unit: LINE_UNIT, bet, line: lineBet(bet) })}</p>
+                <p>{tr('slots.pay.cascText')}</p>
+                <p>{tr('slots.pay.note')}</p>
+              </CasMore>
+            </div>
+          </GxSheet>
+        )}
+      </CasSheet>
 
-      {skinSheet && <SkinSheet onClose={() => setSkinSheet(false)} />}
+      <CasSheet id="skins">{(close) => <SkinSheet onClose={close} />}</CasSheet>
 
       {autoSheet && (
         <GxSheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>

@@ -1462,6 +1462,10 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   border-image-repeat: stretch;
   image-rendering: pixelated;
 }
+/* A card below the first screen on the sheet's first frame: the empty well, same grid cell. */
+.skn-card--ph {
+  cursor: default;
+}
 .skn-card[aria-disabled='true'] {
   cursor: default;
 }
