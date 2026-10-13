@@ -1151,3 +1151,132 @@ html[data-ff='phone-portrait'] .skn {
   color: var(--px-red);
   overflow-wrap: anywhere;
 }
+
+/* ==== Session card (SessionCard): a kit wood card over the old veil `.ses` ================== */
+.ses > .sesk {
+  width: min(100%, calc(190 * var(--u, 2px)));
+  max-height: 100%;
+  overflow: hidden auto;
+  display: grid;
+  justify-items: center;
+  gap: calc(4 * var(--u));
+  text-align: center;
+  animation: ses-in 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.sesk {
+  --sesk-plate: var(--px-text);
+}
+/* Everything over the rays of the unforgettable session. */
+.sesk > *:not(.ses__rays) {
+  position: relative;
+  z-index: 1;
+}
+.sesk__grade {
+  max-width: 100%;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  white-space: nowrap;
+}
+/* The peak: a dark iron plate — the rarity colour reads only on dark. */
+.sesk__peak {
+  justify-self: stretch;
+  display: grid;
+  gap: var(--u);
+  padding: calc(6 * var(--u)) calc(5 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  image-rendering: pixelated;
+  /* Ink of the light context (resolved on .sesk, before .px-dark turns the vars cream). */
+  background: var(--sesk-plate);
+  background-clip: padding-box;
+  --pk: var(--px-text);
+}
+.sesk__peak--rare {
+  --pk: var(--px-blue);
+}
+.sesk__peak--epic {
+  --pk: var(--px-violet);
+}
+.sesk__peak--legendary,
+.sesk__peak--mythic {
+  --pk: var(--px-gold);
+}
+.sesk__peak-label {
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  color: var(--px-muted);
+}
+.sesk__peak-title {
+  font: 400 var(--px-fs-hero) / 1.1 var(--px-head);
+  color: var(--pk);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  overflow-wrap: anywhere;
+}
+.sesk__peak--mythic .sesk__peak-title {
+  background: linear-gradient(100deg, #ff5ec7, #ffd83d 25%, #5ee7ff 50%, #a06bff 75%, #ff5ec7);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  animation: ses-holo 2s linear infinite;
+}
+.sesk__peak-detail {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-text);
+}
+.sesk__net {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  font-size: var(--px-fs-hero);
+  line-height: 1;
+}
+.sesk__net.is-up {
+  color: var(--px-green);
+}
+.sesk__net.is-down {
+  color: var(--px-red);
+}
+.sesk__rank {
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-gold);
+}
+.sesk__stats {
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+}
+.sesk__stats > span {
+  display: grid;
+  align-content: center;
+  gap: var(--u);
+  min-width: 0;
+  padding: calc(3 * var(--u)) var(--u);
+}
+.sesk__stats b {
+  font-size: var(--px-fs);
+  line-height: 1.1;
+  color: var(--px-text);
+}
+.sesk__stats i {
+  font: 600 var(--px-fs-tiny) / 1.15 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+}
+.sesk__hook {
+  font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+.sesk__actions {
+  justify-self: stretch;
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ses > .sesk,
+  .sesk__peak--mythic .sesk__peak-title {
+    animation: none;
+  }
+}

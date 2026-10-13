@@ -19,6 +19,8 @@ import { fmtDec, fmtNum as fmt, t, useT } from '@/i18n';
 import { burstConfetti } from '@/lib/confetti';
 import { coinDing, jackpotFanfare, primeAudio, winChime } from '@/lib/sound';
 import { notifySuccess, tapLight } from '@/lib/haptics';
+import { Button, Panel } from '@/ui-px';
+import '@/pages/casino.css';
 
 /** Множитель: ×12 без хвоста, ×2,4 — с одним знаком (по локали). */
 const fmtMult = (m: number) => `×${m >= 10 ? fmt(m) : fmtDec(m, 1).replace(/[.,]0$/, '')}`;
@@ -183,58 +185,62 @@ export function SessionCard() {
 
   return (
     <div className="ses" role="presentation" onClick={close}>
-      <div
-        className={`ses__card ses__card--${grade}`}
+      <Panel
+        material="wood"
+        className={`sesk sesk--${grade}`}
         role="dialog"
         aria-label={tr('slots.session.aria')}
         onClick={(e) => e.stopPropagation()}
       >
         {grade === 'unforgettable' && <div className="ses__rays" aria-hidden="true" />}
 
-        <div className="ses__grade">{tr(`slots.session.grade.${grade}`)}</div>
+        <div className="sesk__grade px-ribbon">{tr(`slots.session.grade.${grade}`)}</div>
 
         {/* Пик — единственное, что здесь по-настоящему крупно. Заход должен
-            вспоминаться одним кадром, а не таблицей достижений. */}
-        <div className={`ses__peak ses__peak--${tone}`}>
-          <div className="ses__peak-label">
+            вспоминаться одним кадром, а не таблицей достижений. Плита тёмная:
+            цвет редкости читается только на тёмном. */}
+        <div className={`sesk__peak sesk__peak--${tone} pxk-frame-iron px-nofill px-dark`}>
+          <div className="sesk__peak-label">
             {peak.kind === 'none' ? tr('slots.session.noPeak') : tr('slots.session.peak')}
           </div>
-          <div className="ses__peak-title">{text.title}</div>
-          <div className="ses__peak-detail">{text.detail}</div>
+          <div className="sesk__peak-title">{text.title}</div>
+          <div className="sesk__peak-detail">{text.detail}</div>
         </div>
 
-        <div className={`ses__net${net >= 0 ? ' is-up' : ' is-down'}`}>
+        <div className={`sesk__net px-num${net >= 0 ? ' is-up' : ' is-down'}`}>
           {net >= 0 ? '+' : '−'}
           <AnimatedNumber value={Math.abs(net)} format={(n) => fmt(n)} duration={900} />
-          <CoinIcon size={22} />
+          <CoinIcon size={24} />
         </div>
 
-        {rankLine && <div className="ses__rank">{rankLine}</div>}
+        {rankLine && <div className="sesk__rank">{rankLine}</div>}
 
-        <div className="ses__stats">
-          <span>
-            <b>{fmt(session.spins)}</b>
+        <div className="sesk__stats">
+          <span className="cas-well">
+            <b className="px-num">{fmt(session.spins)}</b>
             <i>{tr('slots.session.spins')}</i>
           </span>
-          <span>
-            <b>{fmt(session.bestWin)}</b>
+          <span className="cas-well">
+            <b className="px-num">{fmt(session.bestWin)}</b>
             <i>{tr('slots.session.bestSpin')}</i>
           </span>
-          <span>
-            <b>{sessionLength(session)}</b>
+          <span className="cas-well">
+            <b className="px-num">{sessionLength(session)}</b>
             <i>{tr('slots.session.played')}</i>
           </span>
         </div>
 
         {/* Крючок на возврат — честный и без восклицаний: просто сколько
             осталось до следующего уровня. */}
-        <div className="ses__hook">
+        <div className="sesk__hook">
           {tr('slots.session.hook', { lvl: level.level + 1, xp: toNext })}
         </div>
 
-        <div className="ses__actions">
-          <button
-            className="ses__btn ses__btn--go"
+        <div className="sesk__actions">
+          <Button
+            kind="primary"
+            wide
+            data-autofocus=""
             onClick={() => {
               primeAudio();
               tapLight();
@@ -243,12 +249,12 @@ export function SessionCard() {
             }}
           >
             {tr('slots.session.again')}
-          </button>
-          <button className="ses__btn" onClick={close}>
+          </Button>
+          <Button wide onClick={close}>
             {tr('slots.session.enough')}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Panel>
     </div>
   );
 }
