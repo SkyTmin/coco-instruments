@@ -34,8 +34,8 @@
   display: grid;
   gap: var(--cg);
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas: 'info' 'stage' 'deck';
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'info' 'stage' 'status' 'deck';
   padding: 0 calc(2 * var(--u)) calc(2 * var(--u));
 }
 /* The JS reel motion moves in 68-px cells: the old landscape rule (56 px) must not reach the
@@ -51,6 +51,51 @@
 }
 .cas > .cas-deck {
   grid-area: deck;
+}
+.cas > .cas-status {
+  grid-area: status;
+}
+
+/* ---- Status and win line: out of the scaled cabinet, kit type, one fixed height -------------- */
+/* It keeps the skin's recessed plate (`.cabinet__status` in theme.css: dark, the skin's neon
+   edge) — cream text on dark — but its size is the kit's: the text is --px-fs (20 px on
+   phones) instead of the cabinet's 13.5 px × the stage scale (critic R20: 9–14 px). The height
+   never changes: spins swap only what is inside. */
+.cas .cas-status {
+  height: calc(var(--px-fs) * 2.2);
+  margin: 0;
+  padding: 0 calc(4 * var(--u));
+  border-radius: 0;
+  gap: 0 calc(3 * var(--u));
+  font-family: var(--px-font);
+  min-width: 0;
+}
+.cas .cas-status .status {
+  min-width: 0;
+  font: 700 var(--px-fs) / 1.05 var(--px-font);
+  text-wrap: balance;
+}
+.cas .cas-status .status--hint,
+.cas .cas-status .status--spin {
+  font-weight: 500;
+  font-size: var(--px-fs-sm);
+  color: rgba(255, 236, 214, 0.86);
+}
+.cas .cas-status .status__win {
+  flex: none;
+  font: 700 var(--px-fs-big) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cas .cas-status :is(.status__mult, .status__streak, .status__pool) {
+  flex: none;
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  white-space: nowrap;
+}
+/* Phones: the GameTop ribbon (or, lying, the stage itself) names the game — the cabinet's
+   marquee gives its height to the field. */
+html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__sign {
+  display: none;
 }
 
 /* Frames by material (longhands; widths are multiples of the 1-art-px border). */
@@ -523,8 +568,8 @@
 /* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
 .cas[data-lay='wide'] {
   grid-template-columns: minmax(0, var(--cas-l)) minmax(0, 1fr) minmax(0, var(--cas-r));
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: 'info stage deck';
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: 'info stage deck' 'info status deck';
   --cas-l: calc(100 * var(--u));
   --cas-r: calc(116 * var(--u));
 }
@@ -544,6 +589,29 @@ html[data-ff='phone-landscape'] .cas {
 }
 html[data-ff='phone-landscape'] .cas-info {
   gap: calc(2 * var(--u));
+}
+/* Phone landscape has no GameTop row: back, skins, rules and settings are one row of 44-px
+   icons at the top of the info column (4 × 44 + 3 gaps fit its 184 px). */
+html[data-ff='phone-landscape'] .cas[data-lay='wide'] .cas-info {
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  grid-template-areas: 'tools' 'lvl' 'jp' 'best' 'sp' 'hist';
+}
+.cas-info > .cas-tools {
+  grid-area: tools;
+}
+.cas-tools {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(2 * var(--u));
+}
+.cas-tools > :is(.gx-round, .px-btn) {
+  --gx-size: var(--gx-hit);
+  flex: none;
+  width: var(--gx-hit);
+  height: var(--gx-hit);
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+  padding: 0;
 }
 .cas[data-lay='wide'] .cas-lvl {
   flex-wrap: wrap;
@@ -699,8 +767,8 @@ html[data-ff='phone-landscape'] .cas-bonus .px-btn > b {
 /* ---- Tablet portrait: the stage takes the whole width on top; info | deck share the bottom -- */
 html[data-ff='tablet'] .cas[data-lay='tall'] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  grid-template-areas: 'stage stage' 'info deck';
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas: 'stage stage' 'status status' 'info deck';
 }
 html[data-ff='tablet'] .cas[data-lay='tall'] > .cas-info {
   border-image-source: var(--pxk-frame-wood);

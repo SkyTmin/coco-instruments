@@ -14,6 +14,7 @@ import { BETS } from '@/lib/slots';
 import { spinReel } from '@/lib/reel-motion';
 import type { ReelPlan } from '@/lib/reel-motion';
 import { selectionChanged, tapLight } from '@/lib/haptics';
+import { uiTap } from '@/lib/sound';
 import { fmtNum, useT } from '@/i18n';
 import './casino.css';
 
@@ -119,7 +120,34 @@ export function useCasLayout(): 'tall' | 'wide' {
   return ff === 'phone-portrait' || (ff === 'tablet' && !landscape) ? 'tall' : 'wide';
 }
 
-/** One fact: icon + number (+ a small word under it on roomy formats). */
+/** Phone landscape: the page renders no GameTop row (critic 7c: it took 62 of 390 px). */
+export function useCasLying(): boolean {
+  return useFormFactor().ff === 'phone-landscape';
+}
+
+/**
+ * Phone landscape: back + the page's own top buttons (skins, rules, settings) as one row of
+ * 44-px icons at the top of the info column, instead of the GameTop row over the whole page.
+ */
+export function CasTools({ onBack, children }: { onBack: () => void; children: ReactNode }) {
+  const t = useT();
+  return (
+    <div className="cas-tools">
+      <Button
+        icon="left"
+        label={t('common.back')}
+        className="cas-tools__back"
+        onClick={() => {
+          tapLight();
+          uiTap();
+          onBack();
+        }}
+      />
+      {children}
+    </div>
+  );
+}
+
 /**
  * Steps the font of a box down (`data-fit` 1, 2) until its text fits the width — a long number
  * gets smaller instead of losing its tail. Measured before paint and again on resize.
