@@ -1,0 +1,36 @@
+/** Mine critters and the risk game (`src/components/Critters.tsx`): bat, shinies, treasure chest, double-or-nothing. `rank` = the card letters of `RANK_NAMES` (`src/lib/critters.ts`), checked by `critters.test.ts`. */
+export const critters = {
+  bat: 'Летучая мышь — поймай',
+  shiny: 'Блестяшка — подбери',
+  from: {
+    bat: 'Сундучок мыши',
+    batRare: 'Сундучок синей мыши',
+    magpie: 'Мешочек сороки',
+    box: 'Шкатулка со дна',
+  },
+  offer: {
+    coins: 'Монеты',
+    tokens: 'Токены',
+    key: 'Ключ',
+    keys: 'Ключи',
+    rune: 'руна {text}',
+  },
+  risk: 'Риск',
+  win: 'Угадал! Вдвое',
+  draw: 'Ничья — ставка та же',
+  take: 'Забрать',
+  double: 'Рискнуть',
+  rule: 'Старше карты сдающего — вдвое, младше — сгорит',
+  dealer: 'Сдающий · {rank}',
+  card: 'Карта {n}',
+  higher: 'Старше! {v}',
+  lower: 'Младше — сгорело',
+  equal: 'Равная — ещё раз',
+  pick: 'Выбери карту старше',
+  rank: {
+    '9': 'В',
+    '10': 'Д',
+    '11': 'К',
+    '12': 'Т',
+  },
+} as const;

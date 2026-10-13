@@ -25,7 +25,7 @@ import { AudioToggles } from '@/components/AudioToggles';
 import { openCreative, useOwner } from '@/components/CreativePanel';
 import { FloatingStick, useFloatingStick } from '@/components/FloatingStick';
 import { useFinanceStore } from '@/store';
-import { liveEvent, rankLetter, shortMoney, ZONE_TIERS } from '@/lib/prison';
+import { liveEvent, rankLetter, ZONE_TIERS } from '@/lib/prison';
 import { eventOf, EVENTS, EVENTS_FROM_RANK } from '@/lib/yard';
 import { DUNGEON_UNLOCK_RANK } from '@/lib/dungeon';
 import { FOREST_ON } from '@/lib/features';
@@ -63,12 +63,15 @@ import { registerEscape } from '@/lib/escape-stack';
 import { useAction, useGameplayCapture, useHotkeys, useMoveAxis } from '@/input/hooks';
 import { inTopLayer } from '@/input/focus-nav';
 import { Prompt } from '@/input/Prompt';
-import { useT } from '@/i18n';
+import { fmtNum, fmtShort, t as tNow, useT } from '@/i18n';
+import { doorLabel, eventLead, eventName, hubMapName, npcName } from '@/i18n/data-yard';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(Math.round(n));
 const clock = (ms: number) => {
-  const t = Math.max(0, Math.ceil(ms / 1000));
-  return t < 60 ? `${t} с` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return s < 60
+    ? tNow('yard.sec', { n: s })
+    : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
 /** Шаг мира: длинный кадр режется на куски не длиннее 1/60 с (см. подземелье). */
@@ -186,7 +189,12 @@ function HubWorld() {
   const leaving = useRef(false);
 
   const [mapId, setMapId] = useState(sim.map.id);
-  const [use, setUse] = useState<{ key: string; label: string; kind: 'npc' | 'door' } | null>(null);
+  const [use, setUse] = useState<{
+    key: string;
+    label: string;
+    kind: 'npc' | 'door';
+    to: string;
+  } | null>(null);
   const [talk, setTalk] = useState<Talk | null>(null);
   const [camp, setCamp] = useState<CampOpen | null>(null);
   const [forgeOpen, setForgeOpen] = useState(false);
@@ -281,8 +289,8 @@ function HubWorld() {
         softThud();
         say(
           factsRef.current.zoneOpen
-            ? 'На сегодня время особой шахты вышло'
-            : `Особая шахта — после ${ZONE_TIERS[0]}-го престижа`,
+            ? tNow('yard.zoneOver')
+            : tNow('yard.zoneAfter', { n: ZONE_TIERS[0] }),
         );
       }
     },
@@ -295,16 +303,12 @@ function HubWorld() {
       // Замок проверяет игра: карта знает только, какой.
       if (d.lock === 'dungeon' && !f.dungeonOpen) {
         softThud();
-        say(`Лифт вниз — с ранга ${rankLetter(DUNGEON_UNLOCK_RANK)}`);
+        say(tNow('yard.liftFrom', { r: rankLetter(DUNGEON_UNLOCK_RANK) }));
         return;
       }
       if (d.lock === 'zone' && !(f.zoneOpen && (f.zoneOn || f.zoneMs > 0))) {
         softThud();
-        say(
-          f.zoneOpen
-            ? 'На сегодня время особой шахты вышло'
-            : `Особая шахта — после ${ZONE_TIERS[0]}-го престижа`,
-        );
+        say(f.zoneOpen ? tNow('yard.zoneOver') : tNow('yard.zoneAfter', { n: ZONE_TIERS[0] }));
         return;
       }
       const back = placeAtDoor(sim.map, d);
@@ -338,7 +342,7 @@ function HubWorld() {
           if (HUB_MAPS[d.to]) go(d.to, d.at);
           else {
             softThud();
-            say('Заперто');
+            say(tNow('yard.locked'));
           }
       }
     },
@@ -473,7 +477,11 @@ function HubWorld() {
         const u = busyRef.current ? null : nearestUsable(sim);
         const key = u ? `${u.kind}:${u.kind === 'npc' ? u.id : u.door.i}` : '';
         setUse((prev) =>
-          (prev?.key ?? '') === key ? prev : u ? { key, label: u.label, kind: u.kind } : null,
+          (prev?.key ?? '') === key
+            ? prev
+            : u
+              ? { key, label: u.label, kind: u.kind, to: u.kind === 'door' ? u.door.to : '' }
+              : null,
         );
       }
       saveT += dt;
@@ -601,13 +609,13 @@ function HubWorld() {
 
       <div className="hub-top" ref={topRef} onPointerDown={stop}>
         <GameTop
-          title={sim.map.data.name || 'Двор'}
+          title={hubMapName(sim.map.id, sim.map.data.name) || t('yard.title')}
           onBack={exit}
           right={<AudioToggles />}
           chips={
             <>
               <span className="gx-chip">
-                <CoinIcon size={18} /> {shortMoney(balance)}
+                <CoinIcon size={18} /> {fmtShort(balance)}
               </span>
               <span className="gx-chip">
                 <TokenIcon size={17} /> {fmt(prison.tokens)}
@@ -615,7 +623,7 @@ function HubWorld() {
               <span className="gx-chip">
                 <KeyIcon size={17} /> {prison.keys}
               </span>
-              <span className="gx-chip yardx__rank" title="Ранг в шахте">
+              <span className="gx-chip yardx__rank" title={t('yard.rankTip')}>
                 <GxIcon name="pick" size={16} /> {rankLetter(prison.rank)}
               </span>
             </>
@@ -629,7 +637,7 @@ function HubWorld() {
             onClick={() => leave(ev.place === 'forest' ? '/forest' : '/prison')}
           >
             <span className="hub-ev__glyph">{def.glyph}</span>
-            <b>{def.name}</b>
+            <b>{eventName(ev.id)}</b>
             <em>
               <GxIcon name="hourglass" size={13} /> {clock(ev.until - now)}
             </em>
@@ -651,7 +659,7 @@ function HubWorld() {
           <button
             type="button"
             className="gx-round gx-round--dark hub-pad__map"
-            aria-label="Креатив"
+            aria-label={t('yard.creative')}
             onClick={() => {
               tapLight();
               openCreative();
@@ -663,7 +671,7 @@ function HubWorld() {
         <button
           type="button"
           className="gx-round gx-round--dark hub-pad__map"
-          aria-label="Инвентарь"
+          aria-label={t('yard.inventory')}
           data-tip={t('input.action.inventory')}
           data-tip-key="inventory"
           onClick={() => {
@@ -677,7 +685,7 @@ function HubWorld() {
           <button
             type="button"
             className="gx-round gx-round--dark hub-pad__map"
-            aria-label="Карта"
+            aria-label={t('yard.map')}
             onClick={() => {
               tapLight();
               setMapOpen(true);
@@ -693,7 +701,7 @@ function HubWorld() {
             onClick={actNear}
           >
             <GxIcon name={use.kind === 'npc' ? 'scroll' : 'gate'} />
-            {use.label}
+            {use.kind === 'npc' ? t('yard.talk') : doorLabel({ to: use.to, label: use.label })}
             <Prompt action="interact" className="hub-pad__key" />
           </button>
         )}
@@ -704,7 +712,7 @@ function HubWorld() {
       {talk && talkRes && (
         <HubTalk
           key={talk.id}
-          name={talk.name}
+          name={npcName(talk.id, talk.name)}
           sheet={talk.sheet}
           lines={talk.lines}
           options={talkRes.options(facts)}
@@ -731,7 +739,7 @@ function HubWorld() {
       )}
 
       {board && (
-        <GxModal title="Доска" onClose={() => setBoard(false)} className="hub-board">
+        <GxModal title={t('yard.board')} onClose={() => setBoard(false)} className="hub-board">
           <BoardNote
             facts={facts}
             onGo={(place) => {
@@ -758,22 +766,22 @@ function HubWorld() {
       {forgeOpen && <ForgeScreen onClose={() => setForgeOpen(false)} />}
       {inv && <Inventory place={inv} onClose={() => setInv(null)} />}
       {newTerm && (
-        <GxModal title="Новый срок" onClose={dismissNewTerm} className="yard-term">
+        <GxModal title={t('yard.term.title')} onClose={dismissNewTerm} className="yard-term">
           <ul className="yard-term__list">
             <li>
-              <GxIcon name="coins" size={20} /> Цены постоянные: руда, блоки, ранги, кирки
+              <GxIcon name="coins" size={20} /> {t('yard.term.prices')}
             </li>
             <li>
-              <GxIcon name="gold-mine" size={20} /> С ранга E — выработка и блок этажа
+              <GxIcon name="gold-mine" size={20} /> {t('yard.term.fromE')}
             </li>
             <li>
-              <GxIcon name="anvil" size={20} /> Кирки куются из руды
+              <GxIcon name="anvil" size={20} /> {t('yard.term.picks')}
             </li>
             <li>
-              <GxIcon name="slots" size={20} /> Наград за вход больше нет — монеты только за работу
+              <GxIcon name="slots" size={20} /> {t('yard.term.login')}
             </li>
           </ul>
-          <p className="yard-term__note">Все игры начаты заново.</p>
+          <p className="yard-term__note">{t('yard.term.reset')}</p>
           <button
             type="button"
             className="gx-btn gx-btn--red gx-btn--big gx-btn--block"
@@ -782,7 +790,7 @@ function HubWorld() {
               leave('/prison');
             }}
           >
-            В шахту
+            {t('yard.toMine')}
           </button>
         </GxModal>
       )}
@@ -814,6 +822,7 @@ function HubTalk({
   onOption: (o: HubOption) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [i, setI] = useState(0);
   const [done, setDone] = useState(false);
   const textRef = useRef<HTMLSpanElement>(null);
@@ -897,7 +906,7 @@ function HubTalk({
               onClose();
             }}
           >
-            Пока
+            {t('yard.bye')}
           </button>
         </div>
       </div>
@@ -920,6 +929,7 @@ function HubMapSheet({
   onClose: () => void;
   onPick: (d: HubDoor) => void;
 }) {
+  const t = useT();
   const cvRef = useRef<HTMLCanvasElement>(null);
   const m = sim.map;
   // Карта рисуется один раз: пол и все постройки кадром «покоя». Картинки
@@ -953,7 +963,7 @@ function HubMapSheet({
   const hx = (sim.hero.x / m.w) * 100;
   const hy = (sim.hero.y / m.h) * 100;
   return (
-    <GxModal title="Карта лагеря" onClose={onClose} className="hub-map">
+    <GxModal title={t('yard.mapTitle')} onClose={onClose} className="hub-map">
       <div className="hub-map__frame" style={{ aspectRatio: `${m.w} / ${m.h}` }}>
         <canvas ref={cvRef} className="hub-map__cv" />
         <i className="hub-map__me" style={{ left: `${hx}%`, top: `${hy}%` }} aria-hidden="true" />
@@ -968,7 +978,7 @@ function HubMapSheet({
               onPick(d);
             }}
           >
-            {d.label || HUB_MAPS[d.to].name}
+            {d.label ? doorLabel(d) : hubMapName(d.to, HUB_MAPS[d.to].name)}
             {flags.has(d.i) && <span className="gx-badge gx-badge--gold">!</span>}
           </button>
         ))}
@@ -982,6 +992,7 @@ function HubMapSheet({
 // ---------------------------------------------------------------------------
 
 function BoardNote({ facts, onGo }: { facts: HubFacts; onGo: (place: 'mine' | 'forest') => void }) {
+  const t = useT();
   const prison = useFinanceStore((s) => s.prison);
   const now = facts.now;
   const live = liveEvent(prison, now);
@@ -999,12 +1010,12 @@ function BoardNote({ facts, onGo }: { facts: HubFacts; onGo: (place: 'mine' | 'f
           <>
             <div className="yardx-note__head">
               <span className="yardx-note__glyph">{def.glyph}</span>
-              <b>{def.name}</b>
+              <b>{eventName(ev.id)}</b>
               <em>
                 <GxIcon name="hourglass" size={14} /> {clock(ev.until - now)}
               </em>
             </div>
-            <span className="yardx-note__lead">{def.lead}</span>
+            <span className="yardx-note__lead">{eventLead(ev.id)}</span>
             {ev.need > 0 && (
               <GxBar
                 value={Math.min(1, ev.have / ev.need)}
@@ -1018,7 +1029,7 @@ function BoardNote({ facts, onGo }: { facts: HubFacts; onGo: (place: 'mine' | 'f
               onClick={() => onGo(ev.place === 'forest' ? 'forest' : 'mine')}
             >
               <GxIcon name={ev.place === 'forest' ? 'axe' : 'pick'} />
-              {ev.place === 'forest' ? 'В лес' : 'В шахту'}
+              {ev.place === 'forest' ? t('yard.toForest') : t('yard.toMine')}
             </button>
           </>
         ) : (
@@ -1026,10 +1037,10 @@ function BoardNote({ facts, onGo }: { facts: HubFacts; onGo: (place: 'mine' | 'f
             <GxIcon name="scroll" size={30} />
             <span>
               {quiet
-                ? `События во дворе начнутся с ранга ${rankLetter(EVENTS_FROM_RANK)}`
+                ? t('yard.quiet.rank', { r: rankLetter(EVENTS_FROM_RANK) })
                 : prison.eventNext > now
-                  ? `Тихо. Следующее событие — через ${nextMin} мин, пока работаешь`
-                  : 'Событие вот-вот — начни копать'}
+                  ? t('yard.quiet.next', { n: nextMin })
+                  : t('yard.quiet.soon')}
             </span>
           </div>
         )}
@@ -1038,7 +1049,7 @@ function BoardNote({ facts, onGo }: { facts: HubFacts; onGo: (place: 'mine' | 'f
         {EVENTS.filter((e) => FOREST_ON || e.place !== 'forest').map((e) => (
           <span
             key={e.id}
-            title={e.name}
+            title={eventName(e.id)}
             className={ev?.id === e.id ? 'is-on' : ''}
             style={{ '--ev': e.color } as CSSProperties}
           >

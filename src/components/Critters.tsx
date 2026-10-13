@@ -20,15 +20,15 @@ import {
   cardRank,
   MAGPIE_DROP_MS,
   MAGPIE_KEYS,
-  offerLabel,
-  RANK_NAMES,
   RISK_STEPS,
   riskable,
   SHINY_LIFE_MS,
   shinyRoll,
 } from '@/lib/critters';
 import type { BatPath, ShinyKind, Treasure } from '@/lib/critters';
-import { MINE_COLS, MINE_ROWS, shortMoney } from '@/lib/prison';
+import { MINE_COLS, MINE_ROWS } from '@/lib/prison';
+import { fmtNum, fmtShort, t as tNow, useT } from '@/i18n';
+import { offerText, rankName } from '@/i18n/data-critters';
 import type { YardEvent } from '@/lib/prison';
 import {
   batSqueak,
@@ -92,6 +92,7 @@ export const BatLayer = forwardRef<
     onCatch: (rare: boolean, x: number, y: number) => void;
   }
 >(function BatLayer({ host, onCatch }, ref) {
+  const tr = useT();
   const [bat, setBat] = useState<{ id: number; rare: boolean; size: number } | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const shadow = useRef<HTMLElement>(null);
@@ -226,7 +227,7 @@ export const BatLayer = forwardRef<
         type="button"
         className={`pbat${bat.rare ? ' is-rare' : ''}`}
         style={{ width: bat.size * 1.7, height: bat.size * 1.7 }}
-        aria-label="Летучая мышь — поймай"
+        aria-label={tr('critters.bat')}
         onPointerDown={grab}
       >
         <i
@@ -289,6 +290,7 @@ export const MagpieLayer = forwardRef<
     onPick: (kind: ShinyKind, cell: number) => void;
   }
 >(function MagpieLayer({ ev, host, canDrop, onPick }, ref) {
+  const tr = useT();
   const [shinies, setShinies] = useState<Shiny[]>([]);
   const list = useRef<Shiny[]>([]);
   const bird = useRef<HTMLDivElement>(null);
@@ -416,7 +418,7 @@ export const MagpieLayer = forwardRef<
               '--life': `${SHINY_LIFE_MS}ms`,
             } as CSSProperties
           }
-          aria-label="Блестяшка — подбери"
+          aria-label={tr('critters.shiny')}
           onPointerDown={(e) => {
             swallow(e);
             primeAudio();
@@ -478,12 +480,7 @@ export function PlayingCard({
 // Сундучок и риск.
 // ---------------------------------------------------------------------------
 
-const FROM_TITLE: Record<Treasure['from'], string> = {
-  bat: 'Сундучок мыши',
-  batRare: 'Сундучок синей мыши',
-  magpie: 'Мешочек сороки',
-  box: 'Шкатулка со дна',
-};
+const fromTitle = (from: Treasure['from']) => tNow(`critters.from.${from}`);
 
 type Flash = { kind: 'win' | 'draw'; step: number } | null;
 
@@ -527,6 +524,7 @@ export function TreasurePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownId]);
 
+  const tr = useT();
   const t = treasure ?? ghost;
   if (!t) return null;
   const chosen = t.pick >= 0 ? t.options[t.pick] : null;
@@ -620,27 +618,22 @@ export function TreasurePanel({
 
   const shownStake = reveal?.outcome === 'win' ? reveal.stake : t.stake;
   const unit = chosen?.kind === 'tokens' ? 'tokens' : 'coins';
-  const money = (n: number) => (unit === 'coins' ? shortMoney(n) : n.toLocaleString('ru-RU'));
+  const money = (n: number) => (unit === 'coins' ? fmtShort(n) : fmtNum(n));
   const Unit = ({ size }: { size: number }) =>
     unit === 'coins' ? <CoinIcon size={size} /> : <TokenIcon size={size} />;
 
   return (
-    <div
-      className="ptreasure"
-      onPointerDown={swallow}
-      role="dialog"
-      aria-label={FROM_TITLE[t.from]}
-    >
+    <div className="ptreasure" onPointerDown={swallow} role="dialog" aria-label={fromTitle(t.from)}>
       <div className="ptreasure__veil" />
       <div className={`ptreasure__box is-${stage}`}>
         <div className="gx-ribbon ptreasure__title">
-          {stage === 'risk' ? 'Риск' : FROM_TITLE[t.from]}
+          {stage === 'risk' ? tr('critters.risk') : fromTitle(t.from)}
         </div>
 
         {stage === 'pick' && (
           <div className="ptreasure__cards">
             {t.options.map((r, i) => {
-              const l = offerLabel(r);
+              const l = offerText(r);
               return (
                 <button
                   key={i}
@@ -669,23 +662,21 @@ export function TreasurePanel({
             </div>
             {flash && (
               <span className={`ptreasure__flash is-${flash.kind}`}>
-                {flash.kind === 'win' ? 'Угадал! Вдвое' : 'Ничья — ставка та же'}
+                {flash.kind === 'win' ? tr('critters.win') : tr('critters.draw')}
               </span>
             )}
             <div className="ptreasure__btns">
               <button type="button" className="gx-btn gx-btn--red gx-btn--big" onClick={take}>
-                Забрать
+                {tr('critters.take')}
               </button>
               {t.step < RISK_STEPS && (
                 <button type="button" className="gx-btn gx-btn--big ptreasure__risk" onClick={risk}>
-                  Рискнуть <small>×2</small>
+                  {tr('critters.double')} <small>×2</small>
                 </button>
               )}
             </div>
             {t.step === 0 && !flash && (
-              <span className="ptreasure__hint">
-                Старше карты сдающего — вдвое, младше — сгорит
-              </span>
+              <span className="ptreasure__hint">{tr('critters.rule')}</span>
             )}
           </div>
         )}
@@ -700,7 +691,11 @@ export function TreasurePanel({
             <div className="prisk__table">
               <div className="prisk__dealer">
                 <PlayingCard card={reveal?.dealer ?? t.dealer} open className="is-dealt" />
-                <i>Сдающий · {RANK_NAMES[cardRank(reveal?.dealer ?? t.dealer)]}</i>
+                <i>
+                  {tr('critters.dealer', {
+                    rank: rankName(cardRank(reveal?.dealer ?? t.dealer)),
+                  })}
+                </i>
               </div>
               <div className="prisk__four">
                 {[0, 1, 2, 3].map((k) => {
@@ -713,7 +708,7 @@ export function TreasurePanel({
                       style={{ '--k': k } as CSSProperties}
                       disabled={!!reveal}
                       onClick={() => open(k)}
-                      aria-label={`Карта ${k + 1}`}
+                      aria-label={tr('critters.card', { n: k + 1 })}
                     >
                       <PlayingCard
                         card={reveal ? reveal.cards[k] : -1}
@@ -729,13 +724,13 @@ export function TreasurePanel({
             {reveal && (
               <span className={`prisk__verdict is-${reveal.outcome}`}>
                 {reveal.outcome === 'win'
-                  ? `Старше! ${money(reveal.stake)}`
+                  ? tr('critters.higher', { v: money(reveal.stake) })
                   : reveal.outcome === 'lose'
-                    ? 'Младше — сгорело'
-                    : 'Равная — ещё раз'}
+                    ? tr('critters.lower')
+                    : tr('critters.equal')}
               </span>
             )}
-            {!reveal && <span className="prisk__hint">Выбери карту старше</span>}
+            {!reveal && <span className="prisk__hint">{tr('critters.pick')}</span>}
           </div>
         )}
       </div>

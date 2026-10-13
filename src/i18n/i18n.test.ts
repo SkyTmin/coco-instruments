@@ -159,19 +159,15 @@ const INSTRUMENT_DIRS = ['src/pages/clothing/', 'src/pages/finance/', 'src/pages
  */
 const NOT_YET_TRANSLATED = [
   'src/components/CreativePanel.tsx',
-  'src/components/Critters.tsx',
   'src/components/DungeonCamp.tsx',
   'src/components/DungeonInventory.tsx',
   'src/components/DungeonMine.tsx',
   'src/components/DungeonRun.tsx',
   'src/components/FishingCamp.tsx',
   'src/components/Inventory.tsx',
-  'src/components/PrisonCamp.tsx',
-  'src/components/YardBits.tsx',
   'src/pages/DungeonPage.tsx',
   'src/pages/FishingPage.tsx',
   'src/pages/ForestPage.tsx',
-  'src/pages/YardPage.tsx',
 ];
 /** The list as it was on 12.10.2026 — never extend, only the list above shrinks. */
 const ORIGINAL_COUNT = 29;
