@@ -9,7 +9,8 @@
 //
 // Fails (exit 1) when the pet frame (`.nur-pet .pet__px`) is below `TARGET` on a format, when any
 // box (stage, room, pet, plate, anims, squad, collection, actions, side, tabs) differs between
-// the pets, or when a key press moves one. Targets = the critic's round-2 table; lower them only
+// the pets, when a key press moves one, or when fewer collection cells than `CELLS` are fully
+// visible on open. Targets = the critic's round-2 table; lower them only
 // with the owner's consent («питомец как можно крупнее»).
 import fs from 'node:fs';
 const { chromium } = await import(process.env.PW || 'playwright');
@@ -31,13 +32,40 @@ const TARGET = {
   pp: 299,
   p360: 224,
   p440: 336,
-  pl: 224,
+  pl: 261,
   pl440: 299,
   tp: 336,
   tl: 448,
   d1: 560,
   d2: 560,
 };
+// Collection cells fully visible on open (phones: in the drawer) — round 4, «no format below
+// prod» (prod v2.152: pp 10, p360 4, pl 12, tp 12, tl 10, d1 18, d2 12).
+const CELLS = { pp: 18, p360: 16, p440: 18, pl: 15, pl440: 18, tp: 12, tl: 10, d1: 18, d2: 12 };
+async function cellsOnOpen(p, k) {
+  const drawer = !!(await p.$('.nur-strip__open'));
+  if (drawer) {
+    await tap(p, k, '.nur-strip__open');
+    await p.waitForTimeout(500);
+  }
+  const n = await p.evaluate(() => {
+    const box =
+      document.querySelector('.nur-drawer .nur-grid') ||
+      document.querySelector('.nur-side__mid') ||
+      document.querySelector('.nur-coll > .nur-grid');
+    if (!box) return -1;
+    const sb = box.getBoundingClientRect();
+    return [...box.querySelectorAll('[data-pet]')].filter((c) => {
+      const r = c.getBoundingClientRect();
+      return r.top >= sb.top - 0.5 && r.bottom <= sb.bottom + 0.5;
+    }).length;
+  });
+  if (drawer) {
+    await tap(p, k, '.nur-drawer__close');
+    await p.waitForTimeout(400);
+  }
+  return n;
+}
 const want = (process.argv[2] || 'pp,p360,p440,pl,pl440,tp,tl,d1,d2').split(',');
 const lang = process.env.UILANG || 'ru';
 const PETS = (process.env.PETS || 'phoenix,raven,mole,roach').split(',');
@@ -303,6 +331,9 @@ if (process.env.TABS) {
 let fails = 0;
 for (const k of want) {
   const { ctx, p, h } = await openNursery(k, lang);
+  const cells = await cellsOnOpen(p, k);
+  if (cells < CELLS[k]) fails++;
+  console.log(`${lang} ${k}: cells on open ${cells} (≥ ${CELLS[k]}) ${cells < CELLS[k] ? 'LOW' : 'OK'}`);
   const rows = [];
   for (const id of PETS) {
     const direct = await tap(p, k, `.nur-side [data-pet="${id}"], .nur-coll [data-pet="${id}"]`);

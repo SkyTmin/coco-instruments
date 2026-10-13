@@ -25,6 +25,7 @@ export const nursery: Translation<typeof ru> = {
     sleep: 'Sleep',
   },
   lvMax: 'Max',
+  lvPct: 'Lv {n} · {p}%',
   patXp: '+{n} XP',
   power: 'Power',
   gold: 'Gold',

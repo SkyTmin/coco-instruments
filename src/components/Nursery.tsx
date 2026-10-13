@@ -604,22 +604,25 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
             </Badge>
           </span>
         )}
-        {srec && <span className="nur-lv">{t('common.level', { n: slv.level })}</span>}
+        {srec && (
+          <span className="nur-lv px-num">
+            {slv.need
+              ? t('nursery.lvPct', { n: slv.level, p: Math.floor(xpV * 100) })
+              : `${t('common.level', { n: slv.level })} · ${t('nursery.lvMax')}`}
+          </span>
+        )}
       </div>
       <div
         className={`nur-plate__roles${shown.some((s) => pctI(sb[s] ?? 0) >= 100) ? ' is-big' : ''}`}
       >
         {roles}
       </div>
-      {layout === 'one' ? (
-        // phone portrait: a slim bar (the pet takes the height); the numbers are its tip and
-        // the details sheet's bar
-        <span className="nur-xp" data-tip={xpText || undefined} aria-label={xpText || undefined}>
-          <Bar value={xpV} height={4} />
-        </span>
-      ) : (
-        <Bar value={xpV} label={xpText} />
-      )}
+      {/* a slim bar on every format (round 4: the level row says «25 ур. · 41 %», and the
+          labelled bar cost the wide collection its second row); «into / need» is its tip and
+          the details sheet's bar */}
+      <span className="nur-xp" data-tip={xpText || undefined} aria-label={xpText || undefined}>
+        <Bar value={xpV} height={4} />
+      </span>
     </div>
   );
 
@@ -649,13 +652,10 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const squad = (
     <section className="nur-squad" aria-label={t('nursery.squad')}>
       <div className="nur-squad__head">
-        <span
-          className="nur-squad__t"
-          data-tip={layout === 'land' ? t('nursery.squadHint') : undefined}
-        >
+        <span className="nur-squad__t" data-tip={plateSide ? t('nursery.squadHint') : undefined}>
           <Heading className="nur-squad__title">{t('nursery.squad')}</Heading>
         </span>
-        {layout !== 'land' && <span className="nur-squad__hint">{t('nursery.squadHint')}</span>}
+        {!plateSide && <span className="nur-squad__hint">{t('nursery.squadHint')}</span>}
       </div>
       <div className="nur-squad__row">
         {[0, 1, 2].map((i) => {
@@ -757,28 +757,36 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
           <b className="px-num">{t('nursery.bonus', { v: pctI(zoo) })}</b>
         </span>
       )}
+      {/* Tablets / desktop: the inline head on one row — icons only, the value in the tip and the
+          label (critic round 3, item 3: the head's second row cost a row of cells); a filter
+          other than «all» shows as a pressed toggle. The drawer keeps the words. */}
       <span className="nur-tools">
         <Button
           size="sm"
           icon="sort"
-          aria-label={t('nursery.sortLabel')}
+          label={drawerMode ? undefined : `${t('nursery.sortLabel')}: ${t(`nursery.sort.${sort}`)}`}
+          aria-label={drawerMode ? t('nursery.sortLabel') : undefined}
           onClick={() => {
             tapLight();
             setSort((s) => SORTS[(SORTS.indexOf(s) + 1) % SORTS.length]);
           }}
         >
-          {t(`nursery.sort.${sort}`)}
+          {drawerMode ? t(`nursery.sort.${sort}`) : null}
         </Button>
         <Button
           size="sm"
           icon="filter"
-          aria-label={t('nursery.filterLabel')}
+          on={!drawerMode && filter !== 'all'}
+          label={
+            drawerMode ? undefined : `${t('nursery.filterLabel')}: ${t(`nursery.filter.${filter}`)}`
+          }
+          aria-label={drawerMode ? t('nursery.filterLabel') : undefined}
           onClick={() => {
             tapLight();
             setFilter((f) => FILTERS[(FILTERS.indexOf(f) + 1) % FILTERS.length]);
           }}
         >
-          {t(`nursery.filter.${filter}`)}
+          {drawerMode ? t(`nursery.filter.${filter}`) : null}
         </Button>
       </span>
     </div>
@@ -828,6 +836,16 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       if ((d === 'keyboard' || d === 'gamepad') && open) focusEl(open);
     };
   }, [drawer]);
+  // Phone portrait: the drawer reaches up to the room's bottom edge (over the plate), so the
+  // pet stays in view and all 18 cells fit (critic round 3, item 3: 5 → 18 on 390 × 844).
+  useLayoutEffect(() => {
+    const d = drawerRef.current;
+    const r = roomRef.current;
+    const show = r?.closest('.nur-show');
+    if (!drawer || layout !== 'one' || !d || !r || !show) return;
+    const top = r.getBoundingClientRect().bottom - show.getBoundingClientRect().top;
+    d.style.setProperty('--nur-dtop', `${Math.round(top * dpr) / dpr}px`);
+  }, [drawer, layout, room.w, room.h, dpr]);
   // The drawer's first visible row is fetched one by one once it has painted: those are the
   // pets the next tap picks.
   useEffect(() => {

@@ -23,6 +23,7 @@ export const nursery = {
     sleep: 'Сон',
   },
   lvMax: 'Предел',
+  lvPct: '{n} ур. · {p} %',
   patXp: '+{n} опыта',
   power: 'Сила',
   gold: 'Золотой',
