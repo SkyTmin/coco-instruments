@@ -164,3 +164,25 @@ disabled (`aria-disabled`: ash material, still clickable to show why).
 - **Not checked on a real phone / Telegram webview / gamepad hardware** (stand: Playwright at
   390×844@3, 844×390@3, 820×1180@2, 1180×820@2, 1440×900, 1920×1080; keyboard by real key
   presses, gamepad by emitted actions).
+
+### Rollout — waves (owner 13.10: «когда волна закончилась, сразу запускай следующую»)
+
+The lead launches the next wave as soon as the previous one is shipped — no question to the
+owner. Each agent ships as its own version after the lead reviews its shots (6 formats, ru/de/tr).
+
+- **Wave 1 (v2.143, done):** kit, fonts, shell + input, Nursery pilot.
+- **Wave 2:** C — window chrome (`gx.tsx`: GxModal, GxSheet, GameTop, GxBar on the kit; the camp
+  frame and tab bar in `PrisonCamp`); M — the mine screen (`PrisonPage` HUD, dock, sheets,
+  `MineField` overlays, `MinePets`); F — forge, backpack, books (`ForgeScreen`, `Inventory`,
+  `BooksTab`); K — casino (`GamesPage`, `SlotsPage`, `ScatterPage`, `SessionCard`, `SkinSheet`,
+  `CashDesk`).
+- **Wave 3:** camp tabs (`ChestTab`, shop, runes, finds, miles, perks, gear); yard + square
+  (`YardPage`, `YardBits`, `Critters`, per-language sign images via `scripts/hub`); dungeon
+  (`DungeonPage`, `DungeonCamp`, `DungeonInventory`, `DungeonRun` HUD, `DungeonMine`,
+  `CreativePanel`).
+- **Wave 4:** store-readiness pass (one hand, no page scroll, rotation/resize, full keyboard and
+  gamepad traversal, one look for all windows); forest + fishing (flags off); dead old CSS out of
+  `game-ui.css`.
+
+Wave rules: new CSS in the screen's own file (like `nursery.css`), `game-ui.css` only loses the
+screen's old blocks; no logic changes in `src/lib`; every new string through `t()` in 7 languages.
