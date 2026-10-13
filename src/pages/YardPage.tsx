@@ -1038,13 +1038,22 @@ function HubMapSheet({
         // 1 px inside the frame: offsetWidth is whole px, the plate is not.
         const dx = Math.max(0, 1 - p.l) - Math.max(0, p.l + p.w + 1 - fw);
         const l = p.l + dx;
-        let top = p.t;
-        for (let n = 0; n < boxes.length; n++) {
-          const hit = placed.find(
-            (q) => l < q.r && l + p.w > q.l && top < q.b + GAP && top + p.h + GAP > q.t,
-          );
-          if (!hit) break;
-          top = hit.b + GAP;
+        // Below the pins in the way; no room below (the bottom row of doors) — above them.
+        const settle = (down: boolean) => {
+          let y = Math.max(1, Math.min(p.t, fh - p.h - 1));
+          for (let n = 0; n < boxes.length; n++) {
+            const hit = placed.find(
+              (q) => l < q.r && l + p.w > q.l && y < q.b + GAP && y + p.h + GAP > q.t,
+            );
+            if (!hit) break;
+            y = down ? hit.b + GAP : hit.t - GAP - p.h;
+          }
+          return y;
+        };
+        let top = settle(true);
+        if (top + p.h > fh - 1) {
+          const up = settle(false);
+          if (up >= 1 && p.t - up < top - p.t) top = up;
         }
         top = Math.max(1, Math.min(top, fh - p.h - 1));
         const dy = top - p.t;

@@ -187,8 +187,10 @@ Owner: «Когда альбомный, персонаж и всё его окр
   areas sit at z −1 in an isolated frame (the map canvas has `pointer-events: none`): a tap on
   a plate's pixels is always that plate. A moved plate gets a tail (`.hub-map__tail`, the `<i>`
   before its button): a 1-art-px parchment line between ink from the plate edge to the door,
-  ending in a dot. Pressed pins drop 1u (`translate`). Cost: more pins move (7/12 on pp, the
-  tower plate ~70 px) — the tails keep their doors readable.
+  ending in a dot. Pressed pins drop 1u (`translate`). A pin with no room below (the bottom row
+  of doors) goes above instead when that moves it less; otherwise it is clamped, and only there
+  two plates may stand 9–14 px apart. Cost: more pins move (7/12 on pp, the tower plate ~70 px)
+  — the tails keep their doors readable. Measure: `scratchpad/ui3Q/mapshot.mjs`.
 - **Talk camera:** while `.hub-talk` is open the bottom camera inset = the box's height
   (`root.clientHeight − offsetTop`, unaffected by its slide-in), eased in the renderer
   (`setInsets(top, bottom, ease)`, k = 1 − e^(−10·dt)), re-measured by a ResizeObserver on the
