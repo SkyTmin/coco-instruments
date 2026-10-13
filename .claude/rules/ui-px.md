@@ -7,7 +7,7 @@ paths:
   - 'src/components/nursery.css'
 ---
 
-## Pixel UI kit — style guide (v1, 12.10.2026) — `src/ui-px/`, `scripts/ui-px/`
+## Pixel UI kit — style guide (v2, 13.10.2026) — `src/ui-px/`, `scripts/ui-px/`
 
 Owner: redraw the whole game interface in the style of the bosses and pets (pixel art, 1-px dark
 outline, light from the upper left), «no walls of text», every format (phone portrait/landscape,
@@ -55,14 +55,41 @@ Moonlighter, Darkest Dungeon, Octopath, Diablo, PoE2). Study only — never copy
 
 ### Materials (5-tone ramps, dark → light; INK `#120a0e` outline everywhere)
 
+Palette v2 (wave 2 — N, 13.10): LIGHT and warm, so text and art read («на её фоне не особо всё
+хорошо видно»). Ramps in `paint.ts` `MAT`; re-bake after any change.
+
 | material                 | ramp                                      | use                                   |
 | ------------------------ | ----------------------------------------- | ------------------------------------- |
-| stone                    | `#23242d #343643 #4a4d5d #64687b #8a8fa2` | stages, showcase, mine screens        |
+| stone (sandstone)        | `#6b5238 #a08462 #c4a985 #e0cba8 #f8ecd2` | stages, showcase, mine screens        |
 | iron                     | `#1a1e25 #2a3039 #404853 #5e6875 #8e99a7` | secondary buttons, tools, forge       |
-| wood (dark)              | `#25140c #391f12 #53301b #724527 #986135` | windows, sheets, the camp frame       |
+| wood (oak)               | `#3a2010 #6b3f20 #94592e #bd7a3e #e3a25c` | windows, sheets, the camp frame       |
 | parchment                | `#73502c #a27b4b #caa56e #e3c893 #f5e5bb` | readable text blocks, books           |
-| obsidian                 | `#0a0810 #14101c #201a2b #32283f #54466e` | inspect/details, tooltips             |
+| obsidian (= interior)    | `#6a4526 #f0dfba #e4cc9c #c9a56d #fff6e0` | fill of frames, wells, slots, details |
 | gold / red / green / ash | see `MAT`                                 | primary / danger / confirm / disabled |
+
+- **`obsidian` is the interior ramp of everything** (well, slot, inspect, tooltip fills), now
+  light parchment (`#f0dfba` fill, `#e4cc9c` well) — not a dark material any more. The name stays
+  so the bake/pieces don't change.
+- **Text vars are ink by default** (light surfaces): `--px-text #2a190c`, `--px-muted #5a3d22`,
+  `--px-dim #6e5034`, `--px-gold #804400`, `--px-red #a52a1a`, `--px-green #255c18`,
+  `--px-blue #1d5a96`, `--px-violet #6236a8`. On a DARK surface (iron/dark wood button, ink name
+  plate, red ribbon) put **`.px-dark`** on the container: the same vars become cream
+  (`#fff4dc #ecdcbc #d4c2a3`, gold `#ffd25e`, red `#ffa78c`, green `#9be887`, blue `#a6d6ff`,
+  violet `#d8c0ff`). Screens of other agents that sat on dark panels need `.px-dark` there.
+- **Measured contrast** (script `{SCR}/contrast.py`, every pair ≥ 4.5:1 for body, ≥ 3 for bold
+  ≥ 18.7 px): ink on fill 12.8, on well 10.8; muted 7.5/6.3; dim 5.6/4.7; gold 5.8; red 5.4;
+  green 6.1; blue 5.4; violet 6.1; `.px-dark` cream on dark wood 8.2, on iron 8.5, on ink plate
+  15.5; primary button ink on gold 7.9; danger/confirm cream on red/green 4.3/3.3 (bold 20 px).
+- **Rarity colours are never plain text on light** (common on fill = 1.4:1): use an ink pill
+  (`.nur-rar`: ink on the rarity colour, ≥ 7:1), the colour on an ink plate (≥ 6:1), or a name
+  with a 4-direction ink outline (`.px-inspect__name`). Slot frames keep the colour (inside an
+  ink line).
+- Tabs have fixed colours (not text vars): off = `#efe2c4` on iron, on = `#2a1405` on the wood
+  face. Slot counters / ★ are white with a 4-side ink outline (readable on light and dark).
+- Rejected (shots `{SCR}/palette-variants.png`): v2 walnut — stone `#4a3a2e…#eadbc0`, wood
+  `#2e190c…#d08e4c`, interior `#1a110b #46301f #3b281a #6b4d36 #94704f`; v3 slate — stone
+  `#3c4458…#e4eaf4`, wood `#22170f…#a07a52`, interior `#11151d #2c3446 #253041 #465370 #6d7c9e`.
+  Both kept dark wells where pet thumbnails blur; v1 (above) has the highest body contrast.
 
 Light comes from the UPPER LEFT: bevel highlight on top+left, shadow on bottom+right, buttons are
 3 px deeper at the bottom (pressed = the face moves down 2 px, bottom lip gone).
@@ -70,31 +97,34 @@ Light comes from the UPPER LEFT: bevel highlight on top+left, shadow on bottom+r
 ### Rarity
 
 Slot frames `slot-r0…r6` and name colours come from `lib/rarity.ts` (`RARITIES[i].color`) — never
-only text. Locked/unknown = silhouette in the same cell (`PetArt ghost`, grey on dark slots,
+only text. Locked/unknown = silhouette in the same cell (`PetArt ghost`, grey on the light slot well,
 black on the stage) + small lock bottom-right.
 
 ### Type
 
-- Body: **Tiny5** (OFL, 8-px em) as `CocoPx`; headings and tiny digits: **Press Start 2P** renamed
-  **«Coco Head»** (OFL with Reserved Font Name → renamed in the subset; licence files in
-  `public/ui/fonts/`). Coverage: Latin + Latin-1/Extended-A (fr, tr, de, es, it) + Cyrillic; checked
-  by `scripts/ui-px/fonts.py` (subset + coverage report). Fallbacks: GxRubik, system.
-- Sizes are whole multiples of the 8-px em: `--ts = max(2, ui-scale − 1 + --ts-add)`;
-  `--px-fs` 8·ts (body, ≥ 16 px), `--px-fs-big` 8·(ts+1), `--px-fs-hero` 8·(ts+2).
-  L's text-size setting (`html[data-text=s|l]`) shifts `--ts-add` by a whole step (fractional
-  scales give uneven pixel rows). L's `--ui-text` (0.9/1/1.15) is for vector text — the kit
-  deliberately ignores it. `font-synthesis: none` (no fake bold).
-- **Legibility floor (lead review, 13.10)**: nothing user-facing under `--px-fs-sm` =
-  max(floor, 8·(ts−1)), floor by DPR so a font pixel is whole screen dots: 13.333 px at DPR ≥ 2.5
-  (5 dots), 12 px at DPR ≥ 1.5 (3 dots), 16 px at DPR 1. Used by bar labels, badges, key-hint
-  words. `--px-fs-tiny` (8 px on phones) is ONLY for digits/glyphs on slot counters and key caps.
-  Tiny5 16 px has a 10-px cap and ~8-px x-height (≈ a 14–15 px system font), so body stays 16.
-- **Why Tiny5 stays the body font** (side-by-side at 16 px, DPR 2 and 3, 7 languages): Pixelify
-  Sans has no «О»/«П» in its cmap and its Cyrillic reads wrong (д≈a, ь≈b, Э≈З, 5≈S); DotGothic16
-  lacks Turkish İ Ğ ğ Ş ş and its Cyrillic is full-width; Rubik Pixels is textured mush at body
-  sizes; VT323 has no Cyrillic; Handjet rendered blank. Taller body = next whole step, not
-  another font.
-- Short labels; names in the rarity colour; numbers via `fmtNum`/`t()` params (locale).
+- Owner 13.10: the pixel fonts (Tiny5, Press Start 2P) were «непонятный, сложно читаемый»; they
+  are GONE (files, `@font-face`, OFL texts). Body = **GxRubik** (`--px-font`, the game's vector
+  Rubik, weight 500, `b/strong` 700, `font-synthesis: none`). Headings = **Russo One** subset
+  renamed **«Coco Title»** (`--px-head`, `/ui/fonts/coco-title.woff2`, OFL in
+  `public/ui/fonts/OFL-coco-title.txt`; built by `python3 scripts/ui-px/fonts.py <dir with
+RussoOne-Regular.ttf>` — subsets Latin + Latin-1/Ext-A + Cyrillic, renames, FAILS on a missing
+  glyph of the 7 languages). Numbers: `.px-num` = Rubik 700 tabular (nothing jumps).
+- Why Russo One (side by side at 20–28 px, DPR 1/2/3, 7 languages, `{SCR}/fonts*.png`): game
+  character, wide clear Cyrillic, full Turkish/German; Exo 2 / Oswald readable but plainer or
+  condensed; Philosopher too thin; Rubik 800 readable but no character. Only headings/names
+  use it — body text stays Rubik.
+- Scale (vector, not whole pixel steps): `--px-fs = (15px + 2.5px·ui-scale) · --px-tx` →
+  20 px on phones (scale 2), 22.5 tablet/laptop, 25 at 1080p. Owner set «large» and liked it,
+  so this default is ≥ the old «large». `--px-fs-sm` ×0.85 (labels, ≥ 17 px), `-tiny` ×0.7
+  (ONLY digits on slot counters/key caps), `-head` ×1.15, `-big` ×1.3, `-hero` ×1.4.
+  L's setting `html[data-text=s|l]` → `--px-tx` 0.87 / 1.15 (one step smaller / larger).
+- Heading = `.px-h` (Coco Title, `--px-gold`, 1-art-px ink shadow). Pitfall: `game-ui.css`
+  `.gx-panel--wood :is(h2,h3,b)` puts its own shadow/colour on headings inside the camp sheet —
+  scope kit headings one class deeper (`.nur .nur-…`).
+- Never ellipsis on primary labels (buttons, tabs, titles): wrap or a shorter string; check
+  de/tr at 390×844. Long names fit by size, not by cutting: `font-size: min(hero,
+100cqi / (len · 0.64))` in a size container (`--len` = name length).
+- Short labels; numbers via `fmtNum`/`t()` params (locale thousand separators).
 
 ### Spacing
 
@@ -132,44 +162,57 @@ disabled (`aria-disabled`: ash material, still clickable to show why).
   `data-autofocus`. A list where focus = selection (Nursery grid) selects on `onFocus`.
 - Hotkeys via `useAction(…, { scope })` so they die when a window covers the screen; show them
   with `hint`/`KeyHint` (nothing on touch).
-- Layout by S's format: `useFormFactor()` → `ff`, `landscape`, `scale`. Phone portrait: one
-  column, selected thing on top, list scrolls, actions in the thumb zone. Phone landscape /
-  tablet landscape / desktop: list | showcase (hero, 40 %) | details column. Tablet portrait:
-  showcase | details on top, wide list below (more columns). Each column scrolls on its own; the
-  page never scrolls. No dead strips: grids spread spare width between columns
-  (`justify-content: space-between`), a details column spreads its groups over its height.
+- Layout by S's format: `useFormFactor()` → `ff`, `landscape`, `scale`. The showcased thing is
+  about HALF the screen (owner): phone portrait — stage on top (~55 % of the height), compact
+  rows under it, actions in the thumb zone; phone landscape / tablet landscape / desktop — stage
+  | side column (~50 % of the width); tablet portrait — stage on top, side below. Each column
+  scrolls on its own; the page never scrolls. No dead strips: grids spread spare width between
+  columns (`justify-content: space-between`).
 - **Never give a grid child a `grid-area` name its parent doesn't define** (e.g. a block reused in
   two containers): the browser adds implicit tracks and the parent's layout explodes into
   columns. Scope it: `.nur-stage > .nur-id { grid-area: id }`.
 
-### Nursery pilot (v1) — `src/components/Nursery.tsx`, `nursery.css`, tabs in `PetsTab.tsx`
+### Nursery v2 (wave 2 — N, 13.10) — `src/components/Nursery.tsx`, `nursery.css`, tabs in `PetsTab.tsx`
 
-- Replaces the old main view, `PetSheet` and `SquadPicker` (deleted). Eggs (nests, basket, hatch
-  all, shop, `NestSheet`, `HatchScene`, `HatchBatch`) are untouched and live on the «Яйца» tab;
-  a ready nest opens the screen on that tab. On the pets tab the egg blocks are hidden by CSS
-  (`.ppn.is-pets > :not(...)`), not by JSX — less conflict with the eggs code.
-- Showcase: stone stage + pedestal, tap = pat (+XP every 10 min, as before). Phone portrait:
-  name/rarity/level/perks/power beside a 64-art-px pet, six animation buttons under them. Other
-  formats: the stage is the HERO — `useBox` measures `.nur-stage__room` (`contain: size`, so the
-  pet can't feed back into it) and `fitPet` picks the biggest frame whose `pxFit` result (it can
-  round UP 15 %) fits with the pedestal; the pedestal is drawn at the pet's own pixel (`--ped` =
-  round(s·dpr/112)/dpr, ≥ UI px). Name (hero size), rarity, gold, power, level bar with XP
-  numbers and the animation buttons move to the details column (`.nur-side`, a size container
-  `nur-side`: ≥ 290 px → icon + word in 2 columns, ≥ 470 px → 3; tablet portrait and phone
-  landscape: small icon-only). Animation icons: idle = pause bars, walk = paw prints, happy =
-  heart, trick = star, attack = claw, sleep = moon + z; the word is the `data-tip` (S's TipHost)
-  and `aria-label`.
-- Squad bar (3 slots: filled = select, empty = picker modal, locked = rank J / prestige — tap
-  says why; no captions under slots, names in the tip), squad
-  totals in the header; collection: count, zoo bonus, sort (rarity/level/power) and filter
-  (all/owned/missing) cycle buttons, grid of `Slot`s (level, ★ gold, «!» can merge, paw = along,
-  hover/long-press tooltip). Details (column or sheet on phones): lore, roles with values, XP
-  numbers, copies to gold + «make gold», skin choice for gold pets, eggs it hatches from.
-- Primary action «take along / leave home» (`inspect`: X / pad Y). Squad full → replaces the last
-  (as before). Strings: area `nursery` (7 languages) + L's `pets.<id>.name/lore`.
+- Eggs (nests, basket, shop, `NestSheet`, `HatchScene`, `HatchBatch`) are untouched on the «Яйца»
+  tab; on the pets tab the egg blocks are hidden by CSS (`.ppn.is-pets > :not(...)`).
+- Layouts (`Layout` in the component): `one` phone portrait — stage / squad / collection strip
+  (grid button + one row) / action bar; `land` phone landscape — stage | side (plate, squad,
+  collection button, actions); `tall` tablet portrait — stage on top, side below with squad +
+  full collection grid; `wide` tablet landscape & desktop — stage | side with the full grid.
+  On `one`/`land` the full collection is a **drawer** over the side column (`.nur-drawer`,
+  `data-ui-layer`, escape stack, focus into the selected cell on keyboard/pad, back to the grid
+  button on close). Details (lore, roles, copies → gold, skins, eggs) = a `Modal sheet` on
+  every layout (the `i` button, «!» badge when a merge is possible).
+- Stage: lit sandstone room (radial light pool, floor band), framed animation buttons in a
+  vertical column on the right (6 × `Button size="sm" icon`, always framed, unowned = `off` and
+  says «hatch first»), the name plate under the room (`.px-dark` ink plate: name in the rarity
+  colour, rarity pill, gold badge, power, role chips max 2 on phones / 3 elsewhere + «+N» chip
+  that opens details, XP bar). Pet size: `useBox` measures `.nur-room` (`contain: size`),
+  `pedFor` = pedestal pixel from the room (not the pet), `fitPet` picks the biggest whole-dot
+  frame that fits above the pedestal; offsets rounded to 1/dpr.
+- **Fixed layout (owner: «чтобы картинка не дёргалась»)**: every row has a fixed height from
+  the TYPE scale (`calc(var(--px-fs-sm) * 1.65)`, not from `--u` — u-based rows made the plate
+  tall on desktop and shrank the pet 448 → 336), names shrink to fit instead of wrapping, chips
+  are capped, absent things keep their box. Check: `{SCR}/jump.mjs` selects the pets with the
+  fewest/most roles + an unhatched one and compares bounding boxes of stage, room, pet, plate,
+  anims, squad, collection, actions — all identical on all 6 formats.
+- Squad («Отряд» + hint «Идут с тобой в шахту», `nursery.squad/squadHint`): three BIG slots
+  (34 u, 26 u on phone landscape) — filled = select, empty = dashed frame + plus (picker), locked
+  = lock + what unlocks it; bonuses as compact chips UNDER the slots (icon + `nursery.bonus`),
+  never bigger than the pets.
 - The camp window chrome is the kit for EVERY camp since wave 2 (C, `gx-px.css`; see
-  `game-ui.md` → «Window chrome on the kit»); `nursery.css` keeps only the Nursery's own fill
-  of the body (`.gx-camp:has(.nur) .pcamp-body`).
+  `game-ui.md` → «Window chrome on the kit»); `nursery.css` only sizes the pets camp and fills
+  its body (`.gx-camp:has(.nur) .pcamp-body`). The pets camp is full height and
+  `--gx-mw: 480` on every format (`.gx-win .gx-win__box.gx-camp:has(.ppn)`), same on both tabs:
+  C's default caps camps at 250 u high, which made the tablet-portrait pet 96 px.
+- Primary action «take along / leave home» (`inspect`: X / pad Y); squad full → replaces the
+  last. Strings: area `nursery` (7 languages) + L's `pets.<id>.name/lore`.
+- Pitfalls: a drawer placed in a grid area resizes its `auto` track — make it absolutely
+  positioned (`inset: 0`, z 5) inside the area; the `hidden` attribute loses to a CSS
+  `display` — render conditionally; new files in `public/` are not served by a running Vite —
+  restart it. The gold mark on the plate is a ★ badge, the word shows only where the plate is
+  wider than 17 em (em of its own text, so the large text size drops it too).
 - **Not checked on a real phone / Telegram webview / gamepad hardware** (stand: Playwright at
   390×844@3, 844×390@3, 820×1180@2, 1180×820@2, 1440×900, 1920×1080; keyboard by real key
   presses, gamepad by emitted actions).

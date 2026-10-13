@@ -1,44 +1,57 @@
-/* Nursery (components/Nursery.tsx) — the pets view of «Питомник» on the pixel kit.
-   Every size is a whole number of art pixels (var(--u)); kit rules: .claude/rules/ui-px.md. */
+/* Nursery (components/Nursery.tsx) — the pets view of «Питомник» on the pixel kit, v2.
+   Owner 13.10: one pet BIG, readable type, a light palette, nothing jumps when another pet is
+   picked. Every art size is a whole number of art pixels (var(--u)); kit rules:
+   .claude/rules/ui-px.md. Rows that hold changing text have FIXED heights (the plate, the
+   chip rows) — switching pets must not move a single box. */
 
 .nur {
   --gap: calc(4 * var(--u));
+  /* chip background: a shade of the surface it sits on */
+  --chip: rgb(90 61 34 / 0.13);
+  position: relative;
   display: grid;
   gap: var(--gap);
   min-height: 0;
+  flex: 1 1 auto;
   color: var(--px-text);
 }
+.nur .px-dark {
+  --chip: rgb(255 244 220 / 0.1);
+}
+/* Phone portrait: the stage takes all the height the squad, the strip and the actions leave. */
 .nur--one {
-  flex: 1 1 auto;
+  --gap: calc(3 * var(--u));
   grid-template:
-    'show' auto
-    'list' minmax(0, 1fr)
-    'acts' auto
+    'show' minmax(0, 1fr)
+    'side' auto
     / minmax(0, 1fr);
 }
-.nur--two {
-  flex: 1 1 auto;
-  grid-template:
-    'show side' minmax(0, 11fr)
-    'list list' minmax(0, 9fr)
-    / minmax(0, 1fr) minmax(0, 1fr);
+/* Phone landscape: the stage on the left half, full height. */
+.nur--land {
+  grid-template: 'show side' minmax(0, 1fr) / minmax(0, 11fr) minmax(0, 9fr);
 }
-/* The showcase is the hero: 40% of the width, the pet as big as a whole scale allows. */
-.nur--three {
-  flex: 1 1 auto;
-  grid-template: 'list show side' minmax(0, 1fr) / minmax(0, 7fr) minmax(0, 10fr) minmax(0, 8fr);
+/* Tablet portrait: the stage on top (11/20 of the height), squad | collection under it. */
+.nur--tall {
+  grid-template:
+    'show' minmax(0, 3fr)
+    'side' minmax(0, 2fr)
+    / minmax(0, 1fr);
+}
+/* Tablet landscape, desktop: the stage is the hero, 55 % of the width. */
+.nur--wide {
+  grid-template: 'show side' minmax(0, 1fr) / minmax(0, 11fr) minmax(0, 9fr);
 }
 
-/* ---- Showcase ------------------------------------------------------------------------------ */
+/* ---- Stage ----------------------------------------------------------------------------------- */
 .nur-show {
   grid-area: show;
   min-height: 0;
   min-width: 0;
   display: grid;
 }
-/* A lit stage (owner 13.10: «на её фоне не особо всё хорошо видно»): the stone wall under a warm
-   veil, a pool of light behind the pet in hard bands (no smooth glow on pixel art) and a lighter
-   floor — the pet's ink outline reads against it. */
+/* A lit stage (owner 13.10: «на её фоне не особо всё хорошо видно»): the sandstone wall under a
+   warm veil, a pool of light behind the pet in hard bands (no smooth glow on pixel art) and a
+   lighter floor — the pet's ink outline reads against it. */
 .nur-stage {
   --st-veil: rgb(255 244 222 / 0.4);
   --st-s1: rgb(255 250 240 / 0.95);
@@ -69,53 +82,51 @@
   background-repeat: no-repeat, no-repeat, no-repeat, repeat;
   display: grid;
   min-width: 0;
+  min-height: 0;
   gap: calc(3 * var(--u));
-  grid-template: 'pet' minmax(0, 1fr) / minmax(0, 1fr);
-  align-items: center;
-}
-.nur--one .nur-stage {
+  /* the animation buttons stand in a column on the right: the pet keeps the whole height */
   grid-template:
-    'id pet' auto
-    'anims anims' auto
+    'room anims' minmax(0, 1fr)
+    'plate plate' auto
     / minmax(0, 1fr) auto;
 }
-.nur--one .nur-anims {
+.nur-anims {
+  grid-area: anims;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
   gap: calc(2 * var(--u));
 }
-/* The measured box of the hero stage: its size comes from the grid only (contain), the pet is
-   sized from it in Nursery.tsx and sits in the middle on its pedestal. */
-.nur-stage__room {
-  grid-area: pet;
-  align-self: stretch;
-  min-height: 0;
-  contain: size;
-  display: grid;
-  place-items: center;
-}
-/* The pedestal is drawn at the pet's own pixel (--ped, whole screen dots). */
-.nur-stage__pet {
-  grid-area: pet;
+/* The measured room: its size comes from the grid only (contain), the pet is sized from it in
+   Nursery.tsx and stands on a pedestal of the room's size (--ped, whole screen dots). */
+.nur-room {
+  grid-area: room;
   position: relative;
-  display: grid;
-  place-items: center;
-  justify-self: center;
-  padding-bottom: calc(4 * var(--ped, var(--u)));
-  background: var(--pximg-pedestal) no-repeat center bottom /
+  min-height: 0;
+  min-width: 0;
+  contain: size;
+}
+.nur-pet {
+  position: absolute;
+  inset: 0;
+  background: var(--pximg-pedestal) no-repeat var(--pedx, 50%) bottom /
     calc(var(--pximg-pedestal-w) * var(--ped, var(--u)))
     calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
   image-rendering: pixelated;
 }
-.nur-stage__pet .pet {
+.nur-pet > .pet {
+  position: absolute;
+  left: var(--x, 0);
+  bottom: var(--lift, 0);
   cursor: pointer;
 }
 .nur-stage__xp {
-  grid-area: pet;
+  grid-area: room;
   align-self: start;
   justify-self: center;
   z-index: 3;
-  font: 400 var(--px-fs) / 1 var(--px-font);
-  color: var(--px-gold);
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-gold-hi);
   text-shadow:
     var(--u) 0 0 var(--px-ink),
     0 var(--u) 0 var(--px-ink),
@@ -137,158 +148,324 @@
     opacity: 0;
   }
 }
-.nur-stage > .nur-anims {
-  grid-area: anims;
-}
-.nur-anims {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--u);
-}
-.nur-anim {
-  padding-left: calc(3 * var(--u));
-  padding-right: calc(3 * var(--u));
-}
-.nur-anim__lbl {
-  display: none;
-}
-/* Wide details column (desktop, tablets): the word beside the icon. */
-@container nur-side (min-width: 290px) {
-  .nur-anims {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: calc(2 * var(--u));
-  }
-  .nur-anim {
-    justify-content: flex-start;
-    min-width: 0;
-  }
-  .nur-anim__lbl {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-/* Tablet portrait: the column is short (the collection takes the lower half) — icons only. */
-.nur--two .nur-anims {
-  display: flex;
-}
-.nur--two .nur-anim__lbl {
-  display: none;
-}
-@container nur-side (min-width: 470px) {
-  .nur-anims {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-.nur-stage > .nur-id {
-  grid-area: id;
-}
-.nur-id {
+
+/* ---- Plate: name, rarity, power, roles, level ---------------------------------------------- */
+.nur-plate {
+  grid-area: plate;
+  container: nur-plate / inline-size;
   display: grid;
   gap: calc(2 * var(--u));
   min-width: 0;
-  align-content: start;
+  padding: calc(3 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u));
+  background: #2a190c;
+  border: var(--u) solid var(--px-ink);
+  box-shadow:
+    inset 0 var(--u) 0 #6b4a2c,
+    inset 0 calc(-1 * var(--u)) 0 #1a0f07;
 }
-/* `.nur` in front: the camp sheet's `.gx-panel--wood h3` shadow must not win */
-.nur .nur-id__name {
+/* `.nur` in front: the camp sheet's `.gx-panel--wood h3` shadow must not win. One line, the
+   size shrinks for long names (container width ÷ length) so the row height never changes. */
+.nur .nur-plate__name {
   margin: 0;
-  font: 400 var(--px-fs-big) / 1 var(--px-head);
-  color: var(--rc, var(--px-gold));
-  text-shadow:
-    var(--u) 0 0 var(--px-ink),
-    calc(-1 * var(--u)) 0 0 var(--px-ink),
-    0 var(--u) 0 var(--px-ink),
-    0 calc(-1 * var(--u)) 0 var(--px-ink);
-  overflow-wrap: break-word;
-}
-.nur-id__sub {
+  height: calc(var(--px-fs-hero) * 1.15);
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: calc(2 * var(--u));
-  color: var(--rc, var(--px-muted));
+  font: 400 var(--px-fs-head) / 1 var(--px-head);
+  font-size: min(var(--px-fs-hero), calc(100cqi / (var(--len, 12) * 0.64)));
+  color: var(--rc, var(--px-gold));
+  text-shadow: 0 var(--u) 0 #000;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.nur-perks {
+.nur-plate__row,
+.nur-plate__roles {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--u) calc(3 * var(--u));
+  align-items: center;
+  gap: calc(3 * var(--u));
+  /* text rows: their height follows the type, not the art scale */
+  height: calc(var(--px-fs-sm) * 1.65);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
-.nur-perk {
+.nur-plate__roles {
+  gap: calc(2 * var(--u));
+}
+.nur-plate > .px-bar {
+  height: calc(var(--px-fs-sm) * 1.3);
+}
+/* Rarity as a pill: ink on the rarity colour reads on any surface (≥ 4.5:1 for every rarity). */
+.nur-rar {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--px-fs-sm) * 1.45);
+  padding: 0 calc(3 * var(--u));
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-ink);
+  background: var(--rc, #c4c0b8);
+  border: var(--u) solid var(--px-ink);
+  box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.45);
+  text-shadow: none;
+}
+.nur-pow {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: var(--u);
-  min-width: 0;
-  color: var(--px-text);
-}
-.nur-perk > .px-i {
-  color: var(--px-gold);
-}
-.nur-perk--pow {
+  font: 600 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-muted);
 }
-.nur-id__sub > .nur-perk--pow {
-  margin-left: auto;
-}
-.nur-perk--pow > b {
-  font-weight: 400;
+.nur-pow > .px-i,
+.nur-pow > b {
   color: var(--px-gold);
 }
-
-/* ---- List: squad + collection ------------------------------------------------------------- */
-.nur-list {
-  grid-area: list;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  display: grid;
-  align-content: start;
-  gap: calc(6 * var(--u));
-  /* room for the focus ring and the corner badges inside the scroller */
-  padding: calc(3 * var(--u));
-  margin: calc(-3 * var(--u));
+.nur-pow > b {
+  font-size: var(--px-fs);
+  margin-left: var(--u);
 }
-.nur-head {
+@container nur-plate (max-width: 300px) {
+  .nur-pow__w {
+    display: none;
+  }
+}
+/* Gold: a star (as on the collection slots) + the word where the plate is wide. The threshold is
+   in em of the plate's text, so a larger text size drops the word too: the row never overflows
+   (a phone plate fits «Легендарный» + ★ + power at the large size). */
+.nur-gold {
+  display: inline-flex;
+  flex: none;
+}
+.nur-gold .px-badge {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: var(--u);
+}
+@container nur-plate (max-width: 17em) {
+  .nur-gold__w {
+    display: none;
+  }
+}
+.nur-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--u);
+  height: calc(var(--px-fs-sm) * 1.5);
+  padding: 0 calc(2 * var(--u));
+  margin: 0;
+  border: 0;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-text);
+  background: var(--chip);
+  white-space: nowrap;
+}
+.nur-chip > .px-i {
+  color: var(--px-gold);
+}
+.nur-chip--more {
+  cursor: pointer;
+  color: var(--px-gold);
+  -webkit-tap-highlight-color: transparent;
+}
+.nur-chip--note {
+  background: none;
+  padding: 0;
+  font-weight: 600;
+  color: var(--px-muted);
+}
+
+/* ---- Squad: three BIG cells, the summed bonuses small under them ---------------------------- */
+.nur-squad {
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.nur-squad__head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: calc(2 * var(--u)) calc(4 * var(--u));
-  margin-bottom: calc(3 * var(--u));
+  gap: 0 calc(3 * var(--u));
 }
-.nur-head .px-h {
+.nur .nur-squad__title {
   margin: 0;
 }
-.nur-head__count {
+.nur-squad__hint {
+  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-muted);
 }
-.nur-head__note {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--u) calc(3 * var(--u));
-}
 .nur-squad__row {
+  --slot: calc(34 * var(--u));
   display: flex;
   gap: calc(5 * var(--u));
-  padding: 0 calc(3 * var(--u));
+  padding: calc(2 * var(--u)) calc(3 * var(--u)) 0;
 }
-.nur-squad__row .px-slot.is-empty .px-slot__lock {
-  inset: 0;
-  margin: auto;
+.nur--land .nur-squad__row {
+  --slot: calc(26 * var(--u));
+  gap: calc(4 * var(--u));
+}
+/* Empty place: a dashed outline and a big plus — «tap to add». */
+.nur-squad__row > .nur-squad__add {
+  --d: var(--px-gold);
+  border-image-source: none;
+  background:
+    repeating-linear-gradient(
+        90deg,
+        var(--d) 0 calc(3 * var(--u)),
+        transparent 0 calc(6 * var(--u))
+      )
+      0 0 / 100% calc(2 * var(--u)) no-repeat,
+    repeating-linear-gradient(
+        90deg,
+        var(--d) 0 calc(3 * var(--u)),
+        transparent 0 calc(6 * var(--u))
+      )
+      0 100% / 100% calc(2 * var(--u)) no-repeat,
+    repeating-linear-gradient(0deg, var(--d) 0 calc(3 * var(--u)), transparent 0 calc(6 * var(--u)))
+      0 0 / calc(2 * var(--u)) 100% no-repeat,
+    repeating-linear-gradient(0deg, var(--d) 0 calc(3 * var(--u)), transparent 0 calc(6 * var(--u)))
+      100% 0 / calc(2 * var(--u)) 100% no-repeat,
+    rgb(255 250 235 / 0.55);
+  color: var(--px-gold);
+}
+.nur-squad__add .px-i {
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+}
+/* Shut place: a lock and what opens it, in the cell itself. */
+.nur-squad__row > .nur-squad__lock {
+  color: var(--px-muted);
+}
+.nur-squad__lock > .px-slot__art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--u);
+}
+.nur-squad__why {
+  max-width: 100%;
+  padding: 0 var(--u);
+  font: 700 var(--px-fs-tiny) / 1.1 var(--px-font);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.nur-squad__sum {
+  display: flex;
+  gap: calc(2 * var(--u));
+  height: calc(var(--px-fs-sm) * 1.5);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.nur-chip--sm {
+  height: calc(var(--px-fs-sm) * 1.4);
+}
+
+/* ---- Collection: strip + drawer (phones), grid (tablets, desktop) --------------------------- */
+.nur-strip {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.nur-strip__open {
+  flex: none;
+  min-height: calc(26 * var(--u));
+  flex-direction: column;
+  gap: var(--u);
+  padding-left: calc(3 * var(--u));
+  padding-right: calc(3 * var(--u));
+}
+.nur-strip__open .px-num {
+  font-size: var(--px-fs-sm);
+}
+.nur-strip__row {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: calc(3 * var(--u));
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* room for the focus ring and the corner badges inside the scroller */
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u)) 0;
+}
+.nur-strip__row::-webkit-scrollbar {
+  display: none;
+}
+.nur-strip__row > .px-slot {
+  flex: none;
+}
+.nur-coll {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  min-height: 0;
+  min-width: 0;
+}
+.nur-coll__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+}
+.nur-coll__head .px-h {
+  margin: 0;
+}
+.nur-coll__count {
+  font-family: var(--px-font);
+  color: var(--px-muted);
 }
 .nur-tools {
   display: flex;
-  flex-wrap: wrap;
   gap: calc(2 * var(--u));
-  margin-bottom: calc(3 * var(--u));
+  margin-left: auto;
 }
 .nur-grid {
   width: 100%;
   /* the spare width goes between the columns, not into a strip on the right */
   justify-content: space-between;
+  align-content: start;
 }
-/* Not hatched yet: a grey silhouette (the global ghost is black — lost on the dark slots). */
+.nur-coll > .nur-grid,
+.nur-drawer > .nur-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The drawer lies over the side area only (same grid area, absolutely placed so its content
+   never resizes the row): the stage stays in view and shows each pet as it is picked. */
+.nur .nur-drawer {
+  grid-area: side;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  min-height: 0;
+  min-width: 0;
+  animation: nur-up 120ms steps(3, jump-none);
+}
+/* drawer head: the title on its own line (beside the close button), chip + tools under it */
+.nur-drawer > .nur-coll__head > .px-h {
+  flex-basis: 100%;
+  padding-right: calc(18 * var(--u));
+}
+.nur-drawer__close {
+  position: absolute !important;
+  top: calc(3 * var(--u));
+  right: calc(3 * var(--u));
+}
+@keyframes nur-up {
+  from {
+    transform: translateY(calc(12 * var(--u)));
+  }
+}
+/* Not hatched yet: a grey silhouette in the cells, a dark one on the stage. */
 .nur .pet.is-ghost .pet__thumb {
   filter: brightness(0) invert(0.32);
 }
@@ -304,8 +481,7 @@
   color: var(--px-gold);
 }
 
-/* ---- Details column (tablet, landscape, desktop): name, level, power, animations, lore,
-   roles, gold, skin — and the take/leave button under it ----------------------------------- */
+/* ---- Side column ---------------------------------------------------------------------------- */
 .nur-side {
   grid-area: side;
   min-height: 0;
@@ -314,17 +490,45 @@
   flex-direction: column;
   gap: var(--gap);
 }
-.nur-info {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  container: nur-side / inline-size;
+.nur--land .nur-side {
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
 }
+.nur--land .nur-plate__roles {
+  display: none;
+}
+.nur--land .nur-strip__open {
+  min-height: calc(19 * var(--u));
+  flex-direction: row;
+}
+.nur--wide .nur-side > .nur-coll {
+  flex: 1 1 auto;
+}
+.nur--tall .nur-side {
+  display: grid;
+  grid-template:
+    'squad coll' auto
+    '. coll' minmax(0, 1fr)
+    'acts coll' auto
+    / minmax(0, 5fr) minmax(0, 6fr);
+  gap: var(--gap) calc(6 * var(--u));
+}
+.nur--tall .nur-side > .nur-squad {
+  grid-area: squad;
+}
+.nur--tall .nur-side > .nur-coll {
+  grid-area: coll;
+}
+.nur--tall .nur-side > .nur-acts {
+  grid-area: acts;
+}
+
+/* ---- Details (sheet): lore, roles, copies to gold, skin, eggs ------------------------------- */
 .nur-info__body {
   display: grid;
   gap: calc(4 * var(--u));
+  /* the sheet body's own 2 u is tight against the wood bevel for a line of text */
+  padding-inline: calc(2 * var(--u));
 }
 .nur-info__grp {
   display: grid;
@@ -333,26 +537,6 @@
 }
 .nur-info__grp:empty {
   display: none;
-}
-/* In the details column the groups spread over the full height (no half-empty panel when
-   the pet has little to say) and pack + scroll when it has a lot. */
-.nur-side .nur-info__body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: calc(5 * var(--u));
-}
-.nur-side .nur-info__grp + .nur-info__grp {
-  padding-top: calc(5 * var(--u));
-  border-top: var(--u) solid #2c2438;
-  box-shadow: inset 0 var(--u) 0 #0c0a12;
-}
-.nur-side .nur-id__name {
-  font-size: var(--px-fs-hero);
-}
-html[data-ff='phone-landscape'] .nur-side .nur-id__name {
-  font-size: var(--px-fs-big);
 }
 .nur-info__lore {
   margin: 0;
@@ -372,8 +556,7 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
   color: var(--px-gold);
 }
 .nur-role > b {
-  font-weight: 400;
-  color: var(--rc, var(--px-gold));
+  color: var(--px-text);
 }
 .nur-role > span {
   color: var(--px-text);
@@ -384,7 +567,6 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
   gap: calc(2 * var(--u));
 }
 .nur-info__merge b {
-  font-weight: 400;
   color: var(--px-blue);
 }
 .nur-info__skin {
@@ -413,24 +595,34 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
   color: var(--px-gold);
 }
 .nur-egg > b {
-  font-weight: 400;
   color: var(--px-gold);
 }
 
-/* ---- Action bar (thumb zone on phones) ----------------------------------------------------- */
+/* ---- Action bar (thumb zone on phones) ------------------------------------------------------ */
 .nur-acts {
-  grid-area: acts;
-  align-self: end;
   display: flex;
   gap: calc(3 * var(--u));
   align-items: stretch;
 }
 .nur-acts > .px-btn--wide {
   flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  text-align: center;
 }
-.nur-side > .nur-acts {
+.nur--wide .nur-side > .nur-acts {
+  margin-top: auto;
+}
+.nur-acts__info {
+  position: relative;
   flex: none;
-  align-self: stretch;
+  display: flex;
+}
+.nur-acts__info > .px-slot__dot {
+  position: absolute;
+  top: calc(-2 * var(--u));
+  right: calc(-2 * var(--u));
+  z-index: 2;
 }
 
 /* ---- Tooltip and picker --------------------------------------------------------------------- */
@@ -440,8 +632,7 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
   text-align: left;
 }
 .nur-tip > b {
-  font-weight: 400;
-  color: var(--rc, var(--px-gold));
+  color: var(--px-text);
 }
 .nur-tip > i {
   font-style: normal;
@@ -456,7 +647,14 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
 }
 
 /* The camp window chrome (frame, ribbon, well body for kit content) lives in gx-px.css (agent C,
-   wave 2) for every camp; here only the Nursery's own fill of the body. */
+   wave 2) for every camp; here only the pets camp's size and the Nursery's fill of the body.
+   The stage must take about half the screen (owner), so on every format the pets window takes
+   the whole height under the header and is wider than other kit windows. `.ppn` wraps both tabs
+   (pets | eggs), so the window keeps one size when the tab changes. */
+.gx-win .gx-win__box.gx-camp:has(.ppn) {
+  --gx-mw: 480;
+  height: 100%;
+}
 .gx-camp:has(.nur) .pcamp-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -481,4 +679,16 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
 }
 .ppn.is-pets > .ppn__tabs {
   margin-bottom: 0;
+}
+/* The count sits on the tab's corner (like the camp tabs), so «Yumurtalar» keeps its full word
+   on a phone instead of an ellipsis. */
+.ppn__tabs .px-tab > .px-badge {
+  position: absolute;
+  top: calc(-2 * var(--u));
+  right: calc(-2 * var(--u));
+  z-index: 2;
+}
+/* Large text on a phone: the word wins over the icon (Turkish «Yumurtalar» at 23 px). */
+html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i {
+  display: none;
 }
