@@ -185,22 +185,34 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
 
 - Eggs (nests, basket, shop, `NestSheet`, `HatchScene`, `HatchBatch`) are untouched on the «Яйца»
   tab; on the pets tab the egg blocks are hidden by CSS (`.ppn.is-pets > :not(...)`).
-- Layouts (`Layout` in the component): `one` phone portrait — stage / squad / action bar
-  `[▦ 18/18] [take/leave] [i]` (no strip since wave 3 — it cut cells at both edges); `land` phone
-  landscape — stage | side 1fr/1fr (plate, squad with the stat grid beside the slots, actions); `tall` tablet portrait — stage on top, side below with squad +
-  full collection grid; `wide` tablet landscape & desktop — stage | side with the full grid.
-  On `one`/`land` the full collection is a **drawer** over the side column (`.nur-drawer`,
-  `data-ui-layer`, escape stack, focus into the selected cell on keyboard/pad, back to the grid
-  button on close). Details (lore, roles, copies → gold, skins, eggs) = a `Modal sheet` on
-  every layout (the `i` button, «!» badge when a merge is possible).
-- Stage: lit sandstone room (radial light pool, floor band), framed animation buttons in a
-  vertical column on the right (6 × `Button size="sm" icon`, always framed, unowned = `off` and
-  says «hatch first»), the name plate under the room (`.px-dark` ink plate: name in the rarity
-  colour + power picture and number on the right; rarity pill, ★ gold, level; at most 3 chips —
-  stat picture + whole percent, biggest first, ties in the fixed stat order — + «+N» that opens
-  details (≥ 44 × 28); XP bar «into / need» or «Предел»). Pet size: `useBox` measures `.nur-room` (`contain: size`),
-  `pedFor` = pedestal pixel from the room (not the pet), `fitPet` picks the biggest whole-dot
-  frame that fits above the pedestal; offsets rounded to 1/dpr.
+- Layouts (`Layout` in the component; round 3 — N3): `one` phone portrait — stage (room, plate
+  under it) / squad / action bar `[▦ 18/18] [take/leave] [i]`; `land` phone landscape — stage
+  (room only) | side 1fr/1fr (plate, squad with the stat grid beside the slots, actions);
+  `tall` tablet portrait — stage on top, side below (grid rows 16fr/9fr); `wide` tablet
+  landscape & desktop — stage (room | anim column) | side (plate on top, squad + full grid as ONE
+  scrolling list `.nur-side__mid`, action bar at the bottom). `plateSide` (land, wide) moves the
+  plate into the side column. On `one`/`land` (`drawerMode`) the full collection is a **drawer**
+  over the side column (`.nur-drawer`, `data-ui-layer`, escape stack, focus into the selected
+  cell on keyboard/pad, back to the grid button on close). Details (lore, roles, copies → gold,
+  skins, eggs) = a `Modal sheet` on every layout (the `i` button, «!» badge when a merge is
+  possible).
+- Stage: sandstone room (floor band + veil + tile, NO light pool since N3 — its curved bands were
+  mixels), the animation buttons (6 × `Button icon`, always framed, unowned = `off` and says
+  «hatch first») as a column right of the room on `tall`/`wide`; on phones ONE ▶ toggle
+  (`.nur-anim-tog`, `nursery.anims`, top-right of the room, hit 50 × 48) opens them as a 3 × 2
+  menu over the room (`.nur-anims--pop`, `md` buttons, `data-ui-layer`, escape stack, closes on a
+  pick and on a tap outside, focus in/out on keyboard/pad) — the column cost the portrait pet its
+  width. Name plate (`.px-dark` ink plate: name in the rarity colour + power picture and number on
+  the right; rarity pill, ★ gold, level; at most 3 chips — stat picture + whole percent, biggest
+  first, ties in the fixed stat order — + «+N» that opens details; XP bar «into / need» or
+  «Предел», on `one` a slim 4-u bar with the text as its tip). Pet size: `useBox` measures
+  `.nur-room` (`contain: size`), `pedFor` = pedestal pixel from the room (not the pet), `fitPet`
+  picks the biggest whole-dot frame that fits above the pedestal; offsets rounded to 1/dpr.
+- **Pet size per format (N3, asserted by `{SCR}/ui3N3/m.mjs`: frame ≥ target, identical boxes
+  across 4 pets, no change on a key press, page scroll 0)**: phone 390×844@3 299 (k 8 of the
+  112 strip), 360×780@3 224, 440×956@3 336, 844×390@3 224, 956×440@3 299, tablet 820×1180@2
+  336, 1180×820@2 448, desktop 1440×900 and 1920×1080 560. Before N3 (critic round 2, same order):
+  261/187/299/187/224/280/280/336/336.
 - **Fixed layout (owner: «чтобы картинка не дёргалась»)**: every row has a fixed height from
   the TYPE scale (`calc(var(--px-fs-sm) * 1.65)`, not from `--u` — u-based rows made the plate
   tall on desktop and shrank the pet 448 → 336), names shrink to fit instead of wrapping, chips
@@ -239,7 +251,8 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
   component-local view with holes (`SquadView`); the store still gets the compact list in the same
   order (`prisonSquadSet` compacts), and a squad change from elsewhere resets the view.
 - Legendary/mythic: `.pet__aura`/`.pet__rays` are hidden on the stage (soft vector glow, cost
-  frames); the light pool's hard bands take the rarity colour instead (`.nur-show--r3…r5`).
+  frames). The rarity tint of the light pool is gone too (N3, critic P1-6): rarity already shows
+  three times (pill, name colour, slot frame); a future accent must be baked at 1 art px.
 - Type on the screen: name hero (Coco Title), body `--px-fs` (power, headings), label `--px-fs-sm`
   (chips, rarity, level, hint, bar); weight 700 (slot counters keep `-tiny`). Hit areas ≥ 48 × 48 on
   phones (critic R13): anim column, drawer ✕, «+N», action bar get a `::before` with negative
@@ -259,9 +272,39 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
   `display` — render conditionally; new files in `public/` are not served by a running Vite —
   restart it. The gold mark on the plate is a ★ badge, the word shows only where the plate is
   wider than 17 em (em of its own text, so the large text size drops it too).
+- **Round 3 (N3) details.**
+  - «+N» chip: `usePress` + `:is(:active,.is-down)` look; `::before` hit area ≥ 48 × 44
+    (`min(-10px, calc((100% - 48px) / 2))`); `.nur-plate__roles` is `z-index: 2`, else the XP
+    bar's label (z 1) ate the bottom of the chip.
+  - Action bar: `KeyHint` is absolute on the button's top-right corner (`.nur-acts .px-btn >
+    .px-keyhint`) and the wide label is `nowrap` — an inline hint made the bar wrap / grow on the
+    first key press.
+  - Phone landscape: `PetsTab` turns the pets/eggs tabs into a 24-u rail on the left
+    (`ppn--rail`, `Tabs vertical`, `name` = aria + tip, labels hidden, key hint absolute under the
+    rail) — the full-width tab row cost the pet 75 px of height.
+  - Tight tabs: `PetsTab` measures `.px-tab__label` (scrollWidth > clientWidth) in a layout effect
+    + ResizeObserver and sets `.ppn__tabs.is-tight`, which hides the tab icons (tr «Hayvanlar»
+    at 360 px was an ellipsis); the large text size on phone portrait hides them by CSS.
+  - Cold switch (critic P1-5, slow link): if the strip isn't decoded 100 ms after the pick
+    (`cold`), the plate switches and `.nur-ph` shows the 48-px thumbnail at the biggest whole
+    upscale inside the strip's frame, centred, feet on the pedestal, until the strip is ready.
+    The strip fetch starts on `pointerdown` (`onPointerDownCapture` on `.nur` → `[data-pet]`),
+    and the drawer's first visible row is decoded one by one 150 ms after it opens. Measured at
+    150 ms RTT / 60 KB/s, 4×: the old pet stays ≤ 140 ms after the ring (was 560).
+  - The stage follows `useDeferredValue(sel)`: the ring and the action bar paint first, the stage
+    + plate a frame later. Production build at 4×: worst switch frame ~115–290 → ~70–150 ms (the
+    rest is style/layout/paint of the plate, not React).
+  - Press after a key press (critic P1-7): `src/input/device.ts` defers BOTH `data-input` and the
+    subscriber render to rAF + timeout on pointer events (`setInputDevice(d, pad, true)`); the
+    root attribute flip alone restyled the page for ~40 ms at 4× (426 elements, selectors like
+    `html[data-input=touch] :focus-visible`). `getInputDevice()` is still updated at once. Press
+    feedback ≤ 33 ms at 4× in every case of `{SCR}/ui3N3/press.mjs`.
+  - The 4–8 px «latent scroll» (critic P2-13) is the kit's hidden focus ring `.px-f::after`
+    (inset −3 u) and the hit-area `::before`s; no container scrolls by it (page and `.nur` 0),
+    `.nur-side__mid` has a 3-u padding with a −3-u margin so its rings are not clipped.
 - **Not checked on a real phone / Telegram webview / gamepad hardware** (stand: Playwright at
-  390×844@3, 844×390@3, 820×1180@2, 1180×820@2, 1440×900, 1920×1080; keyboard by real key
-  presses, gamepad by emitted actions).
+  390×844@3, 360×780@3, 440×956@3, 844×390@3, 956×440@3, 820×1180@2, 1180×820@2, 1440×900,
+  1920×1080; keyboard by real key presses, gamepad by emitted actions).
 
 ### Rollout — waves (owner 13.10: «когда волна закончилась, сразу запускай следующую»)
 
