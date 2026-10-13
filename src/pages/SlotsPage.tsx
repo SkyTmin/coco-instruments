@@ -1203,9 +1203,10 @@ export function SlotsPage() {
               <p className="cas-broke">{tr('slots.brokeHint')}</p>
             ) : (
               <div className="cas-hist__row">
-                {history.length === 0 && (
-                  <div className="cas-hchip cas-well is-empty" aria-hidden />
-                )}
+                {history.length === 0 &&
+                  [0, 1, 2, 3, 4].map((i) => (
+                    <div key={i} className="cas-hchip is-empty" aria-hidden />
+                  ))}
                 {history.map((h) => (
                   <div key={h.id} className={`cas-hchip cas-well${h.payout > 0 ? ' is-win' : ''}`}>
                     <span className="cas-hchip__reels">

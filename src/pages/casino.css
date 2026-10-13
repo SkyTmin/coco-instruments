@@ -267,7 +267,8 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: calc(3 * var(--u));
-  height: calc(16 * var(--u));
+  /* One chip tall (17-px symbols + the sum line + padding and frame): chips were cut at 16 u. */
+  min-height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
 }
 .cas-hist__row {
   display: flex;
@@ -279,24 +280,33 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
 }
 .cas-hchip {
   flex: none;
+  box-sizing: border-box;
   display: grid;
   justify-items: center;
+  align-content: center;
+  min-width: calc(51px + 6 * var(--u));
+  height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
   padding: var(--u) calc(2 * var(--u));
 }
 .cas-hchip__reels {
   display: inline-flex;
 }
 .cas-hchip__sum {
-  font: 700 var(--px-fs-tiny) / 1 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-red);
 }
 .cas-hchip.is-win .cas-hchip__sum {
   color: var(--px-green);
 }
+/* Before the first spin: five dashed outlines of a chip — «spins will line up here». Only the
+   ones that fit whole are shown (the rest wrap to a hidden line), so no outline is cut. */
 .cas-hchip.is-empty {
-  align-self: stretch;
-  width: calc(22 * var(--u));
-  opacity: 0.5;
+  border: var(--u) dashed rgb(42 25 12 / 0.4);
+}
+.cas-hist__row:has(> .is-empty) {
+  flex-wrap: wrap;
+  height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
+  overflow: hidden;
 }
 .cas-broke {
   margin: 0;
@@ -412,6 +422,11 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   padding-left: 0;
   padding-right: 0;
 }
+/* The icon is the button (critic K2 #15: 18 px on a 48 × 52 face was 37 %): ×2 of the 9-px mask. */
+.cas-mini > .px-i {
+  --i-w: 18;
+  --i-h: 18;
+}
 .cas-mini > .px-keyhint {
   position: absolute;
   right: calc(-2 * var(--u));
@@ -505,7 +520,8 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
 .cas-bonus .px-btn > b {
   max-width: 100%;
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
-  white-space: nowrap;
+  /* A narrow plate (phone landscape, fr/de) takes two lines instead of cutting the name. */
+  text-wrap: balance;
   text-align: center;
 }
 .cas-bonus .px-btn > i {
@@ -575,7 +591,8 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   --cas-r: calc(116 * var(--u));
 }
 html[data-ff='phone-landscape'] .cas {
-  --cas-l: calc(92 * var(--u));
+  /* 4 × 44-px tools + 3 gaps of 1 u + the wood frame (2 × 9 u) — they were cut at 92 u. */
+  --cas-l: calc(109 * var(--u));
   --cas-r: calc(118 * var(--u));
   gap: calc(2 * var(--u));
 }
@@ -592,7 +609,7 @@ html[data-ff='phone-landscape'] .cas-info {
   gap: calc(2 * var(--u));
 }
 /* Phone landscape has no GameTop row: back, skins, rules and settings are one row of 44-px
-   icons at the top of the info column (4 × 44 + 3 gaps fit its 184 px). */
+   icons at the top of the info column (4 × 44 + 3 × 1 u = 182 px inside its 218). */
 html[data-ff='phone-landscape'] .cas[data-lay='wide'] .cas-info {
   grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
   grid-template-areas: 'tools' 'lvl' 'jp' 'best' 'sp' 'hist';
@@ -603,7 +620,7 @@ html[data-ff='phone-landscape'] .cas[data-lay='wide'] .cas-info {
 .cas-tools {
   display: flex;
   justify-content: space-between;
-  gap: calc(2 * var(--u));
+  gap: var(--u);
 }
 .cas-tools > :is(.gx-round, .px-btn) {
   --gx-size: var(--gx-hit);
