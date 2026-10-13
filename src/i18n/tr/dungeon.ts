@@ -177,7 +177,10 @@ export const dungeon: Translation<typeof ru> = {
     meatN: 'Et · {n} adet',
     nothingLost: 'Taşıyacak bir şey yoktu.',
     kept: 'Tecrübe ve keşfedilen yerler sende kaldı',
-    keptKills: 'Tecrübe, {n} leş ve keşfedilen yerler sende kaldı',
+    keptKills: {
+      one: 'Tecrübe, {n} leş ve keşfedilen yerler sende kaldı',
+      other: 'Tecrübe, {n} leş ve keşfedilen yerler sende kaldı',
+    },
     downAgain: 'Tekrar aşağı',
     upgrade: 'Ekipmanı geliştir',
     inventory: 'Envanter',

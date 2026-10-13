@@ -56,6 +56,7 @@ export const dlines: Translation<typeof ru> = {
     rubi_latnikov_poka: 'kabuklu şövalyeler zırha sürünürken onları doğra',
     laty_sobrany: 'ZIRH TOPLANDI',
     vnutri_a_latnikov: 'içinde {a} kabuklu şövalye var — yeniden kır',
+    vnutri_a_latnika: 'içinde {a} kabuklu şövalye var — yeniden kır',
     laty_treschat: 'ZIRH ÇATLIYOR',
     iz_scheley_sypletsya: 'çatlaklardan sürü dökülüyor',
   },

@@ -37,19 +37,12 @@ import {
   stackOf as deepStack,
 } from './dungeon';
 import type { DungeonState, MatId } from './dungeon';
-import { fmtDec, hasKey, lower, t as tr } from '@/i18n/core';
-import type { Key } from '@/i18n/core';
-import {
-  chestName,
-  enchantName,
-  itemName,
-  itemText,
-  rockName,
-  runeName,
-  runeText,
-} from '@/i18n/data';
+import { fmtDec, lower, t as tr } from '@/i18n/core';
+import { chestName, itemName, itemText, rockName, runeName, runeText } from '@/i18n/data';
+import { bookTierName, eggName } from '@/i18n/data-books';
 import { matName } from '@/i18n/data-dungeon';
-import { normalizeBook, ROMAN, SHELF_MAX, tierOfLevel } from './books';
+import { bookName, findName, findText } from '@/i18n/data-mine';
+import { normalizeBook, SHELF_MAX, tierOfLevel } from './books';
 import type { Book } from './books';
 import { EGG_BASKET, EGG_IDS, eggCount, eggOf, isEggId, NEST_SLOTS } from './pets';
 import type { EggId } from './pets';
@@ -583,9 +576,6 @@ export const SECTIONS: { id: InvSection; name: string; icon: string }[] = [
 ];
 
 const pct = (x: number) => `+${fmtDec(Math.round(x * 1000) / 10, 1)}%`;
-/** Find of the mine collection: its catalog when there is one, else the lib text. */
-const findText = (id: string, field: 'name' | 'text', ru: string) =>
-  hasKey(`finds.${id}.${field}`) ? tr(`finds.${id}.${field}` as Key) : ru;
 
 /** Вещь раздела «Сундук» или «Склад» в общем виде: имя, картинка, подпись. */
 export function thingView(t: BunkThing): Pick<InvItem, 'name' | 'sub' | 'icon'> & {
@@ -609,8 +599,11 @@ export function thingView(t: BunkThing): Pick<InvItem, 'name' | 'sub' | 'icon'> 
       return { name: eggName(t.egg), icon: { k: 'egg', egg: t.egg }, section: 'eggs' };
     case 'book':
       return {
-        name: `${enchantName(enchantOf(t.book.id).id)} ${ROMAN[t.book.lvl - 1] ?? t.book.lvl}`,
-        sub: tr('inv.bookSub', { n: String(t.book.chance), tier: bookTierName(t.book.lvl) }),
+        name: bookName({ id: enchantOf(t.book.id).id, lvl: t.book.lvl }),
+        sub: tr('inv.bookSub', {
+          n: String(t.book.chance),
+          tier: lower(bookTierName(tierOfLevel(t.book.lvl))),
+        }),
         icon: { k: 'book', book: t.book },
         section: 'books',
       };
@@ -625,9 +618,6 @@ export function thingView(t: BunkThing): Pick<InvItem, 'name' | 'sub' | 'icon'> 
     }
   }
 }
-
-const bookTierName = (lvl: number) => tr(`inv.bookTier.${tierOfLevel(lvl)}`);
-const eggName = (id: string) => (hasKey(`inv.egg.${id}`) ? tr(`inv.egg.${id}` as Key) : id);
 
 /** Что можно сделать с вещью здесь и сейчас. */
 export type InvPlace = 'yard' | 'mine' | 'bunk' | 'view';
@@ -832,7 +822,7 @@ export function inventoryOf(
       key: `parcel:${i}`,
       kind: `parcel:${x.tier}`,
       name: tr('inv.parcel', { tier: lower(chestName(tier.id)) }),
-      sub: x.left > 0 ? tr('inv.blocksLeft', { n: String(x.left) }) : tr('inv.parcelReady'),
+      sub: x.left > 0 ? tr('books.blocksLeft', { n: String(x.left) }) : tr('inv.parcelReady'),
       icon: { k: 'parcel', tier: x.tier },
       n: 1,
       stack: 0,
@@ -931,11 +921,8 @@ export function inventoryOf(
     add({
       key: `find:${f.id}`,
       kind: `find:${f.id}`,
-      name: n > 0 ? findText(f.id, 'name', f.name) : '???',
-      sub:
-        n > 0
-          ? findText(f.id, 'text', f.text)
-          : tr('inv.findFrom', { f: String.fromCharCode(65 + f.from) }),
+      name: n > 0 ? findName(f.id) : '???',
+      sub: n > 0 ? findText(f.id) : tr('inv.findFrom', { f: String.fromCharCode(65 + f.from) }),
       icon: { k: 'find', id: f.id, ghost: n <= 0 },
       n,
       stack: 0,

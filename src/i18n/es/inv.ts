@@ -34,18 +34,6 @@ export const inv: Translation<typeof ru> = {
   deepOre: 'mineral de la mazmorra',
   forPick: 'para el pico',
   bookSub: 'prob. {n} % · {tier}',
-  bookTier: {
-    simple: 'simple',
-    rare: 'raro',
-    epic: 'épico',
-    legend: 'legendario',
-  },
-  egg: {
-    moss: 'Huevo musgoso',
-    stone: 'Huevo de piedra',
-    crystal: 'Huevo de cristal',
-    dragon: 'Huevo de dragón',
-  },
   coins: 'Monedas',
   tokens: 'Fichas',
   chestKey: 'Llave de cofre',
@@ -54,11 +42,6 @@ export const inv: Translation<typeof ru> = {
   pearl: 'Perla',
   pearlSub: '+0,5 % a la venta',
   parcel: 'Paquete · {tier}',
-  blocksLeft: {
-    one: 'falta {n} bloque',
-    many: 'faltan {n} bloques',
-    other: 'faltan {n} bloques',
-  },
   parcelReady: 'listo',
   eggWarm: {
     one: 'incubando · falta {n} bloque',
@@ -95,7 +78,11 @@ export const inv: Translation<typeof ru> = {
   bigBought: 'Cofre doble: 54 huecos',
   noCoins: 'No hay monedas suficientes',
   bigChest: 'Cofre doble',
-  bigMore: '{n} huecos más. Tus cosas se quedan donde están.',
+  bigMore: {
+    one: '{n} hueco más. Tus cosas se quedan donde están.',
+    many: '{n} de huecos más. Tus cosas se quedan donde están.',
+    other: '{n} huecos más. Tus cosas se quedan donde están.',
+  },
   buySure: '¿Seguro? Comprar',
   buy: 'Comprar',
   perPiece: '{price} cada uno',
@@ -153,8 +140,12 @@ export const inv: Translation<typeof ru> = {
     drop1: 'Tirar 1',
     dropStack: 'Tirar la pila',
     pocket: 'Bolsillo',
-    pocketText:
-      'Mochila más grande: {n} huecos en vez de {slots}. Lista al momento, aquí mismo. Las pieles salen del almacén y lo que falte, de la mochila.',
+    pocketText: {
+      one: 'Mochila más grande: {n} hueco en vez de {slots}. Lista al momento, aquí mismo. Las pieles salen del almacén y lo que falte, de la mochila.',
+      many: 'Mochila más grande: {n} de huecos en vez de {slots}. Lista al momento, aquí mismo. Las pieles salen del almacén y lo que falte, de la mochila.',
+      other:
+        'Mochila más grande: {n} huecos en vez de {slots}. Lista al momento, aquí mismo. Las pieles salen del almacén y lo que falte, de la mochila.',
+    },
     grow: 'Ampliar mochila',
     hint: 'Toca una pieza del muñeco para afilarla. Toca un hueco para comer o tirar.',
     lv: 'Nv. {n}',

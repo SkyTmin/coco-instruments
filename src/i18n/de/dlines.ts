@@ -56,6 +56,7 @@ export const dlines: Translation<typeof ru> = {
     rubi_latnikov_poka: 'hau die Panzerschnecken um, solange sie zur Rüstung kriechen',
     laty_sobrany: 'RÜSTUNG KOMPLETT',
     vnutri_a_latnikov: '{a} Panzerschnecken drin — zerschlag sie noch mal',
+    vnutri_a_latnika: '{a} Panzerschnecke drin — zerschlag sie noch mal',
     laty_treschat: 'RÜSTUNG KNACKT',
     iz_scheley_sypletsya: 'aus den Ritzen quillt der Schwarm',
   },

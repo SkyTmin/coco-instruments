@@ -54,6 +54,7 @@ export const dlines = {
     rubi_latnikov_poka: 'руби латников, пока они ползут к латам',
     laty_sobrany: 'ЛАТЫ СОБРАНЫ',
     vnutri_a_latnikov: 'внутри {a} латников — разбей снова',
+    vnutri_a_latnika: 'внутри {a} латника — разбей снова',
     laty_treschat: 'ЛАТЫ ТРЕЩАТ',
     iz_scheley_sypletsya: 'из щелей сыплется рой',
   },

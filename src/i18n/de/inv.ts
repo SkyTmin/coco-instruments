@@ -34,18 +34,6 @@ export const inv: Translation<typeof ru> = {
   deepOre: 'Verlieserz',
   forPick: 'für die Spitzhacke',
   bookSub: 'Chance {n} % · {tier}',
-  bookTier: {
-    simple: 'einfach',
-    rare: 'selten',
-    epic: 'episch',
-    legend: 'legendär',
-  },
-  egg: {
-    moss: 'Moos-Ei',
-    stone: 'Stein-Ei',
-    crystal: 'Kristall-Ei',
-    dragon: 'Drachenei',
-  },
   coins: 'Münzen',
   tokens: 'Tokens',
   chestKey: 'Truhenschlüssel',
@@ -54,10 +42,6 @@ export const inv: Translation<typeof ru> = {
   pearl: 'Perle',
   pearlSub: '+0,5 % Verkaufspreis',
   parcel: 'Paket · {tier}',
-  blocksLeft: {
-    one: 'noch {n} Block',
-    other: 'noch {n} Blöcke',
-  },
   parcelReady: 'fertig',
   eggWarm: {
     one: 'wird gewärmt · noch {n} Block',
@@ -91,7 +75,10 @@ export const inv: Translation<typeof ru> = {
   bigBought: 'Doppeltruhe: 54 Fächer',
   noCoins: 'Nicht genug Münzen',
   bigChest: 'Doppeltruhe',
-  bigMore: '{n} Fächer mehr. Deine Sachen bleiben, wo sie sind.',
+  bigMore: {
+    one: '{n} Fach mehr. Deine Sachen bleiben, wo sie sind.',
+    other: '{n} Fächer mehr. Deine Sachen bleiben, wo sie sind.',
+  },
   buySure: 'Sicher? Kaufen',
   buy: 'Kaufen',
   perPiece: '{price} pro Stück',
@@ -149,8 +136,11 @@ export const inv: Translation<typeof ru> = {
     drop1: '1 wegwerfen',
     dropStack: 'Stapel wegwerfen',
     pocket: 'Tasche',
-    pocketText:
-      'Größerer Rucksack: {n} Fächer statt {slots}. Sofort fertig, gleich hier. Felle kommen aus dem Lager, der Rest aus dem Rucksack.',
+    pocketText: {
+      one: 'Größerer Rucksack: {n} Fach statt {slots}. Sofort fertig, gleich hier. Felle kommen aus dem Lager, der Rest aus dem Rucksack.',
+      other:
+        'Größerer Rucksack: {n} Fächer statt {slots}. Sofort fertig, gleich hier. Felle kommen aus dem Lager, der Rest aus dem Rucksack.',
+    },
     grow: 'Rucksack vergrößern',
     hint: 'Tippe ein Teil an der Figur an — schärfen. Tippe ein Fach an — essen oder wegwerfen.',
     lv: 'St. {n}',

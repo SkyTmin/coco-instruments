@@ -34,18 +34,6 @@ export const inv: Translation<typeof ru> = {
   deepOre: 'minerai du donjon',
   forPick: 'pour la pioche',
   bookSub: 'chance {n} % · {tier}',
-  bookTier: {
-    simple: 'simple',
-    rare: 'rare',
-    epic: 'épique',
-    legend: 'légendaire',
-  },
-  egg: {
-    moss: 'Œuf moussu',
-    stone: 'Œuf de pierre',
-    crystal: 'Œuf de cristal',
-    dragon: 'Œuf de dragon',
-  },
   coins: 'Pièces',
   tokens: 'Jetons',
   chestKey: 'Clé de coffre',
@@ -54,11 +42,6 @@ export const inv: Translation<typeof ru> = {
   pearl: 'Perle',
   pearlSub: '+0,5 % au prix de vente',
   parcel: 'Colis · {tier}',
-  blocksLeft: {
-    one: 'encore {n} bloc',
-    many: 'encore {n} blocs',
-    other: 'encore {n} blocs',
-  },
   parcelReady: 'prêt',
   eggWarm: {
     one: 'au chaud · encore {n} bloc',
@@ -95,7 +78,11 @@ export const inv: Translation<typeof ru> = {
   bigBought: 'Coffre double : 54 cases',
   noCoins: 'Pas assez de pièces',
   bigChest: 'Coffre double',
-  bigMore: '{n} cases de plus. Tes affaires restent en place.',
+  bigMore: {
+    one: '{n} case de plus. Tes affaires restent en place.',
+    many: '{n} de cases de plus. Tes affaires restent en place.',
+    other: '{n} cases de plus. Tes affaires restent en place.',
+  },
   buySure: 'Sûr ? Acheter',
   buy: 'Acheter',
   perPiece: "{price} l'unité",
@@ -153,8 +140,12 @@ export const inv: Translation<typeof ru> = {
     drop1: 'Jeter 1',
     dropStack: 'Jeter la pile',
     pocket: 'Poche',
-    pocketText:
-      'Un sac plus grand : {n} cases au lieu de {slots}. Prêt tout de suite, ici même. Les peaux viennent du dépôt, le manque du sac.',
+    pocketText: {
+      one: 'Un sac plus grand : {n} case au lieu de {slots}. Prêt tout de suite, ici même. Les peaux viennent du dépôt, le manque du sac.',
+      many: 'Un sac plus grand : {n} de cases au lieu de {slots}. Prêt tout de suite, ici même. Les peaux viennent du dépôt, le manque du sac.',
+      other:
+        'Un sac plus grand : {n} cases au lieu de {slots}. Prêt tout de suite, ici même. Les peaux viennent du dépôt, le manque du sac.',
+    },
     grow: 'Agrandir le sac',
     hint: "Touche une pièce sur le bonhomme — l'affûter. Touche une case — manger ou jeter.",
     lv: 'Niv. {n}',

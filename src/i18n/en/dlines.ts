@@ -56,6 +56,7 @@ export const dlines: Translation<typeof ru> = {
     rubi_latnikov_poka: 'cut down the shellknights while they crawl to the armor',
     laty_sobrany: 'ARMOR ASSEMBLED',
     vnutri_a_latnikov: '{a} shellknights inside — smash it again',
+    vnutri_a_latnika: '{a} shellknight inside — smash it again',
     laty_treschat: 'ARMOR CRACKING',
     iz_scheley_sypletsya: 'the swarm pours out of the cracks',
   },

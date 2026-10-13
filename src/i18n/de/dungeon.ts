@@ -178,7 +178,10 @@ export const dungeon: Translation<typeof ru> = {
     meatN: 'Fleisch · {n} Stk.',
     nothingLost: 'Es gab nichts zu tragen.',
     kept: 'Erfahrung und entdeckte Orte bleiben dir',
-    keptKills: 'Erfahrung, {n} Kills und entdeckte Orte bleiben dir',
+    keptKills: {
+      one: 'Erfahrung, {n} Kill und entdeckte Orte bleiben dir',
+      other: 'Erfahrung, {n} Kills und entdeckte Orte bleiben dir',
+    },
     downAgain: 'Wieder runter',
     upgrade: 'Ausrüstung verbessern',
     inventory: 'Inventar',

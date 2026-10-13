@@ -34,18 +34,6 @@ export const inv: Translation<typeof ru> = {
   deepOre: 'minerale delle segrete',
   forPick: 'per il piccone',
   bookSub: 'probabilità {n}% · {tier}',
-  bookTier: {
-    simple: 'semplice',
-    rare: 'raro',
-    epic: 'epico',
-    legend: 'leggendario',
-  },
-  egg: {
-    moss: 'Uovo muschioso',
-    stone: 'Uovo di pietra',
-    crystal: 'Uovo di cristallo',
-    dragon: 'Uovo di drago',
-  },
   coins: 'Monete',
   tokens: 'Gettoni',
   chestKey: 'Chiave del forziere',
@@ -54,11 +42,6 @@ export const inv: Translation<typeof ru> = {
   pearl: 'Perla',
   pearlSub: '+0,5% alla vendita',
   parcel: 'Pacco · {tier}',
-  blocksLeft: {
-    one: 'ancora {n} blocco',
-    many: 'ancora {n} blocchi',
-    other: 'ancora {n} blocchi',
-  },
   parcelReady: 'pronto',
   eggWarm: {
     one: 'in cova · ancora {n} blocco',
@@ -95,7 +78,11 @@ export const inv: Translation<typeof ru> = {
   bigBought: 'Forziere doppio: 54 caselle',
   noCoins: 'Monete insufficienti',
   bigChest: 'Forziere doppio',
-  bigMore: '{n} caselle in più. Le tue cose restano al loro posto.',
+  bigMore: {
+    one: '{n} casella in più. Le tue cose restano al loro posto.',
+    many: '{n} di caselle in più. Le tue cose restano al loro posto.',
+    other: '{n} caselle in più. Le tue cose restano al loro posto.',
+  },
   buySure: 'Sicuro? Compra',
   buy: 'Compra',
   perPiece: '{price} al pezzo',
@@ -153,8 +140,12 @@ export const inv: Translation<typeof ru> = {
     drop1: 'Butta 1',
     dropStack: 'Butta la pila',
     pocket: 'Tasca',
-    pocketText:
-      'Zaino più grande: {n} caselle invece di {slots}. Pronto subito, qui. Le pelli dal magazzino, quelle che mancano dallo zaino.',
+    pocketText: {
+      one: 'Zaino più grande: {n} casella invece di {slots}. Pronto subito, qui. Le pelli dal magazzino, quelle che mancano dallo zaino.',
+      many: 'Zaino più grande: {n} di caselle invece di {slots}. Pronto subito, qui. Le pelli dal magazzino, quelle che mancano dallo zaino.',
+      other:
+        'Zaino più grande: {n} caselle invece di {slots}. Pronto subito, qui. Le pelli dal magazzino, quelle che mancano dallo zaino.',
+    },
     grow: 'Ingrandisci zaino',
     hint: 'Tocca un pezzo sul pupazzo — affilalo. Tocca una casella — mangia o butta.',
     lv: 'Liv. {n}',

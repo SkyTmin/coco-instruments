@@ -56,6 +56,7 @@ export const dlines: Translation<typeof ru> = {
     rubi_latnikov_poka: "taille les chevaliers-coques tant qu'ils rampent vers l'armure",
     laty_sobrany: 'ARMURE RECOMPOSÉE',
     vnutri_a_latnikov: '{a} chevaliers-coques dedans — brise-la encore',
+    vnutri_a_latnika: '{a} chevalier-coque dedans — brise-la encore',
     laty_treschat: "L'ARMURE CRAQUE",
     iz_scheley_sypletsya: "l'essaim s'échappe des fentes",
   },

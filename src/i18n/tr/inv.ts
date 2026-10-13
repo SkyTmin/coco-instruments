@@ -34,18 +34,6 @@ export const inv: Translation<typeof ru> = {
   deepOre: 'zindan cevheri',
   forPick: 'kazma için',
   bookSub: 'şans %{n} · {tier}',
-  bookTier: {
-    simple: 'basit',
-    rare: 'nadir',
-    epic: 'destansı',
-    legend: 'efsanevi',
-  },
-  egg: {
-    moss: 'Yosunlu Yumurta',
-    stone: 'Taş Yumurta',
-    crystal: 'Kristal Yumurta',
-    dragon: 'Ejderha Yumurtası',
-  },
   coins: 'Altın',
   tokens: 'Jeton',
   chestKey: 'Sandık anahtarı',
@@ -54,10 +42,6 @@ export const inv: Translation<typeof ru> = {
   pearl: 'İnci',
   pearlSub: 'satışa +%0,5',
   parcel: 'Koli · {tier}',
-  blocksLeft: {
-    one: '{n} blok kaldı',
-    other: '{n} blok kaldı',
-  },
   parcelReady: 'hazır',
   eggWarm: {
     one: 'ısınıyor · {n} blok kaldı',
@@ -91,7 +75,10 @@ export const inv: Translation<typeof ru> = {
   bigBought: 'Çift sandık: 54 göz',
   noCoins: 'Yeterli altın yok',
   bigChest: 'Çift sandık',
-  bigMore: '{n} göz daha. Eşyalar yerinde kalır.',
+  bigMore: {
+    one: '{n} göz daha. Eşyalar yerinde kalır.',
+    other: '{n} göz daha. Eşyalar yerinde kalır.',
+  },
   buySure: 'Emin misin? Al',
   buy: 'Satın al',
   perPiece: 'tanesi {price}',
@@ -149,8 +136,11 @@ export const inv: Translation<typeof ru> = {
     drop1: '1 at',
     dropStack: 'Desteyi at',
     pocket: 'Cep',
-    pocketText:
-      'Daha büyük çanta: {slots} yerine {n} göz. Hemen burada hazır. Postlar depodan, eksiği çantadan.',
+    pocketText: {
+      one: 'Daha büyük çanta: {slots} yerine {n} göz. Hemen burada hazır. Postlar depodan, eksiği çantadan.',
+      other:
+        'Daha büyük çanta: {slots} yerine {n} göz. Hemen burada hazır. Postlar depodan, eksiği çantadan.',
+    },
     grow: 'Çantayı büyüt',
     hint: 'Figürdeki eşyaya dokun — bile. Göze dokun — ye ya da at.',
     lv: 'Sv. {n}',

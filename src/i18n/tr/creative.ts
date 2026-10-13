@@ -13,7 +13,6 @@ export const creative: Translation<typeof ru> = {
   dungeon: 'Zindan',
   hall: 'Kumarhane',
   wallet: 'Cüzdan',
-  money: '{coins} altın · {tokens} jeton · {keys} anahtar',
   addCoins: '+100 milyon altın',
   addStuff: 'Jeton, anahtar, yumurta',
   rank: 'Rütbe',

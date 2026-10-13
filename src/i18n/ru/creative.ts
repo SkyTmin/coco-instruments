@@ -11,7 +11,6 @@ export const creative = {
   dungeon: 'Подземелье',
   hall: 'Зал',
   wallet: 'Кошелёк',
-  money: '{coins} монет · {tokens} токенов · {keys} ключей',
   addCoins: '+100 млн монет',
   addStuff: 'Токены, ключи, яйца',
   rank: 'Ранг',

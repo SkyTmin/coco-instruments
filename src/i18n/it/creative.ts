@@ -13,7 +13,6 @@ export const creative: Translation<typeof ru> = {
   dungeon: 'Segrete',
   hall: 'Casinò',
   wallet: 'Borsellino',
-  money: '{coins} monete · {tokens} gettoni · {keys} chiavi',
   addCoins: '+100 mln di monete',
   addStuff: 'Gettoni, chiavi, uova',
   rank: 'Grado',

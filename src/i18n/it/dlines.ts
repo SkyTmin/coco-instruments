@@ -56,6 +56,7 @@ export const dlines: Translation<typeof ru> = {
     rubi_latnikov_poka: "abbatti i cavalieri conchiglia mentre strisciano verso l'armatura",
     laty_sobrany: 'ARMATURA RICOMPOSTA',
     vnutri_a_latnikov: 'dentro ci sono {a} cavalieri conchiglia — spaccala di nuovo',
+    vnutri_a_latnika: "dentro c'è {a} cavaliere conchiglia — spaccala di nuovo",
     laty_treschat: "L'ARMATURA SCRICCHIOLA",
     iz_scheley_sypletsya: 'dalle fessure esce lo sciame',
   },

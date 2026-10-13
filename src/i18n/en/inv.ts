@@ -34,18 +34,6 @@ export const inv: Translation<typeof ru> = {
   deepOre: 'dungeon ore',
   forPick: 'for the pickaxe',
   bookSub: 'chance {n}% · {tier}',
-  bookTier: {
-    simple: 'simple',
-    rare: 'rare',
-    epic: 'epic',
-    legend: 'legendary',
-  },
-  egg: {
-    moss: 'Mossy Egg',
-    stone: 'Stone Egg',
-    crystal: 'Crystal Egg',
-    dragon: 'Dragon Egg',
-  },
   coins: 'Coins',
   tokens: 'Tokens',
   chestKey: 'Chest key',
@@ -54,10 +42,6 @@ export const inv: Translation<typeof ru> = {
   pearl: 'Pearl',
   pearlSub: '+0.5% sell price',
   parcel: 'Parcel · {tier}',
-  blocksLeft: {
-    one: '{n} more block',
-    other: '{n} more blocks',
-  },
   parcelReady: 'ready',
   eggWarm: {
     one: 'warming · {n} more block',
@@ -91,7 +75,10 @@ export const inv: Translation<typeof ru> = {
   bigBought: 'Double chest: 54 slots',
   noCoins: 'Not enough coins',
   bigChest: 'Double chest',
-  bigMore: '{n} more slots. Your things stay where they are.',
+  bigMore: {
+    one: '{n} more slot. Your things stay where they are.',
+    other: '{n} more slots. Your things stay where they are.',
+  },
   buySure: 'Sure? Buy',
   buy: 'Buy',
   perPiece: '{price} each',
@@ -149,8 +136,11 @@ export const inv: Translation<typeof ru> = {
     drop1: 'Drop 1',
     dropStack: 'Drop stack',
     pocket: 'Pocket',
-    pocketText:
-      'A bigger backpack: {n} slots instead of {slots}. Ready right away, right here. Pelts come from storage, the rest from the backpack.',
+    pocketText: {
+      one: 'A bigger backpack: {n} slot instead of {slots}. Ready right away, right here. Pelts come from storage, the rest from the backpack.',
+      other:
+        'A bigger backpack: {n} slots instead of {slots}. Ready right away, right here. Pelts come from storage, the rest from the backpack.',
+    },
     grow: 'Enlarge backpack',
     hint: 'Tap gear on the figure — sharpen it. Tap a slot — eat or drop.',
     lv: 'Lv. {n}',

@@ -56,6 +56,7 @@ export const dlines: Translation<typeof ru> = {
     rubi_latnikov_poka: 'acaba con los caballeros concha mientras se arrastran a la armadura',
     laty_sobrany: 'ARMADURA REARMADA',
     vnutri_a_latnikov: 'dentro hay {a} caballeros concha: rómpela otra vez',
+    vnutri_a_latnika: 'dentro hay {a} caballero concha: rómpela otra vez',
     laty_treschat: 'LA ARMADURA CRUJE',
     iz_scheley_sypletsya: 'el enjambre sale por las grietas',
   },

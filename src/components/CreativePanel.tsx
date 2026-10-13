@@ -12,10 +12,8 @@ import { PICKS } from '@/lib/economy';
 import { LAST_RANK, rankLetter } from '@/lib/prison';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 import { GxIcon, GxModal } from '@/components/gx';
-import { fmtNum, pickName, t, useT } from '@/i18n';
+import { pickName, t, useT } from '@/i18n';
 import { setName } from '@/i18n/data-dungeon';
-
-const fmt = (n: number) => fmtNum(n);
 
 /** Владелец (или разработка): только ему видна песочница. */
 export function useOwner(): boolean {
@@ -146,11 +144,11 @@ function Panel({ onClose }: { onClose: () => void }) {
       <section className="crv__sec">
         <h4>{t('creative.wallet')}</h4>
         <p className="crv__note">
-          {t('creative.money', {
-            coins: fmt(balance),
-            tokens: fmt(prison.tokens),
-            keys: fmt(prison.keys),
-          })}
+          {[
+            t('common.coins', { n: balance }),
+            t('chests.tokens', { n: prison.tokens }),
+            t('chests.keys', { n: prison.keys }),
+          ].join(' · ')}
         </p>
         <div className="crv__row">
           <button type="button" className="gx-btn gx-btn--sm" onClick={coins}>
