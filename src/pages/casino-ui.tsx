@@ -110,6 +110,9 @@ export function useReelSpin<T>(
 /** Tempo of the rest of a spin after the Skip press (× the turbo factor): links and the count. */
 export const SKIP_TEMPO = 0.5;
 
+/** Строка правил «A · B»: точка держится за левую половину, перенос — после неё. */
+export const keepDot = (s: string) => s.replace(/ · /g, '\u00a0· ');
+
 /**
  * Page layout: «tall» = info strip, stage, deck in one column (phone portrait and tablet
  * portrait — there the width is the limit, so the stage gets all the height left); «wide» =

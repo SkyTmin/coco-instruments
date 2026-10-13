@@ -134,6 +134,8 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'giros',
   statBestWin: 'mejor premio',
   pay: {
+    more: 'Detalles',
+    cascShort: 'Los ganadores desaparecen, caen otros: el multiplicador sube',
     introShort: '5 líneas, de izquierda a derecha · 3 en raya = pago',
     title: 'Pagos y líneas',
     intro:
@@ -238,6 +240,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Comprar bonus',
   },
   rules: {
+    orbShort: 'Un orbe de ×2 a ×500 multiplica el premio del giro',
+    scatShort: '{trigger}+ scatters en cualquier sitio: {fs} giros gratis',
+    anteShort: 'Ante: apuesta ×{ante}, bonus el doble de veces · compra: {buy} apuestas',
     title: 'Cómo funciona',
     anyTitle: 'Ocho iguales en cualquier sitio',
     any: 'No hay líneas: cuenta cuántos símbolos iguales caen en todo el tablero {cols}×{rows}. Desde {n} hay premio, estén donde estén. Los ganadores desaparecen, los de arriba caen a su sitio, el tablero se cuenta de nuevo, y así mientras salgan premios.',

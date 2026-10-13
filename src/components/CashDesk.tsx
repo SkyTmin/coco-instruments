@@ -87,9 +87,12 @@ export function CashDesk() {
         ))}
       </div>
       <div className="cash__creative px-dark">
-        <CreativeRow />
+        <CreativeRow className="px-btn px-f px-btn--iron" />
       </div>
-      <p className="cash__hint">{t('cash.hint')}</p>
+      {/* Одна строка; полный текст — в подсказке (critic K2 #14). */}
+      <p className="cash__hint" data-tip={t('cash.hint')}>
+        {t('cash.hintShort')}
+      </p>
       <BackupHealth s={status} />
     </section>
   );

@@ -13,6 +13,7 @@ import {
   CasToggles,
   fitStyles,
   CasTools,
+  keepDot,
   KitIcon,
   SKIP_TEMPO,
   useCasLayout,
@@ -2024,35 +2025,69 @@ export function ScatterPage() {
 
       {rules && (
         <GxSheet title={tr('slots.rules.title')} onClose={() => setRules(false)}>
-          <div className="stack slots" data-skin={skin}>
-            <div className="combo-rules">
-              <div className="combo-rules__title">{tr('slots.rules.anyTitle')}</div>
-              <p className="combo-rules__text">
-                {tr('slots.rules.any', { cols: SCATTER_COLS, rows: SCATTER_ROWS, n: CLUSTER_MIN })}
-              </p>
-            </div>
-            <div className="combo-rules">
-              <div className="combo-rules__title">{tr('slots.rules.orbTitle')}</div>
-              <p className="combo-rules__text">
-                {rich('slots.rules.orb', { cell: <b>{tr('slots.rules.orbCell')}</b> })}
-              </p>
-              <p className="combo-rules__text">{tr('slots.rules.orb2')}</p>
-              <div className="rarity-ladder">
-                {ORB_TIERS.map((t) => (
-                  <div className={`rarity-row rarity-row--${t.id}`} key={t.id}>
-                    <i className="rarity-row__dot" aria-hidden="true" />
-                    <b className="rarity-row__name">{orbName(t.id)}</b>
-                    <span className="rarity-row__range">
-                      {t.id === 'mythic' ? '×250 — ×500' : tr('slots.rules.fromX', { n: t.min })}
+          {/* Раздел = заголовок + одна строка + картинка; длинные абзацы — под «Подробнее»
+              (critic K2 #8). Редкость сфер — чернильные плашки цвета ступени. */}
+          <div className="cas-rules">
+            <section className="cas-rules__sec">
+              <h3 className="cas-rules__h">{tr('slots.rules.anyTitle')}</h3>
+              <p className="cas-rules__lead">{tr('slots.cascade.howShort', { n: CLUSTER_MIN })}</p>
+              <div className="paytable">
+                {[...SCATTER_PAYS].reverse().map((p) => (
+                  <div className="paytable__row cas-well" key={p.id}>
+                    <span className="paytable__syms">
+                      <Sym id={p.id} skin={skin} size={26} />
                     </span>
-                    <span className="rarity-row__odds">{fmtDec(t.chance, 1)}%</span>
+                    <span className="paytable__mult px-num">×{p.tiers[2]}</span>
+                    <span className="paytable__pair px-num">
+                      8–9 ×{p.tiers[0]} · 10–11 ×{p.tiers[1]}
+                    </span>
                   </div>
                 ))}
               </div>
-            </div>
-            <div className="combo-rules">
-              <div className="combo-rules__title">{tr('slots.rules.scatTitle')}</div>
-              <p className="combo-rules__text">
+            </section>
+            <section className="cas-rules__sec">
+              <h3 className="cas-rules__h">{tr('slots.rules.orbTitle')}</h3>
+              <p className="cas-rules__lead">{tr('slots.rules.orbShort')}</p>
+              <div className="rarity-ladder">
+                {ORB_TIERS.map((t) => (
+                  <div className={`rarity-row rarity-row--${t.id} cas-well`} key={t.id}>
+                    <b className="rarity-row__name">{orbName(t.id)}</b>
+                    <span className="rarity-row__range px-num">
+                      {t.id === 'mythic' ? '×250 — ×500' : tr('slots.rules.fromX', { n: t.min })}
+                    </span>
+                    <span className="rarity-row__odds px-num">{fmtDec(t.chance, 1)}%</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section className="cas-rules__sec">
+              <h3 className="cas-rules__h">{tr('slots.rules.scatTitle')}</h3>
+              <p className="cas-rules__lead">
+                {tr('slots.rules.scatShort', { trigger: SCATTER_TRIGGER, fs: FREE_SPINS })}
+              </p>
+              <div className="combo-rules__ladder">
+                {[4, 5, 6].map((n) => (
+                  <span key={n} className="combo-rules__step cas-well">
+                    <b className="px-num">{n === 4 ? SCATTER_TRIGGER : n}</b>
+                    <i className="px-num">×{SCATTER_PAYOUTS[n]}</i>
+                  </span>
+                ))}
+              </div>
+            </section>
+            <section className="cas-rules__sec">
+              <h3 className="cas-rules__h">{tr('slots.rules.anteTitle')}</h3>
+              <p className="cas-rules__lead">
+                {keepDot(tr('slots.rules.anteShort', { ante: ANTE_COST, buy: BUY_BONUS_COST }))}
+              </p>
+            </section>
+            <details className="cas-more">
+              <summary>{tr('slots.pay.more')}</summary>
+              <p>
+                {tr('slots.rules.any', { cols: SCATTER_COLS, rows: SCATTER_ROWS, n: CLUSTER_MIN })}
+              </p>
+              <p>{rich('slots.rules.orb', { cell: <b>{tr('slots.rules.orbCell')}</b> })}</p>
+              <p>{tr('slots.rules.orb2')}</p>
+              <p>
                 {tr('slots.rules.scat', {
                   trigger: SCATTER_TRIGGER,
                   p4: SCATTER_PAYOUTS[4],
@@ -2062,43 +2097,11 @@ export function ScatterPage() {
                   max: MAX_WIN,
                 })}
               </p>
-              <div className="combo-rules__ladder">
-                <span className="combo-rules__step">
-                  <b>{SCATTER_TRIGGER}</b>
-                  <i>×{SCATTER_PAYOUTS[4]}</i>
-                </span>
-                <span className="combo-rules__step">
-                  <b>5</b>
-                  <i>×{SCATTER_PAYOUTS[5]}</i>
-                </span>
-                <span className="combo-rules__step">
-                  <b>6</b>
-                  <i>×{SCATTER_PAYOUTS[6]}</i>
-                </span>
-              </div>
-            </div>
-            <div className="combo-rules">
-              <div className="combo-rules__title">{tr('slots.rules.anteTitle')}</div>
-              <p className="combo-rules__text">
+              <p>
                 {tr('slots.rules.ante', { ante: ANTE_COST, buy: BUY_BONUS_COST, fs: FREE_SPINS })}
               </p>
-            </div>
-            <div className="paytable">
-              {[...SCATTER_PAYS].reverse().map((p) => (
-                <div className="paytable__row" key={p.id}>
-                  <span className="paytable__syms">
-                    <Sym id={p.id} skin={skin} size={26} />
-                  </span>
-                  <span className="paytable__mult">×{p.tiers[2]}</span>
-                  <span className="paytable__pair">
-                    8–9 ×{p.tiers[0]} · 10–11 ×{p.tiers[1]}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-              {tr('slots.rules.note')}
-            </p>
+              <p>{tr('slots.rules.note')}</p>
+            </details>
           </div>
         </GxSheet>
       )}

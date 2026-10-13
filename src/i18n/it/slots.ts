@@ -134,6 +134,8 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'giri',
   statBestWin: 'vincita migliore',
   pay: {
+    more: 'Dettagli',
+    cascShort: 'I vincenti spariscono, ne cadono altri: il moltiplicatore sale',
     introShort: '5 linee, da sinistra a destra · 3 in fila = vincita',
     title: 'Vincite e linee',
     intro:
@@ -238,6 +240,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Compra bonus',
   },
   rules: {
+    orbShort: 'Una sfera da ×2 a ×500 moltiplica la vincita del giro',
+    scatShort: '{trigger}+ scatter ovunque: {fs} giri gratis',
+    anteShort: 'Ante: puntata ×{ante}, bonus il doppio delle volte · acquisto: {buy} puntate',
     title: 'Come funziona',
     anyTitle: 'Otto uguali ovunque',
     any: 'Niente linee: conta quanti simboli uguali cadono in tutta la griglia {cols}×{rows}. Da {n} in su è vincita, ovunque siano. I vincenti spariscono, quelli sopra cadono al loro posto, la griglia si ricalcola, e così via finché escono vincite.',

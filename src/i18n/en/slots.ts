@@ -129,6 +129,8 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'spins',
   statBestWin: 'best win',
   pay: {
+    more: 'Details',
+    cascShort: 'Winners vanish, new symbols fall — the multiplier grows',
     introShort: '5 lines, left to right · 3 in a row = payout',
     title: 'Payouts and lines',
     intro:
@@ -230,6 +232,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Buy bonus',
   },
   rules: {
+    orbShort: 'An orb from ×2 to ×500 multiplies the spin’s win',
+    scatShort: '{trigger}+ scatters anywhere — {fs} free spins',
+    anteShort: 'Ante: bet ×{ante}, bonus twice as often · buy — {buy} bets',
     title: 'How it works',
     anyTitle: 'Eight of a kind anywhere',
     any: 'No lines: what counts is how many matching symbols land anywhere on the {cols}×{rows} board. {n} or more is a win, wherever they are. Winners vanish, the ones above fall into their places, the board is counted again — and so on while wins keep coming.',

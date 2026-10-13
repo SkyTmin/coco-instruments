@@ -129,6 +129,8 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'spin',
   statBestWin: 'en iyi kazanç',
   pay: {
+    more: 'Ayrıntılar',
+    cascShort: 'Kazananlar kaybolur, yenileri düşer — çarpan büyür',
     introShort: '5 hat, soldan sağa · 3 aynı = ödeme',
     title: 'Ödemeler ve hatlar',
     intro:
@@ -230,6 +232,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Bonus satın al',
   },
   rules: {
+    orbShort: '×2 ile ×500 arası küre, spinin kazancını katlar',
+    scatShort: 'Her yerde {trigger}+ scatter — {fs} bedava spin',
+    anteShort: 'Ante: bahis ×{ante}, bonus iki kat sık · satın alma — {buy} bahis',
     title: 'Nasıl çalışır',
     anyTitle: 'Her yerde sekiz aynı',
     any: 'Hat yok: {cols}×{rows} alanın tamamında kaç aynı sembol olduğu sayılır. {n} ve fazlası kazandırır, nerede durdukları önemli değil. Kazananlar kaybolur, üsttekiler yerlerine düşer, alan yeniden sayılır; kazanç geldikçe bu sürer.',

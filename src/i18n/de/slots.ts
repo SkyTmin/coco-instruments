@@ -129,6 +129,8 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'Spins',
   statBestWin: 'bester Gewinn',
   pay: {
+    more: 'Details',
+    cascShort: 'Gewinner verschwinden, neue fallen nach — der Multiplikator steigt',
     introShort: '5 Linien, von links nach rechts · 3 in Reihe = Gewinn',
     title: 'Gewinne und Linien',
     intro:
@@ -230,6 +232,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Bonus kaufen',
   },
   rules: {
+    orbShort: 'Eine Kugel von ×2 bis ×500 multipliziert den Gewinn des Spins',
+    scatShort: '{trigger}+ Scatter irgendwo — {fs} Freispiele',
+    anteShort: 'Ante: Einsatz ×{ante}, Bonus doppelt so oft · Kauf — {buy} Einsätze',
     title: 'So funktioniert’s',
     anyTitle: 'Acht gleiche irgendwo',
     any: 'Keine Linien: Gezählt wird, wie viele gleiche Symbole auf dem ganzen {cols}×{rows}-Feld liegen. Ab {n} Stück gibt’s Gewinn, egal wo sie stehen. Gewinner verschwinden, die oberen rutschen nach, das Feld wird neu gezählt — so lange, wie Gewinne fallen.',

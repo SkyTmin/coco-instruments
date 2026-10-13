@@ -134,6 +134,8 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'tours',
   statBestWin: 'meilleur gain',
   pay: {
+    more: 'Détails',
+    cascShort: 'Les gagnants disparaissent, d’autres tombent — le multiplicateur monte',
     introShort: '5 lignes, de gauche à droite · 3 alignés = gain',
     title: 'Gains et lignes',
     intro:
@@ -238,6 +240,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Acheter le bonus',
   },
   rules: {
+    orbShort: 'Un orbe de ×2 à ×500 multiplie le gain du tour',
+    scatShort: '{trigger}+ scatters n’importe où — {fs} tours gratuits',
+    anteShort: 'Ante : mise ×{ante}, bonus deux fois plus souvent · achat — {buy} mises',
     title: 'Comment ça marche',
     anyTitle: 'Huit identiques n’importe où',
     any: 'Pas de lignes : on compte combien de symboles identiques tombent sur toute la grille {cols}×{rows}. Dès {n}, c’est gagné, peu importe où ils sont. Les gagnants disparaissent, ceux du dessus tombent à leur place, on recompte — et ainsi de suite tant que ça gagne.',

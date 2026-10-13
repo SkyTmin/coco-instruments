@@ -14,6 +14,7 @@ import {
   CasToggles,
   fitStyles,
   CasTools,
+  keepDot,
   KitIcon,
   SKIP_TEMPO,
   useCasLayout,
@@ -1121,7 +1122,9 @@ export function SlotsPage() {
         </div>
       }
       top={
-        lying ? undefined : <GameTop title={skinText(skin, 'title')} onBack={goBack} right={topRight} />
+        lying ? undefined : (
+          <GameTop title={skinText(skin, 'title')} onBack={goBack} right={topRight} />
+        )
       }
     >
       {/* --speed уезжает во ВСЕ CSS-анимации страницы. Без него турбо сжимал
@@ -1167,11 +1170,7 @@ export function SlotsPage() {
               <>
                 {/* Рекорды и копилка — не крутящийся баланс: им хватает короткой
                     записи («1,2 млн»), точное число — в подсказке. */}
-                <AnimatedNumber
-                  value={jackpotPrize}
-                  format={(n) => fmtCompact(n)}
-                  duration={600}
-                />
+                <AnimatedNumber value={jackpotPrize} format={(n) => fmtCompact(n)} duration={600} />
                 <CoinIcon size={16} />
               </>
             }
@@ -1413,20 +1412,15 @@ export function SlotsPage() {
                   : outcomeText(result)}
               </span>
               {result.total > 0 && (
-                <span
-                  className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}
-                >
-                  {/* Без анимации: сумму только что досчитали на глазах. */}+
-                  {fmt(result.total)}
+                <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
+                  {/* Без анимации: сумму только что досчитали на глазах. */}+{fmt(result.total)}
                   <CoinIcon size={20} />
                 </span>
               )}
               {result.multiplier >= 3 && (
                 <span className="status__mult">×{fmt(result.multiplier)}</span>
               )}
-              {jackpotWin > 0 && (
-                <span className="status__pool">{tr('slots.status.pool')}</span>
-              )}
+              {jackpotWin > 0 && <span className="status__pool">{tr('slots.status.pool')}</span>}
               {streak >= 2 && result.total > 0 && (
                 <span className="status__streak">🔥 {streak}</span>
               )}
@@ -1486,39 +1480,32 @@ export function SlotsPage() {
 
       {sheet && (
         <GxSheet title={tr('slots.pay.title')} onClose={() => setSheet(false)}>
-          <div className="stack">
-            <p className="muted" style={{ margin: 0 }}>
-              {tr('slots.pay.intro', { unit: LINE_UNIT, bet, line: lineBet(bet) })}
-            </p>
-            {/* Каскады — главная механика: объясняем её до таблицы выплат */}
-            <div className="combo-rules">
-              <div className="combo-rules__title">{tr('slots.pay.cascTitle')}</div>
-              <p className="combo-rules__text">{tr('slots.pay.cascText')}</p>
-              <div className="combo-rules__ladder">
-                {COMBO_LADDER.map((m, i) => (
-                  <span key={i} className="combo-rules__step">
-                    <b>{i + 1 === COMBO_LADDER.length ? `${i + 1}+` : i + 1}</b>
-                    <i>×{m}</i>
-                  </span>
-                ))}
-              </div>
-            </div>
+          {/* Правила — одна строка на раздел и картинка (таблица, лестница, линии); длинные
+              абзацы — под «Подробнее» (critic K2 #8: на пергаменте 12-px абзацы не читались). */}
+          <div className="cas-rules">
+            <p className="cas-rules__lead">{keepDot(tr('slots.pay.introShort'))}</p>
             <div className="paytable">
               {[...SLOT_SYMBOLS].reverse().map((s) => (
-                <div className="paytable__row" key={s.id}>
+                <div className="paytable__row cas-well" key={s.id}>
                   <span className="paytable__syms">
                     <Sym id={s.id} skin={skin} size={26} />
                     <Sym id={s.id} skin={skin} size={26} />
                     <Sym id={s.id} skin={skin} size={26} />
                   </span>
-                  <span className="paytable__mult">×{s.three}</span>
+                  <span className="paytable__mult px-num">×{s.three}</span>
                   <span className="paytable__pair">{tr('slots.pay.pair', { n: s.pair })}</span>
                 </div>
               ))}
             </div>
             <div className="lines-grid">
               {PAYLINES.map((line) => (
-                <div className="line-card" key={line.id}>
+                <div
+                  className="line-card cas-well"
+                  key={line.id}
+                  role="img"
+                  aria-label={lineName(line.id)}
+                  data-tip={lineName(line.id)}
+                >
                   <svg viewBox="0 0 30 30" aria-hidden="true">
                     {[0, 1, 2].map((col) =>
                       [0, 1, 2].map((row) => (
@@ -1528,19 +1515,32 @@ export function SlotsPage() {
                           y={row * 10 + 1}
                           width="8"
                           height="8"
-                          rx="2"
                           className={line.rows[col] === row ? 'is-on' : ''}
                         />
                       )),
                     )}
                   </svg>
-                  <span>{lineName(line.id)}</span>
                 </div>
               ))}
             </div>
-            <p className="muted" style={{ margin: 0 }}>
-              {tr('slots.pay.note')}
-            </p>
+            <section className="cas-rules__sec">
+              <h3 className="cas-rules__h">{tr('slots.pay.cascTitle')}</h3>
+              <p className="cas-rules__lead">{tr('slots.pay.cascShort')}</p>
+              <div className="combo-rules__ladder">
+                {COMBO_LADDER.map((m, i) => (
+                  <span key={i} className="combo-rules__step cas-well">
+                    <b className="px-num">{i + 1 === COMBO_LADDER.length ? `${i + 1}+` : i + 1}</b>
+                    <i className="px-num">×{m}</i>
+                  </span>
+                ))}
+              </div>
+            </section>
+            <details className="cas-more">
+              <summary>{tr('slots.pay.more')}</summary>
+              <p>{tr('slots.pay.intro', { unit: LINE_UNIT, bet, line: lineBet(bet) })}</p>
+              <p>{tr('slots.pay.cascText')}</p>
+              <p>{tr('slots.pay.note')}</p>
+            </details>
           </div>
         </GxSheet>
       )}
@@ -1553,7 +1553,7 @@ export function SlotsPage() {
             options={AUTO_OPTIONS}
             hint={(h) => tr(`slots.auto.${h}`)}
             onPick={(v) => startAuto(v)}
-            note={tr('slots.auto.note')}
+            note={tr('slots.auto.short')}
           />
         </GxSheet>
       )}
@@ -1615,13 +1615,12 @@ export function SlotsPage() {
             onChange={(v) => setBetDraft(clampBet(v))}
             lessLabel={tr('slots.bet.less')}
             moreLabel={tr('slots.bet.more')}
-            note={tr('slots.bet.note', {
-              min: MIN_BET,
-              max: MAX_BET,
-              step: BET_STEP,
-              unit: LINE_UNIT,
-              line: fmt(betDraft / LINE_UNIT),
-            })}
+            note={keepDot(
+              [
+                tr('slots.bet.short', { min: MIN_BET, max: MAX_BET, step: BET_STEP }),
+                tr('slots.bet.lineShort', { unit: LINE_UNIT }),
+              ].join(' · '),
+            )}
             cta={
               betDraft > balance && freeSpins <= 0
                 ? tr('slots.bet.noCoins')
