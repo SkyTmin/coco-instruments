@@ -157,6 +157,9 @@
   --pximg-m-dock-camp: url('/ui/kit/m-dock-camp.png?v=f4b5c28f');
   --pximg-m-dock-camp-w: 12;
   --pximg-m-dock-camp-h: 12;
+  --pximg-m-dock-inv: url('/ui/kit/m-dock-inv.png?v=8f27f18c');
+  --pximg-m-dock-inv-w: 12;
+  --pximg-m-dock-inv-h: 12;
 }
 
 .pxk-frame-stone {

@@ -4,6 +4,7 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}B',
   m: '{n}Mn',
+  g: '{n} Mr',
   sec: '{n} sn',
   perMin: '/dk',
   reward: {

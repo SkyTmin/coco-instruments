@@ -107,6 +107,7 @@ export function MinePets({
               id={id}
               size={size}
               v={petLook(rec)}
+              focusable
               joy={joy[i]}
               trick={tricks[i]}
               onClick={() => {

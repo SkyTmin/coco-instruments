@@ -11,6 +11,7 @@ export const mineHud = {
   /** Short counts in the narrow chips: «12,3к», «1,2м». */
   k: '{n}к',
   m: '{n}м',
+  g: '{n} млрд',
   sec: '{n} с',
   perMin: '/мин',
   /** Guide reward line, joined with « · ». */

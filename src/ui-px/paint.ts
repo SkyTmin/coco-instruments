@@ -1367,6 +1367,22 @@ const DOCK_ART: Record<string, string[]> = {
     'KxxxyKKyxxzK',
     '.KKKK..KKKK.',
   ],
+  // Inventory: an open crate with a gem, a potion and a coin on top — «all your stuff»,
+  // not the backpack's briefcase (critic r2: the same icon twice on one screen).
+  inv: [
+    '.KK..KK.....',
+    'KABK.KyK.KK.',
+    'KBCKKEFKK43K',
+    '.KK.KEFKK32K',
+    '....KFGK.KK.',
+    'KKKKKKKKKKKK',
+    'KwwwwwwwwwxK',
+    'KxxxxxxxxxyK',
+    'KzzzzKKzzzzK',
+    'KxxxK43KxxyK',
+    'KyyyyyyyyyzK',
+    '.KKKKKKKKKK.',
+  ],
 };
 
 export const PIECES: Piece[] = [

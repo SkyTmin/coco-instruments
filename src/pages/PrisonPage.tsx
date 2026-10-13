@@ -27,6 +27,7 @@ import {
   PickIcon,
   PrisonCamp,
   rewardLabel,
+  RuneIcon,
   TokenIcon,
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
@@ -37,7 +38,7 @@ import { Inventory } from '@/components/Inventory';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
 import { MinePets } from '@/components/MinePets';
-import { PetArt } from '@/components/PetArt';
+import { EggArt, PetArt } from '@/components/PetArt';
 import { petLook, TRICK_RUSH, TRICK_RUSH_MS, TRICK_SENSE_MS } from '@/lib/pets';
 import type { BatHandle, MagpieHandle } from '@/components/Critters';
 import { BAT_GAP_MS, BAT_RARE, batRoll } from '@/lib/critters';
@@ -190,17 +191,40 @@ const shortCount = (n: number) =>
     ? fmt(n)
     : n < 1e6
       ? t('mineHud.k', { n: Math.floor(n / 100) / 10 })
-      : t('mineHud.m', { n: Math.floor(n / 1e5) / 10 });
+      : n < 1e9
+        ? t('mineHud.m', { n: Math.floor(n / 1e5) / 10 })
+        : t('mineHud.g', { n: n < 1e10 ? Math.floor(n / 1e8) / 10 : Math.floor(n / 1e9) });
 
 /**
- * Монеты в шапке шахты: до ста тысяч — целиком, дальше «123,4к» и «12,3м»,
- * как токены рядом. Шапка — одна строка на всё (v2.67.2): «999 999», как и
- * «12,3 млн», на экране 375 px в неё уже не влезают.
+ * Монеты в шапке шахты: до ста тысяч — целиком, дальше «123,4к», «12,3м» и «1,2 млрд».
+ * Кегль фишки постоянный (критик r2, R50): длинное число короче, а не мельче — место
+ * рассчитано на самое длинное, «1,2 млрд».
  */
 const chipMoney = (n: number) => (n >= 1e5 ? shortCount(n) : fmtNum(n));
 
-/** Длина строки числа — фишка шапки ужимает кегль под неё (`--len` в mine.css). */
-const lenVar = (text: string) => ({ '--len': text.length }) as CSSProperties;
+/** Токены и ключи в фишке: не длиннее пяти знаков и суффикса («98,7к», «987к», «12м»). */
+const chipCount = (n: number) =>
+  n < 1e4
+    ? fmt(n)
+    : n < 1e5
+      ? t('mineHud.k', { n: Math.floor(n / 100) / 10 })
+      : n < 1e6
+        ? t('mineHud.k', { n: Math.floor(n / 1e3) })
+        : n < 1e8
+          ? t('mineHud.m', { n: Math.floor(n / 1e5) / 10 })
+          : n < 1e9
+            ? t('mineHud.m', { n: Math.floor(n / 1e6) })
+            : shortCount(n);
+
+/** Темп на полосе запала: не длиннее «99,9к» — колонка полосы рассчитана на это (R51). */
+const paceCount = (n: number) =>
+  n < 999.5
+    ? fmt(Math.round(n))
+    : n < 1e5
+      ? t('mineHud.k', { n: Math.floor(n / 100) / 10 })
+      : n < 1e6
+        ? t('mineHud.k', { n: Math.floor(n / 1e3) })
+        : t('mineHud.m', { n: Math.floor(n / 1e5) / 10 });
 
 /**
  * Блок шахты, который перерисовывается, только когда меняется что-то из `deps` (примитивы).
@@ -313,6 +337,46 @@ function DockLabel({ text }: { text: string }) {
   );
 }
 
+/** Награда проводника фишкой: значок и число на каждую часть, без слов (фраза — в подсказке). */
+function RewardChip({ r, size }: { r: GuideReward; size: number }) {
+  return (
+    <span className="mn-reward">
+      {r.coins ? (
+        <span>
+          <i className="mn-coin mn-coin--s" aria-hidden="true" />+{fmtNum(Math.round(r.coins))}
+        </span>
+      ) : null}
+      {r.tokens ? (
+        <span>
+          <TokenIcon size={size} />+{fmtNum(Math.round(r.tokens))}
+        </span>
+      ) : null}
+      {r.keys ? (
+        <span>
+          <KeyIcon size={size} />+{r.keys}
+        </span>
+      ) : null}
+      {r.item ? (
+        <span>
+          <ItemIcon id={r.item[0]} size={size} />+{r.item[1]}
+        </span>
+      ) : null}
+      {r.rune ? (
+        <span>
+          <RuneIcon kind="dmg" tier={r.rune} size={size} />
+          {RUNE_ROMAN[r.rune - 1]}
+        </span>
+      ) : null}
+      {r.egg ? (
+        <span>
+          <EggArt egg={r.egg} size={size} still />
+          +1
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function RankChips({ need, floor }: { need: RankNeeds; floor: number }) {
   const workOk = need.work >= need.workNeed;
   const blocksOk = need.blocks >= need.blocksNeed;
@@ -382,11 +446,25 @@ export function PrisonPage() {
   const [invOpen, setInvOpen] = useState(false);
   /** Нижняя панель — область горячих клавиш лагеря. */
   const dockRef = useRef<HTMLElement>(null);
+  /** Окно открывается: поле, отряд и посылки замирают сразу, на нажатии, а не когда
+   *  переход смонтирует окно (критик r2: анимации шахты жили, пока строился питомник). */
+  const freeze = () => rootRef.current?.classList.add('is-under');
   const openScreen = (key: Screen, tab?: CampTab) => {
     tapLight();
+    freeze();
     // Окно монтируется переходом: нажатие и «прыжок» значка успевают в кадр, длинная
     // сборка вкладки не держит поток одним куском (критик, волна 2: до 370 мс при 4×).
     startTransition(() => setScreen({ key, tab: tab ?? SCREENS[key].only[0] }));
+  };
+  const openForge = () => {
+    tapLight();
+    freeze();
+    startTransition(() => setForgeOpen(true));
+  };
+  const openInv = () => {
+    tapLight();
+    freeze();
+    startTransition(() => setInvOpen(true));
   };
   const [rankScene, setRankScene] = useState<PrisonRankUp | null>(null);
   const [sceneShown, sceneLeaving] = useExit(rankScene, 260);
@@ -1463,7 +1541,7 @@ export function PrisonPage() {
   const rankUp = () => {
     primeAudio();
     if (rank >= LAST_RANK) {
-      setSheet('prestige');
+      startTransition(() => setSheet('prestige'));
       return;
     }
     const st = useFinanceStore.getState();
@@ -1471,7 +1549,7 @@ export function PrisonPage() {
     // Не готово — лист условий: что сделано, чего не хватает, что можно докупить.
     if (!nd.pickOk || nd.work < nd.workNeed || nd.buyout > 0 || st.slotsBalance < nd.coins) {
       tapLight();
-      setSheet('norm');
+      startTransition(() => setSheet('norm'));
       return;
     }
     takeRank(false);
@@ -1489,7 +1567,8 @@ export function PrisonPage() {
     // Ранг — редкое событие: ему фраза положена (по бюджету мелодий).
     tierBreak(4);
     notifySuccess();
-    burstConfetti(80);
+    // Телефону — вдвое меньше конфетти (критик r2: 95 узлов, кадр до 283 мс при 4×).
+    burstConfetti(shell.ff.startsWith('phone') ? 40 : 80);
     field.current?.trauma(0.35);
     setRankScene(res);
   };
@@ -1634,8 +1713,28 @@ export function PrisonPage() {
   const guideOk = guideReady(prison);
   const [guideV, guideGoal] = guide ? guide.progress(prison) : [0, 0];
   const crewNow = crewYield(prison, nowTick);
-  const campBadge =
-    perkPointsFree(prison) > 0 || (CREW_ON && crewNow.minutes >= 60) || milesReady(prison) > 0;
+  /** Вкладка лагеря, где «!» на кнопке снимается (критик r2: «!» открывал «Руны»). */
+  const campTab: CampTab | null =
+    milesReady(prison) > 0
+      ? 'miles'
+      : perkPointsFree(prison) > 0
+        ? 'perks'
+        : CREW_ON && crewNow.minutes >= 60
+          ? 'crew'
+          : null;
+  const campBadge = campTab !== null;
+  const openCamp = () => {
+    const p = useFinanceStore.getState().prison;
+    const tab: CampTab | undefined =
+      milesReady(p) > 0
+        ? 'miles'
+        : perkPointsFree(p) > 0
+          ? 'perks'
+          : CREW_ON && crewYield(p, Date.now()).minutes >= 60
+            ? 'crew'
+            : undefined;
+    openScreen('more', tab);
+  };
   const forgeReady = forgeReadyNow(prison, balance);
   // «!» на книгах: есть что вписать или склеить на наковальне.
   const enchReady = booksReady(prison);
@@ -1732,22 +1831,16 @@ export function PrisonPage() {
   };
   useHotkeys(
     {
-      inventory: () => {
-        tapLight();
-        startTransition(() => setInvOpen(true));
-      },
+      inventory: openInv,
       pets: () => openScreen('pets'),
-      forge: () => {
-        tapLight();
-        startTransition(() => setForgeOpen(true));
-      },
+      forge: openForge,
       books: () => openScreen('enchant'),
       chests: () => openScreen('cases'),
       mines: () => {
         tapLight();
-        setSheet('mines');
+        startTransition(() => setSheet('mines'));
       },
-      camp: () => openScreen('more'),
+      camp: () => openCamp(),
       sell: () => sell(),
       rank: () => rankUp(),
       item1: itemKey(0),
@@ -1836,11 +1929,15 @@ export function PrisonPage() {
       onClick={() => openSheet('mines')}
     >
       <img className="mn-floor__ore" src={rockTexture(mine.id)} alt="" />
-      <span className="mn-floor__badge">
-        <Badge>
-          {prison.zone.on ? <GxIcon name="stairs" size={6 * u} /> : rankLetter(mine.id)}
-        </Badge>
-      </span>
+      {/* Буква — только когда этаж не тот, что у ранга (критик r2: «J J» рядом); плашка
+          нейтральная: красный на этом экране — только «!». */}
+      {(prison.zone.on || mine.id !== rank) && (
+        <span className="mn-floor__badge">
+          <Badge>
+            {prison.zone.on ? <GxIcon name="stairs" size={6 * u} /> : rankLetter(mine.id)}
+          </Badge>
+        </span>
+      )}
       <KeyHint action="mines" />
     </button>
   );
@@ -1853,78 +1950,32 @@ export function PrisonPage() {
         shownBalance,
         prison.tokens,
         prison.keys,
+        rank,
         wide,
         u,
         mine.id,
         prison.zone.on,
         rank < FOREST_UNLOCK_RANK && !prestige,
       ]}
-      render={() => (
-        <div className="mn-hud">
+      render={() => {
+        // Порядок в DOM = порядок Tab (критик r2, WCAG 2.4.3): на широком этаж и ⚙ стоят
+        // в первой строке — они и в DOM раньше денег; места задают `order`/`grid-area`.
+        const forestBtn = FOREST_ON && (
           <button
+            key="forest"
             type="button"
-            className="px-btn px-btn--iron px-btn--icon px-f mn-hud__back"
+            className={`px-btn px-btn--iron px-btn--icon px-f mn-hud__forest${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
             {...press}
-            aria-label={t('common.back')}
-            onClick={() => {
-              tapLight();
-              nav(-1);
-            }}
+            aria-label={t('mineHud.hud.forest')}
+            data-tip={t('mineHud.hud.forest')}
+            onClick={goForest}
           >
-            <i className="px-i pxi-left" aria-hidden="true" />
+            <GxIcon name="forest" size={9 * u} />
           </button>
-          <span
-            className="mn-stat mn-stat--coins"
-            title={t('mineHud.norm.coins')}
-            style={lenVar(chipMoney(shownBalance))}
-          >
-            <i className="mn-coin" aria-hidden="true" />
-            <MoneyCounter
-              ref={moneyRef}
-              value={shownBalance}
-              format={chipMoney}
-              className="px-num mn-stat__n"
-            />
-          </span>
+        );
+        const gearBtn = (
           <button
-            type="button"
-            ref={tokenRef}
-            className="mn-stat mn-stat--btn mn-stat--tokens px-f"
-            {...press}
-            aria-label={t('mineHud.hud.tokens')}
-            data-tip={t('mineHud.hud.tokens')}
-            style={lenVar(shortCount(prison.tokens))}
-            onClick={() => openScreen('enchant')}
-          >
-            <TokenIcon size={12 * u} />
-            <b className="px-num mn-stat__n">{shortCount(prison.tokens)}</b>
-          </button>
-          <button
-            type="button"
-            className="mn-stat mn-stat--btn mn-stat--keys px-f"
-            {...press}
-            aria-label={t('mineHud.pres.keys')}
-            data-tip={t('mineHud.pres.keys')}
-            style={lenVar(shortCount(prison.keys))}
-            onClick={() => openScreen('cases')}
-          >
-            <KeyIcon size={12 * u} />
-            <b className="px-num mn-stat__n">{shortCount(prison.keys)}</b>
-          </button>
-          {wide && floorBtn}
-          {FOREST_ON && (
-            <button
-              type="button"
-              className={`px-btn px-btn--iron px-btn--icon px-f mn-hud__forest${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
-              {...press}
-              aria-label={t('mineHud.hud.forest')}
-              data-tip={t('mineHud.hud.forest')}
-              onClick={goForest}
-            >
-              <GxIcon name="forest" size={9 * u} />
-            </button>
-          )}
-          <button
+            key="gear"
             type="button"
             className="px-btn px-btn--iron px-btn--icon px-f mn-hud__gear"
             {...press}
@@ -1935,8 +1986,62 @@ export function PrisonPage() {
           >
             <i className="px-i pxi-gear" aria-hidden="true" />
           </button>
-        </div>
-      )}
+        );
+        return (
+          <div className="mn-hud">
+            <button
+              type="button"
+              className="px-btn px-btn--iron px-btn--icon px-f mn-hud__back"
+              {...press}
+              aria-label={t('common.back')}
+              onClick={() => {
+                tapLight();
+                nav(-1);
+              }}
+            >
+              <i className="px-i pxi-left" aria-hidden="true" />
+            </button>
+            {wide && [floorBtn, forestBtn, gearBtn]}
+            <span className="mn-stat mn-stat--coins" title={t('mineHud.norm.coins')}>
+              <i className="mn-coin" aria-hidden="true" />
+              <MoneyCounter
+                ref={moneyRef}
+                value={shownBalance}
+                format={chipMoney}
+                className="px-num mn-stat__n"
+              />
+            </span>
+            <button
+              type="button"
+              ref={tokenRef}
+              className="mn-stat mn-stat--btn mn-stat--tokens px-f"
+              {...press}
+              aria-label={t('mineHud.hud.tokens')}
+              data-tip={t('mineHud.hud.tokens')}
+              onClick={() => openScreen('enchant')}
+            >
+              <TokenIcon size={12 * u} />
+              <b className="px-num mn-stat__n">{chipCount(prison.tokens)}</b>
+            </button>
+            {/* Стоя ключей в шапке нет: их число — на «Сундуках» в доке, а место
+                отдано деньгам и токенам (критик r2: кегль не ниже 16 px). */}
+            {wide && (
+              <button
+                type="button"
+                className="mn-stat mn-stat--btn mn-stat--keys px-f"
+                {...press}
+                aria-label={t('mineHud.pres.keys')}
+                data-tip={t('mineHud.pres.keys')}
+                onClick={() => openScreen('cases')}
+              >
+                <KeyIcon size={12 * u} />
+                <b className="px-num mn-stat__n">{chipCount(prison.keys)}</b>
+              </button>
+            )}
+            {!wide && [forestBtn, gearBtn]}
+          </div>
+        );
+      }}
     />
   );
 
@@ -2010,30 +2115,49 @@ export function PrisonPage() {
         </span>
         <Bar value={Math.max(0, Math.min(1, streak > 0 ? sFill : 0))} height={4} />
       </span>
+      {/* Колонка темпа шириной по самой длинной строке языка (невидимая копия в той же
+          клетке): живые числа её не раздвигают и на полосу серии не залезают (R51). */}
       <span className="mn-strip__pace">
-        {pace ? (
-          <>
-            <span>{t('mineHud.hud.paceBlocks', { n: shortCount(pace.blocks) })}</span>
-            <span>
-              {shortCount(pace.coins)}
-              <i className="mn-coin mn-coin--s" aria-hidden="true" />
-              {t('mineHud.perMin')}
-            </span>
-          </>
-        ) : (
-          streak > 0 && <span>{t('mineHud.hud.inARow', { n: fmt(streak) })}</span>
-        )}
+        <span className="mn-strip__ghost" aria-hidden="true">
+          <span>{t('mineHud.hud.paceBlocks', { n: fmt(999) })}</span>
+          <span>
+            {paceCount(99_999)}
+            <i className="mn-coin mn-coin--s" />
+            {t('mineHud.perMin')}
+          </span>
+          <span>{t('mineHud.hud.inARow', { n: paceCount(99_999) })}</span>
+        </span>
+        <span className="mn-strip__live">
+          {pace ? (
+            <>
+              <span>{t('mineHud.hud.paceBlocks', { n: paceCount(pace.blocks) })}</span>
+              <span>
+                {paceCount(pace.coins)}
+                <i className="mn-coin mn-coin--s" aria-hidden="true" />
+                {t('mineHud.perMin')}
+              </span>
+            </>
+          ) : (
+            streak > 0 && <span>{t('mineHud.hud.inARow', { n: paceCount(streak) })}</span>
+          )}
+        </span>
       </span>
     </div>
   );
 
-  // Задание проводника, пока они не пройдены. Подсказка — по тапу.
+  // Задание проводника, пока они не пройдены. Высота постоянная (критик r2, R49: поле
+  // не прыгает от шага к шагу): название — до двух строк, справа — награда фишкой и счёт;
+  // готово — тот же блок становится золотой кнопкой «Забрать». Фраза целиком — в подсказке,
+  // по тапу — совет.
+  const questTip = guide ? `${guideTitle(guide.id)} · ${rewardText(guide.reward)}` : '';
   const questBox = guide ? (
     <button
       key="quest"
       type="button"
       className={`mn-quest px-f${guideOk ? ' is-ready' : ''}`}
       {...press}
+      data-tip={questTip}
+      aria-label={guideOk ? `${t('mineHud.card.collect')}: ${questTip}` : questTip}
       onClick={() => {
         if (guideOk) {
           claimGuide();
@@ -2045,26 +2169,22 @@ export function PrisonPage() {
     >
       <span className="mn-hex mn-hex--next px-num">{prison.guide + 1}</span>
       <span className="mn-quest__body">
-        <b>{guideTitle(guide.id)}</b>
-        {!guideOk && guideGoal > 1 ? (
-          <Bar value={guideV / guideGoal} tone="green" height={4} />
-        ) : (
-          <em>{rewardText(guide.reward)}</em>
-        )}
+        <b className="mn-quest__title">{guideTitle(guide.id)}</b>
+        {!guideOk && guideGoal > 1 && <Bar value={guideV / guideGoal} tone="green" height={3} />}
       </span>
-      {guideOk ? (
-        <span className="px-btn px-btn--sm px-btn--gold mn-quest__go">
-          {t('mineHud.card.collect')}
-        </span>
-      ) : (
+      <span className={`px-btn px-btn--sm mn-quest__end${guideOk ? ' px-btn--gold' : ''}`}>
+        <RewardChip r={guide.reward} size={8 * u} />
         <span className="mn-quest__n">
-          {guideGoal > 1 ? (
-            `${fmt(guideV)}/${fmt(guideGoal)}`
-          ) : (
-            <i className="px-i pxi-info" aria-hidden="true" />
-          )}
+          <span className={guideOk ? undefined : 'is-off'}>{t('mineHud.card.collect')}</span>
+          <span className={guideOk ? 'is-off' : 'px-num'}>
+            {guideGoal > 1 ? (
+              `${fmt(Math.min(guideV, guideGoal))}/${fmt(guideGoal)}`
+            ) : (
+              <i className="px-i pxi-info" aria-hidden="true" />
+            )}
+          </span>
         </span>
-      )}
+      </span>
     </button>
   ) : null;
 
@@ -2438,10 +2558,7 @@ export function PrisonPage() {
             {...press}
             data-tip={t('input.action.forge')}
             data-tip-key="forge"
-            onClick={() => {
-              tapLight();
-              startTransition(() => setForgeOpen(true));
-            }}
+            onClick={openForge}
           >
             <span className="mn-dock__ico" data-hop="">
               <PickIcon pick={pick} size={dockIco} />
@@ -2527,13 +2644,10 @@ export function PrisonPage() {
             {...press}
             data-tip={t('input.action.inventory')}
             data-tip-key="inventory"
-            onClick={() => {
-              tapLight();
-              startTransition(() => setInvOpen(true));
-            }}
+            onClick={openInv}
           >
             <span className="mn-dock__ico">
-              <i className="mn-pic mn-pic--bag" aria-hidden="true" />
+              <i className="mn-pic mn-pic--inv" aria-hidden="true" />
             </span>
             <DockLabel text={t('input.action.inventory')} />
             <KeyHint action="inventory" />
@@ -2544,7 +2658,7 @@ export function PrisonPage() {
             {...press}
             data-tip={t('input.action.camp')}
             data-tip-key="camp"
-            onClick={() => openScreen('more')}
+            onClick={openCamp}
           >
             <span className="mn-dock__ico">
               <i className="mn-pic mn-pic--camp" aria-hidden="true" />
