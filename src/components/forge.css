@@ -22,7 +22,7 @@
   min-width: 0;
 }
 .frg-ing__txt > b {
-  color: var(--rc, var(--px-text));
+  color: var(--px-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

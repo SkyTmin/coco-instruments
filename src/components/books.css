@@ -1,0 +1,191 @@
+/* Enchantment books tab (components/BooksTab.tsx) on the pixel kit — the tab's own parts.
+   Skeleton (columns, showcase, stats, actions) — armory.css. The scenes (.pbks*, .pbka*, .pbook*)
+   and the Enchanter's portrait overlays (.pbk-mage__*) keep their styles in game-ui.css. */
+
+/* Embedded in the camp window: fills the body, the page never scrolls. */
+.bkx {
+  min-height: 0;
+}
+.bkx .bkx-top {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+}
+.bkx-dust {
+  color: var(--px-violet);
+}
+
+/* Status under the name: can enchant / weaker / no room. */
+.arm-status.is-ok {
+  color: var(--px-green);
+}
+.arm-status.is-lower {
+  color: var(--px-red);
+}
+.arm-status.is-full {
+  color: var(--px-gold);
+}
+/* The effect line: two lines reserved, so a long effect never pushes the art or the stats. */
+.bkx-fx {
+  margin: 0;
+  hyphens: auto;
+  max-width: 100%;
+  min-height: calc(2 * 1.2 * var(--px-fs));
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* The chance cell is a toggle for dust (tap = add / remove dust). Same box as the other cells. */
+.bkx-chance {
+  margin: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bkx-chance.is-hi > b {
+  color: var(--px-green);
+}
+.bkx-chance.is-mid > b {
+  color: var(--px-gold);
+}
+.bkx-chance.is-lo > b {
+  color: var(--px-red);
+}
+.bkx-dusttag {
+  grid-area: delta;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.bkx-dusttag.is-on {
+  color: var(--px-green);
+}
+.arm-stat.is-short > b {
+  color: var(--px-red);
+}
+.bkx-stars > b > .px-i {
+  color: var(--px-gold);
+}
+
+/* Details. */
+.bkx-details p {
+  margin: 0;
+}
+.bkx-block {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.bkx-block > .px-btn {
+  justify-self: start;
+}
+.bkx-note {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--px-gold);
+}
+.bkx-note.is-bad {
+  color: var(--px-red);
+}
+
+/* Grids: the pick's places, the Enchanter's tiers, the shelf. */
+.bkx-sec .px-heading b {
+  color: var(--px-gold);
+}
+.bkx-shelfhead {
+  align-items: center;
+}
+.bkx-up {
+  color: var(--px-green);
+}
+.bkx-weak .pbook,
+.bkx-off .pbook,
+.bkx-off.px-slot > :first-child {
+  filter: saturate(0.35) brightness(0.75);
+}
+.bkx-ghost {
+  display: grid;
+  filter: brightness(0) invert(0.35);
+}
+
+/* The Enchanter: his portrait (3:2, overlays in %) beside his line, the four tiers next to it. */
+.bkx-seller {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(4 * var(--u));
+  align-items: start;
+}
+.bkx-mage {
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.bkx .pbk-mage {
+  width: 100%;
+  max-width: calc(110 * var(--u));
+  margin: 0;
+  border-radius: 0;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  box-shadow: none;
+  image-rendering: auto;
+}
+.bkx .pbk-mage::after {
+  content: none;
+}
+.bkx-mage__say {
+  margin: 0;
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-text);
+}
+.bkx-tiers {
+  display: grid;
+  grid-template-columns: repeat(2, var(--slot, calc(26 * var(--u))));
+  gap: calc(3 * var(--u));
+}
+.arm--three .bkx-seller {
+  grid-template-columns: minmax(0, 1fr);
+}
+.arm--three .bkx-tiers {
+  grid-template-columns: repeat(4, var(--slot, calc(26 * var(--u))));
+  justify-content: space-between;
+}
+
+/* Two-tap confirmations («В пыль», «Снять», «Перековать»): the armed button blinks. */
+.bkx .px-btn.is-armed,
+.ivx .px-btn.is-armed {
+  animation: bkx-armed 0.9s steps(2, jump-none) infinite;
+}
+@keyframes bkx-armed {
+  50% {
+    filter: brightness(1.25);
+  }
+}
+
+/* «No room»: which enchant to knock out. */
+.bkx-replace {
+  display: grid;
+  gap: calc(4 * var(--u));
+}
+.bkx-replace p {
+  margin: 0;
+}
+.bkx-replace__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(2 * var(--u));
+}

@@ -108,7 +108,6 @@
   image-rendering: pixelated;
   font: 400 var(--px-fs) / 1 var(--px-head);
   color: var(--px-gold);
-  text-shadow: 0 var(--u) 0 var(--px-ink);
   white-space: nowrap;
 }
 .arm-num {
@@ -139,6 +138,37 @@
   gap: calc(3 * var(--u));
   overflow: hidden;
 }
+/* Phone portrait: the art beside the name plate (as the Nursery), stats under both — the art
+   gets the stage's full height instead of what the text leaves. */
+.arm--one .arm-stage {
+  grid-template:
+    'room id' minmax(0, 1fr)
+    'stats stats' auto
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.arm--one .arm-id {
+  align-self: center;
+  padding: calc(3 * var(--u));
+}
+.arm--one .arm-name {
+  min-height: calc(2 * 1.1 * var(--px-fs));
+  font-size: var(--px-fs);
+  align-items: center;
+}
+.arm--one .arm-status {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.arm--one .arm-status > :is(.px-i, .gx-icon) {
+  margin-right: var(--u);
+}
+.arm--one .arm-sub {
+  flex-wrap: wrap;
+  white-space: normal;
+  min-height: calc(2 * 1.2 * var(--px-fs-sm));
+  font-size: var(--px-fs-sm);
+  line-height: 1.2;
+}
 /* The measured box of the art: its size comes from the grid only (contain), the art is sized
    from it in the component and never feeds back. */
 .arm-room {
@@ -158,14 +188,19 @@
     calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
   image-rendering: pixelated;
 }
+/* Name, state and effect sit on a dark plate over the light stage (the kit's «plate over a
+   stage»: the element also carries `.px-dark`, so the text vars are the light ones); rarity
+   colours read on it at full strength. */
 .arm-id {
   grid-area: id;
   display: grid;
   justify-items: center;
   gap: calc(2 * var(--u));
   min-width: 0;
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  background: color-mix(in srgb, var(--px-ink) 74%, transparent);
   text-align: center;
-  text-shadow: var(--u) var(--u) 0 var(--px-ink);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 /* Two lines reserved for the name: a long name never pushes the art or the stats. */
 .arm-name {
@@ -176,7 +211,10 @@
   max-width: 100%;
   font: 400 var(--px-fs-big) / 1.1 var(--px-head);
   color: var(--rc, var(--px-gold));
+  /* `anywhere`: the text is an anonymous grid item, `break-word` would not lower its min size;
+     `hyphens` puts a hyphen where the browser knows the language. */
   overflow-wrap: anywhere;
+  hyphens: auto;
 }
 html:not([data-ff='phone-portrait']) .arm-name {
   min-height: calc(2 * 1.1 * var(--px-fs-hero));
@@ -248,7 +286,6 @@ html[data-ff='phone-landscape'] .arm-name {
   font: 400 var(--px-fs-big) / 1 var(--px-head);
   font-variant-numeric: tabular-nums;
   color: var(--px-text);
-  text-shadow: 0 var(--u) 0 var(--px-ink);
   white-space: nowrap;
 }
 .arm-stat > b > :is(.px-i, .gx-icon) {
@@ -256,11 +293,17 @@ html[data-ff='phone-landscape'] .arm-name {
 }
 .arm-stat > i {
   grid-area: lbl;
-  font: 400 var(--px-fs-sm) / 1.15 var(--px-font);
+  /* two lines reserved: a long label («blocks a minute», German) wraps instead of «…» */
+  min-height: calc(2 * 1.15 * var(--px-fs-sm));
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
   color: var(--px-text);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 .arm-stat > .arm-delta {
   grid-area: delta;
@@ -272,13 +315,11 @@ html[data-ff='phone-landscape'] .arm-name {
   font-variant-numeric: tabular-nums;
   color: var(--px-text);
   white-space: nowrap;
-  text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 .arm-delta {
   font: 400 var(--px-fs) / 1 var(--px-head);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 .arm-delta.is-up {
   color: var(--px-green);
@@ -344,8 +385,13 @@ html[data-ff='phone-landscape'] .arm-name {
   padding-bottom: calc(3 * var(--u));
   border-bottom: var(--u) solid var(--px-dim);
 }
-.arm-info__head .rname {
+/* The name in dark ink on the parchment column (rarity colours are too light there); the
+   rarity chip next to it carries the colour. */
+.arm-info__name {
+  margin: 0;
   font: 400 var(--px-fs-big) / 1.15 var(--px-head);
+  color: var(--px-text);
+  overflow-wrap: anywhere;
 }
 .arm-details {
   display: grid;
@@ -381,8 +427,11 @@ html[data-ff='phone-landscape'] .arm-name {
   flex: none;
   grid-auto-flow: row;
 }
+/* Fixed height for two lines of label: a longer label wraps inside, never grows the bar. */
 .arm-acts > .px-btn {
-  min-height: calc(26 * var(--u));
+  height: calc(26 * var(--u));
+  min-height: 0;
+  overflow: hidden;
   white-space: normal;
   text-align: center;
   line-height: 1.1;
@@ -417,10 +466,9 @@ html[data-ff='phone-landscape'] .arm-name {
   border-image-slice: var(--pxk-frame-obsidian-s);
   border-image-width: var(--pxk-frame-obsidian-w);
   image-rendering: pixelated;
-  font: 400 var(--px-fs) / 1.25 var(--px-font);
+  font: 500 var(--px-fs) / 1.25 var(--px-font);
   color: var(--px-text);
   text-align: center;
-  text-shadow: 0 var(--u) 0 var(--px-ink);
   pointer-events: none;
   animation: px-fade 120ms steps(3, jump-none);
 }
@@ -428,15 +476,15 @@ html[data-ff='phone-landscape'] .arm-name {
   display: grid;
   gap: var(--u);
   text-align: left;
-  font: 400 var(--px-fs) / 1.2 var(--px-font);
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
   color: var(--px-text);
 }
 .arm-tip > b {
   font-family: var(--px-head);
-  color: var(--rc, var(--px-gold));
+  color: var(--px-text);
 }
 .arm-tip > i {
-  color: var(--rc, var(--px-muted));
+  color: var(--px-muted);
 }
 .arm-tip__row {
   display: flex;

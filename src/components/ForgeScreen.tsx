@@ -17,20 +17,18 @@ import { createPortal } from 'react-dom';
 import { CoinIcon } from '@/components/slot-art';
 import { BagIcon, OreIcon, TokenIcon } from '@/components/PrisonCamp';
 import { GxIcon } from '@/components/gx';
-import { PICK_ART, PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
+import {
+  PICK_ART,
+  PickArt,
+  PickPx,
+  RarityChip,
+  RarityName,
+  rarityVars,
+} from '@/components/PickArt';
 import { preloadPx, PxStrip } from '@/components/PxStrip';
 import { heroSize, useArmLayout, useBox } from '@/components/armory';
 import { useFinanceStore } from '@/store';
-import {
-  enchantName,
-  fmtNum,
-  fmtShort,
-  pickName,
-  rarityName,
-  rockName,
-  t,
-  useT,
-} from '@/i18n';
+import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
 import { nameIn, pickTitle } from '@/i18n/data-mine';
 import { enchantEffect } from '@/i18n/data-books';
 import { useAction } from '@/input';
@@ -70,13 +68,7 @@ import {
   uiOpen,
   uiTap,
 } from '@/lib/sound';
-import {
-  notifySuccess,
-  notifyWarning,
-  selectionChanged,
-  tapLight,
-  tapMedium,
-} from '@/lib/haptics';
+import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 import './armory.css';
 import './forge.css';
 
@@ -377,7 +369,7 @@ export function ForgeScreen({
             </span>
           )}
         </span>
-        <div className="arm-id">
+        <div className="arm-id px-dark">
           <h2 className="arm-name" style={{ color: 'var(--rc)' }}>
             {pickTitle(sel)}
           </h2>
@@ -701,7 +693,7 @@ export function ForgeScreen({
         <aside className="arm-side">
           <Panel material="obsidian" className="arm-info">
             <div className="arm-info__head">
-              <RarityName rarity={d.rarity}>{pickTitle(sel)}</RarityName>
+              <h3 className="arm-info__name">{pickTitle(sel)}</h3>
               <RarityChip rarity={d.rarity} />
             </div>
             {details}

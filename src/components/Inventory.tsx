@@ -21,7 +21,7 @@ import { CoinIcon } from '@/components/slot-art';
 import { ItemIcon, KeyIcon, OreIcon, RuneIcon, TokenIcon } from '@/components/PrisonCamp';
 import { EggArt } from '@/components/PetArt';
 import { BookArt, DustIcon, TIER_RARITY } from '@/components/BooksTab';
-import { RarityChip, RarityName, rarityVars } from '@/components/PickArt';
+import { RarityChip, rarityVars } from '@/components/PickArt';
 import { heroSize, useArmLayout, useBox } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import {
@@ -238,8 +238,11 @@ interface Act {
   run: () => void;
 }
 
-/** Сколько мест под кнопки держит каждое место: столько, сколько бывает максимум. */
-const ACT_SLOTS: Record<InvPlace, number> = { bunk: 4, mine: 2, yard: 2, view: 0 };
+/**
+ * Сколько мест под кнопки держит каждое место: столько, сколько бывает максимум. В шахте и во
+ * дворе у вещи одно действие (выпить / бросить / в гнездо / продать рюкзак) — кнопка во всю ширину.
+ */
+const ACT_SLOTS: Record<InvPlace, number> = { bunk: 4, mine: 1, yard: 1, view: 0 };
 
 export function Inventory({
   place,
@@ -616,7 +619,7 @@ export function Inventory({
             </span>
           )}
         </span>
-        <div className="arm-id">
+        <div className="arm-id px-dark">
           <h2 className="arm-name">{name}</h2>
           <p className="ivx-sub">{sub}</p>
         </div>
@@ -881,7 +884,7 @@ export function Inventory({
         <aside className="arm-side">
           <Panel material="obsidian" className="arm-info">
             <div className="arm-info__head">
-              <RarityName rarity={rarity}>{name}</RarityName>
+              <h3 className="arm-info__name">{name}</h3>
               <span className={rarity > 0 && item ? undefined : 'ivx-hide'}>
                 <RarityChip rarity={rarity} />
               </span>

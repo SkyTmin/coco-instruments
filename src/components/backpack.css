@@ -15,9 +15,10 @@
 /* Two lines reserved under the name: a long line never pushes the art or the stats. */
 .ivx-sub {
   margin: 0;
+  hyphens: auto;
   max-width: 100%;
   min-height: calc(2 * 1.2 * var(--px-fs));
-  font: 400 var(--px-fs) / 1.2 var(--px-font);
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
   color: var(--px-text);
   overflow: hidden;
   display: -webkit-box;
@@ -100,7 +101,7 @@
   display: grid;
   gap: var(--u);
   min-width: 0;
-  font: 400 var(--px-fs-sm) / 1.15 var(--px-font);
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
   color: var(--px-text);
 }
 .ivx-lim.is-full b {

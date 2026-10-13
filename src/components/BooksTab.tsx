@@ -1,5 +1,6 @@
-// Книги зачарований (v2.70) — вкладка «Книги» у шахты: места в кирке,
-// Чародей, полка, пыль, наковальня. Правила — lib/books.ts, стор —
+// Книги зачарований (v2.70; UI v2 — пиксельный набор) — вкладка «Книги» у шахты: места в
+// кирке, Чародей, полка, пыль, наковальня. Каркас — «оружейная» (`armory.ts`, как кузница и
+// рюкзак): выбранная книга крупно на подиуме, три цифры, сетки ячеек, кнопки внизу. Правила — lib/books.ts, стор —
 // prisonBook*. Сцены (покупка, вписывание, наковальня) — порталом в body:
 // у листа лагеря `backdrop-filter`, и `position: fixed` внутри него жил бы
 // в рамке листа.
@@ -10,19 +11,20 @@
 // сгорает книга, не кирка.
 
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { GxIcon, GxModal } from '@/components/gx';
+import './books.css';
+import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
-import { PickArt, RarityName, rarityVars } from '@/components/PickArt';
+import { PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
+import { heroSize, useArmLayout, useBox } from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
-import { PickIcon, TokenIcon } from '@/components/PrisonCamp';
+import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
-import { enchantName, fmtNum, lower, rich, useT } from '@/i18n';
+import { enchantName, fmtNum, fmtShort, rich, useT } from '@/i18n';
 import {
   bookName,
   bookTierBook,
-  bookTierName,
   enchantEffect,
   mageLine,
   pickFull,
@@ -58,7 +60,7 @@ import {
   STAR_KEYS,
   STAR_TOKENS,
 } from '@/lib/prison';
-import type { EnchantId, PrisonState } from '@/lib/prison';
+import type { EnchantId } from '@/lib/prison';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { registerEscape } from '@/lib/escape-stack';
@@ -76,9 +78,10 @@ import {
   tierBreak,
   uiBuy,
   uiError,
-  uiTap,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
+import { useAction } from '@/input';
+import { Bar, Button, Heading, Icon, Modal, Panel, Slot } from '@/ui-px';
 
 const fmt = (n: number) => fmtNum(n);
 
@@ -238,41 +241,120 @@ type Scene =
   | { kind: 'anvil'; book: Book; from: Book }
   | { kind: 'apply'; book: Book; ok: boolean; chance: number; replaced?: EnchantId };
 
+/** What sits on the showcase: a shelf book, an enchant in the pick, an Enchanter tier, the pick. */
+type Sel =
+  | { k: 'book'; i: number }
+  | { k: 'slot'; id: EnchantId }
+  | { k: 'tier'; id: BookTier }
+  | { k: 'pick' };
+
+const selKey = (s: Sel) =>
+  s.k === 'book' ? `b${s.i}` : s.k === 'slot' ? `s${s.id}` : s.k === 'tier' ? `t${s.id}` : 'p';
+
+/** One action place of the bar (three per screen: destructive · secondary · main). */
+interface Act {
+  id: string;
+  label: ReactNode;
+  kind: 'confirm' | 'primary' | 'secondary' | 'danger';
+  off?: boolean;
+  hide?: boolean;
+  armed?: boolean;
+  run?: () => void;
+}
+
+/** Green «+2» / red «−1» beside a big number. */
+function Delta({ v }: { v: number }) {
+  if (!v) return null;
+  return (
+    <span className={`arm-delta ${v > 0 ? 'is-up' : 'is-down'}`}>{v > 0 ? `+${v}` : `−${-v}`}</span>
+  );
+}
+
 export function BooksTab() {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const buy = useFinanceStore((s) => s.prisonBookBuy);
-  const [open, setOpen] = useState<number | null>(null);
-  const [slot, setSlot] = useState<EnchantId | null>(null);
+  const apply = useFinanceStore((s) => s.prisonBookApply);
+  const salvage = useFinanceStore((s) => s.prisonBookSalvage);
+  const anvil = useFinanceStore((s) => s.prisonBookAnvil);
+  const toggle = useFinanceStore((s) => s.prisonEnchantToggle);
+  const wipe = useFinanceStore((s) => s.prisonEnchantWipe);
+  const prisonPickStar = useFinanceStore((s) => s.prisonPickStar);
+  const { layout, u } = useArmLayout();
+  const root = useRef<HTMLDivElement>(null);
+
+  const [sel, setSel] = useState<Sel>(() => (p.books.length ? { k: 'book', i: 0 } : { k: 'pick' }));
   const [scene, setScene] = useState<Scene | null>(null);
-  const [hint, setHint] = useState<{ text: string; key: number } | null>(null);
+  const [hint, setHint] = useState<{ text: string; key: number; bad?: boolean } | null>(null);
   const [fresh, setFresh] = useState<Book | null>(null);
-  const slots = enchSlots(p);
-  const pick = PICKS[p.pickMax];
-  const onPick = ENCHANTS.filter((e) => p.ench[e.id] > 0);
-  const full = p.books.length >= SHELF_MAX;
+  /** The armed two-tap action («В пыль», «Снять», «Перековать»): its id. */
+  const [armed, setArmed] = useState<string | null>(null);
+  const [dustOn, setDustOn] = useState(true);
+  const [asking, setAsking] = useState(false);
+  const [replace, setReplace] = useState<EnchantId | null>(null);
+  const [byLevel, setByLevel] = useState(false);
 
-  const say = (text: string) => setHint({ text, key: Date.now() });
-
+  const say = (text: string, bad = false) => setHint({ text, key: Date.now(), bad });
   useEffect(() => {
     if (!hint) return undefined;
-    const t = setTimeout(() => setHint(null), 2600);
-    return () => clearTimeout(t);
+    const id = setTimeout(() => setHint(null), 2600);
+    return () => clearTimeout(id);
   }, [hint]);
+  useEffect(() => {
+    if (!armed) return undefined;
+    const id = setTimeout(() => setArmed(null), 5000);
+    return () => clearTimeout(id);
+  }, [armed]);
 
+  const slots = enchSlots(p);
+  const pk = PICKS[p.pickMax];
+  const onPick = ENCHANTS.filter((e) => p.ench[e.id] > 0);
+  const full = p.books.length >= SHELF_MAX;
+  const lvl = pickLevelOf(p.pickXp);
+  const starMax = p.pickStars >= PICK_STARS_MAX;
+  const starReady = lvl.level >= PICK_LEVEL_MAX && !starMax;
+
+  // The selection survives the shelf changing under it: a book index past the end falls back
+  // to the last book (after «в пыль» the next one slides into the same place), a wiped enchant
+  // to the pick. The showcase never empties.
+  let cur: Sel = sel;
+  if (cur.k === 'book' && p.books.length === 0) cur = { k: 'pick' };
+  if (cur.k === 'slot' && !(p.ench[cur.id] > 0)) cur = { k: 'pick' };
+  const bi = cur.k === 'book' ? Math.min(cur.i, p.books.length - 1) : -1;
+  const b = bi >= 0 ? p.books[bi] : undefined;
+
+  const select = (s: Sel) => {
+    if (selKey(s) === selKey(cur)) return false;
+    selectionChanged();
+    setSel(s);
+    setArmed(null);
+    setDustOn(true);
+    setReplace(null);
+    return true;
+  };
+
+  // ---- Book on the showcase -------------------------------------------------------------------
+  const check = b ? canApply(p.ench, slots, b) : 'ok';
+  const inPick = b ? p.ench[b.id] : 0;
+  const need = b ? dustToFull(b) : 0;
+  const dust = b && dustOn ? Math.min(p.dust, need) : 0;
+  const chance = b ? applyChance(b, dust) : 0;
+  const mate = bi >= 0 ? anvilMate(p.books, bi) : -1;
+
+  // ---- Actions (behaviour as before: same store calls, same two-tap confirmations) ------------
   const onBuy = (tier: BookTier) => {
     primeAudio();
     const def = bookTierOf(tier);
     if (full) {
       uiError();
       notifyWarning();
-      say(t('books.shelfFull'));
+      say(t('books.shelfFull'), true);
       return;
     }
     if (p.tokens < def.price) {
       uiError();
       notifyWarning();
-      say(t('books.needTokens', { n: Math.round(def.price - p.tokens) }));
+      say(t('books.needTokens', { n: Math.round(def.price - p.tokens) }), true);
       return;
     }
     const book = buy(tier);
@@ -281,178 +363,825 @@ export function BooksTab() {
     preloadBookReveal(tierOfLevel(book.lvl));
     setScene({ kind: 'buy', book, tier });
   };
+  const doApply = (rep?: EnchantId) => {
+    if (!b) return;
+    primeAudio();
+    if (check === 'lower') {
+      uiError();
+      notifyWarning();
+      say(lowerText(), true);
+      return;
+    }
+    if (check === 'full' && !rep) {
+      tapLight();
+      setAsking(true);
+      return;
+    }
+    const res = apply(bi, dust, check === 'full' ? rep : undefined);
+    if (!res) {
+      uiError();
+      return;
+    }
+    setAsking(false);
+    setReplace(null);
+    void preloadPx(
+      'books',
+      `${res.ok ? 'apply-ok' : 'apply-burn'}-${tierOfLevel(res.book.lvl)}`,
+      APPLY_SIZE,
+    );
+    setScene({
+      kind: 'apply',
+      book: res.book,
+      ok: res.ok,
+      chance: res.chance,
+      replaced: check === 'full' ? rep : undefined,
+    });
+  };
+  const doAnvil = () => {
+    if (!b || mate < 0) return;
+    primeAudio();
+    const from = b;
+    const got = anvil(bi, mate);
+    if (!got) return;
+    preloadBookReveal(tierOfLevel(got.lvl));
+    setScene({ kind: 'anvil', book: got, from });
+  };
+  const doSalvage = () => {
+    if (!b) return;
+    if (armed !== 'salvage') {
+      tapLight();
+      setArmed('salvage');
+      return;
+    }
+    setArmed(null);
+    const name = bookName(b);
+    const got = salvage(bi);
+    softChime(1);
+    tapLight();
+    if (got) say(t('books.crumbled', { name }));
+  };
+  const doWipe = (id: EnchantId) => {
+    if (armed !== 'wipe') {
+      tapLight();
+      setArmed('wipe');
+      return;
+    }
+    setArmed(null);
+    const got = wipe(id);
+    softThud();
+    tapMedium();
+    if (got) say(t('books.crumbled', { name: bookName({ id, lvl: p.ench[id] }) }));
+  };
+  const doStar = () => {
+    primeAudio();
+    if (!starReady) {
+      uiError();
+      notifyWarning();
+      say(starMax ? t('books.starMax') : t('books.starNeed', { n: PICK_LEVEL_MAX }), true);
+      return;
+    }
+    if (armed !== 'star') {
+      tapLight();
+      setArmed('star');
+      return;
+    }
+    setArmed(null);
+    if (!prisonPickStar()) {
+      notifyWarning();
+      return;
+    }
+    tierBreak(3);
+    burstConfetti(80, ['#ffe08a', '#ffffff', '#b8f4e6']);
+    flashFrame('big');
+    notifySuccess();
+  };
+  /** Dust raises the chance: on by default, the chance cell and the details button toggle it. */
+  const toggleDust = () => {
+    if (!b || need <= 0 || check === 'lower') return;
+    if (p.dust <= 0) {
+      notifyWarning();
+      say(t('books.noDust'), true);
+      return;
+    }
+    selectionChanged();
+    setDustOn(!dustOn);
+  };
+  const lowerText = () =>
+    t(mate >= 0 ? 'books.lowerMate' : 'books.lower', {
+      name: b ? bookName({ id: b.id, lvl: inPick }) : '',
+    });
 
-  // Лучший кандидат на полке — для подсказки «что вписать».
-  const better = (b: Book) => canApply(p.ench, slots, b) === 'ok';
+  // ---- Showcase ---------------------------------------------------------------------------------
+  const roomRef = useRef<HTMLSpanElement>(null);
+  const roomBox = useBox(roomRef);
+  const art = heroSize(roomBox, u, 112 * u);
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const ped = Math.max(u, Math.round((art * 0.8 * dpr) / 112) / dpr);
 
-  return (
-    <div className="pforge pbk">
-      <div className="pcamp-purse pbk-purse">
-        <span>
-          <TokenIcon size={18} /> <b>{fmt(p.tokens)}</b>
+  let rarity = 0;
+  let hero: ReactNode = null;
+  let name: ReactNode = '';
+  let status: ReactNode = null;
+  let fx: ReactNode = '';
+  let stats: ReactNode = null;
+  const acts: Act[] = [
+    { id: 'a0', label: '·', kind: 'danger', hide: true },
+    { id: 'a1', label: '·', kind: 'secondary', hide: true },
+    { id: 'a2', label: '·', kind: 'confirm', hide: true },
+  ];
+
+  if (cur.k === 'book' && b) {
+    const tier = tierOfLevel(b.lvl);
+    rarity = TIER_RARITY[tier];
+    hero = <BookArt key={`${bi}-${b.id}-${b.lvl}`} book={b} size={art} glow />;
+    name = bookName(b);
+    status = (
+      <span className={`arm-status is-${check}`}>
+        {check === 'ok' && <Icon name="up" />}
+        {check === 'lower' && <Icon name="down" />}
+        {check === 'ok'
+          ? t('books.canApply')
+          : check === 'lower'
+            ? t('books.weaker')
+            : t('books.fullPick')}
+      </span>
+    );
+    fx = effectOf(b.id, b.lvl, p.pickStars);
+    const canDust = need > 0 && check !== 'lower';
+    stats = (
+      <div className="arm-stats">
+        <button
+          type="button"
+          className={`arm-stat bkx-chance px-f is-${chanceTone(check === 'lower' ? b.chance : chance)}`}
+          aria-pressed={canDust ? dustOn && p.dust > 0 : undefined}
+          aria-label={
+            !canDust
+              ? t('books.chance', { v: check === 'lower' ? b.chance : chance })
+              : p.dust <= 0
+                ? t('books.noDust')
+                : dustOn
+                  ? t('books.dustOn', { n: dust })
+                  : t('books.dustOff', { n: Math.min(p.dust, need) })
+          }
+          onClick={toggleDust}
+        >
+          <b>{t('books.pct', { v: check === 'lower' ? b.chance : chance })}</b>
+          {canDust && (
+            <span className={`bkx-dusttag${dustOn && p.dust > 0 ? ' is-on' : ''}`}>
+              <DustIcon size={u * 7} />
+              {p.dust > 0 ? `+${Math.min(p.dust, need)}` : '0'}
+            </span>
+          )}
+          <i>{t('books.statChance')}</i>
+        </button>
+        <span className="arm-stat">
+          <b>{ROMAN[b.lvl - 1]}</b>
+          {inPick > 0 && <Delta v={b.lvl - inPick} />}
+          <i>{t('books.statLevel')}</i>
         </span>
-        <span>
-          <DustIcon size={18} /> {rich('books.dust', { v: <b>{fmt(p.dust)}</b> })}
+        <span className="arm-stat">
+          <b>
+            <DustIcon size={u * 8} />
+            {dustOf(b)}
+          </b>
+          <i>{t('books.statDust')}</i>
         </span>
       </div>
-
-      {/* ---- Кирка и её места ---- */}
-      <section className="pbk-pick" style={rarityVars(pick.rarity)}>
-        <div className="pbk-pick__head">
-          <PickIcon pick={p.pickMax} size={46} />
-          <span>
-            <RarityName rarity={pick.rarity}>{pickFull(p.pickMax)}</RarityName>
-            <i>{rich('books.onPick', { a: <b>{onPick.length}</b>, b: <b>{slots}</b> })}</i>
+    );
+    acts[0] = {
+      id: 'salvage',
+      label: (
+        <>
+          {layout !== 'one' && <DustIcon size={u * 7} />}
+          <span className="arm-btn-txt">
+            {armed === 'salvage'
+              ? t('books.sureDust', { n: dustOf(b) })
+              : t('books.salvage', { n: dustOf(b) })}
           </span>
+        </>
+      ),
+      kind: 'danger',
+      armed: armed === 'salvage',
+      run: doSalvage,
+    };
+    acts[1] = {
+      id: 'anvil',
+      label: (
+        <>
+          {layout !== 'one' && <GxIcon name="anvil" size={u * 8} />}
+          <span className="arm-btn-txt">
+            {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
+          </span>
+        </>
+      ),
+      kind: 'secondary',
+      hide: mate < 0,
+      run: doAnvil,
+    };
+    acts[2] = {
+      id: 'apply',
+      label: <span className="arm-btn-txt">{t('books.apply', { v: chance })}</span>,
+      kind: 'confirm',
+      off: check === 'lower',
+      run: () => doApply(),
+    };
+  } else if (cur.k === 'slot') {
+    const id = cur.id;
+    const l = p.ench[id];
+    const off = p.off.includes(id);
+    rarity = rarityOfLevel(l);
+    hero = <BookArt key={`s-${id}-${l}`} book={{ id, lvl: l }} size={art} glow={!off} />;
+    name = bookName({ id, lvl: l });
+    status = (
+      <span className={`arm-status ${off ? 'is-locked' : 'is-hand'}`}>
+        <Icon name={off ? 'zzz' : 'check'} />
+        {off ? t('books.offState') : t('books.inPickNow')}
+      </span>
+    );
+    fx = effectOf(id, l, p.pickStars);
+    stats = (
+      <div className="arm-stats">
+        <span className="arm-stat">
+          <b>{ROMAN[l - 1]}</b>
+          <i>{t('books.statLevel')}</i>
+        </span>
+        <span className="arm-stat">
+          <b>
+            <Icon name={off ? 'zzz' : 'check'} />
+            {off ? t('common.off') : t('common.on')}
+          </b>
+          <i>{t('books.statState')}</i>
+        </span>
+        <span className="arm-stat">
+          <b>
+            <DustIcon size={u * 8} />
+            {dustOf({ lvl: l })}
+          </b>
+          <i>{t('books.statDust')}</i>
+        </span>
+      </div>
+    );
+    acts[0] = {
+      id: 'wipe',
+      label: (
+        <span className="arm-btn-txt">
+          {armed === 'wipe'
+            ? t('books.sureDust', { n: dustOf({ lvl: l }) })
+            : t('books.wipeBtn', { n: dustOf({ lvl: l }) })}
+        </span>
+      ),
+      kind: 'danger',
+      armed: armed === 'wipe',
+      run: () => doWipe(id),
+    };
+    acts[2] = {
+      id: 'toggle',
+      label: off ? t('books.toggleOn') : t('books.toggleOff'),
+      kind: 'secondary',
+      hide: !ENCHANT_TOGGLE.includes(id),
+      run: () => {
+        selectionChanged();
+        toggle(id);
+      },
+    };
+  } else if (cur.k === 'tier') {
+    const bt = bookTierOf(cur.id);
+    const can = p.tokens >= bt.price && !full;
+    rarity = TIER_RARITY[bt.id];
+    hero = <BookArt key={`t-${bt.id}`} tier={bt.id} size={art} glow={can} />;
+    name = bookTierBook(bt.id);
+    status = (
+      <span className="arm-status">
+        <GxIcon name="book" size={u * 7} />
+        {t('books.mageName')}
+      </span>
+    );
+    fx = mageLine(0);
+    stats = (
+      <div className="arm-stats">
+        <span className={`arm-stat${p.tokens < bt.price ? ' is-short' : ''}`}>
+          <b>
+            <TokenIcon size={u * 8} />
+            {fmtShort(bt.price)}
+          </b>
+          <i>{t('books.statPrice')}</i>
+        </span>
+        <span className="arm-stat">
+          <b>
+            {ROMAN[bt.lvl[0] - 1]}–{ROMAN[bt.lvl[1] - 1]}
+          </b>
+          <i>{t('books.statLevel')}</i>
+        </span>
+        <span className="arm-stat">
+          <b>{t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] })}</b>
+          <i>{t('books.statChance')}</i>
+        </span>
+      </div>
+    );
+    acts[2] = {
+      id: 'buy',
+      label: (
+        <>
+          <span className="arm-btn-txt">{t('books.buy')}</span>
+          <span className="arm-btn-price">
+            {fmt(bt.price)} <TokenIcon size={u * 7} />
+          </span>
+        </>
+      ),
+      kind: 'primary',
+      off: !can,
+      run: () => onBuy(bt.id),
+    };
+  } else {
+    rarity = pk.rarity;
+    hero = <PickArt key={`p-${p.pickMax}`} pick={p.pickMax} size={art} />;
+    name = pickFull(p.pickMax);
+    status = (
+      <span className="arm-status">
+        {rich('books.onPick', { a: <b>{onPick.length}</b>, b: <b>{slots}</b> })}
+      </span>
+    );
+    fx = lvl.need
+      ? `${t('books.pickLv', { n: lvl.level })} · ${t('books.blocksLeft', { n: Math.round(lvl.need - lvl.into) })}`
+      : `${t('books.pickLv', { n: lvl.level })} · ${t('books.max')}`;
+    stats = (
+      <div className="arm-stats">
+        <span className="arm-stat">
+          <b>
+            <Icon name="up" />
+            {lvl.level}
+          </b>
+          <i>{t('books.statLevel')}</i>
+        </span>
+        <span className="arm-stat bkx-stars">
+          <b>
+            <Icon name="star" />
+            {p.pickStars}/{PICK_STARS_MAX}
+          </b>
+          <i>{t('books.statStars')}</i>
+        </span>
+        <span className="arm-stat">
+          <b>
+            <GxIcon name="book" size={u * 8} />
+            {onPick.length}/{slots}
+          </b>
+          <i>{t('books.statSlots')}</i>
+        </span>
+      </div>
+    );
+    acts[2] = {
+      id: 'star',
+      label: (
+        <span className="arm-btn-txt">
+          {armed === 'star'
+            ? t('books.sure')
+            : starMax
+              ? t('books.starMax')
+              : t('books.star', { n: p.pickStars + 1 })}
+        </span>
+      ),
+      kind: 'primary',
+      off: !starReady,
+      armed: armed === 'star',
+      run: doStar,
+    };
+  }
+
+  // X / pad Y — the main action of whatever is on the showcase.
+  const main = [...acts].reverse().find((a) => !a.hide && !a.off && a.kind !== 'danger');
+  useAction(['inspect'], () => main?.run?.(), { scope: root, enabled: !!main });
+
+  const showcase = (
+    <section className="arm-show" style={rarityVars(rarity)}>
+      <Panel material="stone" stage className="arm-stage bkx-stage">
+        <span ref={roomRef} className="arm-room">
+          {art > 0 && (
+            <span className="arm-ped" style={{ '--ped': `${ped}px` } as CSSProperties}>
+              {hero}
+            </span>
+          )}
+        </span>
+        <div className="arm-id px-dark">
+          <h2 className="arm-name">{name}</h2>
+          <div className="arm-sub">{status}</div>
+          <p className="bkx-fx">{fx}</p>
         </div>
-        <div className="pbk-slots">
-          {onPick.map((e) => {
-            const lvl = p.ench[e.id];
-            const off = p.off.includes(e.id);
-            return (
-              <button
-                key={e.id}
-                type="button"
-                className={`pbk-slot${off ? ' is-off' : ''}${slot === e.id ? ' is-open' : ''}`}
-                onClick={() => {
-                  selectionChanged();
-                  setSlot(slot === e.id ? null : e.id);
-                }}
+        {stats}
+      </Panel>
+    </section>
+  );
+
+  // ---- Details: what the choice means (side column; a fixed box over the list on phones) ------
+  let details: ReactNode = null;
+  if (cur.k === 'book' && b) {
+    details = (
+      <div className="arm-details bkx-details">
+        <div className="bkx-block">
+          <Heading sub>{t('books.inPickHead')}</Heading>
+          <p>
+            {inPick > 0
+              ? t('books.inPick', {
+                  name: bookName({ id: b.id, lvl: inPick }),
+                  fx: effectOf(b.id, inPick, p.pickStars),
+                })
+              : t('books.notInPick')}
+          </p>
+        </div>
+        {check === 'lower' ? (
+          <p className="bkx-note is-bad">{lowerText()}</p>
+        ) : (
+          <div className="bkx-block">
+            <Heading sub>{t('books.statChance')}</Heading>
+            <Bar
+              value={chance / 100}
+              tone={chance >= 80 ? 'green' : 'gold'}
+              label={
+                dust > 0
+                  ? `${t('books.pct', { v: b.chance })} + ${t('books.pct', { v: chance - b.chance })}`
+                  : t('books.pct', { v: chance })
+              }
+            />
+            {need > 0 && (
+              <Button
+                size="sm"
+                kind="secondary"
+                on={dustOn && p.dust > 0}
+                off={p.dust <= 0}
+                className="bkx-dustbtn"
+                onClick={toggleDust}
               >
-                <BookArt book={{ id: e.id, lvl }} size={44} />
-                <span className="pbk-slot__txt">
-                  <b>
-                    {enchantName(e.id)} <em>{ROMAN[lvl - 1]}</em>
-                  </b>
-                  <i>{off ? t('books.offState') : effectOf(e.id, lvl, p.pickStars)}</i>
-                </span>
-              </button>
-            );
-          })}
-          {Array.from({ length: Math.max(0, slots - onPick.length) }, (_, i) => (
-            <div key={`e${i}`} className="pbk-slot is-empty">
-              <span className="pbk-slot__plus">+</span>
-              <span className="pbk-slot__txt">
-                <b>{t('books.free')}</b>
-                <i>{p.books.some(better) ? t('books.freeShelf') : t('books.freeBuy')}</i>
-              </span>
-            </div>
-          ))}
-        </div>
-        {slot && p.ench[slot] > 0 && <SlotTools id={slot} p={p} onDone={() => setSlot(null)} />}
-        {slots < 7 && (
-          <div className="pbk-locks" aria-label={t('books.locksAria')}>
-            {Array.from({ length: 7 - slots }, (_, i) => {
-              const r = rarityOf(slots + i);
-              return (
-                <span
-                  key={i}
-                  className={`pbk-lock${i === 0 ? ' is-next' : ''}`}
-                  style={{ '--rc': r.color } as CSSProperties}
-                  title={rarityPick(r.id)}
-                >
-                  <GxIcon name="book" size={12} />
-                  {i === 0 && rarityPick(r.id)}
-                </span>
-              );
-            })}
-            <em>{t('books.perStep')}</em>
+                <DustIcon size={u * 7} />
+                {p.dust <= 0
+                  ? t('books.noDust')
+                  : dustOn
+                    ? t('books.dustOn', { n: dust })
+                    : t('books.dustOff', { n: Math.min(p.dust, need) })}
+              </Button>
+            )}
+            <p className="arm-muted">{t('books.warn')}</p>
           </div>
         )}
-      </section>
+        {mate >= 0 && (
+          <p className="bkx-note">
+            <GxIcon name="anvil" size={u * 8} />{' '}
+            {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
+          </p>
+        )}
+        {check === 'full' && <p className="bkx-note">{t('books.replace')}</p>}
+      </div>
+    );
+  } else if (cur.k === 'slot') {
+    const id = cur.id;
+    details = (
+      <div className="arm-details bkx-details">
+        <p>{effectOf(id, p.ench[id], p.pickStars)}</p>
+        <p className="arm-muted">
+          {armed === 'wipe'
+            ? t('books.wipeArmed', { n: dustOf({ lvl: p.ench[id] }) })
+            : t('books.wipeInfo')}
+        </p>
+      </div>
+    );
+  } else if (cur.k === 'tier') {
+    const bt = bookTierOf(cur.id);
+    details = (
+      <div className="arm-details bkx-details">
+        <p>{mageLine(0)}</p>
+        <p>
+          {ROMAN[bt.lvl[0] - 1]}–{ROMAN[bt.lvl[1] - 1]} ·{' '}
+          {t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] })}
+        </p>
+        <p className={full ? 'bkx-note is-bad' : 'arm-muted'}>
+          {full ? t('books.shelfFull') : `${t('books.shelf')} ${p.books.length}/${SHELF_MAX}`}
+        </p>
+      </div>
+    );
+  } else {
+    details = (
+      <div className="arm-details bkx-details">
+        <div className="bkx-block">
+          <Heading sub>{t('books.pickLv', { n: lvl.level })}</Heading>
+          <Bar
+            value={lvl.need ? lvl.into / lvl.need : 1}
+            tone="blue"
+            label={
+              lvl.need
+                ? t('books.blocksLeft', { n: Math.round(lvl.need - lvl.into) })
+                : t('books.max')
+            }
+          />
+        </div>
+        <p>
+          {t('books.starText', {
+            cap: Math.round(STAR_CAP * 100),
+            dmg: Math.round(STAR_DMG * 100),
+            tokens: fmt(STAR_TOKENS * (p.pickStars + 1)),
+            keys: STAR_KEYS,
+          })}
+        </p>
+        <p className="arm-muted">{t('books.perStep')}</p>
+      </div>
+    );
+  }
 
-      {/* ---- Чародей ---- */}
-      <section className="pbk-seller">
+  // ---- Lists: the pick's places · the Enchanter · the shelf -----------------------------------
+  const cell = u * 20;
+  const pickSec = (
+    <section className="bkx-sec">
+      <div className="arm-head">
+        <Heading>
+          {rich('books.onPick', {
+            a: <b className="arm-num">{onPick.length}</b>,
+            b: <b className="arm-num">{slots}</b>,
+          })}
+        </Heading>
+      </div>
+      <div className="arm-grid bkx-grid" role="group">
+        <Slot
+          rarity={pk.rarity}
+          selected={cur.k === 'pick'}
+          corner={p.pickStars > 0 ? `★${p.pickStars}` : undefined}
+          dot={starReady ? '!' : undefined}
+          aria-label={pickFull(p.pickMax)}
+          tip={pickFull(p.pickMax)}
+          data-autofocus={cur.k === 'pick' ? '' : undefined}
+          onClick={() => select({ k: 'pick' })}
+          onFocus={() => select({ k: 'pick' })}
+        >
+          <PickPx pick={p.pickMax} size={cell} />
+        </Slot>
+        {onPick.map((e) => {
+          const l = p.ench[e.id];
+          const off = p.off.includes(e.id);
+          const on = cur.k === 'slot' && cur.id === e.id;
+          return (
+            <Slot
+              key={e.id}
+              rarity={rarityOfLevel(l)}
+              selected={on}
+              count={ROMAN[l - 1]}
+              corner={off ? <Icon name="zzz" /> : undefined}
+              className={off ? 'bkx-off' : undefined}
+              aria-label={bookName({ id: e.id, lvl: l })}
+              tip={<BookTip book={{ id: e.id, lvl: l }} stars={p.pickStars} />}
+              data-autofocus={on ? '' : undefined}
+              onClick={() => select({ k: 'slot', id: e.id })}
+              onFocus={() => select({ k: 'slot', id: e.id })}
+            >
+              <BookArt book={{ id: e.id, lvl: l }} size={cell} />
+            </Slot>
+          );
+        })}
+        {Array.from({ length: Math.max(0, slots - onPick.length) }, (_, i) => (
+          <Slot
+            key={`e${i}`}
+            empty
+            aria-label={t('books.free')}
+            tip={`${t('books.free')}: ${p.books.some((x) => canApply(p.ench, slots, x) === 'ok') ? t('books.freeShelf') : t('books.freeBuy')}`}
+            onClick={() => {
+              tapLight();
+              say(
+                `${t('books.free')}: ${p.books.some((x) => canApply(p.ench, slots, x) === 'ok') ? t('books.freeShelf') : t('books.freeBuy')}`,
+              );
+            }}
+          >
+            <Icon name="plus" />
+          </Slot>
+        ))}
+        {Array.from({ length: Math.max(0, 7 - slots) }, (_, i) => {
+          const r = rarityOf(slots + i);
+          const txt = t('books.lockedBy', { pick: rarityPick(r.id) });
+          return (
+            <Slot
+              key={`l${i}`}
+              locked
+              rarity={slots + i}
+              aria-label={txt}
+              tip={txt}
+              onClick={() => {
+                tapLight();
+                say(txt);
+              }}
+            >
+              <span className="bkx-ghost">
+                <GxIcon name="book" size={Math.round(cell * 0.7)} />
+              </span>
+            </Slot>
+          );
+        })}
+      </div>
+    </section>
+  );
+
+  const mageSec = (
+    <section className="bkx-sec">
+      <div className="arm-head">
+        <Heading>{t('books.mageName')}</Heading>
+      </div>
+      <div className="bkx-seller">
         <MageCard poor={p.tokens < BOOK_TIERS[0].price} />
-        <div className="pbk-tiers">
+        <div className="bkx-tiers" role="group">
           {BOOK_TIERS.map((bt) => {
             const can = p.tokens >= bt.price && !full;
+            const on = cur.k === 'tier' && cur.id === bt.id;
             return (
-              <button
+              <Slot
                 key={bt.id}
-                type="button"
-                className={`pbk-tier t-${bt.id}${can ? '' : ' is-no'}`}
-                aria-disabled={!can}
-                style={rarityVars(TIER_RARITY[bt.id])}
+                rarity={TIER_RARITY[bt.id]}
+                selected={on}
+                count={fmtShort(bt.price)}
+                className={can ? undefined : 'bkx-off'}
+                aria-label={`${bookTierBook(bt.id)} · ${fmt(bt.price)}`}
+                tip={`${bookTierBook(bt.id)} · ${fmt(bt.price)}`}
+                data-autofocus={on ? '' : undefined}
                 onPointerDown={() => can && preloadBookReveal(bt.id)}
-                onClick={() => onBuy(bt.id)}
+                onClick={() => {
+                  // A tap on the tier already on the showcase buys it (as the forge: tap again).
+                  if (!select({ k: 'tier', id: bt.id })) onBuy(bt.id);
+                }}
+                onFocus={() => select({ k: 'tier', id: bt.id })}
               >
-                <BookArt tier={bt.id} size={56} glow={can} />
-                <b>{bookTierName(bt.id)}</b>
-                <i>
-                  {ROMAN[bt.lvl[0] - 1]}–{ROMAN[bt.lvl[1] - 1]} ·{' '}
-                  {t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] })}
-                </i>
-                <span className="pbk-tier__price">
-                  {fmt(bt.price)} <TokenIcon size={13} />
-                </span>
-              </button>
+                <BookArt tier={bt.id} size={cell} />
+              </Slot>
             );
           })}
         </div>
-      </section>
+      </div>
+    </section>
+  );
 
-      {/* ---- Полка ---- */}
-      <section className="pbk-shelf">
-        <h4>
-          <GxIcon name="book" size={18} /> {t('books.shelf')}
-          <i>
+  const order = p.books.map((x, i) => i);
+  if (byLevel) order.sort((a, c) => p.books[c].lvl - p.books[a].lvl || a - c);
+  const shelfSec = (
+    <section className="bkx-sec">
+      <div className="arm-head bkx-shelfhead">
+        <Heading>
+          {t('books.shelf')}{' '}
+          <span className="arm-num">
             {p.books.length}/{SHELF_MAX}
-          </i>
-        </h4>
-        {p.books.length === 0 ? (
-          <p className="pbk-empty">{t('books.shelfEmpty')}</p>
-        ) : (
-          <div className="pbk-grid">
-            {p.books.map((b, i) => {
-              const check = canApply(p.ench, slots, b);
-              const mate = anvilMate(p.books, i) >= 0;
-              return (
-                <button
-                  key={`${i}-${b.id}-${b.lvl}-${b.chance}`}
-                  type="button"
-                  className={`pbk-book${check === 'lower' ? ' is-weak' : ''}${fresh === b ? ' is-fresh' : ''}`}
-                  onClick={() => {
-                    uiTap();
-                    setOpen(i);
-                  }}
-                >
-                  <BookArt book={b} size={54} />
-                  <em className="pbk-book__lv">{ROMAN[b.lvl - 1]}</em>
-                  <span className={`pbk-book__ch is-${chanceTone(b.chance)}`}>
-                    {t('books.pct', { v: b.chance })}
-                  </span>
-                  {check === 'ok' && <i className="pbk-book__up" title={t('books.canApply')} />}
-                  {mate && <GxIcon name="anvil" size={14} className="pbk-book__anvil" />}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
+          </span>
+        </Heading>
+        <Button
+          size="sm"
+          icon="sort"
+          on={byLevel}
+          label={t('books.sortLevel')}
+          onClick={() => {
+            tapLight();
+            setByLevel((v) => !v);
+          }}
+        />
+      </div>
+      {p.books.length === 0 ? (
+        <p className="arm-muted">{t('books.shelfEmpty')}</p>
+      ) : (
+        <div className="arm-grid bkx-grid" role="group">
+          {order.map((i) => {
+            const x = p.books[i];
+            const ck = canApply(p.ench, slots, x);
+            const mt = anvilMate(p.books, i) >= 0;
+            const on = cur.k === 'book' && bi === i;
+            return (
+              <Slot
+                key={`${i}-${x.id}-${x.lvl}-${x.chance}`}
+                rarity={rarityOfLevel(x.lvl)}
+                selected={on}
+                count={ROMAN[x.lvl - 1]}
+                corner={
+                  ck === 'ok' ? (
+                    <Icon name="up" className="bkx-up" />
+                  ) : mt ? (
+                    <GxIcon name="anvil" size={Math.round(cell * 0.45)} />
+                  ) : undefined
+                }
+                dot={fresh === x ? '!' : undefined}
+                className={ck === 'lower' ? 'bkx-weak' : undefined}
+                aria-label={`${bookName(x)} · ${t('books.pct', { v: x.chance })}`}
+                tip={<BookTip book={x} stars={p.pickStars} have={p.ench[x.id]} />}
+                data-autofocus={on ? '' : undefined}
+                onClick={() => select({ k: 'book', i })}
+                onFocus={() => select({ k: 'book', i })}
+              >
+                <BookArt book={x} size={cell} />
+              </Slot>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 
-      <StarSection p={p} />
+  const actBar = (
+    <div className="arm-acts bkx-acts">
+      {acts.map((a) => (
+        <Button
+          key={a.id}
+          kind={a.kind}
+          off={a.off}
+          className={`${a.hide ? 'is-hidden' : ''}${a.armed ? ' is-armed' : ''}`}
+          aria-hidden={a.hide || undefined}
+          tabIndex={a.hide ? -1 : undefined}
+          hint={a === main ? 'inspect' : undefined}
+          onClick={a.hide ? undefined : a.run}
+        >
+          {a.label}
+        </Button>
+      ))}
+    </div>
+  );
+
+  const list = (
+    <div className="arm-list bkx-list">
+      {layout === 'one' && details}
+      {pickSec}
+      {mageSec}
+      {shelfSec}
+    </div>
+  );
+
+  return (
+    <div
+      ref={root}
+      className={`px arm arm--${layout} is-embed bkx`}
+      style={{ '--slot': `${cell + 6 * u}px` } as CSSProperties}
+    >
+      <header className="arm-top bkx-top">
+        <span className="arm-purse">
+          <span>
+            <TokenIcon size={u * 8} />
+            <b className="arm-num">{fmt(p.tokens)}</b>
+          </span>
+          <span className="bkx-dust">
+            <DustIcon size={u * 8} />
+            <b className="arm-num">{fmt(p.dust)}</b>
+          </span>
+        </span>
+      </header>
+      {showcase}
+      {list}
+      {layout === 'one' ? (
+        actBar
+      ) : (
+        <aside className="arm-side">
+          <Panel material="obsidian" className="arm-info">
+            <div className="arm-info__head">
+              <h3 className="arm-info__name">{name}</h3>
+              <RarityChip rarity={rarity} />
+            </div>
+            {details}
+          </Panel>
+          {actBar}
+        </aside>
+      )}
 
       {hint && (
-        <div key={hint.key} className="pbk-hint" role="status">
+        <div key={hint.key} className={`arm-note${hint.bad ? ' is-bad' : ''}`} role="status">
           {hint.text}
         </div>
       )}
 
-      {open !== null &&
-        p.books[open] &&
-        createPortal(
-          <BookSheet
-            i={open}
-            p={p}
-            onClose={() => setOpen(null)}
-            onScene={(s) => {
-              setOpen(null);
-              setScene(s);
-            }}
-          />,
-          document.body,
-        )}
+      {asking && b && (
+        <Modal title={t('books.replaceTitle')} sheet width={220} onClose={() => setAsking(false)}>
+          <div className="bkx-replace">
+            <p>{t('books.replace')}</p>
+            <div className="bkx-replace__chips" role="group">
+              {onPick
+                .filter((e) => e.id !== b.id)
+                .map((e) => (
+                  <Button
+                    key={e.id}
+                    size="sm"
+                    kind="secondary"
+                    on={replace === e.id}
+                    onClick={() => {
+                      selectionChanged();
+                      setReplace(e.id);
+                    }}
+                  >
+                    <GxIcon name={ENCH_ICON[e.id]} size={u * 7} />
+                    {bookName({ id: e.id, lvl: p.ench[e.id] })}
+                  </Button>
+                ))}
+            </div>
+            <Button
+              kind="confirm"
+              wide
+              off={!replace}
+              onClick={() => {
+                if (!replace) {
+                  uiError();
+                  notifyWarning();
+                  return;
+                }
+                doApply(replace);
+              }}
+            >
+              {t('books.apply', { v: chance })}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {scene &&
         createPortal(
           scene.kind === 'apply' ? (
@@ -462,6 +1191,8 @@ export function BooksTab() {
               scene={scene}
               onDone={() => {
                 setFresh(scene.book);
+                const i = useFinanceStore.getState().prison.books.indexOf(scene.book);
+                if (i >= 0) select({ k: 'book', i });
                 setScene(null);
               }}
             />
@@ -469,6 +1200,42 @@ export function BooksTab() {
           document.body,
         )}
     </div>
+  );
+}
+
+/** Tooltip of a book cell: effect, chance, and the same enchant in the pick (green / red). */
+function BookTip({
+  book,
+  stars,
+  have,
+}: {
+  book: Book | Pick<Book, 'id' | 'lvl'>;
+  stars: number;
+  have?: number;
+}): ReactNode {
+  const t = useT();
+  const r = rarityOfLevel(book.lvl);
+  const chance = 'chance' in book ? book.chance : undefined;
+  return (
+    <span className="arm-tip" style={rarityVars(r)}>
+      <b>{bookName(book)}</b>
+      <i>{bookTierBook(tierOfLevel(book.lvl))}</i>
+      <span className="arm-tip__row">{effectOf(book.id, book.lvl, stars)}</span>
+      {chance !== undefined && (
+        <span className="arm-tip__row">{t('books.chance', { v: chance })}</span>
+      )}
+      {have !== undefined && (
+        <span className="arm-tip__row">
+          {have > 0 ? (
+            <>
+              {t('books.inPickHead')}: {ROMAN[have - 1]} <Delta v={book.lvl - have} />
+            </>
+          ) : (
+            t('books.notInPick')
+          )}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -480,6 +1247,7 @@ export function BooksTab() {
 /**
  * Реплики Чародея — одна строка, тап по портрету даёт следующую. Это его
  * голос, а не подсказка интерфейса: механику книг он рассказывает сам.
+ * UI v2: the line sits beside the portrait (kit text), not on it.
  */
 function MageCard({ poor }: { poor: boolean }) {
   const t = useT();
@@ -487,273 +1255,31 @@ function MageCard({ poor }: { poor: boolean }) {
   const line =
     poor && k === 0 ? t('books.magePoor') : mageLine((poor ? k - 1 : k) % MAGE_LINES.length);
   return (
-    <button
-      type="button"
-      className="pbk-mage"
-      aria-label={t('books.mageName')}
-      onClick={() => {
-        primeAudio();
-        softChime(1);
-        tapLight();
-        setK(k + 1);
-      }}
-    >
-      <img src="/ui/books/enchanter.webp" alt="" draggable={false} />
-      <i className="pbk-mage__eye is-l" aria-hidden="true" />
-      <i className="pbk-mage__eye is-r" aria-hidden="true" />
-      <i className="pbk-mage__lid is-l" aria-hidden="true" />
-      <i className="pbk-mage__lid is-r" aria-hidden="true" />
-      <i className="pbk-mage__fire is-l" aria-hidden="true" />
-      <i className="pbk-mage__fire is-r" aria-hidden="true" />
-      {k > 0 && <i key={k} className="pbk-mage__flare" aria-hidden="true" />}
-      <span className="pbk-mage__cap">
-        <b>{t('books.mageName')}</b>
-        <span key={k} className="pbk-mage__say">
-          {line}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Место в кирке: выключить или снять в пыль.
-// ---------------------------------------------------------------------------
-
-function SlotTools({ id, p, onDone }: { id: EnchantId; p: PrisonState; onDone: () => void }) {
-  const t = useT();
-  const toggle = useFinanceStore((s) => s.prisonEnchantToggle);
-  const wipe = useFinanceStore((s) => s.prisonEnchantWipe);
-  const [armed, setArmed] = useState(false);
-  const lvl = p.ench[id];
-  const off = p.off.includes(id);
-  useEffect(() => {
-    if (!armed) return undefined;
-    const t = setTimeout(() => setArmed(false), 5000);
-    return () => clearTimeout(t);
-  }, [armed]);
-  return (
-    <div className="pbk-tools">
-      {ENCHANT_TOGGLE.includes(id) && (
-        <button
-          type="button"
-          className={`pench-switch${off ? '' : ' is-on'}`}
-          aria-pressed={!off}
-          onClick={() => {
-            selectionChanged();
-            toggle(id);
-          }}
-        >
-          <i />
-          {lower(off ? t('common.off') : t('common.on'))}
-        </button>
-      )}
+    <div className="bkx-mage">
       <button
         type="button"
-        className={`pench-reset${armed ? ' is-armed' : ''}`}
+        className="pbk-mage px-f"
+        aria-label={t('books.mageName')}
         onClick={() => {
-          if (!armed) {
-            setArmed(true);
-            return;
-          }
-          const got = wipe(id);
-          softThud();
-          tapMedium();
-          setArmed(false);
-          if (got) onDone();
+          primeAudio();
+          softChime(1);
+          tapLight();
+          setK(k + 1);
         }}
       >
-        {armed ? t('books.wipeArmed', { n: dustOf({ lvl }) }) : t('books.wipe')}
+        <img src="/ui/books/enchanter.webp" alt="" draggable={false} />
+        <i className="pbk-mage__eye is-l" aria-hidden="true" />
+        <i className="pbk-mage__eye is-r" aria-hidden="true" />
+        <i className="pbk-mage__lid is-l" aria-hidden="true" />
+        <i className="pbk-mage__lid is-r" aria-hidden="true" />
+        <i className="pbk-mage__fire is-l" aria-hidden="true" />
+        <i className="pbk-mage__fire is-r" aria-hidden="true" />
+        {k > 0 && <i key={k} className="pbk-mage__flare" aria-hidden="true" />}
       </button>
+      <p key={k} className="bkx-mage__say">
+        {line}
+      </p>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Книга с полки: вписать, разобрать, склеить.
-// ---------------------------------------------------------------------------
-
-function BookSheet({
-  i,
-  p,
-  onClose,
-  onScene,
-}: {
-  i: number;
-  p: PrisonState;
-  onClose: () => void;
-  onScene: (s: Scene) => void;
-}) {
-  const t = useT();
-  const apply = useFinanceStore((s) => s.prisonBookApply);
-  const salvage = useFinanceStore((s) => s.prisonBookSalvage);
-  const anvil = useFinanceStore((s) => s.prisonBookAnvil);
-  const b = p.books[i];
-  const slots = enchSlots(p);
-  const check = canApply(p.ench, slots, b);
-  const cur = p.ench[b.id];
-  const need = dustToFull(b);
-  const [useDust, setUseDust] = useState(() => p.dust > 0 && need > 0);
-  const dust = useDust ? Math.min(p.dust, need) : 0;
-  const chance = applyChance(b, dust);
-  const onPick = ENCHANTS.filter((e) => p.ench[e.id] > 0 && e.id !== b.id);
-  const [replace, setReplace] = useState<EnchantId | null>(null);
-  const mate = anvilMate(p.books, i);
-  const [armed, setArmed] = useState(false);
-  const r = rarityOfLevel(b.lvl);
-
-  const doApply = () => {
-    primeAudio();
-    if (check === 'full' && !replace) {
-      uiError();
-      notifyWarning();
-      return;
-    }
-    const res = apply(i, dust, check === 'full' ? (replace ?? undefined) : undefined);
-    if (!res) {
-      uiError();
-      return;
-    }
-    void preloadPx(
-      'books',
-      `${res.ok ? 'apply-ok' : 'apply-burn'}-${tierOfLevel(res.book.lvl)}`,
-      APPLY_SIZE,
-    );
-    onScene({
-      kind: 'apply',
-      book: res.book,
-      ok: res.ok,
-      chance: res.chance,
-      replaced: check === 'full' ? (replace ?? undefined) : undefined,
-    });
-  };
-
-  return (
-    <GxModal title={bookName(b)} onClose={onClose} className="pbk-sheet">
-      <div className="pbk-sheet__top" style={rarityVars(r)}>
-        <BookArt book={b} size={112} glow />
-        <div className="pbk-sheet__fx">
-          <RarityName rarity={r}>{bookTierBook(tierOfLevel(b.lvl))}</RarityName>
-          <b>{effectOf(b.id, b.lvl, p.pickStars)}</b>
-          <i>
-            {cur > 0
-              ? t('books.inPick', {
-                  name: bookName({ id: b.id, lvl: cur }),
-                  fx: effectOf(b.id, cur, p.pickStars),
-                })
-              : t('books.notInPick')}
-          </i>
-        </div>
-      </div>
-
-      {check === 'lower' ? (
-        <p className="pbk-note">
-          {t(mate >= 0 ? 'books.lowerMate' : 'books.lower', {
-            name: bookName({ id: b.id, lvl: cur }),
-          })}
-        </p>
-      ) : (
-        <>
-          <div className={`pbk-odds is-${chanceTone(chance)}`}>
-            <span className="pbk-odds__bar">
-              <i style={{ width: `${b.chance}%` }} />
-              <i
-                className="is-dust"
-                style={{ left: `${b.chance}%`, width: `${chance - b.chance}%` }}
-              />
-            </span>
-            <b>{t('books.pct', { v: chance })}</b>
-          </div>
-          {need > 0 && (
-            <button
-              type="button"
-              className={`pbk-dust${useDust ? ' is-on' : ''}`}
-              aria-pressed={useDust}
-              disabled={p.dust <= 0}
-              onClick={() => {
-                selectionChanged();
-                setUseDust(!useDust);
-              }}
-            >
-              <DustIcon size={16} />
-              {p.dust <= 0
-                ? t('books.noDust')
-                : useDust
-                  ? t('books.dustOn', { n: dust })
-                  : t('books.dustOff', { n: Math.min(p.dust, need) })}
-            </button>
-          )}
-          {check === 'full' && (
-            <div className="pbk-replace">
-              <i>{t('books.replace')}</i>
-              <div>
-                {onPick.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    className={`pbk-chip${replace === e.id ? ' is-on' : ''}`}
-                    onClick={() => {
-                      selectionChanged();
-                      setReplace(e.id);
-                    }}
-                  >
-                    <GxIcon name={ENCH_ICON[e.id]} size={14} />
-                    {bookName({ id: e.id, lvl: p.ench[e.id] })}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <p className="pbk-warn">{t('books.warn')}</p>
-        </>
-      )}
-
-      <div className="pbk-sheet__btns">
-        {check !== 'lower' && (
-          <button
-            type="button"
-            className="gx-btn gx-btn--red pbk-go"
-            aria-disabled={check === 'full' && !replace}
-            onClick={doApply}
-          >
-            {t('books.apply', { v: chance })}
-          </button>
-        )}
-        {mate >= 0 && (
-          <button
-            type="button"
-            className="gx-btn"
-            onClick={() => {
-              primeAudio();
-              const from = b;
-              const got = anvil(i, mate);
-              if (!got) return;
-              preloadBookReveal(tierOfLevel(got.lvl));
-              onScene({ kind: 'anvil', book: got, from });
-            }}
-          >
-            <GxIcon name="anvil" size={16} /> {t('books.glue', { lvl: ROMAN[b.lvl] })}
-          </button>
-        )}
-        <button
-          type="button"
-          className={`gx-btn gx-btn--grey${armed ? ' is-armed' : ''}`}
-          onClick={() => {
-            if (!armed) {
-              setArmed(true);
-              return;
-            }
-            const got = salvage(i);
-            softChime(1);
-            tapLight();
-            if (got) onClose();
-          }}
-        >
-          <DustIcon size={15} />{' '}
-          {armed ? t('books.sureDust', { n: dustOf(b) }) : t('books.salvage', { n: dustOf(b) })}
-        </button>
-      </div>
-    </GxModal>
   );
 }
 
@@ -1153,72 +1679,5 @@ function BookLift({
         </span>
       </span>
     </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Перековка кирки звездой (престиж кирки): живёт у книг, потому что
-// звезда делает сильнее каждую книгу.
-// ---------------------------------------------------------------------------
-
-function StarSection({ p }: { p: PrisonState }) {
-  const t = useT();
-  const prisonPickStar = useFinanceStore((s) => s.prisonPickStar);
-  const [armed, setArmed] = useState(false);
-  const lvl = pickLevelOf(p.pickXp);
-  return (
-    <>
-      <div className="pench-pick">
-        <span className="pench-pick__lv">
-          <PickIcon pick={p.pick} size={20} /> {t('books.pickLv', { n: lvl.level })}
-          {p.pickStars > 0 && <em className="pench-stars">{'★'.repeat(p.pickStars)}</em>}
-        </span>
-        <span className="pench-pick__bar">
-          <i style={{ transform: `scaleX(${lvl.need ? lvl.into / lvl.need : 1})` }} />
-        </span>
-        <span className="pench-pick__txt">
-          {lvl.need
-            ? t('books.blocksLeft', { n: Math.round(lvl.need - lvl.into) })
-            : t('books.max')}
-        </span>
-      </div>
-      {lvl.level >= PICK_LEVEL_MAX && p.pickStars < PICK_STARS_MAX && (
-        <div className="pstar">
-          <span>
-            <b>{t('books.star', { n: p.pickStars + 1 })}</b>
-            <i>
-              {t('books.starText', {
-                cap: Math.round(STAR_CAP * 100),
-                dmg: Math.round(STAR_DMG * 100),
-                tokens: fmt(STAR_TOKENS * (p.pickStars + 1)),
-                keys: STAR_KEYS,
-              })}
-            </i>
-          </span>
-          <button
-            type="button"
-            className={`btn btn--sm pforge__buy${armed ? ' is-armed' : ''}`}
-            onClick={() => {
-              primeAudio();
-              if (!armed) {
-                setArmed(true);
-                return;
-              }
-              setArmed(false);
-              if (!prisonPickStar()) {
-                notifyWarning();
-                return;
-              }
-              tierBreak(3);
-              burstConfetti(80, ['#ffe08a', '#ffffff', '#b8f4e6']);
-              flashFrame('big');
-              notifySuccess();
-            }}
-          >
-            {armed ? t('books.sure') : t('books.reforge')}
-          </button>
-        </div>
-      )}
-    </>
   );
 }
