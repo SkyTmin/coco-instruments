@@ -64,6 +64,7 @@ import { bandAt, bandOf, fogEncode, fogGet, liftOf, Tile, walkableTile } from '@
 import type { World, WorldObj } from '@/lib/dungeon-world';
 import { itemUrl } from '@/lib/dungeon-art';
 import { registerEscape } from '@/lib/escape-stack';
+import { useAction, useGameplayCapture, useMoveAxis } from '@/input/hooks';
 import { playTotem } from '@/lib/totem';
 import { rainCoins } from '@/lib/coins';
 import { FLOORS } from '@/lib/dungeon-floors';
@@ -1509,49 +1510,39 @@ export function DungeonRun({
     input.current[k] = true;
   };
 
-  // Клавиатура — для стенда и планшета с клавиатурой.
-  useEffect(() => {
-    const keys = new Set<string>();
-    const axis = () => {
+  // Клавиатура и геймпад — через слой действий (src/input): WASD/стрелки,
+  // крестовина и левый стик — ось; J/Пробел/A/RT — удар (держать — тяжёлый),
+  // K/Shift/B/LT — рывок, L/Y — вихрь, Q/LB — еда, E/X — действие рядом.
+  // Привязки — по физическим клавишам (WASD и в русской раскладке), их можно
+  // переназначить. Пока идёт бой, стрелки не водят фокус по кнопкам, а «B»
+  // геймпада — рывок, не «Назад»; Start ставит паузу, как Esc.
+  const playing = sheet === null && mine === null && finale === null && !dying;
+  useGameplayCapture(playing);
+  useMoveAxis(({ x, y }) => {
+    if (paused.current) return;
+    input.current.mx = x;
+    input.current.my = y;
+  });
+  useAction(
+    ['attack', 'dash', 'skill', 'eat', 'interact'],
+    (e) => {
       const i = input.current;
-      const x =
-        (keys.has('d') || keys.has('arrowright') ? 1 : 0) -
-        (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
-      const y =
-        (keys.has('s') || keys.has('arrowdown') ? 1 : 0) -
-        (keys.has('w') || keys.has('arrowup') ? 1 : 0);
-      const l = Math.hypot(x, y) || 1;
-      i.mx = x / l;
-      i.my = y / l;
-    };
-    const down = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (paused.current) return;
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
-        keys.add(k);
-        axis();
-      } else if ((k === 'j' || k === ' ') && !e.repeat) {
-        input.current.attack = true;
-        input.current.attackHeld = true;
-      } else if (k === 'k' || k === 'shift') input.current.dash = true;
-      else if (k === 'l') input.current.skill = true;
-      else if (k === 'q') input.current.eat = true;
-      else if (k === 'e') actNear();
-    };
-    const up = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      keys.delete(k);
-      axis();
-      if (k === 'j' || k === ' ') input.current.attackHeld = false;
-    };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      if (e.action === 'attack' && e.phase === 'up') {
+        i.attackHeld = false;
+        return false;
+      }
+      if (paused.current || e.phase !== 'down') return false;
+      if (e.action === 'attack') {
+        i.attack = true;
+        i.attackHeld = true;
+      } else if (e.action === 'dash') i.dash = true;
+      else if (e.action === 'skill') i.skill = true;
+      else if (e.action === 'eat') i.eat = true;
+      else actNear();
+      return true;
+    },
+    { phases: ['down', 'up'] },
+  );
 
   // ---- Контекстное действие ------------------------------------------------
 

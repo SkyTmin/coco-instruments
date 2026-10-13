@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useAction } from '@/input/hooks';
 import { AnimatedNumber, Screen, Sheet } from '@/components/ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
@@ -29,10 +30,18 @@ import {
   scatterLabel,
   scatterSymbol,
 } from '@/lib/scatter';
-import type { Orb, ScatterCell, ScatterGrid, ScatterStep, ScatterWin } from '@/lib/scatter';
+import type {
+  Orb,
+  ScatterCell,
+  ScatterGrid,
+  ScatterRound,
+  ScatterStep,
+  ScatterWin,
+} from '@/lib/scatter';
 import type { SlotSymbolId } from '@/types';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
+import { fmtDec, fmtNum, orbName, rich, t, useT, winStepName } from '@/i18n';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
 import type { OrbTier } from '@/lib/orb-rarity';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
@@ -113,11 +122,11 @@ const TURBO = 0.55;
 const TURBO_SPIN = 0.5;
 const TURBO_SPEEDUP = 1.2;
 
-const AUTO_OPTIONS: { value: number; label: string; hint: string }[] = [
-  { value: 10, label: '10', hint: 'десять вращений' },
-  { value: 25, label: '25', hint: 'двадцать пять' },
-  { value: 50, label: '50', hint: 'пятьдесят' },
-  { value: Infinity, label: '∞', hint: 'пока не кончатся монеты' },
+const AUTO_OPTIONS: { value: number; label: string; hint: 'h10' | 'h25' | 'h50' | 'hInf' }[] = [
+  { value: 10, label: '10', hint: 'h10' },
+  { value: 25, label: '25', hint: 'h25' },
+  { value: 50, label: '50', hint: 'h50' },
+  { value: Infinity, label: '∞', hint: 'hInf' },
 ];
 
 /** Общая «никто не тянет» — константа, чтобы не плодить массивы каждый спин. */
@@ -127,7 +136,17 @@ const reduceMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = fmtNum;
+
+/** Подпись результата на языке игрока (`scatterLabel` в lib — по-русски, для тестов). */
+function scatterText(out: ScatterRound): string {
+  if (out.freeSpins && !out.steps.length) return t('slots.outcome.scatBonus', { n: out.scatters });
+  if (out.kind === 'none') return t('slots.outcome.miss');
+  const best = out.steps.flatMap((s) => s.wins).sort((a, b) => b.pay - a.pay)[0];
+  if (!best) return t('slots.outcome.scatPaid');
+  if (out.combo >= 2) return t('slots.status.chainOf', { n: out.combo });
+  return t('slots.outcome.symbols', { n: best.count });
+}
 
 /**
  * Рывок тотема в случайный угол — в игре смещение берётся как четверть
@@ -459,6 +478,7 @@ const SpinCol = memo(
 );
 
 export function ScatterPage() {
+  const tr = useT();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const bet = useFinanceStore((s) => s.slotsBet);
@@ -1365,6 +1385,14 @@ export function ScatterPage() {
     );
   }, [hydrated, spinning, balance, stake, playScatter, turbo, playOrbs]);
 
+  // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
+  useAction('confirm', (e) => {
+    const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
+    if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
+    spin();
+    return true;
+  });
+
   // Бонус крутится сам: вращения бесплатные, ждать нажатия незачем.
   useEffect(() => {
     if (!inBonus || spinning || celebration) return;
@@ -1402,8 +1430,12 @@ export function ScatterPage() {
 
   return (
     <Screen
-      title="Каскад"
-      subtitle={`Поле ${SCATTER_COLS}×${SCATTER_ROWS} · ${CLUSTER_MIN} одинаковых где угодно`}
+      title={tr('hall.cascade')}
+      subtitle={tr('slots.cascade.subtitle', {
+        cols: SCATTER_COLS,
+        rows: SCATTER_ROWS,
+        n: CLUSTER_MIN,
+      })}
       className={`slots-screen slots-screen--${skin}`}
       action={
         <div className="row" style={{ gap: 8 }}>
@@ -1413,7 +1445,7 @@ export function ScatterPage() {
               tapLight();
               setSkinSheet(true);
             }}
-            aria-label="Сменить скин"
+            aria-label={tr('slots.a11y.skin')}
           >
             <Sym id={skinOf(skin).preview} skin={skin} size={22} />
           </button>
@@ -1423,7 +1455,7 @@ export function ScatterPage() {
               tapLight();
               setRules(true);
             }}
-            aria-label="Правила и выплаты"
+            aria-label={tr('slots.a11y.rules')}
           >
             <IconInfo size={21} />
           </button>
@@ -1444,7 +1476,7 @@ export function ScatterPage() {
 
         <div className="slot-hud">
           <div className="slot-hud__cell">
-            <span className="slot-hud__label">Баланс</span>
+            <span className="slot-hud__label">{tr('slots.hud.balance')}</span>
             <span className="slot-hud__value">
               {/* Баланс — тот же механический счётчик, и во время выплаты он
                   крутится В ОДИН ХОД с выигрышем: видно, как деньги прибывают
@@ -1454,7 +1486,7 @@ export function ScatterPage() {
             </span>
           </div>
           <div className="slot-hud__cell">
-            <span className="slot-hud__label">Лучший спин</span>
+            <span className="slot-hud__label">{tr('slots.hud.best')}</span>
             <span className="slot-hud__value">
               <AnimatedNumber value={best} format={(n) => fmt(n)} duration={450} />
               <CoinIcon size={18} />
@@ -1463,12 +1495,12 @@ export function ScatterPage() {
         </div>
 
         <div className="slot-level">
-          <span className="slot-level__lvl">Ур. {level.level}</span>
+          <span className="slot-level__lvl">{tr('slots.hud.lvl', { n: level.level })}</span>
           <span className="slot-level__bar">
             <i style={{ width: `${Math.min(100, (level.into / level.need) * 100)}%` }} />
           </span>
           {freeSpins > 0 && (
-            <span className="slot-level__free" title="Бесплатные вращения">
+            <span className="slot-level__free" title={tr('slots.hud.free')}>
               🎟 {freeSpins}
             </span>
           )}
@@ -1498,12 +1530,14 @@ export function ScatterPage() {
           <div className={`cabinet__sign cabinet__sign--wide${inBonus ? ' is-bonus' : ''}`}>
             {inBonus && fs ? (
               <>
-                <span className="sign-bonus__label">БОНУС</span>
+                <span className="sign-bonus__label">{tr('slots.cascade.bonus')}</span>
                 {/* Числа — состояние ПОЛЯ, а не стора: пока крутится, они
                     держат прошлые значения и не выдают результат вперёд
                     барабанов. Раньше плашка успевала показать новый множитель
                     до того, как сферы появлялись на поле. */}
-                <span className="sign-bonus__left">ещё {shownFs?.left ?? fs.left}</span>
+                <span className="sign-bonus__left">
+                  {tr('slots.cascade.left', { n: shownFs?.left ?? fs.left })}
+                </span>
                 <span className="sign-bonus__mult">
                   ×{Math.max(1, shownFs?.mult ?? fs.totalMult)}
                 </span>
@@ -1635,7 +1669,7 @@ export function ScatterPage() {
                   {/* Подпись внутри жетона: без неё «×15» посреди поля —
                       просто число. Игрок должен видеть, что это множитель
                       ВЫПЛАТЫ, а не длины цепочки и не чего-то ещё. */}
-                  <i className="stamp__cap">выплата</i>
+                  <i className="stamp__cap">{tr('slots.stamp')}</i>
                   {/* Цвет — по редкости СУММЫ, и он растёт вместе с ней: три
                       обычные сферы, сложившись в ×12, на глазах краснеют в
                       редкую находку. */}
@@ -1657,7 +1691,7 @@ export function ScatterPage() {
                     <OrbGem />
                     <b className="solo__num">×{solo.value}</b>
                   </div>
-                  <div className="solo__name">{solo.tier.name}</div>
+                  <div className="solo__name">{orbName(solo.tier.id)}</div>
                 </div>
               )}
               {/* Титул ступени. Он не появляется и не исчезает — он
@@ -1669,13 +1703,13 @@ export function ScatterPage() {
                   key={winStep.id}
                   aria-hidden="true"
                 >
-                  {winStep.name}
+                  {winStepName(winStep.id)}
                 </div>
               )}
             </div>
             {chain >= 1 && cascade && (
               <div className={`combo combo--t${tier}`} key={chain}>
-                <b>{chain >= 2 ? `ЦЕПОЧКА ×${chain}` : 'ЕСТЬ ВЫИГРЫШ'}</b>
+                <b>{chain >= 2 ? tr('slots.chainCap', { n: chain }) : tr('slots.anyWin')}</b>
                 {/* «выплата ×N» здесь больше нет: в такте сбора её и так
                     показывает жетон посреди поля, вдесятеро крупнее. */}
               </div>
@@ -1714,7 +1748,11 @@ export function ScatterPage() {
                       Название ступени несёт плашка над полем — дублировать
                       его здесь значит забивать узкую строку длинным словом
                       и сжимать сам счётчик. */}
-                  {counting ? 'Считаем…' : chain >= 2 ? `Цепочка ×${chain}!` : 'Есть выигрыш!'}
+                  {counting
+                    ? tr('slots.status.counting')
+                    : chain >= 2
+                      ? tr('slots.status.chain', { n: chain })
+                      : tr('slots.status.win')}
                 </span>
                 {/* Один и тот же счётчик на весь спин: он набирает базу за
                     каскад, а потом с неё же уезжает к итогу. Раньше здесь
@@ -1726,12 +1764,12 @@ export function ScatterPage() {
                 </span>
               </>
             ) : spinning ? (
-              <span className="status status--spin">Крутится…</span>
+              <span className="status status--spin">{tr('slots.status.spinning')}</span>
             ) : result && label ? (
               <>
                 <span className="status">
                   {label.symbol && <Sym id={label.symbol} skin={skin} size={22} />}
-                  {label.text}
+                  {scatterText(result)}
                 </span>
                 {result.total > 0 && (
                   <span className="status__win">
@@ -1743,7 +1781,9 @@ export function ScatterPage() {
                 )}
               </>
             ) : (
-              <span className="status status--hint">Соберите {CLUSTER_MIN} одинаковых</span>
+              <span className="status status--hint">
+                {tr('slots.status.hintCollect', { n: CLUSTER_MIN })}
+              </span>
             )}
           </div>
         </div>
@@ -1770,7 +1810,7 @@ export function ScatterPage() {
               setBetDraft(bet);
               setBetSheet(true);
             }}
-            aria-label="Своя ставка"
+            aria-label={tr('slots.a11y.bet')}
           >
             {BETS.includes(bet) ? '⋯' : fmt(bet)}
           </button>
@@ -1784,21 +1824,21 @@ export function ScatterPage() {
           >
             {auto > 0
               ? auto === Infinity
-                ? 'Стоп · ∞'
-                : `Стоп (${auto})`
+                ? tr('slots.btn.stopInf')
+                : tr('slots.btn.stopN', { n: auto })
               : cascade
                 ? chain >= 2
-                  ? `Цепочка ×${chain}…`
-                  : 'Каскад…'
+                  ? tr('slots.btn.chain', { n: chain })
+                  : tr('slots.btn.cascade')
                 : spinning
-                  ? 'Крутится…'
+                  ? tr('slots.status.spinning')
                   : inBonus && fs
-                    ? `Бонус · ${fs.left}`
+                    ? tr('slots.btn.bonus', { n: fs.left })
                     : broke
-                      ? 'Монеты кончились'
+                      ? tr('slots.btn.broke')
                       : freeSpins > 0
-                        ? `Бесплатно · ${freeSpins}`
-                        : `Крутить · ${fmt(stake)}`}
+                        ? tr('slots.btn.free', { n: freeSpins })
+                        : tr('slots.btn.spin', { bet: stake })}
           </button>
           <button
             className={`slot-mini${auto > 0 ? ' is-on' : ''}`}
@@ -1809,7 +1849,7 @@ export function ScatterPage() {
               if (auto > 0) stopAuto();
               else setAutoSheet(true);
             }}
-            aria-label={auto > 0 ? 'Остановить автоспин' : 'Автоспин'}
+            aria-label={auto > 0 ? tr('slots.a11y.autoStop') : tr('slots.a11y.auto')}
           >
             {auto > 0 ? (auto === Infinity ? '↻∞' : `↻${auto}`) : '↻'}
           </button>
@@ -1819,7 +1859,7 @@ export function ScatterPage() {
               selectionChanged();
               setPrefs({ turbo: !turbo });
             }}
-            aria-label="Турбо-режим"
+            aria-label={tr('slots.a11y.turbo')}
           >
             ⚡
           </button>
@@ -1830,13 +1870,13 @@ export function ScatterPage() {
               primeAudio();
               setSettings(true);
             }}
-            aria-label="Настройки"
+            aria-label={tr('common.settings')}
           >
             ⚙
           </button>
         </div>
 
-        {broke && <p className="slot-bonus-hint">Монеты кончились — заработай в шахте</p>}
+        {broke && <p className="slot-bonus-hint">{tr('slots.brokeHint')}</p>}
 
         {/* Ставка Ante и покупка бонуса — оба пути к фриспинам */}
         {!inBonus && (
@@ -1851,7 +1891,7 @@ export function ScatterPage() {
               aria-pressed={ante}
             >
               <b>Ante</b>
-              <i>ставка ×{ANTE_COST} — бонус чаще</i>
+              <i>{tr('slots.cascade.anteHint', { n: ANTE_COST })}</i>
               <span className="toggle__switch" aria-hidden="true" />
             </button>
             <button
@@ -1867,7 +1907,7 @@ export function ScatterPage() {
                 burstConfetti(80, theme.confetti);
               }}
             >
-              <b>Купить бонус</b>
+              <b>{tr('slots.cascade.buy')}</b>
               <i>
                 {fmt(buyCost)}
                 <CoinIcon size={13} />
@@ -1879,62 +1919,54 @@ export function ScatterPage() {
         <div className="slot-stats">
           <div className="slot-stat">
             <div className="slot-stat__num">{fmt(spins)}</div>
-            <div className="slot-stat__lbl">вращений</div>
+            <div className="slot-stat__lbl">{tr('slots.session.spins')}</div>
           </div>
           <div className="slot-stat">
             <div className="slot-stat__num">{fmt(best)}</div>
-            <div className="slot-stat__lbl">лучший спин</div>
+            <div className="slot-stat__lbl">{tr('slots.session.bestSpin')}</div>
           </div>
         </div>
       </div>
 
       {rules && (
-        <Sheet title="Как это работает" onClose={() => setRules(false)}>
+        <Sheet title={tr('slots.rules.title')} onClose={() => setRules(false)}>
           <div className="stack slots" data-skin={skin}>
             <div className="combo-rules">
-              <div className="combo-rules__title">Восемь одинаковых где угодно</div>
+              <div className="combo-rules__title">{tr('slots.rules.anyTitle')}</div>
               <p className="combo-rules__text">
-                Линий нет: считается, сколько одинаковых символов оказалось на всём поле{' '}
-                {SCATTER_COLS}×{SCATTER_ROWS}. От {CLUSTER_MIN} штук — выигрыш, неважно, где они
-                стоят. Сыгравшие исчезают, верхние падают на их места, поле считается заново — и
-                так, пока выпадают выигрыши.
+                {tr('slots.rules.any', { cols: SCATTER_COLS, rows: SCATTER_ROWS, n: CLUSTER_MIN })}
               </p>
             </div>
             <div className="combo-rules">
-              <div className="combo-rules__title">Сферы-множители</div>
+              <div className="combo-rules__title">{tr('slots.rules.orbTitle')}</div>
               <p className="combo-rules__text">
-                Сфера с числом от ×2 до ×500 — это <b>такая же клетка барабана</b>, как вишня или
-                скаттер: она крутится вместе со всеми, встаёт в поле и съезжает вниз при каскаде.
-                Символа под ней нет, поэтому в восьмёрку эта клетка не идёт — в этом и размен: сфера
-                платит, но загромождает поле. Выигрышем сфера не бывает, а значит и не исчезает: она
-                остаётся на поле до конца цепочки. В самом конце все сферы поля складываются и разом
-                умножают весь её выигрыш. Складываются, а не перемножаются: ×20 и ×50 дают ×70.
+                {rich('slots.rules.orb', { cell: <b>{tr('slots.rules.orbCell')}</b> })}
               </p>
-              <p className="combo-rules__text">
-                Чем крупнее номинал, тем реже сфера и тем громче она приходит: у каждой ступени свой
-                цвет, свой звук и своя отдача. Проценты — доля ступени среди всех выпавших сфер.
-              </p>
+              <p className="combo-rules__text">{tr('slots.rules.orb2')}</p>
               <div className="rarity-ladder">
                 {ORB_TIERS.map((t) => (
                   <div className={`rarity-row rarity-row--${t.id}`} key={t.id}>
                     <i className="rarity-row__dot" aria-hidden="true" />
-                    <b className="rarity-row__name">{t.name}</b>
+                    <b className="rarity-row__name">{orbName(t.id)}</b>
                     <span className="rarity-row__range">
-                      {t.id === 'mythic' ? '×250 — ×500' : `от ×${t.min}`}
+                      {t.id === 'mythic' ? '×250 — ×500' : tr('slots.rules.fromX', { n: t.min })}
                     </span>
-                    <span className="rarity-row__odds">{t.chance}%</span>
+                    <span className="rarity-row__odds">{fmtDec(t.chance, 1)}%</span>
                   </div>
                 ))}
               </div>
             </div>
             <div className="combo-rules">
-              <div className="combo-rules__title">Скаттер и бонус</div>
+              <div className="combo-rules__title">{tr('slots.rules.scatTitle')}</div>
               <p className="combo-rules__text">
-                {SCATTER_TRIGGER} и больше скаттеров где угодно платят ×{SCATTER_PAYOUTS[4]} / ×
-                {SCATTER_PAYOUTS[5]} / ×{SCATTER_PAYOUTS[6]} ставки и дают {FREE_SPINS} бесплатных
-                вращений. В бонусе общий множитель не сбрасывается между вращениями: сферы копят его
-                до самого конца бонуса. Три скаттера внутри бонуса добавляют ещё вращения. Выигрыш
-                за одно вращение ограничен {fmt(MAX_WIN)} ставками.
+                {tr('slots.rules.scat', {
+                  trigger: SCATTER_TRIGGER,
+                  p4: SCATTER_PAYOUTS[4],
+                  p5: SCATTER_PAYOUTS[5],
+                  p6: SCATTER_PAYOUTS[6],
+                  fs: FREE_SPINS,
+                  max: MAX_WIN,
+                })}
               </p>
               <div className="combo-rules__ladder">
                 <span className="combo-rules__step">
@@ -1952,11 +1984,9 @@ export function ScatterPage() {
               </div>
             </div>
             <div className="combo-rules">
-              <div className="combo-rules__title">Ante и покупка</div>
+              <div className="combo-rules__title">{tr('slots.rules.anteTitle')}</div>
               <p className="combo-rules__text">
-                Ante поднимает ставку в {ANTE_COST} раза и делает бонус примерно вдвое чаще — это
-                выбор стиля, а не бесплатный плюс: отдача при нём чуть ниже. Покупка бонуса стоит{' '}
-                {BUY_BONUS_COST} ставок и сразу запускает {FREE_SPINS} вращений.
+                {tr('slots.rules.ante', { ante: ANTE_COST, buy: BUY_BONUS_COST, fs: FREE_SPINS })}
               </p>
             </div>
             <div className="paytable">
@@ -1973,15 +2003,14 @@ export function ScatterPage() {
               ))}
             </div>
             <p className="muted" style={{ margin: 0, fontSize: 12 }}>
-              Множители считаются от всей ставки. Кошелёк, уровень и цели дня общие со «Слотами».
-              Отдача — около 92%, символы берёт тот же честный ГСЧ.
+              {tr('slots.rules.note')}
             </p>
           </div>
         </Sheet>
       )}
 
       {autoSheet && (
-        <Sheet title="Автоспин" onClose={() => setAutoSheet(false)}>
+        <Sheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
           <div className="stack slots" data-skin={skin}>
             <div className="auto-grid">
               {AUTO_OPTIONS.map((o) => (
@@ -1996,7 +2025,7 @@ export function ScatterPage() {
                   }}
                 >
                   <span className="auto-card__num">{o.label}</span>
-                  <span className="auto-card__hint">{o.hint}</span>
+                  <span className="auto-card__hint">{tr(`slots.auto.${o.hint}`)}</span>
                 </button>
               ))}
             </div>
@@ -2005,7 +2034,7 @@ export function ScatterPage() {
       )}
 
       {betSheet && (
-        <Sheet title="Своя ставка" onClose={() => setBetSheet(false)}>
+        <Sheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
           <div className="stack slots bet-sheet" data-skin={skin}>
             <div className="bet-sheet__value">
               {fmt(betDraft)}
@@ -2018,7 +2047,7 @@ export function ScatterPage() {
                   selectionChanged();
                   setBetDraft((v) => clampBet(v - BET_STEP));
                 }}
-                aria-label="Меньше"
+                aria-label={tr('slots.bet.less')}
               >
                 −
               </button>
@@ -2037,7 +2066,7 @@ export function ScatterPage() {
                   selectionChanged();
                   setBetDraft((v) => clampBet(v + BET_STEP));
                 }}
-                aria-label="Больше"
+                aria-label={tr('slots.bet.more')}
               >
                 +
               </button>
@@ -2052,15 +2081,15 @@ export function ScatterPage() {
               }}
             >
               {betDraft > balance && freeSpins <= 0
-                ? 'Не хватает монет'
-                : `Играть по ${fmt(betDraft)}`}
+                ? tr('slots.bet.noCoins')
+                : tr('slots.bet.play', { bet: betDraft })}
             </button>
           </div>
         </Sheet>
       )}
 
       {settings && (
-        <Sheet title="Настройки" onClose={() => setSettings(false)}>
+        <Sheet title={tr('common.settings')} onClose={() => setSettings(false)}>
           <div className="stack slots" data-skin={skin}>
             <div className="toggles">
               {[
@@ -2068,29 +2097,29 @@ export function ScatterPage() {
                   key: 'sound' as const,
                   on: sound,
                   icon: sound ? '🔊' : '🔇',
-                  name: 'Звук',
-                  hint: 'Барабаны, цепочки и выигрыши',
+                  name: tr('slots.toggle.sound'),
+                  hint: tr('slots.toggle.soundCascade'),
                 },
                 {
                   key: 'music' as const,
                   on: music,
                   icon: music ? '🎵' : '🔕',
-                  name: 'Музыка',
-                  hint: 'Фоновая мелодия игры',
+                  name: tr('slots.toggle.music'),
+                  hint: tr('slots.toggle.musicHint'),
                 },
                 {
                   key: 'haptics' as const,
                   on: haptics,
                   icon: haptics ? '📳' : '📴',
-                  name: 'Вибрация',
-                  hint: 'Отклик на остановку и выигрыш',
+                  name: tr('slots.toggle.haptics'),
+                  hint: tr('slots.toggle.hapticsHint'),
                 },
                 {
                   key: 'turbo' as const,
                   on: turbo,
                   icon: '⚡',
-                  name: 'Турбо',
-                  hint: 'Вращения и каскады вдвое быстрее',
+                  name: tr('slots.toggle.turbo'),
+                  hint: tr('slots.toggle.turboHint'),
                 },
               ].map((t) => (
                 <button
@@ -2128,7 +2157,7 @@ export function ScatterPage() {
           role="presentation"
         >
           <div className="levelup__card">
-            <div className="levelup__lvl">Уровень {lvlShown.level}</div>
+            <div className="levelup__lvl">{tr('slots.levelup.level', { n: lvlShown.level })}</div>
             {lvlShown.coins > 0 && (
               <div className="levelup__gain">
                 +{fmt(lvlShown.coins)}
@@ -2190,7 +2219,7 @@ export function ScatterPage() {
                 уже «МЕГА». Ключ по ступени — чтобы каждый титул прилетал
                 своим кадром, а не подменялся текстом. */}
             <div className="totem__title" key={winStep?.id ?? totem.tier}>
-              {winStep?.name ?? (totem.tier === 'mega' ? 'МЕГА-ВЫИГРЫШ' : 'КРУПНЫЙ ВЫИГРЫШ')}
+              {winStepName(winStep?.id ?? (totem.tier === 'mega' ? 'mega' : 'big'))}
             </div>
             <div className="totem__amount">
               {/* Счётчик НЕ начинается заново: он продолжает тот же счёт,
@@ -2199,7 +2228,7 @@ export function ScatterPage() {
               <CoinIcon size={30} />
             </div>
             <div className="totem__hint">
-              {counting ? 'нажмите, чтобы досчитать' : 'нажмите, чтобы продолжить'}
+              {counting ? tr('slots.totem.tapSkip') : tr('slots.totem.tapGo')}
             </div>
           </div>
         </div>

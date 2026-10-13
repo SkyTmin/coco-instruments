@@ -1,0 +1,518 @@
+/* Nursery (components/Nursery.tsx) — the pets view of «Питомник» on the pixel kit.
+   Every size is a whole number of art pixels (var(--u)); kit rules: .claude/rules/ui-px.md. */
+
+.nur {
+  --gap: calc(4 * var(--u));
+  display: grid;
+  gap: var(--gap);
+  min-height: 0;
+  color: var(--px-text);
+}
+.nur--one {
+  flex: 1 1 auto;
+  grid-template:
+    'show' auto
+    'list' minmax(0, 1fr)
+    'acts' auto
+    / minmax(0, 1fr);
+}
+.nur--two {
+  flex: 1 1 auto;
+  grid-template:
+    'show side' minmax(0, 11fr)
+    'list list' minmax(0, 9fr)
+    / minmax(0, 1fr) minmax(0, 1fr);
+}
+/* The showcase is the hero: 40% of the width, the pet as big as a whole scale allows. */
+.nur--three {
+  flex: 1 1 auto;
+  grid-template: 'list show side' minmax(0, 1fr) / minmax(0, 7fr) minmax(0, 10fr) minmax(0, 8fr);
+}
+
+/* ---- Showcase ------------------------------------------------------------------------------ */
+.nur-show {
+  grid-area: show;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+}
+.nur-stage {
+  /* the wall dimmed by a flat veil: the pet and the text read first */
+  background-image: linear-gradient(rgb(12 10 18 / 0.55), rgb(12 10 18 / 0.55)), var(--tile);
+  display: grid;
+  min-width: 0;
+  gap: calc(3 * var(--u));
+  grid-template: 'pet' minmax(0, 1fr) / minmax(0, 1fr);
+  align-items: center;
+}
+.nur--one .nur-stage {
+  grid-template:
+    'id pet' auto
+    'anims anims' auto
+    / minmax(0, 1fr) auto;
+}
+.nur--one .nur-anims {
+  justify-content: center;
+  gap: calc(2 * var(--u));
+}
+/* The measured box of the hero stage: its size comes from the grid only (contain), the pet is
+   sized from it in Nursery.tsx and sits in the middle on its pedestal. */
+.nur-stage__room {
+  grid-area: pet;
+  align-self: stretch;
+  min-height: 0;
+  contain: size;
+  display: grid;
+  place-items: center;
+}
+/* The pedestal is drawn at the pet's own pixel (--ped, whole screen dots). */
+.nur-stage__pet {
+  grid-area: pet;
+  position: relative;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  padding-bottom: calc(4 * var(--ped, var(--u)));
+  background: var(--pximg-pedestal) no-repeat center bottom /
+    calc(var(--pximg-pedestal-w) * var(--ped, var(--u)))
+    calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
+  image-rendering: pixelated;
+}
+.nur-stage__pet .pet {
+  cursor: pointer;
+}
+.nur-stage__xp {
+  grid-area: pet;
+  align-self: start;
+  justify-self: center;
+  z-index: 3;
+  font: 400 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-gold);
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
+  pointer-events: none;
+  animation: nur-rise 1.2s steps(12) forwards;
+}
+@keyframes nur-rise {
+  from {
+    transform: translateY(calc(6 * var(--u)));
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(calc(-12 * var(--u)));
+    opacity: 0;
+  }
+}
+.nur-stage > .nur-anims {
+  grid-area: anims;
+}
+.nur-anims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--u);
+}
+.nur-anim {
+  padding-left: calc(3 * var(--u));
+  padding-right: calc(3 * var(--u));
+}
+.nur-anim__lbl {
+  display: none;
+}
+/* Wide details column (desktop, tablets): the word beside the icon. */
+@container nur-side (min-width: 290px) {
+  .nur-anims {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(2 * var(--u));
+  }
+  .nur-anim {
+    justify-content: flex-start;
+    min-width: 0;
+  }
+  .nur-anim__lbl {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* Tablet portrait: the column is short (the collection takes the lower half) — icons only. */
+.nur--two .nur-anims {
+  display: flex;
+}
+.nur--two .nur-anim__lbl {
+  display: none;
+}
+@container nur-side (min-width: 470px) {
+  .nur-anims {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.nur-stage > .nur-id {
+  grid-area: id;
+}
+.nur-id {
+  text-shadow: var(--u) var(--u) 0 var(--px-ink);
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  align-content: start;
+}
+.nur-id__name {
+  margin: 0;
+  font: 400 var(--px-fs-big) / 1 var(--px-font);
+  color: var(--rc, var(--px-gold));
+  overflow-wrap: break-word;
+}
+.nur-id__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--rc, var(--px-muted));
+}
+.nur-perks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--u) calc(3 * var(--u));
+}
+.nur-perk {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  min-width: 0;
+  color: var(--px-text);
+}
+.nur-perk > .px-i {
+  color: var(--px-gold);
+}
+.nur-perk--pow {
+  color: var(--px-muted);
+}
+.nur-id__sub > .nur-perk--pow {
+  margin-left: auto;
+}
+.nur-perk--pow > b {
+  font-weight: 400;
+  color: var(--px-gold);
+}
+
+/* ---- List: squad + collection ------------------------------------------------------------- */
+.nur-list {
+  grid-area: list;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: calc(6 * var(--u));
+  /* room for the focus ring and the corner badges inside the scroller */
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+}
+.nur-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+  margin-bottom: calc(3 * var(--u));
+}
+.nur-head .px-h {
+  margin: 0;
+}
+.nur-head__count {
+  color: var(--px-muted);
+}
+.nur-head__note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--u) calc(3 * var(--u));
+}
+.nur-squad__row {
+  display: flex;
+  gap: calc(5 * var(--u));
+  padding: 0 calc(3 * var(--u));
+}
+.nur-squad__row .px-slot.is-empty .px-slot__lock {
+  inset: 0;
+  margin: auto;
+}
+.nur-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(2 * var(--u));
+  margin-bottom: calc(3 * var(--u));
+}
+.nur-grid {
+  width: 100%;
+  /* the spare width goes between the columns, not into a strip on the right */
+  justify-content: space-between;
+}
+/* Not hatched yet: a grey silhouette (the global ghost is black — lost on the dark slots). */
+.nur .pet.is-ghost .pet__thumb {
+  filter: brightness(0) invert(0.32);
+}
+.nur-stage .pet.is-ghost .pet__thumb {
+  filter: brightness(0) opacity(0.7);
+}
+/* along: a paw tag on the bottom-left of the collection slot */
+.nur-along {
+  position: absolute;
+  left: calc(2 * var(--u));
+  bottom: calc(2 * var(--u));
+  z-index: 2;
+  color: var(--px-gold);
+}
+
+/* ---- Details column (tablet, landscape, desktop): name, level, power, animations, lore,
+   roles, gold, skin — and the take/leave button under it ----------------------------------- */
+.nur-side {
+  grid-area: side;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.nur-info {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  container: nur-side / inline-size;
+}
+.nur-info__body {
+  display: grid;
+  gap: calc(4 * var(--u));
+}
+.nur-info__grp {
+  display: grid;
+  gap: calc(4 * var(--u));
+  align-content: start;
+}
+.nur-info__grp:empty {
+  display: none;
+}
+/* In the details column the groups spread over the full height (no half-empty panel when
+   the pet has little to say) and pack + scroll when it has a lot. */
+.nur-side .nur-info__body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: calc(5 * var(--u));
+}
+.nur-side .nur-info__grp + .nur-info__grp {
+  padding-top: calc(5 * var(--u));
+  border-top: var(--u) solid #2c2438;
+  box-shadow: inset 0 var(--u) 0 #0c0a12;
+}
+.nur-side .nur-id__name {
+  font-size: var(--px-fs-hero);
+}
+html[data-ff='phone-landscape'] .nur-side .nur-id__name {
+  font-size: var(--px-fs-big);
+}
+.nur-info__lore {
+  margin: 0;
+  color: var(--px-muted);
+}
+.nur-info__roles {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.nur-role {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.nur-role > .px-i {
+  color: var(--px-gold);
+}
+.nur-role > b {
+  font-weight: 400;
+  color: var(--rc, var(--px-gold));
+}
+.nur-role > span {
+  color: var(--px-text);
+  text-align: right;
+}
+.nur-info__merge {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.nur-info__merge b {
+  font-weight: 400;
+  color: var(--px-blue);
+}
+.nur-info__skin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.nur-info__skin > span {
+  margin-right: auto;
+  color: var(--px-muted);
+}
+.nur-info__from {
+  display: grid;
+  gap: calc(2 * var(--u));
+  color: var(--px-muted);
+}
+.nur-egg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--px-text);
+}
+.nur-egg > .px-i {
+  color: var(--px-gold);
+}
+.nur-egg > b {
+  font-weight: 400;
+  color: var(--px-gold);
+}
+
+/* ---- Action bar (thumb zone on phones) ----------------------------------------------------- */
+.nur-acts {
+  grid-area: acts;
+  align-self: end;
+  display: flex;
+  gap: calc(3 * var(--u));
+  align-items: stretch;
+}
+.nur-acts > .px-btn--wide {
+  flex: 1 1 auto;
+}
+.nur-side > .nur-acts {
+  flex: none;
+  align-self: stretch;
+}
+
+/* ---- Tooltip and picker --------------------------------------------------------------------- */
+.nur-tip {
+  display: grid;
+  gap: var(--u);
+  text-align: left;
+}
+.nur-tip > b {
+  font-weight: 400;
+  color: var(--rc, var(--px-gold));
+}
+.nur-tip > i {
+  font-style: normal;
+  color: var(--px-muted);
+}
+.nur-pick {
+  width: 100%;
+}
+.nur-empty {
+  margin: 0;
+  color: var(--px-muted);
+}
+
+/* ==============================================================================================
+   The camp sheet around the Nursery. PrisonCamp's GxSheet is not ours to edit, so the Nursery
+   screen restyles it through :has(): pixel wood frame, ribbon title, dark body, full height,
+   wide on landscape/desktop. The eggs tab keeps the parchment body (its content is still drawn
+   for it); the frame and ribbon stay pixel on both tabs, so switching tabs doesn't flicker.
+   ============================================================================================== */
+.gx-camp.is-single:has(.ppn) {
+  height: calc(100% - var(--safe-top, 0px) - var(--content-top, 0px) - 26px);
+}
+html[data-ff='phone-landscape'] .gx-camp.is-single:has(.ppn),
+html[data-ff='desktop'] .gx-camp.is-single:has(.ppn),
+html[data-ff='tablet'] .gx-camp.is-single:has(.ppn) {
+  width: min(calc(100% - 4 * var(--u)), calc(420 * var(--u)));
+}
+.gx-camp.is-single:has(.ppn) .gx-sheet__frame {
+  flex: 1 1 auto;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: repeat;
+  background: none;
+  image-rendering: pixelated;
+  padding: calc(12 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u) + var(--safe-bottom, 0px));
+}
+.gx-camp.is-single:has(.ppn) .gx-sheet__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  box-shadow: none;
+  padding: calc(3 * var(--u));
+}
+.gx-camp.is-single:has(.ppn.is-pets) .gx-sheet__body {
+  overflow: hidden;
+  border-width: var(--u);
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  padding: calc(4 * var(--u));
+}
+.gx-camp:has(.nur) .pcamp-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.gx-camp.is-single:has(.ppn) .gx-sheet__title {
+  /* the kit ribbon instead of the Kenney one */
+  top: calc(-4 * var(--u));
+  height: calc(16 * var(--u));
+  display: flex;
+  align-items: center;
+  padding: 0 calc(10 * var(--u));
+  border-width: 0 var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-ribbon);
+  border-image-slice: var(--pxk-ribbon-s);
+  border-image-width: var(--pxk-ribbon-w);
+  border-image-repeat: stretch;
+  background: none;
+  image-rendering: pixelated;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  color: #fff3d0;
+  text-shadow: var(--u) var(--u) 0 var(--px-ink);
+  filter: none;
+}
+.gx-camp.is-single:has(.ppn) .gx-sheet__close {
+  top: calc(-4 * var(--u));
+  right: calc(4 * var(--u));
+}
+
+/* PetsTab around the Nursery: tabs on top; the egg blocks hide on the pets tab. */
+.ppn.is-pets {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+}
+.ppn.is-pets > :not(.ppn__tabs, .nur, .ppn__note) {
+  display: none;
+}
+.ppn__tabs {
+  flex: none;
+  margin-bottom: calc(3 * var(--u));
+}
+.ppn.is-pets > .ppn__tabs {
+  margin-bottom: 0;
+}

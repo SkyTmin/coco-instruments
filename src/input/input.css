@@ -1,0 +1,92 @@
+/* Значки кнопок <Prompt>: колпачок клавиши, буквы Xbox/Nintendo, фигуры
+   PlayStation точками, крестовина. Размер — от шрифта (1.4em). */
+.ip-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  vertical-align: middle;
+  line-height: 1;
+}
+.ip {
+  --ip-h: 1.45em;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  height: var(--ip-h);
+  min-width: var(--ip-h);
+  box-sizing: border-box;
+  font:
+    700 0.78em/1 'GxRubik',
+    system-ui,
+    sans-serif;
+  color: #fff8ea;
+}
+.ip--key {
+  padding: 0 0.4em;
+  border-radius: 0.22em;
+  background: #2b2118;
+  box-shadow:
+    inset 0 -0.14em 0 #120c07,
+    0 0 0 0.09em #8d7458;
+  color: #fff1d2;
+}
+.ip--pill {
+  padding: 0 0.45em;
+  border-radius: 0.6em;
+  background: #22262b;
+  box-shadow: 0 0 0 0.09em #5b636c;
+}
+.ip--face {
+  border-radius: 50%;
+  background: #1d2024;
+  box-shadow: 0 0 0 0.09em #4b5259;
+}
+.ip--face svg,
+.ip--dpad svg {
+  width: 72%;
+  height: 72%;
+  display: block;
+}
+.ip--dpad {
+  background: none;
+}
+.ip--dpad svg {
+  width: 100%;
+  height: 100%;
+}
+.ip__base {
+  fill: #2b2f34;
+}
+.ip__hot {
+  fill: #fff1d2;
+}
+.ip--xb-a {
+  color: #6fd36a;
+}
+.ip--xb-b {
+  color: #ff6b5e;
+}
+.ip--xb-x {
+  color: #5fa8ff;
+}
+.ip--xb-y {
+  color: #ffd257;
+}
+.ip--ps-x {
+  color: #8fb2ff;
+}
+.ip--ps-o {
+  color: #ff7a7a;
+}
+.ip--ps-sq {
+  color: #f2a2dc;
+}
+.ip--ps-tri {
+  color: #5fdcb0;
+}
+.ip--nin {
+  color: #fff8ea;
+}
+.ip-prompt__label {
+  white-space: nowrap;
+}

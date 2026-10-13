@@ -10,27 +10,31 @@ import { useEffect, useRef, useState } from 'react';
 import { PetArt } from '@/components/PetArt';
 import { useFinanceStore } from '@/store';
 import type { PetTrick } from '@/store';
-import { shortMoney } from '@/lib/prison';
+import { fmtShort, t } from '@/i18n';
 import { petLook, TRICK_EVERY } from '@/lib/pets';
 import type { PetId } from '@/lib/pets';
 import { petPat, petTrick, primeAudio } from '@/lib/sound';
 import { tapLight } from '@/lib/haptics';
 
 /** Надпись над питомцем по итогу трюка. */
-function bubble(t: PetTrick): string {
-  switch (t.role) {
+function bubble(p: PetTrick): string {
+  switch (p.role) {
     case 'loot':
-      return t.ore ? `+${t.ore.units} руды` : `+${t.tokens} ✦`;
+      return p.ore ? t('field.ore', { n: p.ore.units }) : `+${p.tokens} ✦`;
     case 'sell':
-      return t.coins ? `+${shortMoney(t.coins)}` : `+${t.tokens} ✦`;
+      return p.coins ? `+${fmtShort(p.coins)}` : `+${p.tokens} ✦`;
     case 'token':
-      return `+${t.tokens} ✦`;
+      return `+${p.tokens} ✦`;
     case 'dmg':
-      return 'Подмога!';
+      return t('field.petDmg');
     case 'rate':
-      return 'Разгон!';
+      return t('field.petRate');
     case 'luck':
-      return t.sense ? (t.sense.below ? `Чую! ↓${t.sense.below}` : 'Чую!') : `+${t.tokens} ✦`;
+      return p.sense
+        ? p.sense.below
+          ? t('field.petSenseBelow', { n: p.sense.below })
+          : t('field.petSense')
+        : `+${p.tokens} ✦`;
   }
 }
 
@@ -90,7 +94,7 @@ export function MinePets({
 
   if (!squad.length) return null;
   return (
-    <div className="ppets" aria-label="Питомцы">
+    <div className="ppets" aria-label={t('field.pets')}>
       {squad.map((id, i) => {
         const rec = pets[id];
         if (!rec) return null;
@@ -107,7 +111,7 @@ export function MinePets({
                 petPat();
                 tapLight();
                 const xp = pat(id);
-                cheer(i, xp ? '+опыт' : null);
+                cheer(i, xp ? t('field.petXp') : null);
                 onPat?.(id, xp);
               }}
             />

@@ -23,6 +23,8 @@ import { setServerAuth, setWebAuth } from '@/lib/storage';
 import { resolveDark, useThemePref } from '@/lib/theme';
 import { syncReminders } from '@/lib/reminders';
 import { closeTopOverlay } from '@/lib/escape-stack';
+import { InputRoot } from '@/input/InputRoot';
+import { GameShellRoot } from '@/game-shell/GameShellRoot';
 import { tapLight } from '@/lib/haptics';
 
 import { HomePage } from '@/pages/HomePage';
@@ -246,50 +248,6 @@ function prefetchSections() {
   warm(() => import('@/pages/CalculatorPage'));
 }
 
-/** App-wide keyboard support (desktop Telegram / browser):
- *  Esc — blur the focused field → close the topmost sheet → go back;
- *  Enter/Space — activate focused role="button" elements (so Tab works everywhere). */
-function KeyboardController() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const pathRef = useRef(location.pathname);
-  pathRef.current = location.pathname;
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        const el = document.activeElement as HTMLElement | null;
-        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
-          el.blur();
-          return;
-        }
-        if (closeTopOverlay()) return;
-        if (pathRef.current !== '/') {
-          e.preventDefault();
-          navigate(-1);
-        }
-        return;
-      }
-      // Make div-based "buttons" (cards, tiles) work from the keyboard.
-      if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
-        const t = e.target as HTMLElement | null;
-        if (
-          t &&
-          t.getAttribute?.('role') === 'button' &&
-          !['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
-        ) {
-          e.preventDefault();
-          t.click();
-        }
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [navigate]);
-
-  return null;
-}
-
 /**
  * Per-section error boundary: a crash in one section shows its fallback while
  * the Telegram BackButton (mounted outside) still navigates away; changing the
@@ -485,7 +443,9 @@ function AppShell({ platform, isDark, webMode, rawInitData }: AppShellProps) {
         <NavigationController />
         <SwipeBackController />
         <WheelScrollController />
-        <KeyboardController />
+        {/* Ввод (клавиатура, геймпад, фокус; Esc — назад) и форматы игры. */}
+        <InputRoot />
+        <GameShellRoot />
         <CropProvider>
           <Suspense
             fallback={

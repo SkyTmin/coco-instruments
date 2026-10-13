@@ -1,0 +1,351 @@
+/* General game settings (src/settings/GameSettings.tsx) — gx look; agent U's
+   kit restyles it later. Phone portrait: icon tabs on top; a wide window
+   (container ≥ 520 px): a rail on the left, the pane on the right. */
+
+/* Latin Extended-A for GxRubik (Turkish ş ğ ı İ, French œ, €): the base
+   rubik.woff2 is cut to Latin-1 + Cyrillic. Same family, picked by range. */
+@font-face {
+  font-family: 'GxRubik';
+  src: url('/ui/fonts/rubik-ext.woff2') format('woff2');
+  font-weight: 300 900;
+  font-display: swap;
+  unicode-range: U+0100-017F, U+0218-021B, U+1E9E, U+20AC;
+}
+
+.gx-modal__box:has(.gset) {
+  width: min(760px, 100%);
+}
+.gx-modal__body.gset {
+  container-type: inline-size;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.gset__in {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  min-height: 0;
+  font-size: calc(15px * var(--ui-text, 1));
+  color: var(--gx-ink);
+}
+
+.gset__nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.gset__tab {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--gx-paper-2);
+  color: var(--gx-ink-soft);
+  font:
+    600 calc(11px * var(--ui-text, 1)) / 1.1 'GxRubik',
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.gset__tab.is-on {
+  background: var(--gx-wood);
+  border-color: var(--gx-wood-d);
+  color: #fff;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+.gset__tab span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gset__h {
+  display: none;
+  margin: 2px 0 10px;
+  font:
+    800 calc(18px * var(--ui-text, 1)) / 1.1 'GxRubik',
+    system-ui,
+    sans-serif;
+  color: var(--gx-wood-dd);
+}
+
+@container (min-width: 520px) {
+  .gset__in {
+    grid-template-columns: minmax(150px, 190px) 1fr;
+    grid-template-rows: 1fr;
+    gap: 14px;
+  }
+  .gset__nav {
+    flex-direction: column;
+    overflow: visible;
+  }
+  .gset__tab {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 46px;
+    padding: 8px 12px;
+    font-size: calc(14px * var(--ui-text, 1));
+  }
+  .gset__tab span {
+    max-width: none;
+    white-space: normal;
+    text-align: left;
+  }
+  .gset__h {
+    display: block;
+  }
+}
+
+.gset-icon {
+  flex: none;
+}
+
+/* Rows */
+.gset-list,
+.gset-langs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gset-row,
+.gset-opt {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 2px solid var(--gx-paper-2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--gx-ink);
+  font:
+    600 1em / 1.2 'GxRubik',
+    system-ui,
+    sans-serif;
+  text-align: left;
+}
+button.gset-row,
+.gset-opt {
+  cursor: pointer;
+}
+.gset-row__icon {
+  display: grid;
+  place-items: center;
+  color: var(--gx-wood-d);
+}
+.gset-row__label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Switch */
+.gset-switch__track {
+  flex: none;
+  position: relative;
+  width: 50px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--gx-wood-d);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25);
+  transition: background 0.15s;
+}
+.gset-switch__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--gx-paper);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+.gset-switch.is-on .gset-switch__track {
+  background: var(--gx-green);
+}
+.gset-switch.is-on .gset-switch__knob {
+  transform: translateX(22px);
+}
+
+/* Slider */
+.gset-slider input {
+  flex: 1 1 120px;
+  min-width: 90px;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.gset-slider input::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--gx-wood) var(--v), rgba(61, 42, 22, 0.18) var(--v));
+}
+.gset-slider input::-moz-range-track {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--gx-wood) var(--v), rgba(61, 42, 22, 0.18) var(--v));
+}
+.gset-slider input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -8px;
+  border-radius: 50%;
+  border: 3px solid var(--gx-wood-d);
+  background: var(--gx-paper);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+.gset-slider input::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid var(--gx-wood-d);
+  background: var(--gx-paper);
+}
+.gset-slider .gset-row__label {
+  flex: 0 1 34%;
+}
+.gset-slider__val {
+  flex: none;
+  width: 2.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--gx-ink-soft);
+}
+.gset-slider.is-off {
+  opacity: 0.45;
+}
+
+/* Segmented */
+.gset-seg {
+  flex-wrap: wrap;
+}
+.gset-seg .gset-row__label {
+  flex: 1 1 6em;
+  min-width: 6em;
+  overflow-wrap: normal;
+}
+.gset-seg__opts {
+  flex: 0 1 auto;
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.gset-seg__opt {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--gx-paper-2);
+  color: var(--gx-ink-soft);
+  font:
+    700 0.87em / 1.1 'GxRubik',
+    system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.gset-seg__opt.is-on {
+  background: var(--gx-wood);
+  border-color: var(--gx-wood-d);
+  color: #fff;
+}
+
+/* Language list */
+@container (min-width: 520px) {
+  .gset-langs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .gset-opt--auto {
+    grid-column: 1 / -1;
+  }
+}
+.gset-opt.is-on {
+  border-color: var(--gx-green);
+  background: rgba(114, 184, 78, 0.16);
+}
+.gset-opt__code {
+  flex: none;
+  width: 36px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--gx-wood-d);
+  color: var(--gx-paper);
+  font:
+    800 11px / 1 'GxRubik',
+    system-ui,
+    sans-serif;
+  letter-spacing: 0.04em;
+}
+.gset-opt--auto .gset-icon {
+  width: 36px;
+  color: var(--gx-wood-d);
+}
+.gset-opt__txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gset-opt__txt i {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.8em;
+  color: var(--gx-ink-soft);
+}
+
+.gset-soon {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 26px 12px;
+  color: var(--gx-ink-soft);
+  text-align: center;
+}
+.gset-soon .gset-icon {
+  width: 44px;
+  height: 44px;
+}
+
+/* Keyboard / gamepad focus */
+.gset__tab:focus-visible,
+.gset-row:focus-visible,
+.gset-opt:focus-visible,
+.gset-seg__opt:focus-visible,
+.gset-slider input:focus-visible {
+  outline: 3px solid var(--gx-gold-d);
+  outline-offset: 2px;
+}
+
+/* «Reduce motion» chosen in settings (or by the system with «auto»): the
+   game's CSS animations finish at once. JS effects ask `motionReduced()`. */
+html[data-motion='reduce'] .gx *,
+html[data-motion='reduce'] .gx *::before,
+html[data-motion='reduce'] .gx *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
