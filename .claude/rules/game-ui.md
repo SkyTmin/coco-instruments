@@ -137,6 +137,16 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   padding box: add the 1u border). The settings chunk is fetched on idle after a header with ⚙
   mounts and on the gear's pointerdown (first open 349 → ~270 ms at 4× in dev — the rest is
   the window's own mount).
+  HUD pictures: `GxHud name="coin|token|key|rank"` — baked 12 × 12 `hud-*` (`paint.ts`
+  `HUD_ART`: coin / token / pick are the `st-*` pixels, the key is upright brass, not the old
+  water drop). GameTop sets `--hud` on itself = 1.4 em of the chip number (twice its cap height)
+  snapped to whole device px per art px (24 px phone, 36 at ui-scale 4); mask icons in header
+  chips take the same box. On phone portrait the chip gap is 1u and padding 2u/3u — the bigger
+  pictures cost 12 px per chip and 360 px must still show money + tokens (340/340 at fit 3).
+  New picture: add it to `HUD_ART`, re-bake (`npx vite-node scripts/ui-px/bake.ts`), restart the
+  stand's Vite if it ignores `public/**` (a new PNG is otherwise the SPA's HTML). The wallet is a
+  disclosure, not a dialog: `role="region"`, the chip has `aria-expanded` + `aria-controls`,
+  focus stays on the chip (it closes on any outside tap).
 - **Widgets:** `gx-btn` / `gx-round` → kit button frames via `--b/--bs/--bw` (gold default;
   iron for `--grey/--dark/--steel`; red; green; `:disabled` / `.is-off` ash), text colours
   `--gx-on-*` = the `.px-btn` face pairs. `gx-badge` → kit badge (1-art-px bob), `gx-bar` → kit

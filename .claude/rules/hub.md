@@ -180,13 +180,31 @@ Owner: «Когда альбомный, персонаж и всё его окр
   (`--pxk-frame-obsidian` — its fill is PARCHMENT, so the ink is `--px-text`, not cream: cream on
   it was unreadable); pill/toast/pins `--px-fs-sm`, talk name + text `--px-fs`. Map pins at kit
   size collided (Шахта / Особая шахта): `HubMapSheet` lays them out in a layout effect — clamp
-  into the frame, push below an overlapped pin above, offsets in the frame's own units
-  (`offsetLeft/Top`; the window body may be zoomed ×2).
+  into the frame (1 px in: offsetWidth is whole px), push below a pin above that is closer than
+  18 px, offsets in the frame's own units (`offsetLeft/Top`; the window body may be zoomed ×2).
+  Why 18: each pin's `::after` reaches 9 px past the plate (44 px to tap), so stacked areas
+  touch but never overlap; with the critic's 8 the lower pin took the upper one's bottom. The
+  areas sit at z −1 in an isolated frame (the map canvas has `pointer-events: none`): a tap on
+  a plate's pixels is always that plate. A moved plate gets a tail (`.hub-map__tail`, the `<i>`
+  before its button): a 1-art-px parchment line between ink from the plate edge to the door,
+  ending in a dot. Pressed pins drop 1u (`translate`). Cost: more pins move (7/12 on pp, the
+  tower plate ~70 px) — the tails keep their doors readable.
+- **Talk camera:** while `.hub-talk` is open the bottom camera inset = the box's height
+  (`root.clientHeight − offsetTop`, unaffected by its slide-in), eased in the renderer
+  (`setInsets(top, bottom, ease)`, k = 1 − e^(−10·dt)), re-measured by a ResizeObserver on the
+  box. Phone landscape forge: smith's feet 194 → 78 px against the box top at 185 (was under).
+  The idle stick ring hides while talking (`.hub:has(.hub-talk)`).
+- **HUD band:** `.hub-top .gx-top::before` — flat `--px-ink` from the screen top to 2u under the
+  row (z −1 in `.hub-top`): world sign plates at the spawn read as part of the HUD before.
+- **Motion and type:** the pill, toast and «Говорить» come in with `hub-in` — 2u up + opacity in
+  `steps(3)`, no scale (kit frames must not scale); the old `hub-pop` / `hub-use` keyframes are
+  gone. Weights: 700 text (toast, talk text, wallet names), 800 the talk name; `.hub-ev b`
+  inherits (was 900).
 - **Press:** `usePress()` on the pad buttons, the event pill, map pins and the talk buttons
   (`.is-down` in the first frame). Pad and talk buttons are `--px-fs-sm` (`.gx-btn`'s own 15 px
   beat the page's size before). The toast is centred by `left/right: 16px` + `margin-inline:
   auto` + `width: fit-content` — `left: 50%` + translate shrink-wrapped it to half the screen.
-- **Stick ring** shows idle only for `html[data-input='touch']`.
+- **Stick ring** shows idle only for `html[data-input='touch']` and not during a talk.
 - **Stand:** `window.__hub` (DEV) has `sim`, `r`, `go(to, at)`, `phase(p)`, `say(text)` (toast).
   Scripts must import the store by the URL the app loaded (`performance.getEntriesByType
   ('resource')` → `/src/store.ts?t=…`), or they write into a second store instance.
