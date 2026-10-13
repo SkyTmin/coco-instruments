@@ -564,6 +564,13 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   min-width: calc(11ch + 22px + 2 * var(--u));
   height: calc(15 * var(--u));
 }
+/* 360-px phones: the 11-digit box one step smaller, so the caption keeps its whole word
+   («Guthaben» was «Gutha…» next to 510.812.345). One fixed size per width — nothing jumps. */
+@media (max-width: 374px) {
+  .cas[data-lay='tall'] .cas-bal__v {
+    font-size: var(--px-fs-head);
+  }
+}
 .cas[data-lay='tall'] .cas-bet__keys {
   top: auto;
   right: auto;
