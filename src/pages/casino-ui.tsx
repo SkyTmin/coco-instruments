@@ -277,8 +277,10 @@ export interface DeckProps {
   onAuto: () => void;
   turbo: boolean;
   onTurbo: () => void;
-  /** Cascade: ante + buy bonus. */
+  /** Cascade (wide layouts): the buy-bonus row above the money. */
   extra?: ReactNode;
+  /** Cascade: the Ante toggle at the right end of the bet row. */
+  betSide?: ReactNode;
 }
 
 /**
@@ -417,6 +419,7 @@ export function CasDeck(p: DeckProps) {
               onClick={() => step(1)}
               className="cas-bet__step"
             />
+            {p.betSide}
           </div>
           <div className="cas-bet__keys" aria-hidden="true">
             <KeyHint action="tabPrev" />

@@ -580,48 +580,77 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   z-index: 2;
 }
 
-/* Cascade: ante + buy bonus — two equal plates, fixed height. */
+/* Cascade: Ante is a toggle in the bet row, the buy-bonus plate is a fact of the info strip on the
+   tall layouts and a row above the money on the wide ones (critic9 #7: the deck's own 46-px bonus
+   row went to the board). */
 .cas-bonus {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: calc(3 * var(--u));
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(2 * var(--u));
 }
-.cas-bonus.is-hidden {
+.cas-ante.is-hidden,
+.cas-buy.is-hidden {
   visibility: hidden;
 }
-.cas-bonus .px-btn {
+.cas-info > .cas-buy {
+  grid-area: buy;
+}
+.cas-buy.px-btn {
   flex-direction: column;
   gap: 0;
-  /* One 44-px row (critic 10): a name line and a line of numbers, no paragraph inside. */
+  /* A name line and a line of numbers, no paragraph inside. */
   min-height: var(--gx-hit);
-  padding-top: var(--u);
-  padding-bottom: calc(3 * var(--u));
+  padding: var(--u) calc(2 * var(--u)) calc(3 * var(--u));
   width: 100%;
   min-width: 0;
 }
-.cas-bonus .px-btn:is(:active, .is-down):not([aria-disabled='true']) {
+.cas-buy.px-btn:is(:active, .is-down):not([aria-disabled='true']) {
   padding-top: calc(3 * var(--u));
   padding-bottom: var(--u);
 }
-.cas-bonus .px-btn > b {
+.cas-buy.px-btn > b {
   max-width: 100%;
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
-  /* A narrow plate (phone landscape, fr/de) takes two lines instead of cutting the name. */
+  /* A narrow plate (fr/de at 360) takes two lines instead of cutting the name. */
   text-wrap: balance;
   text-align: center;
 }
-.cas-bonus .px-btn > i {
+.cas-buy.px-btn > i {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--u);
-  max-width: 100%;
+  /* The plate is as wide as its name: the price (≤ «50 000» + coin, narrower than the name in
+     every language) does not size it, so a bet change never moves the facts beside it. */
+  width: 0;
+  min-width: 100%;
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
   font-style: normal;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.cas-bonus__sep {
-  padding: 0 var(--u);
+.cas-ante.px-btn {
+  flex: none;
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+.cas[data-lay='tall'] .cas-ante.px-btn {
+  min-height: max(var(--gx-hit), calc(24 * var(--u)));
+}
+.cas-ante.px-btn > b {
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+}
+/* Tall: the plate is the third fact beside the best win and the spins, as wide as its name (fr
+   «Acheter le bonus» took two lines in a third of the strip and cost the board 17 px). */
+.cas--scatter[data-lay='tall'] > .cas-info {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'lvl lvl lvl'
+    'best sp buy';
+  column-gap: calc(2 * var(--u));
+  align-items: center;
 }
 
 /* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
@@ -845,19 +874,8 @@ html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chip
 .cas[data-lay='wide'] .cas-deck__go > .cas-spin {
   grid-area: spin;
 }
-/* The two bonus plates are narrow — thinner side padding. */
-.cas .cas-bonus .px-btn {
-  padding-left: calc(2 * var(--u));
-  padding-right: calc(2 * var(--u));
-}
 html[data-ff='phone-landscape'] .cas-mini {
   min-height: var(--gx-hit);
-}
-html[data-ff='phone-landscape'] .cas-bonus .px-btn {
-  min-height: var(--gx-hit);
-}
-html[data-ff='phone-landscape'] .cas-bonus .px-btn > i {
-  display: none;
 }
 html[data-ff='phone-landscape'] .cas-spin {
   min-height: var(--gx-hit);
@@ -877,9 +895,6 @@ html[data-ff='tablet'] .cas-spin__t {
 }
 html[data-ff='phone-landscape'] .cas-spin__t {
   font-size: var(--px-fs);
-}
-html[data-ff='phone-landscape'] .cas-bonus .px-btn > b {
-  font-size: var(--px-fs-sm);
 }
 
 /* ---- Slots on tablet landscape and desktop: the machine is the show -------------------------- */
@@ -971,7 +986,8 @@ html[data-ff='tablet'] .cas[data-lay='tall'] > .cas-info {
   align-content: space-between;
 }
 html[data-ff='tablet'] .cas--scatter[data-lay='tall'] > .cas-info {
-  grid-template-areas: 'lvl' 'best' 'sp';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'lvl' 'best' 'sp' 'buy';
   align-content: start;
   row-gap: calc(5 * var(--u));
 }

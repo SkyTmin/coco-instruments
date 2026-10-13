@@ -1638,6 +1638,49 @@ export function ScatterPage() {
     </>
   );
 
+  // Ante — тумблер в ряду ставки (44 px); покупка бонуса — в полосе сводки на высоких
+  // раскладках, над деньгами на широких. Цена и смысл Ante — в подсказке и в правилах.
+  const anteBtn = (
+    <Button
+      on={ante}
+      off={spinning}
+      className={`cas-ante${inBonus ? ' is-hidden' : ''}`}
+      data-tip={tr('slots.cascade.anteHint', { n: ANTE_COST })}
+      aria-label={`Ante · ${tr('slots.cascade.anteHint', { n: ANTE_COST })}`}
+      aria-pressed={ante}
+      onClick={() => {
+        if (spinning || inBonus) return;
+        selectionChanged();
+        setAnte(!ante);
+      }}
+    >
+      <b>Ante</b>
+    </Button>
+  );
+  const buyBtn = (
+    <Button
+      kind="primary"
+      className={`cas-buy${inBonus ? ' is-hidden' : ''}`}
+      off={spinning || balance < buyCost}
+      onClick={() => {
+        if (spinning || inBonus || balance < buyCost) return;
+        if (!buyBonus()) return;
+        // Новый бонус — плашка начинает с чистого листа.
+        setShownFs(null);
+        tapMedium();
+        primeAudio();
+        jackpotFanfare();
+        burstConfetti(80, theme.confetti);
+      }}
+    >
+      <b>{tr('slots.cascade.buy')}</b>
+      <i className="px-num">
+        {fmt(buyCost)}
+        <CoinIcon size={16} />
+      </i>
+    </Button>
+  );
+
   return (
     <GameScreen
       className="gx cas-page"
@@ -1705,6 +1748,7 @@ export function ScatterPage() {
             value={fmt(spins)}
             label={tr('slots.session.spins')}
           />
+          {lay === 'tall' && buyBtn}
         </section>
 
         <div className="cas-stage" ref={stageRef}>
@@ -2063,57 +2107,18 @@ export function ScatterPage() {
             selectionChanged();
             setPrefs({ turbo: !turbo });
           }}
+          betSide={lay === 'tall' ? anteBtn : undefined}
           extra={
-            /* Ставка Ante и покупка бонуса — оба пути к фриспинам. В бонусе
-               ряд не исчезает, а гаснет: иначе поле над ним прыгало бы. */
-            <div
-              className={`cas-bonus${inBonus ? ' is-hidden' : ''}`}
-              aria-hidden={inBonus || undefined}
-            >
-              <Button
-                on={ante}
-                off={spinning}
-                data-tip={tr('slots.cascade.anteHint', { n: ANTE_COST })}
-                aria-label={`Ante · ${tr('slots.cascade.anteHint', { n: ANTE_COST })}`}
-                onClick={() => {
-                  if (spinning || inBonus) return;
-                  selectionChanged();
-                  setAnte(!ante);
-                }}
-              >
-                <b>Ante</b>
-                {/* Одна строка значков вместо абзаца в кнопке: монета — во сколько
-                    раз ставка, скаттер — во сколько раз чаще бонус (≈ вдвое, см.
-                    правила); фраза целиком — в подсказке и в листе правил. */}
-                <i className="cas-bonus__sub" aria-hidden="true">
-                  <CoinIcon size={14} />
-                  {tr('slots.cascade.anteChip', { n: ANTE_COST })}
-                  <span className="cas-bonus__sep">·</span>
-                  <Sym id="scatter" skin={skin} size={16} />
-                  {tr('slots.cascade.anteChip', { n: 2 })}
-                </i>
-              </Button>
-              <Button
-                kind="primary"
-                off={spinning || balance < buyCost}
-                onClick={() => {
-                  if (spinning || inBonus || balance < buyCost) return;
-                  if (!buyBonus()) return;
-                  // Новый бонус — плашка начинает с чистого листа.
-                  setShownFs(null);
-                  tapMedium();
-                  primeAudio();
-                  jackpotFanfare();
-                  burstConfetti(80, theme.confetti);
-                }}
-              >
-                <b>{tr('slots.cascade.buy')}</b>
-                <i>
-                  {fmt(buyCost)}
-                  <CoinIcon size={13} />
-                </i>
-              </Button>
-            </div>
+            /* В высоких раскладках Ante — в ряду ставки, покупка — в полосе сводки (ряд
+               «Ante / Купить» стоил полю 52 px). В широких оба — ряд над деньгами: в узкой
+               колонке телефона лёжа ряд ставки с Ante не помещается. В бонусе кнопки не
+               исчезают, а гаснут: иначе поле прыгало бы. */
+            lay === 'wide' ? (
+              <div className="cas-bonus" aria-hidden={inBonus || undefined}>
+                {anteBtn}
+                {buyBtn}
+              </div>
+            ) : undefined
           }
         />
       </div>
