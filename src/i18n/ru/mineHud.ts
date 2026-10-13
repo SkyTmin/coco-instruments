@@ -4,7 +4,8 @@
  * new-rank scene. Plurals whose Russian forms are all alike keep the old text
  * byte for byte (fix the Russian forms only — the translations already agree).
  */
-const blocks = (s: string) => ({ one: s, few: s, many: s, other: s });
+/** Russian plural: 1 блок / 3 блока / 5 блоков; `other` (fractions) reads like `few`. */
+const ru3 = (one: string, few: string, many: string) => ({ one, few, many, other: few });
 
 export const mineHud = {
   /** Short counts in the narrow chips: «12,3к», «1,2м». */
@@ -14,16 +15,16 @@ export const mineHud = {
   perMin: '/мин',
   /** Guide reward line, joined with « · ». */
   reward: {
-    coins: blocks('+{n} монет'),
-    tokens: blocks('+{n} токенов'),
-    keys: blocks('+{n} ключа'),
+    coins: ru3('+{n} монета', '+{n} монеты', '+{n} монет'),
+    tokens: ru3('+{n} токен', '+{n} токена', '+{n} токенов'),
+    keys: ru3('+{n} ключ', '+{n} ключа', '+{n} ключей'),
     key: '+ключ',
     rune: 'руна {roman}',
     egg: '{name} яйцо',
   },
   /** Big floating words over the field. */
   float: {
-    keys: blocks('+{n} ключа'),
+    keys: ru3('+{n} ключ', '+{n} ключа', '+{n} ключей'),
     key: '+ключ',
     pickLevel: 'КИРКА {n}',
     parcel: 'ПОСЫЛКА',
@@ -42,7 +43,7 @@ export const mineHud = {
   say: {
     mineRenewed: 'Шахта обновилась',
     streakFirst: '«{name}»: +{pct}% к добыче, пока бьёшь без пауз',
-    keys: blocks('{n} ключа от сундука!'),
+    keys: ru3('{n} ключ от сундука!', '{n} ключа от сундука!', '{n} ключей от сундука!'),
     pickLevel: 'Кирка {n} ур. · +{tokens} ✦',
     pickLevelKey: 'Кирка {n} ур. · +{tokens} ✦ · +ключ',
     parcelRipe: 'Посылка дозрела — вскрой её',
@@ -51,8 +52,8 @@ export const mineHud = {
     normDone: 'Выработка набрана',
     bagFull: 'Рюкзак полон — продай добычу',
     pity: '{block} встал по гарантии — вон он, блестит',
-    tokens: blocks('+{n} токенов'),
-    chestKeys: blocks('+{n} ключа от сундука'),
+    tokens: ru3('+{n} токен', '+{n} токена', '+{n} токенов'),
+    chestKeys: ru3('+{n} ключ от сундука', '+{n} ключа от сундука', '+{n} ключей от сундука'),
     chestKey: '+ключ от сундука',
     runeShattered: 'Мешочек рун полон — руна разбита на {n} ✦',
     runeBag: '{reward} — в мешочке рун',
@@ -61,7 +62,7 @@ export const mineHud = {
     riskLost: 'Сгорело: {sum}. В другой раз повезёт',
     hardHave: 'Не берёт! Возьми в руку {name} кирку ⛏{power} — в кузнице',
     hardNeed: 'Не берёт! Нужна {name} кирка ⛏{power} — кузница внизу',
-    hardNone: 'Не берёт! Нужна кирка сильнее кирка ⛏{power} — кузница внизу',
+    hardNone: 'Не берёт! Нужна кирка сильнее ⛏{power} — кузница внизу',
     frenzy: 'Кураж: 15 секунд двойной добычи',
     seid: 'Сейд-камень: +{tokens} токенов, +{coins} монет',
     block: '{block}: +{n} монет',
@@ -79,9 +80,9 @@ export const mineHud = {
     bagEmpty: 'Рюкзак пуст — копай',
     parcelLeft: {
       one: 'Вскроется через {n} блок',
-      few: 'Вскроется через {n} блоков',
+      few: 'Вскроется через {n} блока',
       many: 'Вскроется через {n} блоков',
-      other: 'Вскроется через {n} блоков',
+      other: 'Вскроется через {n} блока',
     },
     crew: 'Рабочие: +{coins} монет, +{tokens} токенов',
     prestige: 'Престиж {n}: +2 очка навыков, продажа ×{x}',
@@ -117,14 +118,18 @@ export const mineHud = {
     findNewBonus: '+1% к продаже навсегда',
     findDupBonus: '+40 токенов',
     shift: 'Смена · 5 минут',
-    shiftBlocks: blocks('{n} блоков · +{coins}'),
+    shiftBlocks: ru3('{n} блок · +{coins}', '{n} блока · +{coins}', '{n} блоков · +{coins}'),
     shiftKeys: {
       one: ' · +{n} ключ',
       few: ' · +{n} ключа',
-      many: ' · +{n} ключа',
+      many: ' · +{n} ключей',
       other: ' · +{n} ключа',
     },
-    crewDug: blocks('Рабочие накопали {n} блоков'),
+    crewDug: ru3(
+      'Рабочие накопали {n} блок',
+      'Рабочие накопали {n} блока',
+      'Рабочие накопали {n} блоков',
+    ),
     crewLine: '+{coins} монет · +{tokens} токенов',
     crewCapped: ' · смена кончилась',
     collect: 'Забрать',
@@ -158,7 +163,11 @@ export const mineHud = {
     pick: 'Кирка ⛏{power} · {name}',
     toForge: 'В кузницу',
     work: 'Выработка — сломать блоков',
-    pity: blocks('Гарантия: через {n} блоков он встанет сам'),
+    pity: ru3(
+      'Гарантия: через {n} блок он встанет сам',
+      'Гарантия: через {n} блока он встанет сам',
+      'Гарантия: через {n} блоков он встанет сам',
+    ),
     coins: 'Монеты',
     take: 'Взять ранг {rank}',
     buyBlock: 'Докупить блок · {sum}',
@@ -179,7 +188,11 @@ export const mineHud = {
     mine: 'Этаж {rank} · {rock} · {ore} за руду · блок {block}',
     key: '+1 ключ от сундука',
     forest: 'Открыт лес — кнопка «Лес» над полем',
-    buyout: blocks('Блок докуплен за {n} монет'),
+    buyout: ru3(
+      'Блок докуплен за {n} монету',
+      'Блок докуплен за {n} монеты',
+      'Блок докуплен за {n} монет',
+    ),
     next: 'Для ранга {rank}:',
     level: 'Уровень {n}',
     toMine: 'В шахту',
