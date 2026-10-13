@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, RefObject } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { GxIcon, GxModal } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
 import { ChestIcon } from '@/components/ChestTab';
@@ -133,6 +133,7 @@ import {
   t,
   upper,
   useT,
+  getLang,
 } from '@/i18n';
 import type { Key } from '@/i18n';
 import { bookName, findName, guideHint, guideTitle, nameIn } from '@/i18n/data-mine';
@@ -168,7 +169,7 @@ import { useAction, useHotkeys } from '@/input/hooks';
 import { inTopLayer } from '@/input/focus-nav';
 import type { Action } from '@/input/actions';
 import { useFormFactor } from '@/game-shell';
-import { Badge, Bar, KeyHint, Slot } from '@/ui-px';
+import { Badge, Bar, KeyHint, Slot, usePress } from '@/ui-px';
 import './mine.css';
 
 const fmt = (n: number) => fmtNum(n);
@@ -189,6 +190,19 @@ const chipMoney = (n: number) => (n >= 1e5 ? shortCount(n) : fmtNum(n));
 
 /** Длина строки числа — фишка шапки ужимает кегль под неё (`--len` в mine.css). */
 const lenVar = (text: string) => ({ '--len': text.length }) as CSSProperties;
+
+/**
+ * Блок шахты, который перерисовывается, только когда меняется что-то из `deps` (примитивы).
+ * Удар по породе перерисовывает страницу 5–10 раз в секунду, а шапка, расходники, рюкзак и
+ * док при этом почти всегда те же (критик, волна 2: при 4× замедлении 35 % кадров > 20 мс).
+ * Обработчики внутри — стабильные (сеттеры состояния) или через `live` страницы.
+ */
+const Keep = memo(
+  function Keep({ render }: { deps: readonly unknown[]; render: () => ReactNode }) {
+    return <>{render()}</>;
+  },
+  (a, b) => a.deps.length === b.deps.length && a.deps.every((x, i) => Object.is(x, b.deps[i])),
+);
 
 /** Размер пикселя арта для `hop` — страница пишет его из оболочки. */
 let hopU = 2;
@@ -1557,6 +1571,9 @@ export function PrisonPage() {
   // ---- Разметка ----------------------------------------------------------
 
   const m = modsOf(prison);
+  // Свежие обработчики для блоков под Keep (их разметка не перерисовывается на каждом ударе).
+  const live = useRef({ sell, applyItem });
+  live.current = { sell, applyItem };
   const cap = bagCapacity(bagLevel);
   const count = bagCount(bag);
   // Цена на кнопке — без руды для следующей кирки: её кузнец отложит в ящик.
@@ -1672,6 +1689,8 @@ export function PrisonPage() {
 
   // Раскладка (UI v2): высокий экран — стопкой, широкий — три колонки.
   const shell = useFormFactor();
+  // Нажатие видно на pointerdown (набор): для кнопок шахты вне набора.
+  const press = usePress();
   useEffect(() => {
     hopU = shell.scale;
   }, [shell.scale]);
@@ -1794,6 +1813,7 @@ export function PrisonPage() {
       key="floor"
       type="button"
       className="mn-stat mn-stat--btn mn-floor px-f"
+      {...press}
       data-tip={floorName}
       data-tip-key="mines"
       aria-label={floorName}
@@ -1810,77 +1830,98 @@ export function PrisonPage() {
   );
 
   const hud = (
-    <div key="hud" className="mn-hud">
-      <button
-        type="button"
-        className="px-btn px-btn--iron px-btn--icon px-f mn-hud__back"
-        aria-label={t('common.back')}
-        onClick={() => {
-          tapLight();
-          nav(-1);
-        }}
-      >
-        <i className="px-i pxi-left" aria-hidden="true" />
-      </button>
-      <span
-        className="mn-stat mn-stat--coins"
-        title={t('mineHud.norm.coins')}
-        style={lenVar(chipMoney(shownBalance))}
-      >
-        <i className="mn-coin" aria-hidden="true" />
-        <MoneyCounter
-          ref={moneyRef}
-          value={shownBalance}
-          format={chipMoney}
-          className="px-num mn-stat__n"
-        />
-      </span>
-      <button
-        type="button"
-        ref={tokenRef}
-        className="mn-stat mn-stat--btn mn-stat--tokens px-f"
-        aria-label={t('mineHud.hud.tokens')}
-        data-tip={t('mineHud.hud.tokens')}
-        style={lenVar(shortCount(prison.tokens))}
-        onClick={() => openScreen('enchant')}
-      >
-        <TokenIcon size={12 * u} />
-        <b className="px-num mn-stat__n">{shortCount(prison.tokens)}</b>
-      </button>
-      <button
-        type="button"
-        className="mn-stat mn-stat--btn mn-stat--keys px-f"
-        aria-label={t('mineHud.pres.keys')}
-        data-tip={t('mineHud.pres.keys')}
-        style={lenVar(shortCount(prison.keys))}
-        onClick={() => openScreen('cases')}
-      >
-        <KeyIcon size={12 * u} />
-        <b className="px-num mn-stat__n">{shortCount(prison.keys)}</b>
-      </button>
-      {wide && floorBtn}
-      {FOREST_ON && (
-        <button
-          type="button"
-          className={`px-btn px-btn--iron px-btn--icon px-f mn-hud__forest${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
-          aria-label={t('mineHud.hud.forest')}
-          data-tip={t('mineHud.hud.forest')}
-          onClick={goForest}
-        >
-          <GxIcon name="forest" size={9 * u} />
-        </button>
+    <Keep
+      key="hud"
+      deps={[
+        getLang(),
+        shownBalance,
+        prison.tokens,
+        prison.keys,
+        wide,
+        u,
+        mine.id,
+        prison.zone.on,
+        rank < FOREST_UNLOCK_RANK && !prestige,
+      ]}
+      render={() => (
+        <div className="mn-hud">
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-btn--icon px-f mn-hud__back"
+            {...press}
+            aria-label={t('common.back')}
+            onClick={() => {
+              tapLight();
+              nav(-1);
+            }}
+          >
+            <i className="px-i pxi-left" aria-hidden="true" />
+          </button>
+          <span
+            className="mn-stat mn-stat--coins"
+            title={t('mineHud.norm.coins')}
+            style={lenVar(chipMoney(shownBalance))}
+          >
+            <i className="mn-coin" aria-hidden="true" />
+            <MoneyCounter
+              ref={moneyRef}
+              value={shownBalance}
+              format={chipMoney}
+              className="px-num mn-stat__n"
+            />
+          </span>
+          <button
+            type="button"
+            ref={tokenRef}
+            className="mn-stat mn-stat--btn mn-stat--tokens px-f"
+            {...press}
+            aria-label={t('mineHud.hud.tokens')}
+            data-tip={t('mineHud.hud.tokens')}
+            style={lenVar(shortCount(prison.tokens))}
+            onClick={() => openScreen('enchant')}
+          >
+            <TokenIcon size={12 * u} />
+            <b className="px-num mn-stat__n">{shortCount(prison.tokens)}</b>
+          </button>
+          <button
+            type="button"
+            className="mn-stat mn-stat--btn mn-stat--keys px-f"
+            {...press}
+            aria-label={t('mineHud.pres.keys')}
+            data-tip={t('mineHud.pres.keys')}
+            style={lenVar(shortCount(prison.keys))}
+            onClick={() => openScreen('cases')}
+          >
+            <KeyIcon size={12 * u} />
+            <b className="px-num mn-stat__n">{shortCount(prison.keys)}</b>
+          </button>
+          {wide && floorBtn}
+          {FOREST_ON && (
+            <button
+              type="button"
+              className={`px-btn px-btn--iron px-btn--icon px-f mn-hud__forest${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
+              {...press}
+              aria-label={t('mineHud.hud.forest')}
+              data-tip={t('mineHud.hud.forest')}
+              onClick={goForest}
+            >
+              <GxIcon name="forest" size={9 * u} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-btn--icon px-f mn-hud__gear"
+            {...press}
+            aria-label={t('common.settings')}
+            data-tip={t('common.settings')}
+            data-mine-settings=""
+            onClick={() => openSheet('settings')}
+          >
+            <i className="px-i pxi-gear" aria-hidden="true" />
+          </button>
+        </div>
       )}
-      <button
-        type="button"
-        className="px-btn px-btn--iron px-btn--icon px-f mn-hud__gear"
-        aria-label={t('common.settings')}
-        data-tip={t('common.settings')}
-        data-mine-settings=""
-        onClick={() => openSheet('settings')}
-      >
-        <i className="px-i pxi-gear" aria-hidden="true" />
-      </button>
-    </div>
+    />
   );
 
   const rankBox = (
@@ -1888,6 +1929,7 @@ export function PrisonPage() {
       key="rank"
       type="button"
       className={`mn-rank px-f${rankOk ? ' is-ready' : ''}`}
+      {...press}
       onClick={rankUp}
       data-tip={t('input.action.rank')}
       data-tip-key="rank"
@@ -1975,6 +2017,7 @@ export function PrisonPage() {
       key="quest"
       type="button"
       className={`mn-quest px-f${guideOk ? ' is-ready' : ''}`}
+      {...press}
       onClick={() => {
         if (guideOk) {
           claimGuide();
@@ -2077,6 +2120,7 @@ export function PrisonPage() {
                   key={i}
                   type="button"
                   className={`mn-parcel px-f${ready ? ' is-ready' : ''}`}
+                  {...press}
                   style={{ '--tier': tier.color } as CSSProperties}
                   aria-label={t(ready ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
                     tier: nameIn(chestName(tier.id)),
@@ -2251,200 +2295,243 @@ export function PrisonPage() {
 
   // Расходники: цифры 1–6 на клавиатуре — по порядку на экране.
   const itemsRow = (
-    <div key="items" className="mn-items" role="group" aria-label={t('inv.section.items')}>
-      {roomy && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
-      <div className="mn-items__row">
-        {shownItems.map((it, i) => {
-          const n = prison.items[it.id];
-          return (
-            <Slot
-              key={it.id}
-              className={`mn-item${n ? '' : ' is-buy'}`}
-              empty={!n}
-              selected={arming === it.id}
-              count={n || undefined}
-              aria-label={`${itemName(it.id)}: ${n}`}
-              data-tip={itemName(it.id)}
-              data-tip-key={`item${i + 1}`}
-              onClick={() => applyItem(it.id)}
-            >
-              <ItemIcon id={it.id} size={(roomy ? 16 : 13) * u} />
-              {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
-              <KeyHint action={`item${i + 1}` as Action} />
-            </Slot>
-          );
-        })}
-      </div>
-    </div>
+    <Keep
+      key="items"
+      deps={[
+        getLang(),
+        arming,
+        roomy,
+        u,
+        ...shownItems.map((it) => `${it.id}:${prison.items[it.id]}`),
+      ]}
+      render={() => (
+        <div className="mn-items" role="group" aria-label={t('inv.section.items')}>
+          {roomy && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
+          <div className="mn-items__row">
+            {shownItems.map((it, i) => {
+              const n = prison.items[it.id];
+              return (
+                <Slot
+                  key={it.id}
+                  className={`mn-item${n ? '' : ' is-buy'}`}
+                  empty={!n}
+                  selected={arming === it.id}
+                  count={n || undefined}
+                  aria-label={`${itemName(it.id)}: ${n}`}
+                  data-tip={itemName(it.id)}
+                  data-tip-key={`item${i + 1}`}
+                  onClick={() => live.current.applyItem(it.id)}
+                >
+                  <ItemIcon id={it.id} size={(roomy ? 16 : 13) * u} />
+                  {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
+                  <KeyHint action={`item${i + 1}` as Action} />
+                </Slot>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    />
   );
 
   const bagBox = (
-    <button
+    <Keep
       key="bag"
-      type="button"
-      ref={bagRef}
-      className={`mn-bag px-f${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
-      onClick={sell}
-      aria-label={t('input.action.sell')}
-      data-tip={t('input.action.sell')}
-      data-tip-key="sell"
-    >
-      <i className="mn-pic mn-pic--bag mn-bag__ico" data-hop="" aria-hidden="true" />
-      <span className="mn-bag__mid">
-        <span className="mn-bag__title">{t('inv.lim.bag')}</span>
-        <Bar
-          value={count / cap}
-          tone={full ? 'gold' : 'green'}
-          height={11}
-          className="mn-bag__bar"
-          label={<span>{`${count} / ${cap}`}</span>}
-        />
-      </span>
-      <span
-        className={`px-btn px-btn--sm ${count && value ? 'px-btn--gold' : 'px-btn--iron'} mn-bag__sell`}
-      >
-        {count && value ? (
-          <>
-            <span>{t('mineHud.bag.sell', { sum: fmtShort(value) })}</span>
-            <i className="mn-coin mn-coin--s" aria-hidden="true" />
-          </>
-        ) : count ? (
-          <>
-            <GxIcon name="anvil" size={7 * u} /> <span>{t('mineHud.bag.toBox')}</span>
-          </>
-        ) : (
-          <span>{t('mineHud.bag.empty')}</span>
-        )}
-      </span>
-      <KeyHint action="sell" />
-    </button>
+      deps={[getLang(), full, !!cart, count, cap, value, u]}
+      render={() => (
+        <button
+          type="button"
+          ref={bagRef}
+          className={`mn-bag px-f${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
+          {...press}
+          onClick={() => live.current.sell()}
+          aria-label={t('input.action.sell')}
+          data-tip={t('input.action.sell')}
+          data-tip-key="sell"
+        >
+          <i className="mn-pic mn-pic--bag mn-bag__ico" data-hop="" aria-hidden="true" />
+          <span className="mn-bag__mid">
+            <span className="mn-bag__title">{t('inv.lim.bag')}</span>
+            <Bar
+              value={count / cap}
+              tone={full ? 'gold' : 'green'}
+              height={11}
+              className="mn-bag__bar"
+              label={<span>{`${count} / ${cap}`}</span>}
+            />
+          </span>
+          <span
+            className={`px-btn px-btn--sm ${count && value ? 'px-btn--gold' : 'px-btn--iron'} mn-bag__sell`}
+          >
+            {count && value ? (
+              <>
+                <span>{t('mineHud.bag.sell', { sum: fmtShort(value) })}</span>
+                <i className="mn-coin mn-coin--s" aria-hidden="true" />
+              </>
+            ) : count ? (
+              <>
+                <GxIcon name="anvil" size={7 * u} /> <span>{t('mineHud.bag.toBox')}</span>
+              </>
+            ) : (
+              <span>{t('mineHud.bag.empty')}</span>
+            )}
+          </span>
+          <KeyHint action="sell" />
+        </button>
+      )}
+    />
   );
 
   // Док (v2.67 → UI v2): шесть крупных кнопок под большим пальцем. Каждая
   // открывает свой экран; горячие клавиши — на кнопках (клавиатура, геймпад).
+  const nestReady = prison.nest.some((x) => x.left <= 0);
+  const pet0 = prison.squad[0];
   const dock = (
-    <nav key="dock" ref={dockRef} className="mn-dock px-dark" aria-label={t('mineHud.dock.camp')}>
-      <button
-        type="button"
-        ref={forgeRef}
-        className={`px-btn px-btn--iron px-f mn-dock__btn${forgeReady ? ' is-ready' : ''}`}
-        data-tip={t('input.action.forge')}
-        data-tip-key="forge"
-        onClick={() => {
-          tapLight();
-          setForgeOpen(true);
-        }}
-      >
-        <span className="mn-dock__ico" data-hop="">
-          <PickIcon pick={pick} size={dockIco} />
-        </span>
-        <DockLabel text={t('mineHud.dock.forge')} />
-        {forgeReady && (
-          <span className="mn-dock__badge">
-            <Badge gold>!</Badge>
-          </span>
-        )}
-        <KeyHint action="forge" />
-      </button>
-      <button
-        type="button"
-        className="px-btn px-btn--iron px-f mn-dock__btn"
-        data-tip={t('input.action.books')}
-        data-tip-key="books"
-        onClick={() => openScreen('enchant')}
-      >
-        <span className="mn-dock__ico">
-          <i className="mn-pic mn-pic--books" aria-hidden="true" />
-        </span>
-        <DockLabel text={t('mineHud.dock.books')} />
-        {enchReady && (
-          <span className="mn-dock__badge">
-            <Badge>!</Badge>
-          </span>
-        )}
-        <KeyHint action="books" />
-      </button>
-      <button
-        type="button"
-        ref={chestRef}
-        className="px-btn px-btn--iron px-f mn-dock__btn"
-        data-tip={t('input.action.chests')}
-        data-tip-key="chests"
-        onClick={() => openScreen('cases')}
-      >
-        <span className="mn-dock__ico" data-hop="">
-          <ChestIcon size={dockIco} />
-        </span>
-        <DockLabel text={t('mineHud.dock.chests')} />
-        {prison.keys > 0 && (
-          <span className="mn-dock__badge">
-            <Badge gold>{shortCount(prison.keys)}</Badge>
-          </span>
-        )}
-        <KeyHint action="chests" />
-      </button>
-      <button
-        type="button"
-        className="px-btn px-btn--iron px-f mn-dock__btn"
-        data-tip={t('input.action.pets')}
-        data-tip-key="pets"
-        onClick={() => openScreen('pets')}
-      >
-        <span className="mn-dock__ico" ref={petRef}>
-          {prison.squad[0] ? (
-            <PetArt
-              id={prison.squad[0]}
-              size={dockIco}
-              v={petLook(prison.pets[prison.squad[0]])}
-              still
-            />
-          ) : (
-            <i className="px-i pxi-paw mn-dock__mask" aria-hidden="true" />
-          )}
-        </span>
-        <DockLabel text={t('mineHud.dock.pets')} />
-        {prison.nest.some((x) => x.left <= 0) && (
-          <span className="mn-dock__badge">
-            <Badge>!</Badge>
-          </span>
-        )}
-        <KeyHint action="pets" />
-      </button>
-      <button
-        type="button"
-        className="px-btn px-btn--iron px-f mn-dock__btn"
-        data-tip={t('input.action.inventory')}
-        data-tip-key="inventory"
-        onClick={() => {
-          tapLight();
-          setInvOpen(true);
-        }}
-      >
-        <span className="mn-dock__ico">
-          <i className="mn-pic mn-pic--bag" aria-hidden="true" />
-        </span>
-        <DockLabel text={t('input.action.inventory')} />
-        <KeyHint action="inventory" />
-      </button>
-      <button
-        type="button"
-        className="px-btn px-btn--iron px-f mn-dock__btn"
-        data-tip={t('input.action.camp')}
-        data-tip-key="camp"
-        onClick={() => openScreen('more')}
-      >
-        <span className="mn-dock__ico">
-          <i className="mn-pic mn-pic--camp" aria-hidden="true" />
-        </span>
-        <DockLabel text={t('mineHud.dock.camp')} />
-        {campBadge && (
-          <span className="mn-dock__badge">
-            <Badge>!</Badge>
-          </span>
-        )}
-        <KeyHint action="camp" />
-      </button>
-    </nav>
+    <Keep
+      key="dock"
+      deps={[
+        getLang(),
+        forgeReady,
+        enchReady,
+        prison.keys,
+        pet0,
+        petLook(prison.pets[pet0]),
+        nestReady,
+        campBadge,
+        dockIco,
+        pick,
+      ]}
+      render={() => (
+        <nav ref={dockRef} className="mn-dock px-dark" aria-label={t('mineHud.dock.camp')}>
+          <button
+            type="button"
+            ref={forgeRef}
+            className={`px-btn px-btn--iron px-f mn-dock__btn${forgeReady ? ' is-ready' : ''}`}
+            {...press}
+            data-tip={t('input.action.forge')}
+            data-tip-key="forge"
+            onClick={() => {
+              tapLight();
+              setForgeOpen(true);
+            }}
+          >
+            <span className="mn-dock__ico" data-hop="">
+              <PickIcon pick={pick} size={dockIco} />
+            </span>
+            <DockLabel text={t('mineHud.dock.forge')} />
+            {forgeReady && (
+              <span className="mn-dock__badge">
+                <Badge gold>!</Badge>
+              </span>
+            )}
+            <KeyHint action="forge" />
+          </button>
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
+            data-tip={t('input.action.books')}
+            data-tip-key="books"
+            onClick={() => openScreen('enchant')}
+          >
+            <span className="mn-dock__ico">
+              <i className="mn-pic mn-pic--books" aria-hidden="true" />
+            </span>
+            <DockLabel text={t('mineHud.dock.books')} />
+            {enchReady && (
+              <span className="mn-dock__badge">
+                <Badge>!</Badge>
+              </span>
+            )}
+            <KeyHint action="books" />
+          </button>
+          <button
+            type="button"
+            ref={chestRef}
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
+            data-tip={t('input.action.chests')}
+            data-tip-key="chests"
+            onClick={() => openScreen('cases')}
+          >
+            <span className="mn-dock__ico" data-hop="">
+              <ChestIcon size={dockIco} />
+            </span>
+            <DockLabel text={t('mineHud.dock.chests')} />
+            {prison.keys > 0 && (
+              <span className="mn-dock__badge">
+                <Badge gold>{shortCount(prison.keys)}</Badge>
+              </span>
+            )}
+            <KeyHint action="chests" />
+          </button>
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
+            data-tip={t('input.action.pets')}
+            data-tip-key="pets"
+            onClick={() => openScreen('pets')}
+          >
+            <span className="mn-dock__ico" ref={petRef}>
+              {prison.squad[0] ? (
+                <PetArt
+                  id={prison.squad[0]}
+                  size={dockIco}
+                  v={petLook(prison.pets[prison.squad[0]])}
+                  still
+                />
+              ) : (
+                <i className="px-i pxi-paw mn-dock__mask" aria-hidden="true" />
+              )}
+            </span>
+            <DockLabel text={t('mineHud.dock.pets')} />
+            {nestReady && (
+              <span className="mn-dock__badge">
+                <Badge>!</Badge>
+              </span>
+            )}
+            <KeyHint action="pets" />
+          </button>
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
+            data-tip={t('input.action.inventory')}
+            data-tip-key="inventory"
+            onClick={() => {
+              tapLight();
+              setInvOpen(true);
+            }}
+          >
+            <span className="mn-dock__ico">
+              <i className="mn-pic mn-pic--bag" aria-hidden="true" />
+            </span>
+            <DockLabel text={t('input.action.inventory')} />
+            <KeyHint action="inventory" />
+          </button>
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
+            data-tip={t('input.action.camp')}
+            data-tip-key="camp"
+            onClick={() => openScreen('more')}
+          >
+            <span className="mn-dock__ico">
+              <i className="mn-pic mn-pic--camp" aria-hidden="true" />
+            </span>
+            <DockLabel text={t('mineHud.dock.camp')} />
+            {campBadge && (
+              <span className="mn-dock__badge">
+                <Badge>!</Badge>
+              </span>
+            )}
+            <KeyHint action="camp" />
+          </button>
+        </nav>
+      )}
+    />
   );
 
   const layout = wide

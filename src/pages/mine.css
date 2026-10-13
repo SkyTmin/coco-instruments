@@ -650,8 +650,6 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 .mn-rank.is-down > :not(.px-keyhint, .mn-rank__ready),
 .mn-quest:active > *,
 .mn-quest.is-down > *,
-.mn-item:active > .px-slot__art,
-.mn-item.is-down > .px-slot__art,
 .mn-parcel:active > img,
 .mn-parcel.is-down > img,
 .mn-bag:active > :not(.px-keyhint, .mn-bag__sell),
@@ -1095,7 +1093,8 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
   padding-right: 0;
   white-space: normal;
 }
-.mn-dock__btn:active {
+.mn-dock__btn:active,
+.mn-dock__btn.is-down {
   padding-left: calc(2 * var(--u));
   padding-right: 0;
 }
