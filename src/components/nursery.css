@@ -141,11 +141,11 @@
 }
 .nur-show--r3 .nur-stage,
 .nur-show--r4 .nur-stage {
-  --st-s3: color-mix(in srgb, var(--rc) 38%, rgb(242 222 182 / 0.45));
+  --st-s3: color-mix(in srgb, var(--rc) 30%, rgb(242 222 182 / 0.45));
 }
 .nur-show--r5 .nur-stage {
-  --st-s2: color-mix(in srgb, var(--rc) 22%, rgb(251 239 214 / 0.75));
-  --st-s3: color-mix(in srgb, var(--rc) 45%, rgb(242 222 182 / 0.45));
+  --st-s2: color-mix(in srgb, var(--rc) 12%, rgb(251 239 214 / 0.75));
+  --st-s3: color-mix(in srgb, var(--rc) 38%, rgb(242 222 182 / 0.45));
 }
 .nur-stage__xp {
   grid-area: room;
@@ -195,7 +195,8 @@
   display: flex;
   align-items: center;
   gap: calc(3 * var(--u));
-  height: max(calc(var(--px-fs-hero) * 1.15), var(--row-st));
+  /* one line of the hero size, or two lines of the label size (a long name on a narrow plate) */
+  height: max(calc(var(--px-fs-hero) * 1.15), calc(var(--px-fs-sm) * 2.05), var(--row-st));
   min-width: 0;
 }
 .nur-plate__nm {
@@ -204,17 +205,20 @@
   container: nur-name / inline-size;
 }
 /* `.nur` in front: the camp sheet's `.gx-panel--wood h3` shadow must not win. One line, the
-   size shrinks for long names (container width ÷ length) so the row height never changes. */
+   size shrinks for long names (container width ÷ length); never below the label size — a name
+   that still doesn't fit wraps to two lines of it («Panzerknacker-Waschbär» at 360). The row
+   height is fixed either way. */
 .nur .nur-plate__name {
   margin: 0;
+  height: 100%;
   display: flex;
   align-items: center;
-  font: 400 var(--px-fs-hero) / 1.15 var(--px-head);
-  font-size: min(var(--px-fs-hero), calc(100cqi / (var(--len, 12) * 0.7)));
+  font: 400 var(--px-fs-hero) / 1 var(--px-head);
+  font-size: max(var(--px-fs-sm), min(var(--px-fs-hero), calc(100cqi / (var(--len, 12) * 0.67))));
   color: var(--rc, var(--px-gold));
   text-shadow: 0 var(--u) 0 #000;
-  white-space: nowrap;
   overflow: hidden;
+  overflow-wrap: break-word;
 }
 .nur-plate__row,
 .nur-plate__roles {
@@ -229,9 +233,34 @@
 }
 .nur-plate__roles {
   gap: calc(2 * var(--u));
-  /* clipped sideways only: the «+N» hit area reaches above and below the row */
+  /* the «+N» hit area reaches above and below the row; the chips never overflow (see below) */
   overflow: visible;
-  overflow-x: clip;
+  container: nur-roles / inline-size;
+  font-size: var(--px-fs-sm);
+}
+/* Three chips + «+N» need ≈ 17.2 em of the label size (de «+42 %»); a narrower plate (360-px
+   phones, the large text size) shows two chips + «+N+1» — both variants are rendered, CSS picks
+   one. Three-digit values need ≈ 19 em (`is-big`). */
+.nur-chip.nur-chip--more2 {
+  display: none;
+}
+@container nur-roles (max-width: 17.2em) {
+  .nur-chip.nur-chip--3,
+  .nur-chip.nur-chip--more:not(.nur-chip--more2) {
+    display: none;
+  }
+  .nur-chip.nur-chip--more2 {
+    display: inline-flex;
+  }
+}
+@container nur-roles (max-width: 19em) {
+  .is-big > .nur-chip.nur-chip--3,
+  .is-big > .nur-chip.nur-chip--more:not(.nur-chip--more2) {
+    display: none;
+  }
+  .is-big > .nur-chip.nur-chip--more2 {
+    display: inline-flex;
+  }
 }
 .nur-lv {
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
@@ -326,7 +355,7 @@
   flex: none;
   gap: var(--u);
   height: calc(var(--st, 24px) + 4px);
-  padding: 0 calc(3 * var(--u)) 0 calc(2 * var(--u));
+  padding: 0 var(--u);
   margin: 0;
   border: 0;
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
@@ -334,10 +363,10 @@
   background: var(--chip);
   white-space: nowrap;
 }
-/* «+N»: at least 44 × 28 visible, the hit area 44 high (Apple HIG) */
+/* «+N»: 36 × 28 visible, the hit area 44 × 44 (Apple HIG) */
 .nur-chip--more {
   justify-content: center;
-  min-width: 44px;
+  min-width: 36px;
   cursor: pointer;
   color: var(--px-gold);
   -webkit-tap-highlight-color: transparent;
@@ -345,7 +374,7 @@
 .nur-chip--more::before {
   content: '';
   position: absolute;
-  inset: min(0px, calc((100% - 44px) / 2)) 0;
+  inset: min(0px, calc((100% - 44px) / 2)) -4px;
 }
 .nur-chip--note {
   background: none;
@@ -729,6 +758,14 @@
   display: flex;
   gap: calc(3 * var(--u));
   align-items: stretch;
+  container: nur-acts / inline-size;
+}
+/* a narrow phone: the grid button drops its count (it is the drawer's title) so «take along /
+   leave home» stays on one line */
+@container nur-acts (max-width: 16em) {
+  .nur-strip__open .px-num {
+    display: none;
+  }
 }
 .nur-acts > .px-btn--wide {
   flex: 1 1 auto;
@@ -739,11 +776,11 @@
 .nur--wide .nur-side > .nur-acts {
   margin-top: auto;
 }
-/* the action bar is 40 px high (critic's budget); the hit areas reach 44 */
+/* the action bar is 40 px high (critic's budget); the hit areas reach 44 (into the gaps) */
 .nur-acts .px-btn::before {
   content: '';
   position: absolute;
-  inset: -2px 0;
+  inset: -2px -3px;
 }
 .nur-acts__info {
   position: relative;

@@ -185,7 +185,9 @@ const padSquad = (squad: PetId[], n: number): SquadView =>
 const sameList = (a: readonly (PetId | null)[], b: readonly PetId[]) =>
   a.length === b.length && a.every((x, i) => x === b[i]);
 
-export function Nursery({ say }: { say: (text: string) => void }) {
+/** Memoised: the camp re-renders every second (`useNow` in `PrisonCamp`) — the Nursery only
+ *  when the store or its own state changes (`say` from `PetsTab` is stable). */
+export const Nursery = memo(function Nursery({ say }: { say: (text: string) => void }) {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const setSquad = useFinanceStore((s) => s.prisonSquadSet);
@@ -434,31 +436,39 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     (a, b) => (sb[b] ?? 0) - (sb[a] ?? 0) || STATS.indexOf(a) - STATS.indexOf(b),
   );
   const shown = ranked.slice(0, MAX_CHIPS);
+  // A narrow plate shows two chips + «+N+1» (nursery.css picks the variant by the row's width).
+  const moreBtn = (n: number, cls: string) => (
+    <button
+      type="button"
+      className={`nur-chip nur-chip--more${cls} px-f`}
+      aria-label={t('nursery.details')}
+      data-tip={t('nursery.details')}
+      onClick={() => {
+        tapLight();
+        setInfo(true);
+      }}
+    >
+      +{n}
+    </button>
+  );
   const roles = srec ? (
     <>
-      {shown.map((s) => {
+      {shown.map((s, i) => {
         const full = t(`nursery.role.${s}.text`, { v: pctV(sb[s] ?? 0) });
         return (
-          <span key={s} className="nur-chip" data-tip={full} aria-label={full}>
+          <span
+            key={s}
+            className={`nur-chip${i === 2 ? ' nur-chip--3' : ''}`}
+            data-tip={full}
+            aria-label={full}
+          >
             <StatIcon stat={s} />
             <b className="px-num">{t('nursery.bonus', { v: pctI(sb[s] ?? 0) })}</b>
           </span>
         );
       })}
-      {shown.length < ranked.length && (
-        <button
-          type="button"
-          className="nur-chip nur-chip--more px-f"
-          aria-label={t('nursery.details')}
-          data-tip={t('nursery.details')}
-          onClick={() => {
-            tapLight();
-            setInfo(true);
-          }}
-        >
-          +{ranked.length - shown.length}
-        </button>
-      )}
+      {shown.length < ranked.length && moreBtn(ranked.length - shown.length, '')}
+      {shown.length === MAX_CHIPS && moreBtn(ranked.length - 2, ' nur-chip--more2')}
     </>
   ) : (
     <span className="nur-chip nur-chip--note">{t('nursery.notYet')}</span>
@@ -485,7 +495,9 @@ export function Nursery({ say }: { say: (text: string) => void }) {
         </span>
       </div>
       <div className="nur-plate__row">
-        <span className="nur-rar">{t(`nursery.rarity.r${sdef.rarity}` as 'nursery.rarity.r0')}</span>
+        <span className="nur-rar">
+          {t(`nursery.rarity.r${sdef.rarity}` as 'nursery.rarity.r0')}
+        </span>
         {!!srec?.v && (
           <span
             className="nur-gold"
@@ -501,15 +513,15 @@ export function Nursery({ say }: { say: (text: string) => void }) {
         )}
         {srec && <span className="nur-lv">{t('common.level', { n: slv.level })}</span>}
       </div>
-      <div className="nur-plate__roles">{roles}</div>
+      <div
+        className={`nur-plate__roles${shown.some((s) => pctI(sb[s] ?? 0) >= 100) ? ' is-big' : ''}`}
+      >
+        {roles}
+      </div>
       <Bar
         value={srec ? (slv.need ? slv.into / slv.need : 1) : 0}
         label={
-          !srec
-            ? ''
-            : !slv.need
-              ? t('nursery.lvMax')
-              : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`
+          !srec ? '' : !slv.need ? t('nursery.lvMax') : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`
         }
       />
     </div>
@@ -541,7 +553,10 @@ export function Nursery({ say }: { say: (text: string) => void }) {
   const squad = (
     <section className="nur-squad" aria-label={t('nursery.squad')}>
       <div className="nur-squad__head">
-        <span className="nur-squad__t" data-tip={layout === 'land' ? t('nursery.squadHint') : undefined}>
+        <span
+          className="nur-squad__t"
+          data-tip={layout === 'land' ? t('nursery.squadHint') : undefined}
+        >
           <Heading className="nur-squad__title">{t('nursery.squad')}</Heading>
         </span>
         {layout !== 'land' && <span className="nur-squad__hint">{t('nursery.squadHint')}</span>}
@@ -592,14 +607,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
               </Slot>
             );
           return (
-            <SquadSlot
-              key={i}
-              id={id}
-              rec={r}
-              selected={sel === id}
-              size={big}
-              onPick={onPick}
-            />
+            <SquadSlot key={i} id={id} rec={r} selected={sel === id} size={big} onPick={onPick} />
           );
         })}
       </div>
@@ -810,7 +818,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
       )}
     </div>
   );
-}
+});
 
 /** A collection cell — memoised: a switch re-renders the two cells whose selection changed, not
  *  all eighteen (the worst frame of a switch was 220–292 ms at 4×). The tip is built on demand. */
