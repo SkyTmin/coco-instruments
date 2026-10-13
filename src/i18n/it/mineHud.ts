@@ -82,7 +82,7 @@ export const mineHud: Translation<typeof ru> = {
       other: 'Si apre tra {n} blocchi',
     },
     crew: 'Squadra: +{coins} monete, +{tokens} gettoni',
-    prestige: 'Prestigio {n}: +2 punti abilità, vendita ×{x}',
+    prestige: 'Prestigio {n}: +2 punti talento, vendita ×{x}',
     forestAt: 'Il bosco si apre al grado {rank}',
   },
   hud: {
@@ -166,7 +166,7 @@ export const mineHud: Translation<typeof ru> = {
   },
   pres: {
     sell: 'Vendita più cara',
-    points: 'Punti abilità',
+    points: 'Punti talento',
     keys: 'Chiavi',
     keep: 'Restano:',
     go: 'Prestigio · {sum}',

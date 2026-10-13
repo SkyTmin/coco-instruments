@@ -12,7 +12,6 @@ import type { AxeEnchId } from '@/lib/forest';
 
 const k = (s: string) => s as Key;
 
-export const eggName = (id: string) => t(k(`campData.egg.${id}`));
 export const handleName = (id: string) => t(k(`campData.handle.${id}`));
 /** Axe by its index in `AXES` (the save keeps the index). */
 export const axeName = (i: number) => t(k(`campData.axe.${AXES[i]?.id}`));

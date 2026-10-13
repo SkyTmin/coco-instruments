@@ -2,12 +2,6 @@ import type { Translation } from '../types';
 import type { campData as ru } from '../ru/campData';
 
 export const campData: Translation<typeof ru> = {
-  egg: {
-    moss: 'Huevo de musgo',
-    stone: 'Huevo de piedra',
-    crystal: 'Huevo de cristal',
-    dragon: 'Huevo de dragón',
-  },
   handle: {
     birch: 'Mango de abedul',
     larch: 'Mango de alerce',

@@ -70,7 +70,7 @@ export const mineHud: Translation<typeof ru> = {
     bagEmpty: 'Rucksack leer — grab',
     parcelLeft: { one: 'Öffnet sich in {n} Block', other: 'Öffnet sich in {n} Blöcken' },
     crew: 'Trupp: +{coins} Münzen, +{tokens} Tokens',
-    prestige: 'Prestige {n}: +2 Skillpunkte, Verkauf ×{x}',
+    prestige: 'Prestige {n}: +2 Talentpunkte, Verkauf ×{x}',
     forestAt: 'Der Wald öffnet ab Rang {rank}',
   },
   hud: {
@@ -148,7 +148,7 @@ export const mineHud: Translation<typeof ru> = {
   },
   pres: {
     sell: 'Teurer verkaufen',
-    points: 'Skillpunkte',
+    points: 'Talentpunkte',
     keys: 'Schlüssel',
     keep: 'Bleibt dir:',
     go: 'Prestige · {sum}',

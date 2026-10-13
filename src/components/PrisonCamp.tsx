@@ -153,11 +153,11 @@ import {
   axeName,
   benchName,
   benchWho,
-  eggName,
   handleName,
   speciesName,
   woodOf,
 } from '@/i18n/data-camp';
+import { eggName } from '@/i18n/data-books';
 import { bookName, findName, findText, mileText, mileTitle, nameIn } from '@/i18n/data-mine';
 
 const fmt = (n: number) => fmtNum(n);

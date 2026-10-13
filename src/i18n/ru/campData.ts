@@ -1,11 +1,5 @@
 /** Camp data by id (generated from src/lib: prison HANDLES, pets EGGS, forest AXES/SPECIES/AXE_ENCHANTS/BENCH_ITEMS; finds and achievements are T1's areas finds/miles). «gen» = the wood form after «boards» in each language. */
 export const campData = {
-  egg: {
-    moss: 'Мшистое яйцо',
-    stone: 'Каменное яйцо',
-    crystal: 'Кристальное яйцо',
-    dragon: 'Драконье яйцо',
-  },
   handle: {
     birch: 'Берёзовая рукоять',
     larch: 'Лиственничная рукоять',

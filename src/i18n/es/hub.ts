@@ -111,7 +111,7 @@ export const hub: Translation<typeof ru> = {
       many: 'Tienes {n} de logros: recoge los premios.',
       other: 'Tienes {n} logros: recoge los premios.',
     },
-    perks: 'Puntos de habilidad libres: {n}. Repártelos.',
+    perks: 'Puntos de talento libres: {n}. Repártelos.',
     idle: 'Trabaja. El campo lo ve todo.',
     finds: 'Los hallazgos de la mina, a la colección. Cada uno sube la venta.',
   },

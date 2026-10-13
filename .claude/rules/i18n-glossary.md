@@ -155,7 +155,7 @@ feminine, ES masculine «el orbe»); the top tier stays a noun («Relic»), as i
 | Находка | find | trouvaille | buluntu | Fund | hallazgo | reperto |
 | Смена (5-min summary) | Shift | Poste | Vardiya | Schicht | Turno | Turno |
 | Вагонетка | Minecart | Wagonnet | Vagon | Lore | Vagoneta | Carrello |
-| очки навыков | skill points | points de talent | yetenek puanı | Skillpunkte | puntos de habilidad | punti abilità |
+| Навыки / очки навыков | Skills / skill points | Talents / points de talent | Yetenekler / yetenek puanı | Talente / Talentpunkte | Talentos / puntos de talento | Talenti / punti talento |
 | Гарантия (pity block) | guaranteed | garanti | garanti | Garantie | garantizado | garantito |
 
 Pick TITLES (forge header, books tab) are the full names `books.pick` via `pickTitle(i)` /
@@ -164,7 +164,7 @@ merge — T1's «Spitzhacke Eisen» read like a model code). Inside sentences (`
 `norm.pick`, `forge.say.equip`) the short modifier `mine.pick` still goes into «{name}», because
 Russian declines «кирку/кирка» around it; DE reads «die Spitzhacke Eisen» there. Names inside a sentence go through `nameIn()` (`src/i18n/data-mine.ts`):
 lower case everywhere except German. FR strings use a no-break space before `: ! ? ; %` and
-inside « » (as in round 1). DE «Kumpel» stays the pet; the dock's «Питомцы» is «Tiere» (short).
+inside « » (as in round 1). Skills follow the MMO «talent» word in fr/de/es/it (lead unified T1 and T2). DE «Kumpel» stays the pet; the dock's «Питомцы» is «Tiere» (short).
 
 ## Wave 2 — Books, chests, eggs (T4: `books`, `chests`, `eggs`)
 | ru | en | fr | tr | de | es | it | why |

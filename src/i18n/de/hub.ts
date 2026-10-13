@@ -106,7 +106,7 @@ export const hub: Translation<typeof ru> = {
       one: 'Du hast {n} Erfolg — hol dir die Belohnung.',
       other: 'Du hast {n} Erfolge — hol dir die Belohnungen.',
     },
-    perks: 'Freie Skillpunkte: {n}. Verteil sie.',
+    perks: 'Freie Talentpunkte: {n}. Verteil sie.',
     idle: 'Arbeite. Das Lager sieht alles.',
     finds: 'Funde aus der Mine kommen in die Sammlung. Jeder hebt den Verkauf.',
   },
