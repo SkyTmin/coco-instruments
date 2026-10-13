@@ -510,6 +510,8 @@
 .nur-info__body {
   display: grid;
   gap: calc(4 * var(--u));
+  /* the sheet body's own 2 u is tight against the wood bevel for a line of text */
+  padding-inline: calc(2 * var(--u));
 }
 .nur-info__grp {
   display: grid;
@@ -627,52 +629,15 @@
   color: var(--px-muted);
 }
 
-   The camp sheet around the Nursery. PrisonCamp's GxSheet is not ours to edit, so the Nursery
-   screen restyles it through :has(): pixel wood frame, ribbon title, dark body, full height,
-   wide on landscape/desktop. The eggs tab keeps the parchment body (its content is still drawn
-   for it); the frame and ribbon stay pixel on both tabs, so switching tabs doesn't flicker.
-   ============================================================================================== */
-.gx-camp.is-single:has(.ppn) {
-  height: calc(100% - var(--safe-top, 0px) - var(--content-top, 0px) - 26px);
-}
-html[data-ff='phone-landscape'] .gx-camp.is-single:has(.ppn),
-html[data-ff='desktop'] .gx-camp.is-single:has(.ppn),
-html[data-ff='tablet'] .gx-camp.is-single:has(.ppn) {
-  width: min(calc(100% - 4 * var(--u)), calc(480 * var(--u)));
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__frame {
-  flex: 1 1 auto;
-  border-width: var(--u);
-  border-style: solid;
-  border-color: transparent;
-  border-image-source: var(--pxk-frame-wood);
-  border-image-slice: var(--pxk-frame-wood-s);
-  border-image-width: var(--pxk-frame-wood-w);
-  border-image-repeat: repeat;
-  background: none;
-  image-rendering: pixelated;
-  padding: calc(12 * var(--u)) calc(6 * var(--u)) calc(6 * var(--u) + var(--safe-bottom, 0px));
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__body {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  border-radius: 0;
-  box-shadow: none;
-  padding: calc(3 * var(--u));
-}
-.gx-camp.is-single:has(.ppn.is-pets) .gx-sheet__body {
-  overflow: hidden;
-  border-width: var(--u);
-  border-image-source: var(--pxk-frame-well);
-  border-image-slice: var(--pxk-frame-well-s);
-  border-image-width: var(--pxk-frame-well-w);
-  border-image-repeat: stretch;
-  padding: calc(4 * var(--u));
-}
-=======
 /* The camp window chrome (frame, ribbon, well body for kit content) lives in gx-px.css (agent C,
-   wave 2) for every camp; here only the Nursery's own fill of the body. */
+   wave 2) for every camp; here only the pets camp's size and the Nursery's fill of the body.
+   The stage must take about half the screen (owner), so on every format the pets window takes
+   the whole height under the header and is wider than other kit windows. `.ppn` wraps both tabs
+   (pets | eggs), so the window keeps one size when the tab changes. */
+.gx-win .gx-win__box.gx-camp:has(.ppn) {
+  --gx-mw: 480;
+  height: 100%;
+}
 .gx-camp:has(.nur) .pcamp-body {
   flex: 1 1 auto;
   min-height: 0;
