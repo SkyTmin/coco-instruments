@@ -8369,27 +8369,6 @@ button.fg-slot {
   opacity: 0.25;
   animation: pch-burst 700ms ease-out both;
 }
-.phs__pillar {
-  position: absolute;
-  left: 50%;
-  top: -45%;
-  bottom: 14%;
-  width: 160px;
-  margin-left: -80px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--rl) 45%, transparent) 35%,
-    color-mix(in srgb, #fff 55%, transparent) 50%,
-    color-mix(in srgb, var(--rl) 45%, transparent) 65%,
-    transparent
-  );
-  -webkit-mask: linear-gradient(180deg, transparent, #000 30%, #000 80%, transparent);
-  mask: linear-gradient(180deg, transparent, #000 30%, #000 80%, transparent);
-  opacity: 0.6;
-  transform-origin: 50% 100%;
-  animation: pch-pillar 900ms ease-out both;
-}
 .phs__floor {
   position: absolute;
   left: 50%;
@@ -8418,159 +8397,6 @@ button.fg-slot {
   height: 220px;
   margin-top: -30px;
   transform-origin: 50% 88%;
-}
-/* Качается всё сильнее: у каждой ступени свой размах и частота. */
-.phs__egg.is-w1 {
-  animation: phs-wob1 900ms ease-in-out infinite;
-}
-.phs__egg.is-w2 {
-  animation: phs-wob2 520ms ease-in-out infinite;
-}
-.phs__egg.is-w3 {
-  animation: phs-wob3 260ms ease-in-out infinite;
-}
-@keyframes phs-wob1 {
-  0%,
-  55%,
-  100% {
-    transform: none;
-  }
-  65% {
-    transform: rotate(-5deg);
-  }
-  78% {
-    transform: rotate(4deg);
-  }
-  90% {
-    transform: rotate(-2deg);
-  }
-}
-@keyframes phs-wob2 {
-  0%,
-  100% {
-    transform: rotate(-6deg);
-  }
-  50% {
-    transform: rotate(6deg) translateY(-2px);
-  }
-}
-@keyframes phs-wob3 {
-  0%,
-  100% {
-    transform: rotate(-8deg) translateX(-2px);
-  }
-  50% {
-    transform: rotate(8deg) translate(2px, -4px);
-  }
-}
-/* Свет изнутри — цвета редкости, сквозь трещины. */
-.phs__leak {
-  position: absolute;
-  inset: -14%;
-  border-radius: 50%;
-  background: radial-gradient(
-    closest-side,
-    var(--rl),
-    color-mix(in srgb, var(--rc) 60%, transparent) 45%,
-    transparent 75%
-  );
-  transition: opacity 180ms;
-}
-.phs__egg .pegg-img {
-  position: relative;
-}
-.phs__cracks {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  filter: drop-shadow(0 0 2px var(--rc)) drop-shadow(0 0 5px var(--rc))
-    drop-shadow(0 0 9px var(--rl));
-}
-.phs__cracks g {
-  opacity: 0;
-}
-.phs__cracks g.is-on {
-  opacity: 1;
-}
-.phs__cracks path {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-/* Половинки скорлупы: одна картинка яйца, срезанная по линии трещины. */
-.phs__half {
-  position: relative;
-  width: 220px;
-  height: 220px;
-  margin-top: -30px;
-  transform-origin: 50% 50%;
-}
-.phs__half--top {
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% 48%,
-    76% 48%,
-    71% 44%,
-    65% 49%,
-    58% 43%,
-    52% 51%,
-    46% 44%,
-    39% 50%,
-    33% 43%,
-    26% 47%,
-    0 47%
-  );
-  animation: phs-top 800ms cubic-bezier(0.2, 0.7, 0.4, 1) both;
-}
-.phs__half--bot {
-  clip-path: polygon(
-    0 47%,
-    26% 47%,
-    33% 43%,
-    39% 50%,
-    46% 44%,
-    52% 51%,
-    58% 43%,
-    65% 49%,
-    71% 44%,
-    76% 48%,
-    100% 48%,
-    100% 100%,
-    0 100%
-  );
-  animation: phs-bot 900ms ease-out both;
-}
-@keyframes phs-top {
-  0% {
-    transform: none;
-    opacity: 1;
-  }
-  60% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-38%, -70%) rotate(-48deg);
-    opacity: 0;
-  }
-}
-@keyframes phs-bot {
-  0% {
-    transform: none;
-    opacity: 1;
-  }
-  40% {
-    transform: translateY(6%) rotate(6deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(12%) rotate(10deg);
-    opacity: 0;
-  }
 }
 .phs__pet {
   position: relative;
@@ -8664,9 +8490,10 @@ button.fg-slot {
 /* Яйца качаются вразнобой и лопаются по очереди: `--i` × `--step`. */
 .phb__egg {
   transform-origin: 50% 88%;
-  animation:
-    phb-wob 520ms calc(var(--i) * -70ms) ease-in-out infinite,
-    pch-mini-out 1ms calc(var(--i) * var(--step) + 200ms) both;
+  animation: phb-wob 520ms calc(var(--i) * -70ms) ease-in-out infinite;
+}
+.phb__egg.is-pop {
+  animation: none;
 }
 @keyframes phb-wob {
   0%,
@@ -8685,7 +8512,7 @@ button.fg-slot {
     transparent
   );
   opacity: 0;
-  animation: phb-pet 340ms calc(var(--i) * var(--step) + 200ms) cubic-bezier(0.2, 0.9, 0.3, 1.4)
+  animation: phb-pet 340ms calc(var(--i) * var(--step) + 250ms) cubic-bezier(0.2, 0.9, 0.3, 1.4)
     both;
 }
 @keyframes phb-pet {
@@ -8810,8 +8637,6 @@ button.fg-slot {
   text-align: center;
 }
 @media (prefers-reduced-motion: reduce) {
-  .phs__egg,
-  .phs__half,
   .phs__pet,
   .phs__rays,
   .phb__egg,

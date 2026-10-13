@@ -81,11 +81,6 @@
   width: 72% !important;
   height: 72% !important;
 }
-.inv-slot > .pegg-img {
-  width: 76% !important;
-  height: 76% !important;
-  object-fit: contain;
-}
 .inv-slot > .pore-ico {
   image-rendering: auto;
 }

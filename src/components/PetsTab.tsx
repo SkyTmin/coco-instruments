@@ -16,6 +16,7 @@ import { EggArt, PetArt } from '@/components/PetArt';
 import { Nursery } from '@/components/Nursery';
 import { Tabs } from '@/ui-px';
 import { useT } from '@/i18n';
+import { PxStrip, preloadPx } from '@/components/PxStrip';
 import { CoinIcon } from '@/components/slot-art';
 import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
@@ -137,6 +138,8 @@ export function PetsTab() {
     primeAudio();
     const res = hatch(i);
     if (!res) return;
+    // Полоса вылупления качается сразу после броска; сцена ждёт её декодирования.
+    void preloadPx('eggs', `hatch-${res.egg}-r${res.rarity}`, 220);
     tapMedium();
     setScene({ res, key: Date.now() });
   };
@@ -542,11 +545,14 @@ function NestSheet({
 
 // ---- Сцена вылупления --------------------------------------------------------
 
-/** Сколько яйцо качается до разлома: чем реже, тем дольше вопрос. */
-const WOBBLE_MS = [1100, 1300, 1600, 2000, 2600, 3200];
+type HPhase = 'egg' | 'burst' | 'reveal' | 'done';
 
-type HPhase = 'w1' | 'w2' | 'w3' | 'burst' | 'reveal' | 'done';
-
+/**
+ * Сцена вылупления: пиксельная полоса `hatch-<яйцо>-r<редкость>` (`lib/props-pixel/eggs.ts`)
+ * играет качку, трещины и разлом сама; звук, вспышка и показ питомца — по её меткам
+ * (`w1…w3`, `crack1…3`, `burst`, `clear`), конец полосы — кнопки. Чем реже, тем дольше
+ * качается (`HATCH_WOB`).
+ */
 function HatchScene({
   res,
   onAgain,
@@ -560,60 +566,37 @@ function HatchScene({
   const r = res.rarity;
   const def = petOf(res.id);
   const rec = p.pets[res.id];
-  const [phase, setPhase] = useState<HPhase>('w1');
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [phase, setPhase] = useState<HPhase>(() => (reduceMotion() ? 'done' : 'egg'));
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => registerEscape(() => closeRef.current()), []);
-  const hatched = phase === 'burst' || phase === 'reveal' || phase === 'done';
+  const hatched = phase !== 'egg';
   const shown = phase === 'reveal' || phase === 'done';
-  const cracks = phase === 'w1' ? 0 : phase === 'w2' ? 1 : phase === 'w3' ? 2 : 3;
-
-  const finish = () => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-    setPhase('done');
-  };
 
   useEffect(() => {
-    if (reduceMotion()) {
-      eggHatch(r);
-      finish();
-      return undefined;
-    }
-    const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
-    const W = WOBBLE_MS[r];
-    eggWobble(0);
-    // Качается сильнее с каждой трещиной; трещины светятся цветом редкости.
-    [0.34, 0.62].forEach((f, j) =>
-      at(W * f, () => {
-        setPhase(j === 0 ? 'w2' : 'w3');
-        eggCrack(j);
-        eggWobble(j + 1);
-        tapLight();
-      }),
-    );
-    at(W * 0.86, () => {
-      eggCrack(2);
-      tapMedium();
-    });
-    at(W, () => {
-      setPhase('burst');
+    if (reduceMotion()) eggHatch(r);
+    // Сцена играет один раз на яйцо (новое яйцо — новый ключ компонента).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onMark = (m: string) => {
+    if (m === 'w1') eggWobble(0);
+    else if (m === 'w2' || m === 'w3') {
+      eggWobble(m === 'w2' ? 1 : 2);
+      tapLight();
+    } else if (m.startsWith('crack')) {
+      const j = Number(m.slice(5)) - 1;
+      eggCrack(j);
+      if (j === 2) tapMedium();
+    } else if (m === 'burst') {
+      setPhase((x) => (x === 'egg' ? 'burst' : x));
       eggHatch(r);
       flashFrame(r >= 4 ? 'mega' : r >= 2 ? 'big' : 'small');
       if (r >= 2) notifySuccess();
       if (r >= 3)
         burstConfetti(40 + 30 * (r - 2), [rarityOf(r).color, rarityOf(r).light, '#ffffff']);
-    });
-    at(W + 260, () => setPhase('reveal'));
-    at(W + 1300, () => setPhase('done'));
-    return () => {
-      timers.current.forEach(clearTimeout);
-      timers.current = [];
-    };
-    // Сцена играет один раз на яйцо (новое яйцо — новый ключ компонента).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    } else if (m === 'clear') setPhase((x) => (x === 'burst' ? 'reveal' : x));
+  };
 
   const moreReady = p.nest.some((x) => x.left <= 0);
   const label =
@@ -628,9 +611,9 @@ function HatchScene({
   return (
     <div
       className={`phs is-${phase} r${r}`}
-      style={{ ...rarityVars(r), '--wob': `${WOBBLE_MS[r]}ms` } as CSSProperties}
+      style={rarityVars(r)}
       onClick={() => {
-        if (phase !== 'done') finish();
+        if (phase !== 'done') setPhase('done');
       }}
     >
       <div className="phs__head">
@@ -640,37 +623,21 @@ function HatchScene({
       <div className="phs__stage">
         {hatched && <i className="phs__rays" aria-hidden="true" />}
         {hatched && <i className="phs__burst" aria-hidden="true" />}
-        {hatched && r >= 3 && <i className="phs__pillar" aria-hidden="true" />}
         <i className="phs__floor" aria-hidden="true" />
         <i className="phs__nest" aria-hidden="true" />
-        {!hatched && (
-          <div className={`phs__egg is-${phase}`}>
-            <i className="phs__leak" style={{ opacity: cracks * 0.3 }} aria-hidden="true" />
-            <EggArt egg={res.egg} size={220} />
-            <svg className="phs__cracks" viewBox="0 0 100 100" aria-hidden="true">
-              <g className={cracks >= 1 ? 'is-on' : ''}>
-                <path d="M 26 47 L 33 43 L 39 50 L 46 44 L 52 51 L 58 43" />
-              </g>
-              <g className={cracks >= 2 ? 'is-on' : ''}>
-                <path d="M 58 43 L 65 49 L 71 44 L 76 48" />
-                <path d="M 46 44 L 44 36 L 48 30" />
-              </g>
-              <g className={cracks >= 3 ? 'is-on' : ''}>
-                <path d="M 39 50 L 37 59 L 41 65" />
-                <path d="M 65 49 L 68 57" />
-              </g>
-            </svg>
+        {phase !== 'done' && (
+          <div className="phs__egg">
+            <PxStrip
+              set="eggs"
+              name={`hatch-${res.egg}-r${r}`}
+              size={220}
+              mode="once"
+              poster={`idle-${res.egg}`}
+              onMark={onMark}
+              onEnd={() => setPhase('done')}
+              label={eggOf(res.egg).name}
+            />
           </div>
-        )}
-        {hatched && (
-          <>
-            <span className="phs__half phs__half--top" aria-hidden="true">
-              <EggArt egg={res.egg} size={220} />
-            </span>
-            <span className="phs__half phs__half--bot" aria-hidden="true">
-              <EggArt egg={res.egg} size={220} />
-            </span>
-          </>
         )}
         {shown && (
           <span className="phs__pet">
@@ -717,6 +684,37 @@ const petsWord = (n: number) =>
  * крупно и живой, остальные списком по редкости (одинаковые сложены).
  * Броски уже сделал стор; экран только показывает. Тап — сразу итог.
  */
+/**
+ * Яйцо в волне «Вылупить все»: дышит кадром покоя, в свой черёд (`at`, мс) играет короткую
+ * полосу `pop-<яйцо>` — разлом на кадре 6 (250 мс), вместе с ним появляется питомец
+ * (`.phb__pet`, задержка `--i × --step + 250ms`).
+ */
+function BatchEgg({ egg, at }: { egg: EggId; at: number }) {
+  const [pop, setPop] = useState(false);
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setPop(true), at);
+    return () => clearTimeout(t);
+  }, [at]);
+  if (gone) return null;
+  return (
+    <span className={`phb__egg${pop ? ' is-pop' : ''}`}>
+      {pop ? (
+        <PxStrip
+          set="eggs"
+          name={`pop-${egg}`}
+          size={40}
+          mode="once"
+          poster={`idle-${egg}`}
+          onEnd={() => setGone(true)}
+        />
+      ) : (
+        <EggArt egg={egg} size={40} />
+      )}
+    </span>
+  );
+}
+
 function HatchBatch({
   list,
   coins,
@@ -743,6 +741,7 @@ function HatchBatch({
       setDone(true);
       return undefined;
     }
+    for (const id of new Set(shown.map((x) => x.egg))) void preloadPx('eggs', `pop-${id}`, 40);
     eggWobble(0);
     const timers: ReturnType<typeof setTimeout>[] = [];
     const ticks = Math.min(12, shown.length);
@@ -811,9 +810,7 @@ function HatchBatch({
                 className="phb__tile"
                 style={{ ...rarityVars(r.rarity), '--i': i } as CSSProperties}
               >
-                <span className="phb__egg">
-                  <EggArt egg={r.egg} size={40} />
-                </span>
+                <BatchEgg egg={r.egg} at={i * step} />
                 <span className="phb__pet">
                   <PetArt id={r.id} size={40} v={petLook(p.pets[r.id])} still />
                 </span>
