@@ -17,6 +17,8 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Romper por fichas',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'fuerza {n}/100',
+    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
+    fuse: 'Fusionar',
   },
   finds: {
     title: 'Hallazgos',

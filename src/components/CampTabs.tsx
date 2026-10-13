@@ -373,6 +373,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const sockPx = fit(40, lay === 'wide' ? 30 : lay === 'one' ? 26 : lay === 'tall' ? 18 : 22, scale, dpr);
   const sockSlot = slotFor(sockPx, scale, 6);
   const inspPx = fit(40, lay === 'wide' ? 30 : 24, scale, dpr);
+  const actSize = lay === 'tall' || lay === 'land' ? 'sm' : undefined;
 
   const b = bonusOf(p);
   const bonus = BONUS_KEYS.filter((k) => b[k] > 0);
@@ -509,14 +510,20 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
         </div>
         <div className={`ctab-insp__line${note ? ' is-note' : ''}`}>{note ?? fuseLine}</div>
         <div className="ctab-insp__acts">
-          <Button kind={shownWorn ? 'secondary' : 'primary'} hint="inspect" onClick={wear}>
+          <Button
+            kind={shownWorn ? 'secondary' : 'primary'}
+            size={actSize}
+            hint="inspect"
+            onClick={wear}
+          >
             {shownWorn ? t('camp.runes.takeOut') : t('camp.runes.wear')}
           </Button>
-          <Button off={!plan} onClick={plan ? doFuse : () => notifyWarning()}>
-            {t('camp.runes.fuse')}
+          <Button size={actSize} off={!plan} onClick={plan ? doFuse : () => notifyWarning()}>
+            {t('ctabs.runes.fuse')}
           </Button>
           <Button
             kind="danger"
+            size={actSize}
             off={shownWorn}
             data-tip={t('ctabs.runes.shatter')}
             aria-label={`${t('ctabs.runes.shatter')}: +${RUNE_SHATTER[shown.tier - 1]}`}

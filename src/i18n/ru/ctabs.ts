@@ -15,6 +15,8 @@ export const ctabs = {
     shatter: 'Разбить на токены',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'сила {n}/100',
+    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
+    fuse: 'Сплавить',
   },
   finds: {
     title: 'Находки',

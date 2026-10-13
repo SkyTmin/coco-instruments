@@ -17,6 +17,8 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Spezza per gettoni',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'forza {n}/100',
+    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
+    fuse: 'Fondi',
   },
   finds: {
     title: 'Reperti',

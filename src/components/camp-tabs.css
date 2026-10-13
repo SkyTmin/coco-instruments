@@ -399,12 +399,12 @@
 .ctab-good__text {
   font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-muted);
-  /* two lines kept even for a short text; German may take a third (the row is that tall for good) */
+  /* two lines kept even for a short text; German / French may take more (that row stays tall) */
   min-height: calc(var(--px-fs-sm) * 2.4);
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
 }
 .ctab-good__buy {
   grid-area: buy;
@@ -545,7 +545,7 @@
     'ahead pouch insp' auto
     'stage pouch insp' minmax(0, 1fr)
     'stage bonus insp' auto
-    / minmax(0, 7fr) minmax(0, 9fr) minmax(0, 10fr);
+    / minmax(0, 6fr) minmax(0, 9fr) minmax(0, 11fr);
 }
 .ctab-runes.ctab--land > .ctab-amulet {
   display: contents;
@@ -573,13 +573,23 @@
   height: calc(var(--ln-sm) * 3);
   -webkit-line-clamp: 3;
 }
-.ctab-runes.ctab--land .ctab-insp__acts {
+/* Rune actions: «Socket it» on its own row, fuse + shatter under it — German «Verschmelzen» never
+   fits a third of the panel. Tablet portrait has no height for a second row: one row of small
+   buttons there (its panel is 150u wide). */
+.ctab-runes:not(.ctab--tall) .ctab-insp__acts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ctab-runes:not(.ctab--tall) .ctab-insp__acts > :first-child {
+  grid-column: 1 / -1;
+}
+.ctab-runes.ctab--land .ctab-insp__acts {
   margin-top: auto;
 }
-.ctab-runes.ctab--land .ctab-insp__acts > :first-child {
-  grid-column: 1 / -1;
+/* (tablet portrait) fixed shares sized for the longest words: tr «Muskaya tak», de «Schmelzen» */
+.ctab-runes.ctab--tall .ctab-insp__acts {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr);
 }
 .ctab-runes.ctab--wide {
   grid-template:
@@ -1037,6 +1047,14 @@
 }
 .ctab-insp__acts > .ctab-reset__btn {
   flex: none;
+}
+/* Phone landscape: the panel is narrow — «Learn» takes the row, the reset sits under it. */
+.ctab--land .ctab-insp--perk .ctab-insp__acts {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.ctab--land .ctab-insp--perk .ctab-insp__acts > :first-child {
+  flex: 1 1 100%;
 }
 .ctab--tall .ctab-insp--perk .ctab-insp__line {
   height: var(--ln-sm);

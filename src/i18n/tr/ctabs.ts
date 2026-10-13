@@ -17,6 +17,8 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Jeton için kır',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'güç {n}/100',
+    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
+    fuse: 'Birleştir',
   },
   finds: {
     title: 'Buluntular',
