@@ -77,7 +77,9 @@ import {
   softThud,
   tierBreak,
   uiBuy,
+  uiClose,
   uiError,
+  uiOpen,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 import { useAction } from '@/input';
@@ -259,6 +261,8 @@ interface Act {
   off?: boolean;
   hide?: boolean;
   armed?: boolean;
+  /** The words of an icon-only button (the phone's anvil). */
+  aria?: string;
   run?: () => void;
 }
 
@@ -270,8 +274,25 @@ function Delta({ v }: { v: number }) {
   );
 }
 
-export function BooksTab() {
+/**
+ * The books: with `onClose` a full-screen window like the forge and the backpack (the mine dock
+ * opens it so — critic ruling 4: the one-tab camp cost 64 px on top and closed with a ✕ at the
+ * other corner); without it, a tab embedded in a multi-tab camp.
+ */
+export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const t = useT();
+  const win = !!onClose;
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!win) return undefined;
+    uiOpen();
+    const off = registerEscape(() => closeRef.current?.());
+    return () => {
+      off();
+      uiClose();
+    };
+  }, [win]);
   const p = useFinanceStore((s) => s.prison);
   const buy = useFinanceStore((s) => s.prisonBookBuy);
   const apply = useFinanceStore((s) => s.prisonBookApply);
@@ -505,7 +526,7 @@ export function BooksTab() {
           ? t('books.canApply')
           : check === 'lower'
             ? t('books.weaker')
-            : t('books.fullPick')}
+            : t('books.noRoomShort')}
       </span>
     );
     fx = effectOf(b.id, b.lvl, p.pickStars);
@@ -568,14 +589,18 @@ export function BooksTab() {
     };
     acts[1] = {
       id: 'anvil',
-      label: (
-        <>
-          {layout !== 'one' && <GxIcon name="anvil" size={u * 8} />}
-          <span className="arm-btn-txt">
-            {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
-          </span>
-        </>
-      ),
+      label:
+        layout === 'one' ? (
+          <GxIcon name="anvil" size={u * 11} />
+        ) : (
+          <>
+            <GxIcon name="anvil" size={u * 8} />
+            <span className="arm-btn-txt">
+              {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
+            </span>
+          </>
+        ),
+      aria: t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] }),
       kind: 'secondary',
       hide: mate < 0,
       run: doAnvil,
@@ -783,14 +808,6 @@ export function BooksTab() {
   if (cur.k === 'book' && b) {
     details = (
       <div className="arm-details bkx-details">
-        {/* Phone portrait: three buttons don't fit a 390-px bar with German words, so the
-            anvil (only when there is a pair) stands here, at the top of the details. */}
-        {mate >= 0 && layout === 'one' && (
-          <Button kind="secondary" size="sm" className="bkx-anvil" onClick={doAnvil}>
-            <GxIcon name="anvil" size={u * 8} />
-            {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
-          </Button>
-        )}
         <div className="bkx-block">
           <Heading sub>{t('books.inPickHead')}</Heading>
           <p>
@@ -836,7 +853,7 @@ export function BooksTab() {
             <p className="arm-muted">{t('books.warn')}</p>
           </div>
         )}
-        {mate >= 0 && layout !== 'one' && (
+        {mate >= 0 && (
           <p className="bkx-note">
             <GxIcon name="anvil" size={u * 8} />{' '}
             {t('books.glue', { lvl: ROMAN[Math.min(b.lvl, ROMAN.length - 1)] })}
@@ -905,13 +922,22 @@ export function BooksTab() {
     <section className="bkx-sec">
       <div className="arm-head">
         <Heading>
-          {rich('books.onPick', {
-            a: <b className="arm-num">{onPick.length}</b>,
-            b: <b className="arm-num">{slots}</b>,
-          })}
+          {layout === 'one' ? (
+            <>
+              {t('books.inPickHead')}{' '}
+              <b className="arm-num">
+                {onPick.length}/{slots}
+              </b>
+            </>
+          ) : (
+            rich('books.onPick', {
+              a: <b className="arm-num">{onPick.length}</b>,
+              b: <b className="arm-num">{slots}</b>,
+            })
+          )}
         </Heading>
       </div>
-      <div className="arm-grid bkx-grid" role="group">
+      <div className="arm-grid bkx-grid bkx-pickgrid" role="group">
         <Slot
           rarity={pk.rarity}
           selected={cur.k === 'pick'}
@@ -1088,12 +1114,13 @@ export function BooksTab() {
 
   const actBar = (
     <div className="arm-acts bkx-acts">
-      {(layout === 'one' ? [acts[0], acts[2]] : acts).map((a) => (
+      {acts.map((a) => (
         <Button
           key={a.id}
           kind={a.kind}
           off={a.off}
-          className={`${a.hide ? 'is-hidden' : ''}${a.armed ? ' is-armed' : ''}${a.off ? ' px-dark' : ''}`}
+          className={`${a.hide ? 'is-hidden' : ''}${a.armed ? ' is-armed' : ''}${a.off ? ' px-dark' : ''}${a.id === 'anvil' && layout === 'one' ? ' bkx-iconbtn' : ''}`}
+          aria-label={a.aria}
           aria-hidden={a.hide || undefined}
           tabIndex={a.hide ? -1 : undefined}
           hint={a === main ? 'inspect' : undefined}
@@ -1120,29 +1147,50 @@ export function BooksTab() {
     </span>
   );
 
+  // Phone portrait: the shelf right under the pick's strip — two rows of books show on open (the
+  // details box and the Enchanter used to fill the list: 0 of 42 cells visible).
   const list = (
     <div className="arm-list bkx-list">
-      {layout === 'one' && details}
       {pickSec}
-      {mageSec}
-      {shelfSec}
+      {layout === 'one' ? shelfSec : mageSec}
+      {layout === 'one' ? mageSec : shelfSec}
     </div>
   );
 
-  return (
+  const body = (
     <div
       ref={root}
-      className={`px arm arm--${layout} is-embed bkx`}
+      className={`px arm arm--${layout} ${win ? 'is-window' : 'is-embed'} bkx`}
       style={{ '--slot': `${cell + 6 * u}px` } as CSSProperties}
+      role={win ? 'dialog' : undefined}
+      aria-label={win ? t('mineHud.dock.books') : undefined}
     >
-      {layout === 'one' && <header className="arm-top bkx-top">{purse}</header>}
+      {win ? (
+        <header className="arm-top">
+          <Button
+            icon="left"
+            label={t('common.back')}
+            className="arm-top__back"
+            onClick={() => {
+              tapLight();
+              onClose?.();
+            }}
+          />
+          <Heading ribbon className="arm-top__title">
+            {t('mineHud.dock.books')}
+          </Heading>
+          {purse}
+        </header>
+      ) : (
+        layout === 'one' && <header className="arm-top bkx-top">{purse}</header>
+      )}
       {showcase}
       {list}
       {layout === 'one' ? (
         actBar
       ) : (
         <aside className="arm-side">
-          {purse}
+          {!win && purse}
           <Panel material="obsidian" className="arm-info">
             <div className="arm-info__head">
               <h3 className="arm-info__name">{name}</h3>
@@ -1222,6 +1270,7 @@ export function BooksTab() {
         )}
     </div>
   );
+  return win ? createPortal(body, document.body) : body;
 }
 
 /** Tooltip of a book cell: effect, chance, and the same enchant in the pick (green / red). */

@@ -71,6 +71,14 @@ export const books = {
   mageName: 'Чародей',
   /** Tier on the showcase: two short lines under the name (the mage line didn't fit). */
   tierFx: 'Какая чара внутри — сюрприз',
+  /** State under the name on the showcase plate (one short line; the rest is in the details). */
+  noRoomShort: 'Мест нет',
+  /** Verdict chip of the book-vs-pick compare row. */
+  weakerShort: 'Слабее',
+  /** The «no room» window: the one line above the enchant cells. */
+  replacePick: 'Выбей одну:',
+  /** The «no room» window: the greyed confirm until an enchant is chosen. */
+  replaceFirst: 'Выбери книгу',
   dust: '{v} пыли',
   onPick: 'Книг в кирке: {a} из {b}',
   offState: 'выключена',

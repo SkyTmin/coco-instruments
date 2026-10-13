@@ -2,15 +2,10 @@
    Skeleton (columns, showcase, stats, actions) — armory.css. The scenes (.pbks*, .pbka*, .pbook*)
    and the Enchanter's portrait overlays (.pbk-mage__*) keep their styles in game-ui.css. */
 
-/* Embedded in the camp window: fills the body, the page never scrolls. */
+/* From the mine dock the books are a full-screen window (`.is-window`, as the forge and the
+   backpack); inside a multi-tab camp they fill the camp's body (`.is-embed`). */
 .bkx {
   min-height: 0;
-}
-/* The books open as a one-tab camp (no tab row to keep steady): like the forge and the backpack,
-   the window takes the whole screen, so the showcase gets half of it. */
-.gx-win > .gx-win__box.gx-camp.is-single:has(.bkx) {
-  --gx-mw: 9999;
-  height: 100%;
 }
 .bkx .bkx-top {
   grid-template-columns: minmax(0, 1fr);
@@ -19,14 +14,14 @@
 .bkx-dust {
   color: var(--px-violet);
 }
-/* Landscape / tablet / desktop: no top row — the purse heads the side column. */
-.bkx.arm--two {
+/* Embedded on landscape / tablet / desktop: no top row — the purse heads the side column. */
+.bkx.is-embed.arm--two {
   grid-template:
     'show show' minmax(0, 13fr)
     'list side' minmax(0, 7fr)
     / minmax(0, 11fr) minmax(0, 9fr);
 }
-.bkx.arm--three {
+.bkx.is-embed.arm--three {
   grid-template:
     'list show side' minmax(0, 1fr)
     / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 6fr);
@@ -45,52 +40,29 @@
 .arm-status.is-full {
   color: var(--px-gold);
 }
-/* The effect line: two lines reserved, so a long effect never pushes the art or the stats. */
+/* The effect line: the small step at a fixed height — one line on a plate across the stage (the
+   longest effect, «+252% лишних блоков добычи», is ~260 px), two on the narrow plate beside the
+   art. The plate stacks under the art on every format, as the forge's: beside it on a phone the
+   plate was 139 px and broke words in the middle («Эффективнос|ть»). */
 .bkx-fx {
   margin: 0;
   hyphens: auto;
-  overflow-wrap: break-word; /* a word wider than the narrow plate breaks where no dictionary */
+  overflow-wrap: normal;
   max-width: 100%;
-  min-height: calc(2 * 1.2 * var(--px-fs));
-  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  height: calc(1.2 * var(--px-fs-sm));
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-text);
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-}
-/* Phone portrait: a book is tall and narrow — beside the plate it stands taller (168 px on
-   390x844) than over a plate of name, state and effect (~145). Picks and items stack. */
-.bkx.arm--one .arm-stage {
-  grid-template:
-    'room id' minmax(0, 1fr)
-    'stats stats' auto
-    / minmax(0, 11fr) minmax(0, 9fr);
-}
-.bkx.arm--one .arm-stage > .arm-id {
-  align-self: center;
-  padding: calc(3 * var(--u));
-}
-.bkx.arm--one .arm-name {
-  --nfs: var(--px-fs);
-}
-/* …and only ~13 characters wide: «+42% к скорости копки» took three lines and lost its end to
-   «…» — three lines reserved there (the plate is far shorter than the book beside it). */
-.bkx.arm--one .arm-stage .bkx-fx {
-  min-height: calc(3 * 1.2 * var(--px-fs-sm));
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-}
-/* The plate beside the art (phone portrait, a wide low stage) is narrow: the smaller step. */
-.arm--one .bkx-fx {
-  min-height: calc(2 * 1.2 * var(--px-fs-sm));
-  font-size: var(--px-fs-sm);
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
 }
 @container arm-show (aspect-ratio > 23 / 20) {
   .arm-stage .bkx-fx {
-    min-height: calc(2 * 1.2 * var(--px-fs-sm));
-    font-size: var(--px-fs-sm);
+    height: calc(2 * 1.2 * var(--px-fs-sm));
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 }
 
@@ -247,4 +219,37 @@
   display: flex;
   flex-wrap: wrap;
   gap: calc(2 * var(--u));
+}
+
+/* Phone portrait list: the pick's places in one strip (scrolls sideways, as the forge's ladder),
+   then the shelf — two rows of books on open at 390x844, one at 360x800. */
+.bkx.arm--one .bkx-list {
+  gap: calc(4 * var(--u));
+}
+.bkx.arm--one .arm-head {
+  margin-bottom: calc(2 * var(--u));
+}
+.arm--one .bkx-pickgrid {
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-auto-columns: var(--slot, calc(26 * var(--u)));
+  justify-content: start;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+/* Phone portrait bar: «В пыль» · anvil (an icon, only with a pair) · «Вписать». */
+.bkx.arm--one .bkx-acts {
+  grid-template-columns: minmax(0, 1fr) calc(26 * var(--u)) minmax(0, 1fr);
+  grid-auto-flow: row;
+}
+.bkx-acts > .px-btn.bkx-iconbtn {
+  padding-inline: 0;
+}
+/* Tablet portrait: the three buttons in one row under the details (stacked they took 252 of the
+   347-px side column and the details collapsed to ~30 px). */
+.bkx.arm--two .arm-side > .arm-acts {
+  grid-auto-flow: column;
 }

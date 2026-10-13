@@ -140,7 +140,7 @@
     'id' auto
     'stats' auto
     / minmax(0, 1fr);
-  gap: calc(3 * var(--u));
+  gap: calc(2 * var(--u));
   overflow: hidden;
 }
 /* A wide, low showcase (phone landscape): the art beside the name plate (as the Nursery), stats
@@ -158,26 +158,55 @@
     align-self: center;
   }
 }
+/* Phone landscape (282 px of stage height): the art takes the whole height and the wider share of
+   the width (≥ 234 px on 844x390, critic: ≥ 60 % of the short side); the plate and the numbers
+   stack beside it, one number per row (number · delta · label). */
+html[data-ff='phone-landscape'] .arm-stage {
+  grid-template:
+    'room id' auto
+    'room stats' minmax(0, 1fr)
+    / minmax(0, 3fr) minmax(0, 2fr);
+}
+html[data-ff='phone-landscape'] .arm-stage > .arm-id {
+  align-self: start;
+}
+html[data-ff='phone-landscape'] .arm-stage > .arm-stats {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--u);
+}
+html[data-ff='phone-landscape'] .arm-stage .arm-stat {
+  grid-template: 'num delta lbl' calc(2 * 1.1 * var(--px-fs-sm)) / auto auto minmax(0, 1fr);
+  align-items: center;
+  padding: var(--u) calc(2 * var(--u));
+}
+html[data-ff='phone-landscape'] .arm-stage .arm-stat > b {
+  font-size: var(--px-fs);
+}
 /* A narrow plate (a phone's width, or beside the art): state and effect wrap into two reserved
    lines of the smaller step. `.arm-stage` in front: the base rules below would win on order. */
 .arm--one .arm-stage .arm-status {
   display: block;
-  overflow-wrap: anywhere;
+  /* never inside a word («Kazmadakin|den»): the dictionary hyphenates where there is one */
+  overflow-wrap: normal;
+  hyphens: auto;
 }
 .arm--one .arm-stage .arm-status > :is(.px-i, .gx-icon) {
   margin-right: var(--u);
 }
+/* the plate spans the stage on a phone: one line of state, a fixed height */
 .arm--one .arm-stage .arm-sub {
-  flex-wrap: wrap;
-  white-space: normal;
-  min-height: calc(2 * 1.2 * var(--px-fs-sm));
+  flex-wrap: nowrap;
+  height: calc(1.2 * var(--px-fs-sm));
+  min-height: 0;
   font-size: var(--px-fs-sm);
   line-height: 1.2;
 }
 @container arm-show (aspect-ratio > 23 / 20) {
   .arm-stage .arm-status {
     display: block;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    hyphens: auto;
   }
   .arm-stage .arm-status > :is(.px-i, .gx-icon) {
     margin-right: var(--u);
@@ -185,7 +214,8 @@
   .arm-stage .arm-sub {
     flex-wrap: wrap;
     white-space: normal;
-    min-height: calc(2 * 1.2 * var(--px-fs-sm));
+    height: calc(2 * 1.2 * var(--px-fs-sm));
+    min-height: 0;
     font-size: var(--px-fs-sm);
     line-height: 1.2;
   }
@@ -219,33 +249,40 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
-  gap: calc(2 * var(--u));
+  gap: var(--u);
   min-width: 0;
-  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  /* fitted to its content (critic: the plate took 118–170 px of the stage, the art 168–198) */
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
   background: color-mix(in srgb, var(--px-ink) 90%, transparent);
   border: var(--u) solid var(--px-ink);
   text-align: center;
   text-shadow: 0 var(--u) 0 var(--px-ink);
 }
-/* Two lines reserved for the name: a long name never pushes the art or the stats. `--nfs` is the
-   size per format; the longest word (`--wlen`, set by `nameFit`) shrinks it to fit one line of
-   the plate, as the Nursery's name — so words break between words, never inside. */
+/* The name on one line: the whole name (`--nlen`, set by `nameFit`) shrinks it to the plate's
+   width down to the small step; a name longer still takes two lines of the small step. The box
+   has that fixed height, so a long name never pushes the art or the stats. */
 .arm-name {
   --nfs: var(--px-fs-big);
   margin: 0;
   display: grid;
-  align-items: end;
+  align-items: center;
   justify-self: stretch;
   min-width: 0;
-  min-height: calc(2 * 1.1 * var(--nfs));
+  height: max(calc(1.1 * var(--nfs)), calc(2 * 1.1 * var(--px-fs-sm)));
   max-width: 100%;
   font: 400 var(--nfs) / 1.1 var(--px-head);
-  font-size: max(var(--px-fs-sm), min(var(--nfs), calc(100cqi / (var(--wlen, 8) * 0.66))));
+  font-size: max(var(--px-fs-sm), min(var(--nfs), calc(100cqi / (var(--nlen, 8) * 0.62))));
   color: var(--rc, var(--px-gold));
-  /* last resort only (a word longer than the hint): the text is an anonymous grid item, so
-     `break-word` would not lower its min size */
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   hyphens: auto;
+}
+/* Beside the art (a wide low stage) the plate is narrow: two lines of the name size, the longest
+   word (`--wlen`) fits one line — words break between words, never inside. */
+@container arm-show (aspect-ratio > 23 / 20) {
+  .arm-stage .arm-name {
+    height: calc(2 * 1.1 * var(--nfs));
+    font-size: max(var(--px-fs-sm), min(var(--nfs), calc(100cqi / (var(--wlen, 8) * 0.66))));
+  }
 }
 html:not([data-ff='phone-portrait']) .arm-name {
   --nfs: var(--px-fs-hero);
@@ -294,13 +331,14 @@ html[data-ff='phone-landscape'] .arm-name {
   display: grid;
   grid-template:
     /* a fixed number row: a delta aligned to an icon's baseline grew it by 2 px on some picks */
-    'num delta' calc(1.25 * var(--px-fs-big))
+    'num delta' calc(1.15 * var(--px-fs-big))
     'lbl lbl' auto
     / auto minmax(0, 1fr);
   align-items: baseline;
   column-gap: calc(2 * var(--u));
   min-width: 0;
-  padding: calc(3 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+  /* compact (critic: the row took 90 px of the stage) — the label is the small step under it */
+  padding: calc(2 * var(--u)) calc(3 * var(--u));
   border-width: var(--u);
   border-style: solid;
   border-color: transparent;
@@ -333,8 +371,8 @@ html[data-ff='phone-landscape'] .arm-name {
 .arm-stat > i {
   grid-area: lbl;
   /* two lines reserved: a long label («blocks a minute», German) wraps instead of «…» */
-  min-height: calc(2 * 1.15 * var(--px-fs-sm));
-  font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
+  min-height: calc(2 * 1.1 * var(--px-fs-sm));
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
   color: var(--px-text);
   overflow: hidden;
   overflow-wrap: break-word;
@@ -343,8 +381,6 @@ html[data-ff='phone-landscape'] .arm-name {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
-  overflow-wrap: anywhere;
-  hyphens: auto;
 }
 .arm-stat > .arm-delta {
   grid-area: delta;
@@ -372,6 +408,9 @@ html[data-ff='phone-landscape'] .arm-name {
 /* ---- List column: headings, grids --------------------------------------------------------- */
 .arm-list {
   grid-area: list;
+  /* one column the list's width: an auto column grew to the forge's 17-slot strip (992 px in a
+     374-px list) and the whole list scrolled sideways, cutting its words */
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -410,7 +449,8 @@ html[data-ff='phone-landscape'] .arm-name {
 }
 .arm-info {
   flex: 1 1 auto;
-  min-height: 0;
+  /* never squeezed to a sliver by the buttons under it (books on a tablet: ~30 px, name cut) */
+  min-height: calc(5 * var(--px-fs));
   min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;

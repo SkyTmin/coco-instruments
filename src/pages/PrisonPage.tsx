@@ -22,6 +22,7 @@ import {
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { ForgeScreen, forgeReadyNow } from '@/components/ForgeScreen';
+import { BooksTab } from '@/components/BooksTab';
 import { Inventory } from '@/components/Inventory';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
@@ -2272,7 +2273,9 @@ export function PrisonPage() {
         ) : null}
       </div>
 
-      {screen && (
+      {/* The books open as a full-screen window, like the forge and the backpack (UI wave 2). */}
+      {screen?.key === 'enchant' && <BooksTab onClose={() => setScreen(null)} />}
+      {screen && screen.key !== 'enchant' && (
         <PrisonCamp
           place="mine"
           only={SCREENS[screen.key].only}
