@@ -59,5 +59,14 @@ export const nursery: Translation<typeof ru> = {
     luck: { name: 'Glückspilz', text: '+{v} % Schlüssel und Funde' },
     rate: { name: 'Zappelphilipp', text: '+{v} % Schlagtempo' },
   },
+  /** Stat nouns of the details table (one line per stat: icon, noun, value). */
+  stat: {
+    loot: 'Beute',
+    sell: 'Verkauf',
+    dmg: 'Abbau',
+    token: 'Tokens',
+    luck: 'Glück',
+    rate: 'Tempo',
+  },
   egg: { moss: 'Moos', stone: 'Stein', crystal: 'Kristall', dragon: 'Drache' },
 };

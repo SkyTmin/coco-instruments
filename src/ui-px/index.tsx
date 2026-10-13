@@ -410,8 +410,9 @@ export function Slot({
   corner?: ReactNode;
   /** Red dot / badge on the corner («new», «can merge»). */
   dot?: ReactNode;
-  /** Rich tooltip (mouse hover, long press on touch). */
-  tip?: ReactNode;
+  /** Rich tooltip (mouse hover, long press on touch). A function is called only when the tip
+   *  shows — a grid of slots doesn't build its tips on every render. */
+  tip?: ReactNode | (() => ReactNode);
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & { children?: ReactNode }) {
   const ref = useRef<HTMLButtonElement>(null);
   const tipState = useTip(ref, tip);
@@ -457,7 +458,10 @@ export function Slot({
 
 /** Rich tooltip for `ref`: mouse hover (after 300 ms) or a long press on touch (450 ms, until
  *  release). Returns the portal to render. */
-export function useTip(ref: RefObject<HTMLElement>, content: ReactNode): ReactNode {
+export function useTip(
+  ref: RefObject<HTMLElement>,
+  content: ReactNode | (() => ReactNode),
+): ReactNode {
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null);
   // Content is new JSX on every render — subscribe once per element, not per render (a
   // re-subscription hid the tip on each store tick).
@@ -502,7 +506,10 @@ export function useTip(ref: RefObject<HTMLElement>, content: ReactNode): ReactNo
     };
   }, [ref, has]);
   if (!pos || !has) return null;
-  return createPortal(<Tooltip {...pos}>{content}</Tooltip>, document.body);
+  return createPortal(
+    <Tooltip {...pos}>{typeof content === 'function' ? content() : content}</Tooltip>,
+    document.body,
+  );
 }
 
 export function Tooltip({
