@@ -1,8 +1,8 @@
 // Pixel UI kit — React components over the baked frames (`kit.gen.css`). Style guide:
 // `.claude/rules/ui-px.md`. Game-only code: no imports from the instruments.
 //
-// Everything is sized in ART pixels (`--u`), uses the pixel fonts (Tiny5 body, Coco Head
-// headings/digits) and the shell's focus/input layer (`@/input`): focusable things carry `px-f`
+// Everything is sized in ART pixels (`--u`), uses the kit type (GxRubik text, Coco Title
+// headings) and the shell's focus/input layer (`@/input`): focusable things carry `px-f`
 // (a loud focus ring for keyboard and gamepad), key hints come from S's `<Prompt>`.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';

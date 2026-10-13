@@ -52,12 +52,18 @@ export class Pix {
 export const INK = hex('#120a0e');
 const ramp = (...c: string[]): RGBA[] => c.map((s) => hex(s));
 
+// Wave 2 palette (owner 13.10: the dark look was «не особо всё хорошо видно»): light, warm.
+// `obsidian` is the INTERIOR ramp — the fill of every frame, wells, slot wells, tooltips — and is
+// now light parchment, so text inside is dark ink (`--px-text` in ui-px.css); `stone` is warm
+// sandstone (lit stages, pedestal), `wood` honey (window frames). Contrast table:
+// `.claude/rules/ui-px.md` → Materials.
+
 export const MAT = {
-  stone: ramp('#23242d', '#343643', '#4a4d5d', '#64687b', '#8a8fa2'),
+  stone: ramp('#6b5238', '#a08462', '#c4a985', '#e0cba8', '#f8ecd2'),
   iron: ramp('#1a1e25', '#2a3039', '#404853', '#5e6875', '#8e99a7'),
-  wood: ramp('#25140c', '#391f12', '#53301b', '#724527', '#986135'),
+  wood: ramp('#3a2010', '#6b3f20', '#94592e', '#bd7a3e', '#e3a25c'),
   parch: ramp('#73502c', '#a27b4b', '#caa56e', '#e3c893', '#f5e5bb'),
-  obsidian: ramp('#0a0810', '#14101c', '#201a2b', '#32283f', '#54466e'),
+  obsidian: ramp('#6a4526', '#f0dfba', '#e4cc9c', '#c9a56d', '#fff6e0'),
   gold: ramp('#4a2c06', '#84530e', '#bf8318', '#f0b136', '#ffe189'),
   red: ramp('#3a0a0c', '#6a1714', '#a0261c', '#d2432d', '#ff8466'),
   green: ramp('#0c2a12', '#17451c', '#25692a', '#3e9a3a', '#86d46c'),
