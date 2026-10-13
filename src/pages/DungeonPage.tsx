@@ -443,7 +443,9 @@ export function DungeonPage() {
                 <span className="gx-hex">{lv.level}</span>
               </div>
               <div className="dgl-hero__info">
-                <b>{t('dungeon.lobby.setTitle', { name: setName(setOf(d.gear.weapon.tier).tier) })}</b>
+                <b>
+                  {t('dungeon.lobby.setTitle', { name: setName(setOf(d.gear.weapon.tier).tier) })}
+                </b>
                 <div className="dgl-hero__stats">
                   <span title={t('dungeon.lobby.health')}>
                     <GxIcon name="heart" size={18} /> {hero.maxHp}
@@ -516,7 +518,9 @@ export function DungeonPage() {
             )}
             {!run && (
               <div className="dgl-floorname">
-                <b>{t('dungeon.lobby.floorName', { n: String(floor.id), name: floorName(floor.id) })}</b>
+                <b>
+                  {t('dungeon.lobby.floorName', { n: String(floor.id), name: floorName(floor.id) })}
+                </b>
                 <i>
                   {floorOpen
                     ? floorLead(floor.id)
@@ -569,7 +573,10 @@ export function DungeonPage() {
                       />
                       <span className="dgl-area__info">
                         <b>{areaName(a.id)}</b>
-                        <span className="dgl-area__stars" aria-label={t('dungeon.lobby.difficulty', { n: String(i + 1) })}>
+                        <span
+                          className="dgl-area__stars"
+                          aria-label={t('dungeon.lobby.difficulty', { n: String(i + 1) })}
+                        >
                           {Array.from({ length: 3 }, (_, k) => (
                             <KIcon
                               key={k}

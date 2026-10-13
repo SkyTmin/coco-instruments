@@ -39,7 +39,15 @@ import {
 import type { DungeonState, MatId } from './dungeon';
 import { fmtDec, hasKey, lower, t as tr } from '@/i18n/core';
 import type { Key } from '@/i18n/core';
-import { chestName, enchantName, itemName, itemText, rockName, runeName, runeText } from '@/i18n/data';
+import {
+  chestName,
+  enchantName,
+  itemName,
+  itemText,
+  rockName,
+  runeName,
+  runeText,
+} from '@/i18n/data';
 import { matName } from '@/i18n/data-dungeon';
 import { normalizeBook, ROMAN, SHELF_MAX, tierOfLevel } from './books';
 import type { Book } from './books';

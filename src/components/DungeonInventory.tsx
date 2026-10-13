@@ -361,7 +361,9 @@ export function DungeonInventory({
         </b>
         <span className="mcinv__sub">
           {meat
-            ? t('inv.dg.meatHeals', { n: String(Math.round(st.maxHp * (MEATS[sk.id]?.heal ?? 0.15))) })
+            ? t('inv.dg.meatHeals', {
+                n: String(Math.round(st.maxHp * (MEATS[sk.id]?.heal ?? 0.15))),
+              })
             : matLead(sk.id)}
         </span>
         <span className="mcinv__stat">
@@ -418,7 +420,10 @@ export function DungeonInventory({
       <>
         <b className="mcinv__name">{t('inv.dg.pocket')}</b>
         <span className="mcinv__sub">
-          {t('inv.dg.pocketText', { n: String(sackSlots(sim.sackLevel + 1)), slots: String(slots) })}
+          {t('inv.dg.pocketText', {
+            n: String(sackSlots(sim.sackLevel + 1)),
+            slots: String(slots),
+          })}
         </span>
         <CostRow cost={cost} balance={balance} d={d} sack={sim.sack.mats} />
         <div className="mcinv__acts">
@@ -434,11 +439,7 @@ export function DungeonInventory({
       </>
     );
   } else {
-    info = (
-      <span className="mcinv__hint">
-        {t('inv.dg.hint')}
-      </span>
-    );
+    info = <span className="mcinv__hint">{t('inv.dg.hint')}</span>;
   }
 
   return (
@@ -486,9 +487,7 @@ export function DungeonInventory({
         </div>
         <div className="mcinv__label">
           {t('inv.dg.sackLabel')}{' '}
-          <em>
-            {t('inv.dg.used', { used: String(used), slots: String(slots) })}
-          </em>
+          <em>{t('inv.dg.used', { used: String(used), slots: String(slots) })}</em>
         </div>
         <div className="mcinv__grid">
           {Array.from({ length: rows * SACK_ROW }, (_, i) => {
@@ -515,9 +514,7 @@ export function DungeonInventory({
             );
           })}
         </div>
-        {slots < rows * SACK_ROW && (
-          <span className="mcinv__lock">{t('inv.dg.lockRows')}</span>
-        )}
+        {slots < rows * SACK_ROW && <span className="mcinv__lock">{t('inv.dg.lockRows')}</span>}
 
         <div className="mcinv__purse">
           <span>

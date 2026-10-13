@@ -35,14 +35,7 @@ import {
   thingOfRef,
 } from '@/lib/inventory';
 import type { InvIcon, InvItem, InvPlace, InvSection, InvSectionView } from '@/lib/inventory';
-import {
-  bagCount,
-  bagValue,
-  CASE_TIERS,
-  modsOf,
-  nextPick,
-  reserveOre,
-} from '@/lib/prison';
+import { bagCount, bagValue, CASE_TIERS, modsOf, nextPick, reserveOre } from '@/lib/prison';
 import type { ItemId } from '@/lib/prison';
 import { findTexture } from '@/lib/prison-art';
 import { itemUrl } from '@/lib/dungeon-art';
@@ -459,11 +452,7 @@ export function Inventory({
   } else {
     card = (
       <span className="mcinv__hint">
-        {place === 'view'
-          ? t('inv.hintView')
-          : atBunk
-            ? t('inv.hintBunk')
-            : t('inv.hintAny')}
+        {place === 'view' ? t('inv.hintView') : atBunk ? t('inv.hintBunk') : t('inv.hintAny')}
       </span>
     );
   }

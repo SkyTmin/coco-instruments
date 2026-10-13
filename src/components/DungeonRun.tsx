@@ -1218,12 +1218,7 @@ export function DungeonRun({
         case 'level': {
           levelUp();
           notifySuccess();
-          say(
-            t('dungeon.level', { n: String(e.level) }),
-            t('dungeon.levelSub'),
-            'gold',
-            1800,
-          );
+          say(t('dungeon.level', { n: String(e.level) }), t('dungeon.levelSub'), 'gold', 1800);
           // Новый уровень — сильнее сразу, прямо в бою.
           const st = useFinanceStore.getState();
           const hpK = sim.hero.hp / sim.stats.maxHp;
@@ -1262,12 +1257,7 @@ export function DungeonRun({
             say(text ?? upper(name), sub ?? t('dungeon.gateShut'), 'danger', 2600);
           } else if (e.what === 'split') {
             roar();
-            say(
-              text ?? t('dungeon.kingSplit'),
-              sub ?? t('dungeon.kingSplitSub'),
-              'danger',
-              2000,
-            );
+            say(text ?? t('dungeon.kingSplit'), sub ?? t('dungeon.kingSplitSub'), 'danger', 2000);
           } else if (e.what === 'phase') {
             roar();
             tapMedium();
@@ -1345,7 +1335,10 @@ export function DungeonRun({
           if (e.big) boom(1);
           break;
         case 'status':
-          note(isStatus(e.kind) ? t(`dungeon.statusNote.${e.kind}`) : t('dungeon.underAttack'), 1400);
+          note(
+            isStatus(e.kind) ? t(`dungeon.statusNote.${e.kind}`) : t('dungeon.underAttack'),
+            1400,
+          );
           break;
         case 'streak':
           streakUp(e.tier);
@@ -1646,12 +1639,7 @@ export function DungeonRun({
     if (!sim || !m) return;
     if (packs > 0) {
       packAtMine(sim, m.obj, packs);
-      say(
-        t('dungeon.waiting'),
-        t('dungeon.waitingSub', { n: String(packs) }),
-        'danger',
-        1800,
-      );
+      say(t('dungeon.waiting'), t('dungeon.waitingSub', { n: String(packs) }), 'danger', 1800);
     }
     save();
   };

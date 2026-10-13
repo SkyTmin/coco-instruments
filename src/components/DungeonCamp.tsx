@@ -315,9 +315,7 @@ export function BeastTab() {
                   <span className="dgc-xp">
                     <i style={{ transform: `scaleX(${(n - from) / (next.at - from)})` }} />
                   </span>
-                  <i>
-                    {t('dungeon.camp.beastNext', { n: fmt(next.at - n), what: beastText(st) })}
-                  </i>
+                  <i>{t('dungeon.camp.beastNext', { n: fmt(next.at - n), what: beastText(st) })}</i>
                 </>
               ) : (
                 <i>{t('dungeon.camp.beastDone')}</i>
