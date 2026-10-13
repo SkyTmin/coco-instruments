@@ -1,9 +1,9 @@
 /**
  * Fishing (`src/pages/FishingPage.tsx`, `src/components/FishingCamp.tsx`):
  * top bar, hints, mastery, spots, catch card, toasts, rods and trophies tabs.
- * Plurals whose Russian forms are all alike keep the old text byte for byte.
  */
-const same = (s: string) => ({ one: s, few: s, many: s, other: s });
+/** Russian plural: 1 рыба / 3 рыбы / 5 рыб; `other` (fractions) reads like `few`. */
+const ru3 = (one: string, few: string, many: string) => ({ one, few, many, other: few });
 
 export const fishing = {
   title: 'Рыбалка',
@@ -85,7 +85,7 @@ export const fishing = {
     next: 'сила {power} → {power2}, катушка ×{reel} → ×{reel2} · {reach}',
     top: 'Золотая удочка вытащит даже осетра',
     net: 'Садок на {n}',
-    netNext: same('{a} → {n} рыб'),
+    netNext: ru3('{a} → {n} рыба', '{a} → {n} рыбы', '{a} → {n} рыб'),
     netMax: 'Больше не влезет',
     auto: 'Садок продаёт сам',
     autoText: 'Полный садок сам уходит торговцу — удочку не бросать',

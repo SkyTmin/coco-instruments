@@ -1,10 +1,10 @@
 /**
  * The forest screen (`src/pages/ForestPage.tsx`): top bar, grade bar, field
  * floats and toasts, plan sheet, new-grade scene. Shared mine words (camp,
- * coins, parcels, «+ключ», pet level…) come from `mineHud`. Plurals whose
- * Russian forms are all alike keep the old text byte for byte.
+ * coins, parcels, «+ключ», pet level…) come from `mineHud`.
  */
-const same = (s: string) => ({ one: s, few: s, many: s, other: s });
+/** Russian plural: 1 бревно / 3 бревна / 5 брёвен; `other` (fractions) reads like `few`. */
+const ru3 = (one: string, few: string, many: string) => ({ one, few, many, other: few });
 
 export const forest = {
   title: 'Лес',
@@ -36,7 +36,6 @@ export const forest = {
     hollowTokens: 'ДУПЛО: +{n} ✦',
     hollowParcel: 'ДУПЛО: ПЕРЕДАЧКА',
     chaga: 'ЧАГА +{n} ✦',
-    keys: same('+{n} ключа'),
     parcel: 'ПЕРЕДАЧКА',
     seid: 'СЕЙД-СОСНА +{n} ✦',
     toMill: '{n} → НА ПИЛОРАМУ',
@@ -49,9 +48,17 @@ export const forest = {
     planDone: 'План сдан — бери разряд',
     pileFull: 'Штабель полон — сдай лес',
     pileEmpty: 'Штабель пуст — руби',
-    storm: same('{name}: ещё {n} брёвен {wood}'),
+    storm: ru3(
+      '{name}: ещё {n} бревно {wood}',
+      '{name}: ещё {n} бревна {wood}',
+      '{name}: ещё {n} брёвен {wood}',
+    ),
     plotGate: 'Следующая делянка откроется с ранга шахты {r}',
-    parcelLeft: same('Вскроется через {n} брёвен или блоков'),
+    parcelLeft: ru3(
+      'Вскроется через {n} бревно или блок',
+      'Вскроется через {n} бревна или блока',
+      'Вскроется через {n} брёвен или блоков',
+    ),
   },
   /** Grade sheet. */
   plan: {
@@ -62,7 +69,11 @@ export const forest = {
   scene: {
     title: 'Новый разряд',
     wood: '{name} · до {v} за бревно',
-    buyout: same('Брёвна докуплены за {n} монет'),
+    buyout: ru3(
+      'Брёвна докуплены за {n} монету',
+      'Брёвна докуплены за {n} монеты',
+      'Брёвна докуплены за {n} монет',
+    ),
     next: 'Для разряда {n}: {m3} м³ {wood}',
     go: 'Рубить',
   },

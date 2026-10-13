@@ -29,10 +29,6 @@ export const forest: Translation<typeof ru> = {
     hollowTokens: 'HOLLOW: +{n} ✦',
     hollowParcel: 'HOLLOW: PARCEL',
     chaga: 'CHAGA +{n} ✦',
-    keys: {
-      one: '+{n} key',
-      other: '+{n} keys',
-    },
     parcel: 'PARCEL',
     seid: 'SEID PINE +{n} ✦',
     toMill: '{n} → TO THE SAWMILL',

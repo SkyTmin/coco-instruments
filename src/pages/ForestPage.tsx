@@ -33,7 +33,7 @@ import {
   SPECIES,
   standHit,
   sumRow,
-  toM3,
+  LOG_M3,
 } from '@/lib/forest';
 import type { Side, Tree } from '@/lib/forest';
 import {
@@ -42,9 +42,7 @@ import {
   PARCEL_NEED,
   perkPointsFree,
   petLevelOf,
-  petOf,
   rankLetter,
-  shortMoney,
   STREAK_DECAY_MS,
   STREAK_GRACE_MS,
   STREAK_TIERS,
@@ -87,14 +85,29 @@ import {
   treeFall,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, setHapticsMuted, tapLight, tapMedium } from '@/lib/haptics';
+import {
+  chestName,
+  fmtDec,
+  fmtNum,
+  fmtShort,
+  petName,
+  streakName,
+  t as tNow,
+  upper,
+  useT,
+} from '@/i18n';
+import { axeEnchName, speciesName, woodOf } from '@/i18n/data-camp';
+import { nameIn } from '@/i18n/data-mine';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 const shortCount = (n: number) =>
   n < 1e4
     ? fmt(n)
     : n < 1e6
-      ? `${(Math.floor(n / 100) / 10).toLocaleString('ru-RU')}к`
-      : `${(Math.floor(n / 1e5) / 10).toLocaleString('ru-RU')}м`;
+      ? tNow('mineHud.k', { n: Math.floor(n / 100) / 10 })
+      : tNow('mineHud.m', { n: Math.floor(n / 1e5) / 10 });
+/** Cubic metres of logs, one decimal («1,5» / «1.5»). */
+const m3 = (logs: number) => fmtDec(Math.round(logs * LOG_M3 * 10) / 10, 1);
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -121,6 +134,7 @@ type Sheetname = 'plan' | null;
  * странице (как урон по блоку в шахте): в стор уходит только срубленное.
  */
 export function ForestPage() {
+  const t = useT();
   const nav = useNavigate();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
@@ -344,12 +358,7 @@ export function ForestPage() {
     const t1 = streakTier(n);
     if (t1 > t0) {
       prisonStreak(t1);
-      floatAt(
-        size.w / 2,
-        size.h * 0.3,
-        `${STREAK_TIERS[t1].name.toUpperCase()}!`,
-        'pfloat--streak',
-      );
+      floatAt(size.w / 2, size.h * 0.3, `${upper(streakName(t1))}!`, 'pfloat--streak');
       tierBreak(Math.min(3, t1));
       tapMedium();
       squashPop(stripRef.current, 0.35 + 0.1 * t1);
@@ -497,7 +506,7 @@ export function ForestPage() {
   };
 
   /** «Бойся!»: крона валится в сторону от топора, снег из неё — облаком. */
-  const fellScene = (t: Tree, s: Side, label = 'БОЙСЯ!', cls = 'pfloat--fell') => {
+  const fellScene = (t: Tree, s: Side, label = tNow('forest.float.fell'), cls = 'pfloat--fell') => {
     treeFall();
     addTrauma(sceneRef.current, 0.5);
     flashFrame('small');
@@ -570,14 +579,14 @@ export function ForestPage() {
     notifyWarning();
     addTrauma(sceneRef.current, 0.32);
     const { x, y } = bottomAt(s);
-    floatAt(x, y - logH, 'СУЧОК!', 'pfloat--branch');
+    floatAt(x, y - logH, t('forest.float.branch'), 'pfloat--branch');
     fx.current?.chips(x, y, [species.leaf, species.dark, '#ffffff'], 10, 1.1);
   };
 
   /** Чутьё: сучок пролетел мимо. */
   const dodge = (s: Side) => {
     const { x, y } = bottomAt(s);
-    floatAt(x, y - logH, 'УВЕРНУЛСЯ', 'pfloat--dodge');
+    floatAt(x, y - logH, t('forest.float.dodge'), 'pfloat--dodge');
     tapLight();
     const el = axeRef.current;
     if (!el || reduceMotion()) return;
@@ -608,7 +617,12 @@ export function ForestPage() {
       tierBreak(3);
       notifySuccess();
       burstConfetti(50, ['#ffe08a', '#c88a52', '#fff']);
-      floatAt(size.w / 2, size.h * 0.3, x.id === 'bear' ? 'ОТОГНАЛ!' : 'ГОТОВО', 'pfloat--fellx');
+      floatAt(
+        size.w / 2,
+        size.h * 0.3,
+        t(x.id === 'bear' ? 'forest.float.bear' : 'forest.float.done'),
+        'pfloat--fellx',
+      );
       if (x.keys) {
         keyFound();
         playTotem(campRef.current, () => squashPop(campRef.current, 0.6));
@@ -660,19 +674,23 @@ export function ForestPage() {
     // Замах и валка снимают несколько брёвен: показываем самое ценное.
     const kinds = res.tree.logs.slice(res.index, res.index + res.take).map((l) => l.kind);
     if (kinds.includes('burl')) {
-      floatAt(x, y - 20, 'КАПОКОРЕНЬ ×10', 'pfloat--burl');
+      floatAt(x, y - 20, t('forest.float.burl'), 'pfloat--burl');
       tierBreak(2);
       burstConfetti(40, ['#c88a52', '#ffe08a', '#fff']);
-    } else if (kinds.includes('figured')) floatAt(x, y - 20, 'СВИЛЬ ×3', 'pfloat--figured');
+    } else if (kinds.includes('figured'))
+      floatAt(x, y - 20, t('forest.float.figured'), 'pfloat--figured');
     const h = res.chop.hollow;
     if (h) {
       softChime(1);
       const hTokens = res.hollows.reduce((a, z) => a + (z.kind === 'tokens' ? z.amount : 0), 0);
-      if (hTokens) floatAt(x, y - 34, `ДУПЛО: +${hTokens} ✦`, 'pfloat--token', 120);
-      else if (h.kind === 'parcel') floatAt(x, y - 34, 'ДУПЛО: ПЕРЕДАЧКА', 'pfloat--parcel', 120);
+      if (hTokens)
+        floatAt(x, y - 34, t('forest.float.hollowTokens', { n: hTokens }), 'pfloat--token', 120);
+      else if (h.kind === 'parcel')
+        floatAt(x, y - 34, t('forest.float.hollowParcel'), 'pfloat--parcel', 120);
     }
     const tokens = res.chop.tokens + res.chop.chaga;
-    if (res.chop.chaga) floatAt(x, y - 46, `ЧАГА +${res.chop.chaga} ✦`, 'pfloat--token', 200);
+    if (res.chop.chaga)
+      floatAt(x, y - 46, t('forest.float.chaga', { n: res.chop.chaga }), 'pfloat--token', 200);
     else if (tokens) floatAt(x, y - 46, `+${tokens} ✦`, 'pfloat--token', 200);
     const keys =
       res.chop.keys + res.hollows.reduce((a, z) => a + (z.kind === 'keys' ? z.amount : 0), 0);
@@ -680,24 +698,38 @@ export function ForestPage() {
       keyFound();
       notifySuccess();
       const played = playTotem(campRef.current, () => squashPop(campRef.current, 0.6));
-      if (!played) floatAt(x, y - 60, keys > 1 ? `+${keys} ключа` : '+ключ', 'pfloat--key', 120);
+      if (!played)
+        floatAt(
+          x,
+          y - 60,
+          keys > 1 ? t('mineHud.float.keys', { n: keys }) : t('mineHud.float.key'),
+          'pfloat--key',
+          120,
+        );
     }
     if (res.parcels.length) {
       squashPop(parcelsRef.current, 0.5);
-      if (!h || h.kind !== 'parcel') floatAt(x, y - 60, 'ПЕРЕДАЧКА', 'pfloat--parcel', 160);
+      if (!h || h.kind !== 'parcel')
+        floatAt(x, y - 60, t('forest.float.parcel'), 'pfloat--parcel', 160);
     }
-    if (res.parcelsReady) say('Посылка дозрела — вскрой её');
+    if (res.parcelsReady) say(t('mineHud.say.parcelRipe'));
     if (res.petUp) {
-      say(`${petOf(res.petUp.id).name}: ${res.petUp.level} уровень`);
+      say(t('mineHud.say.petLevel', { name: petName(res.petUp.id), n: res.petUp.level }));
       softChime(2);
     }
     if (res.eggsReady) {
-      say('Яйцо согрелось — вылупи его в Питомнике');
+      say(t('mineHud.say.eggWarm'));
       softChime(5);
     }
     const seidTokens = (res.felled?.tokens ?? 0) + (res.storm?.tokens ?? 0);
     if (seidTokens) {
-      floatAt(size.w / 2, size.h * 0.24, `СЕЙД-СОСНА +${seidTokens} ✦`, 'pfloat--seid', 300);
+      floatAt(
+        size.w / 2,
+        size.h * 0.24,
+        t('forest.float.seid', { n: seidTokens }),
+        'pfloat--seid',
+        300,
+      );
       burstConfetti(60, ['#3fe6d0', '#c8fff6', '#ffe08a']);
       tierBreak(3);
     }
@@ -705,16 +737,16 @@ export function ForestPage() {
       tierBreak(2);
       notifySuccess();
       burstConfetti(40, ['#9be38a', '#ffe08a', '#fff']);
-      say('План сдан — бери разряд');
+      say(t('forest.say.planDone'));
     }
     if (res.sold) {
       const to = useFinanceStore.getState().slotsBalance;
       rollBalance(to - res.sold, to);
       coinDing();
-      floatAt(x, y - 70, `+${shortMoney(res.sold)}`, 'pfloat--coin');
+      floatAt(x, y - 70, `+${fmtShort(res.sold)}`, 'pfloat--coin');
     }
     if (res.toMill) {
-      floatAt(x, y - 84, `${res.toMill} → НА ПИЛОРАМУ`, 'pfloat--mill', 80);
+      floatAt(x, y - 84, t('forest.float.toMill', { n: res.toMill }), 'pfloat--mill', 80);
       squashPop(millRef.current, 0.45);
     }
     const now = performance.now();
@@ -722,7 +754,7 @@ export function ForestPage() {
       fullWarnAt.current = now;
       pileFullSound();
       notifyWarning();
-      say('Штабель полон — сдай лес');
+      say(t('forest.say.pileFull'));
       squashPop(pileRef.current, 0.5);
     }
   };
@@ -794,7 +826,7 @@ export function ForestPage() {
     const { x, y } = bottomAt(s);
     const woodColors = [SPECIES[t.species].wood, SPECIES[t.species].bark, SPECIES[t.species].light];
     if (crit) {
-      floatAt(x, y - 24, 'КРИТ', 'pfloat--crit');
+      floatAt(x, y - 24, tNow('mineHud.float.crit'), 'pfloat--crit');
       addTrauma(sceneRef.current, 0.14);
       tapMedium();
     }
@@ -834,14 +866,24 @@ export function ForestPage() {
     announce(res, s);
     yardLoot(res);
     if (res.how === 'swing') {
-      floatAt(size.w / 2, y - logH * 1.6, 'ЗАМАХ ×2', 'pfloat--swing');
+      floatAt(
+        size.w / 2,
+        y - logH * 1.6,
+        tNow('forest.float.swing', { name: upper(axeEnchName('swing')) }),
+        'pfloat--swing',
+      );
       addTrauma(sceneRef.current, 0.18);
       tapMedium();
     }
     if (res.felled) {
       if (res.how === 'fell') {
         tierBreak(2);
-        fellScene(res.tree, s, 'ВАЛКА!', 'pfloat--fellx');
+        fellScene(
+          res.tree,
+          s,
+          tNow('forest.float.ench', { name: upper(axeEnchName('fell')) }),
+          'pfloat--fellx',
+        );
       } else fellScene(res.tree, s);
     } else if (res.hit) strike(s);
     else if (res.dodged) dodge(s);
@@ -850,8 +892,19 @@ export function ForestPage() {
       setTimeout(() => {
         tierBreak(3);
         burstConfetti(50, ['#bfe4ff', '#ffffff', SPECIES[t2.species].leaf]);
-        fellScene(t2, s === 'L' ? 'R' : 'L', 'БУРЕЛОМ!', 'pfloat--storm');
-        say(`Бурелом: ещё ${res.storm!.logs} брёвен ${SPECIES[t2.species].gen}`);
+        fellScene(
+          t2,
+          s === 'L' ? 'R' : 'L',
+          tNow('forest.float.ench', { name: upper(axeEnchName('storm')) }),
+          'pfloat--storm',
+        );
+        say(
+          tNow('forest.say.storm', {
+            name: axeEnchName('storm'),
+            n: res.storm!.logs,
+            wood: woodOf(t2.species),
+          }),
+        );
       }, 700);
     }
   };
@@ -924,7 +977,7 @@ export function ForestPage() {
     const value = forestSell();
     if (!value) {
       notifyWarning();
-      say('Штабель пуст — руби');
+      say(t('forest.say.pileEmpty'));
       return;
     }
     rollBalance(from, from + value);
@@ -971,7 +1024,7 @@ export function ForestPage() {
     const st = useFinanceStore.getState();
     if (!plotOpen(st.forest.rank + 1, st.prison.rank, st.prison.prestige)) {
       notifyWarning();
-      say(`Следующая делянка откроется с ранга шахты ${rankLetter(PLOT_GATE[st.forest.rank + 1])}`);
+      say(t('forest.say.plotGate', { r: rankLetter(PLOT_GATE[st.forest.rank + 1]) }));
       return;
     }
     if (
@@ -991,7 +1044,7 @@ export function ForestPage() {
     if (!x) return;
     if (x.left > 0) {
       tapLight();
-      say(`Вскроется через ${fmt(x.left)} брёвен или блоков`);
+      say(t('forest.say.parcelLeft', { n: Math.round(x.left) }));
       return;
     }
     const from = useFinanceStore.getState().slotsBalance;
@@ -1035,7 +1088,6 @@ export function ForestPage() {
   const sNext = STREAK_TIERS[sTier + 1];
   const sFrom = sTier >= 0 ? STREAK_TIERS[sTier].at : 0;
   const sFill = sNext ? (streak - sFrom) / (sNext.at - sFrom) : 1;
-  const plotSpecies = SPECIES[forest.rank];
   const logs = tree.logs.slice(cut, cut + visible);
   const crownBottom = (tree.logs.length - cut) * logH;
   const crownW = logW * 2.4;
@@ -1055,7 +1107,7 @@ export function ForestPage() {
             <button
               type="button"
               className="gx-round gx-round--dark pmx-top__btn"
-              aria-label="Назад"
+              aria-label={t('common.back')}
               onClick={() => {
                 tapLight();
                 nav(-1);
@@ -1063,7 +1115,7 @@ export function ForestPage() {
             >
               <KIcon name="arrowLeft" />
             </button>
-            <div className="gx-ribbon pmx-top__title">Лес</div>
+            <div className="gx-ribbon pmx-top__title">{t('forest.title')}</div>
             <span className="pmx-top__btn" />
           </div>
           <div className="gx-panel gx-panel--wood-fancy fmx-lock">
@@ -1071,9 +1123,9 @@ export function ForestPage() {
               <GxIcon name="forest" size={54} />
               <KIcon name="locked" size={24} />
             </span>
-            <b>Откроется с ранга {rankLetter(FOREST_UNLOCK_RANK)}</b>
+            <b>{t('forest.fromRank', { r: rankLetter(FOREST_UNLOCK_RANK) })}</b>
             <button type="button" className="gx-btn gx-btn--red gx-btn--block" onClick={toMine}>
-              <GxIcon name="pick" size={18} /> В шахту
+              <GxIcon name="pick" size={18} /> {t('mineHud.scene.toMine')}
             </button>
           </div>
         </div>
@@ -1083,7 +1135,7 @@ export function ForestPage() {
             <button
               type="button"
               className="gx-round gx-round--dark pmx-top__btn"
-              aria-label="Назад"
+              aria-label={t('common.back')}
               onClick={() => {
                 tapLight();
                 nav(-1);
@@ -1091,7 +1143,9 @@ export function ForestPage() {
             >
               <KIcon name="arrowLeft" />
             </button>
-            <div className="gx-ribbon pmx-top__title">Лес · {plotSpecies.name.toLowerCase()}</div>
+            <div className="gx-ribbon pmx-top__title">
+              {t('forest.titleAt', { name: nameIn(speciesName(forest.rank)) })}
+            </div>
             <AudioToggles />
           </div>
 
@@ -1103,7 +1157,7 @@ export function ForestPage() {
             <button
               type="button"
               className="gx-chip pmx-chip--btn"
-              aria-label="Токены — чары топора"
+              aria-label={t('forest.tokensAria')}
               onClick={() => {
                 tapLight();
                 setCamp('axench');
@@ -1113,7 +1167,7 @@ export function ForestPage() {
             </button>
             <span className="pmx-chips__gap" />
             <button type="button" className="gx-chip pmx-chip--btn" onClick={toMine}>
-              <GxIcon name="pick" /> Шахта
+              <GxIcon name="pick" /> {t('forest.mine')}
             </button>
           </div>
 
@@ -1121,7 +1175,7 @@ export function ForestPage() {
             type="button"
             className={`gx-panel gx-panel--wood pmx-rank${ready ? ' is-ready' : ''}`}
             onClick={rankUp}
-            aria-label={atTop ? 'Высший разряд' : `Разряд ${forest.rank + 2}`}
+            aria-label={atTop ? t('forest.gradeTop') : t('forest.grade', { n: forest.rank + 2 })}
           >
             <span className="gx-hex pmx-rank__hex">{forest.rank + 1}</span>
             <span className="pmx-rank__mid">
@@ -1130,17 +1184,17 @@ export function ForestPage() {
                 tone="gold"
                 label={
                   atTop ? (
-                    'Высший разряд'
+                    t('forest.gradeTop')
                   ) : gated ? (
                     <span className="pmx-rank__cost">
-                      <KIcon name="locked" size={12} /> шахта{' '}
+                      <KIcon name="locked" size={12} /> {t('forest.gradeLock')}{' '}
                       {rankLetter(PLOT_GATE[forest.rank + 1])}
                     </span>
                   ) : ready ? (
-                    'Новый разряд — жми!'
+                    t('forest.gradeGo')
                   ) : (
                     <span className={`pmx-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
-                      {shortMoney(cost)} <CoinIcon size={12} />
+                      {fmtShort(cost)} <CoinIcon size={12} />
                     </span>
                   )
                 }
@@ -1148,8 +1202,8 @@ export function ForestPage() {
               {!atTop && !ready && (
                 <span className="pquota">
                   <span className={`pquota__chip${planOk ? ' is-done' : ''}`}>
-                    <img src={barkTexture(forest.rank)} alt={plotSpecies.name} />
-                    {planOk ? '✓' : `${toM3(planHave)}/${toM3(need)} м³`}
+                    <img src={barkTexture(forest.rank)} alt={speciesName(forest.rank)} />
+                    {planOk ? '✓' : t('forest.m3', { a: m3(planHave), b: m3(need) })}
                   </span>
                 </span>
               )}
@@ -1164,7 +1218,7 @@ export function ForestPage() {
               className={`pstrip${sTier >= 0 ? ` is-t${sTier}` : ''}${cooling ? ' is-cooling' : ''}`}
               ref={stripRef}
             >
-              <span className="pstrip__pick" title="Топор">
+              <span className="pstrip__pick" title={t('forest.axe')}>
                 <b>
                   <AxeIcon axe={forest.axe} size={13} />
                   {forest.felled}
@@ -1173,7 +1227,7 @@ export function ForestPage() {
               <span className="pstrip__streak">
                 <span className="pstrip__name">
                   <GxIcon name="flame" size={13} />
-                  {sTier >= 0 && STREAK_TIERS[sTier].name}
+                  {sTier >= 0 && streakName(sTier)}
                   {sTier >= 0 && <em>+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
                 </span>
                 <span className="pstrip__bar">
@@ -1181,7 +1235,7 @@ export function ForestPage() {
                 </span>
               </span>
               <span className="pstrip__pace">
-                {streak > 0 && <small>{fmt(streak)} подряд</small>}
+                {streak > 0 && <small>{t('mineHud.hud.inARow', { n: streak })}</small>}
               </span>
             </div>
 
@@ -1196,7 +1250,9 @@ export function ForestPage() {
                       type="button"
                       className={`pparcel${done ? ' is-ready' : ''}`}
                       style={{ '--tier': tier.color } as CSSProperties}
-                      aria-label={`Посылка, ${tier.name.toLowerCase()}${done ? ', готова' : ''}`}
+                      aria-label={t(done ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
+                        tier: nameIn(chestName(tier.id)),
+                      })}
                       onClick={() => openParcel(i)}
                     >
                       <img src={parcelTexture(tier.color)} alt="" />
@@ -1254,7 +1310,7 @@ export function ForestPage() {
                     height: logW * 0.72,
                   }}
                 >
-                  <img src={bearTexture()} alt="Медведь" />
+                  <img src={bearTexture()} alt={t('forest.bear')} />
                   <b className="fbear__n">
                     {Math.min(yardEv.have, yardEv.need)}/{yardEv.need}
                   </b>
@@ -1326,7 +1382,7 @@ export function ForestPage() {
               {forest.logs === 0 && (
                 <div className="fmx-tap" aria-hidden="true">
                   <GxIcon name="pointing" />
-                  <b>Тапай слева или справа</b>
+                  <b>{t('forest.tapSides')}</b>
                   <GxIcon name="pointing" />
                 </div>
               )}
@@ -1359,10 +1415,10 @@ export function ForestPage() {
                 >
                   {forest.pile.n ? (
                     <>
-                      {shortMoney(pileValue)} <CoinIcon size={13} />
+                      {fmtShort(pileValue)} <CoinIcon size={13} />
                     </>
                   ) : (
-                    'Пусто'
+                    t('mineHud.bag.empty')
                   )}
                 </span>
               </span>
@@ -1372,11 +1428,11 @@ export function ForestPage() {
                 type="button"
                 ref={millRef}
                 className={`gx-panel gx-panel--wood pmx-camp fmx-mill${millQueued > 0 ? ' is-busy' : ''}`}
-                aria-label="Пилорама"
+                aria-label={t('forest.mill')}
                 onClick={toMill}
               >
                 <GxIcon name="saw" size={28} className="fmx-mill__saw" />
-                <b>Пилорама</b>
+                <b>{t('forest.mill')}</b>
                 <GxBar thin tone="blue" value={millQueued / millQueueCap(mill.level)} />
                 {millBoards > 0 && (
                   <i className="gx-badge gx-badge--gold">{shortCount(millBoards)}</i>
@@ -1393,11 +1449,14 @@ export function ForestPage() {
               }}
             >
               <AxeIcon axe={forest.axe} size={30} />
-              <b>Лагерь</b>
+              <b>{t('mineHud.dock.camp')}</b>
               {prison.squad[0] && (
                 <span
                   className="ppet-perch"
-                  title={`${petOf(prison.squad[0]).name}, ${petLevelOf(prison.pets[prison.squad[0]]?.xp ?? 0).level} ур.`}
+                  title={t('forest.petLevel', {
+                    name: petName(prison.squad[0]),
+                    n: petLevelOf(prison.pets[prison.squad[0]]?.xp ?? 0).level,
+                  })}
                   onClick={(e) => {
                     e.stopPropagation();
                     tapLight();
@@ -1439,14 +1498,14 @@ export function ForestPage() {
 
       {sheet === 'plan' && !atTop && (
         <GxModal
-          title={`Разряд ${forest.rank + 2}`}
+          title={t('forest.grade', { n: forest.rank + 2 })}
           onClose={() => setSheet(null)}
           className="pmx-norm"
         >
           <div className={`pmx-norm__row${planOk ? ' is-done' : ''}`}>
             <img src={barkTexture(forest.rank)} alt="" />
             <span className="pmx-norm__info">
-              <b>{plotSpecies.name}</b>
+              <b>{speciesName(forest.rank)}</b>
               <GxBar
                 tone={planOk ? 'green' : 'gold'}
                 value={planHave / need}
@@ -1454,7 +1513,7 @@ export function ForestPage() {
                   planOk ? (
                     <KIcon name="checkmark" size={12} />
                   ) : (
-                    `${toM3(planHave)} / ${toM3(need)} м³`
+                    t('forest.m3Bar', { a: m3(planHave), b: m3(need) })
                   )
                 }
               />
@@ -1463,7 +1522,7 @@ export function ForestPage() {
           <div className={`pmx-norm__row${balance >= cost ? ' is-done' : ''}`}>
             <CoinIcon size={32} />
             <span className="pmx-norm__info">
-              <b>Монеты</b>
+              <b>{t('mineHud.norm.coins')}</b>
               <GxBar
                 tone={balance >= cost ? 'green' : 'gold'}
                 value={progress}
@@ -1471,7 +1530,7 @@ export function ForestPage() {
                   balance >= cost ? (
                     <KIcon name="checkmark" size={12} />
                   ) : (
-                    `${shortMoney(balance)} / ${shortMoney(cost)}`
+                    `${fmtShort(balance)} / ${fmtShort(cost)}`
                   )
                 }
               />
@@ -1484,7 +1543,7 @@ export function ForestPage() {
               disabled={!planOk || balance < cost}
               onClick={() => takeRank(false)}
             >
-              Взять разряд {forest.rank + 2}
+              {t('forest.plan.take', { n: forest.rank + 2 })}
             </button>
             {!planOk && (
               <button
@@ -1493,7 +1552,7 @@ export function ForestPage() {
                 disabled={balance < cost + buyout}
                 onClick={() => takeRank(true)}
               >
-                Докупить брёвна · {shortMoney(buyout)} <CoinIcon size={13} />
+                {t('forest.plan.buyout', { sum: fmtShort(buyout) })} <CoinIcon size={13} />
               </button>
             )}
           </div>
@@ -1509,25 +1568,33 @@ export function ForestPage() {
           }}
         >
           <div className="prank__card">
-            <span className="prank__label">Новый разряд</span>
+            <span className="prank__label">{t('forest.scene.title')}</span>
             <b className="prank__letter">{sceneShown.rank + 1}</b>
             <span className="prank__mine">
               <img src={barkTexture(sceneShown.rank)} alt="" />
-              {SPECIES[sceneShown.rank].name} · до {SPECIES[sceneShown.rank].value} за бревно
+              {t('forest.scene.wood', {
+                name: speciesName(sceneShown.rank),
+                v: SPECIES[sceneShown.rank].value,
+              })}
             </span>
             <span className="prank__key">
-              <KeyIcon size={13} /> +1 ключ от сундука
+              <KeyIcon size={13} /> {t('mineHud.scene.key')}
             </span>
             {sceneShown.buyout > 0 && (
-              <span className="prank__lvl">Брёвна докуплены за {fmt(sceneShown.buyout)} монет</span>
+              <span className="prank__lvl">
+                {t('forest.scene.buyout', { n: Math.round(sceneShown.buyout) })}
+              </span>
             )}
             {sceneShown.rank < LAST_PLOT && (
               <span className="prank__norm">
-                Для разряда {sceneShown.rank + 2}: {toM3(forestPlan(sceneShown.rank))} м³{' '}
-                {SPECIES[sceneShown.rank].gen}
+                {t('forest.scene.next', {
+                  n: sceneShown.rank + 2,
+                  m3: m3(forestPlan(sceneShown.rank)),
+                  wood: woodOf(sceneShown.rank),
+                })}
               </span>
             )}
-            <span className="prank__cta">Рубить</span>
+            <span className="prank__cta">{t('forest.scene.go')}</span>
           </div>
         </div>
       )}
