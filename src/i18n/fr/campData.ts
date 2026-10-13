@@ -19,8 +19,8 @@ export const campData: Translation<typeof ru> = {
     feller: 'Hache de bûcheron',
     cleaver: 'Merlin',
     bowsaw: 'Scie à archet',
-    druzhba: 'Tronçonneuse « Copain »',
-    ural: 'Tronçonneuse « Oural »',
+    druzhba: 'Tronçonneuse « Copain »',
+    ural: 'Tronçonneuse « Oural »',
   },
   species: {
     willow: {
@@ -67,27 +67,27 @@ export const campData: Translation<typeof ru> = {
   axeEnch: {
     chips: {
       name: 'Copeaux',
-      per: "+4 % de chance d'une bûche en plus",
+      per: "+4 % de chance d'une bûche en plus",
     },
     resin: {
       name: 'Résine',
-      per: '+20 % de jetons sur les bûches',
+      per: '+20 % de jetons sur les bûches',
     },
     sense: {
       name: 'Flair',
-      per: "+8 % d'esquive des nœuds, le nœud dangereux brille",
+      per: "+8 % d'esquive des nœuds, le nœud dangereux brille",
     },
     swing: {
       name: 'Élan',
-      per: "+2 % de couper deux bûches d'un coup",
+      per: "+2 % de couper deux bûches d'un coup",
     },
     fell: {
       name: 'Abattage',
-      per: "+0,4 % d'abattre un arbre d'un coup",
+      per: "+0,4 % d'abattre un arbre d'un coup",
     },
     storm: {
       name: 'Chablis',
-      per: "+2 % qu'un arbre qui tombe abatte son voisin",
+      per: "+2 % qu'un arbre qui tombe abatte son voisin",
     },
   },
   bench: {

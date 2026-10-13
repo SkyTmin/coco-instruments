@@ -164,3 +164,36 @@ wants it; German keeps them as a model name («Spitzhacke Rostig») because «Ro
 cannot be compounded. Names inside a sentence go through `nameIn()` (`src/i18n/data-mine.ts`):
 lower case everywhere except German. FR strings use a no-break space before `: ! ? ; %` and
 inside « » (as in round 1). DE «Kumpel» stays the pet; the dock's «Питомцы» is «Tiere» (short).
+
+## Wave 2 — Лагерь и двор (T2: `camp`, `campData`, `yard`, `yardData`, `hub`, `critters`)
+| ru | en | fr | tr | de | es | it | why |
+|---|---|---|---|---|---|---|---|
+| Площадь | Square | Place | Meydan | Platz | Plaza | Piazza | the hub map |
+| Штаб | HQ | QG | Karargâh | Zentrale | Cuartel | Comando | short: door labels and map pins |
+| Каптёрка / Каптёрщик | Storeroom / Quartermaster | Réserve / Magasinier | Depo / Depocu | Kammer / Kammerwart | Almacén / Almacenero | Magazzino / Magazziniere | army storeroom; DE from «Kleiderkammer» |
+| Ларёк | Kiosk | Kiosque | Büfe | Kiosk | Quiosco | Chiosco | |
+| Барак 1 | Barracks 1 | Baraque 1 | Koğuş 1 | Baracke 1 | Barracón 1 | Baracca 1 | TR «koğuş» = prison/army dormitory |
+| Доска (объявлений) | Board | Tableau | Pano | Schwarzes Brett | Tablón | Bacheca | |
+| Начальник | Warden | Directeur | Müdür | Direktor | Alcaide | Direttore | ES «alcaide» = prison governor |
+| Дневальный | Orderly | Planton | Nöbetçi | Stubendienst | Celador | Piantone | FR/IT: the barracks orderly |
+| Лифтёр | Liftman | Liftier | Asansörcü | Liftführer | Ascensorista | Ascensorista | |
+| Смотрительница | Keeper | Soigneuse | Bakıcı | Pflegerin | Cuidadora | Custode | the Nursery keeper |
+| Продавщица | Shopkeeper | Vendeuse | Satıcı | Verkäuferin | Dependienta | Commessa | |
+| Бригадир / Кузнец | Foreman / Smith | Contremaître / Forgeron | Ustabaşı / Demirci | Vorarbeiter / Schmied | Capataz / Herrero | Caposquadra / Fabbro | |
+| Особая шахта | Special mine | Mine spéciale | Özel maden | Sondermine | Mina especial | Miniera speciale | same as T1 |
+| Крысиный король | Rat King | Roi des rats | Fare Kral | Rattenkönig | Rey Rata | Re dei ratti | T3 should match |
+| Мешочек (рун) / гнездо | Pouch / socket | Bourse / emplacement | Kese / yuva | Beutel / Sockel | Bolsa / engaste | Sacchetto / incastro | |
+| Сдающий (risk game) | Dealer | Croupier | Krupiye | Geber | Crupier | Banco | |
+
+Yard events: Получка → Payday / Jour de paie / Maaş Günü / Zahltag / Día de paga / Giorno di
+paga; Сорока-воровка → Thieving Magpie / La Pie voleuse / Hırsız Saksağan / Diebische Elster /
+Urraca ladrona / Gazza ladra (Rossini's opera title — every FR/DE/IT player knows it); Хозяин
+тайги → Lord of the Taiga (and the same «lord» in each language); Куйва stays «Kuiva» (a name).
+Card letters of the risk game follow each country's own deck: en/es/it J Q K A, fr V D R A
+(valet, dame, roi), de B D K A (Bube, Dame, König), tr V K P A (vale, kız, papaz). Chainsaws
+«Дружба» / «Урал» are model names: «Дружба» is translated (Buddy, Freundschaft…), «Урал» stays.
+Wood after «доски» (`campData.species.<id>.gen`): the form each language puts after «boards»
+(en «birch», de «aus Birke», fr «de bouleau»). Open for the lead: the camp tab «Навыки» is
+Talente / Talentos / Talenti, while T1's «очки навыков» are Skillpunkte / puntos de habilidad /
+punti abilità — pick one. The square's pixel signposts (ШАХТА, ЛИФТ, ПИТОМНИК, КПП) are baked
+into `public/hub` art and stay Russian until `scripts/hub` draws per-language signs.

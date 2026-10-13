@@ -29,7 +29,7 @@ export const yardData: Translation<typeof ru> = {
     },
     blizzard: {
       name: 'Tempête',
-      lead: 'Le vent couche la forêt : chaque arbre abattu entraîne son voisin',
+      lead: 'Le vent couche la forêt : chaque arbre abattu entraîne son voisin',
     },
     bear: {
       name: 'Maître de la taïga',
