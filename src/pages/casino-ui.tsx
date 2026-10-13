@@ -109,6 +109,11 @@ export function useReelSpin<T>(
 
 /** Tempo of the rest of a spin after the Skip press (× the turbo factor): links and the count. */
 export const SKIP_TEMPO = 0.5;
+/**
+ * После «Пропустить» кнопка снова «Крутить», и быстрый второй тап запускал новый спин (ставка!).
+ * Тап «Крутить» раньше этого срока после пропуска — мимо (Android DOUBLE_TAP_TIMEOUT = 300 мс).
+ */
+export const SKIP_GUARD_MS = 350;
 
 /** Строка правил «A · B»: точка держится за левую половину, перенос — после неё. */
 export const keepDot = (s: string) => s.replace(/ · /g, '\u00a0· ');

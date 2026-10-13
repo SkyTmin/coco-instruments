@@ -16,6 +16,7 @@ import {
   CasTools,
   keepDot,
   KitIcon,
+  SKIP_GUARD_MS,
   SKIP_TEMPO,
   useCasLayout,
   useCasLying,
@@ -529,6 +530,7 @@ export function ScatterPage() {
   const [slam, setSlam] = useState(0);
   const [hurried, setHurried] = useState(false);
   const hurry = useRef(1);
+  const skipAt = useRef(-1e9);
   const reelsDone = useRef<(() => void) | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
   /** Поле, каким оно отрисовано сейчас, — для досыпки после сбора сфер. */
@@ -1442,6 +1444,7 @@ export function ScatterPage() {
    */
   const skip = useCallback(() => {
     if (!spinning) return;
+    skipAt.current = performance.now();
     const land = reelsDone.current;
     if (land) {
       tapLight();
@@ -1453,6 +1456,11 @@ export function ScatterPage() {
     setHurried(true);
     if (!skipCount()) tapLight();
   }, [spinning, skipCount]);
+  // Спин от игрока (кнопка, Space, «A»): тап сразу после «Пропустить» нового спина не начинает.
+  const pressSpin = useCallback(() => {
+    if (performance.now() - skipAt.current < SKIP_GUARD_MS) return;
+    spin();
+  }, [spin]);
 
   // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
   useAction(
@@ -1463,7 +1471,7 @@ export function ScatterPage() {
       // Тот же путь, что у кнопки: стоп автоспина, «Пропустить» во время спина, иначе спин.
       if (auto > 0) stopAuto();
       else if (spinning) skip();
-      else spin();
+      else pressSpin();
       return true;
     },
     { scope: pageRef },
@@ -1929,7 +1937,7 @@ export function ScatterPage() {
           }}
           spinDisabled={!canSpin && auto === 0}
           busy={spinning}
-          onSpin={() => (auto > 0 ? stopAuto() : spin())}
+          onSpin={() => (auto > 0 ? stopAuto() : pressSpin())}
           onSkip={skip}
           spinLabel={
             auto > 0
