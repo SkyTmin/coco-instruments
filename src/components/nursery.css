@@ -59,23 +59,14 @@
   display: grid;
 }
 /* A lit stage (owner 13.10: «на её фоне не особо всё хорошо видно»): the sandstone wall under a
-   warm veil, a pool of light behind the pet in hard bands (no smooth glow on pixel art) and a
-   lighter floor — the pet's ink outline reads against it. */
+   warm veil and a lighter floor — the pet's ink outline reads against it. No light pool: a CSS
+   ellipse is drawn at screen resolution, its curved edges are mixels next to the pixel art
+   (critic round 2, P1-6 / P2-10); a baked pool would go in paint.ts. */
 .nur-stage {
   --st-veil: rgb(255 244 222 / 0.4);
-  --st-s1: rgb(255 250 240 / 0.95);
-  --st-s2: rgb(251 239 214 / 0.7);
-  --st-s3: rgb(242 222 182 / 0.45);
   --st-floor: rgb(200 170 125 / 0.6);
   --st-seam: rgb(110 80 50 / 0.6);
   background-image:
-    radial-gradient(
-      ellipse 50% 46% at 50% 54%,
-      var(--st-s1) 0 52%,
-      var(--st-s2) 52% 74%,
-      var(--st-s3) 74% 100%,
-      transparent 100%
-    ),
     linear-gradient(
       to bottom,
       transparent 0 calc(100% - 22 * var(--u)),
@@ -86,13 +77,14 @@
   background-size:
     100% 100%,
     100% 100%,
-    100% 100%,
     calc(var(--tile-w) * var(--u)) calc(var(--tile-h) * var(--u));
-  background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+  background-repeat: no-repeat, no-repeat, repeat;
   display: grid;
   min-width: 0;
   min-height: 0;
-  gap: calc(3 * var(--u));
+  /* 1 u: the pet grows in whole steps and each room sits just below its next step (critic
+     round 2: a 3-u gap cost the 1080p pet 448 → 336) */
+  gap: var(--u);
   /* the animation buttons stand in a column on the right: the pet keeps the whole height */
   grid-template:
     'room anims' minmax(0, 1fr)
@@ -140,17 +132,9 @@
   }
 }
 /* No soft vector glow on the pixel stage (kit: no blur, no soft masks): the aura and the
-   rotating rays are off here; legendary and mythic tint the light pool's hard bands instead. */
+   rotating rays are off here. Rarity already shows on the pill, the name and the slot frame. */
 .nur-stage :is(.pet__aura, .pet__rays) {
   display: none;
-}
-.nur-show--r3 .nur-stage,
-.nur-show--r4 .nur-stage {
-  --st-s3: color-mix(in srgb, var(--rc) 30%, rgb(242 222 182 / 0.45));
-}
-.nur-show--r5 .nur-stage {
-  --st-s2: color-mix(in srgb, var(--rc) 12%, rgb(251 239 214 / 0.75));
-  --st-s3: color-mix(in srgb, var(--rc) 38%, rgb(242 222 182 / 0.45));
 }
 .nur-stage__xp {
   grid-area: room;
@@ -368,19 +352,34 @@
   background: var(--chip);
   white-space: nowrap;
 }
-/* «+N»: 36 × 28 visible, the hit area 48 × 48 (Android 48 dp) */
+/* «+N»: 36 × 28 visible, the hit area ≥ 48 × 48 (Android 48 dp). The row paints above the bar
+   (z 1), so the bar doesn't cover the area's lower part; to the left the area only reaches into
+   the gap (the chip before it paints over the rest), to the right the row is free. */
+.nur-plate__roles {
+  position: relative;
+  z-index: 1;
+}
 .nur-chip--more {
   justify-content: center;
   min-width: 36px;
   cursor: pointer;
   color: var(--px-gold);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 .nur-chip--more::before {
   content: '';
   position: absolute;
   z-index: -1;
-  inset: min(0px, calc((100% - 48px) / 2)) -6px;
+  inset: min(-10px, calc((100% - 48px) / 2)) -12px min(-10px, calc((100% - 48px) / 2))
+    calc(-2 * var(--u));
+}
+/* pressed on pointerdown (`usePress`): one step darker, the face 1 u down, no transition */
+.nur-chip--more:is(:active, .is-down) {
+  background: rgb(0 0 0 / 0.35);
+  translate: 0 var(--u);
 }
 .nur-chip--note {
   background: none;
@@ -785,8 +784,17 @@
 .nur-acts > .px-btn--wide {
   flex: 1 1 auto;
   min-width: 0;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
+}
+/* The key cap sits on the button's corner, out of the flow: the box is the same with and without
+   key hints (critic round 2, P0-3 — the first key press grew the bar 57 → 77 px on tablets). */
+.nur-acts .px-btn > .px-keyhint {
+  position: absolute;
+  inset-block-start: calc(-3 * var(--u));
+  inset-inline-end: calc(-2 * var(--u));
+  z-index: 2;
+  pointer-events: none;
 }
 .nur--wide .nur-side > .nur-acts {
   margin-top: auto;

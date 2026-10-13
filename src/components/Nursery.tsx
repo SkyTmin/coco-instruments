@@ -55,7 +55,7 @@ import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { petMerge, petPat, primeAudio } from '@/lib/sound';
 import { notifySuccess, selectionChanged, tapLight } from '@/lib/haptics';
-import { Badge, Bar, Button, Grid, Heading, Icon, Modal, Panel, Slot } from '@/ui-px';
+import { Badge, Bar, Button, Grid, Heading, Icon, Modal, Panel, Slot, usePress } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
 import './nursery.css';
 
@@ -219,6 +219,7 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const [pick, setPick] = useState<number | null>(null);
   const [info, setInfo] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const morePress = usePress<HTMLButtonElement>();
 
   const rec = p.pets[sel];
   const slots = Math.min(3, squadSlots(p.rank, p.prestige));
@@ -436,10 +437,12 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
     (a, b) => (sb[b] ?? 0) - (sb[a] ?? 0) || STATS.indexOf(a) - STATS.indexOf(b),
   );
   const shown = ranked.slice(0, MAX_CHIPS);
+  // «+N» is not a kit button: its press shows on pointerdown by the shared `usePress` handlers.
   // A narrow plate shows two chips + «+N+1» (nursery.css picks the variant by the row's width).
   const moreBtn = (n: number, cls: string) => (
     <button
       type="button"
+      {...morePress}
       className={`nur-chip nur-chip--more${cls} px-f`}
       aria-label={t('nursery.details')}
       data-tip={t('nursery.details')}
@@ -533,8 +536,8 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
     </b>
   );
 
-  // Legendary and mythic: a static pixel glow (hard bands in the rarity colour) instead of the
-  // soft rotating rays (`.pet__rays` is hidden on the stage).
+  // The soft aura and rotating rays of legendary/mythic pets are hidden on the stage (no vector
+  // glow next to pixel art); rarity shows on the plate's pill and name.
   const showcase = (
     <section className={`nur-show nur-show--r${sdef.rarity}`} style={rc(sdef.rarity)}>
       <Panel material="stone" stage className="nur-stage">
