@@ -1067,6 +1067,18 @@ const ICONS: Record<string, string[]> = {
     '..#.#.#..',
     '..#####..',
   ],
+  // wave 2 — K2: skip (fast-forward, two arrowheads — the spin's «skip the show» button).
+  skip: [
+    '.........',
+    '#....#...',
+    '##...##..',
+    '###..###.',
+    '####.####',
+    '###..###.',
+    '##...##..',
+    '#....#...',
+    '.........',
+  ],
 };
 
 function icon(rows: string[]): Pix {

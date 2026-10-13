@@ -1,6 +1,7 @@
 /** Owner-only cash desk and backup health (CashDesk, inside the mine settings). */
 export const cash = {
   title: 'Касса',
+  hintShort: 'Отдачу автомата это не меняет',
   meta: 'монеты виртуальные',
   hint: 'Отдача автомата от этого не меняется: спины по-прежнему считает честный ГСЧ, и проигрывать тоже будет. Это просто способ не ждать ежедневных бонусов.',
   telegram: 'Связь с Telegram',

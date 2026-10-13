@@ -379,8 +379,9 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
 - Touch targets ≥ `--gx-hit` (44 px): bet −/+/value, auto/turbo in landscape, bonus buttons;
   in `tall` the bet −/+/value are 24u (48 px on phones, critic R13). Landscape keeps 44 — the
   deck has no height to spare there (Spin ends 2 px above the edge).
-- Hall: wallet (coins + casino level) and three cards — Slots, Cascade, «Каторга» (→ `/prison`,
-  rank letter + tokens). A card is one button; «Играть» is drawn, not a nested button. The hall
+- Hall: wallet (coins + casino level), two cards — Slots, Cascade — and a low row for «Каторга»
+  (→ `/prison`, rank letter + tokens; it is a different game, not a third machine). A card is one
+  button; «Играть» is drawn, not a nested button. The hall
   gets the screen height and no more (`.gs__main` / `.hall` flex 1 1 + `min-height: 0`); the
   cards share it and the art is what gives way: symbols are `object-fit: contain` in a definite
   grid cell. Phone landscape: the wallet is one line and the note is hidden — else «Play» fell
@@ -388,7 +389,7 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   Long skin names («Nuit des citrouilles») get `.is-long` (> 10 letters): a step smaller, two
   lines. Fact values: ≥ 100 000 compact without decimals below a million («988 тыс.»), and
   `CasStat fit` steps the font down (`data-fit` 1–2, the coin goes at 2) instead of clipping —
-  only in the hall: in play a changing font would move the info strip. Stress values used for the
+  hall and in-game info (K2: the box is fixed by the grid, so a smaller font moves nothing). Stress values used for the
   check: spins 12 345, best 987 654, tokens 1 234 567, balance 123 456 789, in all 7 languages.
 - Session card: on a low screen (`orientation: landscape` and `max-height: 520px`) it is two
   columns (peak + net | stats + buttons via `.sesk__col`, `display: contents` elsewhere); the
@@ -397,7 +398,7 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   halo and shimmer live there); current skin = kit select frame; locked = `aria-disabled`
   (focusable, shows why). Cash desk: kit buttons with the row icon in front (a per-button coin
   did not fit «+1 000 000» on phones; the million is `fmtShort`); CreativeRow (another
-  section's) is dressed as an iron kit button through `.cash__creative`.
+  section's) takes a `className` prop (`px-btn px-f px-btn--iron`) — no override of its own CSS.
 - Settings / auto / bet sheets of both games share `CasToggles` / `CasAutoPicker` /
   `CasBetPicker`; handlers stay in the pages. New kit icons: `auto`, `buzz` (vibration).
 - Dead CSS of the old HUD, sheets and session card was removed from `theme.css` with a postcss
@@ -406,3 +407,40 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   than deleting by eye.
 - Not verified: a real phone / Telegram webview, a real gamepad, the big-win totem in the new
   frame (the rig reached only combo ×2).
+
+### Critic fixes (wave 3 — K2, 13.10.2026)
+
+- **SPIN → SKIP, never locked.** During a spin the button reads «Пропустить» (`is-skip`) and is
+  live: tap 1 lands the reels (`slam`, `reelsDone`), tap 2 hurries the count (`hurry` =
+  `SKIP_TEMPO` 0.5 + `skipCount()`). Space and pad A take the same path (`pressSpin`).
+  `SKIP_GUARD_MS` 350: a spin tap right after a skip is ignored — without it the second tap of a
+  double-tap started a new paid spin in Cascade. Economy untouched (`src/lib` diff empty).
+- **Status / win line lives outside the scaled cabinet** (`.cas-status`): inside it shrank with
+  `useFit` to 7.7–13.6 px. Now 17 px on phones (19 on tablet), fixed height 44/50 px.
+- **Press feedback on touch:** `usePress` on `.cas-spin`, `.cas-bet__v`, hall cards / row and every
+  header round (`CasRound` = `gx-round gx-round--dark` + `usePress`). `:active` alone never showed
+  during a touch hold. Checked: `.is-down` within 2 frames at 4× CPU.
+- **Phone landscape** (`useCasLying`): no GameTop on casino pages; a 4×44 tools row (`CasTools`) tops `.cas-info`.
+  Info column 109u (was 92u) so the tools fit; the cabinet lost 6.6 % against K, still +33 %
+  against before.
+- **Hall wallet** has a fixed min-width (`11ch` + coin + gap): its rect is identical for
+  9 990 … 999 999 999 on every format. Hall cards: art is a size container, symbols
+  `min(100cqw, 100cqh)` — `aspect-ratio` with `min-height: auto` stretched the grid. Phone landscape:
+  facts in one row, captions hidden, art column square (`calc(100cqh - 14u)`).
+- **Records** use `fmtCompact` («1,2 млн», «988 тыс.»); `useFitText` refits on ResizeObserver AND
+  a MutationObserver (text changes while the numbers roll). Tablet portrait stats:
+  `auto minmax(min-content, 1fr) minmax(0, max-content)` — else the caption was cut.
+- **Rules / paytable sheets** = `.cas-rules`: short lead + pictures; full texts inside
+  `<details class="cas-more">` (44-px summary). Min font 17 px; rarity names are ink pills on the
+  rarity colour (≥ 7:1) — rarity colour as text on parchment was 1.1:1.
+- **Skins sheet** = `SkinCard` (art | name / state), names step down by a length class plus
+  `@container skn` — measuring each name forced 13 layouts on open. The relic badge only when
+  earned; a locked card shows lock + numbers + bar, same row height.
+- Recent-spins row: 5 dashed empty chips before the first spin, fixed chip size — no jump on the
+  first result. Under 375 px the tall balance is `--px-fs-head` (de «Guthaben» was cut).
+- **Probe pitfalls:** the kit focus ring (`.px-f::after`, inset −3u) adds 6 px to `scrollWidth` —
+  compare the content range, not sw/cw. After HMR Vite serves `/src/store.ts?t=…`: scripts must
+  import the same URL the page did, or they patch a second store. Eruda (dev) sits top-right and
+  steals taps / inflates long tasks — abort its requests in the stand.
+- Left: tablet-landscape Slots cabinet is ~11 % of the screen; the lever is a 34-px-wide target;
+  juice tiers (R18) not touched by ruling.

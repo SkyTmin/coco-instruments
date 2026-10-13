@@ -108,6 +108,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: 'Sammle {n} gleiche',
   },
   btn: {
+    spinShort: 'Drehen',
+    freeShort: 'Gratis',
+    brokeShort: 'Pleite',
+    bonusShort: 'Bonus',
+    stopShort: 'Stopp',
+    skip: 'Überspringen',
     stopInf: 'Stopp · ∞',
     stopN: 'Stopp ({n})',
     combo: 'Kombo ×{n}…',
@@ -123,6 +129,9 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'Spins',
   statBestWin: 'bester Gewinn',
   pay: {
+    more: 'Details',
+    cascShort: 'Gewinner verschwinden, neue fallen nach — der Multiplikator steigt',
+    introShort: '5 Linien, von links nach rechts · 3 in Reihe = Gewinn',
     title: 'Gewinne und Linien',
     intro:
       'Fünf Linien, jede zahlt von links nach rechts: Drei gleiche sind der Hauptgewinn, die ersten zwei bringen ein bisschen zurück. Der Multiplikator aus der Tabelle gilt für Einsatz ÷ {unit} — bei {bet} Einsatz sind das {line}.',
@@ -166,6 +175,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Stoppt von selbst, wenn die Münzen ausgehen',
     h10: 'zehn Spins',
     h25: 'fünfundzwanzig',
     h50: 'fünfzig',
@@ -184,6 +194,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Spins und Kaskaden doppelt so schnell',
   },
   bet: {
+    short: '{min}–{max}, Schritt {step}',
+    lineShort: 'Linie = Einsatz ÷ {unit}',
     less: 'Weniger',
     more: 'Mehr',
     note: 'Von {min} bis {max} Münzen in {step}er-Schritten. Eine Linie zahlt auf Einsatz ÷ {unit} — gerade sind das {line}.',
@@ -211,6 +223,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MAXIMUM',
   },
   cascade: {
+    howShort: '{n} gleiche irgendwo = Gewinn, das Feld rutscht nach',
+    anteChip: '×{n}',
     subtitle: '{cols}×{rows}-Feld · {n} gleiche irgendwo',
     bonus: 'BONUS',
     left: 'noch {n}',
@@ -218,6 +232,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Bonus kaufen',
   },
   rules: {
+    orbShort: 'Eine Kugel von ×2 bis ×500 multipliziert den Gewinn des Spins',
+    scatShort: '{trigger}+ Scatter irgendwo — {fs} Freispiele',
+    anteShort: 'Ante: Einsatz ×{ante}, Bonus doppelt so oft · Kauf — {buy} Einsätze',
     title: 'So funktioniert’s',
     anyTitle: 'Acht gleiche irgendwo',
     any: 'Keine Linien: Gezählt wird, wie viele gleiche Symbole auf dem ganzen {cols}×{rows}-Feld liegen. Ab {n} Stück gibt’s Gewinn, egal wo sie stehen. Gewinner verschwinden, die oberen rutschen nach, das Feld wird neu gezählt — so lange, wie Gewinne fallen.',

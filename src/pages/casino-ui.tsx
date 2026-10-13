@@ -3,15 +3,18 @@
 // cells. The cabinet itself (reels, grid, lever, skins) is untouched: it is drawn at its old
 // fixed pixel size and scaled as one piece, because the reel motion moves in those pixels.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
-import { Button, Icon, KeyHint } from '@/ui-px';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode, RefObject } from 'react';
+import { Button, Icon, KeyHint, usePress } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
 import { useAction } from '@/input/hooks';
 import { useFormFactor } from '@/game-shell';
 import { inTopLayer } from '@/input/focus-nav';
 import { CoinIcon } from '@/components/slot-art';
 import { BETS } from '@/lib/slots';
+import { spinReel } from '@/lib/reel-motion';
+import type { ReelPlan } from '@/lib/reel-motion';
 import { selectionChanged, tapLight } from '@/lib/haptics';
+import { uiTap } from '@/lib/sound';
 import { fmtNum, useT } from '@/i18n';
 import './casino.css';
 
@@ -68,6 +71,54 @@ export function fitStyles(fit: { k: number; w: number; h: number }): {
 }
 
 /**
+ * One reel strip's spin (`spinReel`) that can be LANDED at once: when `slam` grows (the Skip
+ * press), the running animation and its blur / impact timers are cancelled — the strip already
+ * stands at its end (`spinReel` sets the final transform inline) — and `onStop` fires now if
+ * the reel had not landed yet. The outcome is fixed before the reels start; only the show ends.
+ */
+export function useReelSpin<T>(
+  ref: RefObject<HTMLElement>,
+  plan: ReelPlan<T>,
+  spinId: number,
+  onStop: () => void,
+  slam: number,
+): void {
+  const stopRef = useRef(onStop);
+  stopRef.current = onStop;
+  const live = useRef<{ landed: boolean; cancel?: () => void }>({ landed: true });
+  // Before paint, not after: else the first frame of a spin showed the strip at rest.
+  useLayoutEffect(() => {
+    const st: { landed: boolean; cancel?: () => void } = { landed: false };
+    live.current = st;
+    st.cancel = spinReel(ref.current, plan, spinId, () => {
+      st.landed = true;
+      stopRef.current();
+    });
+    return () => st.cancel?.();
+  }, [ref, spinId, plan]);
+  useLayoutEffect(() => {
+    if (!slam) return;
+    const st = live.current;
+    st.cancel?.();
+    st.cancel = undefined;
+    if (st.landed) return;
+    st.landed = true;
+    stopRef.current();
+  }, [slam]);
+}
+
+/** Tempo of the rest of a spin after the Skip press (× the turbo factor): links and the count. */
+export const SKIP_TEMPO = 0.5;
+/**
+ * После «Пропустить» кнопка снова «Крутить», и быстрый второй тап запускал новый спин (ставка!).
+ * Тап «Крутить» раньше этого срока после пропуска — мимо (Android DOUBLE_TAP_TIMEOUT = 300 мс).
+ */
+export const SKIP_GUARD_MS = 350;
+
+/** Строка правил «A · B»: точка держится за левую половину, перенос — после неё. */
+export const keepDot = (s: string) => s.replace(/ · /g, '\u00a0· ');
+
+/**
  * Page layout: «tall» = info strip, stage, deck in one column (phone portrait and tablet
  * portrait — there the width is the limit, so the stage gets all the height left); «wide» =
  * info | stage | deck columns (phone landscape, tablet landscape, desktop).
@@ -77,13 +128,55 @@ export function useCasLayout(): 'tall' | 'wide' {
   return ff === 'phone-portrait' || (ff === 'tablet' && !landscape) ? 'tall' : 'wide';
 }
 
-/** One fact: icon + number (+ a small word under it on roomy formats). */
+/** Phone landscape: the page renders no GameTop row (critic 7c: it took 62 of 390 px). */
+export function useCasLying(): boolean {
+  return useFormFactor().ff === 'phone-landscape';
+}
+
+/** Круглая кнопка шапки (`gx-round`): нажатие видно в первый кадр (`usePress` → `.is-down`). */
+export function CasRound({ className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const press = usePress(ref);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      {...rest}
+      {...press}
+      className={`gx-round gx-round--dark${className ? ` ${className}` : ''}`}
+    />
+  );
+}
+
+/**
+ * Phone landscape: back + the page's own top buttons (skins, rules, settings) as one row of
+ * 44-px icons at the top of the info column, instead of the GameTop row over the whole page.
+ */
+export function CasTools({ onBack, children }: { onBack: () => void; children: ReactNode }) {
+  const t = useT();
+  return (
+    <div className="cas-tools">
+      <Button
+        icon="left"
+        label={t('common.back')}
+        className="cas-tools__back"
+        onClick={() => {
+          tapLight();
+          uiTap();
+          onBack();
+        }}
+      />
+      {children}
+    </div>
+  );
+}
+
 /**
  * Steps the font of a box down (`data-fit` 1, 2) until its text fits the width — a long number
- * gets smaller instead of losing its tail. Measured before paint and again on resize.
+ * gets smaller instead of losing its tail. Measured before paint, on resize and on a text change.
  */
-function useFitText(dep: unknown, on: boolean) {
-  const ref = useRef<HTMLElement>(null);
+function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boolean) {
+  const ref = useRef<T>(null);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !on) return;
@@ -95,7 +188,14 @@ function useFitText(dep: unknown, on: boolean) {
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
-    return () => ro.disconnect();
+    // A rolling number (AnimatedNumber) changes its text without a new `dep` — «18 тыс.» →
+    // «988 тыс.» kept the step measured for the short text and lost its tail.
+    const mo = new MutationObserver(fit);
+    mo.observe(el, { characterData: true, childList: true, subtree: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
   }, [dep, on]);
   return ref;
 }
@@ -107,12 +207,15 @@ export function CasStat({
   tone,
   className,
   fit = false,
+  tip,
 }: {
   icon: ReactNode;
   value: ReactNode;
   label: ReactNode;
   tone?: 'gold';
   className?: string;
+  /** The exact value when `value` is compact (hover / long press). */
+  tip?: string;
   /** Shrink a long value to fit (the hall: static numbers; not in play, where it would jump). */
   fit?: boolean;
 }) {
@@ -120,6 +223,7 @@ export function CasStat({
   return (
     <div
       className={`cas-stat${tone ? ` cas-stat--${tone}` : ''}${className ? ` ${className}` : ''}`}
+      data-tip={tip}
     >
       <span className="cas-stat__ico">{icon}</span>
       <b ref={vRef} className="cas-stat__v px-num">
@@ -146,7 +250,16 @@ export interface DeckProps {
   spinning: boolean;
   setBet: (b: number) => void;
   onCustomBet: () => void;
-  spinLabel: ReactNode;
+  /** The verb only («Крутить», «Нет монет»): the stake already sits in the bet well above. */
+  spinLabel: string;
+  /** A count on the spin plate's corner: free spins, bonus spins left, auto spins left. */
+  spinBadge?: ReactNode;
+  /**
+   * While a spin plays, the plate stays gold and SKIPS the show (the outcome is already fixed):
+   * the page's handler stops the reels, then hurries the links and the count. Space / pad A
+   * call the same handler.
+   */
+  onSkip?: () => void;
   spinDisabled: boolean;
   busy: boolean;
   onSpin: () => void;
@@ -221,6 +334,12 @@ export function CasDeck(p: DeckProps) {
   }, []);
 
   const autoOn = p.auto > 0;
+  // Auto keeps its «Stop» plate; otherwise a running spin turns the plate into «Skip».
+  const skipping = p.spinning && !!p.onSkip && !autoOn;
+  const spinText = skipping ? t('slots.btn.skip') : p.spinLabel;
+  // A long verb steps its font down (then wraps at the smallest step), never an ellipsis.
+  const spinRef = useFitText<HTMLSpanElement>(spinText, true);
+  const betPress = usePress<HTMLButtonElement>();
   return (
     <div className="cas-deck px" ref={root}>
       {p.extra && <div className="cas-deck__extra">{p.extra}</div>}
@@ -242,6 +361,7 @@ export function CasDeck(p: DeckProps) {
             />
             <button
               type="button"
+              {...betPress}
               className="cas-bet__v cas-well px-f px-num"
               disabled={p.spinning}
               aria-label={t('slots.a11y.bet')}
@@ -306,16 +426,27 @@ export function CasDeck(p: DeckProps) {
         </Button>
         <Button
           kind={autoOn ? 'danger' : 'primary'}
-          className={`cas-spin${p.busy ? ' is-busy' : ''}`}
-          off={p.spinDisabled}
+          className={`cas-spin${p.busy ? ' is-busy' : ''}${skipping ? ' is-skip' : ''}`}
+          off={skipping ? false : p.spinDisabled}
           hint="confirm"
           data-autofocus=""
+          aria-label={spinText}
           onClick={() => {
+            if (skipping) {
+              p.onSkip?.();
+              return;
+            }
             if (p.spinDisabled) return;
             p.onSpin();
           }}
         >
-          <span className="cas-spin__t">{p.spinLabel}</span>
+          {skipping && <Icon name="skip" />}
+          <span className="cas-spin__t" ref={spinRef}>
+            {spinText}
+          </span>
+          {!skipping && p.spinBadge != null && (
+            <b className="cas-mini__n cas-spin__n px-num">{p.spinBadge}</b>
+          )}
         </Button>
         <Button
           icon="bolt"

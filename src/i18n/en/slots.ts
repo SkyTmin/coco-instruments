@@ -108,6 +108,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: 'Match {n} of a kind',
   },
   btn: {
+    spinShort: 'Spin',
+    freeShort: 'Free',
+    brokeShort: 'No coins',
+    bonusShort: 'Bonus',
+    stopShort: 'Stop',
+    skip: 'Skip',
     stopInf: 'Stop · ∞',
     stopN: 'Stop ({n})',
     combo: 'Combo ×{n}…',
@@ -123,6 +129,9 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'spins',
   statBestWin: 'best win',
   pay: {
+    more: 'Details',
+    cascShort: 'Winners vanish, new symbols fall — the multiplier grows',
+    introShort: '5 lines, left to right · 3 in a row = payout',
     title: 'Payouts and lines',
     intro:
       'Five lines, each pays left to right: three of a kind is the main win, the first two give a small return. The table multiplier is applied to bet ÷ {unit} — at a bet of {bet} that’s {line}.',
@@ -166,6 +175,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Stops by itself when coins run out',
     h10: 'ten spins',
     h25: 'twenty-five',
     h50: 'fifty',
@@ -184,6 +194,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Spins and cascades twice as fast',
   },
   bet: {
+    short: '{min}–{max}, step {step}',
+    lineShort: 'line = bet ÷ {unit}',
     less: 'Less',
     more: 'More',
     note: 'From {min} to {max} coins in steps of {step}. A line pays from bet ÷ {unit} — right now that’s {line}.',
@@ -211,6 +223,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MAX WIN',
   },
   cascade: {
+    howShort: '{n} alike anywhere = a win, the board tumbles',
+    anteChip: '×{n}',
     subtitle: '{cols}×{rows} board · {n} of a kind anywhere',
     bonus: 'BONUS',
     left: '{n} left',
@@ -218,6 +232,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Buy bonus',
   },
   rules: {
+    orbShort: 'An orb from ×2 to ×500 multiplies the spin’s win',
+    scatShort: '{trigger}+ scatters anywhere — {fs} free spins',
+    anteShort: 'Ante: bet ×{ante}, bonus twice as often · buy — {buy} bets',
     title: 'How it works',
     anyTitle: 'Eight of a kind anywhere',
     any: 'No lines: what counts is how many matching symbols land anywhere on the {cols}×{rows} board. {n} or more is a win, wherever they are. Winners vanish, the ones above fall into their places, the board is counted again — and so on while wins keep coming.',
