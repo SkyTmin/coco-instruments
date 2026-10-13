@@ -63,6 +63,9 @@ html[data-input='touch'] .mn .px-keyhint {
   .mn--tall {
     gap: var(--u);
   }
+  .mn--tall .mn-dock {
+    row-gap: calc(2 * var(--u));
+  }
 }
 /* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
 .mn--tall :is(.mn-stat--tokens, .mn-stat--keys) {
@@ -163,6 +166,10 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 .mn-side__h {
   margin: 0 0 calc(2 * var(--u));
   font-size: var(--px-fs);
+}
+/* Телефон лёжа: с заданием проводника заголовка «Расходники» нет — колонка низкая. */
+html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
+  display: none;
 }
 .mn-panel {
   flex: none;
@@ -970,6 +977,18 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
   justify-content: space-between;
   gap: calc(2 * var(--u));
 }
+/* Телефон лёжа, шестой расходник (крепь): ряд остаётся одним — ячейки 20u, иначе второй
+   ряд сдвигает колонку и она начинает прокручиваться. */
+html[data-ff^='phone'] .mn--wide .mn-items[data-n='6'] {
+  --slot: calc(20 * var(--u));
+}
+html[data-ff^='phone'] .mn--wide .mn-items[data-n='6'] .mn-items__row {
+  gap: var(--u);
+}
+html[data-ff^='phone'] .mn--wide .mn-items__row {
+  height: calc(23 * var(--u));
+  align-items: center;
+}
 .mn-item {
   flex: none;
 }
@@ -1096,11 +1115,15 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
   justify-content: flex-start;
   gap: calc(1 * var(--u));
   min-width: 0;
-  height: calc(24 * var(--u));
+  /* 21u: на планшете это 63 px; телефону — 24u (48 px, палец), см. ниже. */
+  height: calc(21 * var(--u));
   align-items: center;
   padding-left: calc(2 * var(--u));
   padding-right: 0;
   white-space: normal;
+}
+html[data-ff^='phone'] .mn--tall .mn-dock__btn {
+  height: calc(24 * var(--u));
 }
 .mn-dock__btn:active,
 .mn-dock__btn.is-down {

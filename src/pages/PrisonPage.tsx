@@ -2316,8 +2316,13 @@ export function PrisonPage() {
         ...shownItems.map((it) => `${it.id}:${prison.items[it.id]}`),
       ]}
       render={() => (
-        <div className="mn-items" role="group" aria-label={t('inv.section.items')}>
-          {roomy && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
+        <div
+          className="mn-items"
+          role="group"
+          aria-label={t('inv.section.items')}
+          data-n={shownItems.length}
+        >
+          {wide && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
           <div className="mn-items__row">
             {shownItems.map((it, i) => {
               const n = prison.items[it.id];
