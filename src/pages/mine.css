@@ -434,7 +434,7 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
   padding: calc(1 * var(--u)) calc(3 * var(--u));
   border-radius: 0;
   background: var(--px-ink);
-  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-gold);
 }
 
@@ -453,7 +453,7 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
   background: none;
   box-shadow: none;
   font-family: var(--px-font);
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1.2;
   color: var(--px-text);
 }
@@ -488,7 +488,7 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 .mn .pshift i,
 .mn .pshift em {
   font-size: var(--px-fs-sm);
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
   opacity: 1;
@@ -526,7 +526,7 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 }
 .mn .psense b {
   font-family: var(--px-head);
-  font-weight: 400;
+  font-weight: 700;
 }
 
 /* ---- Шапка: деньги, токены, ключи (+ этаж на широком), назад и настройки ------------ */
@@ -927,7 +927,7 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
   color: var(--px-green);
 }
 .mn-quest__n {
-  font: 400 var(--px-fs) / 1 var(--px-font);
+  font: 700 var(--px-fs) / 1 var(--px-font);
   color: var(--px-gold);
 }
 /* В боковой колонке счёт уходит под название — иначе оно ломается в три строки. */
@@ -1014,6 +1014,15 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 .mn-bag__ico {
   position: relative;
   justify-self: center;
+  line-height: 0;
+}
+.mn-bag__badge {
+  position: absolute;
+  z-index: 3;
+  top: calc(-4 * var(--u));
+  right: calc(-5 * var(--u));
+  line-height: 1;
+  pointer-events: none;
 }
 .mn-bag__mid {
   display: flex;
@@ -1185,7 +1194,7 @@ html:not([data-ff^='phone']) .mn .mn-bag__sell {
   background: none;
   box-shadow: none;
   color: var(--px-text);
-  font: 400 var(--px-fs) / 1.2 var(--px-font);
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
 }
 /* «Новый горизонт · Серебряный» длиннее карточки: лента переносится в две
    строки, а не раздвигает карточку за край экрана. */
@@ -1215,33 +1224,34 @@ html:not([data-ff^='phone']) .mn .mn-bag__sell {
   border-image-slice: var(--pxk-badge-s);
   border-image-width: var(--pxk-badge-w);
   image-rendering: pixelated;
-  font: 400 calc(var(--px-fs-hero) * 2) / 1 var(--px-head);
+  font: 400 calc(var(--px-fs-hero) * 2.6) / 1 var(--px-head);
   color: var(--px-gold);
   text-shadow: 0 var(--u) 0 var(--px-ink);
 }
 .mn .prank__mine {
-  gap: calc(3 * var(--u));
-  font: 600 var(--px-fs) / 1.2 var(--px-font);
-  text-align: left;
+  gap: calc(6 * var(--u));
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+}
+.mn .prank__mine > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
 }
 .mn .prank__mine img {
-  width: calc(16 * var(--u));
-  height: calc(16 * var(--u));
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
   border-radius: 0;
+  image-rendering: pixelated;
 }
 .mn .prank__key {
   gap: calc(2 * var(--u));
-  font: 600 var(--px-fs) / 1.2 var(--px-font);
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
   color: var(--px-gold);
 }
 .mn .prank__lvl {
-  font: 600 var(--px-fs) / 1.2 var(--px-font);
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
   color: var(--px-green);
-}
-.mn .prank__norm {
-  gap: calc(2 * var(--u));
-  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
-  color: var(--px-muted);
 }
 .mn .prank__cta {
   margin-top: calc(2 * var(--u));

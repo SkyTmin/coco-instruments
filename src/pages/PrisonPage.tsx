@@ -1,4 +1,13 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { GxIcon, GxModal } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
@@ -373,7 +382,9 @@ export function PrisonPage() {
   const dockRef = useRef<HTMLElement>(null);
   const openScreen = (key: Screen, tab?: CampTab) => {
     tapLight();
-    setScreen({ key, tab: tab ?? SCREENS[key].only[0] });
+    // Окно монтируется переходом: нажатие и «прыжок» значка успевают в кадр, длинная
+    // сборка вкладки не держит поток одним куском (критик, волна 2: до 370 мс при 4×).
+    startTransition(() => setScreen({ key, tab: tab ?? SCREENS[key].only[0] }));
   };
   const [rankScene, setRankScene] = useState<PrisonRankUp | null>(null);
   const [sceneShown, sceneLeaving] = useExit(rankScene, 260);
@@ -1718,12 +1729,12 @@ export function PrisonPage() {
     {
       inventory: () => {
         tapLight();
-        setInvOpen(true);
+        startTransition(() => setInvOpen(true));
       },
       pets: () => openScreen('pets'),
       forge: () => {
         tapLight();
-        setForgeOpen(true);
+        startTransition(() => setForgeOpen(true));
       },
       books: () => openScreen('enchant'),
       chests: () => openScreen('cases'),
@@ -1774,7 +1785,7 @@ export function PrisonPage() {
 
   const openSheet = (which: 'mines' | 'settings') => {
     tapLight();
-    setSheet(which);
+    startTransition(() => setSheet(which));
   };
   const goForest = () => {
     if (rank < FOREST_UNLOCK_RANK && !prestige) {
@@ -2349,7 +2360,14 @@ export function PrisonPage() {
           data-tip={t('input.action.sell')}
           data-tip-key="sell"
         >
-          <i className="mn-pic mn-pic--bag mn-bag__ico" data-hop="" aria-hidden="true" />
+          <span className="mn-bag__ico">
+            <i className="mn-pic mn-pic--bag" data-hop="" aria-hidden="true" />
+            {full && (
+              <span className="mn-bag__badge">
+                <Badge>!</Badge>
+              </span>
+            )}
+          </span>
           <span className="mn-bag__mid">
             <span className="mn-bag__title">{t('inv.lim.bag')}</span>
             <Bar
@@ -2412,7 +2430,7 @@ export function PrisonPage() {
             data-tip-key="forge"
             onClick={() => {
               tapLight();
-              setForgeOpen(true);
+              startTransition(() => setForgeOpen(true));
             }}
           >
             <span className="mn-dock__ico" data-hop="">
@@ -2501,7 +2519,7 @@ export function PrisonPage() {
             data-tip-key="inventory"
             onClick={() => {
               tapLight();
-              setInvOpen(true);
+              startTransition(() => setInvOpen(true));
             }}
           >
             <span className="mn-dock__ico">
@@ -2900,20 +2918,33 @@ export function PrisonPage() {
           <div className="prank__card">
             <span className="prank__label px-ribbon">
               {horizonOf(sceneShown.rank).from === sceneShown.rank
-                ? t('mineHud.scene.horizon', {
-                    name: horizonName(HORIZONS.indexOf(horizonOf(sceneShown.rank))),
-                  })
+                ? horizonName(HORIZONS.indexOf(horizonOf(sceneShown.rank)))
                 : t('mineHud.scene.rank')}
             </span>
             <b className="prank__letter">{rankLetter(sceneShown.rank)}</b>
-            <span className="prank__mine">
-              <img src={blockTexture(sceneShown.rank)} alt="" />
-              {t('mineHud.scene.mine', {
+            {/* Этаж, цена руды, цена блока — строкой значков; фраза целиком — для чтеца. */}
+            <span
+              className="prank__mine"
+              role="img"
+              aria-label={t('mineHud.scene.mine', {
                 rank: rankLetter(sceneShown.rank),
                 rock: nameIn(rockName(sceneShown.rank)),
                 ore: String(ROCKS[sceneShown.rank].value),
                 block: fmtShort(ROCKS[sceneShown.rank].block),
               })}
+            >
+              <span>
+                <img src={rockTexture(sceneShown.rank)} alt="" />
+                {rankLetter(sceneShown.rank)}
+              </span>
+              <span>
+                <i className="mn-coin" aria-hidden="true" />
+                {fmt(ROCKS[sceneShown.rank].value)}
+              </span>
+              <span>
+                <img src={blockTexture(sceneShown.rank)} alt="" />
+                {fmtShort(ROCKS[sceneShown.rank].block)}
+              </span>
             </span>
             <span className="prank__key">
               <KeyIcon size={10 * u} /> {t('mineHud.scene.key')}
@@ -2924,20 +2955,6 @@ export function PrisonPage() {
             {sceneShown.buyout > 0 && (
               <span className="prank__lvl">
                 {t('mineHud.scene.buyout', { n: Math.round(sceneShown.buyout) })}
-              </span>
-            )}
-            {sceneShown.rank < LAST_RANK && (
-              <span className="prank__norm">
-                {t('mineHud.scene.next', { rank: rankLetter(sceneShown.rank + 1) })}
-                <RankChips
-                  need={rankNeeds({
-                    rank: sceneShown.rank,
-                    norm: {},
-                    oreBlocks: 0,
-                    pickMax: prison.pickMax,
-                  })}
-                  floor={sceneShown.rank}
-                />
               </span>
             )}
             {sceneShown.levelUps.length > 0 && (
