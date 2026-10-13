@@ -23,6 +23,7 @@ export const nursery = {
     sleep: 'Сон',
   },
   lvMax: 'Предел',
+  lvPct: '{n} ур. · {p} %',
   patXp: '+{n} опыта',
   power: 'Сила',
   gold: 'Золотой',
@@ -34,6 +35,7 @@ export const nursery = {
   take: 'Взять с собой',
   leave: 'Оставить дома',
   details: 'Подробнее',
+  anims: 'Движения',
   unknown: 'Кто это?',
   from: 'Из яиц',
   /** Chance of this very pet from one egg. */
