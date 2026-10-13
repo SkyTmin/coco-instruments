@@ -69,7 +69,7 @@ export const campData: Translation<typeof ru> = {
     },
     sense: {
       name: 'Fiuto',
-      per: '+8% di schivare i nodi, quello pericoloso si illumina',
+      per: '+8% di schivare i rami, quello pericoloso si illumina',
     },
     swing: {
       name: 'Slancio',

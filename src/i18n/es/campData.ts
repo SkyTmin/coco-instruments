@@ -69,7 +69,7 @@ export const campData: Translation<typeof ru> = {
     },
     sense: {
       name: 'Olfato',
-      per: '+8 % de esquivar nudos, el nudo peligroso brilla',
+      per: '+8 % de esquivar ramas, la rama peligrosa brilla',
     },
     swing: {
       name: 'Impulso',

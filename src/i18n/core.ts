@@ -101,12 +101,11 @@ export function savedLang(): Lang | null {
 }
 
 /**
- * Auto-detect stays OFF while part of the game is still Russian-only
- * (`NOT_YET_TRANSLATED` in `i18n.test.ts`, lib data): a player with an English
- * Telegram would get a mixed game. Until then everyone starts in Russian and
- * picks a language in ⚙ → Язык; the test turns this on when the list is empty.
+ * Auto-detect is ON since the whole game is translated (v2.149;
+ * `NOT_YET_TRANSLATED` in `i18n.test.ts` is empty, and a test keeps it off
+ * while that list is not). The player's choice in ⚙ → Язык always wins.
  */
-export const AUTO_DETECT = false;
+export const AUTO_DETECT = true;
 
 /**
  * Saved choice → (with `AUTO_DETECT`) Telegram `language_code` → browser

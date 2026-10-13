@@ -186,7 +186,7 @@ export const camp: Translation<typeof ru> = {
   axench: {
     chips: '+{pct} % de bûches en plus',
     resin: 'un jeton sur {pct} des bûches',
-    sense: '{pct} d’esquive · le nœud dangereux brille',
+    sense: '{pct} d’esquive · la branche dangereuse brille',
     swing: '{pct} · deux bûches d’un coup',
     fell: '{pct} · un arbre d’un coup',
     storm: '{pct} · l’arbre qui tombe abat le voisin',

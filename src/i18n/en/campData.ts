@@ -69,7 +69,7 @@ export const campData: Translation<typeof ru> = {
     },
     sense: {
       name: 'Instinct',
-      per: '+8% to dodge a knot, dangerous knots glow',
+      per: '+8% to dodge a branch, dangerous branches glow',
     },
     swing: {
       name: 'Big Swing',

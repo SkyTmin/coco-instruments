@@ -177,7 +177,7 @@ export const camp: Translation<typeof ru> = {
   axench: {
     chips: '+{pct}% extra logs',
     resin: 'a token from {pct} of logs',
-    sense: '{pct} dodge · dangerous knots glow',
+    sense: '{pct} dodge · dangerous branches glow',
     swing: '{pct} · two logs at once',
     fell: '{pct} · a tree in one hit',
     storm: '{pct} · a falling tree topples the next',

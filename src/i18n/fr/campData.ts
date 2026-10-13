@@ -69,7 +69,7 @@ export const campData: Translation<typeof ru> = {
     },
     sense: {
       name: 'Flair',
-      per: "+8 % d'esquive des nœuds, le nœud dangereux brille",
+      per: "+8 % d'esquive des branches, la branche dangereuse brille",
     },
     swing: {
       name: 'Élan',

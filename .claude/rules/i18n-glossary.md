@@ -320,3 +320,8 @@ Rods are full names: Homemade/Bamboo/Telescopic/Carbon/Sea/Golden Rod; DE «Bast
 Pond/River/Lake/Mountain Lake/Sea (fr Étang… Lac de montagne, tr Gölet… Dağ gölü, de Teich…
 Bergsee). Forest floats «ВАЛКА!/БУРЕЛОМ!/ЗАМАХ ×2» are built from `axeEnchName` in upper case, so
 they always match the enchant names.
+
+Lead decision after T5: «сучок» in the forest is the Timberman-style BRANCH that drops on your
+side (`lib/forest.ts`), never a knot in the wood — «СУЧОК!» BRANCH!/BRANCHE !/BUDAK!/AST!/¡RAMA!/
+RAMO!, and the camp's «Чутьё» axe-enchant lines (`camp`, `campData`) say the same.
+IT keeps «Categoria» for the forest grade and «grado» for the mine rank (two ladders).
