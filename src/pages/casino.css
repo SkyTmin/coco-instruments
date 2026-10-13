@@ -622,3 +622,289 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-777 .sym {
 html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   height: calc(16 * var(--u));
 }
+
+/* ==== Hall (GamesPage): wallet on top, three big game cards ================================= */
+.cas-hall .gs__main {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.hall {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: calc(400 * var(--u));
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: calc(4 * var(--u));
+  padding: 0 calc(3 * var(--u)) calc(3 * var(--u));
+}
+.hall-wallet,
+.hall-card {
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  min-width: 0;
+}
+.hall-wallet {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: calc(8 * var(--u));
+  padding: calc(8 * var(--u)) calc(10 * var(--u));
+}
+.hall-wallet__money {
+  display: grid;
+  gap: var(--u);
+  min-width: 0;
+}
+.hall-wallet__v {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  font-size: var(--px-fs-hero);
+  line-height: 1.05;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.hall-wallet__lvl {
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  padding-bottom: var(--u);
+}
+.hall-wallet__n {
+  font-size: var(--px-fs);
+  line-height: 1;
+  color: var(--px-gold);
+}
+
+.hall-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(4 * var(--u));
+  align-content: start;
+}
+.hall-card {
+  position: relative;
+  appearance: none;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: var(--px-text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  padding: calc(9 * var(--u));
+  display: grid;
+  grid-template-columns: calc(50 * var(--u)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: 'art body' 'art go';
+  gap: calc(3 * var(--u)) calc(5 * var(--u));
+}
+.hall-card:active {
+  translate: 0 var(--u);
+}
+/* The art sits in a dark obsidian plate: symbols and the mine cover read on it. */
+.hall-card__art {
+  grid-area: art;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  min-height: calc(40 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  padding: calc(5 * var(--u));
+}
+/* Phone portrait: the slots art is one reel (three symbols down), the cascade two columns. */
+.hall-card__reels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--u);
+  width: 56%;
+}
+.hall-card__reels img {
+  width: 100%;
+  height: auto;
+}
+.hall-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--u);
+  width: 100%;
+}
+.hall-card__grid img {
+  width: 100%;
+  height: auto;
+}
+.hall-card__cover {
+  position: absolute;
+  inset: calc(2 * var(--u));
+  width: calc(100% - 4 * var(--u));
+  height: calc(100% - 4 * var(--u));
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+.hall-card__body {
+  grid-area: body;
+  display: grid;
+  align-content: start;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.hall-card__t {
+  font-size: var(--px-fs-big);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hall-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(2 * var(--u));
+}
+.hall-card__tags > i {
+  padding: 0 calc(2 * var(--u));
+  font: 600 var(--px-fs-tiny) / 1.5 var(--px-font);
+  color: var(--px-muted);
+  white-space: nowrap;
+}
+.hall-card__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(4 * var(--u));
+}
+html .hall .hall-card__facts .cas-stat {
+  grid-template-areas: 'ico v' 'k k';
+  padding: 0;
+  border-image-source: none;
+}
+html .hall .hall-card__facts .cas-stat__v {
+  font-size: var(--px-fs-head);
+}
+html .hall .hall-card__facts .cas-stat__ico .px-i {
+  --i-w: 9;
+  --i-h: 9;
+}
+.hall-card__facts .cas-stat__k {
+  font-size: var(--px-fs-tiny);
+  white-space: normal;
+  line-height: 1.05;
+}
+.hall-card__go {
+  grid-area: go;
+  justify-self: end;
+  pointer-events: none;
+}
+.hall-note {
+  margin: 0;
+  padding: 0 calc(2 * var(--u));
+  font: 600 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-text);
+  text-align: center;
+}
+
+/* Wide formats: three cards side by side, picture on top. */
+html .hall[data-lay='wide'] .hall-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+html .hall[data-lay='wide'] .hall-card {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'art' 'body' 'go';
+}
+html .hall[data-lay='wide'] .hall-card__art {
+  aspect-ratio: 3 / 2;
+}
+html .hall[data-lay='wide'] .hall-card__reels {
+  flex-direction: row;
+  justify-content: center;
+  width: 100%;
+}
+html .hall[data-lay='wide'] .hall-card__reels img {
+  width: 28%;
+}
+html .hall[data-lay='wide'] .hall-card__grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 76%;
+}
+html .hall[data-lay='wide'] .hall-card__go {
+  justify-self: stretch;
+}
+html[data-ff='phone-landscape'] .hall {
+  gap: calc(3 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall-wallet {
+  padding: calc(8 * var(--u)) calc(10 * var(--u));
+}
+/* Phone portrait: the cards share the height the wallet leaves. */
+html .hall[data-lay='tall'] {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+html .hall[data-lay='tall'] .hall-cards {
+  grid-auto-rows: minmax(0, 1fr);
+}
+html[data-ff='phone-landscape'] .hall-wallet__v {
+  font-size: var(--px-fs-big);
+}
+html[data-ff='phone-landscape'] .hall-card__art {
+  aspect-ratio: auto;
+  min-height: 0;
+  height: calc(34 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall-card__tags {
+  display: none;
+}
+html[data-ff='phone-portrait'] .hall,
+html[data-ff='phone-portrait'] .hall-cards {
+  gap: calc(3 * var(--u));
+}
+html[data-ff='phone-portrait'] .hall-card {
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
+}
+html[data-ff='phone-portrait'] .hall-wallet {
+  padding: calc(7 * var(--u)) calc(10 * var(--u));
+}
+/* Tablet / desktop: the cards are big — so is everything on them. */
+html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card {
+  grid-template-columns: calc(56 * var(--u)) minmax(0, 1fr);
+}
+html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card__reels {
+  width: 46%;
+}
+html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card__grid {
+  width: 84%;
+}
+/* Wide: the hall sits in the middle of the height, not glued to the top. */
+.hall[data-lay='wide'] {
+  align-content: center;
+}
+html[data-ff='tablet'] .hall-card__t,
+html[data-ff='desktop'] .hall-card__t {
+  font-size: var(--px-fs-hero);
+}
+html[data-ff='tablet'] .hall-card__tags > i,
+html[data-ff='desktop'] .hall-card__tags > i,
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__k,
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__k {
+  font-size: var(--px-fs-sm);
+}
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v,
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v {
+  font-size: var(--px-fs-big);
+}
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__ico .px-i,
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__ico .px-i {
+  --i-w: 11;
+  --i-h: 11;
+}

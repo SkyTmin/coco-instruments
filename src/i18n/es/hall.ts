@@ -7,6 +7,9 @@ export const hall: Translation<typeof ru> = {
   prison: 'Presidio',
   wallet: 'Monedero común',
   play: 'Jugar',
+  main: 'Juego principal',
+  rank: 'rango',
+  tokens: 'fichas',
   reels: {
     one: '{n} rodillo',
     many: '{n} de rodillos',

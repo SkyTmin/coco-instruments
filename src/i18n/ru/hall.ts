@@ -5,6 +5,9 @@ export const hall = {
   prison: 'Каторга',
   wallet: 'Общий кошелёк',
   play: 'Играть',
+  main: 'Главная игра',
+  rank: 'ранг',
+  tokens: 'токены',
   reels: {
     one: '{n} барабан',
     few: '{n} барабана',
