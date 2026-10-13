@@ -100,6 +100,7 @@ export const mineHud = {
     prestigeGo: 'Престиж — жми!',
     rankGo: 'Новый ранг — жми!',
     pickLevel: 'Уровень кирки',
+    streak: 'Серия',
     paceBlocks: '{n} бл',
     inARow: '{n} подряд',
     zoneExit: 'Выйти',

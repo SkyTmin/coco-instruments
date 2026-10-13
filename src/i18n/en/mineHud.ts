@@ -84,6 +84,7 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestige — tap!',
     rankGo: 'New rank — tap!',
     pickLevel: 'Pickaxe level',
+    streak: 'Streak',
     paceBlocks: '{n} bl',
     inARow: '{n} in a row',
     zoneExit: 'Leave',

@@ -84,6 +84,7 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestij — bas!',
     rankGo: 'Yeni rütbe — bas!',
     pickLevel: 'Kazma seviyesi',
+    streak: 'Seri',
     paceBlocks: '{n} bl',
     inARow: 'üst üste {n}',
     zoneExit: 'Çık',
