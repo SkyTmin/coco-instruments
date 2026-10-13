@@ -59,7 +59,7 @@ import type {
 import type { SlotSymbolId } from '@/types';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
-import { fmtDec, fmtNum, orbName, rich, t, useT, winStepName } from '@/i18n';
+import { fmtCompact, fmtDec, fmtNum, orbName, rich, t, useT, winStepName } from '@/i18n';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
 import type { OrbTier } from '@/lib/orb-rarity';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
@@ -1598,11 +1598,13 @@ export function ScatterPage() {
               icon={<KitIcon name="star" />}
               value={
                 <>
-                  <AnimatedNumber value={best} format={(n) => fmt(n)} duration={450} />
+                  {/* Рекорд — не крутящийся баланс: короткая запись, точное — в подсказке. */}
+                  <AnimatedNumber value={best} format={(n) => fmtCompact(n)} duration={450} />
                   <CoinIcon size={16} />
                 </>
               }
               label={tr('slots.hud.best')}
+              tip={`${tr('slots.hud.best')}: ${fmt(best)}`}
             />
           )}
           <CasStat
@@ -1975,6 +1977,8 @@ export function ScatterPage() {
               <Button
                 on={ante}
                 off={spinning}
+                data-tip={tr('slots.cascade.anteHint', { n: ANTE_COST })}
+                aria-label={`Ante · ${tr('slots.cascade.anteHint', { n: ANTE_COST })}`}
                 onClick={() => {
                   if (spinning || inBonus) return;
                   selectionChanged();
@@ -1982,7 +1986,16 @@ export function ScatterPage() {
                 }}
               >
                 <b>Ante</b>
-                <i className="cas-bonus__sub">{tr('slots.cascade.anteHint', { n: ANTE_COST })}</i>
+                {/* Одна строка значков вместо абзаца в кнопке: монета — во сколько
+                    раз ставка, скаттер — во сколько раз чаще бонус (≈ вдвое, см.
+                    правила); фраза целиком — в подсказке и в листе правил. */}
+                <i className="cas-bonus__sub" aria-hidden="true">
+                  <CoinIcon size={14} />
+                  {tr('slots.cascade.anteChip', { n: ANTE_COST })}
+                  <span className="cas-bonus__sep">·</span>
+                  <Sym id="scatter" skin={skin} size={16} />
+                  {tr('slots.cascade.anteChip', { n: 2 })}
+                </i>
               </Button>
               <Button
                 kind="primary"

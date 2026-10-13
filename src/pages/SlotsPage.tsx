@@ -33,7 +33,7 @@ import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
 import type { SlotsSpinOutcome } from '@/store';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
-import { fmtNum, lineIn, lineName, skinText, t, useT, winStepName } from '@/i18n';
+import { fmtCompact, fmtNum, lineIn, lineName, skinText, t, useT, winStepName } from '@/i18n';
 import {
   BET_STEP,
   BETS,
@@ -1160,16 +1160,23 @@ export function SlotsPage() {
             tone="gold"
             icon={
               <span className="cas-777">
-                <Sym id="seven" skin={skin} size={24} />
+                <Sym id="seven" skin={skin} size={18} />
               </span>
             }
             value={
               <>
-                <AnimatedNumber value={jackpotPrize} format={(n) => fmt(n)} duration={600} />
+                {/* Рекорды и копилка — не крутящийся баланс: им хватает короткой
+                    записи («1,2 млн»), точное число — в подсказке. */}
+                <AnimatedNumber
+                  value={jackpotPrize}
+                  format={(n) => fmtCompact(n)}
+                  duration={600}
+                />
                 <CoinIcon size={16} />
               </>
             }
             label={tr('slots.hud.jackpot')}
+            tip={`${tr('slots.hud.jackpot')}: ${fmt(jackpotPrize)}`}
           />
           <CasStat
             className="cas-stat--sp"
@@ -1182,11 +1189,12 @@ export function SlotsPage() {
             icon={<KitIcon name="star" />}
             value={
               <>
-                {fmt(best)}
+                {fmtCompact(best)}
                 <CoinIcon size={14} />
               </>
             }
             label={tr('slots.statBestWin')}
+            tip={`${tr('slots.statBestWin')}: ${fmt(best)}`}
           />
           {/* Ряд последних спинов стоит всегда: появись он после первого
               спина — поле над ним уехало бы. */}

@@ -177,12 +177,15 @@ export function CasStat({
   tone,
   className,
   fit = false,
+  tip,
 }: {
   icon: ReactNode;
   value: ReactNode;
   label: ReactNode;
   tone?: 'gold';
   className?: string;
+  /** The exact value when `value` is compact (hover / long press). */
+  tip?: string;
   /** Shrink a long value to fit (the hall: static numbers; not in play, where it would jump). */
   fit?: boolean;
 }) {
@@ -190,6 +193,7 @@ export function CasStat({
   return (
     <div
       className={`cas-stat${tone ? ` cas-stat--${tone}` : ''}${className ? ` ${className}` : ''}`}
+      data-tip={tip}
     >
       <span className="cas-stat__ico">{icon}</span>
       <b ref={vRef} className="cas-stat__v px-num">

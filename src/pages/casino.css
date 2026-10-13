@@ -491,14 +491,21 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
 .cas-bonus .px-btn {
   flex-direction: column;
   gap: 0;
-  min-height: calc(21 * var(--u));
+  /* One 44-px row (critic 10): a name line and a line of numbers, no paragraph inside. */
+  min-height: var(--gx-hit);
+  padding-top: var(--u);
+  padding-bottom: calc(3 * var(--u));
   width: 100%;
   min-width: 0;
 }
+.cas-bonus .px-btn:is(:active, .is-down):not([aria-disabled='true']) {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: var(--u);
+}
 .cas-bonus .px-btn > b {
   max-width: 100%;
-  font: 700 var(--px-fs) / 1.05 var(--px-font);
-  white-space: normal;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  white-space: nowrap;
   text-align: center;
 }
 .cas-bonus .px-btn > i {
@@ -506,10 +513,13 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   align-items: center;
   gap: var(--u);
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font: 600 var(--px-fs-sm) / 1.1 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
   font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cas-bonus__sep {
+  padding: 0 var(--u);
 }
 
 /* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
@@ -554,15 +564,6 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   font-size: var(--px-fs-sm);
   white-space: normal;
   line-height: 1.05;
-}
-/* The ante hint may take two lines rather than lose its tail. */
-.cas-bonus .px-btn > i.cas-bonus__sub {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  white-space: normal;
-  text-align: center;
-  font-size: var(--px-fs-sm);
 }
 
 /* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
@@ -628,6 +629,11 @@ html[data-ff='phone-landscape'] .cas[data-lay='wide'] .cas-info {
   grid-template-areas: 'k k' 'ico v';
   row-gap: var(--u);
 }
+/* A caption never loses its tail («лучший выигры…»): it wraps. */
+.cas[data-lay='wide'] .cas-stat__k {
+  white-space: normal;
+  line-height: 1.05;
+}
 html[data-ff='desktop'] .cas-stat,
 html[data-ff='tablet'] .cas-stat {
   padding: calc(3 * var(--u)) calc(4 * var(--u));
@@ -646,10 +652,16 @@ html[data-ff='desktop'] .cas-lvl__n,
 html[data-ff='tablet'] .cas-lvl__n {
   font-size: var(--px-fs-big);
 }
+/* One icon size per format for all three facts (critic 13): 9 art px = 18 px on phones,
+   27 px at u = 3. Bigger, the 2-art-px strokes turned into blobs next to a 27-px reel. */
 html[data-ff='desktop'] .cas-stat__ico .px-i,
 html[data-ff='tablet'] .cas-stat__ico .px-i {
-  --i-w: 18;
-  --i-h: 18;
+  --i-w: 9;
+  --i-h: 9;
+}
+.cas-777 .sym {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
 }
 html[data-ff='desktop'] .cas-777 .sym,
 html[data-ff='tablet'] .cas-777 .sym {
@@ -723,14 +735,10 @@ html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chip
 .cas[data-lay='wide'] .cas-deck__go > .cas-spin {
   grid-area: spin;
 }
-/* The two bonus plates are narrow — thinner side padding and up to three lines for the ante
-   hint, so it is never cut (the height is set by the language, not by play). */
+/* The two bonus plates are narrow — thinner side padding. */
 .cas .cas-bonus .px-btn {
   padding-left: calc(2 * var(--u));
   padding-right: calc(2 * var(--u));
-}
-.cas .cas-bonus .px-btn > i.cas-bonus__sub {
-  -webkit-line-clamp: 3;
 }
 html[data-ff='phone-landscape'] .cas-mini {
   min-height: var(--gx-hit);
@@ -802,14 +810,6 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__k {
 }
 html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__v {
   font-size: var(--px-fs-head);
-}
-html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__ico .px-i {
-  --i-w: 12;
-  --i-h: 12;
-}
-html[data-ff='tablet'] .cas[data-lay='tall'] .cas-777 .sym {
-  width: calc(7 * var(--u));
-  height: calc(7 * var(--u));
 }
 html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   height: calc(16 * var(--u));
