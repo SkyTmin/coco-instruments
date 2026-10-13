@@ -92,7 +92,9 @@ export function CasStat({
   className?: string;
 }) {
   return (
-    <div className={`cas-stat${tone ? ` cas-stat--${tone}` : ''}${className ? ` ${className}` : ''}`}>
+    <div
+      className={`cas-stat${tone ? ` cas-stat--${tone}` : ''}${className ? ` ${className}` : ''}`}
+    >
       <span className="cas-stat__ico">{icon}</span>
       <b className="cas-stat__v px-num">{value}</b>
       <i className="cas-stat__k">{label}</i>
@@ -165,11 +167,15 @@ export function CasDeck(p: DeckProps) {
     },
     { scope: root },
   );
-  useAction('inspect', () => {
-    if (p.autoDisabled) return false;
-    p.onAuto();
-    return true;
-  }, { scope: root });
+  useAction(
+    'inspect',
+    () => {
+      if (p.autoDisabled) return false;
+      p.onAuto();
+      return true;
+    },
+    { scope: root },
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

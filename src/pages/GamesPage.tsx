@@ -107,11 +107,19 @@ export function GamesPage() {
           <HallCard
             autoFocus
             title={skinText(skin, 'title')}
-            art={<span className="hall-card__reels">{(['seven', 'star', 'bell'] as const).map(sym)}</span>}
+            art={
+              <span className="hall-card__reels">
+                {(['seven', 'star', 'bell'] as const).map(sym)}
+              </span>
+            }
             tags={[t('hall.reels', { n: 3 }), t('hall.lines', { n: 5 })]}
             facts={
               <>
-                <CasStat icon={<KitIcon name="play" />} value={fmt(slotsSpins)} label={t('slots.statSpins')} />
+                <CasStat
+                  icon={<KitIcon name="play" />}
+                  value={fmt(slotsSpins)}
+                  label={t('slots.statSpins')}
+                />
                 <CasStat
                   tone="gold"
                   icon={<KitIcon name="star" />}
@@ -158,8 +166,16 @@ export function GamesPage() {
             tags={[t('hall.main')]}
             facts={
               <>
-                <CasStat icon={<KitIcon name="up" />} value={rankLetter(rank)} label={t('hall.rank')} />
-                <CasStat icon={<KitIcon name="token" />} value={fmt(tokens)} label={t('hall.tokens')} />
+                <CasStat
+                  icon={<KitIcon name="up" />}
+                  value={rankLetter(rank)}
+                  label={t('hall.rank')}
+                />
+                <CasStat
+                  icon={<KitIcon name="token" />}
+                  value={fmt(tokens)}
+                  label={t('hall.tokens')}
+                />
               </>
             }
             play={t('hall.play')}
@@ -199,7 +215,10 @@ function HallCard({
       data-autofocus={autoFocus ? '' : undefined}
       onClick={onClick}
     >
-      <span className="hall-card__art pxk-frame-obsidian px-nofill px-stage pxt-stone" aria-hidden="true">
+      <span
+        className="hall-card__art pxk-frame-obsidian px-nofill px-stage pxt-stone"
+        aria-hidden="true"
+      >
         {art}
       </span>
       <span className="hall-card__body">

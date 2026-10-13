@@ -5,7 +5,17 @@ import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
 import { Bar, Button } from '@/ui-px';
-import { CasAutoPicker, CasBetPicker, CasDeck, CasStat, CasToggles, fitStyles, KitIcon, useCasLayout, useFit } from './casino-ui';
+import {
+  CasAutoPicker,
+  CasBetPicker,
+  CasDeck,
+  CasStat,
+  CasToggles,
+  fitStyles,
+  KitIcon,
+  useCasLayout,
+  useFit,
+} from './casino-ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, OrbGem } from '@/components/slot-art';
@@ -1409,12 +1419,16 @@ export function ScatterPage() {
   }, [hydrated, spinning, balance, stake, playScatter, turbo, playOrbs]);
 
   // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
-  useAction('confirm', (e) => {
-    const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
-    if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
-    spin();
-    return true;
-  }, { scope: pageRef });
+  useAction(
+    'confirm',
+    (e) => {
+      const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
+      if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
+      spin();
+      return true;
+    },
+    { scope: pageRef },
+  );
 
   // Бонус крутится сам: вращения бесплатные, ждать нажатия незачем.
   useEffect(() => {
@@ -1641,7 +1655,9 @@ export function ScatterPage() {
                                 }${winCells.has(`${c}-${cell.row}`) ? ' is-win' : ''}${
                                   cell.id === 'scatter' ? ' is-scatter' : ''
                                 }${orbClass(value)}${
-                                  value && cascade?.phase === 'collect' && !merging ? ' is-collect' : ''
+                                  value && cascade?.phase === 'collect' && !merging
+                                    ? ' is-collect'
+                                    : ''
                                 }${
                                   shownWins.length &&
                                   !winCells.has(`${c}-${cell.row}`) &&
@@ -1700,7 +1716,10 @@ export function ScatterPage() {
                       сольный выход — иначе между ним и сбором проскакивал светлый
                       кадр: соло снято, а вуаль ещё только проявляется. */}
                   {(cascade?.phase === 'collect' || solo || collectOut) && (
-                    <div className={`sboard__veil${collectOut ? ' is-out' : ''}`} aria-hidden="true" />
+                    <div
+                      className={`sboard__veil${collectOut ? ' is-out' : ''}`}
+                      aria-hidden="true"
+                    />
                   )}
                   <canvas className="dust" ref={dustRef} aria-hidden="true" />
                   <div className="reels__glass" aria-hidden="true" />
@@ -1843,7 +1862,6 @@ export function ScatterPage() {
                 )}
               </div>
             </div>
-
           </div>
         </div>
 
@@ -1904,7 +1922,10 @@ export function ScatterPage() {
           extra={
             /* Ставка Ante и покупка бонуса — оба пути к фриспинам. В бонусе
                ряд не исчезает, а гаснет: иначе поле над ним прыгало бы. */
-            <div className={`cas-bonus${inBonus ? ' is-hidden' : ''}`} aria-hidden={inBonus || undefined}>
+            <div
+              className={`cas-bonus${inBonus ? ' is-hidden' : ''}`}
+              aria-hidden={inBonus || undefined}
+            >
               <Button
                 on={ante}
                 off={spinning}
@@ -2067,10 +2088,34 @@ export function ScatterPage() {
         <GxSheet title={tr('common.settings')} onClose={() => setSettings(false)}>
           <CasToggles
             items={[
-              { key: 'sound' as const, on: sound, icon: sound ? ('sound' as const) : ('mute' as const), name: tr('slots.toggle.sound'), hint: tr('slots.toggle.soundCascade') },
-              { key: 'music' as const, on: music, icon: music ? ('music' as const) : ('nomusic' as const), name: tr('slots.toggle.music'), hint: tr('slots.toggle.musicHint') },
-              { key: 'haptics' as const, on: haptics, icon: 'buzz' as const, name: tr('slots.toggle.haptics'), hint: tr('slots.toggle.hapticsHint') },
-              { key: 'turbo' as const, on: turbo, icon: 'bolt' as const, name: tr('slots.toggle.turbo'), hint: tr('slots.toggle.turboHint') },
+              {
+                key: 'sound' as const,
+                on: sound,
+                icon: sound ? ('sound' as const) : ('mute' as const),
+                name: tr('slots.toggle.sound'),
+                hint: tr('slots.toggle.soundCascade'),
+              },
+              {
+                key: 'music' as const,
+                on: music,
+                icon: music ? ('music' as const) : ('nomusic' as const),
+                name: tr('slots.toggle.music'),
+                hint: tr('slots.toggle.musicHint'),
+              },
+              {
+                key: 'haptics' as const,
+                on: haptics,
+                icon: 'buzz' as const,
+                name: tr('slots.toggle.haptics'),
+                hint: tr('slots.toggle.hapticsHint'),
+              },
+              {
+                key: 'turbo' as const,
+                on: turbo,
+                icon: 'bolt' as const,
+                name: tr('slots.toggle.turbo'),
+                hint: tr('slots.toggle.turboHint'),
+              },
             ].map((it) => ({
               ...it,
               onClick: () => {

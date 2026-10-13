@@ -6,7 +6,17 @@ import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
 import { Bar } from '@/ui-px';
-import { CasAutoPicker, CasBetPicker, CasDeck, CasStat, CasToggles, fitStyles, KitIcon, useCasLayout, useFit } from './casino-ui';
+import {
+  CasAutoPicker,
+  CasBetPicker,
+  CasDeck,
+  CasStat,
+  CasToggles,
+  fitStyles,
+  KitIcon,
+  useCasLayout,
+  useFit,
+} from './casino-ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
@@ -446,7 +456,7 @@ export function SlotsPage() {
   const goBack = () => {
     if (window.history.length > 1) nav(-1);
     else nav('/');
-  };  /** Счётчик выигрыша: его толкает конец счёта. */
+  }; /** Счётчик выигрыша: его толкает конец счёта. */
   const winRef = useRef<HTMLSpanElement>(null);
   /** Шток рычага: его дёргает и кнопка «Крутить», а не только палец. */
   const armRef = useRef<HTMLSpanElement>(null);
@@ -994,12 +1004,16 @@ export function SlotsPage() {
 
   // Пробел/Enter и «A» геймпада — крутить (слой действий src/input). Кнопка в
   // фокусе жмётся сама: Enter — браузером, «A» — навигацией фокуса.
-  useAction('confirm', (e) => {
-    const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
-    if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
-    spin();
-    return true;
-  }, { scope: pageRef });
+  useAction(
+    'confirm',
+    (e) => {
+      const t = (e.native?.target ?? document.activeElement) as HTMLElement | null;
+      if (t && ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return false;
+      spin();
+      return true;
+    },
+    { scope: pageRef },
+  );
 
   const shownBalance = Math.max(0, balance - pending);
   // Подсветка живёт только на фазе показа звена: после схлопывания этих
@@ -1144,7 +1158,9 @@ export function SlotsPage() {
               <p className="cas-broke">{tr('slots.brokeHint')}</p>
             ) : (
               <div className="cas-hist__row">
-                {history.length === 0 && <div className="cas-hchip cas-well is-empty" aria-hidden />}
+                {history.length === 0 && (
+                  <div className="cas-hchip cas-well is-empty" aria-hidden />
+                )}
                 {history.map((h) => (
                   <div key={h.id} className={`cas-hchip cas-well${h.payout > 0 ? ' is-win' : ''}`}>
                     <span className="cas-hchip__reels">
@@ -1240,7 +1256,11 @@ export function SlotsPage() {
                     {/* Множитель звена крупно в центре — чтобы комбо читалось сразу.
                         На первом звене множителя нет, и «×1» был бы шумом. */}
                     {cascade && cascade.phase !== 'drop' && stepCombo > 1 && (
-                      <div className={`stamp stamp--t${tier}`} key={`st-${chain}`} aria-hidden="true">
+                      <div
+                        className={`stamp stamp--t${tier}`}
+                        key={`st-${chain}`}
+                        aria-hidden="true"
+                      >
                         <i className="stamp__cap">{tr('slots.stamp')}</i>
                         <b className="stamp__n">×{stepCombo}</b>
                       </div>
@@ -1285,7 +1305,9 @@ export function SlotsPage() {
                     ref={armRef}
                     style={{
                       transform: `translateY(${lever * 44}px)`,
-                      transition: dragRef.current ? 'none' : 'transform .35s cubic-bezier(.3,1.5,.5,1)',
+                      transition: dragRef.current
+                        ? 'none'
+                        : 'transform .35s cubic-bezier(.3,1.5,.5,1)',
                     }}
                   >
                     <span className="lever__knob" />
@@ -1338,15 +1360,20 @@ export function SlotsPage() {
                         : outcomeText(result)}
                     </span>
                     {result.total > 0 && (
-                      <span className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}>
-                        {/* Без анимации: сумму только что досчитали на глазах. */}+{fmt(result.total)}
+                      <span
+                        className={`status__win${result.kind === 'jackpot' ? ' is-jackpot' : ''}`}
+                      >
+                        {/* Без анимации: сумму только что досчитали на глазах. */}+
+                        {fmt(result.total)}
                         <CoinIcon size={20} />
                       </span>
                     )}
                     {result.multiplier >= 3 && (
                       <span className="status__mult">×{fmt(result.multiplier)}</span>
                     )}
-                    {jackpotWin > 0 && <span className="status__pool">{tr('slots.status.pool')}</span>}
+                    {jackpotWin > 0 && (
+                      <span className="status__pool">{tr('slots.status.pool')}</span>
+                    )}
                     {streak >= 2 && result.total > 0 && (
                       <span className="status__streak">🔥 {streak}</span>
                     )}
@@ -1356,7 +1383,6 @@ export function SlotsPage() {
                 )}
               </div>
             </div>
-
           </div>
         </div>
 
@@ -1492,10 +1518,34 @@ export function SlotsPage() {
         <GxSheet title={tr('common.settings')} onClose={() => setSettings(false)}>
           <CasToggles
             items={[
-              { key: 'sound' as const, on: sound, icon: sound ? ('sound' as const) : ('mute' as const), name: tr('slots.toggle.sound'), hint: tr('slots.toggle.soundSlots') },
-              { key: 'music' as const, on: music, icon: music ? ('music' as const) : ('nomusic' as const), name: tr('slots.toggle.music'), hint: tr('slots.toggle.musicHint') },
-              { key: 'haptics' as const, on: haptics, icon: 'buzz' as const, name: tr('slots.toggle.haptics'), hint: tr('slots.toggle.hapticsHint') },
-              { key: 'turbo' as const, on: turbo, icon: 'bolt' as const, name: tr('slots.toggle.turbo'), hint: tr('slots.toggle.turboHint') },
+              {
+                key: 'sound' as const,
+                on: sound,
+                icon: sound ? ('sound' as const) : ('mute' as const),
+                name: tr('slots.toggle.sound'),
+                hint: tr('slots.toggle.soundSlots'),
+              },
+              {
+                key: 'music' as const,
+                on: music,
+                icon: music ? ('music' as const) : ('nomusic' as const),
+                name: tr('slots.toggle.music'),
+                hint: tr('slots.toggle.musicHint'),
+              },
+              {
+                key: 'haptics' as const,
+                on: haptics,
+                icon: 'buzz' as const,
+                name: tr('slots.toggle.haptics'),
+                hint: tr('slots.toggle.hapticsHint'),
+              },
+              {
+                key: 'turbo' as const,
+                on: turbo,
+                icon: 'bolt' as const,
+                name: tr('slots.toggle.turbo'),
+                hint: tr('slots.toggle.turboHint'),
+              },
             ].map((it) => ({
               ...it,
               onClick: () => {

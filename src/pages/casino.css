@@ -304,7 +304,7 @@
   gap: var(--u);
   /* fixed width: 5 and 500 take the same room — nothing moves when the bet changes */
   width: calc(34 * var(--u));
-  height: calc(17 * var(--u));
+  height: var(--gx-hit);
   margin: 0;
   padding: 0 calc(2 * var(--u));
   background: none;
@@ -425,7 +425,7 @@
   padding: calc(4 * var(--u)) calc(5 * var(--u));
 }
 [data-lay='tall'] .cas-stat__k {
-  font-size: var(--px-fs-tiny);
+  font-size: var(--px-fs-sm);
   white-space: normal;
   line-height: 1.05;
 }
@@ -436,7 +436,7 @@
   -webkit-line-clamp: 2;
   white-space: normal;
   text-align: center;
-  font-size: var(--px-fs-tiny);
+  font-size: var(--px-fs-sm);
 }
 
 /* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
@@ -536,6 +536,11 @@ html[data-ff='tablet'] .cas-bal__v {
   height: calc(20 * var(--u));
   font-size: var(--px-fs-hero);
 }
+/* Touch targets: never under 44 px (the shell's --gx-hit). */
+.cas-bet__step.px-btn {
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+}
 .cas[data-lay='wide'] .cas-bet {
   justify-self: stretch;
 }
@@ -561,13 +566,21 @@ html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chip
   grid-area: spin;
 }
 html[data-ff='phone-landscape'] .cas-mini {
-  min-height: calc(19 * var(--u));
+  min-height: var(--gx-hit);
 }
 html[data-ff='phone-landscape'] .cas-bonus .px-btn {
-  min-height: calc(19 * var(--u));
+  min-height: var(--gx-hit);
 }
 html[data-ff='phone-landscape'] .cas-bonus .px-btn > i {
   display: none;
+}
+html[data-ff='phone-landscape'] .cas-spin {
+  min-height: var(--gx-hit);
+}
+html[data-ff='phone-landscape'] .cas-deck,
+html[data-ff='phone-landscape'] .cas-deck__money,
+html[data-ff='phone-landscape'] .cas-deck__go {
+  gap: calc(2 * var(--u));
 }
 html[data-ff='desktop'] .cas-spin,
 html[data-ff='tablet'] .cas-spin {
@@ -787,7 +800,7 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
 }
 .hall-card__tags > i {
   padding: 0 calc(2 * var(--u));
-  font: 600 var(--px-fs-tiny) / 1.5 var(--px-font);
+  font: 600 var(--px-fs-sm) / 1.5 var(--px-font);
   color: var(--px-muted);
   white-space: nowrap;
 }
@@ -809,7 +822,7 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   --i-h: 9;
 }
 .hall-card__facts .cas-stat__k {
-  font-size: var(--px-fs-tiny);
+  font-size: var(--px-fs-sm);
   white-space: normal;
   line-height: 1.05;
 }
@@ -1037,13 +1050,13 @@ html[data-ff='phone-portrait'] .skn {
   font-style: normal;
 }
 .skn-quest > em {
-  font: 600 var(--px-fs-tiny) / 1.2 var(--px-font);
+  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
   font-style: normal;
   color: var(--px-muted);
 }
 .skn-note {
   margin: calc(4 * var(--u)) 0 0;
-  font: 500 var(--px-fs-tiny) / 1.3 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
   color: var(--px-muted);
 }
 
@@ -1132,7 +1145,7 @@ html[data-ff='phone-portrait'] .skn {
 }
 .cash__hint {
   margin: 0;
-  font: 500 var(--px-fs-tiny) / 1.3 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
   color: var(--px-muted);
 }
 .cash-health {
@@ -1159,7 +1172,7 @@ html[data-ff='phone-portrait'] .skn {
 }
 .cash-health__err {
   margin: 0;
-  font: 500 var(--px-fs-tiny) / 1.3 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
   color: var(--px-red);
   overflow-wrap: anywhere;
 }
@@ -1273,7 +1286,7 @@ html[data-ff='phone-portrait'] .skn {
   color: var(--px-text);
 }
 .sesk__stats i {
-  font: 600 var(--px-fs-tiny) / 1.15 var(--px-font);
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
   font-style: normal;
   color: var(--px-muted);
 }
@@ -1296,7 +1309,7 @@ html[data-ff='phone-portrait'] .skn {
 /* ==== Game sheets (settings toggles, auto-spin, bet picker) ================================== */
 .cas-sheet-note {
   margin: 0;
-  font: 500 var(--px-fs-tiny) / 1.3 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
   color: var(--px-muted);
 }
 .cas-toggles {
