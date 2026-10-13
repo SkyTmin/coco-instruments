@@ -343,6 +343,18 @@
   min-width: calc(24 * var(--u));
   min-height: calc(26 * var(--u));
 }
+/* Fixed width in the thumb row: a key hint or the auto counter must never push Spin. */
+.cas[data-lay='tall'] .cas-mini {
+  width: calc(24 * var(--u));
+  padding-left: 0;
+  padding-right: 0;
+}
+.cas-mini > .px-keyhint {
+  position: absolute;
+  right: calc(-2 * var(--u));
+  bottom: calc(-2 * var(--u));
+  z-index: 2;
+}
 .cas-mini__n {
   position: absolute;
   right: calc(-2 * var(--u));
