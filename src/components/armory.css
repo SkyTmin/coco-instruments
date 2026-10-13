@@ -352,7 +352,8 @@ html[data-ff='phone-landscape'] .arm-name {
   display: inline-flex;
   align-items: center;
   gap: calc(2 * var(--u));
-  font: 400 var(--px-fs-big) / 1 var(--px-head);
+  /* 1.15 = the row: at 1 a tablet's 1em icon stuck 3 px out of the 29-px number box */
+  font: 400 var(--px-fs-big) / 1.15 var(--px-head);
   font-variant-numeric: tabular-nums;
   color: var(--px-text);
   white-space: nowrap;
@@ -840,7 +841,7 @@ html[data-fullwin] :is(.arm.is-window, .arm-scn) {
 /* List sections after the first are laid out and painted only when scrolled near: the window's
    first frame does not pay for the books, gear and items below the fold (critic: open latency).
    `auto` keeps the real height once seen, so the scroll bar does not jump back. */
-.arm-list > section + section {
+.arm-list > section ~ section {
   content-visibility: auto;
   contain-intrinsic-size: auto calc(80 * var(--u));
   /* its paint containment clips at the box: the focus rings and badges (3 u outside a cell) get

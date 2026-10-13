@@ -14,8 +14,8 @@
 .ivx.arm--two {
   grid-template:
     'top top' auto
-    'show show' minmax(0, 12fr)
-    'list side' minmax(0, 8fr)
+    'show show' minmax(0, 11fr)
+    'list side' minmax(0, 9fr)
     / minmax(0, 11fr) minmax(0, 9fr);
 }
 /* The showcased thing: a square box sized from the stage with the pedestal, the icon standing on
@@ -136,6 +136,8 @@ html[data-ff='phone-landscape'] .arm .ivx-tabs {
   display: grid;
   grid-auto-flow: column;
   grid-template-rows: repeat(2, auto);
+  /* max-content: an auto track shrank to the kit label's min-width 0 and cut «Alles» to 32 px. */
+  grid-auto-columns: max-content;
   justify-content: start;
   overflow-x: auto;
 }

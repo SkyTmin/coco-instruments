@@ -679,8 +679,10 @@ export function ForgeScreen({
 
   const list = (
     <div className="arm-list">
-      {layout === 'one' && details}
+      {/* phone portrait: the strip first — under the 144-px details it opened below the fold on a
+          360x800 phone (0 of 17 picks visible) */}
       {ladder}
+      {layout === 'one' && details}
       {gear}
     </div>
   );

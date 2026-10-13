@@ -253,8 +253,15 @@
   grid-template-columns: minmax(0, 1fr) calc(26 * var(--u)) minmax(0, 1fr);
   grid-auto-flow: row;
 }
-.bkx.arm--two .bkx-acts > .px-btn:not(.bkx-iconbtn) {
+/* The words get the room: «Verzaubern» alone is 116 px, the 360-px phone gave it 106 with the
+   kit's 6u padding; the tablet column takes the small size and a 20u anvil (60 px, still a finger). */
+.bkx:is(.arm--one, .arm--two) .bkx-acts > .px-btn:not(.bkx-iconbtn) {
   padding-inline: calc(2 * var(--u));
+}
+.bkx.arm--two .bkx-acts {
+  grid-template-columns: minmax(0, 1fr) calc(20 * var(--u)) minmax(0, 1fr);
+}
+.bkx.arm--two .bkx-acts > .px-btn:not(.bkx-iconbtn) {
   font-size: var(--px-fs-sm);
 }
 .bkx-acts > .px-btn.bkx-iconbtn {
