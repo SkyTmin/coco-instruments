@@ -29,8 +29,8 @@ export const hub: Translation<typeof ru> = {
   smith: {
     ready: 'Cevher yeter. Çekici ver — döverim!',
     best: 'Bundan iyi kazma dövemem. Ona iyi bak.',
-    nextFloor: 'Sıradaki: {pick} kazma. {floor} katına inince döverim.',
-    next: 'Sıradaki: {pick} kazma. Cevher getir, kasa örsün yanında.',
+    nextFloor: 'Sıradaki: {pick}. {floor} katına inince döverim.',
+    next: 'Sıradaki: {pick}. Cevher getir, kasa örsün yanında.',
     floors: 'Kazma kendi katının ve bir alttakinin cevherini alır.',
     keep: 'Kazma cevherini satma — kendiliğinden kasaya girer.',
   },

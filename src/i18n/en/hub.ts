@@ -29,8 +29,8 @@ export const hub: Translation<typeof ru> = {
   smith: {
     ready: 'Enough ore. Hand me the hammer — I’ll forge it!',
     best: 'I can’t forge a better pickaxe than this. Take care of it.',
-    nextFloor: 'Next up: the {pick} pickaxe. I’ll forge it when you reach floor {floor}.',
-    next: 'Next up: the {pick} pickaxe. Bring ore — the crate is by the anvil.',
+    nextFloor: 'Next up: the {pick}. I’ll forge it when you reach floor {floor}.',
+    next: 'Next up: the {pick}. Bring ore — the crate is by the anvil.',
     floors: 'A pickaxe takes ore from its own floor and the next.',
     keep: 'Don’t sell the pickaxe ore — it goes into the crate by itself.',
   },

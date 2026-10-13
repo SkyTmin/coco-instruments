@@ -153,17 +153,12 @@ import {
   axeName,
   benchName,
   benchWho,
-  bookName,
   eggName,
-  findName,
-  findText,
   handleName,
-  inText,
-  mileText,
-  mileTitle,
   speciesName,
   woodOf,
 } from '@/i18n/data-camp';
+import { bookName, findName, findText, mileText, mileTitle, nameIn } from '@/i18n/data-mine';
 
 const fmt = (n: number) => fmtNum(n);
 const pct = (x: number) => `${fmtDec(Math.round(x * 1000) / 10, 2)}%`;
@@ -1024,7 +1019,7 @@ function CrewUnload({
                         height={24}
                         style={{ imageRendering: 'pixelated' }}
                       />
-                      <em>{t('camp.unload.parcel', { tier: inText(chestName(tier.id)) })}</em>
+                      <em>{t('camp.unload.parcel', { tier: nameIn(chestName(tier.id)) })}</em>
                     </span>
                   );
                 })}
@@ -1559,10 +1554,10 @@ function mileRewardText(m: (typeof MILES)[number]): string {
   const out: string[] = [];
   if (r.tokens) out.push(`+${fmt(r.tokens)} ✦`);
   if (r.keys) out.push(t('camp.keysN', { n: r.keys }));
-  if (r.parcel) out.push(t('camp.mile.parcel', { tier: inText(chestName(r.parcel)) }));
+  if (r.parcel) out.push(t('camp.mile.parcel', { tier: nameIn(chestName(r.parcel)) }));
   if (r.rune) out.push(t('camp.mile.rune', { tier: RUNE_ROMAN[r.rune - 1] }));
   if (r.socket) out.push(t('camp.mile.socket'));
-  if (r.egg) out.push(inText(eggName(r.egg)));
+  if (r.egg) out.push(nameIn(eggName(r.egg)));
   return out.join(' · ');
 }
 
@@ -1688,7 +1683,7 @@ export function ParcelReveal({ open, onClose }: { open: ParcelOpen; onClose: () 
       ) : (
         <div className="preveal__card">
           <span className="preveal__tier">
-            {t('camp.reveal.tier', { tier: inText(chestName(tier.id)) })}
+            {t('camp.reveal.tier', { tier: nameIn(chestName(tier.id)) })}
           </span>
           <span className="preveal__icon">
             <RewardIcon r={open.reward} size={64} />
@@ -2321,7 +2316,7 @@ function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: num
             }) +
             (curH
               ? t('camp.bench.handleNow', {
-                  name: inText(handleName(curH.id)),
+                  name: nameIn(handleName(curH.id)),
                   pct: Math.round(handleRate(p.handle) * 100),
                 })
               : '')
@@ -2750,7 +2745,7 @@ function MillTab({
             k > 0 ? (
               <span key={i} className="pmill-board" title={speciesName(i)}>
                 <img src={boardTexture(i)} alt="" />
-                {fmt(k)} · {inText(speciesName(i))}
+                {fmt(k)} · {nameIn(speciesName(i))}
               </span>
             ) : null,
           )}

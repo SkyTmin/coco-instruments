@@ -9,9 +9,10 @@
 // страница не считает одно и то же в двух местах.
 
 import type { CampTab } from '@/components/PrisonCamp';
-import { fmtShort, getLang, hasKey, lower, t } from '@/i18n/core';
+import { fmtShort, hasKey, t } from '@/i18n/core';
 import type { Key } from '@/i18n/core';
-import { blockName, pickName, rockName } from '@/i18n/data';
+import { blockName, rockName } from '@/i18n/data';
+import { nameIn, pickTitle } from '@/i18n/data-mine';
 import { MAGE_LINES, SHELF_MAX } from './books';
 import { bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK } from './dungeon';
 import type { DungeonState } from './dungeon';
@@ -220,9 +221,6 @@ const mageLine = (i: number) => {
   return hasKey(key) ? t(key) : MAGE_LINES[i];
 };
 
-/** Имя данных внутри фразы: строчными, как в русском, кроме немецкого. */
-const inText = (s: string) => (getLang() === 'de' ? s : lower(s));
-
 export const RESIDENTS: Record<string, Resident> = {
   smith: {
     id: 'smith',
@@ -235,10 +233,10 @@ export const RESIDENTS: Record<string, Resident> = {
           ? t('hub.smith.best')
           : f.nextPickFloor
             ? t('hub.smith.nextFloor', {
-                pick: inText(pickName(f.nextPickI)),
+                pick: nameIn(pickTitle(f.nextPickI)),
                 floor: f.nextPickFloor,
               })
-            : t('hub.smith.next', { pick: inText(pickName(f.nextPickI)) }),
+            : t('hub.smith.next', { pick: nameIn(pickTitle(f.nextPickI)) }),
       t('hub.smith.floors'),
       t('hub.smith.keep'),
     ],
@@ -306,7 +304,7 @@ export const RESIDENTS: Record<string, Resident> = {
             ? [t('hub.guard.over'), t('hub.guard.work')]
             : [
                 t('hub.guard.have', { n: mins(f.zoneMs) }),
-                t('hub.guard.there', { rock: inText(rockName(f.zoneRockI)) }),
+                t('hub.guard.there', { rock: nameIn(rockName(f.zoneRockI)) }),
                 t('hub.guard.dig'),
               ],
     options: (f) =>

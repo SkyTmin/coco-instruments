@@ -29,8 +29,8 @@ export const hub: Translation<typeof ru> = {
   smith: {
     ready: 'Il minerale basta. Dammi il martello, si forgia!',
     best: 'Un piccone migliore di questo non lo forgio. Trattalo bene.',
-    nextFloor: 'Il prossimo: piccone «{pick}». Lo forgio quando arrivi al piano {floor}.',
-    next: 'Il prossimo: piccone «{pick}». Porta minerale, la cassa è vicino all’incudine.',
+    nextFloor: 'Il prossimo: il {pick}. Lo forgio quando arrivi al piano {floor}.',
+    next: 'Il prossimo: il {pick}. Porta minerale, la cassa è vicino all’incudine.',
     floors: 'Il piccone prende il minerale del suo piano e del successivo.',
     keep: 'Non vendere il minerale del piccone: finisce da solo nella cassa.',
   },

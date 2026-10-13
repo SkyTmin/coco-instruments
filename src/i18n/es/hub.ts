@@ -29,8 +29,8 @@ export const hub: Translation<typeof ru> = {
   smith: {
     ready: 'Hay mineral de sobra. Dame el martillo, ¡a forjar!',
     best: 'Mejor pico que este no forjo. Cuídalo.',
-    nextFloor: 'El siguiente: pico «{pick}». Lo forjo cuando llegues al piso {floor}.',
-    next: 'El siguiente: pico «{pick}». Trae mineral, la caja está junto al yunque.',
+    nextFloor: 'El siguiente: el {pick}. Lo forjo cuando llegues al piso {floor}.',
+    next: 'El siguiente: el {pick}. Trae mineral, la caja está junto al yunque.',
     floors: 'El pico saca mineral de su piso y del siguiente.',
     keep: 'No vendas el mineral del pico: va solo a la caja.',
   },

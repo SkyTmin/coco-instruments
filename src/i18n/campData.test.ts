@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ru } from './ru';
-import { FINDS, HANDLES, MILES } from '@/lib/prison';
+import { HANDLES } from '@/lib/prison';
 import { EGGS } from '@/lib/pets';
 import { AXES, AXE_ENCHANTS, BENCH_ITEMS, SPECIES } from '@/lib/forest';
 
 // Change a name in src/lib — change ru/campData.ts and the six translations with it.
 describe('ru.campData equals src/lib', () => {
-  it('finds, achievements, eggs, handles, axes, species, axe enchants, bench orders', () => {
+  it('eggs, handles, axes, species, axe enchants, bench orders', () => {
     const by = <T extends { id: string }>(a: T[], f: (x: T) => unknown) =>
       Object.fromEntries(a.map((x) => [x.id, f(x)]));
     expect(ru.campData).toEqual({
-      find: by(FINDS, (x) => ({ name: x.name, text: x.text })),
-      mile: by(MILES, (x) => ({ title: x.title, text: x.text })),
       egg: by(EGGS, (x) => x.name),
       handle: by(HANDLES, (x) => x.name),
       axe: by(AXES, (x) => x.name),

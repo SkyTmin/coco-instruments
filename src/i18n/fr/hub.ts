@@ -29,8 +29,8 @@ export const hub: Translation<typeof ru> = {
   smith: {
     ready: 'Assez de minerai. Passe-moi le marteau, je forge !',
     best: 'Je ne forgerai pas mieux que cette pioche. Prends-en soin.',
-    nextFloor: 'Prochaine : la pioche « {pick} ». Je la forge quand tu atteins l’étage {floor}.',
-    next: 'Prochaine : la pioche « {pick} ». Apporte du minerai, la caisse est près de l’enclume.',
+    nextFloor: 'Prochaine : la {pick}. Je la forge quand tu atteins l’étage {floor}.',
+    next: 'Prochaine : la {pick}. Apporte du minerai, la caisse est près de l’enclume.',
     floors: 'Une pioche prend le minerai de son étage et du suivant.',
     keep: 'Ne vends pas le minerai de la pioche — il va tout seul dans la caisse.',
   },

@@ -29,9 +29,8 @@ export const hub: Translation<typeof ru> = {
   smith: {
     ready: 'Genug Erz. Her mit dem Hammer — ich schmiede!',
     best: 'Eine bessere Spitzhacke schmiede ich nicht. Pass gut auf sie auf.',
-    nextFloor:
-      'Als Nächstes: Spitzhacke „{pick}“. Ich schmiede sie, sobald du Ebene {floor} erreichst.',
-    next: 'Als Nächstes: Spitzhacke „{pick}“. Bring Erz, die Kiste steht am Amboss.',
+    nextFloor: 'Als Nächstes: die {pick}. Ich schmiede sie, sobald du Ebene {floor} erreichst.',
+    next: 'Als Nächstes: die {pick}. Bring Erz, die Kiste steht am Amboss.',
     floors: 'Eine Spitzhacke nimmt Erz ihrer Ebene und der nächsten.',
     keep: 'Verkauf das Erz für die Spitzhacke nicht — es landet von selbst in der Kiste.',
   },
