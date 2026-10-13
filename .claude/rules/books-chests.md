@@ -2,6 +2,7 @@
 paths:
   - "src/lib/books.ts"
   - "src/components/{BooksTab,ChestTab}.tsx"
+  - "src/components/books.css"
   - "public/ui/books/**"
   - "public/ui/chests/**"
 ---
@@ -138,3 +139,61 @@ paths:
 - **Не проверено на телефоне**: стенд подтверждает вкладку, все фазы
   сцены (включая рост до легендарного подменой ГСЧ), «Открыть все» на 29
   сундуках и вёрстку на 375×667.
+
+## Books UI v2 (wave 2 — F, 13.10.2026) — `BooksTab.tsx`, `books.css`
+
+On the armory skeleton (`forge-mine.md` → «UI v2»). Store calls, costs, two-tap confirmations
+and the scenes (`RevealScene`, `ApplyScene`, `BookLift`, portaled) are as before.
+
+- **What can be selected** (`Sel`): a shelf book, an enchant in the pick (`slot`), an Enchanter
+  tier, the pick itself. Focus = selection; Enter / Space / pad on the already selected tier buys
+  it, a finger buys with the button (`fromKeys(e)`: a long press for the tip bought on release).
+- **Action places are fixed**: book = to dust (two-tap) / anvil (only with a pair) / enchant
+  (`off` when weaker — the tap says why); slot = remove (two-tap) / — / on-off (toggle enchants
+  only); tier = buy; pick = reforge ★ (two-tap, `off` explains the level needed). Phone portrait
+  has three places too: to dust · the anvil as an icon button (`aria` = `books.glue`, 26u wide)
+  · enchant. A confirm tap < 400 ms after arming is ignored (`useArmGuard`). X / pad Y = the last
+  enabled non-danger action.
+- **Showcase**: book art (glow) or the pick; plate = name, state (can enchant / weaker / no room
+  / in the pick / off), effect line; stats = chance (the cell toggles dust), level with a delta
+  vs the same enchant in the pick, dust value (tier: price, level range, chance range; pick:
+  level, ★, slots). On phone portrait the plate stands beside the tall book.
+- **Lists**: «Книг в кирке» (pick + enchants with roman level, zzz corner when off, empty places
+  with + that say what to do, locked ones say which pick opens them), Enchanter (portrait in a
+  wood frame, his line, 4 tier slots with price), shelf (count, sort by level, ↑ corner =
+  stronger than in the pick, anvil corner = has a pair, «!» = new, weaker ones desaturated).
+- **No room** → kit `Modal sheet` (`.bkx-replace`): one line `books.replacePick`, a kit `Slot`
+  per enchant in the pick (icon + roman count, `data-autofocus` on the first) with «+252 %» under
+  it, the confirm says `books.replaceFirst` until one is picked.
+- **Window** (critic ruling 4): `BooksTab onClose` = a full-screen `.arm.is-window` portal with
+  ‹ back, ribbon and purse, like the forge and the backpack (`PrisonPage`: `screen.key ===
+  'enchant'`). Without `onClose` it is still a camp tab (`is-embed`, purse heads the side column).
+- **Critic pass**: the plate's effect line holds 3 lines on a phone (`.bkx.arm--one`), the tier
+  shows `books.tierFx` (the mage line didn't fit), reforge is `books.reforge ★n` (the de phrase took
+  3 lines), tier stats go through `numFit` («35–75 %» stuck out of the stage). Greyed buttons and
+  the replace confirm get `.px-dark`. de/fr stat labels shortened. The shelf mounts a frame after
+  the window (`useFirstFrame`).
+- **Critic round 2** (13.10, `critic-armory.md`):
+  - Phone portrait: no details box; the list is the pick strip (one row, scrolls sideways) →
+    shelf → Enchanter, so two shelf rows show on open at 390×844 and one at 360×800 (was 0 of 42).
+    Art cap 160u.
+  - Plate: one line of state (`books.noRoomShort`), the effect line a fixed height (1 line, 2
+    beside the art) — nothing moves between books. Tablet portrait: actions one row of three,
+    `.arm-info` min-height 5 × fs.
+  - Details: `Compare` — `[enchant icon] I +42 % ⌄ [pick] VI +252 %` and the verdict chip
+    `books.weakerShort`; the sentence (`books.lower*`, `books.inPick`) is its tooltip.
+    `enchantPct(id, units)` (`data-books.ts`) is the bare number of `enchantEffect`.
+  - Scenes `.pbks` / `.pbka` share the forge's `.arm-scn` (see `forge-mine.md` → round 2): a light
+    card from `show` / `hit`, CTA = kit primary `Button`. Anvil of simple / rare books skips the
+    reveal strip: three strikes 260 ms apart → flash → book (≈1.3 s at 4× CPU, was ≈4 s); epic and
+    legend keep the strip.
+  - Dust: an 8-mote puff (`PUFF`, `steps(4)` 420 ms) where the book was and a tick on the dust
+    counter (`.bkx-dust.is-tick`); under reduced motion (media or `html[data-motion=reduce]`) no
+    puff and the armed button is lit, not blinking.
+  - Measured on the stand (ru/de/tr; 360×800, 390×844, 844×390, 820×1180, 1180×820, 1440×900):
+    no list scrolls sideways but the pick strips; 0 px drift of plate, stats, actions and side
+    over 14 selections, the no-room «Взрыв X» included («Мест нет»); no word split in the plate,
+    stats, actions or details. Prod build at 4× CPU: window open 300–530 ms (unchanged — JS
+    self time < 20 ms, the rest is style/layout/paint of the window); anvil frames > 20 ms 55 of
+    300 (was 117 of 189), apply 81 of 276, p95 67 ms (was 94 of 177, p95 133).
+- Not verified on a phone / webview / gamepad hardware.

@@ -22,6 +22,8 @@ import {
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { ForgeScreen, forgeReadyNow } from '@/components/ForgeScreen';
+import { BooksTab } from '@/components/BooksTab';
+import { predecodeArmory } from '@/components/armory';
 import { Inventory } from '@/components/Inventory';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
@@ -336,6 +338,9 @@ export function PrisonPage() {
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
   /** Какой сброс взведён: первый тап взводит, второй — сбрасывает. */
   const [wipe, setWipe] = useState<'prison' | 'all' | null>(null);
+  // Кузница, рюкзак и книги открываются без раскодирования картинок в первом кадре: рамки набора,
+  // вращение кирки, значки и полосы книг раскодируются, пока шахта простаивает.
+  useEffect(() => predecodeArmory(useFinanceStore.getState().prison.pick), []);
   useEffect(() => {
     if (!wipe) return undefined;
     const t = setTimeout(() => setWipe(null), 5000);
@@ -2272,7 +2277,9 @@ export function PrisonPage() {
         ) : null}
       </div>
 
-      {screen && (
+      {/* The books open as a full-screen window, like the forge and the backpack (UI wave 2). */}
+      {screen?.key === 'enchant' && <BooksTab onClose={() => setScreen(null)} />}
+      {screen && screen.key !== 'enchant' && (
         <PrisonCamp
           place="mine"
           only={SCREENS[screen.key].only}

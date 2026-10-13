@@ -925,7 +925,8 @@
   color: var(--text);
   font-family: 'GxRubik', system-ui, sans-serif;
 }
-.gx-camp .gx-sheet__body :is(b, strong, h3, h4) {
+/* Not inside kit content (`.px`): Coco Title has one weight — 800 smeared it into a fake bold. */
+.gx-camp .gx-sheet__body :is(b, strong, h3, h4):where(:not(.px *)) {
   font-weight: 800;
 }
 .gx-camp .pforge__row,
@@ -4568,391 +4569,17 @@ html[data-ff='desktop'] .gxh__cards {
   animation: gx-fade 160ms ease-out;
 }
 /* Отсвет горна снизу — статичный, рисуется один раз. */
-.fg__glow {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(120% 60% at 50% 110%, rgba(255, 110, 30, 0.42), transparent 62%),
-    radial-gradient(90% 40% at 50% -6%, rgba(90, 70, 50, 0.5), transparent 70%);
-}
-.fg__wrap {
-  position: relative;
-  max-width: 480px;
-  margin: 0 auto;
-  padding: calc(var(--safe-top, 0px) + var(--content-top, 0px) + 10px) 14px
-    calc(var(--safe-bottom, 0px) + 24px);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.fg__top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.fg__back {
-  --gx-size: 40px;
-  flex: none;
-}
-.fg__back .gx-icon {
-  width: 50%;
-  height: 50%;
-}
-.fg__title {
-  flex: 1;
-}
-.fg__coins {
-  flex: none;
-}
-
-.fg-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-.fg-hero > .rname {
-  font-size: 22px;
-}
-.fg-hero__stand {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 190px;
-  height: 170px;
-}
 /* Пьедестал: каменная плита, на неё падает свет редкости. */
-.fg-hero__plinth {
-  position: absolute;
-  left: 30px;
-  right: 30px;
-  bottom: 4px;
-  height: 22px;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, #5a4a3e, #2a211b 70%, transparent 72%);
-  box-shadow: 0 0 24px -4px var(--rc);
-  z-index: -1;
-}
-.fg-stats {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-}
-.fg-stat {
-  min-width: 92px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 7px 10px 6px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.38);
-  box-shadow: inset 0 0 0 2px rgba(255, 220, 160, 0.14);
-}
-.fg-stat b {
-  font-size: 18px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-.fg-stat i {
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.7;
-}
 
 /* Рецепт — слоты, как на кузнечном столе Майнкрафта. */
-.fg-recipe {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 8px 10px 12px;
-}
-.fg-recipe__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.fg-recipe__head > span {
-  opacity: 0.7;
-}
-.fg-recipe__head .rname {
-  font-size: 16px;
-}
-.fg-recipe__row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-.fg-recipe__plus,
-.fg-recipe__arrow {
-  font-style: normal;
-  font-weight: 900;
-  font-size: 18px;
-  opacity: 0.7;
-}
-.fg-slot {
-  position: relative;
-  flex: none;
-  width: 58px;
-  height: 64px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 3px 2px;
-  border: 0;
-  border-radius: 8px;
-  background: #1c140e;
-  box-shadow:
-    inset 0 3px 0 rgba(0, 0, 0, 0.55),
-    inset 0 0 0 2px #0e0906,
-    0 1px 0 rgba(255, 230, 190, 0.18);
-  color: var(--gx-paper);
-  font: inherit;
-  cursor: default;
-}
-button.fg-slot {
-  cursor: pointer;
-}
-.fg-slot--ore b {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  font-size: 10px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #ff9a8a;
-  white-space: nowrap;
-}
-.fg-slot--ore.is-ok b {
-  color: #9be38a;
-}
-.fg-slot__bar {
-  position: relative;
-  width: 44px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-}
-.fg-slot__bar i {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  transform-origin: left;
-}
-.fg-slot__bar .is-box {
-  background: var(--gx-gold);
-}
-.fg-slot__bar .is-bag {
-  left: var(--x);
-  background: rgba(255, 210, 90, 0.45);
-}
-.fg-slot--out {
-  width: 66px;
-  height: 70px;
-  box-shadow:
-    inset 0 3px 0 rgba(0, 0, 0, 0.55),
-    inset 0 0 0 2px var(--rc),
-    0 0 14px -2px var(--rc);
-}
-.fg-gain {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.fg-gain > span {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-.fg-gain .gx-icon {
-  color: var(--gx-gold);
-}
-.fg-gain b {
-  color: #9be38a;
-  font-weight: 900;
-}
-.fg-gain em {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-style: normal;
-  opacity: 0.85;
-}
-.fg-go[aria-disabled='true'] {
-  filter: grayscale(0.7) brightness(0.8);
-}
-.fg-go.is-ready {
-  animation: fg-call 1.6s ease-in-out infinite;
-}
 @keyframes fg-call {
   50% {
     transform: translateY(-2px);
   }
 }
-.fg-recipe--top {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 14px;
-}
-.fg-recipe--top .gx-icon {
-  color: var(--gx-gold);
-}
 
 /* Лестница кирок: пройденные — в цвете, дальние — силуэты. */
-.fg-ladder {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 6px 2px 8px;
-  scrollbar-width: none;
-  scroll-snap-type: x proximity;
-}
-.fg-ladder::-webkit-scrollbar {
-  display: none;
-}
-.fg-rung {
-  position: relative;
-  flex: none;
-  width: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 0 3px;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
-  color: var(--gx-paper);
-  font: inherit;
-  cursor: pointer;
-  scroll-snap-align: center;
-}
-.fg-rung .pxs {
-  filter: brightness(0) opacity(0.55);
-}
-.fg-rung b {
-  font-size: 10px;
-  font-weight: 800;
-  opacity: 0.55;
-}
-.fg-rung.is-have {
-  box-shadow: inset 0 0 0 2px var(--rc);
-}
-.fg-rung.is-have .pxs {
-  filter: drop-shadow(0 0 3px var(--rc));
-}
-.fg-rung.is-have b {
-  opacity: 1;
-  color: var(--rl);
-}
-.fg-rung.is-cur {
-  background: var(--rd);
-  box-shadow:
-    inset 0 0 0 2px var(--rc),
-    0 0 12px -2px var(--rc);
-}
-.fg-rung.is-next {
-  box-shadow: inset 0 0 0 2px var(--gx-gold);
-}
 /* Кирка в руке (v2.69): любую выкованную можно взять тапом по ней. */
-.fg-rung__hand {
-  position: absolute;
-  left: 50%;
-  top: -7px;
-  translate: -50% 0;
-  padding: 1px 5px;
-  border-radius: 6px;
-  background: var(--rc);
-  color: var(--rd);
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1.3;
-  white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.fg-rung.is-next .pxs {
-  filter: brightness(0) drop-shadow(0 0 4px var(--rc));
-}
-.fg-rung.is-next::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 10px;
-  box-shadow: 0 0 0 2px var(--gx-gold);
-  opacity: 0;
-  animation: prank-call 1.4s ease-in-out infinite;
-}
-
-.fg-gear {
-  display: flex;
-  flex-direction: column;
-}
-.fg-gear__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 46px;
-}
-.fg-gear__row + .fg-gear__row {
-  border-top: 2px dashed rgba(109, 75, 39, 0.25);
-}
-.fg-gear__row > .gx-icon {
-  color: var(--gx-wood-d);
-}
-.fg-gear__info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.fg-gear__info b {
-  font-size: 14px;
-  font-weight: 800;
-}
-.fg-gear__info i {
-  font-style: normal;
-  font-size: 12px;
-  opacity: 0.7;
-}
-.fg__note {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--safe-bottom, 0px) + 18px);
-  z-index: 2;
-  width: min(360px, calc(100% - 32px));
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(20, 12, 6, 0.94);
-  box-shadow: inset 0 0 0 2px rgba(255, 210, 90, 0.4);
-  color: var(--gx-paper);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.35;
-  text-align: center;
-  transform: translateX(-50%);
-  animation: fg-note 220ms ease-out;
-}
 @keyframes fg-note {
   from {
     opacity: 0;
@@ -4970,11 +4597,7 @@ button.fg-slot {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  /* Непрозрачный: кузница под сценой уже показывает новую кирку — сквозь
-     полупрозрачный фон она выдала бы, что выпало, раньше вспышки. */
-  background: radial-gradient(90% 60% at 50% 42%, #2a1a10, #0a0604 70%) #0a0604;
-  color: var(--gx-paper);
+  /* backdrop, card and text: `.arm-scn` in components/armory.css */
   animation: gx-fade 180ms ease-out;
   cursor: pointer;
 }
@@ -5024,37 +4647,6 @@ button.fg-slot {
     transform: scale(1.08);
   }
 }
-.fgr__text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-  animation: fgr-text 380ms 120ms ease-out both;
-}
-.fgr__text.is-wait {
-  visibility: hidden;
-  animation: none;
-}
-.fgr__text .rname {
-  font-size: 28px;
-}
-.fgr__stats,
-.fgr__opens {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  font-weight: 700;
-  opacity: 0.9;
-}
-.fgr__cta {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 700;
-  opacity: 0.6;
-  animation: prank-call 1.6s ease-in-out infinite;
-}
 @keyframes fgr-text {
   from {
     opacity: 0;
@@ -5066,11 +4658,7 @@ button.fg-slot {
   .pkart__rays,
   .pkart__pillar,
   .pkart.is-live .pkart__glow,
-  .fg-go.is-ready,
-  .fg-rung.is-next::after,
-  .fgr__pick,
-  .fgr__text,
-  .fgr__cta {
+  .fgr__pick {
     animation: none;
   }
 }
@@ -5290,165 +4878,6 @@ button.fg-slot {
 }
 
 /* ---- Вкладка --------------------------------------------------------------- */
-.pbk {
-  position: relative;
-  gap: 12px;
-}
-.pbk h4 {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-.pbk h4 > i:not(.gx-icon) {
-  margin-left: auto;
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-  text-align: right;
-}
-.pbk-purse {
-  flex-wrap: nowrap;
-  justify-content: space-between;
-}
-.pbk-purse > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pbk-pick {
-  padding: 10px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #4a3220, #2e1f14);
-  color: var(--gx-paper);
-  box-shadow:
-    inset 0 0 0 2px var(--gx-wood-dd),
-    inset 0 0 0 3px color-mix(in srgb, var(--rc) 45%, transparent);
-}
-.pbk-pick__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.pbk-pick__head > span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.pbk-pick__head .rname {
-  font-size: 17px;
-}
-.pbk-pick__head i {
-  font-style: normal;
-  font-size: 12px;
-  opacity: 0.85;
-}
-.pbk-slots {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.pbk-slot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 54px;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(255, 241, 210, 0.08);
-  box-shadow: inset 0 0 0 1.5px rgba(255, 241, 210, 0.18);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.pbk-slot.is-open {
-  box-shadow: inset 0 0 0 2px var(--gx-gold);
-}
-.pbk-slot.is-off {
-  opacity: 0.55;
-}
-.pbk-slot.is-empty {
-  cursor: default;
-  background: none;
-  box-shadow: inset 0 0 0 1.5px rgba(255, 241, 210, 0.22);
-  border: 1.5px dashed rgba(255, 241, 210, 0.3);
-}
-.pbk-slot__plus {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  font-size: 26px;
-  font-weight: 800;
-  opacity: 0.45;
-}
-.pbk-slot__txt {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.pbk-slot__txt b {
-  font-size: 14px;
-}
-.pbk-slot__txt b em {
-  font-style: normal;
-  color: var(--gx-gold);
-}
-.pbk-slot__txt i {
-  font-style: normal;
-  font-size: 12px;
-  opacity: 0.85;
-}
-.pbk-tools {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 8px 4px 0;
-}
-.pbk-tools .pench-switch,
-.pbk-tools .pench-reset {
-  color: var(--gx-paper);
-  font-size: 13px;
-}
-.pbk-tools .pench-reset.is-armed {
-  color: #ff8a6a;
-}
-.pbk-locks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  margin-top: 8px;
-}
-.pbk-lock {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--rc);
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rc) 55%, transparent);
-}
-.pbk-lock.is-next {
-  padding: 2px 8px 2px 5px;
-}
-.pbk-locks em {
-  font-style: normal;
-  font-size: 11px;
-  opacity: 0.7;
-}
 
 /* Чародей: портрет из ChatGPT (public/ui/books/enchanter.webp, 3:2). Глаза
    на картинке — 46,9% и 52,2% по ширине, 26,4% по высоте; огни в ладонях —
@@ -5645,95 +5074,6 @@ button.fg-slot {
   font-style: italic;
   animation: gx-fade 260ms ease-out;
 }
-
-.pbk-tiers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.pbk-tier {
-  display: grid;
-  grid-template-columns: 58px 1fr;
-  grid-template-rows: auto auto auto;
-  column-gap: 6px;
-  align-items: center;
-  padding: 6px 8px 6px 4px;
-  border: 0;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #3a281a, #24170e);
-  color: var(--gx-paper);
-  font: inherit;
-  text-align: left;
-  box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--rc) 60%, #000),
-    0 3px 0 rgba(61, 42, 22, 0.4);
-  cursor: pointer;
-  transition: transform 80ms ease-out;
-}
-.pbk-tier:active {
-  transform: translateY(2px);
-}
-.pbk-tier .pbook {
-  grid-row: 1 / 4;
-}
-.pbk-tier b {
-  font-size: 14px;
-  color: var(--rl);
-}
-.pbk-tier i {
-  font-style: normal;
-  font-size: 11px;
-  opacity: 0.8;
-}
-.pbk-tier__price {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  justify-self: start;
-  margin-top: 2px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--gx-gold);
-  color: #3a2408;
-  font-size: 13px;
-  font-weight: 900;
-}
-.pbk-tier.is-no .pbk-tier__price {
-  background: rgba(255, 241, 210, 0.2);
-  color: var(--gx-paper);
-}
-.pbk-tier.is-no .pbook {
-  opacity: 0.7;
-}
-
-.pbk-empty {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-.pbk-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
-  gap: 6px;
-}
-.pbk-book {
-  position: relative;
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1;
-  border: 0;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #3a281a, #24170e);
-  box-shadow: inset 0 0 0 1.5px var(--gx-wood-dd);
-  cursor: pointer;
-  padding: 0;
-}
-.pbk-book.is-weak {
-  opacity: 0.55;
-}
-.pbk-book.is-fresh {
-  animation: pbk-fresh 1.4s ease-out 2;
-}
 @keyframes pbk-fresh {
   0%,
   100% {
@@ -5745,218 +5085,9 @@ button.fg-slot {
       0 0 10px rgba(255, 210, 87, 0.8);
   }
 }
-.pbk-book__lv {
-  position: absolute;
-  left: 4px;
-  top: 3px;
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 900;
-  color: var(--gx-gold);
-  text-shadow:
-    0 1px 0 #000,
-    0 0 3px #000;
-}
-.pbk-book__ch {
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  padding: 0 4px;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 900;
-  color: #fff;
-  background: #5a4a3a;
-}
-.pbk-book__ch.is-hi,
-.pbk-odds.is-hi b,
-.pbks__ch.is-hi {
-  background: #2f8a3c;
-}
-.pbk-book__ch.is-mid,
-.pbk-odds.is-mid b,
-.pbks__ch.is-mid {
-  background: #b07a12;
-}
-.pbk-book__ch.is-lo,
-.pbk-odds.is-lo b,
-.pbks__ch.is-lo {
-  background: #a8322a;
-}
 /* Зелёная стрелка: книгу можно вписать прямо сейчас. */
-.pbk-book__up {
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 8px solid #6fe07c;
-  filter: drop-shadow(0 1px 0 #000);
-}
-.pbk-book__anvil {
-  position: absolute;
-  left: 4px;
-  bottom: 4px;
-  color: #cfd8e2;
-}
-
-.pbk-hint {
-  position: sticky;
-  bottom: 8px;
-  z-index: 3;
-  align-self: center;
-  padding: 8px 14px;
-  border-radius: 12px;
-  background: rgba(30, 18, 10, 0.94);
-  color: var(--gx-paper);
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-  animation: gx-fade 160ms ease-out;
-}
 
 /* ---- Книга с полки (окно) -------------------------------------------------- */
-.pbk-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  color: var(--gx-ink);
-}
-.pbk-sheet__top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pbk-sheet__fx {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pbk-sheet__fx .rname {
-  font-size: 13px;
-}
-.pbk-sheet__fx b {
-  font-size: 16px;
-}
-.pbk-sheet__fx i {
-  font-style: normal;
-  font-size: 12px;
-  color: var(--gx-ink-soft);
-}
-.pbk-note,
-.pbk-warn {
-  margin: 0;
-  font-size: 13px;
-  color: var(--gx-ink-soft);
-}
-.pbk-warn {
-  font-size: 12px;
-  text-align: center;
-}
-.pbk-odds {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.pbk-odds__bar {
-  position: relative;
-  flex: 1;
-  height: 14px;
-  border-radius: 7px;
-  overflow: hidden;
-  background: #b0402e;
-  box-shadow: inset 0 0 0 2px var(--gx-wood-dd);
-}
-.pbk-odds__bar i {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: linear-gradient(180deg, #7fdc6a, #3f8a2a);
-}
-.pbk-odds__bar i.is-dust {
-  background: repeating-linear-gradient(135deg, #c89bff 0 6px, #9a5cff 6px 12px);
-}
-.pbk-odds b {
-  min-width: 52px;
-  padding: 2px 6px;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 16px;
-  text-align: center;
-}
-.pbk-dust {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 7px 10px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(109, 75, 39, 0.14);
-  color: var(--gx-ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  box-shadow: inset 0 0 0 1.5px rgba(109, 75, 39, 0.3);
-  cursor: pointer;
-}
-.pbk-dust.is-on {
-  background: rgba(154, 92, 255, 0.18);
-  box-shadow: inset 0 0 0 2px #9a5cff;
-}
-.pbk-dust:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-.pbk-replace > i {
-  display: block;
-  margin-bottom: 6px;
-  font-style: normal;
-  font-size: 12px;
-  color: var(--gx-ink-soft);
-}
-.pbk-replace > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.pbk-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 9px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(109, 75, 39, 0.14);
-  color: var(--gx-ink);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.pbk-chip.is-on {
-  background: #b0402e;
-  color: #fff;
-}
-.pbk-sheet__btns {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pbk-sheet__btns .gx-btn {
-  width: 100%;
-}
-.pbk-go[aria-disabled='true'] {
-  filter: grayscale(0.85) brightness(0.8);
-}
-.pbk-sheet__btns .gx-btn.is-armed {
-  --gx-btn: url('/ui/kenney/button_red.png');
-  --gx-btn-shadow: var(--gx-red-d);
-}
 
 /* ---- Сцены: покупка, наковальня, вписывание -------------------------------- */
 .pbks,
@@ -5968,13 +5099,9 @@ button.fg-slot {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  /* Непрозрачный: под сценой полка уже показывает, что выпало. */
-  background: radial-gradient(90% 60% at 50% 42%, #24142e, #08050a 70%) #08050a;
-  color: var(--gx-paper);
+  /* backdrop, card and text: `.arm-scn` in components/armory.css */
   animation: gx-fade 180ms ease-out;
   cursor: pointer;
-  font-family: 'GxRubik', system-ui, sans-serif;
 }
 .pbks__stage {
   position: relative;
@@ -6096,42 +5223,6 @@ button.fg-slot {
     opacity: 0;
   }
 }
-.pbks__text,
-.pbka__text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-height: 96px;
-  padding: 0 16px;
-  text-align: center;
-  animation: fgr-text 380ms 120ms ease-out both;
-}
-/* Подпись вписывания меняется на метке `hit` — места под самую длинную хватает сразу. */
-.pbka__text {
-  min-height: 124px;
-}
-/* Подпись итога ждёт своей фазы невидимой (место под неё занято сразу). */
-.pbks:not(.is-show) .pbks__text {
-  visibility: hidden;
-  animation: none;
-}
-.pbks__text .rname,
-.pbka__text .rname {
-  font-size: 26px;
-}
-.pbks__fx {
-  font-size: 15px;
-  font-weight: 700;
-  opacity: 0.92;
-}
-.pbks__ch {
-  padding: 2px 10px;
-  border-radius: 999px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-}
 
 /* Вписывание: круг шанса — зелёный сектор ровно `--ch` процентов. */
 .pbka__stage {
@@ -6230,15 +5321,6 @@ button.fg-slot {
     filter: brightness(0.3);
   }
 }
-.pbka__odds {
-  font-size: 34px;
-  font-weight: 900;
-  color: #fff4d0;
-}
-.pbka__lost {
-  font-size: 26px;
-  color: #ff8a6a;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .pbk-mage__eye,
@@ -6249,10 +5331,7 @@ button.fg-slot {
   .pbks__sigil,
   .pbks.is-show .pbook__emboss,
   .pbka.is-ok.is-hit .pbka__pick,
-  .pbook--lift .pbook__bob,
-  .pbk-book.is-fresh,
-  .pbks__text,
-  .pbka__text {
+  .pbook--lift .pbook__bob {
     animation: none;
   }
 }

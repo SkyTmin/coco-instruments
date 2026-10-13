@@ -1,0 +1,173 @@
+/* Forge (components/ForgeScreen.tsx) on the pixel kit — the parts that are the forge's own.
+   Skeleton (columns, showcase, stats, actions) — armory.css. Kit rules: .claude/rules/ui-px.md.
+   The forging scene (.fgr*) and PickArt (.pkart*) keep their styles in game-ui.css. */
+
+/* Recipe: one row per ingredient — slot | name + progress bar (have / need) — then coins. */
+.frg-recipe {
+  display: grid;
+  gap: calc(3 * var(--u));
+}
+.frg-ing {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(4 * var(--u));
+}
+.frg-ing .px-slot {
+  --slot: calc(24 * var(--u));
+}
+.frg-ing__txt {
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.frg-ing__txt > b {
+  color: var(--px-text);
+  /* wraps, never «…»: «Granatspitzhacke» in the narrow side column was cut to «Granatsp…» */
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+/* a name that would split inside a word takes the small step (`useWordFit`) */
+:is(.frg-ing__txt, .frg-ench__row) > b[data-tight] {
+  font-size: var(--px-fs-sm);
+}
+:is(.frg-ing__txt, .frg-ench__row) > b:is([data-tight='2'], [data-tight='3']) {
+  font-size: var(--px-fs-tiny);
+}
+/* …and if even that splits («Granatspitzhacke», 102 px beside the slot in phone landscape) the
+   name goes under the slot, the column's whole width. */
+.frg-ing:has(> .frg-ing__txt > b[data-tight='3']) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.frg-ing:has(> .frg-ing__txt > b[data-tight='3']) > .px-slot {
+  justify-self: start;
+}
+.frg-ing.is-ok .frg-ing__txt > b {
+  color: var(--px-green);
+}
+.frg-ing__txt > b.arm-num {
+  font-size: var(--px-fs-big);
+  color: var(--px-gold);
+}
+.frg-ing__txt > b.is-short {
+  color: var(--px-red);
+}
+.frg-ing__coin {
+  display: grid;
+  place-items: center;
+  width: calc(24 * var(--u));
+}
+
+/* Which ores the selected pick breaks. */
+.frg-opens {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.frg-opens > span:first-child {
+  margin-right: calc(2 * var(--u));
+}
+.frg-opens__ore {
+  display: inline-grid;
+}
+.frg-opens .pore-ico {
+  image-rendering: pixelated;
+}
+
+/* In-hand pick: level bar and enchantments. */
+.frg-level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+}
+/* a narrow column (phone landscape) puts the numbers under the bar instead of cutting them */
+.frg-level > .px-bar {
+  flex: 1 1 calc(30 * var(--u));
+}
+.frg-level__lv {
+  font-family: var(--px-head);
+  color: var(--px-blue);
+}
+.frg-ench {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+/* Name over its effect: side by side the effect («+252% к скорости копки») took the whole row
+   and the name ran under it in a narrow column. */
+.frg-ench__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--u);
+}
+.frg-ench__row > b {
+  color: var(--px-violet);
+  overflow-wrap: break-word;
+}
+.frg-ench__row > span {
+  color: var(--px-text);
+  overflow-wrap: break-word;
+}
+.frg-ench__row.is-off > * {
+  color: var(--px-muted);
+}
+
+/* Ladder of all picks: not forged yet = silhouette; the count is the power ⛏. */
+.frg-grid .px-slot__n {
+  font-size: var(--px-fs-tiny);
+}
+.frg-ghost {
+  display: grid;
+  filter: brightness(0) invert(0.35);
+}
+.arm--one .arm-details {
+  height: calc(72 * var(--u));
+}
+.arm--one .frg-grid {
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-auto-columns: var(--slot, calc(26 * var(--u)));
+  justify-content: start;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+
+/* Gear: backpack and minecart rows. */
+.frg-gear {
+  display: grid;
+  gap: calc(3 * var(--u));
+}
+.frg-gear__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  padding: calc(3 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+}
+.frg-gear__ico {
+  display: grid;
+  color: var(--px-gold);
+}
+.frg-gear__info {
+  display: grid;
+  gap: var(--u);
+  min-width: 0;
+}
+.frg-gear__info > i {
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+.frg-gear__ok {
+  color: var(--px-green);
+}
