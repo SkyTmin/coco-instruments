@@ -55,7 +55,9 @@ async function cellsOnOpen(p, k) {
       document.querySelector('.nur-coll > .nur-grid');
     if (!box) return -1;
     const sb = box.getBoundingClientRect();
-    return [...box.querySelectorAll('[data-pet]')].filter((c) => {
+    // grid cells only: the wide list also holds the squad slots
+    const sel = box.matches('.nur-grid') ? '[data-pet]' : '.nur-grid [data-pet]';
+    return [...box.querySelectorAll(sel)].filter((c) => {
       const r = c.getBoundingClientRect();
       return r.top >= sb.top - 0.5 && r.bottom <= sb.bottom + 0.5;
     }).length;
@@ -333,7 +335,9 @@ for (const k of want) {
   const { ctx, p, h } = await openNursery(k, lang);
   const cells = await cellsOnOpen(p, k);
   if (cells < CELLS[k]) fails++;
-  console.log(`${lang} ${k}: cells on open ${cells} (≥ ${CELLS[k]}) ${cells < CELLS[k] ? 'LOW' : 'OK'}`);
+  console.log(
+    `${lang} ${k}: cells on open ${cells} (≥ ${CELLS[k]}) ${cells < CELLS[k] ? 'LOW' : 'OK'}`,
+  );
   const rows = [];
   for (const id of PETS) {
     const direct = await tap(p, k, `.nur-side [data-pet="${id}"], .nur-coll [data-pet="${id}"]`);
