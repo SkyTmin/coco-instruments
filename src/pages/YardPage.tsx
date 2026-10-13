@@ -195,6 +195,8 @@ function HubWorld() {
   const topRef = useRef<HTMLDivElement>(null);
   const [sim] = useState<HubSim>(() => createHubSim(firstPlace()));
   const rendRef = useRef<HubRenderer | null>(null);
+  /** Re-measures the camera insets (the talk box opening / growing): set by the world effect. */
+  const insetsRef = useRef<(ease: boolean) => void>(() => {});
   const input = useRef<HubInput>({ ...HUB_NO_INPUT });
   const busyRef = useRef(false);
   const fading = useRef(false);
@@ -455,14 +457,26 @@ function HubWorld() {
           },
         },
       });
-    const fit = () => {
-      r.resize(root.clientWidth, root.clientHeight, window.devicePixelRatio || 1);
+    const insets = (ease: boolean) => {
       const top = topRef.current?.getBoundingClientRect().bottom ?? 0;
       // Снизу — джойстик и кнопки: маленькая комната встаёт посередине между
       // табло и ними, а край большой карты не прячется под пальцем.
       // Лёжа джойстик и кнопки стоят по бокам, а не снизу: герой — посередине высоты.
       const land = root.clientWidth > root.clientHeight;
-      r.setInsets(Math.max(0, top - root.getBoundingClientRect().top), land ? 0 : BOTTOM_INSET);
+      // Talking: the box covers the bottom (53 % of a landscape phone) — the hero and the
+      // speaker stand in the part above it. `offsetTop` ignores the box's slide-in transform.
+      const talkEl = root.querySelector<HTMLElement>('.hub-talk');
+      const talkH = talkEl ? root.clientHeight - talkEl.offsetTop : 0;
+      r.setInsets(
+        Math.max(0, top - root.getBoundingClientRect().top),
+        Math.max(land ? 0 : BOTTOM_INSET, talkH),
+        ease,
+      );
+    };
+    insetsRef.current = insets;
+    const fit = () => {
+      r.resize(root.clientWidth, root.clientHeight, window.devicePixelRatio || 1);
+      insets(false);
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -519,6 +533,7 @@ function HubWorld() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      insetsRef.current = () => {};
       document.removeEventListener('visibilitychange', onHide);
       if (!leaving.current) savePlace(placeOf(sim));
       rendRef.current = null;
@@ -526,6 +541,17 @@ function HubWorld() {
     // Мир один на заход на площадь.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim]);
+
+  // The talk box opens / closes / grows (more lines): the camera glides to the part above it.
+  const talkOpen = talk !== null;
+  useLayoutEffect(() => {
+    insetsRef.current(true);
+    const el = rootRef.current?.querySelector('.hub-talk');
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => insetsRef.current(true));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [talkOpen, talk?.id]);
 
   // «!» над жителями с делом и над дверями, за которыми такой житель.
   useEffect(() => {

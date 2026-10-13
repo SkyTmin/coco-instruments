@@ -75,7 +75,7 @@
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  animation: hub-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  animation: hub-in 0.18s steps(3) both;
 }
 .hub-ev__glyph {
   flex: none;
@@ -88,6 +88,7 @@
   font-size: var(--px-fs-sm);
 }
 .hub-ev b {
+  font-weight: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -123,17 +124,36 @@
   max-width: min(560px, calc(100vw - 32px));
   margin-inline: auto;
   padding: calc(3 * var(--u)) calc(6 * var(--u));
-  font: 600 var(--px-fs-sm) / 1.3 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1.3 var(--px-font);
   text-align: center;
   translate: none;
   pointer-events: none;
-  animation: hub-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  animation: hub-in 0.18s steps(3) both;
 }
 
 /* Buttons at kit size: `.gx-btn`'s own 15 px beat the old 17 px of «Говорить». */
 .hub-pad .hub-pad__use,
 .hub-talk__opts .gx-btn {
   font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+}
+.hub-pad .hub-pad__use {
+  animation: hub-in 0.18s steps(3) both;
+}
+
+/* Kit frames don't scale: the pill, toast and «Говорить» come in like the kit — two art px up in
+   three hard steps with the opacity, no scale, no overshoot. Type: 700 text, 800 headings. */
+@keyframes hub-in {
+  from {
+    opacity: 0;
+    translate: 0 calc(2 * var(--u));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-ev,
+  .hub-toast,
+  .hub-pad .hub-pad__use {
+    animation: none;
+  }
 }
 
 .hub-talk .hub-talk__name {
@@ -144,7 +164,7 @@
 }
 .hub-talk__text {
   font-size: var(--px-fs);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.35;
   color: var(--gx-ink);
   white-space: pre-wrap;
@@ -212,7 +232,27 @@
   bottom: calc(-2 * var(--u));
 }
 
-/* The idle joystick ring is a hint for the thumb: mouse, keyboard and pad players don't get it. */
-html:not([data-input='touch']) .hub .dg-stick.is-idle {
+/* The idle joystick ring is a hint for the thumb: mouse, keyboard and pad players don't get it,
+   nor anyone while the talk box is open (it sat on the box on a landscape phone). */
+html:not([data-input='touch']) .hub .dg-stick.is-idle,
+.hub:has(.hub-talk) .dg-stick.is-idle {
   opacity: 0;
+}
+
+/* The HUD row has its own ground: a flat ink band from the screen top to 2 art px under the row,
+   so world sign plates (ШАХТА, ПИТОМНИК at the spawn) never read as part of the HUD. The camera
+   already keeps the hero below it (`setInsets` top = the bottom of `.hub-top`). */
+.hub-top .gx-top {
+  position: relative;
+}
+.hub-top .gx-top::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: -10px;
+  right: -10px;
+  top: calc(-1 * (var(--safe-top) + var(--content-top) + 8px));
+  bottom: calc(-2 * var(--u));
+  background: var(--px-ink);
+  pointer-events: none;
 }

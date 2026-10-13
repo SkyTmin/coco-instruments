@@ -227,6 +227,8 @@ export class HubRenderer {
   /** Сколько сверху и снизу закрыто табло, игровые пиксели. */
   private insetTop = 0;
   private insetBottom = 0;
+  /** Where `insetBottom` is heading: the talk box slides in, the camera follows it (eased). */
+  private insetBottomGoal = 0;
   /** Левый верхний угол кадра в мире — после прижатия к точкам экрана. */
   left = 0;
   top = 0;
@@ -295,10 +297,12 @@ export class HubRenderer {
     el.style[prop] = v;
   }
 
-  /** Сколько экрана занимает табло сверху и снизу (CSS px). */
-  setInsets(topCss: number, bottomCss: number): void {
+  /** Сколько экрана занимает табло сверху и снизу (CSS px). `ease` — the bottom one glides
+   *  there (the talk box opening), not jumps; a resize sets it at once. */
+  setInsets(topCss: number, bottomCss: number, ease = false): void {
     this.insetTop = (topCss * this.dpr) / this.scale;
-    this.insetBottom = (bottomCss * this.dpr) / this.scale;
+    this.insetBottomGoal = (bottomCss * this.dpr) / this.scale;
+    if (!ease || !this.camReady) this.insetBottom = this.insetBottomGoal;
   }
 
   /** Камеру — сразу на героя (новая карта, быстрый переход). */
@@ -340,6 +344,11 @@ export class HubRenderer {
 
   private camera(sim: HubSim, dt: number): void {
     const h = sim.hero;
+    if (this.insetBottom !== this.insetBottomGoal) {
+      const d = this.insetBottomGoal - this.insetBottom;
+      this.insetBottom =
+        Math.abs(d) < 0.5 ? this.insetBottomGoal : this.insetBottom + d * (1 - Math.exp(-10 * dt));
+    }
     const vis = this.gh - this.insetTop - this.insetBottom;
     // Точка середины видимой части в кадре.
     const sy = this.insetTop + vis / 2;

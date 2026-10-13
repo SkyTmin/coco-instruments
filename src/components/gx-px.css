@@ -379,6 +379,9 @@ html[data-ff='phone-portrait'] .gx-top .gx-chip {
   display: inline-grid;
   place-items: center;
 }
+.gx-wallet__n {
+  font-weight: 700;
+}
 .gx-wallet__v {
   font: 700 var(--px-fs) / 1.2 var(--px-font);
   font-variant-numeric: tabular-nums;
