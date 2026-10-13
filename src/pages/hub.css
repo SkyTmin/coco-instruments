@@ -1,0 +1,47 @@
+/* The square (YardPage, `lib/hub-render.ts`) — wave 3, agent Q. Rule: `.claude/rules/hub.md`.
+   Layers over the root, bottom to top: the world canvas in art pixels (the browser scales it ×scale
+   with nearest-neighbour), the darkness canvas (scaled smoothly), the «!» canvas, NPC names (DOM).
+   The renderer sets each layer's size and a transform with the camera's sub-art-pixel remainder. */
+.hub__canvas,
+.hub__light {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.hub__canvas {
+  image-rendering: pixelated;
+}
+.hub__light {
+  display: none;
+  image-rendering: auto;
+}
+.hub__names {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* NPC name over the head: screen letters with an ink outline (was canvas `strokeText`). */
+.hub-name {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: none;
+  color: #f7ead0;
+  font: 800 11.5px / 1 'GxRubik', system-ui, sans-serif;
+  white-space: nowrap;
+  text-shadow:
+    -1.5px 0 rgba(12, 8, 6, 0.9),
+    1.5px 0 rgba(12, 8, 6, 0.9),
+    0 -1.5px rgba(12, 8, 6, 0.9),
+    0 1.5px rgba(12, 8, 6, 0.9),
+    -1px -1px rgba(12, 8, 6, 0.9),
+    1px -1px rgba(12, 8, 6, 0.9),
+    -1px 1px rgba(12, 8, 6, 0.9),
+    1px 1px rgba(12, 8, 6, 0.9);
+  will-change: transform, opacity;
+}

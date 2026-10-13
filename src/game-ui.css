@@ -1822,14 +1822,6 @@
   -webkit-touch-callout: none;
   color: var(--gx-paper);
 }
-.hub__canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  image-rendering: pixelated;
-}
 .hub-top {
   position: absolute;
   top: calc(var(--safe-top) + var(--content-top) + 8px);

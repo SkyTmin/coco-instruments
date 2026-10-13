@@ -65,6 +65,7 @@ import { inTopLayer } from '@/input/focus-nav';
 import { Prompt } from '@/input/Prompt';
 import { fmtNum, t as tNow, useT } from '@/i18n';
 import { doorLabel, eventLead, eventName, hubMapName, npcName } from '@/i18n/data-yard';
+import './hub.css';
 
 const fmt = (n: number) => fmtNum(Math.round(n));
 const clock = (ms: number) => {
@@ -78,7 +79,7 @@ const clock = (ms: number) => {
 const STEP = 1 / 60;
 /** Затемнение при смене карты — половина уходит в чёрное, половина из него. */
 const FADE_MS = 250;
-/** Сколько снизу занимают джойстик и кнопки, CSS px. */
+/** Сколько снизу занимают джойстик и кнопки, CSS px (стоя; лёжа они по бокам — 0). */
 const BOTTOM_INSET = 100;
 /** Где стоял герой: удобство, не прогресс — пропало, значит встанет у ворот. */
 const POS_KEY = 'hub.pos.v1';
@@ -179,6 +180,9 @@ function HubWorld() {
 
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lightRef = useRef<HTMLCanvasElement>(null);
+  const marksRef = useRef<HTMLCanvasElement>(null);
+  const namesRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const [sim] = useState<HubSim>(() => createHubSim(firstPlace()));
   const rendRef = useRef<HubRenderer | null>(null);
@@ -423,7 +427,11 @@ function HubWorld() {
     const canvas = canvasRef.current;
     const root = rootRef.current;
     if (!canvas || !root) return undefined;
-    const r = new HubRenderer(canvas);
+    const r = new HubRenderer(canvas, {
+      light: lightRef.current ?? undefined,
+      marks: marksRef.current ?? undefined,
+      names: namesRef.current ?? undefined,
+    });
     rendRef.current = r;
     if (import.meta.env.DEV)
       Object.assign(window as unknown as Record<string, unknown>, {
@@ -442,7 +450,9 @@ function HubWorld() {
       const top = topRef.current?.getBoundingClientRect().bottom ?? 0;
       // Снизу — джойстик и кнопки: маленькая комната встаёт посередине между
       // табло и ними, а край большой карты не прячется под пальцем.
-      r.setInsets(Math.max(0, top - root.getBoundingClientRect().top), BOTTOM_INSET);
+      // Лёжа джойстик и кнопки стоят по бокам, а не снизу: герой — посередине высоты.
+      const land = root.clientWidth > root.clientHeight;
+      r.setInsets(Math.max(0, top - root.getBoundingClientRect().top), land ? 0 : BOTTOM_INSET);
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -605,7 +615,11 @@ function HubWorld() {
       onPointerCancel={onUp}
       onContextMenu={(e) => e.preventDefault()}
     >
+      {/* Мир в игровых пикселях (браузер увеличивает), темнота, «!» и имена — слоями. */}
       <canvas className="hub__canvas" ref={canvasRef} />
+      <canvas className="hub__light" ref={lightRef} />
+      <canvas className="hub__canvas hub__marks" ref={marksRef} />
+      <div className="hub__names" ref={namesRef} aria-hidden="true" />
 
       <div className="hub-top" ref={topRef} onPointerDown={stop}>
         <GameTop
