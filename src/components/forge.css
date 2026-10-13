@@ -31,8 +31,16 @@
 :is(.frg-ing__txt, .frg-ench__row) > b[data-tight] {
   font-size: var(--px-fs-sm);
 }
-:is(.frg-ing__txt, .frg-ench__row) > b[data-tight='2'] {
+:is(.frg-ing__txt, .frg-ench__row) > b:is([data-tight='2'], [data-tight='3']) {
   font-size: var(--px-fs-tiny);
+}
+/* …and if even that splits («Granatspitzhacke», 102 px beside the slot in phone landscape) the
+   name goes under the slot, the column's whole width. */
+.frg-ing:has(> .frg-ing__txt > b[data-tight='3']) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.frg-ing:has(> .frg-ing__txt > b[data-tight='3']) > .px-slot {
+  justify-self: start;
 }
 .frg-ing.is-ok .frg-ing__txt > b {
   color: var(--px-green);

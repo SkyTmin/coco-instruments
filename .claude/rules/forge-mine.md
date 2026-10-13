@@ -266,7 +266,7 @@ Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventor
   - `.arm-list` is one `minmax(0, 1fr)` column — the forge's 17-pick strip scrolls inside
     `.frg-grid`, not the whole list (992 px in a 374-px list).
   - Phone landscape stage: the art takes the full stage height on the left, the plate and the
-    stats (one line each: number · delta · label) stack on the right.
+    stats (number · delta, the label under them — see below) stack on the right.
   - Plate: name on one line shrinking by its whole length (`--nlen` from `nameFit`; beside the
     art by the longest word `--wlen`), `overflow-wrap: normal; hyphens: auto` — no breaks inside
     a word. Fixed heights for name, state and effect.
@@ -299,6 +299,9 @@ Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventor
     name → sm). MutationObserver + ResizeObserver, so it runs before paint; break points are
     space, ZWSP, hyphen and slash. Was «Состояние», «Buchplätze», «Chance», «Kazmadaki»,
     «Granatspitzhacke» split on 360 px and in phone landscape.
+  - Phone-landscape stats: number · delta on one line, the label one nowrap line under them
+    (`'num delta' 1.15fs / 'lbl lbl' fs-sm`, padding-block 0 — 44 px a stat: the books' three
+    stats under a three-part plate have exactly 136 px). Beside the number the label had 45–62 px.
   - Bunk chest: the phone bar has as many places as actions; a side column keeps `ACT_SLOTS`
     places (spare ones hidden above the buttons) — fewer places moved the details by 58–87 px.
 - **Not verified**: a real phone / Telegram webview, hyphenation (the stand's Linux Chromium has no

@@ -118,8 +118,8 @@ let fullWins = 0;
 let fullScenes = 0;
 /** Short labels that must not break inside a word: a stat's label, the forge's ingredient and
  *  enchant names. When a word would split over two lines (or a one-line label sticks out) the
- *  element gets `data-tight` 1, then 2 — kit steps smaller (`armory.css`, `forge.css`); only a word
- *  too long even then still breaks. */
+ *  element gets `data-tight` 1, 2, 3 — kit steps smaller, then (a forge ingredient) the name under
+ *  its slot (`armory.css`, `forge.css`); only a word too long even then still breaks. */
 const FIT = '.arm-stat > i, .frg-ing__txt > b, .frg-ench__row > b';
 
 function splitsWord(el: Element): boolean {
@@ -144,7 +144,7 @@ function fitWords(els: Element[]): void {
   const list = els as HTMLElement[];
   for (const e of list) delete e.dataset.tight;
   let bad = list.filter(splitsWord); // one layout for all of them
-  for (const step of ['1', '2']) {
+  for (const step of ['1', '2', '3']) {
     for (const e of bad) e.dataset.tight = step;
     bad = bad.filter(splitsWord);
   }
