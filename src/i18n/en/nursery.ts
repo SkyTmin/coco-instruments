@@ -5,6 +5,8 @@ export const nursery: Translation<typeof ru> = {
   tabPets: 'Pets',
   tabEggs: 'Eggs',
   squad: 'Squad',
+  squadHint: 'Come with you into the mine',
+  notYet: 'Not hatched yet',
   pick: 'Who comes along?',
   lockRank: 'Rank {rank}',
   lockPrestige: 'Prestige',
@@ -37,6 +39,8 @@ export const nursery: Translation<typeof ru> = {
   unknown: 'Who is it?',
   from: 'Hatches from',
   eggPct: '{v}%',
+  /** A role bonus on a chip: icon + this. */
+  bonus: '+{v}%',
   allWithYou: 'All your pets are already along',
   hatchFirst: 'Hatch a pet from an egg first',
   rarity: {

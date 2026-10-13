@@ -4,7 +4,9 @@ import type { nursery as ru } from '../ru/nursery';
 export const nursery: Translation<typeof ru> = {
   tabPets: 'Hayvanlar',
   tabEggs: 'Yumurtalar',
-  squad: 'Yanımda',
+  squad: 'Takım',
+  squadHint: 'Seninle madene iner',
+  notYet: 'Henüz yumurtadan çıkmadı',
   pick: 'Kim gelsin?',
   lockRank: 'Rütbe {rank}',
   lockPrestige: 'Prestij',
@@ -37,6 +39,8 @@ export const nursery: Translation<typeof ru> = {
   unknown: 'Bu kim?',
   from: 'Çıktığı yumurtalar',
   eggPct: '%{v}',
+  /** A role bonus on a chip: icon + this. */
+  bonus: '+%{v}',
   allWithYou: 'Tüm hayvanlar zaten yanında',
   hatchFirst: 'Önce bir yumurtadan hayvan çıkar',
   rarity: {

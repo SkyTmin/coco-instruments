@@ -770,6 +770,69 @@
   --i-h: 9;
 }
 
+.pxi-grid {
+  -webkit-mask-image: url('/ui/kit/i-grid.png?v=a3494626');
+  mask-image: url('/ui/kit/i-grid.png?v=a3494626');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-gear {
+  -webkit-mask-image: url('/ui/kit/i-gear.png?v=8a69676c');
+  mask-image: url('/ui/kit/i-gear.png?v=8a69676c');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-sound {
+  -webkit-mask-image: url('/ui/kit/i-sound.png?v=0e23ebb5');
+  mask-image: url('/ui/kit/i-sound.png?v=0e23ebb5');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-mute {
+  -webkit-mask-image: url('/ui/kit/i-mute.png?v=5c1883c0');
+  mask-image: url('/ui/kit/i-mute.png?v=5c1883c0');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-music {
+  -webkit-mask-image: url('/ui/kit/i-music.png?v=5d6f633d');
+  mask-image: url('/ui/kit/i-music.png?v=5d6f633d');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-nomusic {
+  -webkit-mask-image: url('/ui/kit/i-nomusic.png?v=ca0d26d0');
+  mask-image: url('/ui/kit/i-nomusic.png?v=ca0d26d0');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-question {
+  -webkit-mask-image: url('/ui/kit/i-question.png?v=0ecd9d5c');
+  mask-image: url('/ui/kit/i-question.png?v=0ecd9d5c');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-excl {
+  -webkit-mask-image: url('/ui/kit/i-excl.png?v=ed27ab50');
+  mask-image: url('/ui/kit/i-excl.png?v=ed27ab50');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-minus {
+  -webkit-mask-image: url('/ui/kit/i-minus.png?v=832e4510');
+  mask-image: url('/ui/kit/i-minus.png?v=832e4510');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .pxk-tab-side-on {
   border-image-source: var(--pxk-tab-side-on);
   border-image-slice: var(--pxk-tab-side-on-s);

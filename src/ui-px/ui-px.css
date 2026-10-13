@@ -349,6 +349,11 @@ html[data-game][data-input] .px-f:focus-visible {
 .px-tab .ip-prompt {
   font-size: var(--px-fs-tiny);
 }
+/* wave 2 — C: a tab row inside a window that has its own (main) row leaves the keys to it, so
+   no key hints on the inner row. */
+[data-ui-layer]:has(.px-tabs[data-tabs-main]) .px-tabs:not([data-tabs-main]) > .px-keyhint {
+  display: none;
+}
 /* Rail (wave 2 — C): vertical tabs; the selected one joins the panel on its right. */
 .px-tabs--rail {
   flex-direction: column;
