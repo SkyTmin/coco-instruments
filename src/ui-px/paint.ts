@@ -942,7 +942,7 @@ const ICONS: Record<string, string[]> = {
     '.#######.',
     '..#####..',
   ],
-  // wave 2 — M: the mine dock and HUD (books, inventory, camp, settings, streak)
+  // wave 2 — M: the mine dock and HUD (books, inventory, camp, streak)
   'm-book': [
     '.........',
     '.##...##.',
@@ -975,17 +975,6 @@ const ICONS: Record<string, string[]> = {
     '#.......#',
     '.#######.',
     '#.......#',
-  ],
-  'm-gear': [
-    '....#....',
-    '.#.###.#.',
-    '..#####..',
-    '.##...##.',
-    '###...###',
-    '.##...##.',
-    '..#####..',
-    '.#.###.#.',
-    '....#....',
   ],
   'm-flame': [
     '...#.....',

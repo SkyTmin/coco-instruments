@@ -756,13 +756,6 @@
   --i-h: 9;
 }
 
-.pxi-m-gear {
-  -webkit-mask-image: url('/ui/kit/i-m-gear.png?v=6b661c60');
-  mask-image: url('/ui/kit/i-m-gear.png?v=6b661c60');
-  --i-w: 9;
-  --i-h: 9;
-}
-
 .pxi-m-flame {
   -webkit-mask-image: url('/ui/kit/i-m-flame.png?v=984a804b');
   mask-image: url('/ui/kit/i-m-flame.png?v=984a804b');

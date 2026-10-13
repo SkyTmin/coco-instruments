@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, RefObject } from 'react';
-import { GxBar, GxIcon, GxModal, KIcon } from '@/components/gx';
+import { GxIcon, GxModal } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
 import { ChestIcon } from '@/components/ChestTab';
 import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/MineField';
@@ -1835,7 +1835,7 @@ export function PrisonPage() {
         data-mine-settings=""
         onClick={() => openSheet('settings')}
       >
-        <i className="px-i pxi-m-gear" aria-hidden="true" />
+        <i className="px-i pxi-gear" aria-hidden="true" />
       </button>
     </div>
   );
@@ -2458,62 +2458,62 @@ export function PrisonPage() {
       )}
 
       {sheet === 'mines' && (
-        <GxModal
-          title={t('mineHud.floors.title')}
-          onClose={() => setSheet(null)}
-          className="mn-sheet mn-mines"
-        >
-          {Array.from({ length: Math.min(LAST_RANK, rank + 1) + 1 }, (_, id) => {
-            const locked = id > rank;
-            const here = id === mine.id && !prison.zone.on;
-            const band = HORIZONS.find((h) => h.from === id);
-            return (
-              <div key={id} className="mn-mines__item">
-                {band && (
-                  <h3 className="px-h px-h--sub mn-mines__band">
-                    {horizonName(HORIZONS.indexOf(band))}
-                  </h3>
-                )}
-                <div
-                  className={`mn-mines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
-                >
-                  <span className={`mn-hex${locked ? ' mn-hex--next' : ''}`}>{rankLetter(id)}</span>
-                  <img className="mn-mines__ore" src={blockTexture(id)} alt="" />
-                  <span className="mn-mines__info">
-                    <b>
-                      {rockName(id)}{' '}
-                      <em className={`mn-mines__hard${canMine(pick, id) ? '' : ' is-no'}`}>
-                        ⛏{rockHardness(id)}
-                      </em>
-                    </b>
-                    <span className="mn-mines__price">
-                      {t('mineHud.floors.price', {
-                        ore: String(ROCKS[id].value),
-                        block: fmtShort(ROCKS[id].block),
-                      })}
-                    </span>
-                  </span>
-                  {locked ? (
-                    <i className="px-i pxi-lock mn-mines__lock" aria-hidden="true" />
-                  ) : (
-                    <button
-                      type="button"
-                      className={`px-btn px-btn--sm ${here ? 'px-btn--iron' : 'px-btn--gold'} px-f`}
-                      onClick={() => goMine(id)}
-                    >
-                      {here ? (
-                        <>
-                          <GxIcon name="cycle" size={7 * u} /> {t('mineHud.floors.again')}
-                        </>
-                      ) : (
-                        t('mineHud.floors.down')
-                      )}
-                    </button>
+        <GxModal title={t('mineHud.floors.title')} onClose={() => setSheet(null)}>
+          <div className="px mn-sheet mn-mines">
+            {Array.from({ length: Math.min(LAST_RANK, rank + 1) + 1 }, (_, id) => {
+              const locked = id > rank;
+              const here = id === mine.id && !prison.zone.on;
+              const band = HORIZONS.find((h) => h.from === id);
+              return (
+                <div key={id} className="mn-mines__item">
+                  {band && (
+                    <h3 className="px-h px-h--sub mn-mines__band">
+                      {horizonName(HORIZONS.indexOf(band))}
+                    </h3>
                   )}
+                  <div
+                    className={`mn-mines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
+                  >
+                    <span className={`mn-hex${locked ? ' mn-hex--next' : ''}`}>
+                      {rankLetter(id)}
+                    </span>
+                    <img className="mn-mines__ore" src={blockTexture(id)} alt="" />
+                    <span className="mn-mines__info">
+                      <b>
+                        {rockName(id)}{' '}
+                        <em className={`mn-mines__hard${canMine(pick, id) ? '' : ' is-no'}`}>
+                          ⛏{rockHardness(id)}
+                        </em>
+                      </b>
+                      <span className="mn-mines__price">
+                        {t('mineHud.floors.price', {
+                          ore: String(ROCKS[id].value),
+                          block: fmtShort(ROCKS[id].block),
+                        })}
+                      </span>
+                    </span>
+                    {locked ? (
+                      <i className="px-i pxi-lock mn-mines__lock" aria-hidden="true" />
+                    ) : (
+                      <button
+                        type="button"
+                        className={`px-btn px-btn--sm ${here ? 'px-btn--iron' : 'px-btn--gold'} px-f`}
+                        onClick={() => goMine(id)}
+                      >
+                        {here ? (
+                          <>
+                            <GxIcon name="cycle" size={7 * u} /> {t('mineHud.floors.again')}
+                          </>
+                        ) : (
+                          t('mineHud.floors.down')
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </GxModal>
       )}
 
@@ -2560,140 +2560,144 @@ export function PrisonPage() {
         <GxModal
           title={t('mineHud.hud.rank', { rank: rankLetter(rank + 1) })}
           onClose={() => setSheet(null)}
-          className="mn-sheet mn-norm"
         >
-          {needPick > 0 && (
-            <div className={`mn-norm__row${pickOk ? ' is-done' : ''}`}>
-              <span className="mn-norm__ico">
-                <PickIcon pick={needPick} size={16 * u} />
-              </span>
-              <span className="mn-norm__info">
-                <b>
-                  {t('mineHud.norm.pick', { power: need.power, name: nameIn(pickName(needPick)) })}
-                </b>
-                {pickOk ? (
-                  <Bar
-                    tone="green"
-                    value={1}
-                    height={10}
-                    label={<i className="px-i pxi-check" aria-hidden="true" />}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="px-btn px-btn--sm px-btn--gold px-f mn-norm__go"
-                    onClick={() => {
-                      tapLight();
-                      setSheet(null);
-                      setForgeOpen(true);
-                    }}
-                  >
-                    <GxIcon name="anvil" size={7 * u} /> {t('mineHud.norm.toForge')}
-                  </button>
-                )}
-              </span>
-            </div>
-          )}
-          {need.workNeed > 0 && (
-            <div className={`mn-norm__row${workOk ? ' is-done' : ''}`}>
-              <span className="mn-norm__ico">
-                <PickIcon pick={pick} size={16 * u} />
-              </span>
-              <span className="mn-norm__info">
-                <b>{t('mineHud.norm.work')}</b>
-                <Bar
-                  tone={workOk ? 'green' : 'gold'}
-                  value={need.work / need.workNeed}
-                  height={10}
-                  label={
-                    workOk ? (
-                      <i className="px-i pxi-check" aria-hidden="true" />
-                    ) : (
-                      `${fmt(need.work)} / ${fmt(need.workNeed)}`
-                    )
-                  }
-                />
-              </span>
-            </div>
-          )}
-          {need.blocksNeed > 0 && (
-            <div className={`mn-norm__row${need.blocks >= need.blocksNeed ? ' is-done' : ''}`}>
-              <span className="mn-norm__ico">
-                <img src={blockTexture(rank)} alt="" />
-              </span>
-              <span className="mn-norm__info">
-                <b>
-                  {blockName(rank)} · {fmtShort(blockValue(rank))}
-                </b>
-                <Bar
-                  tone={need.blocks >= need.blocksNeed ? 'green' : 'gold'}
-                  value={need.blocks / need.blocksNeed}
-                  height={10}
-                  label={
-                    need.blocks >= need.blocksNeed ? (
-                      <i className="px-i pxi-check" aria-hidden="true" />
-                    ) : (
-                      `${need.blocks} / ${need.blocksNeed}`
-                    )
-                  }
-                />
-                {need.blocks < need.blocksNeed && mine.id === rank && (
-                  <i className="mn-norm__sub">
-                    {t('mineHud.norm.pity', { n: Math.round(pityLeft) })}
-                  </i>
-                )}
-              </span>
-            </div>
-          )}
-          <div className={`mn-norm__row${balance >= cost ? ' is-done' : ''}`}>
-            <span className="mn-norm__ico">
-              <CoinIcon size={13 * u} />
-            </span>
-            <span className="mn-norm__info">
-              <b>{t('mineHud.norm.coins')}</b>
-              <Bar
-                tone={balance >= cost ? 'green' : 'gold'}
-                value={progress}
-                height={10}
-                label={
-                  balance >= cost ? (
-                    <i className="px-i pxi-check" aria-hidden="true" />
+          <div className="px mn-sheet mn-norm">
+            {needPick > 0 && (
+              <div className={`mn-norm__row${pickOk ? ' is-done' : ''}`}>
+                <span className="mn-norm__ico">
+                  <PickIcon pick={needPick} size={16 * u} />
+                </span>
+                <span className="mn-norm__info">
+                  <b>
+                    {t('mineHud.norm.pick', {
+                      power: need.power,
+                      name: nameIn(pickName(needPick)),
+                    })}
+                  </b>
+                  {pickOk ? (
+                    <Bar
+                      tone="green"
+                      value={1}
+                      height={10}
+                      label={<i className="px-i pxi-check" aria-hidden="true" />}
+                    />
                   ) : (
-                    `${fmtShort(balance)} / ${fmtShort(cost)}`
-                  )
-                }
-              />
-            </span>
-          </div>
-          <div className="mn-norm__actions">
-            <button
-              type="button"
-              className="px-btn px-btn--gold px-btn--wide px-f"
-              disabled={!qDone || balance < cost}
-              aria-disabled={!qDone || balance < cost || undefined}
-              onClick={() => takeRank(false)}
-            >
-              {t('mineHud.norm.take', { rank: rankLetter(rank + 1) })}
-            </button>
-            {workOk && buyout > 0 && (
+                    <button
+                      type="button"
+                      className="px-btn px-btn--sm px-btn--gold px-f mn-norm__go"
+                      onClick={() => {
+                        tapLight();
+                        setSheet(null);
+                        setForgeOpen(true);
+                      }}
+                    >
+                      <GxIcon name="anvil" size={7 * u} /> {t('mineHud.norm.toForge')}
+                    </button>
+                  )}
+                </span>
+              </div>
+            )}
+            {need.workNeed > 0 && (
+              <div className={`mn-norm__row${workOk ? ' is-done' : ''}`}>
+                <span className="mn-norm__ico">
+                  <PickIcon pick={pick} size={16 * u} />
+                </span>
+                <span className="mn-norm__info">
+                  <b>{t('mineHud.norm.work')}</b>
+                  <Bar
+                    tone={workOk ? 'green' : 'gold'}
+                    value={need.work / need.workNeed}
+                    height={10}
+                    label={
+                      workOk ? (
+                        <i className="px-i pxi-check" aria-hidden="true" />
+                      ) : (
+                        `${fmt(need.work)} / ${fmt(need.workNeed)}`
+                      )
+                    }
+                  />
+                </span>
+              </div>
+            )}
+            {need.blocksNeed > 0 && (
+              <div className={`mn-norm__row${need.blocks >= need.blocksNeed ? ' is-done' : ''}`}>
+                <span className="mn-norm__ico">
+                  <img src={blockTexture(rank)} alt="" />
+                </span>
+                <span className="mn-norm__info">
+                  <b>
+                    {blockName(rank)} · {fmtShort(blockValue(rank))}
+                  </b>
+                  <Bar
+                    tone={need.blocks >= need.blocksNeed ? 'green' : 'gold'}
+                    value={need.blocks / need.blocksNeed}
+                    height={10}
+                    label={
+                      need.blocks >= need.blocksNeed ? (
+                        <i className="px-i pxi-check" aria-hidden="true" />
+                      ) : (
+                        `${need.blocks} / ${need.blocksNeed}`
+                      )
+                    }
+                  />
+                  {need.blocks < need.blocksNeed && mine.id === rank && (
+                    <i className="mn-norm__sub">
+                      {t('mineHud.norm.pity', { n: Math.round(pityLeft) })}
+                    </i>
+                  )}
+                </span>
+              </div>
+            )}
+            <div className={`mn-norm__row${balance >= cost ? ' is-done' : ''}`}>
+              <span className="mn-norm__ico">
+                <CoinIcon size={13 * u} />
+              </span>
+              <span className="mn-norm__info">
+                <b>{t('mineHud.norm.coins')}</b>
+                <Bar
+                  tone={balance >= cost ? 'green' : 'gold'}
+                  value={progress}
+                  height={10}
+                  label={
+                    balance >= cost ? (
+                      <i className="px-i pxi-check" aria-hidden="true" />
+                    ) : (
+                      `${fmtShort(balance)} / ${fmtShort(cost)}`
+                    )
+                  }
+                />
+              </span>
+            </div>
+            <div className="mn-norm__actions">
               <button
                 type="button"
-                className="px-btn px-btn--iron px-btn--wide px-f"
-                disabled={balance < cost + buyout}
-                aria-disabled={balance < cost + buyout || undefined}
-                onClick={() => takeRank(true)}
+                className="px-btn px-btn--gold px-btn--wide px-f"
+                disabled={!qDone || balance < cost}
+                aria-disabled={!qDone || balance < cost || undefined}
+                onClick={() => takeRank(false)}
               >
-                {t(
-                  need.blocksNeed - need.blocks > 1
-                    ? 'mineHud.norm.buyBlocks'
-                    : 'mineHud.norm.buyBlock',
-                  {
-                    sum: fmtShort(buyout),
-                  },
-                )}{' '}
-                <CoinIcon size={7 * u} />
+                {t('mineHud.norm.take', { rank: rankLetter(rank + 1) })}
               </button>
-            )}
+              {workOk && buyout > 0 && (
+                <button
+                  type="button"
+                  className="px-btn px-btn--iron px-btn--wide px-f"
+                  disabled={balance < cost + buyout}
+                  aria-disabled={balance < cost + buyout || undefined}
+                  onClick={() => takeRank(true)}
+                >
+                  {t(
+                    need.blocksNeed - need.blocks > 1
+                      ? 'mineHud.norm.buyBlocks'
+                      : 'mineHud.norm.buyBlock',
+                    {
+                      sum: fmtShort(buyout),
+                    },
+                  )}{' '}
+                  <CoinIcon size={7 * u} />
+                </button>
+              )}
+            </div>
           </div>
         </GxModal>
       )}
@@ -2704,51 +2708,52 @@ export function PrisonPage() {
         <GxModal
           title={t('mineHud.hud.prestige', { n: prestige + 1 })}
           onClose={() => setSheet(null)}
-          className="mn-sheet mn-pres"
         >
-          <div className="mn-pres__swap">
-            <span className="mn-hex">Z</span>
-            <i className="px-i pxi-right" aria-hidden="true" />
-            <span className="mn-hex mn-hex--next">
-              {rankLetter(Math.min(LAST_RANK - 1, prison.perks.blat))}
-            </span>
+          <div className="px mn-sheet mn-pres">
+            <div className="mn-pres__swap">
+              <span className="mn-hex">Z</span>
+              <i className="px-i pxi-right" aria-hidden="true" />
+              <span className="mn-hex mn-hex--next">
+                {rankLetter(Math.min(LAST_RANK - 1, prison.perks.blat))}
+              </span>
+            </div>
+            <div className="mn-pres__row">
+              <GxIcon name="coins-pile" size={11 * u} />
+              <span>{t('mineHud.pres.sell')}</span>
+              <b>
+                ×{sellMult(prestige).toFixed(2)} → ×{sellMult(prestige + 1).toFixed(2)}
+              </b>
+            </div>
+            <div className="mn-pres__row">
+              <GxIcon name="upgrade" size={11 * u} />
+              <span>{t('mineHud.pres.points')}</span>
+              <b>+2</b>
+            </div>
+            <div className="mn-pres__row">
+              <KeyIcon size={11 * u} />
+              <span>{t('mineHud.pres.keys')}</span>
+              <b>+5</b>
+            </div>
+            <div className="mn-pres__keep">
+              <span>{t('mineHud.pres.keep')}</span>
+              <GxIcon name="pick" size={9 * u} />
+              <GxIcon name="magic" size={9 * u} />
+              <TokenIcon size={8 * u} />
+              <GxIcon name="backpack" size={9 * u} />
+              <GxIcon name="miner" size={9 * u} />
+              <GxIcon name="trophy" size={9 * u} />
+            </div>
+            <button
+              type="button"
+              className="px-btn px-btn--gold px-btn--wide px-f"
+              disabled={balance < prestigeCost(prestige)}
+              aria-disabled={balance < prestigeCost(prestige) || undefined}
+              onClick={prestigeNow}
+            >
+              {t('mineHud.pres.go', { sum: fmtShort(prestigeCost(prestige)) })}{' '}
+              <CoinIcon size={7 * u} />
+            </button>
           </div>
-          <div className="mn-pres__row">
-            <GxIcon name="coins-pile" size={11 * u} />
-            <span>{t('mineHud.pres.sell')}</span>
-            <b>
-              ×{sellMult(prestige).toFixed(2)} → ×{sellMult(prestige + 1).toFixed(2)}
-            </b>
-          </div>
-          <div className="mn-pres__row">
-            <GxIcon name="upgrade" size={11 * u} />
-            <span>{t('mineHud.pres.points')}</span>
-            <b>+2</b>
-          </div>
-          <div className="mn-pres__row">
-            <KeyIcon size={11 * u} />
-            <span>{t('mineHud.pres.keys')}</span>
-            <b>+5</b>
-          </div>
-          <div className="mn-pres__keep">
-            <span>{t('mineHud.pres.keep')}</span>
-            <GxIcon name="pick" size={9 * u} />
-            <GxIcon name="magic" size={9 * u} />
-            <TokenIcon size={8 * u} />
-            <GxIcon name="backpack" size={9 * u} />
-            <GxIcon name="miner" size={9 * u} />
-            <GxIcon name="trophy" size={9 * u} />
-          </div>
-          <button
-            type="button"
-            className="px-btn px-btn--gold px-btn--wide px-f"
-            disabled={balance < prestigeCost(prestige)}
-            aria-disabled={balance < prestigeCost(prestige) || undefined}
-            onClick={prestigeNow}
-          >
-            {t('mineHud.pres.go', { sum: fmtShort(prestigeCost(prestige)) })}{' '}
-            <CoinIcon size={7 * u} />
-          </button>
         </GxModal>
       )}
 
