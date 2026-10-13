@@ -389,6 +389,7 @@ export function PrisonCamp({
             items={items}
             value={tab}
             vertical={ff !== 'phone-portrait'}
+            main
             className="gx-camp__tabs"
             onChange={(id) => {
               selectionChanged();
