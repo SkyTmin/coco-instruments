@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { PxStrip } from '@/components/PxStrip';
 import { PICKS } from '@/lib/prison';
 import { FX_PILLAR, FX_RAYS, rarityOf } from '@/lib/rarity';
+import { rarityName } from '@/i18n';
 
 /** Доля стороны `PickArt`, которую занимает рамка рисунка (остальное — ореол). */
 export const PICK_ART = 0.8;
@@ -79,7 +80,7 @@ export function RarityName({ rarity, children }: { rarity: number; children: Rea
 export function RarityChip({ rarity }: { rarity: number }) {
   return (
     <span className={`rchip r${rarity}`} style={rarityVars(rarity)}>
-      {rarityOf(rarity).name}
+      {rarityName(rarityOf(rarity).id)}
     </span>
   );
 }
