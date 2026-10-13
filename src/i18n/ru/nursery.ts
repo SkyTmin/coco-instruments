@@ -58,5 +58,14 @@ export const nursery = {
     luck: { name: 'Счастливчик', text: '+{v}% к ключам и находкам' },
     rate: { name: 'Непоседа', text: '+{v}% к частоте ударов' },
   },
+  /** Stat nouns of the details table (one line per stat: icon, noun, value). */
+  stat: {
+    loot: 'Добыча',
+    sell: 'Продажа',
+    dmg: 'Копка',
+    token: 'Токены',
+    luck: 'Удача',
+    rate: 'Темп',
+  },
   egg: { moss: 'Мшистое', stone: 'Каменное', crystal: 'Кристальное', dragon: 'Драконье' },
 } as const;

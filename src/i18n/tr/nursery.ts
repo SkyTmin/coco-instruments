@@ -59,5 +59,14 @@ export const nursery: Translation<typeof ru> = {
     luck: { name: 'Şanslı', text: '+%{v} anahtar ve buluntu' },
     rate: { name: 'Hiperaktif', text: '+%{v} vuruş sıklığı' },
   },
+  /** Stat nouns of the details table (one line per stat: icon, noun, value). */
+  stat: {
+    loot: 'Ganimet',
+    sell: 'Satış',
+    dmg: 'Kazı',
+    token: 'Jeton',
+    luck: 'Şans',
+    rate: 'Tempo',
+  },
   egg: { moss: 'Yosun', stone: 'Taş', crystal: 'Kristal', dragon: 'Ejderha' },
 };

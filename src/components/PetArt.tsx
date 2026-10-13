@@ -48,6 +48,23 @@ const stripSrc = (id: PetId, anim: PetAnim, large: boolean, v = 0): string => {
   return `/ui/pets/${id}/${anim}${large && (PET_LARGE as readonly string[]).includes(anim) ? '-l' : ''}.webp?v=${PET_REV}`;
 };
 
+/** What `PetArt` shows for `id` at `size` in its rest pose: the idle strip, or the thumbnail
+ *  (`still` / `ghost`, or no strip). The Nursery decodes it BEFORE it swaps its stage to another
+ *  pet — otherwise the old picture is drawn in the new frame box until the new one loads. */
+export function petArtSrc(id: PetId, size: number, v = 0, thumb = false): string {
+  const px = PET_PX[id];
+  const fit = px
+    ? pxFit(size, px, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1)
+    : null;
+  const pxSet = px && fit?.large && px.large ? px.large : px;
+  const idle = (pxSet ? pxSet.anims : PET_SPRITES[id]?.anims)?.idle;
+  if (thumb || !idle)
+    return px
+      ? `/ui/pets/${id}/thumb${v ? `-v${v}` : ''}.webp?v=${px.rev}`
+      : `/ui/pets/${id}/thumb.webp?v=${PET_REV}`;
+  return stripSrc(id, 'idle', px ? !!fit?.large : size >= LARGE_FROM, v);
+}
+
 /** Разовые анимации подгружаем заранее: иначе на первой ласке — пустая рамка. */
 const preloaded = new Set<string>();
 function preload(src: string) {

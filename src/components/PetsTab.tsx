@@ -7,7 +7,7 @@
 // светятся цветом редкости ДО того, как яйцо лопнет: «что-то редкое» видно
 // заранее, и в эту секунду смотрят не отрываясь.
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { GxBar, GxModal, KIcon } from '@/components/gx';
@@ -84,7 +84,9 @@ function OddsBar({ egg }: { egg: EggId }) {
   );
 }
 
-export function PetsTab() {
+/** Memoised (no props): the camp re-renders every second (`useNow` in `PrisonCamp`); the tab
+ *  follows the store and its own state only. */
+export const PetsTab = memo(function PetsTab() {
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const hatch = useFinanceStore((s) => s.prisonHatch);
@@ -116,11 +118,12 @@ export function PetsTab() {
   } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const noteT = useRef<ReturnType<typeof setTimeout>>();
-  const say = (t: string) => {
+  // Stable: the memoised Nursery takes it and must not re-render on the camp's 1-s clock.
+  const say = useCallback((t: string) => {
     setNote(t);
     clearTimeout(noteT.current);
     noteT.current = setTimeout(() => setNote(null), 2200);
-  };
+  }, []);
   useEffect(
     () => () => {
       clearTimeout(noteT.current);
@@ -418,7 +421,7 @@ export function PetsTab() {
         )}
     </div>
   );
-}
+});
 
 /** Сбережённый прогрев вида — тонкая полоска под яйцом в корзине. */
 function HeatBar({ egg, heat }: { egg: EggId; heat: number }) {

@@ -5,24 +5,29 @@
 // One component, four arrangements by the shell's format (`useFormFactor`). The stage (room +
 // framed animation buttons + the name plate) always takes about half the screen, and every box
 // has a fixed size whatever pet is chosen — nothing jumps when the selection changes:
-// - `one` (phone portrait): stage on top, the squad (three big slots), a one-row collection
-//   strip whose grid button opens the full collection in a drawer over the side, action bar.
-// - `land` (phone landscape): stage | side (plate, squad, collection button, actions); the
-//   collection is the same drawer.
+// - `one` (phone portrait): stage on top, the squad (three big slots + the 3×2 bonus grid), the
+//   action bar `[▦ 18/18] [take/leave] [i]`; the collection opens in a drawer over the side.
+// - `land` (phone landscape): stage | side (plate, squad with the bonus grid beside the slots,
+//   actions); the collection is the same drawer.
 // - `tall` (tablet portrait): stage on top, side below with the full collection grid.
 // - `wide` (tablet landscape, desktop): stage | side with the full collection grid.
-// Details (roles, merge, skins) open in a sheet on every format.
+// Details (stats table, merge, skins) open in a sheet on every format.
 // Keyboard/gamepad: arrows move between slots (the shell's spatial focus), a focused slot is
 // the selected pet, `inspect` (X / pad Y) takes it along or leaves it home.
+//
+// Wave 3 — N2 (critic, 13.10): bonuses are baked 12 × 12 stat pictures (`--pximg-st-*`) at
+// 24 CSS px (36 at ui-scale ≥ 4) with whole percents; the squad sum is a fixed grid of all six
+// stats; at most three chips per pet; the stage swaps to another pet only once its strip is
+// decoded; cells and squad slots are memoised.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useFinanceStore } from '@/store';
 import { fmtNum, useT } from '@/i18n';
 import { useFormFactor } from '@/game-shell';
 import { focusEl, getInputDevice, useAction } from '@/input';
 import { registerEscape } from '@/lib/escape-stack';
-import { PetArt } from '@/components/PetArt';
+import { PetArt, petArtSrc } from '@/components/PetArt';
 import type { PetAnim } from '@/components/PetArt';
 import { RARITIES } from '@/lib/rarity';
 import { pxFit } from '@/lib/pet-pixel-fit';
@@ -50,7 +55,7 @@ import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { petMerge, petPat, primeAudio } from '@/lib/sound';
 import { notifySuccess, selectionChanged, tapLight } from '@/lib/haptics';
-import { Badge, Bar, Button, Grid, Heading, Icon, Modal, Panel, Slot } from '@/ui-px';
+import { Badge, Bar, Button, Grid, Heading, Icon, Modal, Panel, Slot, usePress } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
 import './nursery.css';
 
@@ -63,24 +68,64 @@ const ANIMS: { id: PetAnim; icon: PxIconName; loop: boolean }[] = [
   { id: 'attack', icon: 'claw', loop: false },
   { id: 'sleep', icon: 'moon', loop: true },
 ];
-const ROLE_ICON: Record<PetStat, PxIconName> = {
-  loot: 'gem',
-  sell: 'coin',
-  dmg: 'bolt',
-  token: 'token',
-  luck: 'key',
-  rate: 'clock',
-};
+/** The fixed order of the six stats (squad grid, ties between equal chips). */
+const STATS: PetStat[] = ['loot', 'sell', 'dmg', 'token', 'luck', 'rate'];
+/** Chips on the plate: the biggest bonuses first, the rest behind «+N» (opens the details). */
+const MAX_CHIPS = 3;
 type Sort = 'rarity' | 'level' | 'power';
 type Filter = 'all' | 'owned' | 'missing';
 const SORTS: Sort[] = ['rarity', 'level', 'power'];
 const FILTERS: Filter[] = ['all', 'owned', 'missing'];
 type Layout = 'one' | 'land' | 'tall' | 'wide';
+type SquadView = (PetId | null)[];
 
-/** Percent for the `{v}` of the role strings: one decimal, the locale formats the number. */
+/** Percent with one decimal (details table, tips): the locale formats the number. */
 const pctV = (x: number) => Math.round(x * 1000) / 10;
+/** Whole percent for the first glance (plate chips, squad grid); never «+0%» for a real bonus. */
+const pctI = (x: number) => Math.max(x > 0 ? 1 : 0, Math.round(x * 100));
 const rc = (r: number) => ({ '--rc': RARITIES[r]?.color }) as CSSProperties;
 const dprNow = () => (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+
+/** Stat picture size: 24 CSS px (36 at ui-scale ≥ 4), rounded to whole screen dots per art
+ *  pixel — the 12 × 12 art stays crisp at any DPR. */
+function useStatPx(): string {
+  const { scale } = useFormFactor();
+  const dpr = dprNow();
+  const k = Math.max(1, Math.round(((scale >= 4 ? 36 : 24) * dpr) / 12));
+  return `${(k * 12) / dpr}px`;
+}
+
+/** A baked 12 × 12 stat picture (`paint.ts`, wave 3 — N2) at `--st`. */
+function StatIcon({ stat, dim }: { stat: PetStat | 'power'; dim?: boolean }) {
+  return <i className={`nur-st nur-st--${stat}${dim ? ' is-dim' : ''}`} aria-hidden="true" />;
+}
+
+// ---- Decode before swap ------------------------------------------------------------------------
+// Switching pets used to show the OLD strip squeezed into the new frame box until the new one
+// loaded (+186 → +600 ms at 4×, critic). The stage now keeps the old pet until the new strip is
+// decoded; the squad and the neighbours in the collection are decoded ahead of time.
+const decoded = new Map<string, HTMLImageElement>();
+const decoding = new Map<string, Promise<void>>();
+function decodeArt(src: string): Promise<void> {
+  if (decoded.has(src)) return Promise.resolve();
+  let job = decoding.get(src);
+  if (!job) {
+    const im = new Image();
+    im.decoding = 'async';
+    im.src = src;
+    job = im
+      .decode()
+      .catch(() => undefined)
+      .then(() => {
+        decoding.delete(src);
+        // keep a handful referenced, so the decoded bitmaps stay in the memory cache
+        decoded.set(src, im);
+        if (decoded.size > 30) decoded.delete(decoded.keys().next().value as string);
+      });
+    decoding.set(src, job);
+  }
+  return job;
+}
 
 /** Size of an element's box, kept in state: the stage sizes the pet from it. */
 function useBox(ref: RefObject<HTMLElement | null>) {
@@ -132,12 +177,23 @@ function fitPet(id: PetId, w: number, h: number, dpr: number, lift: number): num
   return pxFit(best, px, dpr).s === best ? best : arg;
 }
 
-export function Nursery({ say }: { say: (text: string) => void }) {
+/** The squad as the slots show it: a pet left home keeps its slot empty (no shifting), the next
+ *  one taken fills the first empty slot. The store keeps the plain list (`view` without holes, in
+ *  the same order), so nothing in the save changes; a change from elsewhere resets the view. */
+const padSquad = (squad: PetId[], n: number): SquadView =>
+  Array.from({ length: n }, (_, i) => squad[i] ?? null);
+const sameList = (a: readonly (PetId | null)[], b: readonly PetId[]) =>
+  a.length === b.length && a.every((x, i) => x === b[i]);
+
+/** Memoised: the camp re-renders every second (`useNow` in `PrisonCamp`) — the Nursery only
+ *  when the store or its own state changes (`say` from `PetsTab` is stable). */
+export const Nursery = memo(function Nursery({ say }: { say: (text: string) => void }) {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const setSquad = useFinanceStore((s) => s.prisonSquadSet);
   const pat = useFinanceStore((s) => s.prisonPetPat);
   const { ff, landscape, scale } = useFormFactor();
+  const stPx = useStatPx();
   const layout: Layout =
     ff === 'phone-portrait'
       ? 'one'
@@ -146,7 +202,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
         : ff === 'tablet' && !landscape
           ? 'tall'
           : 'wide';
-  // Phones: the collection is a strip that opens into a drawer; tablets and desktops show the grid.
+  // Phones: the collection opens in a drawer from the action bar; tablets and desktops show the grid.
   const drawerMode = layout === 'one' || layout === 'land';
   const root = useRef<HTMLDivElement>(null);
 
@@ -163,12 +219,23 @@ export function Nursery({ say }: { say: (text: string) => void }) {
   const [pick, setPick] = useState<number | null>(null);
   const [info, setInfo] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const morePress = usePress<HTMLButtonElement>();
 
-  const def = petOf(sel);
   const rec = p.pets[sel];
-  const slots = squadSlots(p.rank, p.prestige);
+  const slots = Math.min(3, squadSlots(p.rank, p.prestige));
   const here = p.squad.includes(sel);
-  const lv = petLevelOf(rec?.xp ?? 0);
+
+  // The slots' own order (item 14 of the critic): holes stay where a pet left.
+  const [view, setView] = useState<SquadView>(() => padSquad(p.squad, slots));
+  let squadView = view;
+  if (view.length !== slots || !sameList(view.filter(Boolean), p.squad)) {
+    squadView = padSquad(p.squad, slots);
+    setView(squadView);
+  }
+  const commitSquad = (next: SquadView) => {
+    setView(next);
+    setSquad(next.filter((x): x is PetId => !!x));
+  };
 
   const select = (id: PetId) => {
     if (id === sel) return;
@@ -177,6 +244,10 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     setBase('idle');
     setShow(null);
   };
+  // Stable for the memoised cells: they get the id back.
+  const selectRef = useRef(select);
+  selectRef.current = select;
+  const onPick = useCallback((id: PetId) => selectRef.current(id), []);
 
   const toggleSquad = () => {
     if (!rec) {
@@ -186,11 +257,14 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     primeAudio();
     selectionChanged();
     if (here) {
-      setSquad(p.squad.filter((x) => x !== sel));
+      commitSquad(squadView.map((x) => (x === sel ? null : x)));
       return;
     }
-    // Squad full — the newcomer takes the last place (as the old card did).
-    setSquad(p.squad.length < slots ? [...p.squad, sel] : [...p.squad.slice(0, slots - 1), sel]);
+    // The first empty slot; squad full — the newcomer takes the last place (as the old card did).
+    const next = [...squadView];
+    const free = next.indexOf(null);
+    next[free >= 0 ? free : next.length - 1] = sel;
+    commitSquad(next);
     petPat();
     setJoy((j) => j + 1);
   };
@@ -232,16 +306,62 @@ export function Nursery({ say }: { say: (text: string) => void }) {
   const room = useBox(roomRef);
   const ped = pedFor(room.w, room.h, dpr, u);
   const lift = 4 * ped;
-  const size = room.w && room.h ? fitPet(sel, room.w, room.h, dpr, lift) : 0;
-  // Slot art: the strip/grid cell is 26 art px, the squad cells bigger (nursery.css `--slot`).
+  const artFor = (id: PetId) => {
+    const r = p.pets[id];
+    const s = room.w && room.h ? fitPet(id, room.w, room.h, dpr, lift) : 0;
+    return { size: s, src: s ? petArtSrc(id, s, r ? petLook(r) : 0, !r) : '' };
+  };
+  // Decode before swap: the stage (art + plate) keeps the pet it shows until the picked one's
+  // strip is decoded. Already decoded (preloaded neighbours) → the same render.
+  const want = artFor(sel);
+  const shownRef = useRef<PetId>(sel);
+  const [, setDecodedTick] = useState(0);
+  const ready = !want.src || decoded.has(want.src);
+  if (ready) shownRef.current = sel;
+  const stageId = shownRef.current;
+  useEffect(() => {
+    if (ready) return undefined;
+    let live = true;
+    void decodeArt(want.src).then(() => live && setDecodedTick((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, [ready, want.src]);
+  // Preload the squad and ±3 neighbours of the selection in the collection order, one by one
+  // and after the switch itself has painted.
+  useEffect(() => {
+    if (!room.w || !room.h) return undefined;
+    const i = list.findIndex((d) => d.id === sel);
+    const ids = new Set<PetId>(p.squad);
+    for (let k = -3; k <= 3; k++) if (list[i + k]) ids.add(list[i + k].id);
+    let live = true;
+    const timer = window.setTimeout(async () => {
+      for (const id of ids) {
+        if (!live) return;
+        const a = artFor(id);
+        if (a.src) await decodeArt(a.src);
+      }
+    }, 250);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, list, p.squad, room.w, room.h]);
+
+  const sdef = petOf(stageId);
+  const srec = p.pets[stageId];
+  const slv = petLevelOf(srec?.xp ?? 0);
+  const size = stageId === sel ? want.size : artFor(stageId).size;
+  // Slot art: the drawer/grid cell is 26 art px, the squad cells bigger (nursery.css `--slot`).
   const thumb = 20 * u;
   const big = (layout === 'land' ? 20 : 26) * u;
 
-  const name = t(`pets.${sel}.name`);
-  const lvText = t('common.level', { n: lv.level });
+  const name = t(`pets.${stageId}.name`);
 
   const pet = (
     <span
+      key={stageId}
       className="nur-pet"
       style={
         {
@@ -255,21 +375,21 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     >
       {size > 0 && (
         <PetArt
-          id={sel}
+          id={stageId}
           size={size}
-          v={petLook(rec)}
-          ghost={!rec}
+          v={petLook(srec)}
+          ghost={!srec}
           anim={base}
           joy={joy}
           play={show}
           onClick={
-            rec
+            srec
               ? () => {
                   primeAudio();
                   petPat();
                   tapLight();
                   setJoy((j) => j + 1);
-                  if (canPat(rec, Date.now()) && pat(sel)) setXpPop((x) => x + 1);
+                  if (canPat(srec, Date.now()) && pat(stageId)) setXpPop((x) => x + 1);
                 }
               : undefined
           }
@@ -291,11 +411,11 @@ export function Nursery({ say }: { say: (text: string) => void }) {
             icon={a.icon}
             label={word}
             className="nur-anim"
-            off={!rec}
-            on={rec && a.loop ? base === a.id && !show : undefined}
+            off={!srec}
+            on={srec && a.loop ? base === a.id && !show : undefined}
             onClick={() => {
               tapLight();
-              if (!rec) {
+              if (!srec) {
                 say(t('nursery.hatchFirst'));
                 return;
               }
@@ -310,52 +430,78 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     </div>
   );
 
-  // Role chips: icon + value; the full sentence is the tip. A fixed number per layout, the rest
-  // behind «+N» (opens the details) — one row, so the plate never grows.
-  const maxChips = layout === 'one' || layout === 'land' ? 2 : 3;
-  const shown = def.stats.length > maxChips ? def.stats.slice(0, maxChips - 1) : def.stats;
-  const roles = rec ? (
+  // Role chips: picture + whole percent, biggest first; the sentence with one decimal is the tip.
+  // At most three, the rest behind «+N» (opens the details) — one row, the plate never grows.
+  const sb = srec ? petBonus(stageId, srec) : {};
+  const ranked = [...sdef.stats].sort(
+    (a, b) => (sb[b] ?? 0) - (sb[a] ?? 0) || STATS.indexOf(a) - STATS.indexOf(b),
+  );
+  const shown = ranked.slice(0, MAX_CHIPS);
+  // «+N» is not a kit button: its press shows on pointerdown by the shared `usePress` handlers.
+  // A narrow plate shows two chips + «+N+1» (nursery.css picks the variant by the row's width).
+  const moreBtn = (n: number, cls: string) => (
+    <button
+      type="button"
+      {...morePress}
+      className={`nur-chip nur-chip--more${cls} px-f`}
+      aria-label={t('nursery.details')}
+      data-tip={t('nursery.details')}
+      onClick={() => {
+        tapLight();
+        setInfo(true);
+      }}
+    >
+      +{n}
+    </button>
+  );
+  const roles = srec ? (
     <>
-      {shown.map((s) => {
-        const v = pctV(petBonus(sel, rec)[s] ?? 0);
-        const full = t(`nursery.role.${s}.text`, { v });
+      {shown.map((s, i) => {
+        const full = t(`nursery.role.${s}.text`, { v: pctV(sb[s] ?? 0) });
         return (
-          <span key={s} className="nur-chip" data-tip={full} aria-label={full}>
-            <Icon name={ROLE_ICON[s]} />
-            <b>{t('nursery.bonus', { v })}</b>
+          <span
+            key={s}
+            className={`nur-chip${i === 2 ? ' nur-chip--3' : ''}`}
+            data-tip={full}
+            aria-label={full}
+          >
+            <StatIcon stat={s} />
+            <b className="px-num">{t('nursery.bonus', { v: pctI(sb[s] ?? 0) })}</b>
           </span>
         );
       })}
-      {shown.length < def.stats.length && (
-        <button
-          type="button"
-          className="nur-chip nur-chip--more px-f"
-          aria-label={t('nursery.details')}
-          data-tip={t('nursery.details')}
-          onClick={() => {
-            tapLight();
-            setInfo(true);
-          }}
-        >
-          +{def.stats.length - shown.length}
-        </button>
-      )}
+      {shown.length < ranked.length && moreBtn(ranked.length - shown.length, '')}
+      {shown.length === MAX_CHIPS && moreBtn(ranked.length - 2, ' nur-chip--more2')}
     </>
   ) : (
     <span className="nur-chip nur-chip--note">{t('nursery.notYet')}</span>
   );
 
-  // The plate under the pet: name (one line, sized to fit), rarity pill, gold, power, roles and
-  // the level bar. Fixed rows — switching pets never changes its height.
+  // The plate under the pet: name (one line, sized to fit) + power, rarity pill + gold + level,
+  // the chips and the level bar. Fixed rows — switching pets never changes its height.
   const plate = (
     <div
       className="px-dark nur-plate"
-      style={{ ...rc(def.rarity), '--len': Math.max(8, name.length) } as CSSProperties}
+      style={{ ...rc(sdef.rarity), '--len': Math.max(8, name.length) } as CSSProperties}
     >
-      <h3 className="nur-plate__name">{name}</h3>
+      <div className="nur-plate__top">
+        <span className="nur-plate__nm">
+          <h3 className="nur-plate__name">{name}</h3>
+        </span>
+        <span
+          className={`nur-pow${srec ? '' : ' is-none'}`}
+          data-tip={t('nursery.power')}
+          aria-label={srec ? `${t('nursery.power')} ${fmtNum(petScore(stageId, srec) * 10)}` : ''}
+        >
+          <StatIcon stat="power" />
+          <b className="px-num">{srec ? fmtNum(petScore(stageId, srec) * 10) : ''}</b>
+        </span>
+      </div>
       <div className="nur-plate__row">
-        <span className="nur-rar">{t(`nursery.rarity.r${def.rarity}` as 'nursery.rarity.r0')}</span>
-        {!!rec?.v && (
+        <span className="nur-rar">
+          {t(`nursery.rarity.r${sdef.rarity}` as 'nursery.rarity.r0')}
+        </span>
+        {!!srec?.v && (
           <span
             className="nur-gold"
             role="img"
@@ -368,23 +514,17 @@ export function Nursery({ say }: { say: (text: string) => void }) {
             </Badge>
           </span>
         )}
-        {rec && (
-          <span className="nur-pow" data-tip={t('nursery.power')}>
-            <Icon name="bolt" />
-            <span className="nur-pow__w">{t('nursery.power')}</span>
-            <b className="px-num">{fmtNum(petScore(sel, rec) * 10)}</b>
-          </span>
-        )}
+        {srec && <span className="nur-lv">{t('common.level', { n: slv.level })}</span>}
       </div>
-      <div className="nur-plate__roles">{roles}</div>
+      <div
+        className={`nur-plate__roles${shown.some((s) => pctI(sb[s] ?? 0) >= 100) ? ' is-big' : ''}`}
+      >
+        {roles}
+      </div>
       <Bar
-        value={rec ? (lv.need ? lv.into / lv.need : 1) : 0}
+        value={srec ? (slv.need ? slv.into / slv.need : 1) : 0}
         label={
-          !rec
-            ? ''
-            : !lv.need
-              ? `${lvText} · ${t('nursery.lvMax')}`
-              : `${lvText} · ${fmtNum(lv.into)} / ${fmtNum(lv.need)}`
+          !srec ? '' : !slv.need ? t('nursery.lvMax') : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`
         }
       />
     </div>
@@ -396,8 +536,10 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     </b>
   );
 
+  // The soft aura and rotating rays of legendary/mythic pets are hidden on the stage (no vector
+  // glow next to pixel art); rarity shows on the plate's pill and name.
   const showcase = (
-    <section className="nur-show" style={rc(def.rarity)}>
+    <section className={`nur-show nur-show--r${sdef.rarity}`} style={rc(sdef.rarity)}>
       <Panel material="stone" stage className="nur-stage">
         <span ref={roomRef} className="nur-room">
           {pet}
@@ -409,12 +551,18 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     </section>
   );
 
-  // Squad: three BIG cells first, the summed bonuses as a small line under them.
+  // Squad: three BIG cells, then all six stats in a fixed grid (a stat the squad lacks keeps its
+  // box: a dim picture and «—»). On phone landscape the grid stands beside the cells.
   const squad = (
     <section className="nur-squad" aria-label={t('nursery.squad')}>
       <div className="nur-squad__head">
-        <Heading className="nur-squad__title">{t('nursery.squad')}</Heading>
-        <span className="nur-squad__hint">{t('nursery.squadHint')}</span>
+        <span
+          className="nur-squad__t"
+          data-tip={layout === 'land' ? t('nursery.squadHint') : undefined}
+        >
+          <Heading className="nur-squad__title">{t('nursery.squad')}</Heading>
+        </span>
+        {layout !== 'land' && <span className="nur-squad__hint">{t('nursery.squadHint')}</span>}
       </div>
       <div className="nur-squad__row">
         {[0, 1, 2].map((i) => {
@@ -442,7 +590,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
               </Slot>
             );
           }
-          const id = p.squad[i];
+          const id = squadView[i];
           const r = id ? p.pets[id] : undefined;
           if (!id || !r)
             return (
@@ -462,63 +610,41 @@ export function Nursery({ say }: { say: (text: string) => void }) {
               </Slot>
             );
           return (
-            <Slot
-              key={i}
-              rarity={petOf(id).rarity}
-              selected={sel === id}
-              count={petLevelOf(r.xp).level}
-              corner={r.v ? '★' : undefined}
-              dot={canMerge(r) ? '!' : undefined}
-              aria-label={t(`pets.${id}.name`)}
-              tip={<SlotTip id={id} rec={r} />}
-              onClick={() => select(id)}
-              onFocus={() => select(id)}
-            >
-              <PetArt id={id} size={big} v={petLook(r)} still />
-            </Slot>
+            <SquadSlot key={i} id={id} rec={r} selected={sel === id} size={big} onPick={onPick} />
           );
         })}
       </div>
-      {layout !== 'land' && (
-        <div className="nur-squad__sum">
-          {(Object.keys(squadBonus) as PetStat[]).map((k) => {
-            const v = pctV(squadBonus[k] ?? 0);
-            const full = t(`nursery.role.${k}.text`, { v });
-            return (
-              <span key={k} className="nur-chip nur-chip--sm" data-tip={full} aria-label={full}>
-                <Icon name={ROLE_ICON[k]} />
-                <b>{t('nursery.bonus', { v })}</b>
-              </span>
-            );
-          })}
-        </div>
-      )}
+      <div className="nur-squad__sum">
+        {STATS.map((k) => {
+          const v = squadBonus[k] ?? 0;
+          const full = v ? t(`nursery.role.${k}.text`, { v: pctV(v) }) : t(`nursery.stat.${k}`);
+          return (
+            <span
+              key={k}
+              className={`nur-sum${v ? '' : ' is-none'}`}
+              data-tip={full}
+              aria-label={v ? full : `${t(`nursery.stat.${k}`)} —`}
+            >
+              <StatIcon stat={k} dim={!v} />
+              <b className="px-num">{v ? t('nursery.bonus', { v: pctI(v) }) : '—'}</b>
+            </span>
+          );
+        })}
+      </div>
     </section>
   );
 
-  const cell = (d: (typeof PETS)[number], focusFirst: boolean) => {
-    const r = p.pets[d.id];
-    return (
-      <Slot
-        key={d.id}
-        rarity={d.rarity}
-        locked={!r}
-        selected={sel === d.id}
-        count={r ? petLevelOf(r.xp).level : undefined}
-        corner={r?.v ? '★' : undefined}
-        dot={canMerge(r) ? '!' : undefined}
-        data-autofocus={focusFirst && sel === d.id ? '' : undefined}
-        data-pet={d.id}
-        aria-label={r ? t(`pets.${d.id}.name`) : t('nursery.unknown')}
-        tip={<SlotTip id={d.id} rec={r} />}
-        onClick={() => select(d.id)}
-        onFocus={() => select(d.id)}
-      >
-        <PetArt id={d.id} size={thumb} v={petLook(r)} ghost={!r} still />
-        {p.squad.includes(d.id) && <Icon name="paw" className="nur-along" />}
-      </Slot>
-    );
-  };
+  const cells = list.map((d) => (
+    <NurCell
+      key={d.id}
+      id={d.id}
+      rec={p.pets[d.id]}
+      selected={sel === d.id}
+      along={p.squad.includes(d.id)}
+      size={thumb}
+      onPick={onPick}
+    />
+  ));
 
   const collHead = (
     <div className="nur-coll__head">
@@ -534,8 +660,8 @@ export function Nursery({ say }: { say: (text: string) => void }) {
           data-tip={t('nursery.zoo', { v: pctV(zoo) })}
           aria-label={t('nursery.zoo', { v: pctV(zoo) })}
         >
-          <Icon name="coin" />
-          <b>{t('nursery.bonus', { v: pctV(zoo) })}</b>
+          <StatIcon stat="sell" />
+          <b className="px-num">{t('nursery.bonus', { v: pctI(zoo) })}</b>
         </span>
       )}
       <span className="nur-tools">
@@ -565,18 +691,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     </div>
   );
 
-  // Phones: one row of cells to flick through + the button that opens the whole grid.
-  const stripRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const row = stripRef.current;
-    const el = row?.querySelector<HTMLElement>(`[data-pet="${sel}"]`);
-    if (!row || !el) return;
-    // Keep the selected cell in view without scrolling anything but the strip itself.
-    const l = el.offsetLeft - row.offsetLeft;
-    if (l < row.scrollLeft) row.scrollLeft = l;
-    else if (l + el.offsetWidth > row.scrollLeft + row.clientWidth)
-      row.scrollLeft = l + el.offsetWidth - row.clientWidth;
-  }, [sel, list, drawerMode]);
+  // Phones: the grid button sits in the action bar and opens the drawer.
   const openBtn = (
     <Button
       className="nur-strip__open"
@@ -594,24 +709,15 @@ export function Nursery({ say }: { say: (text: string) => void }) {
       </span>
     </Button>
   );
-  // Phone landscape has no height for the strip: the grid button sits in the action row.
-  const collection =
-    layout === 'land' ? null : drawerMode ? (
-      <section className="nur-strip">
-        {openBtn}
-        <div ref={stripRef} className="nur-strip__row">
-          {list.map((d) => cell(d, true))}
-        </div>
-      </section>
-    ) : (
-      <section className="nur-coll">
-        {collHead}
-        <Grid className="nur-grid">{list.map((d) => cell(d, true))}</Grid>
-      </section>
-    );
+  const collection = drawerMode ? null : (
+    <section className="nur-coll">
+      {collHead}
+      <Grid className="nur-grid">{cells}</Grid>
+    </section>
+  );
 
-  // The drawer covers the side area only (squad, strip, actions): the stage stays in view and
-  // shows each pet as it is picked. Esc / Back / pad B closes it (escape stack).
+  // The drawer covers the side area only (squad, actions): the stage stays in view and shows
+  // each pet as it is picked. Esc / Back / pad B closes it (escape stack).
   const drawerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!drawer) return;
@@ -635,7 +741,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
 
   const acts = (
     <div className="nur-acts">
-      {layout === 'land' && openBtn}
+      {drawerMode && openBtn}
       <Button
         kind={here ? 'secondary' : 'primary'}
         wide
@@ -664,7 +770,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
   );
 
   return (
-    <div ref={root} className={`px nur nur--${layout}`}>
+    <div ref={root} className={`px nur nur--${layout}`} style={{ '--st': stPx } as CSSProperties}>
       {showcase}
       <div className="nur-side">
         {layout === 'land' && plate}
@@ -692,19 +798,21 @@ export function Nursery({ say }: { say: (text: string) => void }) {
               setDrawer(false);
             }}
           />
-          <Grid className="nur-grid">{list.map((d) => cell(d, true))}</Grid>
+          <Grid className="nur-grid">{cells}</Grid>
         </div>
       )}
       {info && (
-        <Modal title={name} sheet onClose={() => setInfo(false)}>
+        <Modal title={t(`pets.${sel}.name`)} sheet onClose={() => setInfo(false)}>
           <PetInfo id={sel} xp onJoy={() => setJoy((j) => j + 1)} />
         </Modal>
       )}
       {pick !== null && (
         <SquadPick
-          slot={pick}
           thumb={thumb}
           onPicked={(id) => {
+            const next = [...squadView];
+            next[pick] = id;
+            commitSquad(next);
             setSel(id);
             setJoy((j) => j + 1);
           }}
@@ -713,7 +821,80 @@ export function Nursery({ say }: { say: (text: string) => void }) {
       )}
     </div>
   );
-}
+});
+
+/** A collection cell — memoised: a switch re-renders the two cells whose selection changed, not
+ *  all eighteen (the worst frame of a switch was 220–292 ms at 4×). The tip is built on demand. */
+const NurCell = memo(function NurCell({
+  id,
+  rec,
+  selected,
+  along,
+  size,
+  onPick,
+}: {
+  id: PetId;
+  rec: PetRec | undefined;
+  selected: boolean;
+  along: boolean;
+  size: number;
+  onPick: (id: PetId) => void;
+}) {
+  const t = useT();
+  const d = petOf(id);
+  return (
+    <Slot
+      rarity={d.rarity}
+      locked={!rec}
+      selected={selected}
+      count={rec ? petLevelOf(rec.xp).level : undefined}
+      corner={rec?.v ? '★' : undefined}
+      dot={canMerge(rec) ? '!' : undefined}
+      data-autofocus={selected ? '' : undefined}
+      data-pet={id}
+      aria-label={rec ? t(`pets.${id}.name`) : t('nursery.unknown')}
+      tip={() => <SlotTip id={id} rec={rec} />}
+      onClick={() => onPick(id)}
+      onFocus={() => onPick(id)}
+    >
+      <PetArt id={id} size={size} v={petLook(rec)} ghost={!rec} still />
+      {along && <Icon name="paw" className="nur-along" />}
+    </Slot>
+  );
+});
+
+/** A filled squad slot (memoised like the cells). */
+const SquadSlot = memo(function SquadSlot({
+  id,
+  rec,
+  selected,
+  size,
+  onPick,
+}: {
+  id: PetId;
+  rec: PetRec;
+  selected: boolean;
+  size: number;
+  onPick: (id: PetId) => void;
+}) {
+  const t = useT();
+  return (
+    <Slot
+      rarity={petOf(id).rarity}
+      selected={selected}
+      count={petLevelOf(rec.xp).level}
+      corner={rec.v ? '★' : undefined}
+      dot={canMerge(rec) ? '!' : undefined}
+      aria-label={t(`pets.${id}.name`)}
+      data-pet={id}
+      tip={() => <SlotTip id={id} rec={rec} />}
+      onClick={() => onPick(id)}
+      onFocus={() => onPick(id)}
+    >
+      <PetArt id={id} size={size} v={petLook(rec)} still />
+    </Slot>
+  );
+});
 
 /** Hover / long-press card of a collection slot: name in the rarity colour, level and perks. */
 function SlotTip({ id, rec }: { id: PetId; rec: PetRec | undefined }) {
@@ -741,9 +922,10 @@ function SlotTip({ id, rec }: { id: PetId; rec: PetRec | undefined }) {
   );
 }
 
-/** Details: lore, roles, experience, copies to gold + merge, skin, eggs it hatches from.
- *  `head` — the name block on top (the details column); `xp` — its own experience bar (the
- *  phone sheet: the column's level bar already carries the numbers). */
+/** Details: lore, the stats table, experience, copies to gold + merge, skin, eggs it hatches
+ *  from. `head` — the name block on top (the details column); `xp` — its own experience bar (the
+ *  phone sheet). The stats are a table — picture, noun, value with one decimal — one line each;
+ *  the full sentence is the row's tip. */
 function PetInfo({
   id,
   head,
@@ -756,6 +938,7 @@ function PetInfo({
   onJoy: () => void;
 }) {
   const t = useT();
+  const stPx = useStatPx();
   const p = useFinanceStore((s) => s.prison);
   const merge = useFinanceStore((s) => s.prisonPetMerge);
   const setSkin = useFinanceStore((s) => s.prisonPetSkin);
@@ -768,6 +951,7 @@ function PetInfo({
   // The species is picked evenly inside the rolled rarity (`rollEgg`), so one pet's chance is
   // the rarity's share divided by how many pets share it.
   const kin = PETS.filter((d) => d.rarity === def.rarity).length || 1;
+  const lvText = t('common.level', { n: lv.level });
   let rows: ReactNode;
   if (!rec)
     rows = (
@@ -792,7 +976,11 @@ function PetInfo({
         {xp && (
           <Bar
             value={lv.need ? lv.into / lv.need : 1}
-            label={lv.need ? `${fmtNum(lv.into)} / ${fmtNum(lv.need)}` : t('nursery.lvMax')}
+            label={
+              lv.need
+                ? `${lvText} · ${fmtNum(lv.into)} / ${fmtNum(lv.need)}`
+                : `${lvText} · ${t('nursery.lvMax')}`
+            }
           />
         )}
         {rec.v < MERGE_NEED.length && (
@@ -853,18 +1041,21 @@ function PetInfo({
       </>
     );
   return (
-    <div className="nur-info__body" style={rc(def.rarity)}>
+    <div className="nur-info__body" style={{ ...rc(def.rarity), '--st': stPx } as CSSProperties}>
       {head && <div className="nur-info__grp">{head}</div>}
       <div className="nur-info__grp">
         <p className="nur-info__lore">{t(`pets.${id}.lore`)}</p>
         <div className="nur-info__roles">
-          {def.stats.map((s) => (
-            <div key={s} className="nur-role">
-              <Icon name={ROLE_ICON[s]} />
-              <b>{t(`nursery.role.${s}.name`)}</b>
-              {rec && <span>{t(`nursery.role.${s}.text`, { v: pctV(b[s] ?? 0) })}</span>}
-            </div>
-          ))}
+          {def.stats.map((s) => {
+            const full = rec ? t(`nursery.role.${s}.text`, { v: pctV(b[s] ?? 0) }) : undefined;
+            return (
+              <div key={s} className="nur-role" data-tip={full} aria-label={full}>
+                <StatIcon stat={s} dim={!rec} />
+                <span className="nur-role__k">{t(`nursery.stat.${s}`)}</span>
+                <b className="px-num">{rec ? t('nursery.bonus', { v: pctV(b[s] ?? 0) }) : '—'}</b>
+              </div>
+            );
+          })}
         </div>
       </div>
       <div className="nur-info__grp">{rows}</div>
@@ -874,19 +1065,16 @@ function PetInfo({
 
 /** Who goes to an empty squad place: owned pets not along yet, strongest first. */
 function SquadPick({
-  slot,
   thumb,
   onPicked,
   onClose,
 }: {
-  slot: number;
   thumb: number;
   onPicked: (id: PetId) => void;
   onClose: () => void;
 }) {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
-  const setSquad = useFinanceStore((s) => s.prisonSquadSet);
   const list = (Object.keys(p.pets) as PetId[])
     .filter((id) => !p.squad.includes(id))
     .sort((a, b) => petScore(b, p.pets[b]!) - petScore(a, p.pets[a]!));
@@ -904,15 +1092,12 @@ function SquadPick({
                 corner={r.v ? '★' : undefined}
                 aria-label={t(`pets.${id}.name`)}
                 data-autofocus={i === 0 ? '' : undefined}
-                tip={<SlotTip id={id} rec={r} />}
+                tip={() => <SlotTip id={id} rec={r} />}
                 onClick={() => {
                   primeAudio();
                   selectionChanged();
-                  const next = [...p.squad];
-                  next.splice(slot, 0, id);
-                  setSquad(next);
-                  petPat();
                   onPicked(id);
+                  petPat();
                   onClose();
                 }}
               >
