@@ -20,7 +20,12 @@
   /* Text scale: the fonts have an 8-px em; text is one step under the art on big scales
      (an art pixel of 4 CSS px would make 32-px body text on 1080p). */
   --ts: max(2, calc(var(--ui-scale, 2) - 1 + var(--ts-add, 0)));
+  /* Digits on slot counters / key caps only — never words (8 px on phones is unreadable). */
   --px-fs-tiny: calc(8px * (var(--ts) - 1));
+  /* Smallest user-facing text: a whole number of device pixels per font pixel, never under
+     12 CSS px — 13.33 px at DPR 3 (5 dots), 12 px at DPR 2 (3 dots), 16 px at DPR 1. */
+  --px-fs-sm: max(var(--px-sm-floor), calc(8px * (var(--ts) - 1)));
+  --px-sm-floor: 16px;
   --px-fs: calc(8px * var(--ts));
   --px-fs-big: calc(8px * (var(--ts) + 1));
   --px-fs-hero: calc(8px * (var(--ts) + 2));
@@ -38,6 +43,16 @@
 }
 /* L's text-size setting (`data-text` on <html>): whole font steps only — a pixel font at a
    fractional scale gets uneven rows. «s» never goes under the 2× floor. */
+@media (min-resolution: 1.5dppx) {
+  :root {
+    --px-sm-floor: 12px;
+  }
+}
+@media (min-resolution: 2.5dppx) {
+  :root {
+    --px-sm-floor: 13.333px;
+  }
+}
 html[data-text='s'] {
   --ts-add: -1;
 }
@@ -458,7 +473,7 @@ html[data-game][data-input] .px-f:focus-visible {
   z-index: 1;
   display: grid;
   place-items: center;
-  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  font: 400 var(--px-fs-sm) / 1 var(--px-font);
   color: #fff;
   text-shadow:
     var(--u) 0 0 var(--px-ink),
@@ -471,9 +486,9 @@ html[data-game][data-input] .px-f:focus-visible {
 .px-badge {
   display: inline-grid;
   place-items: center;
-  min-width: calc(9 * var(--u));
-  height: calc(9 * var(--u));
-  padding: 0 calc(2 * var(--u));
+  min-width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  padding: 0 calc(3 * var(--u));
   border-width: var(--u);
   border-style: solid;
   border-color: transparent;
@@ -481,7 +496,7 @@ html[data-game][data-input] .px-f:focus-visible {
   border-image-slice: var(--pxk-badge-s);
   border-image-width: var(--pxk-badge-w);
   image-rendering: pixelated;
-  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  font: 400 var(--px-fs-sm) / 1 var(--px-font);
   color: #fff;
   text-shadow: 0 var(--u) 0 var(--px-ink);
   box-sizing: border-box;
@@ -523,7 +538,7 @@ html[data-game][data-input] .px-f:focus-visible {
 
 /* ---- Key hint (S's <Prompt> in kit clothes) ---------------------------------------------- */
 .px-keyhint {
-  font: 400 var(--px-fs-tiny) / 1 var(--px-font);
+  font: 400 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-muted);
   gap: calc(2 * var(--u));
 }

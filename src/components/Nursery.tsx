@@ -10,8 +10,8 @@
 // Keyboard/gamepad: arrows move between slots (the shell's spatial focus), a focused slot is
 // the selected pet, `inspect` (X / pad Y) takes it along or leaves it home.
 
-import { useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useFinanceStore } from '@/store';
 import { fmtNum, useT } from '@/i18n';
 import { useFormFactor } from '@/game-shell';
@@ -19,6 +19,8 @@ import { useAction } from '@/input';
 import { PetArt } from '@/components/PetArt';
 import type { PetAnim } from '@/components/PetArt';
 import { RARITIES } from '@/lib/rarity';
+import { pxFit } from '@/lib/pet-pixel-fit';
+import { PET_PX } from '@/lib/pet-pixel-sprites';
 import { rankLetter } from '@/lib/prison';
 import {
   canMerge,
@@ -48,12 +50,12 @@ import './nursery.css';
 
 /** Showcase buttons: loops switch the base animation, one-shots play once and return. */
 const ANIMS: { id: PetAnim; icon: PxIconName; loop: boolean }[] = [
-  { id: 'idle', icon: 'paw', loop: true },
-  { id: 'walk', icon: 'right', loop: true },
+  { id: 'idle', icon: 'pause', loop: true },
+  { id: 'walk', icon: 'paws', loop: true },
   { id: 'happy', icon: 'heart', loop: false },
   { id: 'work', icon: 'star', loop: false },
-  { id: 'attack', icon: 'sword', loop: false },
-  { id: 'sleep', icon: 'zzz', loop: true },
+  { id: 'attack', icon: 'claw', loop: false },
+  { id: 'sleep', icon: 'moon', loop: true },
 ];
 const ROLE_ICON: Record<PetStat, PxIconName> = {
   loot: 'gem',
@@ -72,6 +74,53 @@ type Layout = 'one' | 'two' | 'three';
 /** Percent for the `{v}` of the role strings: one decimal, the locale formats the number. */
 const pctV = (x: number) => Math.round(x * 1000) / 10;
 const rc = (r: number) => ({ '--rc': RARITIES[r]?.color }) as CSSProperties;
+const dprNow = () => (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+
+/** Size of an element's box, kept in state: the hero stage sizes the pet from it. */
+function useBox(ref: RefObject<HTMLElement | null>, on: boolean) {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!on || !el) return;
+    const put = (w: number, h: number) =>
+      setBox((b) => (b.w === Math.floor(w) && b.h === Math.floor(h) ? b : { w: Math.floor(w), h: Math.floor(h) }));
+    put(el.clientWidth, el.clientHeight);
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => put(e.contentRect.width, e.contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, on]);
+  return box;
+}
+
+/** Pedestal pixel in CSS px: the pet's own pixel (large strip, 112) in whole screen dots, never
+ *  under the UI pixel — under a big pet a UI-scale pedestal looks like a coin. */
+const pedPx = (s: number, dpr: number, u: number) =>
+  Math.max(u, Math.round((s * dpr) / 112) / dpr);
+
+/** The biggest pet frame that fits `w` × `h` with its pedestal, at a whole number of screen dots
+ *  per art pixel (what `pxFit` will draw — it may round up by 15%, so the check is on its result). */
+function fitPet(id: PetId, w: number, h: number, dpr: number, u: number): number {
+  const px = PET_PX[id];
+  const ok = (s: number) => s <= w && s + 4 * pedPx(s, dpr, u) <= h;
+  const plain = Math.max(0, Math.floor(Math.min(w, h - 4 * u)));
+  if (!px) return plain;
+  let best = 0;
+  let arg = 0;
+  for (const box of [px.box, px.large?.box ?? 0]) {
+    if (!box) continue;
+    for (let k = 2; (k * box) / dpr <= w * 1.2; k++) {
+      const want = (k * box) / dpr;
+      const s = pxFit(want, px, dpr).s;
+      if (s > best && ok(s)) {
+        best = s;
+        arg = want;
+      }
+    }
+  }
+  if (!best) return plain;
+  return pxFit(best, px, dpr).s === best ? best : arg;
+}
 
 export function Nursery({ say }: { say: (text: string) => void }) {
   const t = useT();
@@ -156,98 +205,143 @@ export function Nursery({ say }: { say: (text: string) => void }) {
       squadBonus[k as PetStat] = (squadBonus[k as PetStat] ?? 0) + (v ?? 0);
   }
 
-  // Sizes in ART pixels → CSS px through the shell's integer scale (PetArt fits its strip).
+  // Sizes in ART pixels → CSS px through the shell's integer scale. The hero stage (tablet,
+  // landscape, desktop) measures itself and takes the biggest crisp pet that fits; the phone's
+  // stage keeps a fixed 64-px box beside the name.
   const u = scale || 2;
-  const stage =
-    (ff === 'phone-landscape' ? 52 : ff === 'phone-portrait' ? 64 : ff === 'desktop' ? 88 : 72) * u;
+  const dpr = dprNow();
+  const hero = layout !== 'one';
+  const roomRef = useRef<HTMLSpanElement>(null);
+  const room = useBox(roomRef, hero);
+  const stage = hero ? fitPet(sel, room.w, room.h, dpr, u) : fitPet(sel, 64 * u, 68 * u, dpr, u);
+  const px = PET_PX[sel];
+  const ped = pedPx(px && stage ? pxFit(stage, px, dpr).s : stage, dpr, u);
   const thumb = 20 * u;
 
   const name = t(`pets.${sel}.name`);
+  const lvText = t('common.level', { n: lv.level });
+
+  const pet = (
+    <span className="nur-stage__pet" style={{ '--ped': `${ped}px` } as CSSProperties}>
+      {stage > 0 && (
+        <PetArt
+          id={sel}
+          size={stage}
+          v={petLook(rec)}
+          ghost={!rec}
+          anim={base}
+          joy={joy}
+          play={show}
+          onClick={
+            rec
+              ? () => {
+                  primeAudio();
+                  petPat();
+                  tapLight();
+                  setJoy((j) => j + 1);
+                  if (canPat(rec, Date.now()) && pat(sel)) setXpPop((x) => x + 1);
+                }
+              : undefined
+          }
+        />
+      )}
+    </span>
+  );
+
+  // Icons say what they play; the word is in the tip / focus, and beside the icon when the
+  // details column is wide enough (container query in nursery.css).
+  const anims = rec && (
+    <div className="nur-anims" role="toolbar">
+      {ANIMS.map((a) => {
+        const word = t(`nursery.anim.${a.id}`);
+        return (
+          <Button
+            key={a.id}
+            size={hero ? 'md' : 'sm'}
+            icon={a.icon}
+            className="nur-anim"
+            aria-label={word}
+            data-tip={word}
+            on={a.loop ? base === a.id && !show : undefined}
+            onClick={() => {
+              tapLight();
+              if (a.loop) {
+                setBase(a.id);
+                setShow(null);
+              } else setShow((s) => ({ anim: a.id, k: (s?.k ?? 0) + 1 }));
+            }}
+          >
+            <span className="nur-anim__lbl">{word}</span>
+          </Button>
+        );
+      })}
+    </div>
+  );
+
+  const power = rec && (
+    <span className="nur-perk nur-perk--pow">
+      <Icon name="bolt" />
+      {t('nursery.power')} <b className="px-num">{fmtNum(petScore(sel, rec) * 10)}</b>
+    </span>
+  );
+
+  const idBlock = (
+    <div className="nur-id" style={rc(def.rarity)}>
+      <Heading className="nur-id__name">{name}</Heading>
+      <div className="nur-id__sub">
+        <span className="nur-id__rar">
+          {t(`nursery.rarity.r${def.rarity}` as 'nursery.rarity.r0')}
+        </span>
+        {!!rec?.v && <Badge gold>{t('nursery.gold')}</Badge>}
+        {hero && power}
+      </div>
+      {rec && (
+        <Bar
+          value={lv.need ? lv.into / lv.need : 1}
+          label={
+            !lv.need
+              ? `${lvText} · ${t('nursery.lvMax')}`
+              : hero
+                ? `${lvText} · ${fmtNum(lv.into)} / ${fmtNum(lv.need)}`
+                : lvText
+          }
+        />
+      )}
+      {rec && !hero && (
+        <div className="nur-perks">
+          {def.stats.map((s) => (
+            <span key={s} className="nur-perk">
+              <Icon name={ROLE_ICON[s]} />
+              {t(`nursery.role.${s}.text`, { v: pctV(petBonus(sel, rec)[s] ?? 0) })}
+            </span>
+          ))}
+          {power}
+        </div>
+      )}
+    </div>
+  );
+
+  const xp = xpPop > 0 && (
+    <b key={xpPop} className="nur-stage__xp">
+      {t('nursery.patXp', { n: PAT_XP })}
+    </b>
+  );
 
   const showcase = (
     <section className="nur-show" style={rc(def.rarity)}>
       <Panel material="stone" stage className="nur-stage">
-        <span className="nur-stage__pet">
-          <PetArt
-            id={sel}
-            size={stage}
-            v={petLook(rec)}
-            ghost={!rec}
-            anim={base}
-            joy={joy}
-            play={show}
-            onClick={
-              rec
-                ? () => {
-                    primeAudio();
-                    petPat();
-                    tapLight();
-                    setJoy((j) => j + 1);
-                    if (canPat(rec, Date.now()) && pat(sel)) setXpPop((x) => x + 1);
-                  }
-                : undefined
-            }
-          />
-        </span>
-        {xpPop > 0 && (
-          <b key={xpPop} className="nur-stage__xp">
-            {t('nursery.patXp', { n: PAT_XP })}
-          </b>
+        {hero ? (
+          <span ref={roomRef} className="nur-stage__room">
+            {pet}
+          </span>
+        ) : (
+          <>
+            {idBlock}
+            {pet}
+            {anims}
+          </>
         )}
-        {rec && (
-          <div className="nur-anims" role="toolbar">
-            {ANIMS.map((a) => (
-              <Button
-                key={a.id}
-                size="sm"
-                icon={a.icon}
-                label={t(`nursery.anim.${a.id}`)}
-                on={a.loop ? base === a.id && !show : undefined}
-                onClick={() => {
-                  tapLight();
-                  if (a.loop) {
-                    setBase(a.id);
-                    setShow(null);
-                  } else setShow((s) => ({ anim: a.id, k: (s?.k ?? 0) + 1 }));
-                }}
-              />
-            ))}
-          </div>
-        )}
-        <div className="nur-id">
-          <Heading className="nur-id__name">{name}</Heading>
-          <div className="nur-id__sub">
-            <span className="nur-id__rar">
-              {t(`nursery.rarity.r${def.rarity}` as 'nursery.rarity.r0')}
-            </span>
-            {!!rec?.v && <Badge gold>{t('nursery.gold')}</Badge>}
-          </div>
-          {rec && (
-            <>
-              <Bar
-                value={lv.need ? lv.into / lv.need : 1}
-                height={9}
-                label={
-                  lv.need
-                    ? t('common.level', { n: lv.level })
-                    : `${t('common.level', { n: lv.level })} · ${t('nursery.lvMax')}`
-                }
-              />
-              <div className="nur-perks">
-                {def.stats.map((s) => (
-                  <span key={s} className="nur-perk">
-                    <Icon name={ROLE_ICON[s]} />
-                    {t(`nursery.role.${s}.text`, { v: pctV(petBonus(sel, rec)[s] ?? 0) })}
-                  </span>
-                ))}
-                <span className="nur-perk nur-perk--pow">
-                  <Icon name="bolt" />
-                  {t('nursery.power')} {fmtNum(petScore(sel, rec) * 10)}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
+        {xp}
       </Panel>
     </section>
   );
@@ -258,7 +352,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
         <Heading>{t('nursery.squad')}</Heading>
         <span className="nur-head__note">
           {(Object.keys(squadBonus) as PetStat[]).map((k) => (
-            <span key={k} className="nur-perk nur-perk--sm">
+            <span key={k} className="nur-perk">
               <Icon name={ROLE_ICON[k]} />
               {t(`nursery.role.${k}.text`, { v: pctV(squadBonus[k] ?? 0) })}
             </span>
@@ -267,52 +361,61 @@ export function Nursery({ say }: { say: (text: string) => void }) {
       </div>
       <div className="nur-squad__row">
         {[0, 1, 2].map((i) => {
-          if (i >= slots)
+          if (i >= slots) {
+            // Why it's shut: in the tip and the aria label; a tap says it too (phones).
+            const why =
+              i === 1
+                ? t('nursery.lockRank', { rank: rankLetter(SQUAD_RANK2) })
+                : t('nursery.lockPrestige');
             return (
-              <div key={i} className="nur-squad__cell">
-                <Slot empty locked disabled aria-label={t('nursery.squad')} />
-                <i>
-                  {i === 1
-                    ? t('nursery.lockRank', { rank: rankLetter(SQUAD_RANK2) })
-                    : t('nursery.lockPrestige')}
-                </i>
-              </div>
+              <Slot
+                key={i}
+                empty
+                locked
+                aria-disabled
+                aria-label={why}
+                tip={why}
+                onClick={() => {
+                  tapLight();
+                  say(why);
+                }}
+              />
             );
+          }
           const id = p.squad[i];
           const r = id ? p.pets[id] : undefined;
           if (!id || !r)
             return (
-              <div key={i} className="nur-squad__cell">
-                <Slot
-                  empty
-                  aria-label={t('nursery.pick')}
-                  onClick={() => {
-                    tapLight();
-                    if (!owned) say(t('nursery.hatchFirst'));
-                    else setPick(i);
-                  }}
-                >
-                  <Icon name="plus" />
-                </Slot>
-                <i>&nbsp;</i>
-              </div>
-            );
-          return (
-            <div key={i} className="nur-squad__cell">
               <Slot
-                rarity={petOf(id).rarity}
-                selected={sel === id}
-                count={petLevelOf(r.xp).level}
-                corner={r.v ? '★' : undefined}
-                dot={canMerge(r) ? '!' : undefined}
-                aria-label={t(`pets.${id}.name`)}
-                onClick={() => select(id)}
-                onFocus={() => select(id)}
+                key={i}
+                empty
+                aria-label={t('nursery.pick')}
+                tip={t('nursery.pick')}
+                onClick={() => {
+                  tapLight();
+                  if (!owned) say(t('nursery.hatchFirst'));
+                  else setPick(i);
+                }}
               >
-                <PetArt id={id} size={thumb} v={petLook(r)} still />
+                <Icon name="plus" />
               </Slot>
-              <i>{t(`pets.${id}.name`)}</i>
-            </div>
+            );
+          // The name is in the tip (hover, focus, long press) — no truncated caption under it.
+          return (
+            <Slot
+              key={i}
+              rarity={petOf(id).rarity}
+              selected={sel === id}
+              count={petLevelOf(r.xp).level}
+              corner={r.v ? '★' : undefined}
+              dot={canMerge(r) ? '!' : undefined}
+              aria-label={t(`pets.${id}.name`)}
+              tip={<SlotTip id={id} rec={r} />}
+              onClick={() => select(id)}
+              onFocus={() => select(id)}
+            >
+              <PetArt id={id} size={thumb} v={petLook(r)} still />
+            </Slot>
           );
         })}
       </div>
@@ -329,7 +432,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
           </span>
         </Heading>
         {zoo > 0 && (
-          <span className="nur-perk nur-perk--sm">
+          <span className="nur-perk nur-head__zoo">
             <Icon name="coin" />
             {t('nursery.zoo', { v: pctV(zoo) })}
           </span>
@@ -418,15 +521,28 @@ export function Nursery({ say }: { say: (text: string) => void }) {
         {squad}
         {collection}
       </div>
-      {layout !== 'one' && (
-        <Panel material="obsidian" className="nur-info">
-          <PetInfo id={sel} onJoy={() => setJoy((j) => j + 1)} />
-        </Panel>
+      {hero ? (
+        <aside className="nur-side">
+          <Panel material="obsidian" className="nur-info">
+            <PetInfo
+              id={sel}
+              head={
+                <>
+                  {idBlock}
+                  {anims}
+                </>
+              }
+              onJoy={() => setJoy((j) => j + 1)}
+            />
+          </Panel>
+          {acts}
+        </aside>
+      ) : (
+        acts
       )}
-      {acts}
-      {info && layout === 'one' && (
+      {info && !hero && (
         <Modal title={name} sheet onClose={() => setInfo(false)}>
-          <PetInfo id={sel} onJoy={() => setJoy((j) => j + 1)} />
+          <PetInfo id={sel} xp onJoy={() => setJoy((j) => j + 1)} />
         </Modal>
       )}
       {pick !== null && (
@@ -470,8 +586,20 @@ function SlotTip({ id, rec }: { id: PetId; rec: PetRec | undefined }) {
   );
 }
 
-/** Details: lore, roles, experience, copies to gold + merge, skin, eggs it hatches from. */
-function PetInfo({ id, onJoy }: { id: PetId; onJoy: () => void }) {
+/** Details: lore, roles, experience, copies to gold + merge, skin, eggs it hatches from.
+ *  `head` — the name block on top (the details column); `xp` — its own experience bar (the
+ *  phone sheet: the column's level bar already carries the numbers). */
+function PetInfo({
+  id,
+  head,
+  xp,
+  onJoy,
+}: {
+  id: PetId;
+  head?: ReactNode;
+  xp?: boolean;
+  onJoy: () => void;
+}) {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const merge = useFinanceStore((s) => s.prisonPetMerge);
@@ -500,11 +628,12 @@ function PetInfo({ id, onJoy }: { id: PetId; onJoy: () => void }) {
   else
     rows = (
       <>
-        <Bar
-          value={lv.need ? lv.into / lv.need : 1}
-          height={9}
-          label={lv.need ? `${fmtNum(lv.into)} / ${fmtNum(lv.need)}` : t('nursery.lvMax')}
-        />
+        {xp && (
+          <Bar
+            value={lv.need ? lv.into / lv.need : 1}
+            label={lv.need ? `${fmtNum(lv.into)} / ${fmtNum(lv.need)}` : t('nursery.lvMax')}
+          />
+        )}
         {rec.v < MERGE_NEED.length && (
           <div className="nur-info__merge">
             <span>
@@ -564,17 +693,20 @@ function PetInfo({ id, onJoy }: { id: PetId; onJoy: () => void }) {
     );
   return (
     <div className="nur-info__body" style={rc(def.rarity)}>
-      <p className="nur-info__lore">{t(`pets.${id}.lore`)}</p>
-      <div className="nur-info__roles">
-        {def.stats.map((s) => (
-          <div key={s} className="nur-role">
-            <Icon name={ROLE_ICON[s]} />
-            <b>{t(`nursery.role.${s}.name`)}</b>
-            {rec && <span>{t(`nursery.role.${s}.text`, { v: pctV(b[s] ?? 0) })}</span>}
-          </div>
-        ))}
+      {head && <div className="nur-info__grp">{head}</div>}
+      <div className="nur-info__grp">
+        <p className="nur-info__lore">{t(`pets.${id}.lore`)}</p>
+        <div className="nur-info__roles">
+          {def.stats.map((s) => (
+            <div key={s} className="nur-role">
+              <Icon name={ROLE_ICON[s]} />
+              <b>{t(`nursery.role.${s}.name`)}</b>
+              {rec && <span>{t(`nursery.role.${s}.text`, { v: pctV(b[s] ?? 0) })}</span>}
+            </div>
+          ))}
+        </div>
       </div>
-      {rows}
+      <div className="nur-info__grp">{rows}</div>
     </div>
   );
 }

@@ -46,6 +46,10 @@ export type PxIconName =
   | 'sword'
   | 'bolt'
   | 'zzz'
+  | 'pause'
+  | 'paws'
+  | 'claw'
+  | 'moon'
   | 'coin'
   | 'token'
   | 'gem'
@@ -228,21 +232,22 @@ export function Bar({
   value,
   tone = 'gold',
   label,
-  height = 6,
+  height,
   className,
 }: {
   value: number;
   tone?: 'gold' | 'blue' | 'green';
   label?: ReactNode;
-  /** In art pixels (frame included). */
+  /** In art pixels (frame included); a labelled bar is tall enough for the small text. */
   height?: number;
   className?: string;
 }) {
   const v = Math.max(0, Math.min(1, value));
+  const h = height ?? (label != null ? 10 : 6);
   return (
     <span
       className={cx('px-bar', tone !== 'gold' && `px-bar--${tone}`, className)}
-      style={{ '--v': v, '--bh': height } as CSSProperties}
+      style={{ '--v': v, '--bh': h } as CSSProperties}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}

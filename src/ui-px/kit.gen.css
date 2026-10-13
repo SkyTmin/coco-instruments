@@ -662,6 +662,34 @@
   --i-h: 9;
 }
 
+.pxi-pause {
+  -webkit-mask-image: url('/ui/kit/i-pause.png?v=2cf8aa0e');
+  mask-image: url('/ui/kit/i-pause.png?v=2cf8aa0e');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-paws {
+  -webkit-mask-image: url('/ui/kit/i-paws.png?v=95a99854');
+  mask-image: url('/ui/kit/i-paws.png?v=95a99854');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-claw {
+  -webkit-mask-image: url('/ui/kit/i-claw.png?v=02184c55');
+  mask-image: url('/ui/kit/i-claw.png?v=02184c55');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-moon {
+  -webkit-mask-image: url('/ui/kit/i-moon.png?v=0f52f421');
+  mask-image: url('/ui/kit/i-moon.png?v=0f52f421');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .pxi-coin {
   -webkit-mask-image: url('/ui/kit/i-coin.png?v=9d3c8aed');
   mask-image: url('/ui/kit/i-coin.png?v=9d3c8aed');
