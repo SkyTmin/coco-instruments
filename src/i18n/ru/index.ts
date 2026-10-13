@@ -6,6 +6,7 @@ import { chests } from './chests';
 import { common } from './common';
 import { creative } from './creative';
 import { critters } from './critters';
+import { ctabs } from './ctabs';
 import { dfloors } from './dfloors';
 import { dgear } from './dgear';
 import { dlines } from './dlines';
@@ -49,6 +50,7 @@ export const ru = {
   common,
   creative,
   critters,
+  ctabs,
   dfloors,
   dgear,
   dlines,

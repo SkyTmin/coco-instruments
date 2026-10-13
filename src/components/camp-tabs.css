@@ -1,0 +1,924 @@
+/* Camp tabs on the pixel kit (components/CampTabs.tsx, wave 3 — T): shop, runes, finds,
+   achievements, skills. Kit rules: .claude/rules/ui-px.md; notes: game-ui.md → «Camp tabs on
+   the kit». Every art size is a whole number of art pixels (var(--u)); rows that hold changing
+   text have FIXED heights from the type scale, so picking another rune / skill / find never
+   moves a box. The camp body (gx-px.css) gives kit content a well and no zoom. */
+
+.ctab {
+  --gap: calc(4 * var(--u));
+  /* chip background: a shade of the surface it sits on */
+  --chip: rgb(90 61 34 / 0.13);
+  /* one line of small text */
+  --ln-sm: calc(var(--px-fs-sm) * 1.25);
+  position: relative;
+  display: grid;
+  gap: var(--gap);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  color: var(--px-text);
+}
+.ctab--one {
+  --gap: calc(3 * var(--u));
+}
+.ctab-scroll {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--px-dim) transparent;
+}
+.ctab .ptoken-ico {
+  flex: none;
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+}
+.ctab .ptear {
+  flex: none;
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+  image-rendering: pixelated;
+}
+
+/* ---- Head: title + what to do, a plate on the right ------------------------------------------ */
+.ctab-head {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  min-width: 0;
+}
+.ctab-head__txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+}
+/* `.ctab` in front: the camp sheet's heading rules must not win. */
+.ctab .ctab-head__title {
+  margin: 0;
+  font: 400 var(--px-fs-head) / 1.1 var(--px-head);
+}
+.ctab-head__hint {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+}
+/* Ink plates (cream text — `.px-dark`): tokens, counts, skill points. */
+.ctab-purse,
+.ctab-count,
+.ctab-points {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: calc(2 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  background: #2a190c;
+  border: var(--u) solid var(--px-ink);
+  box-shadow:
+    inset 0 var(--u) 0 #6b4a2c,
+    inset 0 calc(-1 * var(--u)) 0 #1a0f07;
+  color: var(--px-text);
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  white-space: nowrap;
+}
+.ctab-purse .px-num {
+  min-width: 4ch;
+  text-align: right;
+}
+
+/* ---- Chips ------------------------------------------------------------------------------------ */
+.ctab-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: var(--u);
+  height: calc(var(--px-fs-sm) * 1.5);
+  padding: 0 calc(2 * var(--u));
+  font: 600 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-text);
+  background: var(--chip);
+  white-space: nowrap;
+}
+.ctab-chip > b {
+  font-weight: 700;
+}
+.ctab-chip > .gx-icon {
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+  color: var(--px-gold);
+}
+.ctab-chip > .px-i {
+  color: var(--px-gold);
+}
+
+/* A framed card on the well: the kit's light interior frame. */
+.ctab-good,
+.ctab-mile {
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+}
+
+/* ---- Inspect panel (runes, finds, skills) ------------------------------------------------------ */
+.ctab-insp {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  min-height: 0;
+}
+.ctab-insp__body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.ctab-insp__body.is-ghost {
+  visibility: hidden;
+}
+.ctab-insp__empty {
+  position: absolute;
+  inset: calc(5 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+  text-align: center;
+  font: 600 var(--px-fs) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+.ctab-insp__empty > .px-i {
+  color: var(--px-gold);
+}
+.ctab-insp__top {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  min-width: 0;
+}
+.ctab-insp__art {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.ctab-insp__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ctab-insp__name,
+.ctab-insp__gives,
+.ctab-insp__sub,
+.ctab-insp__v {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctab .ctab-insp__name {
+  height: calc(var(--px-fs-head) * 1.2);
+  font: 400 var(--px-fs-head) / 1.2 var(--px-head);
+  color: var(--rc, var(--px-gold));
+  /* rarity colours read on the light fill only inside a hard ink outline */
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
+}
+.ctab .ctab-insp__name.is-plain {
+  color: var(--px-text);
+  text-shadow: none;
+}
+.ctab-insp__lv {
+  color: var(--px-gold);
+  font-size: var(--px-fs);
+}
+.ctab-insp__gives {
+  height: calc(var(--px-fs) * 1.25);
+  font: 700 var(--px-fs) / 1.25 var(--px-font);
+  color: var(--px-green);
+}
+.ctab-insp__sub {
+  height: var(--ln-sm);
+  font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+/* Fuse plan / a note: two lines, always. */
+.ctab-insp__line {
+  height: calc(var(--ln-sm) * 2);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+.ctab-insp__line.is-note {
+  color: var(--px-red);
+  font-weight: 700;
+}
+.ctab-insp__acts {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.ctab-insp__acts > .px-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ctab-insp__rows {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--u) calc(4 * var(--u));
+}
+.ctab-insp__k {
+  font: 600 var(--px-fs-sm) / 1.3 var(--px-font);
+  color: var(--px-muted);
+}
+.ctab-insp__v {
+  font: 700 var(--px-fs) / 1.3 var(--px-font);
+}
+.ctab-insp__v.is-next {
+  color: var(--px-green);
+}
+.ctab-insp__max {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-height: calc(19 * var(--u));
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-green);
+}
+
+/* ---- Grids of slots ------------------------------------------------------------------------- */
+.ctab-grid {
+  width: 100%;
+  /* the spare width goes between the columns, not into a strip on the right */
+  justify-content: space-between;
+  align-content: start;
+}
+.ctab-empty {
+  margin: 0;
+  padding: calc(4 * var(--u));
+  color: var(--px-muted);
+}
+.ctab-sub {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 calc(3 * var(--u));
+  min-width: 0;
+}
+.ctab .ctab-sub__title {
+  font: 400 var(--px-fs) / 1.2 var(--px-head);
+  color: var(--px-gold);
+}
+.ctab-sub__count {
+  color: var(--px-text);
+}
+.ctab-sub__hint {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+}
+
+/* ==== Лавка ==================================================================================== */
+.ctab-shop {
+  grid-template:
+    'head purse' auto
+    'goods goods' minmax(0, 1fr)
+    'pack pack' auto
+    / minmax(0, 1fr) auto;
+}
+.ctab-shop.ctab--tall {
+  grid-template:
+    'head purse' auto
+    'pack pack' auto
+    'goods goods' minmax(0, 1fr)
+    / minmax(0, 1fr) auto;
+}
+.ctab-shop.ctab--land,
+.ctab-shop.ctab--wide {
+  grid-template:
+    'head pack purse' auto
+    'goods goods goods' minmax(0, 1fr)
+    / minmax(0, 1fr) auto auto;
+}
+.ctab-shop > .ctab-head {
+  grid-area: head;
+}
+.ctab-shop > .ctab-purse {
+  grid-area: purse;
+  align-self: center;
+}
+.ctab-shop > .ctab-pack {
+  grid-area: pack;
+}
+.ctab-shop > .ctab-goods {
+  grid-area: goods;
+}
+.ctab-pack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.ctab-pack__label {
+  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+}
+.ctab-pack__row {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.ctab-pack__opt {
+  min-width: calc(24 * var(--u));
+}
+/* Phone portrait: the amount is a bar at the bottom (the thumb zone), big buttons. */
+.ctab--one > .ctab-pack {
+  padding: calc(2 * var(--u)) var(--u) 0;
+}
+.ctab--one .ctab-pack__opt {
+  min-width: calc(30 * var(--u));
+}
+.ctab--land .ctab-pack__label {
+  display: none;
+}
+
+.ctab-goods {
+  display: grid;
+  gap: calc(3 * var(--u));
+  align-content: start;
+  padding: var(--u);
+}
+.ctab-good {
+  position: relative;
+  display: grid;
+  grid-template: 'art info buy' auto / auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  padding: calc(3 * var(--u));
+}
+.ctab-good__art {
+  --slot: calc(28 * var(--u));
+  grid-area: art;
+  cursor: default;
+}
+.ctab-good__art .gx-icon {
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+}
+.ctab-good__info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+}
+.ctab-good__name {
+  font: 700 var(--px-fs) / 1.15 var(--px-font);
+}
+.ctab-good__text {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+  height: calc(var(--px-fs-sm) * 2.4);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ctab-good__buy {
+  grid-area: buy;
+  min-width: calc(40 * var(--u));
+}
+.ctab-good__pack {
+  font-size: var(--px-fs-sm);
+  opacity: 0.85;
+}
+.ctab-good__buy .px-num {
+  min-width: 3ch;
+  text-align: right;
+}
+.ctab--land .ctab-goods {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ctab--land .ctab-good {
+  grid-template:
+    'art info' auto
+    'art buy' auto
+    / auto minmax(0, 1fr);
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+}
+.ctab--land .ctab-good__text {
+  height: var(--ln-sm);
+  -webkit-line-clamp: 1;
+}
+.ctab--land .ctab-good__buy {
+  justify-self: start;
+}
+/* Tablet, desktop: a counter of goods — cards with a big picture, the price button under it. */
+.ctab--tall .ctab-goods,
+.ctab--wide .ctab-goods {
+  grid-template-columns: repeat(auto-fill, minmax(calc(84 * var(--u)), 1fr));
+  gap: calc(4 * var(--u));
+}
+.ctab--tall .ctab-good,
+.ctab--wide .ctab-good {
+  grid-template:
+    'art' auto
+    'info' auto
+    'buy' auto
+    / minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+  padding: calc(5 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u));
+}
+.ctab--tall .ctab-good__art,
+.ctab--wide .ctab-good__art {
+  --slot: calc(40 * var(--u));
+}
+.ctab--tall .ctab-good__art .gx-icon,
+.ctab--wide .ctab-good__art .gx-icon {
+  width: calc(28 * var(--u));
+  height: calc(28 * var(--u));
+}
+.ctab--tall .ctab-good__info,
+.ctab--wide .ctab-good__info {
+  align-items: center;
+  width: 100%;
+}
+.ctab--tall .ctab-good__buy,
+.ctab--wide .ctab-good__buy {
+  width: 100%;
+}
+/* Bought / can't pay: a word that floats up over the card — nothing in the layout moves. */
+.ctab-pop {
+  position: absolute;
+  z-index: 4;
+  left: calc(4 * var(--u));
+  top: calc(-2 * var(--u));
+  padding: var(--u) calc(3 * var(--u));
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: #9be887;
+  background: #2a190c;
+  border: var(--u) solid var(--px-ink);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: ctab-pop 1100ms steps(11, jump-none) forwards;
+}
+.ctab-pop.is-bad {
+  left: auto;
+  right: calc(3 * var(--u));
+  color: #ffa78c;
+}
+@keyframes ctab-pop {
+  0% {
+    transform: translateY(calc(2 * var(--u)));
+    opacity: 1;
+  }
+  20%,
+  75% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(-4 * var(--u)));
+    opacity: 0;
+  }
+}
+
+/* ==== Руны ===================================================================================== */
+.ctab-runes {
+  grid-template:
+    'amulet' auto
+    'pouch' minmax(0, 1fr)
+    'insp' auto
+    / minmax(0, 1fr);
+}
+.ctab-runes.ctab--land {
+  grid-template:
+    'amulet pouch' minmax(0, 1fr)
+    'amulet insp' auto
+    / minmax(0, 9fr) minmax(0, 11fr);
+}
+.ctab-runes.ctab--wide {
+  grid-template:
+    'amulet pouch' minmax(0, 1fr)
+    'amulet insp' auto
+    / minmax(0, 1fr) minmax(0, 1fr);
+}
+.ctab-runes > .ctab-amulet {
+  grid-area: amulet;
+}
+.ctab-runes > .ctab-pouch {
+  grid-area: pouch;
+}
+.ctab-runes > .ctab-insp {
+  grid-area: insp;
+}
+.ctab-amulet {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+  min-height: 0;
+}
+.ctab-stage {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+.ctab--land .ctab-stage,
+.ctab--wide .ctab-stage {
+  flex: 1 1 auto;
+}
+/* Sockets: a row on phones / tablet portrait, a cross around the pick-and-axe medallion on
+   wide screens (the amulet works for both tools). */
+.ctab-socks {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  width: 100%;
+  max-width: calc(4 * var(--slot) + 30 * var(--u));
+}
+.ctab-socks.is-cross {
+  display: grid;
+  grid-template:
+    '. s0 .'
+    's1 core s2'
+    '. s3 .'
+    / var(--slot) var(--slot) var(--slot);
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+  justify-content: center;
+  width: auto;
+  max-width: none;
+}
+.ctab-socks.is-cross > .ctab-sock--0 {
+  grid-area: s0;
+}
+.ctab-socks.is-cross > .ctab-sock--1 {
+  grid-area: s1;
+}
+.ctab-socks.is-cross > .ctab-sock--2 {
+  grid-area: s2;
+}
+.ctab-socks.is-cross > .ctab-sock--3 {
+  grid-area: s3;
+}
+.ctab-socks__core {
+  grid-area: core;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--slot);
+  height: var(--slot);
+  color: #6b4a1c;
+}
+.ctab-socks__core > .gx-icon {
+  grid-area: 1 / 1;
+  width: calc(var(--slot) - 12 * var(--u));
+  height: calc(var(--slot) - 12 * var(--u));
+}
+.ctab-socks__core > .gx-icon + .gx-icon {
+  transform: scaleX(-1);
+}
+.ctab-sock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--u);
+  min-width: 0;
+}
+.ctab-sock .px-slot.is-empty .px-i {
+  color: var(--px-gold);
+}
+/* A rune from the pouch is picked: empty open sockets call for it. */
+.ctab-sock .px-slot.is-target {
+  animation: ctab-call 1000ms steps(2, jump-none) infinite;
+}
+@keyframes ctab-call {
+  50% {
+    transform: translateY(calc(-1 * var(--u)));
+  }
+}
+.ctab-sock__cap {
+  height: var(--ln-sm);
+  font: 700 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+  white-space: nowrap;
+  text-shadow: 0 var(--u) 0 rgb(255 246 224 / 0.8);
+}
+.ctab-sock__cap.is-on {
+  color: var(--px-green);
+}
+/* Bonus of the worn runes: chips, two lines kept (socketing changes the words, not the box). */
+.ctab-bonus {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: calc(2 * var(--u));
+  height: calc(var(--px-fs-sm) * 3 + 2 * var(--u));
+  overflow: hidden;
+}
+.ctab-bonus__none {
+  font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+.ctab-pouch {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  min-height: 0;
+}
+.ctab-pouch > .ctab-scroll {
+  flex: 1 1 auto;
+}
+
+/* ==== Находки ================================================================================== */
+.ctab-finds {
+  grid-template:
+    'head' auto
+    'grid' minmax(0, 1fr)
+    'insp' auto
+    / minmax(0, 1fr);
+}
+.ctab-finds.ctab--land,
+.ctab-finds.ctab--wide {
+  grid-template:
+    'head head' auto
+    'grid insp' minmax(0, 1fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.ctab-finds > .ctab-head {
+  grid-area: head;
+}
+.ctab-finds > .ctab-finds__grid {
+  grid-area: grid;
+}
+.ctab-finds > .ctab-insp {
+  grid-area: insp;
+}
+.ctab-find {
+  display: block;
+  image-rendering: pixelated;
+}
+/* Side column: a showcase — the find big on top, its words under it. */
+.ctab--land .ctab-insp--find .ctab-insp__top,
+.ctab--wide .ctab-insp--find .ctab-insp__top {
+  flex-direction: column;
+  text-align: center;
+}
+.ctab--land .ctab-insp--find .ctab-insp__head,
+.ctab--wide .ctab-insp--find .ctab-insp__head {
+  align-items: center;
+  width: 100%;
+}
+.ctab-insp--find .ctab-insp__gives {
+  color: var(--px-text);
+  font-weight: 500;
+}
+.ctab--land .ctab-insp--find .ctab-insp__gives,
+.ctab--wide .ctab-insp--find .ctab-insp__gives {
+  height: calc(var(--px-fs) * 2.5);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ==== Достижения =============================================================================== */
+.ctab-miles {
+  grid-template:
+    'head' auto
+    'list' minmax(0, 1fr)
+    / minmax(0, 1fr);
+}
+.ctab-miles__list {
+  display: grid;
+  gap: calc(3 * var(--u));
+  align-content: start;
+  padding: var(--u);
+}
+.ctab--wide .ctab-miles__list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ctab-mile {
+  display: grid;
+  grid-template:
+    'art info end' auto
+    'art bar bar' auto
+    / auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+}
+.ctab-mile__art {
+  --slot: calc(26 * var(--u));
+  grid-area: art;
+  align-self: start;
+  cursor: default;
+}
+.ctab-mile__art .gx-icon {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  color: #6b4a1c;
+}
+.ctab-mile__info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+}
+.ctab .ctab-mile__name {
+  font: 400 var(--px-fs) / 1.15 var(--px-head);
+  color: var(--px-text);
+}
+.ctab-mile__text {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+}
+.ctab-gifts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--u) calc(2 * var(--u));
+}
+.ctab-mile__end {
+  grid-area: end;
+  align-self: start;
+}
+.ctab-mile__bar {
+  grid-area: bar;
+}
+.ctab-mile__taken {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-green);
+}
+/* Ready to take: a warm gold card (inside the frame's ink line), the button in its corner. */
+.ctab-mile.is-ready {
+  border-image-slice: 5 5 5 5;
+  background: linear-gradient(#ffe7a0, #ffe7a0) center / calc(100% - 4 * var(--u))
+    calc(100% - 4 * var(--u)) no-repeat;
+  background-origin: border-box;
+}
+.ctab-mile.is-ready .ctab-mile__art .gx-icon {
+  color: #804400;
+}
+.ctab-mile.is-done {
+  opacity: 0.62;
+}
+.ctab--one .ctab-mile {
+  grid-template:
+    'art info' auto
+    'bar bar' auto
+    'end end' auto
+    / auto minmax(0, 1fr);
+}
+.ctab--one .ctab-mile__end:empty {
+  display: none;
+}
+.ctab--one .ctab-mile__end > .px-btn {
+  width: 100%;
+}
+
+/* ==== Навыки =================================================================================== */
+.ctab-perks {
+  grid-template:
+    'head' auto
+    'tree' minmax(0, 1fr)
+    'insp' auto
+    / minmax(0, 1fr);
+}
+.ctab-perks.ctab--land,
+.ctab-perks.ctab--wide {
+  grid-template:
+    'head head' auto
+    'tree insp' minmax(0, 1fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.ctab-perks > .ctab-head {
+  grid-area: head;
+}
+.ctab-perks > .ctab-tree {
+  grid-area: tree;
+}
+.ctab-perks > .ctab-insp {
+  grid-area: insp;
+}
+.ctab-points {
+  gap: calc(3 * var(--u));
+  padding: calc(1 * var(--u)) calc(4 * var(--u)) calc(1 * var(--u)) calc(3 * var(--u));
+}
+.ctab-points__n {
+  min-width: 2ch;
+  text-align: center;
+  font-size: var(--px-fs-hero);
+  line-height: 1.1;
+  color: var(--px-dim);
+}
+.ctab-points.is-free .ctab-points__n {
+  color: var(--px-gold);
+}
+.ctab-points__w {
+  display: flex;
+  flex-direction: column;
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+}
+.ctab-points__p {
+  font-weight: 500;
+  color: var(--px-muted);
+}
+.ctab-points.is-locked {
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+}
+.ctab-tree {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  min-height: 0;
+  min-width: 0;
+}
+.ctab-tree > .ctab-scroll {
+  flex: 1 1 auto;
+}
+.ctab-nodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--slot) + 10 * var(--u)), 1fr));
+  gap: calc(4 * var(--u)) calc(2 * var(--u));
+  justify-items: center;
+  align-content: start;
+  padding: calc(2 * var(--u));
+}
+.ctab-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  width: 100%;
+  min-width: 0;
+}
+.ctab-node .px-slot .gx-icon {
+  width: calc(var(--slot) - 12 * var(--u));
+  height: calc(var(--slot) - 12 * var(--u));
+}
+/* The word on the stone tile: a flat light veil under it (no soft shadow on pixel art). */
+.ctab-node__name {
+  max-width: 100%;
+  height: calc(var(--px-fs-sm) * 1.3);
+  padding: 0 calc(2 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.3 var(--px-font);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgb(255 246 224 / 0.82);
+}
+.ctab-pips {
+  display: flex;
+  gap: var(--u);
+}
+.ctab-pips > i {
+  width: calc(4 * var(--u));
+  height: calc(4 * var(--u));
+  background: #c9a56d;
+  border: var(--u) solid var(--px-ink);
+}
+.ctab-pips > i.is-on {
+  background: #ffd25e;
+  box-shadow: inset var(--u) var(--u) 0 #fff3c4;
+}
+.ctab-reset {
+  flex: none;
+  align-self: flex-end;
+  white-space: normal;
+  text-align: center;
+}
+.ctab-insp--perk .ctab-insp__line {
+  height: calc(var(--ln-sm) * 2);
+}
+.ctab--land .ctab-insp--perk .ctab-insp__acts,
+.ctab--wide .ctab-insp--perk .ctab-insp__acts {
+  margin-top: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctab-pop,
+  .ctab-sock .px-slot.is-target {
+    animation: none;
+  }
+}
