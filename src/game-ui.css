@@ -4597,11 +4597,7 @@ html[data-ff='desktop'] .gxh__cards {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  /* Непрозрачный: кузница под сценой уже показывает новую кирку — сквозь
-     полупрозрачный фон она выдала бы, что выпало, раньше вспышки. */
-  background: radial-gradient(90% 60% at 50% 42%, #2a1a10, #0a0604 70%) #0a0604;
-  color: var(--gx-paper);
+  /* backdrop, card and text: `.arm-scn` in components/armory.css */
   animation: gx-fade 180ms ease-out;
   cursor: pointer;
 }
@@ -4651,37 +4647,6 @@ html[data-ff='desktop'] .gxh__cards {
     transform: scale(1.08);
   }
 }
-.fgr__text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-  animation: fgr-text 380ms 120ms ease-out both;
-}
-.fgr__text.is-wait {
-  visibility: hidden;
-  animation: none;
-}
-.fgr__text .rname {
-  font-size: 28px;
-}
-.fgr__stats,
-.fgr__opens {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  font-weight: 700;
-  opacity: 0.9;
-}
-.fgr__cta {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 700;
-  opacity: 0.6;
-  animation: prank-call 1.6s ease-in-out infinite;
-}
 @keyframes fgr-text {
   from {
     opacity: 0;
@@ -4693,9 +4658,7 @@ html[data-ff='desktop'] .gxh__cards {
   .pkart__rays,
   .pkart__pillar,
   .pkart.is-live .pkart__glow,
-  .fgr__pick,
-  .fgr__text,
-  .fgr__cta {
+  .fgr__pick {
     animation: none;
   }
 }
@@ -5122,15 +5085,6 @@ html[data-ff='desktop'] .gxh__cards {
       0 0 10px rgba(255, 210, 87, 0.8);
   }
 }
-.pbks__ch.is-hi {
-  background: #2f8a3c;
-}
-.pbks__ch.is-mid {
-  background: #b07a12;
-}
-.pbks__ch.is-lo {
-  background: #a8322a;
-}
 /* Зелёная стрелка: книгу можно вписать прямо сейчас. */
 
 /* ---- Книга с полки (окно) -------------------------------------------------- */
@@ -5145,13 +5099,9 @@ html[data-ff='desktop'] .gxh__cards {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  /* Непрозрачный: под сценой полка уже показывает, что выпало. */
-  background: radial-gradient(90% 60% at 50% 42%, #24142e, #08050a 70%) #08050a;
-  color: var(--gx-paper);
+  /* backdrop, card and text: `.arm-scn` in components/armory.css */
   animation: gx-fade 180ms ease-out;
   cursor: pointer;
-  font-family: 'GxRubik', system-ui, sans-serif;
 }
 .pbks__stage {
   position: relative;
@@ -5273,42 +5223,6 @@ html[data-ff='desktop'] .gxh__cards {
     opacity: 0;
   }
 }
-.pbks__text,
-.pbka__text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-height: 96px;
-  padding: 0 16px;
-  text-align: center;
-  animation: fgr-text 380ms 120ms ease-out both;
-}
-/* Подпись вписывания меняется на метке `hit` — места под самую длинную хватает сразу. */
-.pbka__text {
-  min-height: 124px;
-}
-/* Подпись итога ждёт своей фазы невидимой (место под неё занято сразу). */
-.pbks:not(.is-show) .pbks__text {
-  visibility: hidden;
-  animation: none;
-}
-.pbks__text .rname,
-.pbka__text .rname {
-  font-size: 26px;
-}
-.pbks__fx {
-  font-size: 15px;
-  font-weight: 700;
-  opacity: 0.92;
-}
-.pbks__ch {
-  padding: 2px 10px;
-  border-radius: 999px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-}
 
 /* Вписывание: круг шанса — зелёный сектор ровно `--ch` процентов. */
 .pbka__stage {
@@ -5407,15 +5321,6 @@ html[data-ff='desktop'] .gxh__cards {
     filter: brightness(0.3);
   }
 }
-.pbka__odds {
-  font-size: 34px;
-  font-weight: 900;
-  color: #fff4d0;
-}
-.pbka__lost {
-  font-size: 26px;
-  color: #ff8a6a;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .pbk-mage__eye,
@@ -5426,9 +5331,7 @@ html[data-ff='desktop'] .gxh__cards {
   .pbks__sigil,
   .pbks.is-show .pbook__emboss,
   .pbka.is-ok.is-hit .pbka__pick,
-  .pbook--lift .pbook__bob,
-  .pbks__text,
-  .pbka__text {
+  .pbook--lift .pbook__bob {
     animation: none;
   }
 }

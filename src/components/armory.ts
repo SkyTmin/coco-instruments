@@ -4,6 +4,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useFormFactor } from '@/game-shell';
+import { preloadPx } from '@/components/PxStrip';
+import { BOOK_TIERS } from '@/lib/books';
+import { PICKS } from '@/lib/economy';
+import { ROCKS } from '@/lib/prison';
 
 /** `one` phone portrait, `two` tablet portrait, `three` landscape / tablet landscape / desktop. */
 export type ArmLayout = 'one' | 'two' | 'three';
@@ -109,3 +113,91 @@ export function useArmGuard(): { mark: () => void; tooSoon: () => boolean } {
  *  counts its clicks. A second tap on a selected cell must not act — touch acts only through the
  *  action button (critic: a long press to read the tip forged the pick on release). */
 export const fromKeys = (e: { detail: number }) => e.detail === 0;
+
+let fullWins = 0;
+let fullScenes = 0;
+/**
+ * While a full-screen window (`.arm.is-window`) or a result scene is mounted: `html[data-fullwin]`
+ * (and `data-fullscene` for a scene). The mine (`.pmx`) and a camp under a scene stop painting —
+ * their canvas and animations ate the frames the window needed to open (critic: 313–557 ms on a
+ * 4× slower CPU). A layout effect, so the first frame of the window is already alone.
+ */
+export function useFullWin(on = true, scene = false): void {
+  useLayoutEffect(() => {
+    if (!on) return undefined;
+    const d = document.documentElement.dataset;
+    fullWins++;
+    d.fullwin = '';
+    if (scene) {
+      fullScenes++;
+      d.fullscene = '';
+    }
+    return () => {
+      if (!--fullWins) delete d.fullwin;
+      if (scene && !--fullScenes) delete d.fullscene;
+    };
+  }, [on, scene]);
+}
+
+/** Kit frame PNGs (`--pxk-*: url(…)` on `:root`), read from the loaded style sheets. */
+function kitUrls(): string[] {
+  const out = new Set<string>();
+  for (const sh of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList;
+    try {
+      rules = sh.cssRules;
+    } catch {
+      continue; // another origin
+    }
+    for (const r of Array.from(rules)) {
+      if (!(r instanceof CSSStyleRule) || r.selectorText !== ':root') continue;
+      for (let i = 0; i < r.style.length; i++) {
+        const k = r.style[i];
+        if (!k.startsWith('--pxk-')) continue;
+        const m = /url\(['"]?([^'")]+)/.exec(r.style.getPropertyValue(k));
+        if (m) out.add(m[1]);
+      }
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Decode, when the mine is idle, what the forge, the backpack and the books show first: the kit
+ * frames, the current pick's spin, the pick icons, the book idle strips and the ore icons. The
+ * windows then open without decoding images in their first frame. Returns the cancel.
+ */
+export function predecodeArmory(pick: number): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const w = window as Window & {
+    requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  let off = false;
+  const decode = (src: string) => {
+    const im = new Image();
+    im.decoding = 'async';
+    im.src = src;
+    return im.decode().catch(() => undefined);
+  };
+  const run = async () => {
+    const jobs: (() => Promise<unknown>)[] = [
+      ...kitUrls().map((s) => () => decode(s)),
+      () => preloadPx('picks', `spin-${pick}`),
+      ...PICKS.map((_, i) => () => preloadPx('picks', `icon-${i}`)),
+      ...BOOK_TIERS.map((b) => () => preloadPx('books', `idle-${b.id}`)),
+      ...ROCKS.map((_, i) => () => decode(`/ui/ores/r${i}-0.png`)),
+    ];
+    // A few at a time: the mine keeps its frames.
+    for (let i = 0; i < jobs.length && !off; i += 4)
+      await Promise.all(jobs.slice(i, i + 4).map((j) => j()));
+  };
+  const id = w.requestIdleCallback
+    ? w.requestIdleCallback(() => void run(), { timeout: 4000 })
+    : window.setTimeout(() => void run(), 1500);
+  return () => {
+    off = true;
+    if (w.cancelIdleCallback) w.cancelIdleCallback(id);
+    else window.clearTimeout(id);
+  };
+}

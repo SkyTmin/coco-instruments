@@ -26,6 +26,7 @@ import {
   useArmLayout,
   useBox,
   useFirstFrame,
+  useFullWin,
 } from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
 import { TokenIcon } from '@/components/PrisonCamp';
@@ -512,6 +513,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const roomRef = useRef<HTMLSpanElement>(null);
   const roomBox = useBox(roomRef);
   const painted = useFirstFrame(); // the shelf grid comes a frame after the window
+  useFullWin(win);
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const pedOf = (a: number) => Math.max(u, Math.round((a * 0.8 * dpr) / 112) / dpr);
   const art = heroFit(roomBox, u, 160 * u, pedOf);
@@ -1402,6 +1404,7 @@ function RevealScene({
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   const p = useFinanceStore((s) => s.prison);
+  useFullWin(true, true);
 
   useEffect(() => registerEscape(() => doneRef.current()), []);
 
@@ -1475,8 +1478,9 @@ function RevealScene({
   const shown = phase === 'show';
   return (
     <div
-      className={`pbks is-${phase} is-${scene.kind}${slow ? ' is-slow' : ''}${sigil === 'up' ? ' is-peak' : ''}`}
+      className={`pbks arm-scn px is-${phase} is-${scene.kind}${slow ? ' is-slow' : ''}${sigil === 'up' ? ' is-peak' : ''}${shown ? ' is-lit' : ''}`}
       style={rarityVars(r)}
+      data-ui-layer=""
       onClick={() => {
         if (!shown) skip();
         else {
@@ -1485,60 +1489,74 @@ function RevealScene({
         }
       }}
     >
-      <div className="pbks__stage">
-        <i className="pbks__burst" aria-hidden="true" />
-        {phase === 'build' && scene.kind === 'anvil' && (
-          <div className="pbks__pair">
-            <span className="is-l">
-              <BookArt book={scene.from} size={120} />
-            </span>
-            <span className="is-r">
-              <BookArt book={scene.from} size={120} />
-            </span>
-          </div>
-        )}
-        {phase === 'play' && (
-          <span className="pbks__px" style={{ width: REVEAL_SIZE, height: REVEAL_SIZE }}>
-            <PxStrip
-              set="books"
-              name={strip}
-              size={REVEAL_SIZE}
-              mode="once"
-              onMark={onMark}
-              onEnd={show}
-            />
-            {sigil && rise && (
-              <span
-                className={`pbks__sigil t-${t} is-${sigil}`}
-                style={
-                  {
-                    left: rise[0],
-                    top: rise[1],
-                    '--sink-y': `${Math.round(REVEAL_SIZE * 0.2)}px`,
-                    '--sink-ms': `${Math.round(sinkMs)}ms`,
-                  } as CSSProperties
-                }
-                aria-hidden="true"
-              >
-                <BookGlyph book={b} />
+      <div className="arm-scn__card">
+        <div className="pbks__stage">
+          <i className="pbks__burst" aria-hidden="true" />
+          {phase === 'build' && scene.kind === 'anvil' && (
+            <div className="pbks__pair">
+              <span className="is-l">
+                <BookArt book={scene.from} size={120} />
               </span>
-            )}
+              <span className="is-r">
+                <BookArt book={scene.from} size={120} />
+              </span>
+            </div>
+          )}
+          {phase === 'play' && (
+            <span className="pbks__px" style={{ width: REVEAL_SIZE, height: REVEAL_SIZE }}>
+              <PxStrip
+                set="books"
+                name={strip}
+                size={REVEAL_SIZE}
+                mode="once"
+                onMark={onMark}
+                onEnd={show}
+              />
+              {sigil && rise && (
+                <span
+                  className={`pbks__sigil t-${t} is-${sigil}`}
+                  style={
+                    {
+                      left: rise[0],
+                      top: rise[1],
+                      '--sink-y': `${Math.round(REVEAL_SIZE * 0.2)}px`,
+                      '--sink-ms': `${Math.round(sinkMs)}ms`,
+                    } as CSSProperties
+                  }
+                  aria-hidden="true"
+                >
+                  <BookGlyph book={b} />
+                </span>
+              )}
+            </span>
+          )}
+          {shown && (
+            <span className="pbks__book">
+              <BookArt book={b} size={REVEAL_SIZE} glow />
+            </span>
+          )}
+        </div>
+        {/* Подпись занимает место с первого кадра: иначе на смене полосы книга прыгнула бы вверх. */}
+        <div className={`pbks__text arm-scn__text${shown ? '' : ' is-wait'}`} aria-hidden={!shown}>
+          <RarityName rarity={r}>{bookName(b)}</RarityName>
+          <span className="arm-scn__line">{effectOf(b.id, b.lvl, p.pickStars)}</span>
+          <span className={`pbks__ch is-${chanceTone(b.chance)}`}>
+            {tx('books.chance', { v: b.chance })}
           </span>
-        )}
-        {shown && (
-          <span className="pbks__book">
-            <BookArt book={b} size={REVEAL_SIZE} glow />
-          </span>
-        )}
-      </div>
-      {/* Подпись занимает место с первого кадра: иначе на смене полосы книга прыгнула бы вверх. */}
-      <div className="pbks__text" aria-hidden={!shown}>
-        <RarityName rarity={r}>{bookName(b)}</RarityName>
-        <span className="pbks__fx">{effectOf(b.id, b.lvl, p.pickStars)}</span>
-        <span className={`pbks__ch is-${chanceTone(b.chance)}`}>
-          {tx('books.chance', { v: b.chance })}
-        </span>
-        <span className="fgr__cta">{tx('books.toShelf')}</span>
+          <Button
+            kind="primary"
+            className="arm-scn__cta"
+            data-autofocus=""
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!shown) return;
+              tapLight();
+              onDone();
+            }}
+          >
+            {tx('books.toShelf')}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -1573,6 +1591,7 @@ function ApplyScene({
   const [hit, setHit] = useState(() => reduceMotion());
   const [ended, setEnded] = useState(() => reduceMotion());
   const needle = useRef<HTMLSpanElement>(null);
+  useFullWin(true, true);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const anim = useRef<Animation | null>(null);
   const hitRef = useRef(hit);
@@ -1667,8 +1686,9 @@ function ApplyScene({
   const told = phase !== 'spin' && hit;
   return (
     <div
-      className={`pbka is-${phase}${hit ? ' is-hit' : ''}`}
+      className={`pbka arm-scn px is-${phase}${hit ? ' is-hit' : ''}${told ? ' is-lit' : ''}`}
       style={{ ...rarityVars(r), '--ch': `${c}%` } as CSSProperties}
+      data-ui-layer=""
       onClick={() => {
         if (phase === 'spin') settle();
         else if (!ended) finish();
@@ -1678,61 +1698,77 @@ function ApplyScene({
         }
       }}
     >
-      <div className="pbka__stage">
-        <i className="pbks__burst" aria-hidden="true" />
-        <span className="pbka__dial" aria-hidden="true">
+      <div className="arm-scn__card">
+        <div className="pbka__stage">
+          <i className="pbks__burst" aria-hidden="true" />
+          <span className="pbka__dial" aria-hidden="true">
+            <span
+              className="pbka__needle"
+              ref={needle}
+              style={phase === 'spin' ? undefined : { transform: `rotate(${stopAt}deg)` }}
+            />
+          </span>
+          <span className="pbka__pick" style={{ top: pickTop }}>
+            <PickArt pick={pick} size={PICK_SIZE} fx={phase === 'ok' && hit} />
+          </span>
           <span
-            className="pbka__needle"
-            ref={needle}
-            style={phase === 'spin' ? undefined : { transform: `rotate(${stopAt}deg)` }}
-          />
-        </span>
-        <span className="pbka__pick" style={{ top: pickTop }}>
-          <PickArt pick={pick} size={PICK_SIZE} fx={phase === 'ok' && hit} />
-        </span>
-        <span
-          className="pbka__book"
-          style={{ top: APPLY_TOP, width: APPLY_SIZE, height: APPLY_SIZE }}
-        >
-          {phase === 'spin' ? (
-            <BookArt book={b} size={APPLY_SIZE} glow />
-          ) : (
-            !ended && (
-              <>
-                <PxStrip
-                  set="books"
-                  name={strip}
-                  size={APPLY_SIZE}
-                  mode="once"
-                  onMark={onMark}
-                  onEnd={finish}
-                />
-                <BookLift book={b} size={APPLY_SIZE} burn={!scene.ok} />
-              </>
-            )
-          )}
-        </span>
-      </div>
-      <div className="pbka__text">
-        {phase === 'spin' && <b className="pbka__odds">{tx('books.pct', { v: c })}</b>}
-        {told && phase === 'ok' && (
-          <>
-            <RarityName rarity={r}>{tx('books.applied', { name: bookName(b) })}</RarityName>
-            <span className="pbks__fx">{effectOf(b.id, b.lvl, p.pickStars)}</span>
-            {scene.replaced && (
-              <span className="pbks__fx">
-                {tx('books.crumbled', { name: enchantName(scene.replaced) })}
-              </span>
+            className="pbka__book"
+            style={{ top: APPLY_TOP, width: APPLY_SIZE, height: APPLY_SIZE }}
+          >
+            {phase === 'spin' ? (
+              <BookArt book={b} size={APPLY_SIZE} glow />
+            ) : (
+              !ended && (
+                <>
+                  <PxStrip
+                    set="books"
+                    name={strip}
+                    size={APPLY_SIZE}
+                    mode="once"
+                    onMark={onMark}
+                    onEnd={finish}
+                  />
+                  <BookLift book={b} size={APPLY_SIZE} burn={!scene.ok} />
+                </>
+              )
             )}
-          </>
-        )}
-        {told && phase === 'fail' && (
-          <>
-            <b className="pbka__lost">{tx('books.burned')}</b>
-            <span className="pbks__fx">{tx('books.burnedSub')}</span>
-          </>
-        )}
-        {told && <span className="fgr__cta">{tx('books.next')}</span>}
+          </span>
+        </div>
+        <div className="pbka__text arm-scn__text">
+          {phase === 'spin' && <b className="pbka__odds px-dark">{tx('books.pct', { v: c })}</b>}
+          {told && phase === 'ok' && (
+            <>
+              <RarityName rarity={r}>{tx('books.applied', { name: bookName(b) })}</RarityName>
+              <span className="arm-scn__line">{effectOf(b.id, b.lvl, p.pickStars)}</span>
+              {scene.replaced && (
+                <span className="arm-scn__line">
+                  {tx('books.crumbled', { name: enchantName(scene.replaced) })}
+                </span>
+              )}
+            </>
+          )}
+          {told && phase === 'fail' && (
+            <>
+              <b className="pbka__lost">{tx('books.burned')}</b>
+              <span className="arm-scn__line">{tx('books.burnedSub')}</span>
+            </>
+          )}
+          {/* Rendered from the first frame, hidden: the button never pushes the card. */}
+          <Button
+            kind="primary"
+            className={`arm-scn__cta${told ? '' : ' is-wait'}`}
+            data-autofocus=""
+            aria-hidden={!told}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!told) return;
+              tapLight();
+              onDone();
+            }}
+          >
+            {tx('books.next')}
+          </Button>
+        </div>
       </div>
     </div>
   );

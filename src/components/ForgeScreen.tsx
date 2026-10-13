@@ -33,6 +33,7 @@ import {
   useArmLayout,
   useBox,
   useFirstFrame,
+  useFullWin,
 } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
@@ -320,6 +321,7 @@ export function ForgeScreen({
   const roomRef = useRef<HTMLSpanElement>(null);
   const room = useBox(roomRef);
   const painted = useFirstFrame(); // the picks grid comes a frame after the window
+  useFullWin();
   const art = heroFit(room, u, 64 * u * 4, (a) => pedPx(a, u));
   const dim = st === 'locked' || (st === 'next' && !ready);
   const selSpeed = pickSpeed(floor, sel, m);
@@ -801,6 +803,7 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
   const opens = opensRocks(pick);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
+  useFullWin(true, true);
 
   useEffect(() => {
     const off = registerEscape(() => doneRef.current());
@@ -853,8 +856,9 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
 
   return (
     <div
-      className={`fgr${shown ? ' is-reveal' : ' is-forge'} r${d.rarity}`}
+      className={`fgr arm-scn px${shown ? ' is-reveal is-lit' : ' is-forge'} r${d.rarity}`}
       style={rarityVars(d.rarity)}
+      data-ui-layer=""
       onClick={() => {
         if (!shown) {
           // Тап до развязки — сразу кирка.
@@ -866,45 +870,60 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
         }
       }}
     >
-      <div className="fgr__stage" ref={stage}>
-        <i className="fgr__burst" aria-hidden="true" />
-        {shown && (
-          <div className="fgr__pick is-shown">
-            <PickArt pick={pick} size={FORGE_ART} />
-          </div>
-        )}
-        {strip && (
-          <div className="fgr__forge">
-            <PxStrip
-              set="picks"
-              name={`forge-r${d.rarity}`}
-              size={FORGE_PX}
-              mode="once"
-              onMark={onMark}
-              onEnd={() => {
-                setStrip(false);
-                reveal();
-              }}
-            />
-          </div>
-        )}
-      </div>
-      {/* Подпись занимает место с начала сцены (скрыта): иначе по вспышке сцена прыгнула бы вверх. */}
-      <div className={`fgr__text${shown ? '' : ' is-wait'}`} aria-hidden={!shown}>
-        <RarityChip rarity={d.rarity} />
-        <RarityName rarity={d.rarity}>{pickTitle(pick)}</RarityName>
-        <span className="fgr__stats">
-          {t('forge.stats', { power: d.power, speed: fmt(pickSpeed(p.mine.id, pick, m)) })}
-        </span>
-        {opens.length > 0 && (
-          <span className="fgr__opens">
-            {t('forge.opens', { list: oreList(opens) })}
-            {opens.map((x) => (
-              <OreIcon key={x} rock={x} size={18} />
-            ))}
+      {/* Dark while the hammer strikes and the flash; the result lies on a light kit card. */}
+      <div className="arm-scn__card">
+        <div className="fgr__stage" ref={stage}>
+          <i className="fgr__burst" aria-hidden="true" />
+          {shown && (
+            <div className="fgr__pick is-shown">
+              <PickArt pick={pick} size={FORGE_ART} />
+            </div>
+          )}
+          {strip && (
+            <div className="fgr__forge">
+              <PxStrip
+                set="picks"
+                name={`forge-r${d.rarity}`}
+                size={FORGE_PX}
+                mode="once"
+                onMark={onMark}
+                onEnd={() => {
+                  setStrip(false);
+                  reveal();
+                }}
+              />
+            </div>
+          )}
+        </div>
+        {/* Подпись занимает место с начала сцены (скрыта): иначе по вспышке сцена прыгнула бы вверх. */}
+        <div className={`arm-scn__text${shown ? '' : ' is-wait'}`} aria-hidden={!shown}>
+          <RarityChip rarity={d.rarity} />
+          <RarityName rarity={d.rarity}>{pickTitle(pick)}</RarityName>
+          <span className="arm-scn__line">
+            {t('forge.stats', { power: d.power, speed: fmt(pickSpeed(p.mine.id, pick, m)) })}
           </span>
-        )}
-        <span className="fgr__cta">{t('forge.toMine')}</span>
+          {opens.length > 0 && (
+            <span className="arm-scn__line">
+              {t('forge.opens', { list: oreList(opens) })}
+              {opens.map((x) => (
+                <OreIcon key={x} rock={x} size={24} />
+              ))}
+            </span>
+          )}
+          <Button
+            kind="primary"
+            className="arm-scn__cta"
+            data-autofocus=""
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!shown) return;
+              tapLight();
+              onDone();
+            }}
+          >
+            {t('forge.toMine')}
+          </Button>
+        </div>
       </div>
     </div>
   );

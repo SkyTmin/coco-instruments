@@ -29,6 +29,7 @@ import {
   useArmLayout,
   useBox,
   useFirstFrame,
+  useFullWin,
 } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import {
@@ -601,6 +602,7 @@ export function Inventory({
   const roomRef = useRef<HTMLSpanElement>(null);
   const roomBox = useBox(roomRef);
   const ready = useFirstFrame();
+  useFullWin();
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const pedOf = (a: number) => Math.max(u, Math.round((a * 0.8 * dpr) / 112) / dpr);
   const stage = heroFit(roomBox, u, 160 * u, pedOf);

@@ -472,7 +472,7 @@ html[data-ff='phone-landscape'] .arm-name {
    «Эффективность» at the big size broke inside the word). */
 /* Rarity word: ink on the rarity colour (the kit's pill, as `.nur-rar`) — the old dark chip with
    the colour as text read 1.4:1 on the light panels. */
-.arm .rchip {
+:is(.arm, .arm-scn) .rchip {
   height: calc(var(--px-fs-sm) * 1.45);
   padding: 0 calc(3 * var(--u));
   border-radius: 0;
@@ -655,4 +655,181 @@ html[data-ff='phone-landscape'] .arm-acts > .px-btn > .gx-icon {
 .arm-tip__vs {
   color: var(--px-muted) !important;
   font-size: var(--px-fs-sm);
+}
+
+/* ---- Result scenes: forge (`.fgr`), book reveal / anvil (`.pbks`), apply (`.pbka`) ----------
+   Dark only while the hammer strikes, the strip plays and the flash fires; `.is-lit` (the result
+   is known) fades the dark away to the kit veil and lights a parchment card under the art and the
+   text (critic: 13–15 px text on rgb(10,6,4), a 53×16 «В шахту» span). The card and the text are
+   laid out from the first frame, hidden — nothing moves when they appear. Motion and the strips
+   themselves stay in game-ui.css. */
+.arm-scn {
+  --scn-tone: var(--px-gold);
+  isolation: isolate;
+  padding: calc(var(--safe-top, 0px) + 4 * var(--u)) calc(4 * var(--u))
+    calc(var(--safe-bottom, 0px) + 4 * var(--u));
+  overflow: auto;
+  background: color-mix(in srgb, var(--px-ink) 72%, transparent);
+  color: var(--px-text);
+}
+.pbks.arm-scn,
+.pbka.arm-scn {
+  --scn-tone: var(--px-violet);
+}
+/* The forge or the shelf under a scene already shows what came out: opaque until the reveal. */
+.arm-scn::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+      90% 60% at 50% 42%,
+      color-mix(in srgb, var(--scn-tone) 22%, var(--px-ink)),
+      var(--px-ink) 70%
+    )
+    var(--px-ink);
+  transition: opacity 260ms steps(4, jump-none);
+}
+.arm-scn.is-lit::before {
+  opacity: 0;
+}
+.arm-scn__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  width: min(100%, calc(150 * var(--u)));
+  margin: auto;
+  padding: calc(6 * var(--u));
+}
+.arm-scn__card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  image-rendering: pixelated;
+  opacity: 0;
+  transition: opacity 260ms steps(4, jump-none);
+}
+.arm-scn.is-lit .arm-scn__card::before {
+  opacity: 1;
+}
+.arm-scn__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  width: 100%;
+  text-align: center;
+  animation: arm-scn-in 320ms 80ms steps(4, jump-none) both;
+}
+.arm-scn__text.is-wait {
+  visibility: hidden;
+  animation: none;
+}
+/* Apply: the caption changes at `hit` — the box holds the longest one (name on two lines, the
+   effect and the crumbled enchant on two lines each, the button) from the first frame. */
+.pbka .arm-scn__text {
+  min-height: calc(
+    2 * 1.15 * var(--px-fs-big) + 4 * 1.2 * var(--px-fs-sm) + var(--gx-hit) + 9 * var(--u)
+  );
+  animation: none;
+}
+@keyframes arm-scn-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(4 * var(--u)));
+  }
+}
+.arm-scn .rname,
+.pbka__lost {
+  font: 400 var(--px-fs-big) / 1.15 var(--px-head);
+  overflow-wrap: normal;
+  hyphens: auto;
+  text-wrap: balance;
+}
+/* The rarity colour reads on the parchment only inside a hard ink outline (as `.px-inspect__name`). */
+.arm-scn .rname {
+  color: var(--rc);
+  background: none;
+  filter: none;
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
+}
+.pbka__lost {
+  color: var(--px-red);
+}
+.arm-scn__line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--u) calc(2 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-text);
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+/* Chance to write in: a kit pill in the tone's ink colour (on the parchment ≥ 5:1). */
+.pbks__ch {
+  padding: 0 calc(3 * var(--u));
+  border: var(--u) solid currentColor;
+  font: 700 var(--px-fs-sm) / 1.4 var(--px-font);
+}
+.pbks__ch.is-hi {
+  color: var(--px-green);
+}
+.pbks__ch.is-mid {
+  color: var(--px-gold);
+}
+.pbks__ch.is-lo {
+  color: var(--px-red);
+}
+.pbka__odds {
+  font: 700 var(--px-fs-hero) / 1.1 var(--px-font);
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+.arm-scn__cta {
+  min-width: min(100%, calc(70 * var(--u)));
+  min-height: var(--gx-hit);
+  margin-top: var(--u);
+}
+.arm-scn__cta.is-wait {
+  visibility: hidden;
+}
+/* Phone landscape: 390 px high — the art beside the text. */
+html[data-ff='phone-landscape'] .arm-scn__card {
+  flex-direction: row;
+  width: auto;
+  max-width: 100%;
+}
+html[data-ff='phone-landscape'] .arm-scn__text {
+  width: calc(120 * var(--u));
+}
+@media (prefers-reduced-motion: reduce) {
+  .arm-scn__text {
+    animation: none;
+  }
+}
+
+/* While a full-screen window or a scene is up (`useFullWin`), the mine under it stops painting;
+   under a scene the camp too. The window and the scene themselves stay visible even when they
+   are rendered inside one of them. */
+html[data-fullwin] .pmx,
+html[data-fullscene] .gx-win {
+  visibility: hidden;
+}
+html[data-fullwin] :is(.arm.is-window, .arm-scn) {
+  visibility: visible;
 }
