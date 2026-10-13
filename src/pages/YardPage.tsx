@@ -11,7 +11,7 @@
 // в цикле `requestAnimationFrame` мимо React; React перерисовывает табло,
 // только когда оно поменялось.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GameTop, GxBar, GxIcon, GxModal } from '@/components/gx';
@@ -65,6 +65,7 @@ import { inTopLayer } from '@/input/focus-nav';
 import { Prompt } from '@/input/Prompt';
 import { fmtNum, t as tNow, useT } from '@/i18n';
 import { doorLabel, eventLead, eventName, hubMapName, npcName } from '@/i18n/data-yard';
+import { usePress } from '@/ui-px';
 import './hub.css';
 
 const fmt = (n: number) => fmtNum(Math.round(n));
@@ -158,6 +159,7 @@ export function YardPage() {
 
 function HubWorld() {
   const t = useT();
+  const press = usePress();
   const nav = useNavigate();
   const owner = useOwner();
   const prison = useFinanceStore((s) => s.prison);
@@ -439,6 +441,7 @@ function HubWorld() {
           sim,
           r,
           go: (to: string, at: string) => go(to, at),
+          say,
           /** Час суток для стенда: 0…1 или null — настоящий. */
           phase: (p: number | null) => {
             r.phaseOverride = p;
@@ -665,6 +668,7 @@ function HubWorld() {
           <button
             type="button"
             className="hub-ev"
+            {...press}
             style={{ '--ev': def.color } as CSSProperties}
             onClick={() => leave(ev.place === 'forest' ? '/forest' : '/prison')}
           >
@@ -691,6 +695,7 @@ function HubWorld() {
           <button
             type="button"
             className="gx-round gx-round--dark hub-pad__map"
+            {...press}
             aria-label={t('yard.creative')}
             onClick={() => {
               tapLight();
@@ -703,6 +708,7 @@ function HubWorld() {
         <button
           type="button"
           className="gx-round gx-round--dark hub-pad__map"
+          {...press}
           aria-label={t('yard.inventory')}
           data-tip={t('input.action.inventory')}
           data-tip-key="inventory"
@@ -717,6 +723,7 @@ function HubWorld() {
           <button
             type="button"
             className="gx-round gx-round--dark hub-pad__map"
+            {...press}
             aria-label={t('yard.map')}
             onClick={() => {
               tapLight();
@@ -730,6 +737,7 @@ function HubWorld() {
           <button
             type="button"
             className={`gx-btn hub-pad__use${use.kind === 'npc' ? ' gx-btn--red' : ''}`}
+            {...press}
             onClick={actNear}
           >
             <GxIcon name={use.kind === 'npc' ? 'scroll' : 'gate'} />
@@ -962,8 +970,49 @@ function HubMapSheet({
   onPick: (d: HubDoor) => void;
 }) {
   const t = useT();
+  const press = usePress();
   const cvRef = useRef<HTMLCanvasElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const m = sim.map;
+  // Pins at kit type size collide (Шахта / Особая шахта stand side by side) and the edge ones
+  // ran past the frame: keep each inside the frame and move it below any pin above it that it
+  // overlaps. Offsets are in the frame's own units (the window body may be zoomed).
+  useLayoutEffect(() => {
+    const fr = frameRef.current;
+    if (!fr) return;
+    const lay = () => {
+      const pins = [...fr.querySelectorAll<HTMLElement>('.hub-map__pin')];
+      const boxes = pins.map((el) => {
+        el.style.transform = '';
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        return { el, l: el.offsetLeft - w / 2, t: el.offsetTop - h, w, h };
+      });
+      boxes.sort((a, b) => a.t - b.t || a.l - b.l);
+      const fw = fr.clientWidth;
+      const placed: { l: number; t: number; r: number; b: number }[] = [];
+      for (const p of boxes) {
+        const dx = Math.max(0, -p.l) - Math.max(0, p.l + p.w - fw);
+        const l = p.l + dx;
+        let top = p.t;
+        for (let n = 0; n < boxes.length; n++) {
+          const hit = placed.find((q) => l < q.r && l + p.w > q.l && top < q.b && top + p.h > q.t);
+          if (!hit) break;
+          top = hit.b + 1;
+        }
+        if (dx || top !== p.t) p.el.style.transform = `translate(${dx}px, ${top - p.t}px)`;
+        placed.push({ l, t: top, r: l + p.w, b: top + p.h });
+      }
+    };
+    lay();
+    const ro = new ResizeObserver(lay);
+    ro.observe(fr);
+    document.fonts?.addEventListener?.('loadingdone', lay);
+    return () => {
+      ro.disconnect();
+      document.fonts?.removeEventListener?.('loadingdone', lay);
+    };
+  }, [m]);
   // Карта рисуется один раз: пол и все постройки кадром «покоя». Картинки
   // могли ещё не прийти — тогда повтор через миг.
   useEffect(() => {
@@ -996,7 +1045,7 @@ function HubMapSheet({
   const hy = (sim.hero.y / m.h) * 100;
   return (
     <GxModal title={t('yard.mapTitle')} onClose={onClose} className="hub-map">
-      <div className="hub-map__frame" style={{ aspectRatio: `${m.w} / ${m.h}` }}>
+      <div className="hub-map__frame" ref={frameRef} style={{ aspectRatio: `${m.w} / ${m.h}` }}>
         <canvas ref={cvRef} className="hub-map__cv" />
         <i className="hub-map__me" style={{ left: `${hx}%`, top: `${hy}%` }} aria-hidden="true" />
         {places.map((d) => (
@@ -1004,6 +1053,7 @@ function HubMapSheet({
             key={d.i}
             type="button"
             className="hub-map__pin"
+            {...press}
             style={{ left: `${((d.x + d.w / 2) / m.w) * 100}%`, top: `${(d.y / m.h) * 100}%` }}
             onClick={() => {
               tapLight();
