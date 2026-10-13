@@ -241,8 +241,12 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
 - Legendary/mythic: `.pet__aura`/`.pet__rays` are hidden on the stage (soft vector glow, cost
   frames); the light pool's hard bands take the rarity colour instead (`.nur-show--r3…r5`).
 - Type on the screen: name hero (Coco Title), body `--px-fs` (power, headings), label `--px-fs-sm`
-  (chips, rarity, level, hint, bar); weight 700 (slot counters keep `-tiny`). Small framed buttons
-  (anim column, drawer ✕) get a `::before` hit area 3 u around them (≥ 44 px).
+  (chips, rarity, level, hint, bar); weight 700 (slot counters keep `-tiny`). Hit areas ≥ 48 × 48 on
+  phones (critic R13): anim column, drawer ✕, «+N», action bar get a `::before` with negative
+  inset and `z-index: -1` inside an isolated row (`isolation: isolate`), so a neighbour's
+  extension lies UNDER the visible frames and never steals a tap. **Pitfall:** an absolute
+  `::before` is placed from the PADDING box — the kit's 1-u border eats 1 u of the inset (check
+  with `elementFromPoint`, not by reading `top`).
 - The camp window chrome is the kit for EVERY camp since wave 2 (C, `gx-px.css`; see
   `game-ui.md` → «Window chrome on the kit»); `nursery.css` only sizes the pets camp and fills
   its body (`.gx-camp:has(.nur) .pcamp-body`). The pets camp is full height and

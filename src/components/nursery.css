@@ -21,6 +21,11 @@
 .nur .px-dark {
   --chip: rgb(255 244 220 / 0.1);
 }
+/* two weights on the screen: 700 for text and numbers, the headings' own (critic P2) — the camp
+   sheet's `.gx-camp .gx-sheet__body :is(b, …)` (0,2,1) made the numbers 800 */
+.px.nur .px-num {
+  font-weight: 700;
+}
 /* Phone portrait: the stage takes all the height the squad, the strip and the actions leave. */
 .nur--one {
   --gap: calc(3 * var(--u));
@@ -363,7 +368,7 @@
   background: var(--chip);
   white-space: nowrap;
 }
-/* «+N»: 36 × 28 visible, the hit area 44 × 44 (Apple HIG) */
+/* «+N»: 36 × 28 visible, the hit area 48 × 48 (Android 48 dp) */
 .nur-chip--more {
   justify-content: center;
   min-width: 36px;
@@ -374,7 +379,8 @@
 .nur-chip--more::before {
   content: '';
   position: absolute;
-  inset: min(0px, calc((100% - 44px) / 2)) -4px;
+  z-index: -1;
+  inset: min(0px, calc((100% - 48px) / 2)) -6px;
 }
 .nur-chip--note {
   background: none;
@@ -565,12 +571,21 @@
   top: calc(3 * var(--u));
   right: calc(3 * var(--u));
 }
-/* Small framed buttons keep their 15-u frame; the hit area reaches 3 u around it (≥ 44 px). */
+/* Small framed buttons keep their 15-u frame; the hit area reaches around it (≥ 48 × 48 px on a
+   phone: Android 48 dp, critic R13). The hit areas lie UNDER the visible frames (z-index −1 in
+   an isolated row): a neighbour's extension never steals a tap on a frame. */
 .nur-drawer__close::before,
 .nur-anim::before {
   content: '';
   position: absolute;
-  inset: calc(-3 * var(--u));
+  z-index: -1;
+  /* from the padding box: the frame's 1-u border is inside these numbers */
+  inset: calc(-5 * var(--u)) calc(-4 * var(--u));
+}
+.nur-anims,
+.nur-acts,
+.nur-plate__roles {
+  isolation: isolate;
 }
 .nur-anim {
   position: relative;
@@ -776,11 +791,12 @@
 .nur--wide .nur-side > .nur-acts {
   margin-top: auto;
 }
-/* the action bar is 40 px high (critic's budget); the hit areas reach 44 (into the gaps) */
+/* the action bar is 40 px high (critic's budget); the hit areas reach 48 (into the gaps) */
 .nur-acts .px-btn::before {
   content: '';
   position: absolute;
-  inset: -2px -3px;
+  z-index: -1;
+  inset: calc(-4px - var(--u)) calc(-5px - var(--u));
 }
 .nur-acts__info {
   position: relative;
