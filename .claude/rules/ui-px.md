@@ -208,8 +208,9 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
   «Предел», on `one` a slim 4-u bar with the text as its tip). Pet size: `useBox` measures
   `.nur-room` (`contain: size`), `pedFor` = pedestal pixel from the room (not the pet), `fitPet`
   picks the biggest whole-dot frame that fits above the pedestal; offsets rounded to 1/dpr.
-- **Pet size per format (N3, asserted by `{SCR}/ui3N3/m.mjs`: frame ≥ target, identical boxes
-  across 4 pets, no change on a key press, page scroll 0)**: phone 390×844@3 299 (k 8 of the
+- **Pet size per format (N3, asserted by `scripts/ui-px/nursery-check.mjs` against a running dev
+  server — frame ≥ target, identical boxes across 4 pets, no change on a key press; run it after
+  any Nursery/camp/kit change)**: phone 390×844@3 299 (k 8 of the
   112 strip), 360×780@3 224, 440×956@3 336, 844×390@3 224, 956×440@3 299, tablet 820×1180@2
   336, 1180×820@2 448, desktop 1440×900 and 1920×1080 560. Before N3 (critic round 2, same order):
   261/187/299/187/224/280/280/336/336.
