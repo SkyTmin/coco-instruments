@@ -18,6 +18,7 @@ import {
   keepDot,
   KitIcon,
   SKIP_GUARD_MS,
+  SKIP_START_MS,
   SKIP_TEMPO,
   useCasLayout,
   useCasLying,
@@ -446,6 +447,12 @@ export function SlotsPage() {
   const hurry = useRef(1);
   const skipAt = useRef(-1e9);
   const reelsDone = useRef<(() => void) | null>(null);
+  // Текущий исход, время старта и число «Пропустить» за спин: второе нажатие — сразу финал.
+  const curRes = useRef<SlotsSpinOutcome | null>(null);
+  const spinAt = useRef(-1e9);
+  const skips = useRef(0);
+  // Идёт большой счёт (а не ход звена): его `rollStop` сам доводит спин до конца.
+  const paying = useRef(false);
 
   const reelsRef = useRef<HTMLDivElement>(null);
 
@@ -545,6 +552,20 @@ export function SlotsPage() {
   // Уровень — только знак и скины (v2.66): денег за него больше нет.
   const level = levelFromXp(xp);
   const broke = balance < MIN_BET && freeSpins <= 0;
+  // «Нет монет»: нажатие объясняет, откуда монеты (строка статуса, толчок плашки, вибро).
+  const [nope, setNope] = useState(0);
+  const [nopeShown, setNopeShown] = useState(false);
+  useEffect(() => {
+    if (!nope) return undefined;
+    setNopeShown(true);
+    const tm = setTimeout(() => setNopeShown(false), 2600);
+    return () => clearTimeout(tm);
+  }, [nope]);
+  const explainBroke = useCallback(() => {
+    if (!broke) return;
+    notifyWarning();
+    setNope((n) => n + 1);
+  }, [broke]);
   const canSpin = hydrated && !spinning && (freeSpins > 0 || balance >= bet);
   // На табло — копилка плюс то, что заплатит сама линия семёрок.
   const jackpotPrize = jackpotPool + lineBet(bet) * symbolOf('seven').three;
@@ -607,6 +628,7 @@ export function SlotsPage() {
 
       setCounting(true);
       setWinStep(null);
+      paying.current = true;
       wonRef.current = start;
       winOdo.current?.set(start);
       tapLight();
@@ -666,6 +688,7 @@ export function SlotsPage() {
           },
           done: () => {
             live = false;
+            paying.current = false;
             rollStop.current = null;
             wonRef.current = to;
             balOdo.current?.set(balance);
@@ -920,6 +943,10 @@ export function SlotsPage() {
       setSpinning(true);
       hurry.current = 1;
       setHurried(false);
+      curRes.current = res;
+      spinAt.current = performance.now();
+      skips.current = 0;
+      paying.current = false;
 
       // Барабаны отъехали (или их остановил «Пропустить») — дальше каскад или деньги.
       const reelTimers: ReturnType<typeof setTimeout>[] = [];
@@ -944,29 +971,77 @@ export function SlotsPage() {
   );
 
   /**
+   * Второе «Пропустить»: всё, что ещё впереди, случается сразу — итоговое поле, сумма, баланс.
+   * Исход решён в момент спина, поэтому пропуск меняет только показ.
+   */
+  const skipAll = useCallback(() => {
+    const res = curRes.current;
+    if (!res) return;
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    if (reelsDone.current) {
+      reelsDone.current = null;
+      setSlam((n) => n + 1);
+    }
+    stopReelSound();
+    dustStop.current?.();
+    setCelebration(null);
+    // Большой счёт уже идёт — его стоп сам ставит итог и закрывает спин (`done` → `finish`).
+    if (paying.current && rollStop.current) {
+      rollStop.current();
+      return;
+    }
+    rollStop.current?.();
+    rollStop.current = null;
+    const last = res.steps[res.steps.length - 1];
+    if (last) {
+      shownGrid.current = last.next;
+      setBoard(gridToBoard(last.next, `${res.steps.length}-end`));
+    }
+    setCascade(null);
+    setChain(0);
+    setStepWins([]);
+    wonRef.current = res.total;
+    winOdo.current?.set(res.total);
+    finish(res);
+  }, [finish]);
+
+  /**
    * «Пропустить» — та же кнопка «Крутить», пока спин идёт: исход уже решён, правила не
-   * тронуты. Первое нажатие ставит барабаны на место сразу; следующие досчитывают текущий
-   * ход, а оставшиеся звенья и счёт идут в темпе SKIP_TEMPO (обычный спин — как турбо).
+   * тронуты. Первое нажатие ставит барабаны на место и переводит остаток в темп SKIP_TEMPO
+   * (звенья и счёт вдвое быстрее); второе — сразу итог (`skipAll`). Первые SKIP_START_MS
+   * после старта нажатие не считается: двойной тап не съедает показ спина.
    */
   const skip = useCallback(() => {
     if (!spinning) return;
-    skipAt.current = performance.now();
-    const land = reelsDone.current;
-    if (land) {
-      tapLight();
-      setSlam((n) => n + 1);
-      land();
+    const now = performance.now();
+    if (now - spinAt.current < SKIP_START_MS) return;
+    skipAt.current = now;
+    skips.current += 1;
+    tapLight();
+    if (skips.current >= 2) {
+      skipAll();
       return;
     }
     hurry.current = SKIP_TEMPO;
     setHurried(true);
-    if (!skipCount()) tapLight();
-  }, [spinning, skipCount]);
+    const land = reelsDone.current;
+    if (land) {
+      setSlam((n) => n + 1);
+      land();
+      return;
+    }
+    skipCount();
+  }, [spinning, skipCount, skipAll]);
   // Спин от игрока (кнопка, Space, «A»): тап сразу после «Пропустить» нового спина не начинает.
   const pressSpin = useCallback(() => {
     if (performance.now() - skipAt.current < SKIP_GUARD_MS) return;
+    if (broke) {
+      explainBroke();
+      return;
+    }
     spin();
-  }, [spin]);
+  }, [spin, broke, explainBroke]);
 
   // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
   useEffect(() => {
@@ -1382,7 +1457,9 @@ export function SlotsPage() {
             текст в нём на телефоне выходил 9–14 px. Здесь он кегля набора, высота
             постоянная — спины меняют только содержимое. */}
         <div className="cabinet__status cas-status">
-          {cascade || counting ? (
+          {nopeShown && !spinning ? (
+            <span className="status">{tr('slots.status.broke')}</span>
+          ) : cascade || counting ? (
             <>
               <span className={`status status--combo status--t${tier}`}>
                 {/* Во время счёта строка говорит только, что идёт счёт.
@@ -1434,7 +1511,9 @@ export function SlotsPage() {
               )}
             </>
           ) : (
-            <span className="status status--hint">{tr('slots.status.hintLever')}</span>
+            <span className="status status--hint">
+              {broke ? tr('slots.brokeHint') : tr('slots.status.hintLever')}
+            </span>
           )}
         </div>
 
@@ -1460,6 +1539,8 @@ export function SlotsPage() {
           busy={spinning}
           onSpin={() => (auto > 0 ? stopAuto() : pressSpin())}
           onSkip={skip}
+          onBlocked={explainBroke}
+          nope={nope}
           spinLabel={
             auto > 0
               ? tr('slots.btn.stopShort')

@@ -93,6 +93,7 @@ export const slots = {
   anyWin: 'ЕСТЬ ВЫИГРЫШ',
   payout: 'выплата ×{n}',
   status: {
+    broke: 'Монеты добывают в шахте',
     counting: 'Считаем…',
     combo: 'Комбо ×{n}!',
     chain: 'Цепочка ×{n}!',

@@ -531,10 +531,45 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   z-index: 2;
 }
 /* Skip: the same gold plate (a press always does something), the skip arrows in front. */
-.cas-spin.is-skip {
-  gap: calc(2 * var(--u));
+/* «Нет монет» tapped: one art pixel left-right-left, no transition elsewhere. */
+.cas-spin.is-nope {
+  animation: cas-nope 0.3s steps(1, end);
 }
-.cas-spin.is-skip > .px-i {
+@keyframes cas-nope {
+  0%,
+  50% {
+    translate: calc(-1 * var(--u)) 0;
+  }
+  25%,
+  75% {
+    translate: var(--u) 0;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cas-spin.is-nope {
+    animation: none;
+  }
+}
+/* The label set in one cell (see CasDeck): the cell is as wide as the longest label. */
+.cas-spin__t {
+  display: inline-grid;
+  justify-items: center;
+  align-items: center;
+}
+.cas-spin__l {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  visibility: hidden;
+}
+.cas-spin__l.is-on {
+  visibility: visible;
+}
+.cas-spin__l > .px-i {
   flex: none;
 }
 /* The key sits on the corner like on the small buttons: the label keeps the whole width. */
@@ -907,6 +942,13 @@ html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .c
   flex-wrap: wrap;
   height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
   overflow: hidden;
+}
+/* Out of coins: the hint moves to the status line (4 lines in a half-width cell pushed the deck
+   38 px down); the facts keep their places. */
+html:is([data-ff='tablet'], [data-ff='desktop'])
+  .cas--slots[data-lay='wide']
+  .cas-hist:has(.cas-broke) {
+  display: none;
 }
 /* The quick bets go to one row of six: the deck gives the facts its height. */
 html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-chips {

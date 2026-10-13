@@ -89,6 +89,7 @@ export const slots: Translation<typeof ru> = {
   anyWin: 'KAZANÇ VAR',
   payout: 'ödeme ×{n}',
   status: {
+    broke: 'Altınlar madenden gelir',
     counting: 'Sayıyoruz…',
     combo: 'Kombo ×{n}!',
     chain: 'Zincir ×{n}!',

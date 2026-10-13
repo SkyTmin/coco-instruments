@@ -17,6 +17,7 @@ import {
   keepDot,
   KitIcon,
   SKIP_GUARD_MS,
+  SKIP_START_MS,
   SKIP_TEMPO,
   useCasLayout,
   useCasLying,
@@ -532,6 +533,12 @@ export function ScatterPage() {
   const hurry = useRef(1);
   const skipAt = useRef(-1e9);
   const reelsDone = useRef<(() => void) | null>(null);
+  // Текущий исход, время старта и число «Пропустить» за спин: второе нажатие — сразу финал.
+  const curRes = useRef<ScatterSpinOutcome | null>(null);
+  const spinAt = useRef(-1e9);
+  const skips = useRef(0);
+  // Идёт большой счёт (а не ход звена): его `rollStop` сам доводит спин до конца.
+  const paying = useRef(false);
   const [board, setBoard] = useState<Board | null>(null);
   /** Поле, каким оно отрисовано сейчас, — для досыпки после сбора сфер. */
   const boardNow = useRef<Board | null>(null);
@@ -685,6 +692,20 @@ export function ScatterPage() {
   const stake = inBonus || freeSpins > 0 ? 0 : Math.round(bet * (ante ? ANTE_COST : 1));
   const buyCost = Math.round(bet * BUY_BONUS_COST);
   const broke = balance < MIN_BET && freeSpins <= 0 && !inBonus;
+  // «Нет монет»: нажатие объясняет, откуда монеты (строка статуса, толчок плашки, вибро).
+  const [nope, setNope] = useState(0);
+  const [nopeShown, setNopeShown] = useState(false);
+  useEffect(() => {
+    if (!nope) return undefined;
+    setNopeShown(true);
+    const tm = setTimeout(() => setNopeShown(false), 2600);
+    return () => clearTimeout(tm);
+  }, [nope]);
+  const explainBroke = useCallback(() => {
+    if (!broke) return;
+    notifyWarning();
+    setNope((n) => n + 1);
+  }, [broke]);
   const canSpin = hydrated && !spinning && balance >= stake;
   const tier = tierOf(chain);
   const marking =
@@ -781,6 +802,7 @@ export function ScatterPage() {
 
       setCounting(true);
       setWinStep(null);
+      paying.current = true;
       wonRef.current = start;
       winOdo.current?.set(start);
       tapLight();
@@ -840,6 +862,7 @@ export function ScatterPage() {
           },
           done: () => {
             live = false;
+            paying.current = false;
             rollStop.current = null;
             wonRef.current = to;
             balOdo.current?.set(balance);
@@ -1402,6 +1425,10 @@ export function ScatterPage() {
     setSpinning(true);
     hurry.current = 1;
     setHurried(false);
+    curRes.current = res;
+    spinAt.current = performance.now();
+    skips.current = 0;
+    paying.current = false;
 
     stopReelSound();
     if (!reduceMotion()) startReelSound(turbo);
@@ -1438,13 +1465,69 @@ export function ScatterPage() {
   }, [hydrated, spinning, balance, stake, playScatter, turbo, playOrbs]);
 
   /**
+   * Второе «Пропустить»: всё, что ещё впереди, случается сразу — итоговое поле (сферы уже
+   * собраны, дыры досыпаны), сумма, баланс. Исход решён в момент спина: меняется только показ.
+   */
+  const skipAll = useCallback(() => {
+    const res = curRes.current;
+    if (!res) return;
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    if (reelsDone.current) {
+      reelsDone.current = null;
+      setSlam((n) => n + 1);
+    }
+    stopReelSound();
+    dustStop.current?.();
+    mergeSkip.current = null;
+    setCelebration(null);
+    setSolo(null);
+    setMerging(null);
+    setCollectOut(false);
+    // Большой счёт уже идёт — его стоп сам ставит итог и закрывает спин (`done` → `finish`).
+    if (paying.current && rollStop.current) {
+      rollStop.current();
+      return;
+    }
+    rollStop.current?.();
+    rollStop.current = null;
+    const last = res.steps[res.steps.length - 1];
+    let end = gridToBoard(last ? last.next : res.grid, `${res.steps.length}-end`);
+    if (res.orbs.length && res.applied > 1 && res.base > 0)
+      end = dropHoles(
+        end,
+        new Set(res.orbs.map((o) => `${o.col}-${o.row}`)),
+        `refill-${res.steps.length}`,
+      );
+    shownGrid.current = end.map((col) => col.map((cell) => cell.id));
+    setBoard(end);
+    setCascade(null);
+    setChain(0);
+    setStepWins([]);
+    wonRef.current = res.total;
+    winOdo.current?.set(res.total);
+    finish(res);
+  }, [finish]);
+
+  /**
    * «Пропустить» — та же кнопка «Крутить», пока спин идёт: исход уже решён, правила не
-   * тронуты. Первое нажатие ставит колонки на место сразу; следующие досчитывают текущий ход
-   * (и дожимают слияние сфер), а оставшиеся звенья и счёт идут в темпе SKIP_TEMPO.
+   * тронуты. Первое нажатие ставит колонки на место и переводит остаток в темп SKIP_TEMPO
+   * (звенья, сбор сфер и счёт быстрее, текущий ход досчитан); второе — сразу итог
+   * (`skipAll`). Первые SKIP_START_MS после старта нажатие не считается.
    */
   const skip = useCallback(() => {
     if (!spinning) return;
-    skipAt.current = performance.now();
+    const now = performance.now();
+    if (now - spinAt.current < SKIP_START_MS) return;
+    skipAt.current = now;
+    skips.current += 1;
+    if (skips.current >= 2) {
+      tapLight();
+      skipAll();
+      return;
+    }
+    hurry.current = SKIP_TEMPO;
+    setHurried(true);
     const land = reelsDone.current;
     if (land) {
       tapLight();
@@ -1452,15 +1535,17 @@ export function ScatterPage() {
       land();
       return;
     }
-    hurry.current = SKIP_TEMPO;
-    setHurried(true);
     if (!skipCount()) tapLight();
-  }, [spinning, skipCount]);
+  }, [spinning, skipCount, skipAll]);
   // Спин от игрока (кнопка, Space, «A»): тап сразу после «Пропустить» нового спина не начинает.
   const pressSpin = useCallback(() => {
     if (performance.now() - skipAt.current < SKIP_GUARD_MS) return;
+    if (broke) {
+      explainBroke();
+      return;
+    }
     spin();
-  }, [spin]);
+  }, [spin, broke, explainBroke]);
 
   // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
   useAction(
@@ -1872,7 +1957,9 @@ export function ScatterPage() {
             текст в нём на телефоне выходил 9–14 px. Здесь он кегля набора, высота
             постоянная — спины меняют только содержимое. */}
         <div className="cabinet__status cas-status">
-          {cascade || counting ? (
+          {nopeShown && !spinning ? (
+            <span className="status">{tr('slots.status.broke')}</span>
+          ) : cascade || counting ? (
             <>
               <span className={`status status--combo status--t${tier}`}>
                 {/* Во время счёта строка говорит только, что идёт счёт.
@@ -1941,6 +2028,8 @@ export function ScatterPage() {
           busy={spinning}
           onSpin={() => (auto > 0 ? stopAuto() : pressSpin())}
           onSkip={skip}
+          onBlocked={explainBroke}
+          nope={nope}
           spinLabel={
             auto > 0
               ? tr('slots.btn.stopShort')

@@ -89,6 +89,7 @@ export const slots: Translation<typeof ru> = {
   anyWin: 'WINNER',
   payout: 'payout ×{n}',
   status: {
+    broke: 'Coins come from the mine',
     counting: 'Counting…',
     combo: 'Combo ×{n}!',
     chain: 'Chain ×{n}!',

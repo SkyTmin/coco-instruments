@@ -108,12 +108,17 @@ export function useReelSpin<T>(
 }
 
 /** Tempo of the rest of a spin after the Skip press (× the turbo factor): links and the count. */
-export const SKIP_TEMPO = 0.5;
+export const SKIP_TEMPO = 0.45;
 /**
  * После «Пропустить» кнопка снова «Крутить», и быстрый второй тап запускал новый спин (ставка!).
  * Тап «Крутить» раньше этого срока после пропуска — мимо (Android DOUBLE_TAP_TIMEOUT = 300 мс).
  */
 export const SKIP_GUARD_MS = 350;
+/**
+ * Зеркало: «Пропустить» раньше этого срока после старта спина не считается — двойной тап
+ * (90 мс) запускал спин и тут же съедал весь показ.
+ */
+export const SKIP_START_MS = 250;
 
 /** Строка правил «A · B»: точка держится за левую половину, перенос — после неё. */
 export const keepDot = (s: string) => s.replace(/ · /g, '\u00a0· ');
@@ -261,6 +266,10 @@ export interface DeckProps {
    */
   onSkip?: () => void;
   spinDisabled: boolean;
+  /** A tap on the plate while it is off: the page says why (status line, haptic). */
+  onBlocked?: () => void;
+  /** Bumped by the page when a spin was refused: the plate shakes by one art pixel. */
+  nope?: number;
   busy: boolean;
   onSpin: () => void;
   auto: number;
@@ -336,10 +345,36 @@ export function CasDeck(p: DeckProps) {
   const autoOn = p.auto > 0;
   // Auto keeps its «Stop» plate; otherwise a running spin turns the plate into «Skip».
   const skipping = p.spinning && !!p.onSkip && !autoOn;
-  const spinText = skipping ? t('slots.btn.skip') : p.spinLabel;
-  // A long verb steps its font down (then wraps at the smallest step), never an ellipsis.
-  const spinRef = useFitText<HTMLSpanElement>(spinText, true);
+  const skipText = t('slots.btn.skip');
+  const spinText = skipping ? skipText : p.spinLabel;
+  // Every label the plate can show (spin, free, bonus, broke, stop, skip with its icon) sits in
+  // one grid cell, only the current one visible: the font step is found once for the longest of
+  // them, so «Крутить» → «Пропустить» no longer shrinks and grows the text on every spin. A long
+  // verb steps the font down (then wraps at the smallest step), never an ellipsis.
+  const labels = [
+    ...new Set([
+      p.spinLabel,
+      t('slots.btn.spinShort'),
+      t('slots.btn.freeShort'),
+      t('slots.btn.bonusShort'),
+      t('slots.btn.brokeShort'),
+      t('slots.btn.stopShort'),
+      skipText,
+    ]),
+  ];
+  const spinRef = useFitText<HTMLSpanElement>(labels.join('|'), true);
   const betPress = usePress<HTMLButtonElement>();
+  // «Нет монет»: the plate shakes one art pixel (class restarted on each refusal).
+  useEffect(() => {
+    if (!p.nope) return undefined;
+    const el = root.current?.querySelector<HTMLElement>('.cas-spin');
+    if (!el) return undefined;
+    el.classList.remove('is-nope');
+    void el.offsetWidth;
+    el.classList.add('is-nope');
+    const tm = setTimeout(() => el.classList.remove('is-nope'), 400);
+    return () => clearTimeout(tm);
+  }, [p.nope]);
   return (
     <div className="cas-deck px" ref={root}>
       {p.extra && <div className="cas-deck__extra">{p.extra}</div>}
@@ -436,13 +471,24 @@ export function CasDeck(p: DeckProps) {
               p.onSkip?.();
               return;
             }
-            if (p.spinDisabled) return;
+            if (p.spinDisabled) {
+              p.onBlocked?.();
+              return;
+            }
             p.onSpin();
           }}
         >
-          {skipping && <Icon name="skip" />}
           <span className="cas-spin__t" ref={spinRef}>
-            {spinText}
+            {labels.map((l) => (
+              <span
+                key={l}
+                className={`cas-spin__l${l === spinText ? ' is-on' : ''}`}
+                aria-hidden={l === spinText ? undefined : true}
+              >
+                {l === skipText && <Icon name="skip" />}
+                {l}
+              </span>
+            ))}
           </span>
           {!skipping && p.spinBadge != null && (
             <b className="cas-mini__n cas-spin__n px-num">{p.spinBadge}</b>
