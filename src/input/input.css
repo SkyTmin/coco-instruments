@@ -95,8 +95,11 @@
    ячейки — две клавиши и кнопка геймпада. */
 .ibind {
   --ibind-cell: 50px;
-  display: flex;
-  flex-direction: column;
+  /* Одна сетка на весь список (строки — subgrid): колонка растёт под самую
+     длинную подпись («Leertaste», «Controller»), а не режет её. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(var(--ibind-cell), max-content));
+  column-gap: 6px;
   color: var(--gx-ink, #3b2a1a);
   font:
     600 1em/1.2 'GxRubik',
@@ -109,11 +112,19 @@
   }
 }
 .ibind__cols,
+.ibind__group,
 .ibind__row {
+  grid-column: 1 / -1;
   display: grid;
+  /* Без subgrid (старый WebView) — ровные колонки, длинное слово обрежется. */
   grid-template-columns: minmax(0, 1fr) repeat(3, var(--ibind-cell));
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 6px;
+  column-gap: 6px;
+}
+.ibind__h,
+.ibind__foot {
+  grid-column: 1 / -1;
 }
 .ibind__cols {
   position: sticky;

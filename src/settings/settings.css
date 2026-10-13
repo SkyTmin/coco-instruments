@@ -68,6 +68,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Narrow window (phone portrait): five labels never fit in all languages
+   («Kontroller», «Commandes», «Vibrazione» were cut). Only the open tab shows
+   its label and takes the room; the others keep the icon, and the label stays
+   for screen readers. */
+@container (max-width: 519.98px) {
+  .gset__tab.is-on {
+    flex-grow: 2.6;
+  }
+  .gset__tab:not(.is-on) span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
 
 .gset__h {
   display: none;
