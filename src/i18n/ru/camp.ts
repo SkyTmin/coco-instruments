@@ -116,12 +116,12 @@ export const camp = {
     lockedRank: 'Ранг {rank} → Z',
     /** After the bold number of free points. */
     free: {
-      one: 'свободных очков · престиж {prestige}',
-      few: 'свободных очков · престиж {prestige}',
+      one: 'свободное очко · престиж {prestige}',
+      few: 'свободных очка · престиж {prestige}',
       many: 'свободных очков · престиж {prestige}',
-      other: 'свободных очков · престиж {prestige}',
+      other: 'свободных очка · престиж {prestige}',
     },
-    reset: 'Сбросить перки — бесплатно',
+    reset: 'Сбросить навыки — бесплатно',
   },
   /** Amulet bonus summary: «+12% к продаже · +5% к добыче». */
   bonus: {
