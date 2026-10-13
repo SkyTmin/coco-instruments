@@ -43,23 +43,23 @@
 .arm--one {
   grid-template:
     'top' auto
-    'show' minmax(0, 12fr)
-    'list' minmax(0, 8fr)
+    'show' minmax(0, 13fr)
+    'list' minmax(0, 7fr)
     'acts' auto
     / minmax(0, 1fr);
 }
 .arm--two {
   grid-template:
     'top top' auto
-    'show show' minmax(0, 11fr)
-    'list side' minmax(0, 9fr)
+    'show show' minmax(0, 13fr)
+    'list side' minmax(0, 7fr)
     / minmax(0, 11fr) minmax(0, 9fr);
 }
 .arm--three {
   grid-template:
     'top top top' auto
     'list show side' minmax(0, 1fr)
-    / minmax(0, 6fr) minmax(0, 13fr) minmax(0, 6fr);
+    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 6fr);
 }
 /* Embedded (books in the camp sheet): no own top bar. */
 .arm.is-embed {
@@ -68,8 +68,8 @@
 .arm--one.is-embed {
   grid-template:
     'top' auto
-    'show' minmax(0, 11fr)
-    'list' minmax(0, 9fr)
+    'show' minmax(0, 7fr)
+    'list' minmax(0, 3fr)
     'acts' auto
     / minmax(0, 1fr);
 }
@@ -125,6 +125,8 @@
   min-width: 0;
   min-height: 0;
   display: grid;
+  /* its size comes from the screen's grid only — the stage below picks its arrangement from it */
+  container: arm-show / size;
 }
 .arm-stage {
   display: grid;
@@ -145,6 +147,33 @@
     'room id' minmax(0, 1fr)
     'stats stats' auto
     / minmax(0, 11fr) minmax(0, 9fr);
+}
+/* A wide, low showcase (phone landscape, tablet portrait): the same — under the plate the art
+   would get a sliver. */
+@container arm-show (aspect-ratio > 7 / 5) {
+  .arm-stage {
+    grid-template:
+      'room id' minmax(0, 1fr)
+      'stats stats' auto
+      / minmax(0, 11fr) minmax(0, 9fr);
+  }
+  .arm-stage > .arm-id {
+    align-self: center;
+  }
+  /* `.arm-stage` in front: the base rules below would win on order alone */
+  .arm-stage .arm-status {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+  .arm-stage .arm-status > :is(.px-i, .gx-icon) {
+    margin-right: var(--u);
+  }
+  .arm-stage .arm-sub {
+    flex-wrap: wrap;
+    white-space: normal;
+    min-height: calc(2 * 1.2 * var(--px-fs));
+    line-height: 1.2;
+  }
 }
 .arm--one .arm-id {
   align-self: center;
@@ -194,6 +223,7 @@
 .arm-id {
   grid-area: id;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: calc(2 * var(--u));
   min-width: 0;
@@ -207,6 +237,8 @@
   margin: 0;
   display: grid;
   align-items: end;
+  justify-self: stretch;
+  min-width: 0;
   min-height: calc(2 * 1.1 * var(--px-fs-big));
   max-width: 100%;
   font: 400 var(--px-fs-big) / 1.1 var(--px-head);
@@ -220,9 +252,11 @@ html:not([data-ff='phone-portrait']) .arm-name {
   min-height: calc(2 * 1.1 * var(--px-fs-hero));
   font-size: var(--px-fs-hero);
 }
+/* Phone landscape: the plate beside the art is narrow — «Эффективность» at the big size broke
+   inside the word. */
 html[data-ff='phone-landscape'] .arm-name {
-  min-height: calc(2 * 1.1 * var(--px-fs-big));
-  font-size: var(--px-fs-big);
+  min-height: calc(2 * 1.1 * var(--px-fs));
+  font-size: var(--px-fs);
 }
 .arm-sub {
   display: flex;
@@ -263,7 +297,8 @@ html[data-ff='phone-landscape'] .arm-name {
 .arm-stat {
   display: grid;
   grid-template:
-    'num delta' auto
+    /* a fixed number row: a delta aligned to an icon's baseline grew it by 2 px on some picks */
+    'num delta' calc(1.25 * var(--px-fs-big))
     'lbl lbl' auto
     / auto minmax(0, 1fr);
   align-items: baseline;
@@ -387,14 +422,24 @@ html[data-ff='phone-landscape'] .arm-name {
 }
 /* The name in dark ink on the parchment column (rarity colours are too light there); the
    rarity chip next to it carries the colour. */
+/* The showcase plate already names the thing big; here it only heads the column (a narrow one —
+   «Эффективность» at the big size broke inside the word). */
 .arm-info__name {
   margin: 0;
-  font: 400 var(--px-fs-big) / 1.15 var(--px-head);
+  font: 400 var(--px-fs) / 1.15 var(--px-head);
   color: var(--px-text);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+/* A phone held sideways: the column is ~150 px — the plate beside the art names it already. */
+html[data-ff='phone-landscape'] .arm-info__name {
+  display: none;
 }
 .arm-details {
   display: grid;
+  /* one column the width of the panel: an auto column grew to the widest row and the panel
+     scrolled sideways, cutting words off */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: calc(5 * var(--u));
   min-width: 0;

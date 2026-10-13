@@ -66,6 +66,11 @@
   flex-wrap: wrap;
   overflow: visible;
 }
+/* …except on a phone held sideways: four rows of tabs would leave no height for the cells. */
+html[data-ff='phone-landscape'] .arm .ivx-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
 .ivx-tab {
   display: inline-grid;
   place-items: center;

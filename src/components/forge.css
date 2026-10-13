@@ -62,10 +62,14 @@
 
 /* In-hand pick: level bar and enchantments. */
 .frg-level {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: calc(3 * var(--u));
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+}
+/* a narrow column (phone landscape) puts the numbers under the bar instead of cutting them */
+.frg-level > .px-bar {
+  flex: 1 1 calc(30 * var(--u));
 }
 .frg-level__lv {
   font-family: var(--px-head);
@@ -75,18 +79,20 @@
   display: grid;
   gap: calc(2 * var(--u));
 }
+/* Name over its effect: side by side the effect («+252% к скорости копки») took the whole row
+   and the name ran under it in a narrow column. */
 .frg-ench__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: calc(3 * var(--u));
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--u);
 }
 .frg-ench__row > b {
   color: var(--px-violet);
+  overflow-wrap: break-word;
 }
 .frg-ench__row > span {
-  text-align: right;
   color: var(--px-text);
+  overflow-wrap: break-word;
 }
 .frg-ench__row.is-off > * {
   color: var(--px-muted);

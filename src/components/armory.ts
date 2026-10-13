@@ -40,3 +40,19 @@ export function heroSize(box: { w: number; h: number }, u: number, max: number, 
   if (s <= 0) return 0;
   return Math.max(min, Math.floor(s / u) * u);
 }
+
+/**
+ * `heroSize` for art standing on the pedestal: `.arm-ped` adds 3 pedestal pixels under the art,
+ * so the square shrinks by whole `u` until art + pedestal fit the room's height.
+ */
+export function heroFit(
+  box: { w: number; h: number },
+  u: number,
+  max: number,
+  pedOf: (art: number) => number,
+  min = 48,
+): number {
+  let s = heroSize(box, u, max, min);
+  while (s > min && s + 3 * pedOf(s) > box.h) s -= u;
+  return s;
+}

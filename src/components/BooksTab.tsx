@@ -17,7 +17,7 @@ import './books.css';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
 import { PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
-import { heroSize, useArmLayout, useBox } from '@/components/armory';
+import { heroFit, useArmLayout, useBox } from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
 import { TokenIcon } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
@@ -474,9 +474,10 @@ export function BooksTab() {
   // ---- Showcase ---------------------------------------------------------------------------------
   const roomRef = useRef<HTMLSpanElement>(null);
   const roomBox = useBox(roomRef);
-  const art = heroSize(roomBox, u, 112 * u);
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const ped = Math.max(u, Math.round((art * 0.8 * dpr) / 112) / dpr);
+  const pedOf = (a: number) => Math.max(u, Math.round((a * 0.8 * dpr) / 112) / dpr);
+  const art = heroFit(roomBox, u, 112 * u, pedOf);
+  const ped = pedOf(art);
 
   let rarity = 0;
   let hero: ReactNode = null;

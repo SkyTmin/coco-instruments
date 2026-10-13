@@ -26,7 +26,7 @@ import {
   rarityVars,
 } from '@/components/PickArt';
 import { preloadPx, PxStrip } from '@/components/PxStrip';
-import { heroSize, useArmLayout, useBox } from '@/components/armory';
+import { heroFit, useArmLayout, useBox } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
 import { nameIn, pickTitle } from '@/i18n/data-mine';
@@ -307,7 +307,7 @@ export function ForgeScreen({
   // ---- Витрина: кирка крупно, имя, ступень, состояние, три цифры ----------------------------
   const roomRef = useRef<HTMLSpanElement>(null);
   const room = useBox(roomRef);
-  const art = heroSize(room, u, 64 * u * 4);
+  const art = heroFit(room, u, 64 * u * 4, (a) => pedPx(a, u));
   const dim = st === 'locked' || (st === 'next' && !ready);
   const selSpeed = pickSpeed(floor, sel, m);
   const statusText =

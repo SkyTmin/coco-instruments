@@ -6,6 +6,12 @@
 .bkx {
   min-height: 0;
 }
+/* The books open as a one-tab camp (no tab row to keep steady): like the forge and the backpack,
+   the window takes the whole screen, so the showcase gets half of it. */
+.gx-win > .gx-win__box.gx-camp.is-single:has(.bkx) {
+  --gx-mw: 9999;
+  height: 100%;
+}
 .bkx .bkx-top {
   grid-template-columns: minmax(0, 1fr);
   justify-items: end;
