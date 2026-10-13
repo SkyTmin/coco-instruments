@@ -1110,6 +1110,11 @@ html:not([data-ff^='phone']) .mn .mn-bag__sell {
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+/* Окно с содержимым набора рамка C делает 420u (под колонки Питомника); листу шахты —
+   обычные 200u, как прежде. */
+.gx-win .gx-win__box:has(.gx-win__body > .mn-sheet) {
+  --gx-mw: 200;
+}
 .mn-sheet b {
   font-weight: 700;
 }
