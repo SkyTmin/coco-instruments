@@ -60,8 +60,7 @@
       var(--st-seam) calc(100% - 22 * var(--u)) calc(100% - 21 * var(--u)),
       var(--st-floor) calc(100% - 21 * var(--u))
     ),
-    linear-gradient(var(--st-veil), var(--st-veil)),
-    var(--tile);
+    linear-gradient(var(--st-veil), var(--st-veil)), var(--tile);
   background-size:
     100% 100%,
     100% 100%,
