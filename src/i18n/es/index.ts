@@ -5,6 +5,7 @@ import { common } from './common';
 import { creative } from './creative';
 import { dfloors } from './dfloors';
 import { dgear } from './dgear';
+import { dlines } from './dlines';
 import { dmats } from './dmats';
 import { dmobs } from './dmobs';
 import { dungeon } from './dungeon';
@@ -26,6 +27,7 @@ const es: Translation<Catalog> = {
   creative,
   dfloors,
   dgear,
+  dlines,
   dmats,
   dmobs,
   dungeon,
