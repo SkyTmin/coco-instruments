@@ -7,7 +7,7 @@
 // светятся цветом редкости ДО того, как яйцо лопнет: «что-то редкое» видно
 // заранее, и в эту секунду смотрят не отрываясь.
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { GxBar, GxModal, KIcon } from '@/components/gx';
@@ -96,6 +96,32 @@ export const PetsTab = memo(function PetsTab() {
   // Phone landscape: the «Питомцы / Яйца» tabs are a rail on the left (icons; the word is the
   // tip and the aria name) — the full-width row cost the stage 44 px of a 390-px screen.
   const rail = useFormFactor().ff === 'phone-landscape';
+  // A tab word that doesn't fit beside its icon («Yumurtalar» on a 360-px phone) drops the icons
+  // of the row instead of an ellipsis (kit rule: never cut a primary label). Measured, so it
+  // follows the language, the text size and the width.
+  const ppnRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const row = ppnRef.current?.querySelector<HTMLElement>('.ppn__tabs');
+    if (!row || rail) return undefined;
+    const check = () => {
+      row.classList.remove('is-tight');
+      const cut = [...row.querySelectorAll<HTMLElement>('.px-tab__label')].some(
+        (l) => l.scrollWidth > l.clientWidth + 0.5,
+      );
+      row.classList.toggle('is-tight', cut);
+    };
+    check();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    let w = row.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (row.clientWidth !== w) {
+        w = row.clientWidth;
+        check();
+      }
+    });
+    ro.observe(row);
+    return () => ro.disconnect();
+  }, [rail, t]);
   /** Pets (the pixel Nursery) or eggs; a ready nest opens straight on the eggs. */
   const [view, setView] = useState<'pets' | 'eggs'>(() =>
     p.nest.some((n) => n.left <= 0) ? 'eggs' : 'pets',
@@ -188,7 +214,7 @@ export const PetsTab = memo(function PetsTab() {
   };
 
   return (
-    <div className={`ppn is-${view}${rail ? ' ppn--rail' : ''}`}>
+    <div ref={ppnRef} className={`ppn is-${view}${rail ? ' ppn--rail' : ''}`}>
       <Tabs
         className="ppn__tabs"
         vertical={rail}

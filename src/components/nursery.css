@@ -962,8 +962,10 @@
   right: calc(-2 * var(--u));
   z-index: 2;
 }
-/* Large text on a phone: the word wins over the icon (Turkish «Yumurtalar» at 23 px). */
-html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i {
+/* A word that doesn't fit beside its icon (PetsTab measures it: Turkish «Yumurtalar» on a
+   360-px phone, any long word at the large text size): the word wins, the row drops its icons. */
+html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i,
+.ppn__tabs.is-tight > .px-tab > .px-i {
   display: none;
 }
 
