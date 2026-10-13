@@ -58,6 +58,8 @@ export const books: Translation<typeof ru> = {
     mythic: 'Mythische Spitzhacke',
     divine: 'Himmlische Spitzhacke',
   },
+  pct: '{v} %',
+  pctRange: '{a}–{b} %',
   mageName: 'Verzauberer',
   dust: '{v} Staub',
   onPick: 'Bücher in der Spitzhacke: {a} von {b}',

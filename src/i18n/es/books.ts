@@ -58,6 +58,8 @@ export const books: Translation<typeof ru> = {
     mythic: 'Pico mítico',
     divine: 'Pico celestial',
   },
+  pct: '{v} %',
+  pctRange: '{a}–{b} %',
   mageName: 'Encantador',
   dust: 'Polvo {v}',
   onPick: 'Libros en el pico: {a} de {b}',

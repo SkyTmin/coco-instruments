@@ -58,6 +58,8 @@ export const books: Translation<typeof ru> = {
     mythic: 'Pioche mythique',
     divine: 'Pioche céleste',
   },
+  pct: '{v} %',
+  pctRange: '{a}–{b} %',
   mageName: 'Enchanteur',
   dust: 'Poussière {v}',
   onPick: 'Livres dans la pioche : {a} sur {b}',

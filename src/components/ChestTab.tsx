@@ -288,7 +288,7 @@ export function ChestTab({ onGain }: { onGain: (from: number, to: number) => voi
           <span key={id} className="pch-odd" style={rarityVars(CHEST_RARITY[id])}>
             <ChestArt tier={id} size={48} />
             <b>{t(`chests.tier.${id}`)}</b>
-            <i>{caseTierOf(id).weight}%</i>
+            <i>{t('books.pct', { v: caseTierOf(id).weight })}</i>
           </span>
         ))}
       </div>

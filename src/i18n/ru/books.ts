@@ -65,6 +65,9 @@ export const books = {
     mythic: 'Мифическая кирка',
     divine: 'Божественная кирка',
   },
+  /** Bare percent of chips and odds (tr: «%40»). */
+  pct: '{v}%',
+  pctRange: '{a}–{b}%',
   mageName: 'Чародей',
   dust: '{v} пыли',
   onPick: 'Книг в кирке: {a} из {b}',

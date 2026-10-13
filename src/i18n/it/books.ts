@@ -58,6 +58,8 @@ export const books: Translation<typeof ru> = {
     mythic: 'Piccone mitico',
     divine: 'Piccone celeste',
   },
+  pct: '{v}%',
+  pctRange: '{a}–{b}%',
   mageName: 'Incantatore',
   dust: 'Polvere {v}',
   onPick: 'Libri nel piccone: {a} su {b}',

@@ -380,7 +380,8 @@ export function BooksTab() {
                 <BookArt tier={bt.id} size={56} glow={can} />
                 <b>{bookTierName(bt.id)}</b>
                 <i>
-                  {ROMAN[bt.lvl[0] - 1]}–{ROMAN[bt.lvl[1] - 1]} · {bt.chance[0]}–{bt.chance[1]}%
+                  {ROMAN[bt.lvl[0] - 1]}–{ROMAN[bt.lvl[1] - 1]} ·{' '}
+                  {t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] })}
                 </i>
                 <span className="pbk-tier__price">
                   {fmt(bt.price)} <TokenIcon size={13} />
@@ -418,7 +419,9 @@ export function BooksTab() {
                 >
                   <BookArt book={b} size={54} />
                   <em className="pbk-book__lv">{ROMAN[b.lvl - 1]}</em>
-                  <span className={`pbk-book__ch is-${chanceTone(b.chance)}`}>{b.chance}%</span>
+                  <span className={`pbk-book__ch is-${chanceTone(b.chance)}`}>
+                    {t('books.pct', { v: b.chance })}
+                  </span>
                   {check === 'ok' && <i className="pbk-book__up" title={t('books.canApply')} />}
                   {mate && <GxIcon name="anvil" size={14} className="pbk-book__anvil" />}
                 </button>
@@ -659,7 +662,7 @@ function BookSheet({
                 style={{ left: `${b.chance}%`, width: `${chance - b.chance}%` }}
               />
             </span>
-            <b>{chance}%</b>
+            <b>{t('books.pct', { v: chance })}</b>
           </div>
           {need > 0 && (
             <button
@@ -1098,7 +1101,7 @@ function ApplyScene({
         </span>
       </div>
       <div className="pbka__text">
-        {phase === 'spin' && <b className="pbka__odds">{c}%</b>}
+        {phase === 'spin' && <b className="pbka__odds">{tx('books.pct', { v: c })}</b>}
         {told && phase === 'ok' && (
           <>
             <RarityName rarity={r}>{tx('books.applied', { name: bookName(b) })}</RarityName>

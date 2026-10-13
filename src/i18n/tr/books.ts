@@ -58,6 +58,8 @@ export const books: Translation<typeof ru> = {
     mythic: 'Mitik Kazma',
     divine: 'Göksel Kazma',
   },
+  pct: '%{v}',
+  pctRange: '%{a}–{b}',
   mageName: 'Büyücü',
   dust: '{v} toz',
   onPick: 'Kazmadaki kitap: {a}/{b}',

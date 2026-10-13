@@ -58,6 +58,8 @@ export const books: Translation<typeof ru> = {
     mythic: 'Mythic Pickaxe',
     divine: 'Celestial Pickaxe',
   },
+  pct: '{v}%',
+  pctRange: '{a}–{b}%',
   mageName: 'Enchanter',
   dust: '{v} dust',
   onPick: 'Books in the pickaxe: {a} of {b}',
