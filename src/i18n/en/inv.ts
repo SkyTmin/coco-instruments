@@ -35,7 +35,7 @@ export const inv: Translation<typeof ru> = {
   forPick: "for the pickaxe",
   bookSub: "chance {n}% · {tier}",
   bookTier: {
-    simple: "plain",
+    simple: "simple",
     rare: "rare",
     epic: "epic",
     legend: "legendary",

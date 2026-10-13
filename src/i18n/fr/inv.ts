@@ -33,7 +33,7 @@ export const inv: Translation<typeof ru> = {
   blockSub: "bloc entier",
   deepOre: "minerai du donjon",
   forPick: "pour la pioche",
-  bookSub: "chance {n} % · {tier}",
+  bookSub: "chance {n} % · {tier}",
   bookTier: {
     simple: "simple",
     rare: "rare",
@@ -50,9 +50,9 @@ export const inv: Translation<typeof ru> = {
   tokens: "Jetons",
   chestKey: "Clé de coffre",
   dust: "Poussière d'enchantement",
-  dustSub: "+1 % de chance de livre",
+  dustSub: "+1 % de chance de livre",
   pearl: "Perle",
-  pearlSub: "+0,5 % au prix de vente",
+  pearlSub: "+0,5 % au prix de vente",
   parcel: "Colis · {tier}",
   blocksLeft: {
     one: "encore {n} bloc",

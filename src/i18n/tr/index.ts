@@ -3,6 +3,10 @@ import type { Translation } from '../types';
 import { cash } from './cash';
 import { common } from './common';
 import { creative } from './creative';
+import { dfloors } from './dfloors';
+import { dgear } from './dgear';
+import { dmats } from './dmats';
+import { dmobs } from './dmobs';
 import { dungeon } from './dungeon';
 import { field } from './field';
 import { hall } from './hall';
@@ -20,6 +24,10 @@ const tr: Translation<Catalog> = {
   cash,
   common,
   creative,
+  dfloors,
+  dgear,
+  dmats,
+  dmobs,
   dungeon,
   field,
   hall,

@@ -35,7 +35,7 @@ export const inv: Translation<typeof ru> = {
   forPick: "para el pico",
   bookSub: "prob. {n} % · {tier}",
   bookTier: {
-    simple: "sencillo",
+    simple: "simple",
     rare: "raro",
     epic: "épico",
     legend: "legendario",

@@ -35,7 +35,7 @@ export const inv: Translation<typeof ru> = {
   forPick: "kazma için",
   bookSub: "şans %{n} · {tier}",
   bookTier: {
-    simple: "sade",
+    simple: "basit",
     rare: "nadir",
     epic: "destansı",
     legend: "efsanevi",

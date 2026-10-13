@@ -206,7 +206,7 @@ export const dungeon: Translation<typeof ru> = {
     inLair: "dans son antre",
     beaten: "vaincu",
     newIn: "nouvelle dans {time}",
-    dug: "{n} % creusé",
+    dug: "{n} % creusé",
     full: "pleine",
     up: "Remontée",
     liftDown: "le monte-charge descend…",
