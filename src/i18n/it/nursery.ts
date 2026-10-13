@@ -25,6 +25,7 @@ export const nursery: Translation<typeof ru> = {
     sleep: 'Sonno',
   },
   lvMax: 'Max',
+  lvPct: 'Liv. {n} · {p}%',
   patXp: '+{n} XP',
   power: 'Potenza',
   gold: 'Dorato',
@@ -36,6 +37,7 @@ export const nursery: Translation<typeof ru> = {
   take: 'Porta con te',
   leave: 'Lascia a casa',
   details: 'Dettagli',
+  anims: 'Movimenti',
   unknown: 'Chi è?',
   from: 'Nasce dalle uova',
   eggPct: '{v}%',
@@ -58,6 +60,15 @@ export const nursery: Translation<typeof ru> = {
     token: { name: 'Collezionista', text: '+{v}% gettoni' },
     luck: { name: 'Fortunello', text: '+{v}% chiavi e scoperte' },
     rate: { name: 'Irrequieto', text: '+{v}% ritmo dei colpi' },
+  },
+  /** Stat nouns of the details table (one line per stat: icon, noun, value). */
+  stat: {
+    loot: 'Bottino',
+    sell: 'Vendita',
+    dmg: 'Scavo',
+    token: 'Gettoni',
+    luck: 'Fortuna',
+    rate: 'Ritmo',
   },
   egg: { moss: 'Muschio', stone: 'Pietra', crystal: 'Cristallo', dragon: 'Drago' },
 };

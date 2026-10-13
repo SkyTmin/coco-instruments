@@ -7,7 +7,7 @@
 // светятся цветом редкости ДО того, как яйцо лопнет: «что-то редкое» видно
 // заранее, и в эту секунду смотрят не отрываясь.
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { GxBar, GxModal, KIcon } from '@/components/gx';
@@ -15,6 +15,7 @@ import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
 import { Nursery } from '@/components/Nursery';
 import { Tabs } from '@/ui-px';
+import { useFormFactor } from '@/game-shell';
 import { fmtNum, fmtShort, petName, t as tl, useT } from '@/i18n';
 import { eggName } from '@/i18n/data-books';
 import { PxStrip, preloadPx } from '@/components/PxStrip';
@@ -84,12 +85,55 @@ function OddsBar({ egg }: { egg: EggId }) {
   );
 }
 
-export function PetsTab() {
+/** Memoised (no props): the camp re-renders every second (`useNow` in `PrisonCamp`); the tab
+ *  follows the store and its own state only. */
+export const PetsTab = memo(function PetsTab() {
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const hatch = useFinanceStore((s) => s.prisonHatch);
   const buyEgg = useFinanceStore((s) => s.prisonEggBuy);
   const t = useT();
+  // Phone landscape: the «Питомцы / Яйца» tabs are a rail on the left (icons; the word is the
+  // tip and the aria name) — the full-width row cost the stage 44 px of a 390-px screen.
+  const rail = useFormFactor().ff === 'phone-landscape';
+  // A tab word that doesn't fit beside its icon («Yumurtalar» on a 360-px phone) drops the icons
+  // of the row instead of an ellipsis (kit rule: never cut a primary label). Measured, so it
+  // follows the language, the text size and the width.
+  const ppnRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const row = ppnRef.current?.querySelector<HTMLElement>('.ppn__tabs');
+    if (!row || rail) return undefined;
+    // Fractional widths: «Yumurtalar» at 360 px is 113.16 px of text in a 113.00-px box, and
+    // scrollWidth / clientWidth are both the integer 113 (critic R36).
+    const check = () => {
+      row.classList.remove('is-tight');
+      const range = document.createRange();
+      const cut = [...row.querySelectorAll<HTMLElement>('.px-tab__label')].some((l) => {
+        range.selectNodeContents(l);
+        return range.getBoundingClientRect().width > l.getBoundingClientRect().width + 0.01;
+      });
+      row.classList.toggle('is-tight', cut);
+    };
+    check();
+    let live = true;
+    void document.fonts?.ready.then(() => live && check());
+    if (typeof ResizeObserver === 'undefined')
+      return () => {
+        live = false;
+      };
+    let w = row.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (row.clientWidth !== w) {
+        w = row.clientWidth;
+        check();
+      }
+    });
+    ro.observe(row);
+    return () => {
+      live = false;
+      ro.disconnect();
+    };
+  }, [rail, t]);
   /** Pets (the pixel Nursery) or eggs; a ready nest opens straight on the eggs. */
   const [view, setView] = useState<'pets' | 'eggs'>(() =>
     p.nest.some((n) => n.left <= 0) ? 'eggs' : 'pets',
@@ -116,11 +160,12 @@ export function PetsTab() {
   } | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const noteT = useRef<ReturnType<typeof setTimeout>>();
-  const say = (t: string) => {
+  // Stable: the memoised Nursery takes it and must not re-render on the camp's 1-s clock.
+  const say = useCallback((t: string) => {
     setNote(t);
     clearTimeout(noteT.current);
     noteT.current = setTimeout(() => setNote(null), 2200);
-  };
+  }, []);
   useEffect(
     () => () => {
       clearTimeout(noteT.current);
@@ -181,15 +226,22 @@ export function PetsTab() {
   };
 
   return (
-    <div className={`ppn is-${view}`}>
+    <div ref={ppnRef} className={`ppn is-${view}${rail ? ' ppn--rail' : ''}`}>
       <Tabs
         className="ppn__tabs"
+        vertical={rail}
         items={[
-          { id: 'pets', label: t('nursery.tabPets'), icon: 'paw' },
+          {
+            id: 'pets',
+            label: t('nursery.tabPets'),
+            icon: 'paw',
+            name: rail ? t('nursery.tabPets') : undefined,
+          },
           {
             id: 'eggs',
             label: t('nursery.tabEggs'),
             icon: 'egg',
+            name: rail ? t('nursery.tabEggs') : undefined,
             badge: p.nest.some((n) => n.left <= 0) ? '!' : eggsAll || null,
           },
         ]}
@@ -418,7 +470,7 @@ export function PetsTab() {
         )}
     </div>
   );
-}
+});
 
 /** Сбережённый прогрев вида — тонкая полоска под яйцом в корзине. */
 function HeatBar({ egg, heat }: { egg: EggId; heat: number }) {

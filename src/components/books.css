@@ -1,0 +1,391 @@
+/* Enchantment books tab (components/BooksTab.tsx) on the pixel kit — the tab's own parts.
+   Skeleton (columns, showcase, stats, actions) — armory.css. The scenes (.pbks*, .pbka*, .pbook*)
+   and the Enchanter's portrait overlays (.pbk-mage__*) keep their styles in game-ui.css. */
+
+/* From the mine dock the books are a full-screen window (`.is-window`, as the forge and the
+   backpack); inside a multi-tab camp they fill the camp's body (`.is-embed`). */
+.bkx {
+  min-height: 0;
+}
+.bkx .bkx-top {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+}
+.bkx-dust {
+  color: var(--px-violet);
+}
+/* Embedded on landscape / tablet / desktop: no top row — the purse heads the side column. */
+.bkx.is-embed.arm--two {
+  grid-template:
+    'show show' minmax(0, 13fr)
+    'list side' minmax(0, 7fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.bkx.is-embed.arm--three {
+  grid-template:
+    'list show side' minmax(0, 1fr)
+    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 6fr);
+}
+.bkx .arm-side > .arm-purse {
+  flex: none;
+}
+
+/* Status under the name: can enchant / weaker / no room. */
+.arm-status.is-ok {
+  color: var(--px-green);
+}
+.arm-status.is-lower {
+  color: var(--px-red);
+}
+.arm-status.is-full {
+  color: var(--px-gold);
+}
+/* The effect line: the small step at a fixed height — one line on a plate across the stage (the
+   longest effect, «+252% лишних блоков добычи», is ~260 px), two on the narrow plate beside the
+   art. The plate stacks under the art on every format, as the forge's: beside it on a phone the
+   plate was 139 px and broke words in the middle («Эффективнос|ть»). */
+.bkx-fx {
+  margin: 0;
+  hyphens: auto;
+  overflow-wrap: normal;
+  max-width: 100%;
+  height: calc(1.2 * var(--px-fs-sm));
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+@container arm-show (aspect-ratio > 23 / 20) {
+  .arm-stage .bkx-fx {
+    height: calc(2 * 1.2 * var(--px-fs-sm));
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+}
+
+/* The chance cell is a toggle for dust (tap = add / remove dust). Same box as the other cells. */
+.bkx-chance {
+  margin: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Pressed (kit `usePress`): the non-kit buttons sink one step like a kit button. */
+.bkx-chance:is(:active, .is-down),
+.bkx .pbk-mage:is(:active, .is-down) {
+  translate: 0 var(--u);
+  filter: brightness(0.9);
+}
+.bkx-chance.is-hi > b {
+  color: var(--px-green);
+}
+.bkx-chance.is-mid > b {
+  color: var(--px-gold);
+}
+.bkx-chance.is-lo > b {
+  color: var(--px-red);
+}
+.bkx-dusttag {
+  grid-area: delta;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.bkx-dusttag.is-on {
+  color: var(--px-green);
+}
+.arm-stat.is-short > b {
+  color: var(--px-red);
+}
+.bkx-stars > b > .px-i {
+  color: var(--px-gold);
+}
+
+/* Details. */
+.bkx-details p {
+  margin: 0;
+}
+.bkx-block {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+/* the dust toggle: as wide as its words, but never wider than the narrow side column */
+.bkx-block > .px-btn {
+  justify-self: start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+/* a block, not a flex row: the text was an anonymous flex item that could not wrap below its
+   longest word (12 px past the side column on a phone held sideways) */
+.bkx-note {
+  display: block;
+  color: var(--px-gold);
+}
+.bkx-note > .gx-icon {
+  vertical-align: middle;
+  margin-right: calc(2 * var(--u));
+}
+.bkx-note.is-bad {
+  color: var(--px-red);
+}
+
+/* Grids: the pick's places, the Enchanter's tiers, the shelf. */
+.bkx-sec .px-heading b {
+  color: var(--px-gold);
+}
+.bkx-shelfhead {
+  align-items: center;
+}
+.bkx-up {
+  color: var(--px-green);
+}
+.bkx-weak .pbook,
+.bkx-off .pbook,
+.bkx-off.px-slot > :first-child {
+  filter: saturate(0.35) brightness(0.75);
+}
+.bkx-ghost {
+  display: grid;
+  filter: brightness(0) invert(0.35);
+}
+
+/* The Enchanter: his portrait (3:2, overlays in %) beside his line, the four tiers next to it. */
+.bkx-seller {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(4 * var(--u));
+  align-items: start;
+}
+.bkx-mage {
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.bkx .pbk-mage {
+  width: 100%;
+  max-width: calc(110 * var(--u));
+  margin: 0;
+  border-radius: 0;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  box-shadow: none;
+  image-rendering: auto;
+}
+.bkx .pbk-mage::after {
+  content: none;
+}
+.bkx-mage__say {
+  margin: 0;
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-text);
+}
+.bkx-tiers {
+  display: grid;
+  grid-template-columns: repeat(2, var(--slot, calc(26 * var(--u))));
+  gap: calc(3 * var(--u));
+}
+.arm--three .bkx-seller {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* as many tiers in a row as the column holds (four overflowed the 182-px list on a phone held
+   sideways — the whole list scrolled sideways) */
+.arm--three .bkx-tiers {
+  grid-template-columns: repeat(auto-fill, var(--slot, calc(26 * var(--u))));
+  justify-content: space-between;
+}
+
+/* Two-tap confirmations («В пыль», «Снять», «Перековать»): the armed button blinks. */
+.bkx .px-btn.is-armed,
+.ivx .px-btn.is-armed {
+  animation: bkx-armed 0.9s steps(2, jump-none) infinite;
+}
+@keyframes bkx-armed {
+  50% {
+    filter: brightness(1.25);
+  }
+}
+
+/* «No room»: which enchant to knock out. */
+.bkx-replace {
+  display: grid;
+  gap: calc(4 * var(--u));
+}
+.bkx-replace p {
+  margin: 0;
+}
+.bkx-replace__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(3 * var(--u));
+}
+
+/* Phone portrait list: the pick's places in one strip (scrolls sideways, as the forge's ladder),
+   then the shelf — two rows of books on open at 390x844, one at 360x800. */
+.bkx.arm--one .bkx-list {
+  gap: calc(4 * var(--u));
+}
+.bkx.arm--one .arm-head {
+  margin-bottom: calc(2 * var(--u));
+}
+.arm--one .bkx-pickgrid {
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-auto-columns: var(--slot, calc(26 * var(--u)));
+  justify-content: start;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+/* Phone portrait bar and the tablet-portrait side column: «В пыль» · anvil (an icon, only with
+   a pair) · «Вписать» in one row (stacked on a tablet they took 252 of the side column's 347 px
+   and the details collapsed to ~30 px; three text buttons there cut «Verzaubern»). */
+.bkx:is(.arm--one, .arm--two) .bkx-acts {
+  grid-template-columns: minmax(0, 1fr) calc(26 * var(--u)) minmax(0, 1fr);
+  grid-auto-flow: row;
+}
+/* The words get the room: «Verzaubern» alone is 116 px, the 360-px phone gave it 106 with the
+   kit's 6u padding; the tablet column takes the small size and a 20u anvil (60 px, still a finger). */
+.bkx:is(.arm--one, .arm--two) .bkx-acts > .px-btn:not(.bkx-iconbtn) {
+  padding-inline: calc(2 * var(--u));
+}
+.bkx.arm--two .bkx-acts {
+  grid-template-columns: minmax(0, 1fr) calc(20 * var(--u)) minmax(0, 1fr);
+}
+.bkx.arm--two .bkx-acts > .px-btn:not(.bkx-iconbtn) {
+  font-size: var(--px-fs-sm);
+}
+.bkx-acts > .px-btn.bkx-iconbtn {
+  padding-inline: 0;
+}
+
+/* Details: the book against the same enchant in the pick — one row and a verdict chip; the
+   sentence is the row's tooltip (critic: nine lines that said «в кирке» twice). */
+.bkx-cmp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--u) calc(3 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+}
+.bkx-cmp__side {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  white-space: nowrap;
+}
+.bkx-cmp__side > b {
+  font-family: var(--px-head);
+  font-weight: 400;
+}
+.bkx-cmp__arrow {
+  color: var(--px-green);
+}
+.bkx-cmp__arrow.is-down {
+  color: var(--px-red);
+}
+.bkx-verdict {
+  padding: 0 calc(3 * var(--u));
+  border: var(--u) solid currentColor;
+  color: var(--px-red);
+  line-height: 1.4;
+}
+
+/* Replace window: the enchants as kit slots with their number under each. */
+.bkx-replace__chip {
+  display: grid;
+  justify-items: center;
+  gap: var(--u);
+}
+.bkx-replace__fx {
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+}
+
+/* Dust: a 4-frame puff where the book was, the dust counter ticks (critic: only a text note). */
+.bkx .arm-room {
+  position: relative;
+}
+.bkx-puff {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  pointer-events: none;
+}
+.bkx-puff > i {
+  position: absolute;
+  left: calc(-5 * var(--u));
+  top: calc(-5 * var(--u));
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  background: var(--px-violet);
+  border: var(--u) solid var(--px-ink);
+  opacity: 0;
+  animation: bkx-puff 420ms steps(4, jump-none);
+}
+.bkx-puff > i:nth-child(odd) {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  background: color-mix(in srgb, var(--px-violet) 55%, transparent);
+}
+@keyframes bkx-puff {
+  from {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  75% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+.bkx-dust.is-tick > b {
+  animation: bkx-tick 480ms steps(2, jump-none);
+}
+@keyframes bkx-tick {
+  0%,
+  60% {
+    translate: 0 calc(-1 * var(--u));
+    color: var(--px-violet);
+  }
+}
+/* Reduced motion: no puff, the armed button stays lit instead of blinking. */
+@media (prefers-reduced-motion: reduce) {
+  .bkx-puff {
+    display: none;
+  }
+  .bkx-dust.is-tick > b,
+  :is(.bkx, .ivx) .px-btn.is-armed {
+    animation: none;
+  }
+  :is(.bkx, .ivx) .px-btn.is-armed {
+    filter: brightness(1.15);
+  }
+}
+html[data-motion='reduce'] .bkx-puff {
+  display: none;
+}
+html[data-motion='reduce']
+  :is(.bkx .bkx-dust.is-tick > b, .bkx .px-btn.is-armed, .ivx .px-btn.is-armed) {
+  animation: none;
+}
+html[data-motion='reduce'] :is(.bkx, .ivx) .px-btn.is-armed {
+  filter: brightness(1.15);
+}

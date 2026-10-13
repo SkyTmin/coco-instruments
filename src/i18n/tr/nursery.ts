@@ -25,6 +25,7 @@ export const nursery: Translation<typeof ru> = {
     sleep: 'Uyku',
   },
   lvMax: 'Maks',
+  lvPct: 'Sv. {n} · %{p}',
   patXp: '+{n} XP',
   power: 'Güç',
   gold: 'Altın',
@@ -36,6 +37,7 @@ export const nursery: Translation<typeof ru> = {
   take: 'Yanına al',
   leave: 'Evde bırak',
   details: 'Ayrıntılar',
+  anims: 'Hareketler',
   unknown: 'Bu kim?',
   from: 'Çıktığı yumurtalar',
   eggPct: '%{v}',
@@ -58,6 +60,15 @@ export const nursery: Translation<typeof ru> = {
     token: { name: 'Jetoncu', text: '+%{v} jeton' },
     luck: { name: 'Şanslı', text: '+%{v} anahtar ve buluntu' },
     rate: { name: 'Hiperaktif', text: '+%{v} vuruş sıklığı' },
+  },
+  /** Stat nouns of the details table (one line per stat: icon, noun, value). */
+  stat: {
+    loot: 'Ganimet',
+    sell: 'Satış',
+    dmg: 'Kazı',
+    token: 'Jeton',
+    luck: 'Şans',
+    rate: 'Tempo',
   },
   egg: { moss: 'Yosun', stone: 'Taş', crystal: 'Kristal', dragon: 'Ejderha' },
 };

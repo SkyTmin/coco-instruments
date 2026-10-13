@@ -151,10 +151,19 @@ phones). Gallery for the stand only (not built): `http://127.0.0.1:<port>/script
 ### States (buttons, slots, tabs)
 
 normal → hover (mouse only, `@media (hover:hover) and (pointer:fine)`: one ramp step lighter) →
-pressed (`:active`/`.is-down`: face 2 px down) → **focus: very visible** — a 2-px gold double ring
+pressed (`.is-down`, set on `pointerdown`: face 2 px down; a slot's well one ramp step darker and
+its art 1 u down) → **focus: very visible** — a 2-px gold double ring
 OUTSIDE the element (`.px-f::after`, `--pxk-focus`), shown for `:focus-visible` and S's
 `[data-focus]` (gamepad), louder than hover and than `selected` (white ring with gold corners) →
 disabled (`aria-disabled`: ash material, still clickable to show why).
+
+**Press is visible in the first frame (wave 3 — N2).** `:active` came 80–90 ms AFTER release on the
+stand (touch, 4× throttle) and never on a slot. `usePress(ref)` from `@/ui-px` puts `.is-down` on
+the element by `classList` in `pointerdown` (no React render), clears it on window `pointerup`/
+`pointercancel`/`blur`/`scroll` (capture) and on `pointerleave`, and a layout effect re-adds it if a
+re-render rewrote `className` mid-press. `Button`/`Slot` use it and still call your own
+`onPointerDown`/`onPointerLeave`. Any custom button outside the kit (`.gx-round`, `.hub-pad`,
+dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed state.
 
 ### Input and formats
 
@@ -176,31 +185,85 @@ disabled (`aria-disabled`: ash material, still clickable to show why).
 
 - Eggs (nests, basket, shop, `NestSheet`, `HatchScene`, `HatchBatch`) are untouched on the «Яйца»
   tab; on the pets tab the egg blocks are hidden by CSS (`.ppn.is-pets > :not(...)`).
-- Layouts (`Layout` in the component): `one` phone portrait — stage / squad / collection strip
-  (grid button + one row) / action bar; `land` phone landscape — stage | side (plate, squad,
-  collection button, actions); `tall` tablet portrait — stage on top, side below with squad +
-  full collection grid; `wide` tablet landscape & desktop — stage | side with the full grid.
-  On `one`/`land` the full collection is a **drawer** over the side column (`.nur-drawer`,
-  `data-ui-layer`, escape stack, focus into the selected cell on keyboard/pad, back to the grid
-  button on close). Details (lore, roles, copies → gold, skins, eggs) = a `Modal sheet` on
-  every layout (the `i` button, «!» badge when a merge is possible).
-- Stage: lit sandstone room (radial light pool, floor band), framed animation buttons in a
-  vertical column on the right (6 × `Button size="sm" icon`, always framed, unowned = `off` and
-  says «hatch first»), the name plate under the room (`.px-dark` ink plate: name in the rarity
-  colour, rarity pill, gold badge, power, role chips max 2 on phones / 3 elsewhere + «+N» chip
-  that opens details, XP bar). Pet size: `useBox` measures `.nur-room` (`contain: size`),
-  `pedFor` = pedestal pixel from the room (not the pet), `fitPet` picks the biggest whole-dot
-  frame that fits above the pedestal; offsets rounded to 1/dpr.
+- Layouts (`Layout` in the component; round 3 — N3): `one` phone portrait — stage (room, plate
+  under it) / squad / action bar `[▦ 18/18] [take/leave] [i]`; `land` phone landscape — stage
+  (room only) | side 1fr/1fr (plate, squad with the stat grid beside the slots, actions);
+  `tall` tablet portrait — stage on top, side below (grid rows 33fr/20fr); `wide` tablet
+  landscape & desktop — stage (room | anim column) | side (plate on top, squad + full grid as ONE
+  scrolling list `.nur-side__mid`, action bar at the bottom). `plateSide` (land, wide) moves the
+  plate into the side column. On `one`/`land` (`drawerMode`) the full collection is a **drawer**
+  over the side column (`.nur-drawer`, `data-ui-layer`, escape stack, focus into the selected
+  cell on keyboard/pad, back to the grid button on close). Details (lore, roles, copies → gold,
+  skins, eggs) = a `Modal sheet` on every layout (the `i` button, «!» badge when a merge is
+  possible).
+- Stage: sandstone room (floor band + veil + tile, NO light pool since N3 — its curved bands were
+  mixels), the animation buttons (6 × `Button icon`, always framed, unowned = `off` and says
+  «hatch first») as a column right of the room on `tall`/`wide`; on phones ONE ▶ toggle
+  (`.nur-anim-tog`, `nursery.anims`, top-right of the room, hit 50 × 48) opens them as a 3 × 2
+  menu over the room (`.nur-anims--pop`, `md` buttons, `data-ui-layer`, escape stack, closes on a
+  pick and on a tap outside, focus in/out on keyboard/pad) — the column cost the portrait pet its
+  width. Name plate (`.px-dark` ink plate: name in the rarity colour + power picture and number on
+  the right; rarity pill, ★ gold, level; at most 3 chips — stat picture + whole percent, biggest
+  first, ties in the fixed stat order — + «+N» that opens details; the level row says «25 ур. ·
+  41 %» (`nursery.lvPct`; at the cap only «25 ур.»), right-aligned; a slim 4-u XP bar on every
+  layout with «into / need» / «Предел» as its tip). Pet size: `useBox` measures
+  `.nur-room` (`contain: size`), `pedFor` = pedestal pixel from the room (not the pet), `fitPet`
+  picks the biggest whole-dot frame that fits above the pedestal; offsets rounded to 1/dpr.
+- **Pet size per format (N3, asserted by `scripts/ui-px/nursery-check.mjs` against a running dev
+  server — frame ≥ target, identical boxes across 4 pets, no change on a key press; run it after
+  any Nursery/camp/kit change)**: phone 390×844@3 299 (k 8 of the
+  112 strip), 360×780@3 224, 440×956@3 336, 844×390@3 261 (round 4), 956×440@3 299, tablet
+  820×1180@2 336, 1180×820@2 448, desktop 1440×900 and 1920×1080 560. Before N3 (critic round 2,
+  same order): 261/187/299/187/224/280/280/336/336. The same script asserts the collection cells
+  fully visible on open (`CELLS`, phones in the drawer): 18/16/18/15/18/12/10/18/12 — prod
+  v2.152 had pp 10, p360 4, pl 12, tp 12, tl 10, d1 18, d2 12; never go below prod.
 - **Fixed layout (owner: «чтобы картинка не дёргалась»)**: every row has a fixed height from
   the TYPE scale (`calc(var(--px-fs-sm) * 1.65)`, not from `--u` — u-based rows made the plate
   tall on desktop and shrank the pet 448 → 336), names shrink to fit instead of wrapping, chips
   are capped, absent things keep their box. Check: `{SCR}/jump.mjs` selects the pets with the
   fewest/most roles + an unhatched one and compares bounding boxes of stage, room, pet, plate,
   anims, squad, collection, actions — all identical on all 6 formats.
-- Squad («Отряд» + hint «Идут с тобой в шахту», `nursery.squad/squadHint`): three BIG slots
-  (34 u, 26 u on phone landscape) — filled = select, empty = dashed frame + plus (picker), locked
-  = lock + what unlocks it; bonuses as compact chips UNDER the slots (icon + `nursery.bonus`),
-  never bigger than the pets.
+- Squad («Отряд» + hint «Идут с тобой в шахту», `nursery.squad/squadHint`; on `land`/`wide` the
+  hint is the title's `data-tip`): three BIG slots (34 u, 26 u on `land`/`wide`) — filled = select,
+  empty = dashed frame + plus (picker), locked = lock + what unlocks it. Under them (beside them
+  on `land`/`wide`, 2 × 3 column-flow) ALL SIX summed stats in a fixed grid, order loot sell dmg / token
+  luck rate; a missing stat keeps its cell (dim picture, «—»). 3 columns; 6 only via
+  `@container nur-squad (min-width: 36em)` (em = the label size); never 4/5; it never scrolls.
+- **Stat pictures (wave 3 — N2)**: `paint.ts` `STAT_ART` — 12 × 12 images `st-loot` gem, `st-sell`
+  coin, `st-dmg` pick, `st-token`, `st-luck` key, `st-rate` clock, `st-power` bolt (ink outline,
+  own-colour ramp, light upper-left; `--pximg-st-*`), drawn by `.nur-st.nur-st--<stat>` at `--st`
+  = 24 CSS px (36 at ui-scale ≥ 4) rounded to whole device px per art px (`useStatPx`). The 9×9
+  `ICONS` masks stay for UI glyphs. Rows holding a picture use `--row-st` = max(label × 1.65,
+  picture + 4 px). The «i» sheet is a table: picture, `nursery.stat.<stat>` noun, dotted leader,
+  value with one decimal; the full sentence is the row's tip; the sheet bar says «25 ур. · Предел».
+- **No wrong-pet frames on switch**: the stage (art + plate) keeps the pet it shows until the new
+  strip's `HTMLImageElement.decode()` resolves (`decodeArt`, a module cache of decoded srcs;
+  `petArtSrc(id, size, v, thumb)` from `PetArt.tsx` gives the exact URL `PetArt` will load); the
+  squad and ±3 collection neighbours are decoded 250 ms after a switch. `.nur-pet` is keyed by the
+  shown id → an 80 ms `steps(2)` pop (`translate` 1 u). Cells and squad slots are `memo`
+  (`NurCell`, `SquadSlot`) with a stable `onPick(id)`; `Slot tip` / `useTip` accept a function, so
+  the 18 tooltips are built only when shown. `PrisonCamp` re-renders every second (`useNow(1000)`):
+  `PetsTab` and `Nursery` are `memo` (PetsTab's `say` is a `useCallback`), else each tick
+  re-rendered the whole Nursery and the hidden egg blocks (CPU profile at 4×: React work in a
+  3-switch window 497 → 144 ms).
+- Narrow plate (360-px phones, the large text size): three chips + «+N» need ≈ 17.2 em of the
+  label size, so both variants are rendered and `@container nur-roles` shows two chips + «+N+1»
+  below that (19 em when a value has 3 digits, `is-big`). A long name never goes below the label
+  size: it wraps to two lines of it inside the fixed name row («Panzerknacker-Waschbär»). The
+  action bar's grid button drops its count under 16 em so «Оставить дома» stays on one line.
+- Leaving home keeps the slot empty (no shift), taking fills the first empty slot: a
+  component-local view with holes (`SquadView`); the store still gets the compact list in the same
+  order (`prisonSquadSet` compacts), and a squad change from elsewhere resets the view.
+- Legendary/mythic: `.pet__aura`/`.pet__rays` are hidden on the stage (soft vector glow, cost
+  frames). The rarity tint of the light pool is gone too (N3, critic P1-6): rarity already shows
+  three times (pill, name colour, slot frame); a future accent must be baked at 1 art px.
+- Type on the screen: name hero (Coco Title), body `--px-fs` (power, headings), label `--px-fs-sm`
+  (chips, rarity, level, hint, bar); weight 700 (slot counters keep `-tiny`). Hit areas ≥ 48 × 48 on
+  phones (critic R13): anim column, drawer ✕, «+N», action bar get a `::before` with negative
+  inset and `z-index: -1` inside an isolated row (`isolation: isolate`), so a neighbour's
+  extension lies UNDER the visible frames and never steals a tap. **Pitfall:** an absolute
+  `::before` is placed from the PADDING box — the kit's 1-u border eats 1 u of the inset (check
+  with `elementFromPoint`, not by reading `top`).
 - The camp window chrome is the kit for EVERY camp since wave 2 (C, `gx-px.css`; see
   `game-ui.md` → «Window chrome on the kit»); `nursery.css` only sizes the pets camp and fills
   its body (`.gx-camp:has(.nur) .pcamp-body`). The pets camp is full height and
@@ -213,9 +276,59 @@ disabled (`aria-disabled`: ash material, still clickable to show why).
   `display` — render conditionally; new files in `public/` are not served by a running Vite —
   restart it. The gold mark on the plate is a ★ badge, the word shows only where the plate is
   wider than 17 em (em of its own text, so the large text size drops it too).
+- **Round 3 (N3) details.**
+  - «+N» chip: `usePress` + `:is(:active,.is-down)` look; `::before` hit area ≥ 48 × 44
+    (`min(-10px, calc((100% - 48px) / 2))`); `.nur-plate__roles` is `z-index: 2`, else the XP
+    bar's label (z 1) ate the bottom of the chip.
+  - Action bar: `KeyHint` is absolute on the button's top-right corner (`.nur-acts .px-btn >
+    .px-keyhint`) and the wide label is `nowrap` — an inline hint made the bar wrap / grow on the
+    first key press.
+  - Phone landscape: `PetsTab` turns the pets/eggs tabs into a 24-u rail on the left
+    (`ppn--rail`, `Tabs vertical`, `name` = aria + tip, labels hidden, key hint absolute under the
+    rail) — the full-width tab row cost the pet 75 px of height.
+  - Tight tabs: `PetsTab` measures `.px-tab__label` (round 4: a `Range` over its text vs the
+    box width + 0.01 — `scrollWidth` is an integer, tr «Yumurtalar» 113.16 / 113 never fired;
+    re-run after `document.fonts.ready`) in a layout effect + ResizeObserver and sets
+    `.ppn__tabs.is-tight`, which hides the tab icons (tr «Hayvanlar»
+    at 360 px was an ellipsis); the large text size on phone portrait hides them by CSS.
+  - Cold switch (critic P1-5, slow link): if the strip isn't decoded 100 ms after the pick
+    (`cold`), the plate switches and `.nur-ph` shows the 48-px thumbnail at the biggest whole
+    upscale inside the strip's frame, centred, feet on the pedestal, until the strip is ready.
+    The strip fetch starts on `pointerdown` (`onPointerDownCapture` on `.nur` → `[data-pet]`),
+    and the drawer's first visible row is decoded one by one 150 ms after it opens. Measured at
+    150 ms RTT / 60 KB/s, 4×: the old pet stays ≤ 140 ms after the ring (was 560).
+  - The stage follows `useDeferredValue(sel)`: the ring and the action bar paint first, the stage
+    + plate a frame later. Production build at 4×: worst switch frame ~115–290 → ~70–150 ms (the
+    rest is style/layout/paint of the plate, not React).
+  - Press after a key press (critic P1-7): `src/input/device.ts` defers BOTH `data-input` and the
+    subscriber render to rAF + timeout on pointer events (`setInputDevice(d, pad, true)`); the
+    root attribute flip alone restyled the page for ~40 ms at 4× (426 elements, selectors like
+    `html[data-input=touch] :focus-visible`). `getInputDevice()` is still updated at once. Press
+    feedback ≤ 33 ms at 4× in every case of `{SCR}/ui3N3/press.mjs`.
+  - The 4–8 px «latent scroll» (critic P2-13) is the kit's hidden focus ring `.px-f::after`
+    (inset −3 u) and the hit-area `::before`s; no container scrolls by it (page and `.nur` 0),
+    `.nur-side__mid` has a 3-u padding with a −3-u margin so its rings are not clipped.
+- **Round 4 (N3) details.**
+  - Kit `Tabs` press: one `usePress()` spread on every tab; `.px-tab.is-down` moves 1 u down and
+    an unselected tab gets a flat veil one ramp step darker (`::before` z 0, children z 1, NO
+    `isolation` — it would trap the focus ring under the neighbours). Measured at 4×: pets/eggs
+    tabs and the camp rail −6…8 ms (`{SCR}/critic7/press.mjs`, `{SCR}/ui3N3/campress.mjs`).
+  - Collection rows back: wide squad stats beside the slots; in `.nur-side__mid` the grid has no
+    block padding (the list's own 3 u keeps the rings) and gaps 3 u / 2 u; `tall` rows 33fr/20fr
+    (room 372, the 336 pet needs 362) and the head's gap 2 u; sort/filter are icon-only on
+    `tall`/`wide` (word + value in `label` = aria + tip, filter `on` when set). Phone portrait:
+    the drawer covers stage-bottom → side (`grid-area: show-start / 1 / side-end / 2`) from the
+    room's bottom edge (`--nur-dtop`, measured in a layout effect, rounded to 1/dpr), drawer gap 0
+    and head row gap 1 u (the 360-px head takes 3 lines in ru/de/tr).
+  - Phone landscape stage `padding-block: 5u` (not the frame's 6): room 280, pet 224 → 261.
+  - The stage pet (`PetArt focusable`): `tabIndex 0` + `px-f`; Enter / Space pat it, pad A
+    clicks it through the shell; arrows reach it from the tab row (pp, tp, tl) and the rail (pl).
+  - Stand pitfall: after editing i18n / store-adjacent files a running Vite may hand
+    `page.evaluate(() => import('/src/store.ts'))` another module instance — seeding silently
+    does nothing (ghost pet, frame 0). Restart Vite.
 - **Not checked on a real phone / Telegram webview / gamepad hardware** (stand: Playwright at
-  390×844@3, 844×390@3, 820×1180@2, 1180×820@2, 1440×900, 1920×1080; keyboard by real key
-  presses, gamepad by emitted actions).
+  390×844@3, 360×780@3, 440×956@3, 844×390@3, 956×440@3, 820×1180@2, 1180×820@2, 1440×900,
+  1920×1080; keyboard by real key presses, gamepad by emitted actions).
 
 ### Rollout — waves (owner 13.10: «когда волна закончилась, сразу запускай следующую»)
 
@@ -238,6 +351,17 @@ owner. Each agent ships as its own version after the lead reviews its shots (6 f
 
 Wave rules: new CSS in the screen's own file (like `nursery.css`), `game-ui.css` only loses the
 screen's old blocks; no logic changes in `src/lib`; every new string through `t()` in 7 languages.
+
+**Critic gate (owner 13.10: «агент критик… возвращать правки для других агентов»).** The `critic`
+agent (`.claude/agents/critic.md`, checklist `.claude/critic/checklist.md`) reviews before
+anything ships. It looks at every UI agent's AFTER shots and at every batch of owner screenshots.
+It returns prioritised, measured fixes per agent and does not touch code. The lead relays the
+fixes to the agent (SendMessage while its cache is alive, else a new agent with the fix list).
+A screen ships only when the critic's P0 list is empty. One exception: an interim ship is allowed
+when the build is strictly better than prod (the critic's earlier P0s are fixed, and no
+regression against prod remains). The remaining P0s must already exist in prod; they become the
+next round's first items. Until a session reloads the agent
+types, run it as `general-purpose` whose first step is to read `critic.md` as its role.
 
 ### Owner's verdicts on the v1 look (13.10, iPhone screenshots) — binding for every screen
 

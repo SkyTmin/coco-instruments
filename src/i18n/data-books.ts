@@ -36,6 +36,12 @@ export function enchantEffect(id: EnchantId, units: number): string {
   return t(k(`books.fx.${id}`), { v: fmtDec(per * units * 100, d) });
 }
 
+/** «252» — the effect's percent alone, as `enchantEffect` rounds it (`books.pct` adds the sign). */
+export function enchantPct(id: EnchantId, units: number): string {
+  const [per, d] = FX[id];
+  return fmtDec(per * units * 100, d);
+}
+
 /** «Эффективность III» — the book's enchant and level (`bookTitle` in the lib). */
 export const bookName = (b: { id: EnchantId; lvl: number }) =>
   `${enchantName(b.id)} ${ROMAN[Math.max(0, Math.min(BOOK_LEVELS, b.lvl) - 1)]}`;

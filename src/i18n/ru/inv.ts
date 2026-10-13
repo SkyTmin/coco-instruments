@@ -105,7 +105,8 @@ export const inv = {
   take1: 'Забрать 1',
   takeN: 'Забрать {n}',
   take: 'Забрать',
-  sellBag: 'Продать рюкзак {price}',
+  /** The price stands beside it with a coin (it wraps to its own line on a narrow button). */
+  sellBag: 'Продать руду',
   bagToBox: 'Рюкзак — в ящик',
   hintView: 'Здесь только посмотреть: сундук — у койки в Бараке 1.',
   hintBunk: 'Тап по вещи — переложить в сундук или забрать.',
@@ -121,6 +122,12 @@ export const inv = {
   shelfFull: 'Полка полна',
   pouchFull: 'Мешочек полон',
   nowhere: 'Некуда',
+  statHave: 'В наличии',
+  statPrice: 'Цена штуки',
+  filterAll: 'Всё',
+  sortRarity: 'По редкости',
+  gone: 'Здесь больше нет',
+  whereHead: 'Где лежит',
   /** The run's inventory (`src/components/DungeonInventory.tsx`). */
   dg: {
     statDmg: 'Урон {v}',
