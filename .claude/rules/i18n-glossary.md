@@ -219,3 +219,68 @@ Wood after «доски» (`campData.species.<id>.gen`): the form each language 
 Talente / Talentos / Talenti, while T1's «очки навыков» are Skillpunkte / puntos de habilidad /
 punti abilità — pick one. The square's pixel signposts (ШАХТА, ЛИФТ, ПИТОМНИК, КПП) are baked
 into `public/hub` art and stay Russian until `scripts/hub` draws per-language signs.
+
+## Wave 2 — Dungeon (T3: `dungeon`, `inv`, `creative`, `dfloors`, `dmobs`, `dmats`, `dgear`, `dlines`)
+Data areas are generated from `src/lib/dungeon*.ts` + `src/lib/dungeon-floors/`; helpers in
+`src/i18n/data-dungeon.ts` (`floorName`, `bossName`, `mobName`, `matName`, `setItem`, `dl(text)` —
+reverse lookup of a lib line, templates too); `src/i18n/dungeon.test.ts` checks ru = lib.
+Floors (signature names — fantasy/anime nods natives know: f8 = Demon Slayer's Infinity Castle):
+| | ru | en | fr | tr | de | es | it |
+|---|---|---|---|---|---|---|---|
+| f1 | Крысиные норы | Rat Burrows | Terriers aux rats | Sıçan Yuvaları | Rattenbau | Madrigueras de ratas | Tane dei ratti |
+| f2 | Грибной грот | Mushroom Grotto | Grotte aux champignons | Mantar Mağarası | Pilzgrotte | Gruta de las setas | Grotta dei funghi |
+| f3 | Затопленная бездна | Flooded Abyss | Abîme englouti | Su Basmış Uçurum | Versunkener Abgrund | Abismo anegado | Abisso sommerso |
+| f4 | Двойная крипта | Twin Crypt | Double Crypte | İkiz Mahzen | Doppelgruft | Cripta doble | Cripta doppia |
+| f5 | Лабиринт | Labyrinth | Labyrinthe | Labirent | Labyrinth | Laberinto | Labirinto |
+| f6 | Огненный разлом | Fire Rift | Faille de feu | Ateş Yarığı | Feuerriss | Grieta de fuego | Faglia di fuoco |
+| f7 | Зеркальный лабиринт | Mirror Maze | Labyrinthe des miroirs | Ayna Labirenti | Spiegellabyrinth | Laberinto de espejos | Labirinto degli specchi |
+| f8 | Бесконечный замок | Infinity Castle | Château Infini | Sonsuz Kale | Unendlichkeitsfestung | Castillo Infinito | Castello dell'Infinito |
+| f9 | Лабиринт гидры | Hydra's Maze | Labyrinthe de l'hydre | Hidra Labirenti | Labyrinth der Hydra | Laberinto de la hidra | Labirinto dell'idra |
+| f10 | Трон демона | Demon Throne | Trône du démon | İblis Tahtı | Dämonenthron | Trono del demonio | Trono del demone |
+| f11 | Небесный архипелаг | Sky Archipelago | Archipel céleste | Gök Takımadaları | Himmelsarchipel | Archipiélago celeste | Arcipelago celeste |
+| f12 | Полярная ночь | Polar Night | Nuit polaire | Kutup Gecesi | Polarnacht | Noche polar | Notte polare |
+| f13 | Театр марионеток | Puppet Theater | Théâtre de marionnettes | Kukla Tiyatrosu | Marionettentheater | Teatro de marionetas | Teatro delle marionette |
+| f14 | Часовая башня | Clock Tower | Tour de l'horloge | Saat Kulesi | Uhrturm | Torre del reloj | Torre dell'orologio |
+| f15 | Ядро подземелья | Dungeon Core | Cœur du donjon | Zindanın Çekirdeği | Kern des Verlieses | Núcleo de la mazmorra | Nucleo delle segrete |
+
+Bosses:
+| | ru | en | fr | tr | de | es | it |
+|---|---|---|---|---|---|---|---|
+| f1 | Крысиный король | Rat King | Roi des rats | Fare Kral | Rattenkönig | Rey Rata | Re dei ratti |
+| f2 | Живые доспехи | Living Armor | Armure vivante | Canlı Zırh | Lebende Rüstung | Armadura viviente | Armatura vivente |
+| f3 | Алая пасть | Crimson Maw | Gueule écarlate | Kızıl Çene | Purpurschlund | Fauces carmesí | Fauci cremisi |
+| f4 | Каменный идол | Stone Idol | Idole de pierre | Taş Heykel | Steinidol | Ídolo de piedra | Idolo di pietra |
+| f5 | Минотавр | Minotaur | Minotaure | Minotor | Minotaurus | Minotauro | Minotauro |
+| f6 | Красный змей | Red Serpent | Serpent rouge | Kızıl Yılan | Roter Lindwurm | Serpiente roja | Serpente rosso |
+| f7 | Отражение героя | Hero's Reflection | Reflet du héros | Kahramanın Yansıması | Spiegelbild des Helden | Reflejo del héroe | Riflesso dell'eroe |
+| f8 | Демон семи лун | Demon of Seven Moons | Démon des sept lunes | Yedi Ay İblisi | Dämon der sieben Monde | Demonio de las siete lunas | Demone delle sette lune |
+| f9 | Многоглавая гидра | Many-Headed Hydra | Hydre aux mille têtes | Çok Başlı Hidra | Vielköpfige Hydra | Hidra de mil cabezas | Idra dalle mille teste |
+| f10 | Король демонов | Demon King | Roi démon | İblis Kral | Dämonenkönig | Rey demonio | Re dei demoni |
+| f11 | Древний страж | Ancient Guardian | Gardien ancien | Kadim Muhafız | Uralter Wächter | Guardián ancestral | Guardiano antico |
+| f12 | Ледниковый мамонт | Glacier Mammoth | Mammouth des glaces | Buzul Mamutu | Gletschermammut | Mamut glacial | Mammut dei ghiacci |
+| f13 | Кукловод | Puppet Master | Marionnettiste | Kuklacı | Puppenspieler | Titiritero | Burattinaio |
+| f14 | Повелитель часа | Lord of the Hour | Seigneur de l'heure | Saatin Efendisi | Herr der Stunde | Señor de la hora | Signore dell'ora |
+| f15 | Хозяин подземелья | Dungeon Master | Maître du donjon | Zindanın Efendisi | Herr des Verlieses | Amo de la mazmorra | Signore delle segrete |
+
+Rat King follows T2 (TR «Fare Kral» — the Nutcracker's Mouse King, every Turkish kid knows it).
+No religion: Каменный идол → TR «Taş Heykel» (statue, not «put»); Ящер-жрец → Lizard Oracle
+(never «priest»); TR «İblis» is the games' plain word for a demon (Diablo TR). DE «Lindwurm» = the
+dragon-serpent of German legends.
+
+Mobs and places worth keeping: Крысолюд → Ratman / Homme-rat / Sıçan Adam / Rattenmensch / Hombre
+rata / Uomo-ratto; Латник (shell mite) → Shellknight / Chevalier-coque / Kabuklu Şövalye /
+Panzerschnecke / Caballero concha / Cavaliere conchiglia; Кролик-рогач → Jackalope (DE
+«Wolpertinger», the Bavarian horned hare); Болотный огонь → Will-o'-the-Wisp / Feu follet / Bataklık Işığı
+/ Irrlicht / Fuego fatuo / Fuoco fatuo; Кобольд-скупщик → Fence Kobold (fr receleur, tr Simsar,
+de Hehler, es perista, it ricettatore); Врата преисподней → Underworld Gates / Portes des Abysses /
+Yeraltı Kapıları / Tor zur Unterwelt / Puertas del Inframundo / Porte degli Inferi (no «hell»);
+f4 Святилище → TR «Gizli Salon», DE «Inneres Gewölbe» (no shrine words); Тайник → TR «Zula»;
+Трофей → TR «Ganimet»; Вага (puppet control) → Control bar / Croix / Kumanda / Spielkreuz /
+Cruceta / Bilancino; theatre bells → FR «les trois coups», ES «tercer aviso».
+
+Gear: slots Weapon / Helmet / Jacket (Роба) / Boots; sets Plain, Miner, Forged, Mine Master,
+Nepheline, Loparite, Astrophyllite, Aurora (Сполох) — Kola minerals by dictionary name as for rocks.
+Ушанка → FR «Chapka», IT «Colbacco»; Кирзачи → FR «Godillots», TR «Postal», IT «Anfibi»; pyrite
+«кошачье золото» → Fool's gold / DE «Katzengold». Places in the backpack (`inv.where`) reuse T1/T2
+words: Nursery = Nurserie / Kuluçka / Zucht / Criadero / Allevamento, Barracks 1 = Baraque 1 /
+Koğuş 1 / Baracke 1 / Barracón 1 / Baracca 1; book tiers follow T4 («simple», not «common»).

@@ -6,7 +6,14 @@ import { campData } from './campData';
 import { cash } from './cash';
 import { chests } from './chests';
 import { common } from './common';
+import { creative } from './creative';
 import { critters } from './critters';
+import { dfloors } from './dfloors';
+import { dgear } from './dgear';
+import { dlines } from './dlines';
+import { dmats } from './dmats';
+import { dmobs } from './dmobs';
+import { dungeon } from './dungeon';
 import { eggs } from './eggs';
 import { field } from './field';
 import { finds } from './finds';
@@ -15,6 +22,7 @@ import { guide } from './guide';
 import { hall } from './hall';
 import { hub } from './hub';
 import { input } from './input';
+import { inv } from './inv';
 import { miles } from './miles';
 import { mine } from './mine';
 import { mineHud } from './mineHud';
@@ -34,7 +42,14 @@ const en: Translation<Catalog> = {
   cash,
   chests,
   common,
+  creative,
   critters,
+  dfloors,
+  dgear,
+  dlines,
+  dmats,
+  dmobs,
+  dungeon,
   eggs,
   field,
   finds,
@@ -43,6 +58,7 @@ const en: Translation<Catalog> = {
   hall,
   hub,
   input,
+  inv,
   miles,
   mine,
   mineHud,

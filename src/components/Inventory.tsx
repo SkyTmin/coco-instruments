@@ -33,35 +33,27 @@ import {
   inventoryOf,
   limitFull,
   thingOfRef,
-  WHERE_NAME,
 } from '@/lib/inventory';
 import type { InvIcon, InvItem, InvPlace, InvSection, InvSectionView } from '@/lib/inventory';
-import {
-  bagCount,
-  bagValue,
-  CASE_TIERS,
-  modsOf,
-  nextPick,
-  reserveOre,
-  shortMoney,
-} from '@/lib/prison';
+import { bagCount, bagValue, CASE_TIERS, modsOf, nextPick, reserveOre } from '@/lib/prison';
 import type { ItemId } from '@/lib/prison';
 import { findTexture } from '@/lib/prison-art';
 import { itemUrl } from '@/lib/dungeon-art';
 // Картинки материалов этажей регистрируют сами этажи.
 import '@/lib/dungeon-floors/art';
 import { registerEscape } from '@/lib/escape-stack';
+import { fmtDec, fmtNum, fmtShort, t, useLang, useT } from '@/i18n';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { chestLatch, coinDing, softThud, uiClose, uiOpen } from '@/lib/sound';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 /** Число в ячейке: 12, 999, 1,2к, 12к. */
 const slotNum = (n: number) =>
   n < 1000
     ? String(n)
     : n < 10_000
-      ? `${(Math.floor(n / 100) / 10).toLocaleString('ru-RU')}к`
-      : `${Math.floor(n / 1000)}к`;
+      ? t('inv.kilo', { n: fmtDec(Math.floor(n / 100) / 10, 3) })
+      : t('inv.kilo', { n: String(Math.floor(n / 1000)) });
 
 // ---------------------------------------------------------------------------
 // Картинка вещи.
@@ -202,7 +194,10 @@ export function Inventory({
   }, [armed]);
 
   const atBunk = place === 'bunk';
-  const sections = useMemo(() => inventoryOf(p, d, bunk), [p, d, bunk]);
+  const lang = useLang();
+  useT();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the names follow the language
+  const sections = useMemo(() => inventoryOf(p, d, bunk), [p, d, bunk, lang]);
   const byKey = useMemo(() => {
     const m = new Map<string, InvItem>();
     for (const s of sections) for (const it of s.items) m.set(it.key, it);
@@ -241,11 +236,11 @@ export function Inventory({
     if (got > 0) {
       chestLatch();
       notifySuccess();
-      say(`В сундук: ${it.name}${got > 1 ? ` ×${got}` : ''}`);
+      say(`${t('inv.toChest', { name: it.name })}${got > 1 ? ` ×${got}` : ''}`);
     } else {
       softThud();
       notifyWarning();
-      say('Сундук полон', true);
+      say(t('inv.chestFull'), true);
     }
   };
   const fromBunk = (it: InvItem, n: number) => {
@@ -254,7 +249,7 @@ export function Inventory({
     if (got > 0) {
       chestLatch();
       notifySuccess();
-      say(`${WHERE_NAME[homeOf(it)]}: +${got}`);
+      say(`${t(`inv.where.${homeOf(it)}`)}: +${got}`);
     } else {
       softThud();
       notifyWarning();
@@ -265,10 +260,10 @@ export function Inventory({
     if (it.icon.k !== 'egg') return;
     if (eggPlace(it.icon.egg)) {
       notifySuccess();
-      say('Яйцо греется в гнезде');
+      say(t('inv.eggWarming'));
     } else {
       notifyWarning();
-      say('Гнёзда заняты', true);
+      say(t('inv.nestsBusy'), true);
     }
   };
   const use = (it: InvItem) => {
@@ -282,10 +277,14 @@ export function Inventory({
     if (got.coins > 0) {
       coinDing();
       notifySuccess();
-      say(`Продано: +${fmt(got.coins)} монет${got.boxed ? ` · ${fmt(got.boxed)} в ящик` : ''}`);
+      say(
+        got.boxed
+          ? t('inv.soldBoxed', { n: got.coins, coins: fmt(got.coins), boxed: fmt(got.boxed) })
+          : t('inv.sold', { n: got.coins, coins: fmt(got.coins) }),
+      );
     } else if (got.boxed > 0) {
       notifySuccess();
-      say(`В ящик кузнеца: ${fmt(got.boxed)}`);
+      say(t('inv.toBox', { n: fmt(got.boxed) }));
     }
     setSel(null);
   };
@@ -299,11 +298,11 @@ export function Inventory({
     if (bunkBuyBig()) {
       chestLatch();
       notifySuccess();
-      say('Двойной сундук: 54 ячейки');
+      say(t('inv.bigBought'));
       setSel(null);
     } else {
       notifyWarning();
-      say('Не хватает монет', true);
+      say(t('inv.noCoins'), true);
     }
   };
 
@@ -318,9 +317,9 @@ export function Inventory({
   if (sel?.key === 'big' && !bunk.big) {
     card = (
       <>
-        <b className="mcinv__name">Двойной сундук</b>
+        <b className="mcinv__name">{t('inv.bigChest')}</b>
         <span className="mcinv__sub">
-          Ещё {BUNK_BIG_SLOTS - bunkSize(bunk)} ячеек. Вещи остаются на местах.
+          {t('inv.bigMore', { n: String(BUNK_BIG_SLOTS - bunkSize(bunk)) })}
         </span>
         <span className="mcinv__cost">
           <span className={balance >= BUNK_BIG_PRICE ? '' : 'is-short'}>
@@ -334,7 +333,7 @@ export function Inventory({
             disabled={balance < BUNK_BIG_PRICE}
             onClick={buyBig}
           >
-            {armed ? 'Точно? Купить' : 'Купить'}
+            {armed ? t('inv.buySure') : t('inv.buy')}
           </button>
         </div>
       </>
@@ -354,52 +353,52 @@ export function Inventory({
         </b>
         {item.sub && <span className="mcinv__sub">{item.sub}</span>}
         <span className={`mcinv__stat${item.where === 'sack' ? ' is-risk' : ''}`}>
-          <GxIcon name={whereIcon(item)} size={12} /> {WHERE_NAME[item.where]}
+          <GxIcon name={whereIcon(item)} size={12} /> {t(`inv.where.${item.where}`)}
           {item.price ? (
             <>
               {' '}
-              · <CoinIcon size={11} /> {fmt(item.price)} за штуку
+              · <CoinIcon size={11} /> {t('inv.perPiece', { price: fmt(item.price) })}
             </>
           ) : null}
         </span>
         {atBunk && item.stack > 1 && (
-          <span className="mcinv__sub">В ячейке сундука до {item.stack}</span>
+          <span className="mcinv__sub">{t('inv.stackMax', { n: String(item.stack) })}</span>
         )}
         <div className="mcinv__acts">
           {acts.includes('use') && (
             <button type="button" className="mcbtn mcbtn--ok" onClick={() => use(item)}>
               {item.key === 'item:energy'
-                ? 'Выпить'
+                ? t('inv.drink')
                 : item.key === 'item:prop'
-                  ? 'Поставить'
-                  : 'Включить'}
+                  ? t('inv.place')
+                  : t('inv.turnOn')}
             </button>
           )}
           {acts.includes('throw') && (
             <button type="button" className="mcbtn mcbtn--ok" onClick={() => use(item)}>
-              {item.key === 'item:charge' ? 'Заложить' : 'Бросить'}
+              {item.key === 'item:charge' ? t('inv.plant') : t('inv.throw')}
             </button>
           )}
           {acts.includes('nest') && (
             <button type="button" className="mcbtn mcbtn--ok" onClick={() => toNest(item)}>
-              В гнездо
+              {t('inv.toNest')}
             </button>
           )}
           {acts.includes('toBunk') &&
             (room <= 0 ? (
               <button type="button" className="mcbtn" disabled>
-                Сундук полон
+                {t('inv.chestFull')}
               </button>
             ) : (
               <>
                 {item.n > 1 && (
                   <button type="button" className="mcbtn" onClick={() => toBunk(item, 1)}>
-                    В сундук 1
+                    {t('inv.toChest1')}
                   </button>
                 )}
                 {stackN > 1 && stackN < item.n && (
                   <button type="button" className="mcbtn" onClick={() => toBunk(item, stackN)}>
-                    Стопку {stackN}
+                    {t('inv.stackN', { n: String(stackN) })}
                   </button>
                 )}
                 <button
@@ -407,7 +406,9 @@ export function Inventory({
                   className="mcbtn mcbtn--ok"
                   onClick={() => toBunk(item, item.n)}
                 >
-                  {item.n > 1 ? `Всё ${slotNum(Math.min(item.n, room))}` : 'В сундук'}
+                  {item.n > 1
+                    ? t('inv.all', { n: slotNum(Math.min(item.n, room)) })
+                    : t('inv.toChestBtn')}
                 </button>
               </>
             ))}
@@ -420,7 +421,7 @@ export function Inventory({
               <>
                 {item.n > 1 && (
                   <button type="button" className="mcbtn" onClick={() => fromBunk(item, 1)}>
-                    Забрать 1
+                    {t('inv.take1')}
                   </button>
                 )}
                 <button
@@ -428,7 +429,9 @@ export function Inventory({
                   className="mcbtn mcbtn--ok"
                   onClick={() => fromBunk(item, item.n)}
                 >
-                  {item.n > 1 ? `Забрать ${Math.min(item.n, home)}` : 'Забрать'}
+                  {item.n > 1
+                    ? t('inv.takeN', { n: String(Math.min(item.n, home)) })
+                    : t('inv.take')}
                 </button>
               </>
             ))}
@@ -436,10 +439,10 @@ export function Inventory({
             <button type="button" className="mcbtn mcbtn--warn" onClick={sellBag}>
               {bagSell > 0 ? (
                 <>
-                  Продать рюкзак {shortMoney(bagSell)} <CoinIcon size={11} />
+                  {t('inv.sellBag', { price: fmtShort(bagSell) })} <CoinIcon size={11} />
                 </>
               ) : (
-                'Рюкзак — в ящик'
+                t('inv.bagToBox')
               )}
             </button>
           )}
@@ -449,11 +452,7 @@ export function Inventory({
   } else {
     card = (
       <span className="mcinv__hint">
-        {place === 'view'
-          ? 'Здесь только посмотреть: сундук — у койки в Бараке 1.'
-          : atBunk
-            ? 'Тап по вещи — переложить в сундук или забрать.'
-            : 'Тап по вещи — что это и что с ней можно сделать.'}
+        {place === 'view' ? t('inv.hintView') : atBunk ? t('inv.hintBunk') : t('inv.hintAny')}
       </span>
     );
   }
@@ -481,19 +480,19 @@ export function Inventory({
         className={`inv${atBunk ? ' inv--bunk' : ''}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label={atBunk ? 'Сундук у койки' : 'Инвентарь'}
+        aria-label={atBunk ? t('inv.bunkTitle') : t('inv.title')}
       >
         <div className="inv__head">
-          <b>{atBunk ? 'Сундук у койки' : 'Инвентарь'}</b>
+          <b>{atBunk ? t('inv.bunkTitle') : t('inv.title')}</b>
           <span className="inv__purse">
             <span>
-              <CoinIcon size={14} /> {shortMoney(balance)}
+              <CoinIcon size={14} /> {fmtShort(balance)}
             </span>
             <span>
               <TokenIcon size={14} /> {fmt(p.tokens)}
             </span>
           </span>
-          <button type="button" className="mcinv__x" aria-label="Закрыть" onClick={onClose}>
+          <button type="button" className="mcinv__x" aria-label={t('inv.close')} onClick={onClose}>
             ✕
           </button>
         </div>
@@ -502,7 +501,7 @@ export function Inventory({
           <div className="inv__chest">
             <div className="mcinv__label">
               <span>
-                <GxIcon name="chest" size={14} /> Сундук
+                <GxIcon name="chest" size={14} /> {t('inv.chest')}
               </span>
               <em>
                 {bunkSec.limits[0].used}/{bunkSec.limits[0].max}
@@ -528,13 +527,13 @@ export function Inventory({
                   setSel(sel?.key === 'big' ? null : { key: 'big', kind: 'big' });
                 }}
               >
-                <KIcon name="locked" size={12} /> Двойной сундук — ещё 27 ячеек
+                <KIcon name="locked" size={12} /> {t('inv.bigLocked')}
               </button>
             )}
           </div>
         )}
 
-        <nav className="inv__tabs" aria-label="Разделы">
+        <nav className="inv__tabs" aria-label={t('inv.tabs')}>
           {listed.map((s) => {
             const full = s.limits.some(limitFull) && s.id !== 'finds' && s.id !== 'bunk';
             const n = s.id === 'finds' ? s.limits[0].used : s.items.length;
@@ -565,7 +564,7 @@ export function Inventory({
             >
               <div className="inv__sec-head">
                 <GxIcon name={s.icon as GxIconName} size={15} />
-                <b>{s.id === 'bunk' ? 'Сундук у койки' : s.name}</b>
+                <b>{s.id === 'bunk' ? t('inv.bunkTitle') : s.name}</b>
                 <span className="inv__lims">
                   {s.limits.map((l) => (
                     <Limit key={l.label} l={l} />
@@ -579,7 +578,7 @@ export function Inventory({
                   ))}
                 </div>
               ) : (
-                <span className="inv__empty">пусто</span>
+                <span className="inv__empty">{t('inv.empty')}</span>
               )}
             </section>
           ))}
@@ -618,13 +617,13 @@ function homeOf(it: InvItem): InvItem['where'] {
 function fullText(it: InvItem): string {
   switch (homeOf(it)) {
     case 'basket':
-      return 'Корзина полна';
+      return t('inv.basketFull');
     case 'shelf':
-      return 'Полка полна';
+      return t('inv.shelfFull');
     case 'pouch':
-      return 'Мешочек полон';
+      return t('inv.pouchFull');
     default:
-      return 'Некуда';
+      return t('inv.nowhere');
   }
 }
 

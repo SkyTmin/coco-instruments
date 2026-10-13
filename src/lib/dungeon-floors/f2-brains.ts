@@ -1492,7 +1492,10 @@ function reform(sim: Sim, b: BossFight, api: SimApi): void {
     t: 'boss',
     what: 'phase',
     text: 'ЛАТЫ СОБРАНЫ',
-    sub: `внутри ${inside} латников — разбей снова`,
+    sub:
+      inside % 10 === 1 && inside % 100 !== 11
+        ? `внутри ${inside} латника — разбей снова`
+        : `внутри ${inside} латников — разбей снова`,
   });
 }
 

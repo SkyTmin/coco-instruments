@@ -31,7 +31,6 @@ import {
   sackSlots,
   setOf,
   SETS,
-  SLOT_NAMES,
   SLOTS,
   OPEN_FLOORS,
 } from '@/lib/dungeon';
@@ -40,11 +39,24 @@ import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { gearIcon, heroFrame, itemUrl } from '@/lib/dungeon-art';
 import { mobPortrait } from '@/lib/dungeon-mobart';
 import '@/lib/dungeon-floors/art';
-import { shortMoney } from '@/lib/prison';
+import { fmtNum, fmtShort, t, useT } from '@/i18n';
+import {
+  beastText,
+  bossLead,
+  bossName,
+  dl,
+  matLead,
+  matName,
+  mobName,
+  setBonus,
+  setItem,
+  setName,
+  slotName,
+} from '@/i18n/data-dungeon';
 import { coinDing, primeAudio, tierBreak } from '@/lib/sound';
 import { notifySuccess, notifyWarning } from '@/lib/haptics';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 
 /** Спрайт кодом → картинка для разметки, один раз на ключ. */
 const spriteUrls = new Map<string, string>();
@@ -69,11 +81,11 @@ function CostLine({
   return (
     <span className="dgc-cost">
       <span className={balance >= cost.coins ? '' : 'is-short'}>
-        <CoinIcon size={16} /> {shortMoney(cost.coins)}
+        <CoinIcon size={16} /> {fmtShort(cost.coins)}
       </span>
       {(Object.entries(cost.mats) as [MatId, number][]).map(([id, n]) => (
-        <span key={id} className={(stash[id] ?? 0) >= n ? '' : 'is-short'} title={MATS[id].name}>
-          <img src={itemUrl(id)} alt={MATS[id].name} /> {stash[id] ?? 0}/{n}
+        <span key={id} className={(stash[id] ?? 0) >= n ? '' : 'is-short'} title={matName(id)}>
+          <img src={itemUrl(id)} alt={matName(id)} /> {stash[id] ?? 0}/{n}
         </span>
       ))}
     </span>
@@ -82,15 +94,18 @@ function CostLine({
 
 function statLine(slot: Slot, tier: number, plus: number): string {
   const s = pieceStats(slot, { tier, plus });
-  if (slot === 'weapon') return `урон ${s.dmg.toFixed(0)}`;
-  if (slot === 'helm') return `броня ${s.armor.toFixed(0)} · свет ${s.light.toFixed(1)}`;
-  if (slot === 'robe') return `броня ${s.armor.toFixed(0)} · здоровье +${s.hp.toFixed(0)}`;
-  return `шаг ${s.speed.toFixed(1)} · рывок ${s.dash.toFixed(1)}`;
+  if (slot === 'weapon') return t('dungeon.camp.statWeapon', { dmg: s.dmg.toFixed(0) });
+  if (slot === 'helm')
+    return t('dungeon.camp.statHelm', { armor: s.armor.toFixed(0), light: s.light.toFixed(1) });
+  if (slot === 'robe')
+    return t('dungeon.camp.statRobe', { armor: s.armor.toFixed(0), hp: s.hp.toFixed(0) });
+  return t('dungeon.camp.statBoots', { speed: s.speed.toFixed(1), dash: s.dash.toFixed(1) });
 }
 
 // ---- Снаряжение ------------------------------------------------------------
 
 export function GearTab({ onSpend }: { onSpend: () => void }) {
+  useT();
   const d = useFinanceStore((s) => s.dungeon);
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
@@ -133,7 +148,7 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
           <GxBar
             value={lv.need ? lv.into / lv.need : 1}
             tone="gold"
-            label={`опыт ${fmt(lv.into)} / ${fmt(lv.need)}`}
+            label={t('dungeon.camp.xp', { into: fmt(lv.into), need: fmt(lv.need) })}
           />
           <div className="dgc-top__stats">
             <span>
@@ -151,8 +166,11 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
           </div>
           <i className="dgc-top__set">
             {set
-              ? `Весь комплект «${setOf(set).name}»: ${setOf(set).bonus}`
-              : 'Собери 4 вещи одного комплекта — будет бонус'}
+              ? t('dungeon.camp.fullSet', {
+                  name: setName(setOf(set).tier),
+                  bonus: setBonus(setOf(set).tier),
+                })
+              : t('dungeon.camp.setHint')}
           </i>
         </div>
       </div>
@@ -176,9 +194,9 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
                 {g.plus > 0 && <em>+{g.plus}</em>}
               </span>
               <span className="dgc-item__name">
-                <b>{cur.items[slot]}</b>
+                <b>{setItem(cur.tier, slot)}</b>
                 <i>
-                  {SLOT_NAMES[slot]} · {nowStat}
+                  {slotName(slot)} · {nowStat}
                 </i>
               </span>
               {can && <span className="gx-badge gx-badge--gold dgc-item__bang">!</span>}
@@ -199,7 +217,7 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
                   onClick={() => go(slot)}
                 >
                   <GxIcon name="anvil" />
-                  Заточить
+                  {t('dungeon.camp.sharpen')}
                 </button>
               </div>
             )}
@@ -210,7 +228,7 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
                   <KIcon name="arrowRight" size={16} />
                   <img src={gearIcon(slot, g.tier + 1)} alt="" />
                   <span>
-                    «{next.items[slot]}» · {statLine(slot, g.tier + 1, 0)}
+                    «{setItem(next.tier, slot)}» · {statLine(slot, g.tier + 1, 0)}
                   </span>
                 </div>
                 {conds.map((c) => {
@@ -219,7 +237,7 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
                     <div key={c.label} className="dgc-cond">
                       <span>
                         {have >= c.need && <KIcon name="checkmark" size={14} />}
-                        {c.label}
+                        {dl(c.label)}
                       </span>
                       <GxBar
                         value={have / c.need}
@@ -237,19 +255,20 @@ export function GearTab({ onSpend }: { onSpend: () => void }) {
                   onClick={() => go(slot)}
                 >
                   <GxIcon name="upgrade" />
-                  {met ? `Улучшить до «${next.name}»` : 'Сначала выполни задания'}
+                  {met
+                    ? t('dungeon.camp.reforgeTo', { name: setName(next.tier) })
+                    : t('dungeon.camp.tasksFirst')}
                 </button>
               </div>
             )}
             {step.kind === 'soon' && (
               <div className="dgc-item__done">
-                <KIcon name="checkmark" size={16} /> Заточено до предела. Дальше — с новыми уровнями
-                подземелья.
+                <KIcon name="checkmark" size={16} /> {t('dungeon.camp.maxed')}
               </div>
             )}
             {step.kind === 'max' && (
               <div className="dgc-item__done">
-                <KIcon name="star" size={16} /> Лучшее, что есть.
+                <KIcon name="star" size={16} /> {t('dungeon.camp.best')}
               </div>
             )}
           </div>
@@ -267,13 +286,11 @@ const BEASTS: MobId[] = OPEN_FLOORS.flatMap((f) =>
 );
 
 export function BeastTab() {
+  useT();
   const d = useFinanceStore((s) => s.dungeon);
   return (
     <div className="pforge dgc">
-      <p className="dgc-lead">
-        Каждого зверя знаешь тем лучше, чем больше их убил. Ступени бестиария — навсегда, на всё
-        подземелье.
-      </p>
+      <p className="dgc-lead">{t('dungeon.camp.beastLead')}</p>
       {BEASTS.map((id) => {
         const def = MOBS[id];
         const n = d.kills[id] ?? 0;
@@ -290,7 +307,7 @@ export function BeastTab() {
             <img className="dgc-beast__img" src={url} alt="" />
             <span className="dgc-beast__info">
               <b>
-                {seen ? def.name : '???'}
+                {seen ? mobName(def.id) : '???'}
                 <em>{fmt(n)}</em>
               </b>
               {next ? (
@@ -298,16 +315,14 @@ export function BeastTab() {
                   <span className="dgc-xp">
                     <i style={{ transform: `scaleX(${(n - from) / (next.at - from)})` }} />
                   </span>
-                  <i>
-                    ещё {fmt(next.at - n)} — {next.what}
-                  </i>
+                  <i>{t('dungeon.camp.beastNext', { n: fmt(next.at - n), what: beastText(st) })}</i>
                 </>
               ) : (
-                <i>Изучен весь — золотая рамка</i>
+                <i>{t('dungeon.camp.beastDone')}</i>
               )}
               <span className="dgc-beast__steps">
                 {BEAST_STEPS.map((b, i) => (
-                  <em key={b.at} className={i < st ? 'is-on' : ''} title={b.what}>
+                  <em key={b.at} className={i < st ? 'is-on' : ''} title={beastText(i)}>
                     {b.at}
                   </em>
                 ))}
@@ -328,12 +343,15 @@ export function BeastTab() {
             />
             <span className="dgc-beast__info">
               <b>
-                {kills > 0 || d.reached >= f.id ? b.name : '???'}
+                {kills > 0 || d.reached >= f.id ? bossName(b.id) : '???'}
                 <em>{kills}</em>
               </b>
               <i>
-                Этаж {f.id} — {b.lead}. Возвращается через {Math.round(b.restMs / 60_000)} минут
-                после смерти.
+                {t('dungeon.camp.bossLine', {
+                  floor: String(f.id),
+                  lead: bossLead(b.id),
+                  n: String(Math.round(b.restMs / 60_000)),
+                })}
               </i>
             </span>
           </div>
@@ -346,6 +364,7 @@ export function BeastTab() {
 // ---- Склад и сидор ---------------------------------------------------------
 
 export function StashTab({ onSpend }: { onSpend: () => void }) {
+  useT();
   const d = useFinanceStore((s) => s.dungeon);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const sackUp = useFinanceStore((s) => s.dungeonSackUp);
@@ -353,14 +372,14 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
   const can = d.sackLevel < SACK_MAX && canPay(d, cost, balance);
   const mats = Object.keys(MATS) as MatId[];
   const stats: [string, number, ReactNode?][] = [
-    ['Вылазок', d.stats.runs ?? 0],
-    ['Вышел живым', d.stats.extracts ?? 0],
-    ['С полным рюкзаком', d.stats.fullExtracts ?? 0],
-    ['Погиб', d.stats.deaths ?? 0],
-    ['Пройдено, м', d.stats.meters ?? 0],
-    ['Уклонов в последний миг', d.stats.dodges ?? 0],
-    ['Шахт вскрыто', d.stats.mines ?? 0],
-    ['Тайников', d.stats.secrets ?? 0],
+    [t('dungeon.camp.stat.runs'), d.stats.runs ?? 0],
+    [t('dungeon.camp.stat.extracts'), d.stats.extracts ?? 0],
+    [t('dungeon.camp.stat.fullExtracts'), d.stats.fullExtracts ?? 0],
+    [t('dungeon.camp.stat.deaths'), d.stats.deaths ?? 0],
+    [t('dungeon.camp.stat.meters'), d.stats.meters ?? 0],
+    [t('dungeon.camp.stat.dodges'), d.stats.dodges ?? 0],
+    [t('dungeon.camp.stat.mines'), d.stats.mines ?? 0],
+    [t('dungeon.camp.stat.secrets'), d.stats.secrets ?? 0],
   ];
   return (
     <div className="pforge dgc">
@@ -369,18 +388,15 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
           <img className="dgc-slot__ico" src={itemUrl('skin')} alt="" />
           <span className="dgc-slot__name">
             <b>
-              Рюкзак · {d.sackLevel + 1} {d.sackLevel === 0 ? 'ряд' : 'ряда'} по {SACK_ROW}
+              {t('dungeon.camp.sackRows', { n: String(d.sackLevel + 1), row: String(SACK_ROW) })}
             </b>
-            <i>
-              {sackSlots(d.sackLevel)} ячеек, в ячейке до 32 штук одного вида · монеты, токены и
-              ключи места не занимают
-            </i>
+            <i>{t('dungeon.camp.sackInfo', { n: String(sackSlots(d.sackLevel)) })}</i>
           </span>
         </div>
         {d.sackLevel < SACK_MAX ? (
           <div className="dgc-step">
             <span className="dgc-step__what">
-              Нашить карман: ещё ряд, {sackSlots(d.sackLevel + 1)} ячеек
+              {t('dungeon.camp.pocket', { n: String(sackSlots(d.sackLevel + 1)) })}
             </span>
             <CostLine cost={cost} balance={balance} stash={d.stash} />
             <button
@@ -398,23 +414,23 @@ export function StashTab({ onSpend }: { onSpend: () => void }) {
                 notifySuccess();
               }}
             >
-              Нашить
+              {t('dungeon.camp.sew')}
             </button>
           </div>
         ) : (
-          <div className="dgc-step dgc-step--soon">Больше не нашить.</div>
+          <div className="dgc-step dgc-step--soon">{t('dungeon.camp.noMore')}</div>
         )}
       </div>
 
       <div className="dgc-stash">
-        <b>Склад наверху</b>
+        <b>{t('dungeon.camp.stashTitle')}</b>
         {mats.map((id) => (
           <span key={id} className={(d.stash[id] ?? 0) > 0 ? '' : 'is-empty'}>
             <img src={itemUrl(id)} alt="" />
             <b>{fmt(d.stash[id] ?? 0)}</b>
             <span>
-              {MATS[id].name}
-              <i>{MATS[id].lead}</i>
+              {matName(id)}
+              <i>{matLead(id)}</i>
             </span>
           </span>
         ))}

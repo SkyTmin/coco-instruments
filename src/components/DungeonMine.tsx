@@ -28,7 +28,6 @@ import {
   deepHp,
   deepMineNow,
   deepRock,
-  matDef,
   mineNextAt,
   mineWindow,
   oreItem,
@@ -60,6 +59,8 @@ import {
   rockVariant,
 } from '@/lib/prison-art';
 import { itemUrl } from '@/lib/dungeon-art';
+import { t, upper, useT } from '@/i18n';
+import { matName, mineName } from '@/i18n/data-dungeon';
 import { crackStage } from '@/components/MineField';
 import { bagFull, deepRumble, pickHit, ratSqueak, softChime, tierBreak } from '@/lib/sound';
 import { notifySuccess, notifyWarning, tapLight, tapMedium } from '@/lib/haptics';
@@ -69,11 +70,11 @@ const texOf = (r: number, v = 0) => (r >= DEEP_BASE ? deepRockTexture(r, v) : ro
 const colorsOf = (r: number) => (r >= DEEP_BASE ? deepRockColors(r) : rockColors(r));
 
 const clock = (ms: number) => {
-  const t = Math.max(0, Math.ceil(ms / 1000));
-  const m = Math.floor(t / 60);
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(s / 60);
   return m >= 60
-    ? `${Math.floor(m / 60)} ч ${String(m % 60).padStart(2, '0')} мин`
-    : `${m}:${String(t % 60).padStart(2, '0')}`;
+    ? t('dungeon.clockH', { h: String(Math.floor(m / 60)), m: String(m % 60).padStart(2, '0') })
+    : `${m}:${String(s % 60).padStart(2, '0')}`;
 };
 
 export function DungeonMine({
@@ -88,6 +89,7 @@ export function DungeonMine({
   onExit: (packs: number) => void;
   onToast: (text: string) => void;
 }) {
+  useT();
   const def = DEEP_MINES[id];
   const pick = useFinanceStore((s) => s.prison.pick);
   const [now, setNow] = useState(() => Date.now());
@@ -158,7 +160,7 @@ export function DungeonMine({
     if (lost) {
       bagFull();
       notifyWarning();
-      onToast('Рюкзак полон — руда осыпается мимо');
+      onToast(t('dungeon.dmine.fullOre'));
     }
     makeNoise(list.length, list[0].cell);
   };
@@ -170,7 +172,7 @@ export function DungeonMine({
       setPacks(p);
       ratSqueak(0);
       ratSqueak(1);
-      field.current?.float(cell, 'ШУМ', 'pfloat--blast');
+      field.current?.float(cell, t('dungeon.dmine.noise'), 'pfloat--blast');
     }
   };
 
@@ -217,11 +219,11 @@ export function DungeonMine({
       notifySuccess();
       f?.trauma(0.4);
       f?.chips(c, [...colors, '#ffffff', '#ffe08a'], 36, 2);
-      f?.float(c, matDef(item).name.toUpperCase(), 'pfloat--block', 0);
+      f?.float(c, upper(matName(item)), 'pfloat--block', 0);
     } else {
       bagFull();
       notifyWarning();
-      onToast('Рюкзак полон — блок раскололся мимо');
+      onToast(t('dungeon.dmine.fullBlock'));
     }
     useFinanceStore.getState().dungeonMineSave(id, next, false, ok ? 1 : 0);
     makeNoise(1, c);
@@ -301,7 +303,7 @@ export function DungeonMine({
         <button
           type="button"
           className="gx-round gx-round--red dgmine__out"
-          aria-label="Выйти из шахты"
+          aria-label={t('dungeon.dmine.exit')}
           onClick={() => {
             tapLight();
             field.current?.stop();
@@ -311,8 +313,8 @@ export function DungeonMine({
         >
           <GxIcon name="exit" />
         </button>
-        <div className="gx-ribbon dgmine__title">{def.name}</div>
-        <span className="gx-chip dgmine__clock" title="Новая порода">
+        <div className="gx-ribbon dgmine__title">{mineName(def.floor, id)}</div>
+        <span className="gx-chip dgmine__clock" title={t('dungeon.dmine.newRock')}>
           <GxIcon name="hourglass" size={15} /> {clock(mineNextAt(id, now) - now)}
         </span>
       </div>
@@ -326,7 +328,7 @@ export function DungeonMine({
         <span className="dgmine__ores" ref={sackRef}>
           {chipIds.map((k, i) =>
             ore[i] > 0 || i < 2 ? (
-              <span key={k} className="gx-chip" title={matDef(k).name}>
+              <span key={k} className="gx-chip" title={matName(k)}>
                 <img src={itemUrl(k)} alt="" /> {ore[i]}
               </span>
             ) : null,
@@ -356,8 +358,8 @@ export function DungeonMine({
         >
           {done && (
             <div className="dgmine__done">
-              <b>Выработана</b>
-              <span>Порода нарастёт через {clock(mineNextAt(id, now) - now)}</span>
+              <b>{t('dungeon.dmine.depleted')}</b>
+              <span>{t('dungeon.dmine.regrows', { time: clock(mineNextAt(id, now) - now) })}</span>
             </div>
           )}
         </MineField>

@@ -17,7 +17,6 @@ import type { RunEnd } from '@/components/DungeonRun';
 import { useFinanceStore } from '@/store';
 import {
   AREAS,
-  areaOf,
   bossOfFloor,
   bossReadyAt,
   DEEP_DONE_AT,
@@ -29,7 +28,6 @@ import {
   floorOf,
   heroOf,
   levelOf,
-  MATS,
   mineNextAt,
   sackSlots,
   slotsUsed,
@@ -43,23 +41,34 @@ import type { AreaId, MatId } from '@/lib/dungeon';
 import { buildWorld } from '@/lib/dungeon-world';
 import { gearIcon, heroFrame, itemUrl, propArt } from '@/lib/dungeon-art';
 import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
-import { MINE_CELLS, minedShare, rankLetter, shortMoney } from '@/lib/prison';
+import { MINE_CELLS, minedShare, rankLetter } from '@/lib/prison';
 import { liftClank, primeAudio } from '@/lib/sound';
+import { fmtNum, fmtShort, t, useT } from '@/i18n';
+import {
+  areaLead,
+  areaName,
+  bossName,
+  floorLead,
+  floorName,
+  matName,
+  mineName,
+  setName,
+} from '@/i18n/data-dungeon';
 import { tapLight } from '@/lib/haptics';
 
 type View = 'lobby' | 'down' | 'play' | 'up' | 'summary' | 'dead';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 const clock = (ms: number) => {
-  const t = Math.max(0, Math.ceil(ms / 1000));
-  const m = Math.floor(t / 60);
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(s / 60);
   return m >= 60
-    ? `${Math.floor(m / 60)} ч ${String(m % 60).padStart(2, '0')} мин`
-    : `${m}:${String(t % 60).padStart(2, '0')}`;
+    ? t('dungeon.clockH', { h: String(Math.floor(m / 60)), m: String(m % 60).padStart(2, '0') })
+    : `${m}:${String(s % 60).padStart(2, '0')}`;
 };
 const minutes = (ms: number) => {
   const m = Math.round(ms / 60_000);
-  return m < 1 ? 'меньше минуты' : `${m} мин`;
+  return m < 1 ? t('dungeon.lobby.lessMin') : t('dungeon.lobby.mins', { n: String(m) });
 };
 
 const urlCache = new Map<string, string>();
@@ -77,6 +86,7 @@ const DOWN_MS = 1300;
 const UP_MS = 1700;
 
 export function DungeonPage() {
+  useT();
   const nav = useNavigate();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
@@ -188,7 +198,7 @@ export function DungeonPage() {
       <div className="gx dgl dgl--after">
         <div className="dg-shaft-bg" aria-hidden="true" />
         <div className="dgl__wrap">
-          <div className="gx-ribbon gx-ribbon--curtain dgl__big">Добыча</div>
+          <div className="gx-ribbon gx-ribbon--curtain dgl__big">{t('dungeon.lobby.loot')}</div>
           <div className="gx-panel gx-panel--fancy dgl-after">
             <div className="dgl-after__pay">
               <CoinIcon size={34} />
@@ -197,7 +207,7 @@ export function DungeonPage() {
             {h.meat > 0 && (
               <div className="gx-row">
                 <img src={itemUrl('meat')} alt="" />
-                <span>Мясо продано · {h.meat} шт.</span>
+                <span>{t('dungeon.lobby.meatSold', { n: String(h.meat) })}</span>
                 <b>
                   {fmt(h.meatValue)} <CoinIcon size={14} />
                 </b>
@@ -206,32 +216,32 @@ export function DungeonPage() {
             {h.coins > 0 && (
               <div className="gx-row">
                 <CoinIcon size={26} />
-                <span>Монеты из рюкзака</span>
+                <span>{t('dungeon.lobby.bagCoins')}</span>
                 <b>{fmt(h.coins)}</b>
               </div>
             )}
             {mats.map(([id, n]) => (
               <div key={id} className="gx-row">
                 <img src={itemUrl(id)} alt="" />
-                <span>{MATS[id].name} → склад</span>
+                <span>{t('dungeon.lobby.toStash', { name: matName(id) })}</span>
                 <b>+{n}</b>
               </div>
             ))}
             {h.tokens > 0 && (
               <div className="gx-row">
                 <TokenIcon size={26} />
-                <span>Токены</span>
+                <span>{t('dungeon.tokens')}</span>
                 <b>+{h.tokens}</b>
               </div>
             )}
             {h.keys > 0 && (
               <div className="gx-row">
                 <KeyIcon size={26} />
-                <span>Ключи от сундуков</span>
+                <span>{t('dungeon.lobby.chestKeys')}</span>
                 <b>+{h.keys}</b>
               </div>
             )}
-            {nothing && <p className="dgl-after__empty">Рюкзак пустой — зато живой.</p>}
+            {nothing && <p className="dgl-after__empty">{t('dungeon.lobby.emptyAlive')}</p>}
             <div className="dgl-after__meta">
               <span>
                 <GxIcon name="rat" size={18} /> {fmt(h.killed)}
@@ -250,7 +260,7 @@ export function DungeonPage() {
               }}
             >
               <GxIcon name="lift" />
-              Ещё раз вниз
+              {t('dungeon.lobby.again')}
             </button>
             <div className="dgl__pair">
               <button
@@ -261,11 +271,11 @@ export function DungeonPage() {
                 }}
               >
                 <GxIcon name="anvil" />
-                Снаряжение
+                {t('dungeon.lobby.gear')}
               </button>
               <button className="gx-btn" onClick={() => nav('/yard')}>
                 <GxIcon name="village" />
-                Во двор
+                {t('dungeon.lobby.toYard')}
               </button>
             </div>
           </div>
@@ -286,49 +296,51 @@ export function DungeonPage() {
           <div className="dgl-dead__skull">
             <GxIcon name="skull" size={72} />
           </div>
-          <div className="gx-ribbon gx-ribbon--curtain dgl__big">Ты погиб</div>
+          <div className="gx-ribbon gx-ribbon--curtain dgl__big">{t('dungeon.dead')}</div>
           <div className="gx-panel gx-panel--wood dgl-after">
-            <p className="dgl-after__lead">Крысы растащили рюкзак:</p>
+            <p className="dgl-after__lead">{t('dungeon.lobby.looted')}</p>
             {l.meat > 0 && (
               <div className="gx-row">
                 <img src={itemUrl('meat')} alt="" />
-                <span>Мясо · {l.meat} шт.</span>
+                <span>{t('dungeon.lobby.meatN', { n: String(l.meat) })}</span>
                 <b>−{fmt(l.meatValue)}</b>
               </div>
             )}
             {l.coins > 0 && (
               <div className="gx-row">
                 <CoinIcon size={26} />
-                <span>Монеты</span>
+                <span>{t('dungeon.coins')}</span>
                 <b>−{fmt(l.coins)}</b>
               </div>
             )}
             {mats.map(([id, n]) => (
               <div key={id} className="gx-row">
                 <img src={itemUrl(id)} alt="" />
-                <span>{MATS[id].name}</span>
+                <span>{matName(id)}</span>
                 <b>−{n}</b>
               </div>
             ))}
             {l.tokens > 0 && (
               <div className="gx-row">
                 <TokenIcon size={26} />
-                <span>Токены</span>
+                <span>{t('dungeon.tokens')}</span>
                 <b>−{l.tokens}</b>
               </div>
             )}
             {l.keys > 0 && (
               <div className="gx-row">
                 <KeyIcon size={26} />
-                <span>Ключи</span>
+                <span>{t('dungeon.keys')}</span>
                 <b>−{l.keys}</b>
               </div>
             )}
-            {!any && <p className="dgl-after__empty">Нести было нечего.</p>}
+            {!any && <p className="dgl-after__empty">{t('dungeon.lobby.nothingLost')}</p>}
             <div className="dgl-after__kept">
               <GxIcon name="shield" size={20} />
               <span>
-                Остались опыт{l.killed > 0 ? `, ${fmt(l.killed)} убитых` : ''} и открытые места
+                {l.killed > 0
+                  ? t('dungeon.lobby.keptKills', { n: fmt(l.killed) })
+                  : t('dungeon.lobby.kept')}
               </span>
             </div>
           </div>
@@ -341,7 +353,7 @@ export function DungeonPage() {
               }}
             >
               <GxIcon name="lift" />
-              Снова вниз
+              {t('dungeon.lobby.downAgain')}
             </button>
             <button
               className="gx-btn gx-btn--block"
@@ -351,7 +363,7 @@ export function DungeonPage() {
               }}
             >
               <GxIcon name="anvil" />
-              Улучшить снаряжение
+              {t('dungeon.lobby.upgrade')}
             </button>
           </div>
         </div>
@@ -381,18 +393,18 @@ export function DungeonPage() {
   const chips = (
     <>
       <span className="gx-chip">
-        <CoinIcon size={18} /> {shortMoney(balance)}
+        <CoinIcon size={18} /> {fmtShort(balance)}
       </span>
-      <span className="gx-chip" title={MATS.skin.name}>
+      <span className="gx-chip" title={matName('skin')}>
         <img src={itemUrl('skin')} alt="" /> {fmt(d.stash.skin ?? 0)}
       </span>
-      <span className="gx-chip" title={MATS.pyrite.name}>
+      <span className="gx-chip" title={matName('pyrite')}>
         <img src={itemUrl('pyrite')} alt="" /> {fmt(d.stash.pyrite ?? 0)}
       </span>
       <button
         type="button"
         className="gx-chip inv-chip"
-        aria-label="Инвентарь"
+        aria-label={t('dungeon.lobby.inventory')}
         onClick={() => {
           tapLight();
           setInvOpen(true);
@@ -408,7 +420,7 @@ export function DungeonPage() {
       <div className="dg-shaft-bg" aria-hidden="true" />
       <div className="dgl__wrap">
         <GameTop
-          title="Подземелье"
+          title={t('dungeon.lobby.title')}
           onBack={() => nav(-1)}
           chips={open ? chips : undefined}
           right={<AudioToggles />}
@@ -416,10 +428,11 @@ export function DungeonPage() {
         {!open ? (
           <div className="gx-panel gx-panel--wood-fancy dgl-lock">
             <GxIcon name="gate" size={64} />
-            <b>Откроется на ранге {rankLetter(DUNGEON_UNLOCK_RANK)}</b>
-            <span>Под лагерем старые шахты, и там крысы. Сначала поднимись в шахте.</span>
+            <b>{t('dungeon.lobby.lockRank', { rank: rankLetter(DUNGEON_UNLOCK_RANK) })}</b>
+            <span>{t('dungeon.lobby.lockText')}</span>
             <button className="gx-btn gx-btn--red gx-btn--block" onClick={() => nav('/prison')}>
-              <GxIcon name="pick" />В шахту
+              <GxIcon name="pick" />
+              {t('dungeon.lobby.toMine')}
             </button>
           </div>
         ) : (
@@ -430,18 +443,20 @@ export function DungeonPage() {
                 <span className="gx-hex">{lv.level}</span>
               </div>
               <div className="dgl-hero__info">
-                <b>{setOf(d.gear.weapon.tier).name} комплект</b>
+                <b>
+                  {t('dungeon.lobby.setTitle', { name: setName(setOf(d.gear.weapon.tier).tier) })}
+                </b>
                 <div className="dgl-hero__stats">
-                  <span title="Здоровье">
+                  <span title={t('dungeon.lobby.health')}>
                     <GxIcon name="heart" size={18} /> {hero.maxHp}
                   </span>
-                  <span title="Урон">
+                  <span title={t('dungeon.lobby.damage')}>
                     <GxIcon name="sword" size={18} /> {hero.dmg.toFixed(0)}
                   </span>
-                  <span title="Броня">
+                  <span title={t('dungeon.lobby.armor')}>
                     <GxIcon name="shield" size={18} /> {hero.armor.toFixed(0)}
                   </span>
-                  <span title="Рюкзак">
+                  <span title={t('dungeon.bag')}>
                     <GxIcon name="backpack" size={18} /> {sackSlots(d.sackLevel)}
                   </span>
                 </div>
@@ -472,13 +487,13 @@ export function DungeonPage() {
                 }}
               >
                 <GxIcon name="anvil" />
-                Улучшить снаряжение
+                {t('dungeon.lobby.upgrade')}
                 {ups.length > 0 && <span className="gx-badge gx-badge--gold">!</span>}
               </button>
             </div>
 
             {!run && (
-              <div className="dgl-floors" role="tablist" aria-label="Этаж">
+              <div className="dgl-floors" role="tablist" aria-label={t('dungeon.lobby.floor')}>
                 {(creativeOn ? READY_FLOORS : OPEN_FLOORS).map((f) => {
                   const ok = f.id <= d.reached;
                   return (
@@ -504,12 +519,12 @@ export function DungeonPage() {
             {!run && (
               <div className="dgl-floorname">
                 <b>
-                  Этаж {floor.id} · {floor.name}
+                  {t('dungeon.lobby.floorName', { n: String(floor.id), name: floorName(floor.id) })}
                 </b>
                 <i>
                   {floorOpen
-                    ? floor.lead
-                    : `Закрыт. Победи босса ${floor.id - 1}-го этажа — лестница за его ареной.`}
+                    ? floorLead(floor.id)
+                    : t('dungeon.lobby.floorLocked', { n: String(floor.id - 1) })}
                 </i>
               </div>
             )}
@@ -517,10 +532,14 @@ export function DungeonPage() {
               <div className="gx-panel gx-panel--iron dgl-resume">
                 <GxIcon name="miner" size={40} />
                 <div>
-                  <b>Ты остался внизу</b>
+                  <b>{t('dungeon.lobby.stayedDown')}</b>
                   <span>
-                    Этаж {run.floor} · {areaOf(run.area).name} · рюкзак {slotsUsed(run.sack)}/
-                    {sackSlots(d.sackLevel)}
+                    {t('dungeon.lobby.resumeLine', {
+                      n: String(run.floor),
+                      area: areaName(run.area),
+                      used: String(slotsUsed(run.sack)),
+                      cap: String(sackSlots(d.sackLevel)),
+                    })}
                   </span>
                   <GxBar
                     value={run.hp / Math.max(1, hero.maxHp)}
@@ -553,8 +572,11 @@ export function DungeonPage() {
                         }}
                       />
                       <span className="dgl-area__info">
-                        <b>{a.name}</b>
-                        <span className="dgl-area__stars" aria-label={`сложность ${i + 1}`}>
+                        <b>{areaName(a.id)}</b>
+                        <span
+                          className="dgl-area__stars"
+                          aria-label={t('dungeon.lobby.difficulty', { n: String(i + 1) })}
+                        >
                           {Array.from({ length: 3 }, (_, k) => (
                             <KIcon
                               key={k}
@@ -566,10 +588,10 @@ export function DungeonPage() {
                         </span>
                         <i>
                           {ok
-                            ? a.lead
+                            ? areaLead(a.id)
                             : floorOpen
-                              ? 'Лифт сломан — дойди пешком и почини'
-                              : 'Этаж закрыт'}
+                              ? t('dungeon.lobby.liftBrokenWalk')
+                              : t('dungeon.lobby.floorClosed')}
                         </i>
                       </span>
                       {!ok && (
@@ -589,24 +611,24 @@ export function DungeonPage() {
               onClick={() => descend(run ? run.area : lift)}
             >
               <GxIcon name="lift" />
-              {run ? 'Вернуться вниз' : 'Спуститься'}
+              {run ? t('dungeon.lobby.goBack') : t('dungeon.lobby.descend')}
             </button>
             <p className="dgl-warn">
-              <GxIcon name="skull" size={16} /> Погибнешь — добыча из рюкзака пропадёт
+              <GxIcon name="skull" size={16} /> {t('dungeon.lobby.deathWarn')}
             </p>
 
             <div className="dgl-status">
               <div className="gx-panel gx-panel--wood dgl-tile">
                 <GxIcon name="crown" size={28} className={bossAt > now ? '' : 'is-gold'} />
-                <b>{boss.name}</b>
+                <b>{bossName(boss.id)}</b>
                 <span>
                   {!floorOpen
-                    ? 'этаж закрыт'
+                    ? t('dungeon.lobby.floorClosedLow')
                     : bossAt > now
-                      ? `через ${clock(bossAt - now)}`
-                      : 'в логове'}
+                      ? t('dungeon.lobby.inTime', { time: clock(bossAt - now) })
+                      : t('dungeon.lobby.inLair')}
                 </span>
-                {(d.bosses[boss.id]?.kills ?? 0) > 0 && <i>побеждён</i>}
+                {(d.bosses[boss.id]?.kills ?? 0) > 0 && <i>{t('dungeon.lobby.beaten')}</i>}
               </div>
               {floorMines.map((id) => {
                 const m = deepMineNow(d, id, now, MINE_CELLS);
@@ -616,15 +638,17 @@ export function DungeonPage() {
                 return (
                   <div key={id} className="gx-panel gx-panel--wood dgl-tile">
                     <GxIcon name="minecart" size={28} className={share > 0 ? '' : 'is-gold'} />
-                    <b>{def.name}</b>
+                    <b>{mineName(def.floor, id)}</b>
                     <span>
                       {share >= DEEP_DONE_AT
-                        ? `новая через ${left}`
+                        ? t('dungeon.lobby.newIn', { time: left })
                         : share > 0
-                          ? `выкопано ${Math.round((share / DEEP_DONE_AT) * 100)}%`
-                          : 'полная'}
+                          ? t('dungeon.lobby.dug', {
+                              n: String(Math.round((share / DEEP_DONE_AT) * 100)),
+                            })
+                          : t('dungeon.lobby.full')}
                     </span>
-                    <i>{areaOf(def.area).name}</i>
+                    <i>{areaName(def.area)}</i>
                   </div>
                 );
               })}
@@ -682,14 +706,14 @@ function Shaft({ dir, area }: { dir: 'down' | 'up'; area: AreaId }) {
   const sprites = useDungeonSprites();
   const gearKey = SLOTS.map((s) => gear[s].tier).join('');
   const cage = once(`shaft:cage:${gearKey}:${sprites ? 1 : 0}`, () => cageArt(gear));
-  const a = areaOf(area);
+  useT();
   return (
     <div className={`dg-shaft dg-shaft--${dir}`}>
       <div className="dg-shaft__beams" />
       <img className="dg-shaft__cage" src={cage} alt="" />
       <div className="dg-shaft__text">
-        <b>{dir === 'down' ? a.name : 'Наверх'}</b>
-        <span>{dir === 'down' ? 'лифт едет вниз…' : 'лифт едет наверх с добычей…'}</span>
+        <b>{dir === 'down' ? areaName(area) : t('dungeon.lobby.up')}</b>
+        <span>{dir === 'down' ? t('dungeon.lobby.liftDown') : t('dungeon.lobby.liftUp')}</span>
       </div>
     </div>
   );

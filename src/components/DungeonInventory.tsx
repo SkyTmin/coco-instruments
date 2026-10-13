@@ -25,7 +25,6 @@ import {
   levelOf,
   MATS,
   MEATS,
-  MEAT_NAMES,
   minusMats,
   nextStep,
   payFromBoth,
@@ -37,7 +36,6 @@ import {
   sackSlots,
   sackStacks,
   setOf,
-  SLOT_NAMES,
   SLOTS,
   slotsUsed,
   stackOf,
@@ -50,13 +48,14 @@ import { gearIcon, heroFrame, itemUrl } from '@/lib/dungeon-art';
 import { registerEscape } from '@/lib/escape-stack';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight } from '@/lib/haptics';
 import { coinDing, tierBreak } from '@/lib/sound';
-import { shortMoney } from '@/lib/prison';
+import { fmtNum, fmtShort, rich, t, useT } from '@/i18n';
+import { dl, matLead, matName, setBonus, setItem, setName, slotName } from '@/i18n/data-dungeon';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 
 // Мясо любого этажа (не только крысятина Входа): имя и лечение — из его записи.
 const isMeat = (id: ItemId): id is MeatId => isMeatId(id);
-const itemName = (id: ItemId) => (isMeat(id) ? MEAT_NAMES[id] : MATS[id as MatId].name);
+const itemName = (id: ItemId) => matName(id);
 
 const urls = new Map<string, string>();
 const spriteUrl = (key: string, make: () => HTMLCanvasElement) => {
@@ -89,13 +88,13 @@ function CostRow({
   return (
     <span className="mcinv__cost">
       <span className={balance >= cost.coins ? '' : 'is-short'}>
-        <CoinIcon size={11} /> {shortMoney(cost.coins)}
+        <CoinIcon size={11} /> {fmtShort(cost.coins)}
       </span>
       {(Object.entries(cost.mats) as [MatId, number][]).map(([id, n]) => {
         const have = (d.stash[id] ?? 0) + (sack[id] ?? 0);
         return (
-          <span key={id} className={have >= n ? '' : 'is-short'} title={MATS[id].name}>
-            <img src={itemUrl(id)} alt={MATS[id].name} /> {fmt(have)}/{fmt(n)}
+          <span key={id} className={have >= n ? '' : 'is-short'} title={matName(id)}>
+            <img src={itemUrl(id)} alt={matName(id)} /> {fmt(have)}/{fmt(n)}
           </span>
         );
       })}
@@ -105,10 +104,21 @@ function CostRow({
 
 function statLine(slot: Slot, tier: number, plus: number): string[] {
   const s = pieceStats(slot, { tier, plus });
-  if (slot === 'weapon') return [`Урон ${s.dmg.toFixed(0)}`];
-  if (slot === 'helm') return [`Броня ${s.armor.toFixed(0)}`, `Свет ${s.light.toFixed(1)} кл.`];
-  if (slot === 'robe') return [`Броня ${s.armor.toFixed(0)}`, `Здоровье +${s.hp.toFixed(0)}`];
-  return [`Шаг ${s.speed.toFixed(1)} кл./с`, `Рывок ${s.dash.toFixed(1)} кл.`];
+  if (slot === 'weapon') return [t('inv.dg.statDmg', { v: s.dmg.toFixed(0) })];
+  if (slot === 'helm')
+    return [
+      t('inv.dg.statArmor', { v: s.armor.toFixed(0) }),
+      t('inv.dg.statLight', { v: s.light.toFixed(1) }),
+    ];
+  if (slot === 'robe')
+    return [
+      t('inv.dg.statArmor', { v: s.armor.toFixed(0) }),
+      t('inv.dg.statHp', { v: s.hp.toFixed(0) }),
+    ];
+  return [
+    t('inv.dg.statSpeed', { v: s.speed.toFixed(1) }),
+    t('inv.dg.statDash', { v: s.dash.toFixed(1) }),
+  ];
 }
 
 export function DungeonInventory({
@@ -129,6 +139,7 @@ export function DungeonInventory({
   /** Снаряжение или сидор изменились — пересчитать героя в бою. */
   onGear: () => void;
 }) {
+  useT();
   const d = useFinanceStore((s) => s.dungeon);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const upgradeHere = useFinanceStore((s) => s.dungeonUpgradeHere);
@@ -235,7 +246,7 @@ export function DungeonInventory({
         type="button"
         className={`mcslot mcslot--gear${on ? ' is-on' : ''}`}
         onClick={() => choose({ kind: 'gear', slot })}
-        aria-label={SLOT_NAMES[slot]}
+        aria-label={slotName(slot)}
       >
         <img src={gearIcon(slot, g.tier)} alt="" />
         {g.plus > 0 && <b className="mcslot__n">+{g.plus}</b>}
@@ -253,11 +264,11 @@ export function DungeonInventory({
     info = (
       <>
         <b className="mcinv__name">
-          {s.items[pick.slot]}
+          {setItem(s.tier, pick.slot)}
           {g.plus > 0 && <em> +{g.plus}</em>}
         </b>
         <span className="mcinv__sub">
-          {SLOT_NAMES[pick.slot]} · комплект «{s.name}»
+          {t('inv.dg.slotSet', { slot: slotName(pick.slot), name: setName(s.tier) })}
         </span>
         {statLine(pick.slot, g.tier, g.plus).map((x) => (
           <span key={x} className="mcinv__stat">
@@ -265,13 +276,18 @@ export function DungeonInventory({
           </span>
         ))}
         <span className={`mcinv__set${set === g.tier ? ' is-on' : ''}`}>
-          Все четыре вещи «{s.name}»: {s.bonus}
-          {set === g.tier ? ' — действует' : ''}
+          {t(set === g.tier ? 'inv.dg.setAllOn' : 'inv.dg.setAll', {
+            name: setName(s.tier),
+            bonus: setBonus(s.tier),
+          })}
         </span>
         {step.kind === 'plus' && (
           <>
             <span className="mcinv__sub">
-              Заточка до +{g.plus + 1}: {statLine(pick.slot, g.tier, g.plus + 1).join(', ')}
+              {t('inv.dg.sharpTo', {
+                n: String(g.plus + 1),
+                stats: statLine(pick.slot, g.tier, g.plus + 1).join(', '),
+              })}
             </span>
             <CostRow cost={step.cost} balance={balance} d={d} sack={sim.sack.mats} />
             <div className="mcinv__acts">
@@ -281,7 +297,7 @@ export function DungeonInventory({
                 disabled={!canAfford(step.cost)}
                 onClick={() => upgrade(pick.slot)}
               >
-                Заточить до +{g.plus + 1}
+                {t('inv.dg.sharpBtn', { n: String(g.plus + 1) })}
               </button>
             </div>
           </>
@@ -289,15 +305,17 @@ export function DungeonInventory({
         {step.kind === 'reforge' && (
           <>
             <span className="mcinv__sub">
-              Улучшение до «{setOf(g.tier + 1).items[pick.slot]}»
-              {conditionsMet(live, pick.slot, g.tier) ? ' — условия выполнены' : ':'}
+              {t(
+                conditionsMet(live, pick.slot, g.tier) ? 'inv.dg.reforgeMet' : 'inv.dg.reforgeNeed',
+                { name: setItem(g.tier + 1, pick.slot) },
+              )}
             </span>
             {conds.map((c) => {
               const have = Math.min(c.need, c.have(live));
               return (
                 <span key={c.label} className={`mcinv__cond${have >= c.need ? ' is-done' : ''}`}>
                   <span>
-                    {c.label}
+                    {dl(c.label)}
                     <em>
                       {fmt(have)} / {fmt(c.need)}
                     </em>
@@ -316,13 +334,13 @@ export function DungeonInventory({
                 disabled={!conditionsMet(live, pick.slot, g.tier) || !canAfford(step.cost)}
                 onClick={() => upgrade(pick.slot)}
               >
-                Улучшить
+                {t('inv.dg.upgrade')}
               </button>
             </div>
           </>
         )}
         {(step.kind === 'soon' || step.kind === 'max') && (
-          <span className="mcinv__sub">Заточено до предела. Дальше — новые районы.</span>
+          <span className="mcinv__sub">{t('inv.dg.maxed')}</span>
         )}
       </>
     );
@@ -343,14 +361,19 @@ export function DungeonInventory({
         </b>
         <span className="mcinv__sub">
           {meat
-            ? `Лечит ${Math.round(st.maxHp * (MEATS[sk.id]?.heal ?? 0.15))} здоровья. Пахнет — крысы идут на запах.`
-            : MATS[sk.id as MatId].lead}
+            ? t('inv.dg.meatHeals', {
+                n: String(Math.round(st.maxHp * (MEATS[sk.id]?.heal ?? 0.15))),
+              })
+            : matLead(sk.id)}
         </span>
         <span className="mcinv__stat">
-          {meat ? 'Торговец даст' : 'Цена лишнего'} {fmt(each)} <CoinIcon size={11} /> за штуку ·
-          всего в рюкзаке {fmt(total)}
+          {rich(meat ? 'inv.dg.priceMeat' : 'inv.dg.priceExtra', {
+            each: fmt(each),
+            coin: <CoinIcon size={11} />,
+            total: fmt(total),
+          })}
         </span>
-        <span className="mcinv__sub">В ячейке до {stackOf(sk.id)} шт.</span>
+        <span className="mcinv__sub">{t('inv.dg.stackMax', { n: String(stackOf(sk.id)) })}</span>
         <div className="mcinv__acts">
           {meat && (
             <button
@@ -362,7 +385,7 @@ export function DungeonInventory({
                 onEat();
               }}
             >
-              Съесть
+              {t('inv.dg.eat')}
             </button>
           )}
           <button
@@ -374,7 +397,7 @@ export function DungeonInventory({
               bump((x) => x + 1);
             }}
           >
-            Выбросить 1
+            {t('inv.dg.drop1')}
           </button>
           <button
             type="button"
@@ -386,7 +409,7 @@ export function DungeonInventory({
               bump((x) => x + 1);
             }}
           >
-            Выбросить стопку
+            {t('inv.dg.dropStack')}
           </button>
         </div>
       </>
@@ -395,10 +418,12 @@ export function DungeonInventory({
     const cost = sackCost(sim.sackLevel);
     info = (
       <>
-        <b className="mcinv__name">Карман</b>
+        <b className="mcinv__name">{t('inv.dg.pocket')}</b>
         <span className="mcinv__sub">
-          Рюкзак побольше: {sackSlots(sim.sackLevel + 1)} ячеек вместо {slots}. Готов сразу, прямо
-          здесь. Шкурки — со склада, недостающие — из рюкзака.
+          {t('inv.dg.pocketText', {
+            n: String(sackSlots(sim.sackLevel + 1)),
+            slots: String(slots),
+          })}
         </span>
         <CostRow cost={cost} balance={balance} d={d} sack={sim.sack.mats} />
         <div className="mcinv__acts">
@@ -408,25 +433,21 @@ export function DungeonInventory({
             disabled={!canAfford(cost)}
             onClick={pocket}
           >
-            Увеличить рюкзак
+            {t('inv.dg.grow')}
           </button>
         </div>
       </>
     );
   } else {
-    info = (
-      <span className="mcinv__hint">
-        Тап по вещи на человечке — заточить. Тап по ячейке — съесть или выбросить.
-      </span>
-    );
+    info = <span className="mcinv__hint">{t('inv.dg.hint')}</span>;
   }
 
   return (
     <div className="mcinv-back" onClick={onClose}>
       <div className="mcinv" onClick={(e) => e.stopPropagation()}>
         <div className="mcinv__head">
-          <b>Инвентарь</b>
-          <button type="button" className="mcinv__x" aria-label="Закрыть" onClick={onClose}>
+          <b>{t('inv.title')}</b>
+          <button type="button" className="mcinv__x" aria-label={t('inv.close')} onClick={onClose}>
             ✕
           </button>
         </div>
@@ -438,7 +459,7 @@ export function DungeonInventory({
           <div className="mcinv__side">
             {slotBtn('weapon')}
             <span className="mcinv__lv">
-              Ур. {lv.level}
+              {t('inv.dg.lv', { n: String(lv.level) })}
               <i>
                 <i style={{ transform: `scaleX(${lv.need ? lv.into / lv.need : 1})` }} />
               </i>
@@ -462,13 +483,11 @@ export function DungeonInventory({
 
         <div className="mcinv__warn">
           <GxIcon name="skull" size={16} />
-          <span>Умрёшь — рюкзак вылазки пропадёт. Вынести — только лифтом.</span>
+          <span>{t('inv.dg.warn')}</span>
         </div>
         <div className="mcinv__label">
-          Рюкзак вылазки{' '}
-          <em>
-            {used}/{slots} ячеек
-          </em>
+          {t('inv.dg.sackLabel')}{' '}
+          <em>{t('inv.dg.used', { used: String(used), slots: String(slots) })}</em>
         </div>
         <div className="mcinv__grid">
           {Array.from({ length: rows * SACK_ROW }, (_, i) => {
@@ -495,9 +514,7 @@ export function DungeonInventory({
             );
           })}
         </div>
-        {slots < rows * SACK_ROW && (
-          <span className="mcinv__lock">Тёмные ряды — место под рюкзак побольше: нажми.</span>
-        )}
+        {slots < rows * SACK_ROW && <span className="mcinv__lock">{t('inv.dg.lockRows')}</span>}
 
         <div className="mcinv__purse">
           <span>
@@ -517,7 +534,7 @@ export function DungeonInventory({
               setAll(true);
             }}
           >
-            <GxIcon name="backpack" size={14} /> Всё добро
+            <GxIcon name="backpack" size={14} /> {t('inv.dg.allStuff')}
           </button>
         </div>
 

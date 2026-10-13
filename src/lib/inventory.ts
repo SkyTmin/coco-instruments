@@ -31,14 +31,18 @@ import {
   itemRock,
   knownMat,
   matDef,
-  MEAT_NAMES,
   sackSlots,
   sackStacks,
   slotsUsed,
   stackOf as deepStack,
 } from './dungeon';
 import type { DungeonState, MatId } from './dungeon';
-import { normalizeBook, ROMAN, SHELF_MAX, tierOfLevel } from './books';
+import { fmtDec, lower, t as tr } from '@/i18n/core';
+import { chestName, itemName, itemText, rockName, runeName, runeText } from '@/i18n/data';
+import { bookTierName, eggName } from '@/i18n/data-books';
+import { matName } from '@/i18n/data-dungeon';
+import { bookName, findName, findText } from '@/i18n/data-mine';
+import { normalizeBook, SHELF_MAX, tierOfLevel } from './books';
 import type { Book } from './books';
 import { EGG_BASKET, EGG_IDS, eggCount, eggOf, isEggId, NEST_SLOTS } from './pets';
 import type { EggId } from './pets';
@@ -571,8 +575,7 @@ export const SECTIONS: { id: InvSection; name: string; icon: string }[] = [
   { id: 'bunk', name: 'Сундук', icon: 'chest' },
 ];
 
-const pct = (x: number) =>
-  `+${(Math.round(x * 1000) / 10).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`;
+const pct = (x: number) => `+${fmtDec(Math.round(x * 1000) / 10, 1)}%`;
 
 /** Вещь раздела «Сундук» или «Склад» в общем виде: имя, картинка, подпись. */
 export function thingView(t: BunkThing): Pick<InvItem, 'name' | 'sub' | 'icon'> & {
@@ -584,42 +587,37 @@ export function thingView(t: BunkThing): Pick<InvItem, 'name' | 'sub' | 'icon'> 
       const m = matDef(t.id);
       const r = itemRock(t.id);
       return {
-        name: m.name,
+        name: m.id === t.id ? matName(t.id) : m.name,
         icon: r ? { k: r.kind, rock: r.rock } : { k: 'mat', id: t.id },
         section: 'deep',
-        sub: r ? (r.kind === 'block' ? 'цельный блок' : 'руда подземелья') : undefined,
+        sub: r ? (r.kind === 'block' ? tr('inv.blockSub') : tr('inv.deepOre')) : undefined,
       };
     }
     case 'item':
-      return { name: itemOf(t.id).name, icon: { k: 'item', id: t.id }, section: 'items' };
+      return { name: itemName(itemOf(t.id).id), icon: { k: 'item', id: t.id }, section: 'items' };
     case 'egg':
-      return { name: eggOf(t.egg).name, icon: { k: 'egg', egg: t.egg }, section: 'eggs' };
+      return { name: eggName(t.egg), icon: { k: 'egg', egg: t.egg }, section: 'eggs' };
     case 'book':
       return {
-        name: `${enchantOf(t.book.id).name} ${ROMAN[t.book.lvl - 1] ?? t.book.lvl}`,
-        sub: `шанс ${t.book.chance}% · ${bookTierName(t.book.lvl)}`,
+        name: bookName({ id: enchantOf(t.book.id).id, lvl: t.book.lvl }),
+        sub: tr('inv.bookSub', {
+          n: String(t.book.chance),
+          tier: lower(bookTierName(tierOfLevel(t.book.lvl))),
+        }),
         icon: { k: 'book', book: t.book },
         section: 'books',
       };
     case 'rune': {
       const def = runeOf(t.rune.kind);
       return {
-        name: `${def.name} ${RUNE_ROMAN[t.rune.tier - 1] ?? t.rune.tier}`,
-        sub: `${pct(runePower(t.rune))} ${def.text}`,
+        name: `${runeName(def.id)} ${RUNE_ROMAN[t.rune.tier - 1] ?? t.rune.tier}`,
+        sub: `${pct(runePower(t.rune))} ${runeText(def.id)}`,
         icon: { k: 'rune', kind: t.rune.kind, tier: t.rune.tier },
         section: 'runes',
       };
     }
   }
 }
-
-const BOOK_TIER_NAME = {
-  simple: 'простая',
-  rare: 'редкая',
-  epic: 'эпическая',
-  legend: 'легендарная',
-} as const;
-const bookTierName = (lvl: number) => BOOK_TIER_NAME[tierOfLevel(lvl)];
 
 /** Что можно сделать с вещью здесь и сейчас. */
 export type InvPlace = 'yard' | 'mine' | 'bunk' | 'view';
@@ -647,7 +645,7 @@ export function inventoryOf(
   b: BunkState = BUNK_START,
 ): InvSectionView[] {
   const out: Record<InvSection, InvSectionView> = Object.fromEntries(
-    SECTIONS.map((s) => [s.id, { ...s, items: [], limits: [] }]),
+    SECTIONS.map((s) => [s.id, { ...s, name: tr(`inv.section.${s.id}`), items: [], limits: [] }]),
   ) as unknown as Record<InvSection, InvSectionView>;
   const add = (it: Omit<InvItem, 'acts'> & { acts?: InvAct[] }) =>
     out[it.section].items.push({ ...it, acts: it.acts ?? [] });
@@ -661,7 +659,7 @@ export function inventoryOf(
     add({
       key: `bag:${rock}`,
       kind: `ore:${rock}`,
-      name: ROCKS[rock].name,
+      name: rockName(rock),
       icon: { k: 'ore', rock },
       n,
       stack: 0,
@@ -676,8 +674,8 @@ export function inventoryOf(
     add({
       key: `box:${rock}`,
       kind: `ore:${rock}`,
-      name: ROCKS[rock].name,
-      sub: 'для кирки',
+      name: rockName(rock),
+      sub: tr('inv.forPick'),
       icon: { k: 'ore', rock },
       n,
       stack: 0,
@@ -685,7 +683,7 @@ export function inventoryOf(
       where: 'box',
     });
   }
-  out.ore.limits.push({ used: bagCount(p.bag), max: cap, label: 'Рюкзак' });
+  out.ore.limits.push({ used: bagCount(p.bag), max: cap, label: tr('inv.lim.bag') });
 
   // Склад подземелья: материалы, руда и цельные блоки из шахт этажей.
   const stashIds = Object.keys(d.stash)
@@ -725,7 +723,7 @@ export function inventoryOf(
       add({
         key: `sack:${s.id}`,
         kind: `sack:${s.id}`,
-        name: meat ? (MEAT_NAMES[s.id] ?? s.id) : matDef(s.id).name,
+        name: matName(s.id),
         icon: r ? { k: r.kind, rock: r.rock } : { k: 'mat', id: s.id },
         n,
         stack: 0,
@@ -734,9 +732,9 @@ export function inventoryOf(
       });
     }
     const purse: [string, string, number, InvIcon][] = [
-      ['coins', 'Монеты', sack.coins, { k: 'coin' }],
-      ['tokens', 'Токены', sack.tokens, { k: 'token' }],
-      ['keys', 'Ключ от сундука', sack.keys, { k: 'key' }],
+      ['coins', tr('inv.coins'), sack.coins, { k: 'coin' }],
+      ['tokens', tr('inv.tokens'), sack.tokens, { k: 'token' }],
+      ['keys', tr('inv.chestKey'), sack.keys, { k: 'key' }],
     ];
     for (const [id, name, n, icon] of purse)
       if (n > 0)
@@ -753,7 +751,7 @@ export function inventoryOf(
     out.sack.limits.push({
       used: slotsUsed(sack),
       max: sackSlots(d.sackLevel ?? 0),
-      label: 'Ячейки',
+      label: tr('inv.lim.slots'),
     });
   }
 
@@ -765,8 +763,8 @@ export function inventoryOf(
     add({
       key: `item:${it.id}`,
       kind: thingKey(t),
-      name: it.name,
-      sub: it.text,
+      name: itemName(it.id),
+      sub: itemText(it.id),
       icon: { k: 'item', id: it.id },
       n,
       stack: ITEM_STACK,
@@ -786,7 +784,7 @@ export function inventoryOf(
     add({
       key: 'keys',
       kind: 'keys',
-      name: 'Ключ от сундука',
+      name: tr('inv.chestKey'),
       icon: { k: 'key' },
       n: p.keys,
       stack: 0,
@@ -797,8 +795,8 @@ export function inventoryOf(
     add({
       key: 'dust',
       kind: 'dust',
-      name: 'Пыль чар',
-      sub: '+1% к шансу книги',
+      name: tr('inv.dust'),
+      sub: tr('inv.dustSub'),
       icon: { k: 'dust' },
       n: p.dust,
       stack: 0,
@@ -809,8 +807,8 @@ export function inventoryOf(
     add({
       key: 'pearls',
       kind: 'pearls',
-      name: 'Жемчуг',
-      sub: '+0,5% к продаже',
+      name: tr('inv.pearl'),
+      sub: tr('inv.pearlSub'),
       icon: { k: 'pearl' },
       n: p.pearls,
       stack: 0,
@@ -823,8 +821,8 @@ export function inventoryOf(
     add({
       key: `parcel:${i}`,
       kind: `parcel:${x.tier}`,
-      name: `Посылка · ${tier.name.toLowerCase()}`,
-      sub: x.left > 0 ? `ещё ${x.left} блоков` : 'готова',
+      name: tr('inv.parcel', { tier: lower(chestName(tier.id)) }),
+      sub: x.left > 0 ? tr('books.blocksLeft', { n: String(x.left) }) : tr('inv.parcelReady'),
       icon: { k: 'parcel', tier: x.tier },
       n: 1,
       stack: 0,
@@ -840,8 +838,8 @@ export function inventoryOf(
     add({
       key: `nest:${i}`,
       kind: `egg:${x.egg}`,
-      name: eggOf(x.egg).name,
-      sub: x.left > 0 ? `греется · ещё ${x.left} блоков` : 'готово вылупиться',
+      name: eggName(x.egg),
+      sub: x.left > 0 ? tr('inv.eggWarm', { n: String(x.left) }) : tr('inv.eggReady'),
       icon: { k: 'egg', egg: x.egg },
       n: 1,
       stack: 0,
@@ -857,7 +855,7 @@ export function inventoryOf(
     add({
       key: `basket:${egg}`,
       kind: `egg:${egg}`,
-      name: eggOf(egg).name,
+      name: eggName(egg),
       icon: { k: 'egg', egg },
       n,
       stack: 1,
@@ -867,8 +865,8 @@ export function inventoryOf(
       acts: [...(nestFree ? (['nest'] as InvAct[]) : []), 'toBunk'],
     });
   }
-  out.eggs.limits.push({ used: eggCount(p.eggs), max: EGG_BASKET, label: 'Корзина' });
-  out.eggs.limits.push({ used: p.nest.length, max: NEST_SLOTS, label: 'Гнёзда' });
+  out.eggs.limits.push({ used: eggCount(p.eggs), max: EGG_BASKET, label: tr('inv.lim.basket') });
+  out.eggs.limits.push({ used: p.nest.length, max: NEST_SLOTS, label: tr('inv.lim.nests') });
 
   // Книги: полка, старшие первыми (номер — место на полке).
   p.books
@@ -891,7 +889,7 @@ export function inventoryOf(
         acts: ['toBunk'],
       });
     });
-  out.books.limits.push({ used: p.books.length, max: SHELF_MAX, label: 'Полка' });
+  out.books.limits.push({ used: p.books.length, max: SHELF_MAX, label: tr('inv.lim.shelf') });
 
   // Руны: из оберега — первыми и только посмотреть (сперва вынуть из гнезда).
   const socketed = (r: Rune) => (p.sockets.includes(r.id) ? 1 : 0);
@@ -915,7 +913,7 @@ export function inventoryOf(
         acts: inSocket ? [] : ['toBunk'],
       });
     });
-  out.runes.limits.push({ used: p.runes.length, max: RUNE_BAG, label: 'Мешочек' });
+  out.runes.limits.push({ used: p.runes.length, max: RUNE_BAG, label: tr('inv.lim.pouch') });
 
   // Находки: вся коллекция, ненайденные — силуэтом.
   for (const f of FINDS) {
@@ -923,8 +921,8 @@ export function inventoryOf(
     add({
       key: `find:${f.id}`,
       kind: `find:${f.id}`,
-      name: n > 0 ? f.name : '???',
-      sub: n > 0 ? f.text : `попадается с этажа ${String.fromCharCode(65 + f.from)}`,
+      name: n > 0 ? findName(f.id) : '???',
+      sub: n > 0 ? findText(f.id) : tr('inv.findFrom', { f: String.fromCharCode(65 + f.from) }),
       icon: { k: 'find', id: f.id, ghost: n <= 0 },
       n,
       stack: 0,
@@ -935,7 +933,7 @@ export function inventoryOf(
   out.finds.limits.push({
     used: FINDS.filter((f) => (p.finds[f.id] ?? 0) > 0).length,
     max: FINDS.length,
-    label: 'Коллекция',
+    label: tr('inv.lim.finds'),
   });
 
   // Сундук у койки — ячейками, как лежит.
@@ -956,7 +954,7 @@ export function inventoryOf(
       acts: ['fromBunk'],
     });
   });
-  out.bunk.limits.push({ used: bunkUsed(b), max: bunkSize(b), label: 'Ячейки' });
+  out.bunk.limits.push({ used: bunkUsed(b), max: bunkSize(b), label: tr('inv.lim.slots') });
 
   return SECTIONS.map((s) => out[s.id]);
 }
