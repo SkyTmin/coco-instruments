@@ -332,7 +332,12 @@ span.gx-top__side {
   max-width: none;
 }
 .gx-camp__tabs.px-tabs--rail .px-tab {
-  padding: calc(3 * var(--u)) calc(5 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+  /* the right end keeps room for a badge on EVERY tab: a badge coming or going never resizes
+     the rail (and so never moves the body) */
+  padding: calc(3 * var(--u)) calc(10 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+}
+.gx-camp.is-compact .gx-camp__tabs.px-tabs--rail .px-tab {
+  padding-inline: calc(2 * var(--u));
 }
 
 /* ==============================================================================================
