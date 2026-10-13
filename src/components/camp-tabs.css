@@ -64,6 +64,12 @@
   font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-muted);
 }
+.ctab-head__right {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+}
 /* Ink plates (cream text — `.px-dark`): tokens, counts, skill points. */
 .ctab-purse,
 .ctab-count,
@@ -232,7 +238,8 @@
   min-width: 0;
 }
 .ctab-insp__acts > .px-btn {
-  flex: 1 1 auto;
+  /* equal shares: a longer label (В оберег / Снять, +5 / +250) never moves its neighbours */
+  flex: 1 1 0;
   min-width: 0;
 }
 .ctab-insp__rows {
@@ -403,13 +410,23 @@
   grid-area: buy;
   min-width: calc(40 * var(--u));
 }
+/* The pack rides as a tag on the button's corner and the price keeps five digits of room:
+   switching ×1 / ×5 / ×10 never resizes the button or the row (checked by script). */
 .ctab-good__pack {
-  font-size: var(--px-fs-sm);
-  opacity: 0.85;
+  position: absolute;
+  z-index: 1;
+  top: calc(-4 * var(--u));
+  right: calc(-2 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: #fff3c4;
+  background: #2a190c;
+  border: var(--u) solid var(--px-ink);
+  pointer-events: none;
 }
 .ctab-good__buy .px-num {
-  min-width: 3ch;
-  text-align: right;
+  min-width: 5ch;
+  text-align: center;
 }
 .ctab--land .ctab-goods {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -765,7 +782,7 @@
 }
 .ctab--land .ctab-insp--find .ctab-insp__head,
 .ctab--wide .ctab-insp--find .ctab-insp__head {
-  align-items: center;
+  align-items: stretch;
   width: 100%;
 }
 .ctab-insp--find .ctab-insp__gives {
@@ -842,9 +859,21 @@
 .ctab-mile__bar {
   grid-area: bar;
 }
+.ctab-mile__swap {
+  display: inline-grid;
+}
+.ctab-mile__swap > * {
+  grid-area: 1 / 1;
+}
+.ctab-mile__swap > .is-gone {
+  visibility: hidden;
+}
 .ctab-mile__taken {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  /* the height of the «Забрать» button it replaces */
+  min-height: calc(19 * var(--u));
   gap: var(--u);
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-green);
@@ -874,8 +903,8 @@
 .ctab--tall .ctab-mile__end:empty {
   display: none;
 }
-.ctab--one .ctab-mile__end > .px-btn,
-.ctab--tall .ctab-mile__end > .px-btn {
+.ctab--one .ctab-mile__end > *,
+.ctab--tall .ctab-mile__end > * {
   width: 100%;
 }
 

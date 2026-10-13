@@ -703,6 +703,8 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
   const claim = useFinanceStore((s) => s.prisonMileClaim);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const frozen = useRef<string[] | null>(null);
+  const takenNow = useRef(new Set<string>());
   const take = (id: string) => {
     primeAudio();
     const before = useFinanceStore.getState().slotsBalance;
@@ -711,6 +713,7 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
       notifyWarning();
       return;
     }
+    takenNow.current.add(id);
     const after = useFinanceStore.getState().slotsBalance;
     if (after > before) onGain(before, after);
     coinDing();
@@ -723,12 +726,17 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
     }
   };
   const rows = MILES.map((m) => ({ m, done: p.miles.includes(m.id), ready: mileReady(p, m) }));
-  // Ready ones on top, then the ones in progress, the taken ones dimmed at the bottom.
-  const order = [
-    ...rows.filter((r) => r.ready),
-    ...rows.filter((r) => !r.ready && !r.done),
-    ...rows.filter((r) => r.done),
-  ];
+  // Ready ones on top, then the ones in progress, the taken ones dimmed at the bottom. The order is
+  // fixed while the tab is open: a row taken now stays in place (button → check, its bar kept) and
+  // sinks to the taken ones next time — nothing under the finger moves.
+  if (!frozen.current)
+    frozen.current = [
+      ...rows.filter((r) => r.ready),
+      ...rows.filter((r) => !r.ready && !r.done),
+      ...rows.filter((r) => r.done),
+    ].map((r) => r.m.id);
+  const byId = new Map(rows.map((r) => [r.m.id, r]));
+  const order = frozen.current.flatMap((id) => byId.get(id) ?? []);
   const first = order.find((r) => r.ready)?.m.id;
   const done = rows.filter((r) => r.done).length;
   // X / pad Y: take the top ready one.
@@ -746,9 +754,14 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
         title={t('camp.tab.miles')}
         hint={t('ctabs.miles.hint')}
         right={
-          <span className="px-dark ctab-count">
-            <span className="px-num">
-              {done}/{MILES.length}
+          <span className="ctab-head__right">
+            {/* X takes the top ready one; the hint lives here, not in a button, so taking one
+                never resizes the next row's button. */}
+            {first && <KeyHint action="inspect" label={t('camp.take')} />}
+            <span className="px-dark ctab-count">
+              <span className="px-num">
+                {done}/{MILES.length}
+              </span>
             </span>
           </span>
         }
@@ -776,22 +789,30 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
                   <MileGifts m={m} />
                 </span>
                 <span className="ctab-mile__end">
-                  {isDone ? (
+                  {ready || takenNow.current.has(m.id) ? (
+                    // The button and the check share one cell: taking swaps them, the cell (and
+                    // so the row) keeps its width and height.
+                    <span className="ctab-mile__swap">
+                      <Button
+                        kind="primary"
+                        className={isDone ? 'is-gone' : undefined}
+                        onClick={() => take(m.id)}
+                      >
+                        {t('camp.take')}
+                      </Button>
+                      <span className={`ctab-mile__taken${isDone ? '' : ' is-gone'}`}>
+                        <Icon name="check" />
+                        {t('camp.mile.taken')}
+                      </span>
+                    </span>
+                  ) : isDone ? (
                     <span className="ctab-mile__taken">
                       <Icon name="check" />
                       {t('camp.mile.taken')}
                     </span>
-                  ) : ready ? (
-                    <Button
-                      kind="primary"
-                      hint={m.id === first ? 'inspect' : undefined}
-                      onClick={() => take(m.id)}
-                    >
-                      {t('camp.take')}
-                    </Button>
                   ) : null}
                 </span>
-                {!isDone && (
+                {(!isDone || takenNow.current.has(m.id)) && (
                   <Bar
                     className="ctab-mile__bar"
                     value={goal ? v / goal : 0}
