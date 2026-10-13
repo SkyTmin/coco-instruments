@@ -37,7 +37,7 @@ export const dmats: Translation<typeof ru> = {
     lead: "Pentole, rivetti e pezzi di binario. Va bene per le giacche.",
   },
   crown: {
-    name: "Corona del Re dei Ratti",
+    name: "Corona del Re dei ratti",
     lead: "Trofeo. Serve per potenziare l'equipaggiamento a Forgiato.",
   },
   f2_cap: {

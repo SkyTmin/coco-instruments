@@ -35,7 +35,7 @@ export const dmobs: Translation<typeof ru> = {
     many: "hurda şövalyeler",
   },
   king: {
-    name: "Sıçan Kral",
+    name: "Fare Kral",
     many: "sıçan krallar",
   },
   kinglet: {
@@ -619,7 +619,7 @@ export const dmobs: Translation<typeof ru> = {
     many: "zindanın efendileri",
   },
   f15b_echo_king: {
-    name: "Sıçan Kral'ın Yankısı",
+    name: "Fare Kral'ın Yankısı",
     many: "sıçan kral yankıları",
   },
   f15b_echo_mino: {

@@ -16,7 +16,7 @@ export const dfloors: Translation<typeof ru> = {
       },
     },
     boss: {
-      name: "Re dei Ratti",
+      name: "Re dei ratti",
       lead: "Sala del trono nelle Gallerie rosicchiate",
     },
     mine: {

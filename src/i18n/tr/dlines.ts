@@ -22,7 +22,7 @@ export const dlines: Translation<typeof ru> = {
     ubit_zhirnyh_krys: "Şişko sıçan öldür",
     ubit_podryvnikov: "Bombacı sıçan öldür",
     poymat_zolotyh_krys: "Altın sıçan yakala",
-    ubit_krysinogo_korolya: "Sıçan Kral'ı öldür",
+    ubit_krysinogo_korolya: "Fare Kral'ı öldür",
   },
   f1: {
     kapkan: "KAPAN",

@@ -16,7 +16,7 @@ export const dfloors: Translation<typeof ru> = {
       },
     },
     boss: {
-      name: "Sıçan Kral",
+      name: "Fare Kral",
       lead: "Kemirilmiş Galeriler'deki Taht Salonu",
     },
     mine: {

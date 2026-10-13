@@ -35,7 +35,7 @@ export const dmobs: Translation<typeof ru> = {
     many: "cavalieri di rottami",
   },
   king: {
-    name: "Re dei Ratti",
+    name: "Re dei ratti",
     many: "re dei ratti",
   },
   kinglet: {
@@ -619,8 +619,8 @@ export const dmobs: Translation<typeof ru> = {
     many: "signori delle segrete",
   },
   f15b_echo_king: {
-    name: "Eco del Re dei Ratti",
-    many: "echi del Re dei Ratti",
+    name: "Eco del Re dei ratti",
+    many: "echi del Re dei ratti",
   },
   f15b_echo_mino: {
     name: "Eco del Minotauro",

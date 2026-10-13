@@ -22,7 +22,7 @@ export const dlines: Translation<typeof ru> = {
     ubit_zhirnyh_krys: "Uccidi ratti grassi",
     ubit_podryvnikov: "Uccidi ratti dinamitardi",
     poymat_zolotyh_krys: "Cattura ratti d'oro",
-    ubit_krysinogo_korolya: "Uccidi il Re dei Ratti",
+    ubit_krysinogo_korolya: "Uccidi il Re dei ratti",
   },
   f1: {
     kapkan: "TAGLIOLA",

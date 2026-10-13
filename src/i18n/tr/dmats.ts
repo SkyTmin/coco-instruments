@@ -37,7 +37,7 @@ export const dmats: Translation<typeof ru> = {
     lead: "Tencereler, perçinler ve ray parçaları. Ceketlere gider.",
   },
   crown: {
-    name: "Sıçan Kral'ın Tacı",
+    name: "Fare Kral'ın Tacı",
     lead: "Ganimet. Ekipmanı Dövme'ye yükseltmek için gerekir.",
   },
   f2_cap: {
