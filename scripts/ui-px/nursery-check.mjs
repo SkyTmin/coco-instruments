@@ -198,15 +198,15 @@ async function tap(p, k, sel) {
   else await p.touchscreen.tap(c.x, c.y);
   return true;
 }
-let fails = 0;
-for (const k of want) {
+/** Opens the pets camp at format `k` in language `lg` with the seeded state. */
+async function openNursery(k, lg) {
   const [w, h, dpr] = SIZES[k];
   const ctx = await b.newContext({
     viewport: { width: w, height: h },
     deviceScaleFactor: dpr,
     hasTouch: k[0] !== 'd',
   });
-  await ctx.addInitScript((l) => localStorage.setItem('coco.lang', l), lang);
+  await ctx.addInitScript((l) => localStorage.setItem('coco.lang', l), lg);
   const p = await ctx.newPage();
   p.on('pageerror', (e) => console.log('PAGEERR', e.message.slice(0, 200)));
   await p.goto(`http://127.0.0.1:${PORT}/#/prison`);
@@ -238,6 +238,8 @@ for (const k of want) {
     ids.forEach((id, i) => (pets[id] = { xp: 2000 + i * 3000, v: 1, dup: 0, pat: 0 }));
     pets.raven = { xp: 400000, v: 1, dup: 0, pat: 0 };
     pets.phoenix = { xp: 60000, v: 1, dup: 0, pat: 0 };
+    // one NORMAL pet: the gold ★ badge comes and goes on the plate (critic round 3, item 6)
+    pets.mole = { xp: 2000, v: 0, dup: 0, pat: 0 };
     S.useFinanceStore.setState({
       slotsBalance: 510_812_345,
       prison: {
@@ -262,6 +264,45 @@ for (const k of want) {
     await p.evaluate(() => document.querySelector('#pets-btn')?.click());
     await p.waitForTimeout(1800);
   }
+  return { ctx, p, h };
+}
+
+// TABS=1 (or a language list): no «Питомцы / Яйца» label may overflow its box by even a fraction
+// of a pixel (scrollWidth is an integer: tr «Yumurtalar» 113.16 in 113.00 hid an ellipsis).
+if (process.env.TABS) {
+  const langs = (process.env.TABS === '1' ? 'ru,en,fr,tr,de,es,it' : process.env.TABS).split(',');
+  let bad = 0;
+  for (const lg of langs) {
+    for (const k of ['p360', 'pp', 'p440']) {
+      const { ctx, p } = await openNursery(k, lg);
+      const r = await p.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+        const row = document.querySelector('.ppn__tabs');
+        const range = document.createRange();
+        const labels = [...document.querySelectorAll('.ppn__tabs .px-tab__label')].map((l) => {
+          range.selectNodeContents(l);
+          const over = range.getBoundingClientRect().width - l.getBoundingClientRect().width;
+          return { text: l.textContent, over: Math.round(over * 100) / 100 };
+        });
+        return { tight: !!row?.classList.contains('is-tight'), labels };
+      });
+      const cut = r.labels.filter((x) => x.over > 0.01);
+      if (cut.length || !r.labels.length) bad++;
+      console.log(
+        `tabs ${lg} ${k}: ${r.tight ? 'tight' : 'icons'} ${r.labels.map((x) => `${x.text} ${x.over}`).join(', ')} ${cut.length || !r.labels.length ? 'CUT' : 'OK'}`,
+      );
+      await ctx.close();
+    }
+  }
+  await b.close();
+  console.log(bad ? `FAIL ${bad}` : 'ALL OK');
+  process.exit(bad ? 1 : 0);
+}
+
+let fails = 0;
+for (const k of want) {
+  const { ctx, p, h } = await openNursery(k, lang);
   const rows = [];
   for (const id of PETS) {
     const direct = await tap(p, k, `.nur-side [data-pet="${id}"], .nur-coll [data-pet="${id}"]`);

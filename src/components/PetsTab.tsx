@@ -103,15 +103,24 @@ export const PetsTab = memo(function PetsTab() {
   useLayoutEffect(() => {
     const row = ppnRef.current?.querySelector<HTMLElement>('.ppn__tabs');
     if (!row || rail) return undefined;
+    // Fractional widths: «Yumurtalar» at 360 px is 113.16 px of text in a 113.00-px box, and
+    // scrollWidth / clientWidth are both the integer 113 (critic R36).
     const check = () => {
       row.classList.remove('is-tight');
-      const cut = [...row.querySelectorAll<HTMLElement>('.px-tab__label')].some(
-        (l) => l.scrollWidth > l.clientWidth + 0.5,
-      );
+      const range = document.createRange();
+      const cut = [...row.querySelectorAll<HTMLElement>('.px-tab__label')].some((l) => {
+        range.selectNodeContents(l);
+        return range.getBoundingClientRect().width > l.getBoundingClientRect().width + 0.01;
+      });
       row.classList.toggle('is-tight', cut);
     };
     check();
-    if (typeof ResizeObserver === 'undefined') return undefined;
+    let live = true;
+    void document.fonts?.ready.then(() => live && check());
+    if (typeof ResizeObserver === 'undefined')
+      return () => {
+        live = false;
+      };
     let w = row.clientWidth;
     const ro = new ResizeObserver(() => {
       if (row.clientWidth !== w) {
@@ -120,7 +129,10 @@ export const PetsTab = memo(function PetsTab() {
       }
     });
     ro.observe(row);
-    return () => ro.disconnect();
+    return () => {
+      live = false;
+      ro.disconnect();
+    };
   }, [rail, t]);
   /** Pets (the pixel Nursery) or eggs; a ready nest opens straight on the eggs. */
   const [view, setView] = useState<'pets' | 'eggs'>(() =>
