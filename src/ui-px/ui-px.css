@@ -414,6 +414,17 @@ html[data-game][data-input] .px-f:focus-visible {
 .px-slot.is-locked > .px-slot__art {
   opacity: 0.85;
 }
+/* Pressed (`.is-down` on pointerdown from `usePress`, `:active` for Space): the well one ramp
+   step darker (obsidian 2 over the fill 1) and the art one art pixel lower — no transition, so
+   it lands in the first frame. The well is painted on the art box, inset to the frame's inner
+   edge (the slot frame is 4/3/3/4 art px, the art box starts 1 px in). */
+.px-slot:is(:active, .is-down):not([aria-disabled='true']) > .px-slot__art {
+  background: linear-gradient(#e4cc9c, #e4cc9c) calc(3 * var(--u)) calc(3 * var(--u)) /
+    calc(100% - 5 * var(--u)) calc(100% - 5 * var(--u)) no-repeat;
+}
+.px-slot:is(:active, .is-down):not([aria-disabled='true']) > .px-slot__art > * {
+  translate: 0 var(--u);
+}
 .px-slot__n {
   position: absolute;
   right: calc(2 * var(--u));
