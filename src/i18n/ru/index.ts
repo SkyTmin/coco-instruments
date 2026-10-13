@@ -2,6 +2,7 @@ import { camp } from './camp';
 import { campData } from './campData';
 import { cash } from './cash';
 import { common } from './common';
+import { critters } from './critters';
 import { field } from './field';
 import { finds } from './finds';
 import { forge } from './forge';
@@ -30,6 +31,7 @@ export const ru = {
   campData,
   cash,
   common,
+  critters,
   field,
   finds,
   forge,

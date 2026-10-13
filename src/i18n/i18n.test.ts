@@ -159,7 +159,6 @@ const NOT_YET_TRANSLATED = [
   'src/components/BooksTab.tsx',
   'src/components/ChestTab.tsx',
   'src/components/CreativePanel.tsx',
-  'src/components/Critters.tsx',
   'src/components/DungeonCamp.tsx',
   'src/components/DungeonInventory.tsx',
   'src/components/DungeonMine.tsx',
