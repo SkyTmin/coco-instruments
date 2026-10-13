@@ -168,12 +168,10 @@ const NOT_YET_TRANSLATED = [
   'src/components/ForgeScreen.tsx',
   'src/components/Inventory.tsx',
   'src/components/PetsTab.tsx',
-  'src/components/YardBits.tsx',
   'src/pages/DungeonPage.tsx',
   'src/pages/FishingPage.tsx',
   'src/pages/ForestPage.tsx',
   'src/pages/PrisonPage.tsx',
-  'src/pages/YardPage.tsx',
 ];
 /** The list as it was on 12.10.2026 — never extend, only the list above shrinks. */
 const ORIGINAL_COUNT = 29;

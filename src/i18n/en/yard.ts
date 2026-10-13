@@ -1,0 +1,71 @@
+import type { Translation } from '../types';
+import type { yard as ru } from '../ru/yard';
+
+export const yard: Translation<typeof ru> = {
+  sec: '{n} s',
+  title: 'Yard',
+  rankTip: 'Rank in the mine',
+  creative: 'Creative',
+  inventory: 'Inventory',
+  map: 'Map',
+  mapTitle: 'Camp map',
+  board: 'Board',
+  bye: 'Bye',
+  talk: 'Talk',
+  open: 'Open',
+  locked: 'Locked',
+  liftFrom: 'Lift down — from rank {r}',
+  zoneOver: 'Your special mine time is up for today',
+  zoneAfter: 'Special mine — after prestige {n}',
+  toMine: 'To the mine',
+  toForest: 'To the forest',
+  term: {
+    title: 'New stretch',
+    prices: 'Fixed prices: ore, blocks, ranks, pickaxes',
+    fromE: 'From rank E — work quota and floor block',
+    picks: 'Pickaxes are forged from ore',
+    login: 'No more login rewards — coins only for work',
+    reset: 'All games have started over.',
+  },
+  quiet: {
+    rank: 'Yard events start at rank {r}',
+    next: 'Quiet. Next event in {n} min, while you work',
+    soon: 'An event is coming — start digging',
+  },
+  tag: 'In the yard',
+  end: {
+    meteor: 'The meteorite cooled and sank into the rock',
+    kuiva: 'Kuiva went back into the rock',
+    convoy: 'The convoy left without its load',
+    bear: {
+      one: 'The bear took {n} log',
+      other: 'The bear took {n} logs',
+    },
+    bearNone: 'The bear left empty-handed',
+    magpie: 'The magpie flew off — you picked up nothing',
+  },
+  prize: {
+    coins: {
+      one: '+{n} coin',
+      other: '+{n} coins',
+    },
+    key: '+1 key',
+    keys: {
+      one: '+{n} key',
+      other: '+{n} keys',
+    },
+    parcel: 'parcel',
+  },
+  trader: {
+    title: 'Trader',
+    motto: '“Got it all, all for coins.”',
+    nextHm: 'New stock in {h} h {m} min',
+    nextM: 'New stock in {m} min',
+    left: '{n} left',
+    gone: 'sold out',
+    none: 'Out',
+    shattered: 'Rune pouch full — the rune shattered into {n} ✦',
+    took: 'Got: {what}',
+    note: 'Only here do coins turn into tokens and keys. Discounted goods last until they’re gone.',
+  },
+};

@@ -4,6 +4,7 @@ import { cash } from './cash';
 import { common } from './common';
 import { field } from './field';
 import { hall } from './hall';
+import { hub } from './hub';
 import { input } from './input';
 import { mine } from './mine';
 import { nursery } from './nursery';
@@ -12,6 +13,8 @@ import { settings } from './settings';
 import { skins } from './skins';
 import { slots } from './slots';
 import { ui } from './ui';
+import { yard } from './yard';
+import { yardData } from './yardData';
 
 /**
  * The Russian catalog — source of truth for every language. One file per
@@ -24,6 +27,7 @@ export const ru = {
   common,
   field,
   hall,
+  hub,
   input,
   mine,
   nursery,
@@ -32,4 +36,6 @@ export const ru = {
   skins,
   slots,
   ui,
+  yard,
+  yardData,
 } as const;

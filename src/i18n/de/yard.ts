@@ -1,0 +1,71 @@
+import type { Translation } from '../types';
+import type { yard as ru } from '../ru/yard';
+
+export const yard: Translation<typeof ru> = {
+  sec: '{n} s',
+  title: 'Hof',
+  rankTip: 'Rang in der Mine',
+  creative: 'Kreativ',
+  inventory: 'Inventar',
+  map: 'Karte',
+  mapTitle: 'Lagerkarte',
+  board: 'Schwarzes Brett',
+  bye: 'Tschüss',
+  talk: 'Reden',
+  open: 'Öffnen',
+  locked: 'Abgeschlossen',
+  liftFrom: 'Aufzug nach unten — ab Rang {r}',
+  zoneOver: 'Deine Zeit in der Sondermine ist für heute um',
+  zoneAfter: 'Sondermine — nach Prestige {n}',
+  toMine: 'In die Mine',
+  toForest: 'In den Wald',
+  term: {
+    title: 'Neue Strafe',
+    prices: 'Feste Preise: Erz, Blöcke, Ränge, Spitzhacken',
+    fromE: 'Ab Rang E: Arbeitssoll und Ebenenblock',
+    picks: 'Spitzhacken werden aus Erz geschmiedet',
+    login: 'Keine Login-Belohnungen mehr — Münzen nur für Arbeit',
+    reset: 'Alle Spiele beginnen von vorn.',
+  },
+  quiet: {
+    rank: 'Hof-Ereignisse beginnen ab Rang {r}',
+    next: 'Ruhig. Nächstes Ereignis in {n} Min., während du arbeitest',
+    soon: 'Gleich passiert was — fang an zu graben',
+  },
+  tag: 'Im Hof',
+  end: {
+    meteor: 'Der Meteorit ist abgekühlt und im Gestein versunken',
+    kuiva: 'Kuiva ist in den Fels zurückgekehrt',
+    convoy: 'Der Konvoi fuhr ohne Ladung ab',
+    bear: {
+      one: 'Der Bär hat {n} Stamm geklaut',
+      other: 'Der Bär hat {n} Stämme geklaut',
+    },
+    bearNone: 'Der Bär zog mit leeren Tatzen ab',
+    magpie: 'Die Elster ist weg — nichts aufgesammelt',
+  },
+  prize: {
+    coins: {
+      one: '+{n} Münze',
+      other: '+{n} Münzen',
+    },
+    key: '+1 Schlüssel',
+    keys: {
+      one: '+{n} Schlüssel',
+      other: '+{n} Schlüssel',
+    },
+    parcel: 'Paket',
+  },
+  trader: {
+    title: 'Händler',
+    motto: '„Alles da, alles für Münzen.“',
+    nextHm: 'Neue Ware in {h} Std. {m} Min.',
+    nextM: 'Neue Ware in {m} Min.',
+    left: 'noch {n}',
+    gone: 'ausverkauft',
+    none: 'Weg',
+    shattered: 'Runenbeutel voll — Rune in {n} ✦ zerschlagen',
+    took: 'Erhalten: {what}',
+    note: 'Nur hier werden Münzen zu Tokens und Schlüsseln. Rabattware nur, solange der Vorrat reicht.',
+  },
+};

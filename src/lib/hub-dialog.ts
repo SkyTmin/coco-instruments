@@ -9,6 +9,9 @@
 // страница не считает одно и то же в двух местах.
 
 import type { CampTab } from '@/components/PrisonCamp';
+import { fmtShort, getLang, hasKey, lower, t } from '@/i18n/core';
+import type { Key } from '@/i18n/core';
+import { blockName, pickName, rockName } from '@/i18n/data';
 import { MAGE_LINES, SHELF_MAX } from './books';
 import { bossReadyAt, dungeonOpen, DUNGEON_UNLOCK_RANK } from './dungeon';
 import type { DungeonState } from './dungeon';
@@ -25,7 +28,6 @@ import {
   rankNeeds,
   ROCKS,
   runesIdle,
-  shortMoney,
   zoneLeft,
   zoneMineId,
   ZONE_TIERS,
@@ -66,6 +68,8 @@ export interface HubFacts {
   forgeReady: boolean;
   /** Следующая кирка: имя; null — лучше уже не скуёшь. */
   nextPick: string | null;
+  /** Её номер в `PICKS` (имя на языке игры); −1 — лучше уже не скуёшь. */
+  nextPickI: number;
   /** С какого этажа её можно ковать; null — уже можно (или престижная). */
   nextPickFloor: string | null;
   booksReady: boolean;
@@ -83,6 +87,8 @@ export interface HubFacts {
     work: number;
     blocks: number;
     blockName: string;
+    /** Номер породы блока в `ROCKS`. */
+    blockI: number;
     power: number;
     ready: boolean;
   } | null;
@@ -93,6 +99,8 @@ export interface HubFacts {
   zoneOn: boolean;
   zoneMs: number;
   zoneRock: string;
+  /** Номер породы особой шахты в `ROCKS`. */
+  zoneRockI: number;
   /** Хранилища, упёршиеся в край: следующая вещь разобьётся (v2.81). */
   eggsFull: boolean;
   shelfFull: boolean;
@@ -123,6 +131,7 @@ export function hubFacts(
       work: Math.max(0, need.workNeed - need.work),
       blocks: Math.max(0, need.blocksNeed - need.blocks),
       blockName: ROCKS[p.rank]?.blockName ?? 'блок этажа',
+      blockI: p.rank,
       power: need.pickOk ? 0 : need.power,
       ready: false,
     };
@@ -138,6 +147,7 @@ export function hubFacts(
     keys: p.keys,
     forgeReady: forgeReadyNow(p, coins),
     nextPick: np >= 0 ? PICKS[np].name : null,
+    nextPickI: np,
     nextPickFloor:
       np >= 0 && !pickOpen(np, p.rank, p.prestige) && !PICKS[np].prestige
         ? rankLetter(PICKS[np].floor)
@@ -158,6 +168,7 @@ export function hubFacts(
     zoneOn: p.zone.on,
     zoneMs: zoneLeft(p.zone, now),
     zoneRock: ROCKS[zoneMineId(p.prestige)]?.name ?? '',
+    zoneRockI: zoneMineId(p.prestige),
     eggsFull: eggCount(p.eggs) >= EGG_BASKET,
     shelfFull: p.books.length >= SHELF_MAX,
     runesFull: p.runes.length >= RUNE_BAG,
@@ -185,19 +196,11 @@ export interface Resident {
 const mins = (ms: number) => Math.max(1, Math.ceil(ms / 60_000));
 const hoursMins = (ms: number) => {
   const m = mins(ms);
-  return m >= 60 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${m} мин`;
-};
-const plural = (n: number, one: string, few: string, many: string) => {
-  const a = Math.abs(n) % 100;
-  const b = a % 10;
-  if (a > 10 && a < 20) return many;
-  if (b === 1) return one;
-  if (b >= 2 && b <= 4) return few;
-  return many;
+  return m >= 60 ? t('hub.hm', { h: Math.floor(m / 60), m: m % 60 }) : t('hub.min', { n: m });
 };
 
 /** Две реплики из общего запаса — разные в разные минуты, но не мигают на глазах. */
-function pick2(pool: string[], now: number): string[] {
+function pick2<T>(pool: T[], now: number): T[] {
   if (pool.length <= 2) return pool;
   const k = Math.floor(now / 60_000) % pool.length;
   return [pool[k], pool[(k + 1) % pool.length]];
@@ -205,14 +208,20 @@ function pick2(pool: string[], now: number): string[] {
 
 const camp = (tabs: CampTab[], title: string): HubAction => ({ kind: 'camp', tabs, title });
 
-/** Присказки дневального — по одной, разные в разные минуты. */
-const ORDERLY_LINES = [
-  'Сапоги у порога, не на койку.',
-  'Печку не трогай — я топлю.',
-  'Отбой в десять. Кто храпит — тот дневалит.',
-  'Чужой сундук не открывают. Свой — пожалуйста.',
-  'Умывальник общий, мыло своё.',
-];
+/** Присказки дневального — по одной, разные в разные минуты (`hub.orderly.say.<i>`). */
+const ORDERLY_SAYS = [0, 1, 2, 3, 4];
+
+/**
+ * Присказка Чародея `i`: перевод — в каталоге книг (`books.mage.<i>`), пока
+ * его нет — русская строка `MAGE_LINES`.
+ */
+const mageLine = (i: number) => {
+  const key = `books.mage.${i}`;
+  return hasKey(key) ? t(key) : MAGE_LINES[i];
+};
+
+/** Имя данных внутри фразы: строчными, как в русском, кроме немецкого. */
+const inText = (s: string) => (getLang() === 'de' ? s : lower(s));
 
 export const RESIDENTS: Record<string, Resident> = {
   smith: {
@@ -221,16 +230,19 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'smith',
     lines: (f) => [
       f.forgeReady
-        ? 'Руды хватает. Давай молот — выкую!'
-        : !f.nextPick
-          ? 'Лучше этой кирки я не скую. Береги её.'
+        ? t('hub.smith.ready')
+        : f.nextPickI < 0
+          ? t('hub.smith.best')
           : f.nextPickFloor
-            ? `Следующая — ${f.nextPick.toLowerCase()} кирка. Скую, когда дойдёшь до этажа ${f.nextPickFloor}.`
-            : `Следующая — ${f.nextPick.toLowerCase()} кирка. Неси руду, ящик у наковальни.`,
-      'Кирка берёт руду своего этажа и следующего.',
-      'Руду для кирки не продавай — сама ляжет в ящик.',
+            ? t('hub.smith.nextFloor', {
+                pick: inText(pickName(f.nextPickI)),
+                floor: f.nextPickFloor,
+              })
+            : t('hub.smith.next', { pick: inText(pickName(f.nextPickI)) }),
+      t('hub.smith.floors'),
+      t('hub.smith.keep'),
     ],
-    options: () => [{ label: 'Кузница', action: { kind: 'forge' } }],
+    options: () => [{ label: t('hub.opt.forge'), action: { kind: 'forge' } }],
     badge: (f) => f.forgeReady,
   },
   mage: {
@@ -239,17 +251,20 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'mage',
     lines: (f) => [
       f.booksReady
-        ? 'На полке есть книга, что ляжет в кирку. Не тяни.'
+        ? t('hub.mage.book')
         : f.runesIdle
-          ? 'В обереге пустое гнездо — вставь руну.'
+          ? t('hub.mage.rune')
           : f.tokens < 140
-            ? 'Приходи с токенами — они падают с блоков.'
-            : 'Книга ждёт тебя. Какая — узнаешь, когда купишь.',
-      ...pick2(MAGE_LINES, f.now),
+            ? t('hub.mage.poor')
+            : t('hub.mage.wait'),
+      ...pick2(
+        MAGE_LINES.map((_, i) => i),
+        f.now,
+      ).map(mageLine),
     ],
     options: () => [
-      { label: 'Книги', action: camp(['enchant'], 'Книги') },
-      { label: 'Руны', action: camp(['runes'], 'Руны') },
+      { label: t('hub.opt.books'), action: camp(['enchant'], t('hub.opt.books')) },
+      { label: t('hub.opt.runes'), action: camp(['runes'], t('hub.opt.runes')) },
     ],
     badge: (f) => f.booksReady || f.runesIdle,
   },
@@ -259,22 +274,23 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'foreman',
     lines: (f) => {
       const r = f.rank2;
-      if (!r) return ['Ты дошёл до самого дна. Дальше — престиж.', 'Клеть внизу — спускайся.'];
-      if (r.ready) return [`Всё готово — бери ранг ${r.letter}!`, 'Клеть внизу — спускайся.'];
+      if (!r) return [t('hub.foreman.bottom'), t('hub.foreman.cage')];
+      if (r.ready) return [t('hub.foreman.ready', { r: r.letter }), t('hub.foreman.cage')];
       const out: string[] = [];
-      if (r.power) out.push(`Кирка слабовата: нужна сила ⛏${r.power}. Сходи к кузнецу.`);
-      if (r.coins) out.push(`До ранга ${r.letter} не хватает ${shortMoney(r.coins)} монет.`);
-      if (r.work)
-        out.push(
-          `Сломай ещё ${shortMoney(r.work)} ${plural(r.work, 'блок', 'блока', 'блоков')} — это выработка.`,
-        );
+      if (r.power) out.push(t('hub.foreman.power', { n: r.power }));
+      if (r.coins)
+        out.push(t('hub.foreman.coins', { n: r.coins, v: fmtShort(r.coins), r: r.letter }));
+      if (r.work) out.push(t('hub.foreman.work', { n: r.work, v: fmtShort(r.work) }));
       if (r.blocks)
         out.push(
-          `Нужно ещё ${r.blocks} ${plural(r.blocks, 'блок', 'блока', 'блоков')} этажа: ${r.blockName}.`,
+          t('hub.foreman.blocks', {
+            n: r.blocks,
+            block: ROCKS[r.blockI] ? blockName(r.blockI) : t('hub.floorBlock'),
+          }),
         );
       return out.slice(0, 4);
     },
-    options: () => [{ label: 'В шахту', action: { kind: 'route', path: '/prison' } }],
+    options: () => [{ label: t('hub.opt.mine'), action: { kind: 'route', path: '/prison' } }],
     badge: (f) => !!f.rank2?.ready,
   },
   guard: {
@@ -283,22 +299,19 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'guard',
     lines: (f) =>
       !f.zoneOpen
-        ? [
-            `Сюда пускают после ${ZONE_TIERS[0]}-го престижа.`,
-            'Там порода, которой в шахте нет. Платит токенами.',
-          ]
+        ? [t('hub.guard.closed', { n: ZONE_TIERS[0] }), t('hub.guard.rock')]
         : f.zoneOn
-          ? [`Ты там уже работаешь. Осталось ${mins(f.zoneMs)} мин.`]
+          ? [t('hub.guard.on', { n: mins(f.zoneMs) })]
           : f.zoneMs <= 0
-            ? ['На сегодня твоё время вышло. Приходи завтра.', 'Время идёт только за работой.']
+            ? [t('hub.guard.over'), t('hub.guard.work')]
             : [
-                `У тебя ${mins(f.zoneMs)} мин в особой шахте.`,
-                `Там ${f.zoneRock.toLowerCase()}. Токены идут щедро.`,
-                'Время идёт только, пока копаешь.',
+                t('hub.guard.have', { n: mins(f.zoneMs) }),
+                t('hub.guard.there', { rock: inText(rockName(f.zoneRockI)) }),
+                t('hub.guard.dig'),
               ],
     options: (f) =>
       f.zoneOpen && (f.zoneOn || f.zoneMs > 0)
-        ? [{ label: 'В особую шахту', action: { kind: 'zone' } }]
+        ? [{ label: t('hub.opt.zone'), action: { kind: 'zone' } }]
         : [],
     badge: (f) => f.zoneOpen && f.zoneMs > 0 && !f.zoneOn,
   },
@@ -308,20 +321,16 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'liftman',
     lines: (f) =>
       !f.dungeonOpen
-        ? [
-            `Лифт не для новичков. Приходи с ранга ${rankLetter(DUNGEON_UNLOCK_RANK)}.`,
-            'Внизу крысы. Злые.',
-          ]
+        ? [t('hub.liftman.closed', { r: rankLetter(DUNGEON_UNLOCK_RANK) }), t('hub.liftman.rats')]
         : f.dungeonRun
-          ? ['Ты оставил внизу рюкзак — он ждёт.', 'Спускайся, пока крысы не растащили.']
+          ? [t('hub.liftman.pack'), t('hub.liftman.hurry')]
           : f.kingInMs > 0
-            ? [
-                `Крысиный король спит. Проснётся через ${mins(f.kingInMs)} мин.`,
-                'Добычу выносят только лифтом.',
-              ]
-            : ['Крысиный король в логове. Точи клинок.', 'Добычу выносят только лифтом.'],
+            ? [t('hub.liftman.sleeps', { n: mins(f.kingInMs) }), t('hub.liftman.loot')]
+            : [t('hub.liftman.awake'), t('hub.liftman.loot')],
     options: (f) =>
-      f.dungeonOpen ? [{ label: 'Спуститься', action: { kind: 'route', path: '/dungeon' } }] : [],
+      f.dungeonOpen
+        ? [{ label: t('hub.opt.down'), action: { kind: 'route', path: '/dungeon' } }]
+        : [],
     badge: (f) => f.dungeonRun,
   },
   keeper: {
@@ -330,13 +339,13 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'keeper',
     lines: (f) => [
       f.eggReady
-        ? 'Яйцо согрелось — пора вылуплять!'
+        ? t('hub.keeper.ready')
         : f.nests === 0
-          ? 'Гнёзда пустые. Купи яйцо — согреем.'
-          : 'Яйца греются от твоей работы в шахте.',
-      'Пять одинаковых питомцев — и один станет золотым.',
+          ? t('hub.keeper.empty')
+          : t('hub.keeper.warm'),
+      t('hub.keeper.gold'),
     ],
-    options: () => [{ label: 'Питомник', action: camp(['pets'], 'Питомник') }],
+    options: () => [{ label: t('hub.opt.pets'), action: camp(['pets'], t('hub.opt.pets')) }],
     badge: (f) => f.eggReady,
   },
   clerk: {
@@ -345,12 +354,9 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'clerk',
     lines: (f) =>
       f.keys > 0
-        ? [
-            `У тебя ${f.keys} ${plural(f.keys, 'ключ', 'ключа', 'ключей')}. Открывай!`,
-            'В сундуке бывают книги.',
-          ]
-        : ['Ключи падают в шахте. Приноси — открою сундук.', 'В сундуке бывают книги.'],
-    options: () => [{ label: 'Сундуки', action: camp(['cases'], 'Сундуки') }],
+        ? [t('hub.clerk.keys', { n: f.keys }), t('hub.clerk.books')]
+        : [t('hub.clerk.none'), t('hub.clerk.books')],
+    options: () => [{ label: t('hub.opt.cases'), action: camp(['cases'], t('hub.opt.cases')) }],
     badge: (f) => f.keys > 0,
   },
   trader: {
@@ -358,19 +364,19 @@ export const RESIDENTS: Record<string, Resident> = {
     name: 'Торговец',
     sheet: 'trader',
     lines: (f) => [
-      f.hotLot ? 'Сегодня скидка — бери, пока лежит.' : 'Всё хорошее уже разобрали.',
-      `Новый товар через ${hoursMins(f.barygaNextMs)}.`,
-      'Беру только монеты.',
+      f.hotLot ? t('hub.trader.hot') : t('hub.trader.gone'),
+      t('hub.trader.next', { t: hoursMins(f.barygaNextMs) }),
+      t('hub.trader.coins'),
     ],
-    options: () => [{ label: 'Товар', action: { kind: 'baryga' } }],
+    options: () => [{ label: t('hub.opt.goods'), action: { kind: 'baryga' } }],
     badge: (f) => f.hotLot,
   },
   seller: {
     id: 'seller',
     name: 'Продавщица',
     sheet: 'seller',
-    lines: () => ['Бомбы, энергетик, лупа — всё для шахты.', 'Чем глубже этаж, тем дороже товар.'],
-    options: () => [{ label: 'Лавка', action: camp(['shop'], 'Лавка') }],
+    lines: () => [t('hub.seller.stock'), t('hub.seller.deep')],
+    options: () => [{ label: t('hub.opt.shop'), action: camp(['shop'], t('hub.opt.shop')) }],
     badge: () => false,
   },
   chief: {
@@ -379,19 +385,16 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'chief',
     lines: (f) => {
       const out: string[] = [];
-      if (f.miles > 0)
-        out.push(
-          `Есть ${f.miles} ${plural(f.miles, 'достижение', 'достижения', 'достижений')} — забери награду.`,
-        );
-      if (f.perksFree > 0) out.push(`Свободных очков навыков: ${f.perksFree}. Распредели.`);
-      if (!out.length) out.push('Работай. Лагерь всё видит.');
-      out.push('Находки из шахты — в коллекцию. Каждая прибавит к продаже.');
+      if (f.miles > 0) out.push(t('hub.chief.miles', { n: f.miles }));
+      if (f.perksFree > 0) out.push(t('hub.chief.perks', { n: f.perksFree }));
+      if (!out.length) out.push(t('hub.chief.idle'));
+      out.push(t('hub.chief.finds'));
       return out;
     },
     options: () => [
-      { label: 'Достижения', action: camp(['miles'], 'Достижения') },
-      { label: 'Навыки', action: camp(['perks'], 'Навыки') },
-      { label: 'Коллекция', action: camp(['finds'], 'Коллекция') },
+      { label: t('hub.opt.miles'), action: camp(['miles'], t('hub.opt.miles')) },
+      { label: t('hub.opt.perks'), action: camp(['perks'], t('hub.opt.perks')) },
+      { label: t('hub.opt.finds'), action: camp(['finds'], t('hub.opt.finds')) },
     ],
     badge: (f) => f.miles > 0 || f.perksFree > 0,
   },
@@ -404,27 +407,27 @@ export const RESIDENTS: Record<string, Resident> = {
     sheet: 'orderly',
     lines: (f) => {
       const out: string[] = [];
-      if (f.eggsFull) out.push('Корзина яиц полна — новое разобьётся. Отложи в сундук.');
-      if (f.shelfFull) out.push('Полка книг забита. Лишние — в сундук, пока не рассыпались.');
-      if (f.runesFull) out.push('Мешочек рун полон. Сундук под койкой — туда.');
+      if (f.eggsFull) out.push(t('hub.orderly.eggs'));
+      if (f.shelfFull) out.push(t('hub.orderly.shelf'));
+      if (f.runesFull) out.push(t('hub.orderly.runes'));
       if (f.bunkUsed >= f.bunkSize)
         out.push(
           f.bunkBig
-            ? 'Сундук набит под крышку. Разбери, что лишнее.'
-            : `Сундук полон. Двойной — ${shortMoney(BUNK_BIG_PRICE)} монет, у меня.`,
+            ? t('hub.orderly.stuffed')
+            : t('hub.orderly.full', { v: fmtShort(BUNK_BIG_PRICE) }),
         );
       if (!out.length)
         out.push(
           f.bunkUsed === 0
-            ? 'Твоя койка — у двери. Сундук под ней, клади что хочешь.'
-            : `В сундуке занято ${f.bunkUsed} из ${f.bunkSize}. Всё цело, я слежу.`,
+            ? t('hub.orderly.empty')
+            : t('hub.orderly.used', { n: f.bunkUsed, size: f.bunkSize }),
         );
-      out.push(pick2(ORDERLY_LINES, f.now)[0]);
+      out.push(t(`hub.orderly.say.${pick2(ORDERLY_SAYS, f.now)[0]}` as Key));
       return out.slice(0, 3);
     },
     options: () => [
-      { label: 'Мой сундук', action: { kind: 'bunk' } },
-      { label: 'Инвентарь', action: { kind: 'inventory' } },
+      { label: t('hub.opt.bunk'), action: { kind: 'bunk' } },
+      { label: t('hub.opt.inventory'), action: { kind: 'inventory' } },
     ],
     badge: (f) => f.eggsFull || f.shelfFull || f.runesFull,
   },
@@ -433,13 +436,13 @@ export const RESIDENTS: Record<string, Resident> = {
     name: 'Крупье',
     sheet: 'croupier',
     lines: (f) => [
-      f.coins < 10 ? 'Без монет за стол не садятся.' : 'Ставки на те же монеты, что в шахте.',
-      'В Каскаде сферы множат весь выигрыш.',
+      f.coins < 10 ? t('hub.croupier.broke') : t('hub.croupier.same'),
+      t('hub.croupier.orbs'),
     ],
     options: () => [
-      { label: 'Слоты', action: { kind: 'route', path: '/slots' } },
-      { label: 'Каскад', action: { kind: 'route', path: '/scatter' } },
-      { label: 'Весь зал', action: { kind: 'route', path: '/games' } },
+      { label: t('hub.opt.slots'), action: { kind: 'route', path: '/slots' } },
+      { label: t('hub.opt.cascade'), action: { kind: 'route', path: '/scatter' } },
+      { label: t('hub.opt.hall'), action: { kind: 'route', path: '/games' } },
     ],
     badge: () => false,
   },

@@ -20,6 +20,7 @@ import type { Gear } from './dungeon';
 import { heroSprite } from './dungeon-sprites';
 import type { Dir4 } from './dungeon-sprites';
 import { walkRow } from './walk';
+import { npcName } from '@/i18n/data-yard';
 
 // ---------------------------------------------------------------------------
 // Картинки.
@@ -842,7 +843,7 @@ export class HubRenderer {
     g.textBaseline = 'alphabetic';
     g.lineJoin = 'round';
     for (const n of sim.npcs) {
-      const name = n.data.name;
+      const name = npcName(n.data.id, n.data.name);
       if (!name) continue;
       const d = Math.hypot(sim.hero.x - n.x, sim.hero.y - n.y);
       // Имя видно вблизи — вдали оно ничего не говорит, а поле загромождает.

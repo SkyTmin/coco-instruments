@@ -8,26 +8,22 @@ import { CoinIcon } from '@/components/slot-art';
 import { RewardIcon, rewardLabel } from '@/components/PrisonCamp';
 import { useFinanceStore } from '@/store';
 import type { YardEnd } from '@/store';
-import { liveEvent, shortMoney } from '@/lib/prison';
+import { liveEvent } from '@/lib/prison';
 import type { YardEvent } from '@/lib/prison';
-import {
-  barygaBought,
-  barygaLots,
-  barygaWindow,
-  BARYGA_HOT,
-  BARYGA_MS,
-  eventOf,
-  prizeText,
-} from '@/lib/yard';
+import { barygaBought, barygaLots, barygaWindow, BARYGA_HOT, BARYGA_MS, eventOf } from '@/lib/yard';
 import type { YardPrize } from '@/lib/yard';
 import { barygaTexture, rockTexture } from '@/lib/prison-art';
 import { useExit } from '@/lib/use-exit';
 import { coinDing, primeAudio, tierBreak } from '@/lib/sound';
 import { notifySuccess, notifyWarning } from '@/lib/haptics';
+import { fmtShort, t, useT } from '@/i18n';
+import { eventLead, eventName } from '@/i18n/data-yard';
 
 const clock = (ms: number) => {
-  const t = Math.max(0, Math.ceil(ms / 1000));
-  return t < 60 ? `${t} с` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return s < 60
+    ? t('yard.sec', { n: s })
+    : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
 /**
@@ -67,15 +63,15 @@ export function endText(end: YardEnd): string | null {
   if (!end.failed) return null;
   switch (end.id) {
     case 'meteor':
-      return 'Метеорит остыл и ушёл в породу';
+      return t('yard.end.meteor');
     case 'kuiva':
-      return 'Куйва ушёл обратно в скалу';
+      return t('yard.end.kuiva');
     case 'convoy':
-      return 'Конвой уехал без груза';
+      return t('yard.end.convoy');
     case 'bear':
-      return end.lost > 0 ? `Медведь унёс ${end.lost} брёвен` : 'Медведь ушёл ни с чем';
+      return end.lost > 0 ? t('yard.end.bear', { n: end.lost }) : t('yard.end.bearNone');
     case 'magpie':
-      return 'Сорока улетела — ничего не подобрал';
+      return t('yard.end.magpie');
     default:
       return null;
   }
@@ -83,11 +79,12 @@ export function endText(end: YardEnd): string | null {
 
 /** Объявление: крупно, на две с половиной секунды, не мешает бить. */
 export function EventAnnounce({ ev, onDone }: { ev: YardEvent | null; onDone: () => void }) {
+  const t = useT();
   const [shown, leaving] = useExit(ev, 320);
   useEffect(() => {
     if (!ev) return undefined;
-    const t = setTimeout(onDone, 2600);
-    return () => clearTimeout(t);
+    const timer = setTimeout(onDone, 2600);
+    return () => clearTimeout(timer);
   }, [ev, onDone]);
   if (!shown) return null;
   const def = eventOf(shown.id);
@@ -97,23 +94,24 @@ export function EventAnnounce({ ev, onDone }: { ev: YardEvent | null; onDone: ()
       style={{ '--ev': def.color } as CSSProperties}
       role="status"
     >
-      <span className="yannounce__tag">Во дворе</span>
+      <span className="yannounce__tag">{t('yard.tag')}</span>
       <b className="yannounce__name">
-        <i>{def.glyph}</i> {def.name}
+        <i>{def.glyph}</i> {eventName(shown.id)}
       </b>
-      <span className="yannounce__lead">{def.lead}</span>
+      <span className="yannounce__lead">{eventLead(shown.id)}</span>
     </div>
   );
 }
 
 /** Плашка события: знак, имя, таймер, прогресс, если он есть. */
 export function EventPill({ ev, now }: { ev: YardEvent; now: number }) {
+  useT();
   const def = eventOf(ev.id);
   const left = ev.until - now;
   // У сороки `have` — монеты в мешочке, а не счёт сданного.
   const part =
     ev.id === 'magpie'
-      ? `${shortMoney(ev.have)} · `
+      ? `${fmtShort(ev.have)} · `
       : ev.need
         ? `${Math.min(ev.have, ev.need)}/${ev.need} · `
         : '';
@@ -127,17 +125,27 @@ export function EventPill({ ev, now }: { ev: YardEvent; now: number }) {
       ) : (
         def.glyph
       )}{' '}
-      {def.name} · {part}
+      {eventName(ev.id)} · {part}
       {clock(left)}
     </span>
   );
 }
 
+/** Приз события на языке игры (`prizeText` из lib — тот же порядок частей). */
+function prizeLine(x: YardPrize): string {
+  const parts: string[] = [];
+  if (x.coins) parts.push(t('yard.prize.coins', { n: x.coins }));
+  if (x.tokens) parts.push(`+${x.tokens} ✦`);
+  if (x.keys) parts.push(x.keys > 1 ? t('yard.prize.keys', { n: x.keys }) : t('yard.prize.key'));
+  if (x.parcel) parts.push(t('yard.prize.parcel'));
+  return parts.join(' · ');
+}
+
 /** Приз события — одной строкой для тоста. */
 export function prizeSay(x: YardPrize): string {
-  const name = eventOf(x.id).name;
+  const name = eventName(x.id);
   const item = x.item ? ` · ${rewardLabel({ kind: 'item', id: x.item.id, amount: x.item.n })}` : '';
-  return `${name}: ${prizeText(x)}${item}`;
+  return `${name}: ${prizeLine(x)}${item}`;
 }
 
 // ---- Торговец (в коде — Барыга) -----------------------------------------------------------------
@@ -150,6 +158,7 @@ export function BarygaSheet({
   /** Монеты ушли или пришли — табло встаёт на новое значение. */
   onGain?: () => void;
 }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const barygaBuy = useFinanceStore((s) => s.barygaBuy);
@@ -167,15 +176,15 @@ export function BarygaSheet({
   const m = Math.ceil((next % 3_600_000) / 60_000);
 
   return (
-    <GxSheet title="Торговец" className="gx-camp" onClose={onClose}>
+    <GxSheet title={t('yard.trader.title')} className="gx-camp" onClose={onClose}>
       <div className="stack">
         <div className="ybaryga">
           <img src={barygaTexture()} alt="" />
           <span>
-            <b>«Всё есть, всё за монеты».</b>
+            <b>{t('yard.trader.motto')}</b>
             <i>
-              <GxIcon name="hourglass" size={14} /> Новый товар через {h ? `${h} ч ` : ''}
-              {m} мин
+              <GxIcon name="hourglass" size={14} />{' '}
+              {h ? t('yard.trader.nextHm', { h, m }) : t('yard.trader.nextM', { m })}
             </i>
           </span>
         </div>
@@ -192,7 +201,7 @@ export function BarygaSheet({
                   {rewardLabel(lot.reward)}
                   {lot.hot && <em className="ylot__hot">−{Math.round(BARYGA_HOT * 100)}%</em>}
                 </b>
-                <i>{left > 0 ? `осталось ${left}` : 'разобрали'}</i>
+                <i>{left > 0 ? t('yard.trader.left', { n: left }) : t('yard.trader.gone')}</i>
               </span>
               <button
                 type="button"
@@ -211,27 +220,25 @@ export function BarygaSheet({
                   notifySuccess();
                   setNote(
                     got.shattered
-                      ? `Мешочек рун полон — руна разбита на ${got.shattered} ✦`
-                      : `Взято: ${rewardLabel(lot.reward)}`,
+                      ? t('yard.trader.shattered', { n: got.shattered })
+                      : t('yard.trader.took', { what: rewardLabel(lot.reward) }),
                   );
                 }}
               >
                 {left > 0 ? (
                   <>
-                    {lot.hot && <s className="ylot__was">{shortMoney(lot.was)}</s>}
-                    {shortMoney(lot.price)} <CoinIcon size={12} />
+                    {lot.hot && <s className="ylot__was">{fmtShort(lot.was)}</s>}
+                    {fmtShort(lot.price)} <CoinIcon size={12} />
                   </>
                 ) : (
-                  'нет'
+                  t('yard.trader.none')
                 )}
               </button>
             </div>
           );
         })}
         {note && <p className="ybaryga__note">{note}</p>}
-        <p className="pcamp-note">
-          Только здесь монеты меняются на токены и ключи. Товар со скидкой — пока не разобрали.
-        </p>
+        <p className="pcamp-note">{t('yard.trader.note')}</p>
       </div>
     </GxSheet>
   );

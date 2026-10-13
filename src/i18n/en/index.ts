@@ -6,6 +6,7 @@ import { cash } from './cash';
 import { common } from './common';
 import { field } from './field';
 import { hall } from './hall';
+import { hub } from './hub';
 import { input } from './input';
 import { mine } from './mine';
 import { nursery } from './nursery';
@@ -14,6 +15,8 @@ import { settings } from './settings';
 import { skins } from './skins';
 import { slots } from './slots';
 import { ui } from './ui';
+import { yard } from './yard';
+import { yardData } from './yardData';
 
 const en: Translation<Catalog> = {
   camp,
@@ -22,6 +25,7 @@ const en: Translation<Catalog> = {
   common,
   field,
   hall,
+  hub,
   input,
   mine,
   nursery,
@@ -30,5 +34,7 @@ const en: Translation<Catalog> = {
   skins,
   slots,
   ui,
+  yard,
+  yardData,
 };
 export default en;
