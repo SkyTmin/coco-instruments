@@ -1,0 +1,48 @@
+import type { Translation } from '../types';
+import type { fishingData as ru } from '../ru/fishingData';
+
+export const fishingData: Translation<typeof ru> = {
+  spot: {
+    pond: 'Estanque',
+    river: 'Río',
+    lake: 'Lago',
+    mount: 'Lago de montaña',
+    sea: 'Mar',
+  },
+  fish: {
+    crucian: 'Carpín',
+    roach: 'Rutilo',
+    perch: 'Perca',
+    tench: 'Tenca',
+    goldfish: 'Pez dorado',
+    chub: 'Cacho',
+    ide: 'Ido',
+    pike: 'Lucio',
+    zander: 'Lucioperca',
+    catfish: 'Siluro',
+    bream: 'Brema',
+    carp: 'Carpa',
+    burbot: 'Lota',
+    eel: 'Anguila',
+    amur: 'Carpa herbívora',
+    grayling: 'Tímalo',
+    trout: 'Trucha',
+    char: 'Salvelino',
+    lenok: 'Lenok',
+    taimen: 'Taimén',
+    mackerel: 'Caballa',
+    flounder: 'Platija',
+    cod: 'Bacalao',
+    halibut: 'Fletán',
+    tuna: 'Atún',
+    sturgeon: 'Esturión',
+  },
+  rod: {
+    '0': 'Caña casera',
+    '1': 'Caña de bambú',
+    '2': 'Caña telescópica',
+    '3': 'Caña de carbono',
+    '4': 'Caña de mar',
+    '5': 'Caña dorada',
+  },
+};

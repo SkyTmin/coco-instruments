@@ -1,0 +1,70 @@
+import type { Translation } from '../types';
+import type { forest as ru } from '../ru/forest';
+
+export const forest: Translation<typeof ru> = {
+  title: 'Wald',
+  titleAt: 'Wald · {name}',
+  fromRank: 'Ab Rang {r}',
+  tokensAria: 'Tokens — Axt-Verzauberungen',
+  mine: 'Mine',
+  axe: 'Axt',
+  bear: 'Bär',
+  tapSides: 'Tippe links oder rechts',
+  mill: 'Sägewerk',
+  petLevel: '{name}, Lvl. {n}',
+  grade: 'Stufe {n}',
+  gradeTop: 'Höchste Stufe',
+  gradeGo: 'Neue Stufe — tippen!',
+  gradeLock: 'Mine',
+  m3: '{a}/{b} m³',
+  m3Bar: '{a} / {b} m³',
+  float: {
+    fell: 'BAUM FÄLLT!',
+    branch: 'AST!',
+    dodge: 'AUSGEWICHEN',
+    bear: 'VERJAGT!',
+    done: 'GESCHAFFT',
+    burl: 'MASERKNOLLE ×10',
+    figured: 'MASERHOLZ ×3',
+    hollowTokens: 'ASTLOCH: +{n} ✦',
+    hollowParcel: 'ASTLOCH: PAKET',
+    chaga: 'CHAGA +{n} ✦',
+    keys: {
+      one: '+{n} Schlüssel',
+      other: '+{n} Schlüssel',
+    },
+    parcel: 'PAKET',
+    seid: 'SEID-KIEFER +{n} ✦',
+    toMill: '{n} → INS SÄGEWERK',
+    ench: '{name}!',
+    swing: '{name} ×2',
+  },
+  say: {
+    planDone: 'Soll erfüllt — hol dir die Stufe',
+    pileFull: 'Stapel voll — verkauf das Holz',
+    pileEmpty: 'Stapel leer — fällen!',
+    storm: {
+      one: '{name}: noch {n} Stamm {wood}',
+      other: '{name}: noch {n} Stämme {wood}',
+    },
+    plotGate: 'Das nächste Waldstück öffnet ab Minenrang {r}',
+    parcelLeft: {
+      one: 'Öffnet in {n} Stamm oder Block',
+      other: 'Öffnet in {n} Stämmen oder Blöcken',
+    },
+  },
+  plan: {
+    take: 'Stufe {n} nehmen',
+    buyout: 'Stämme nachkaufen · {sum}',
+  },
+  scene: {
+    title: 'Neue Stufe',
+    wood: '{name} · bis {v} pro Stamm',
+    buyout: {
+      one: 'Stämme für {n} Münze nachgekauft',
+      other: 'Stämme für {n} Münzen nachgekauft',
+    },
+    next: 'Für Stufe {n}: {m3} m³ Holz {wood}',
+    go: 'Fällen',
+  },
+};

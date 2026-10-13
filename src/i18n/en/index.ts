@@ -10,6 +10,9 @@ import { critters } from './critters';
 import { eggs } from './eggs';
 import { field } from './field';
 import { finds } from './finds';
+import { fishing } from './fishing';
+import { fishingData } from './fishingData';
+import { forest } from './forest';
 import { forge } from './forge';
 import { guide } from './guide';
 import { hall } from './hall';
@@ -38,6 +41,9 @@ const en: Translation<Catalog> = {
   eggs,
   field,
   finds,
+  fishing,
+  fishingData,
+  forest,
   forge,
   guide,
   hall,

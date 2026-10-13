@@ -1,0 +1,70 @@
+import type { Translation } from '../types';
+import type { forest as ru } from '../ru/forest';
+
+export const forest: Translation<typeof ru> = {
+  title: 'Forest',
+  titleAt: 'Forest · {name}',
+  fromRank: 'Unlocks at rank {r}',
+  tokensAria: 'Tokens — axe enchants',
+  mine: 'Mine',
+  axe: 'Axe',
+  bear: 'Bear',
+  tapSides: 'Tap left or right',
+  mill: 'Sawmill',
+  petLevel: '{name}, Lv. {n}',
+  grade: 'Grade {n}',
+  gradeTop: 'Top grade',
+  gradeGo: 'New grade — tap!',
+  gradeLock: 'mine',
+  m3: '{a}/{b} m³',
+  m3Bar: '{a} / {b} m³',
+  float: {
+    fell: 'TIMBER!',
+    branch: 'BRANCH!',
+    dodge: 'DODGED',
+    bear: 'SCARED OFF!',
+    done: 'DONE',
+    burl: 'BURL ×10',
+    figured: 'CURLY GRAIN ×3',
+    hollowTokens: 'HOLLOW: +{n} ✦',
+    hollowParcel: 'HOLLOW: PARCEL',
+    chaga: 'CHAGA +{n} ✦',
+    keys: {
+      one: '+{n} key',
+      other: '+{n} keys',
+    },
+    parcel: 'PARCEL',
+    seid: 'SEID PINE +{n} ✦',
+    toMill: '{n} → TO THE SAWMILL',
+    ench: '{name}!',
+    swing: '{name} ×2',
+  },
+  say: {
+    planDone: 'Quota met — take the grade',
+    pileFull: 'Log pile full — sell the wood',
+    pileEmpty: 'Log pile empty — chop!',
+    storm: {
+      one: '{name}: {n} more {wood} log',
+      other: '{name}: {n} more {wood} logs',
+    },
+    plotGate: 'The next plot unlocks at mine rank {r}',
+    parcelLeft: {
+      one: 'Opens in {n} more log or block',
+      other: 'Opens in {n} more logs or blocks',
+    },
+  },
+  plan: {
+    take: 'Take grade {n}',
+    buyout: 'Buy the missing logs · {sum}',
+  },
+  scene: {
+    title: 'New grade',
+    wood: '{name} · up to {v} per log',
+    buyout: {
+      one: 'Logs bought for {n} coin',
+      other: 'Logs bought for {n} coins',
+    },
+    next: 'For grade {n}: {m3} m³ of {wood}',
+    go: 'Chop',
+  },
+};

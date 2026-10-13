@@ -1,0 +1,70 @@
+import type { Translation } from '../types';
+import type { forest as ru } from '../ru/forest';
+
+export const forest: Translation<typeof ru> = {
+  title: 'Orman',
+  titleAt: 'Orman · {name}',
+  fromRank: '{r} rütbesinde açılır',
+  tokensAria: 'Jetonlar — balta büyüleri',
+  mine: 'Maden',
+  axe: 'Balta',
+  bear: 'Ayı',
+  tapSides: 'Sola ya da sağa dokun',
+  mill: 'Hızar',
+  petLevel: '{name}, Sv. {n}',
+  grade: 'Kademe {n}',
+  gradeTop: 'En üst kademe',
+  gradeGo: 'Yeni kademe — dokun!',
+  gradeLock: 'maden',
+  m3: '{a}/{b} m³',
+  m3Bar: '{a} / {b} m³',
+  float: {
+    fell: 'DİKKAT!',
+    branch: 'BUDAK!',
+    dodge: 'KAÇTIN',
+    bear: 'KOVDUN!',
+    done: 'TAMAM',
+    burl: 'YUMRU ×10',
+    figured: 'DESENLİ ×3',
+    hollowTokens: 'KOVUK: +{n} ✦',
+    hollowParcel: 'KOVUK: KOLİ',
+    chaga: 'CHAGA +{n} ✦',
+    keys: {
+      one: '+{n} anahtar',
+      other: '+{n} anahtar',
+    },
+    parcel: 'KOLİ',
+    seid: 'SEYİT ÇAMI +{n} ✦',
+    toMill: '{n} → HIZARA',
+    ench: '{name}!',
+    swing: '{name} ×2',
+  },
+  say: {
+    planDone: 'Kota tamam — kademeyi al',
+    pileFull: 'Yığın dolu — odunu sat',
+    pileEmpty: 'Yığın boş — kes!',
+    storm: {
+      one: '{name}: {n} {wood} kütüğü daha',
+      other: '{name}: {n} {wood} kütüğü daha',
+    },
+    plotGate: 'Sonraki kesim alanı {r} maden rütbesinde açılır',
+    parcelLeft: {
+      one: '{n} kütük ya da blok sonra açılır',
+      other: '{n} kütük ya da blok sonra açılır',
+    },
+  },
+  plan: {
+    take: '{n}. kademeyi al',
+    buyout: 'Eksik kütükleri al · {sum}',
+  },
+  scene: {
+    title: 'Yeni kademe',
+    wood: '{name} · kütük başı en çok {v}',
+    buyout: {
+      one: 'Kütükler {n} altına alındı',
+      other: 'Kütükler {n} altına alındı',
+    },
+    next: 'Kademe {n} için: {m3} m³ {wood}',
+    go: 'Kes',
+  },
+};

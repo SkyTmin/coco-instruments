@@ -1,0 +1,48 @@
+import type { Translation } from '../types';
+import type { fishingData as ru } from '../ru/fishingData';
+
+export const fishingData: Translation<typeof ru> = {
+  spot: {
+    pond: 'Teich',
+    river: 'Fluss',
+    lake: 'See',
+    mount: 'Bergsee',
+    sea: 'Meer',
+  },
+  fish: {
+    crucian: 'Karausche',
+    roach: 'Rotauge',
+    perch: 'Barsch',
+    tench: 'Schleie',
+    goldfish: 'Goldfisch',
+    chub: 'Döbel',
+    ide: 'Aland',
+    pike: 'Hecht',
+    zander: 'Zander',
+    catfish: 'Wels',
+    bream: 'Brasse',
+    carp: 'Karpfen',
+    burbot: 'Quappe',
+    eel: 'Aal',
+    amur: 'Graskarpfen',
+    grayling: 'Äsche',
+    trout: 'Forelle',
+    char: 'Saibling',
+    lenok: 'Lenok',
+    taimen: 'Taimen',
+    mackerel: 'Makrele',
+    flounder: 'Flunder',
+    cod: 'Kabeljau',
+    halibut: 'Heilbutt',
+    tuna: 'Thunfisch',
+    sturgeon: 'Stör',
+  },
+  rod: {
+    '0': 'Bastelrute',
+    '1': 'Bambusrute',
+    '2': 'Teleskoprute',
+    '3': 'Carbonrute',
+    '4': 'Meeresrute',
+    '5': 'Goldrute',
+  },
+};

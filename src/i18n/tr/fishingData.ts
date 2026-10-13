@@ -1,0 +1,48 @@
+import type { Translation } from '../types';
+import type { fishingData as ru } from '../ru/fishingData';
+
+export const fishingData: Translation<typeof ru> = {
+  spot: {
+    pond: 'Gölet',
+    river: 'Nehir',
+    lake: 'Göl',
+    mount: 'Dağ gölü',
+    sea: 'Deniz',
+  },
+  fish: {
+    crucian: 'Havuz balığı',
+    roach: 'Kızılgöz',
+    perch: 'Tatlısu levreği',
+    tench: 'Kadife balığı',
+    goldfish: 'Japon balığı',
+    chub: 'Tatlısu kefali',
+    ide: 'Sarıbalık',
+    pike: 'Turna balığı',
+    zander: 'Sudak balığı',
+    catfish: 'Yayın balığı',
+    bream: 'Çapak balığı',
+    carp: 'Sazan',
+    burbot: 'Tatlısu gelinciği',
+    eel: 'Yılan balığı',
+    amur: 'Ot sazanı',
+    grayling: 'Gölge balığı',
+    trout: 'Alabalık',
+    char: 'Kutup alabalığı',
+    lenok: 'Lenok',
+    taimen: 'Taimen',
+    mackerel: 'Uskumru',
+    flounder: 'Pisi balığı',
+    cod: 'Morina',
+    halibut: 'Halibut',
+    tuna: 'Ton balığı',
+    sturgeon: 'Mersin balığı',
+  },
+  rod: {
+    '0': 'El yapımı olta',
+    '1': 'Bambu olta',
+    '2': 'Teleskopik olta',
+    '3': 'Karbon olta',
+    '4': 'Deniz oltası',
+    '5': 'Altın olta',
+  },
+};
