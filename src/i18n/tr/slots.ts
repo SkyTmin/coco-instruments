@@ -63,6 +63,7 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'tek spinde ×{x} kazanç',
     yourBest: 'en iyin: {x} / ×{goal}',
     fromLevel: 'seviye {n} ile açılır',
+    current: 'seçili',
     note: '“Kalıntı” seviyeyle açılmaz — tek bir büyük spinle kazanılır ve sonsuza dek kalır. Semboller: Twemoji (CC-BY 4.0, Twitter Inc. ve katkıda bulunanlar).',
   },
   hud: {

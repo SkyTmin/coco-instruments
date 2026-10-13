@@ -63,6 +63,7 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'ein ×{x}-Gewinn in einem Spin',
     yourBest: 'dein Bestwert: {x} von ×{goal}',
     fromLevel: 'ab Level {n}',
+    current: 'gewählt',
     note: '„Relikt“ schaltet kein Level frei — man erspielt es mit einem großen Spin, und es bleibt für immer. Symbole: Twemoji (CC-BY 4.0, Twitter Inc. und Mitwirkende).',
   },
   hud: {

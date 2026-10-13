@@ -2,8 +2,8 @@
 // поэтому и лист один на всех — «Слоты» и «Каскад» показывают его одинаково.
 
 import { useEffect, useState } from 'react';
-import { Sheet } from '@/components/ui';
-import { IconLock } from '@/components/icons';
+import { GxSheet } from '@/components/gx';
+import { Bar, Icon } from '@/ui-px';
 import { cachedOwner, getBackupStatus } from '@/lib/backup';
 import { SKINS, symbolSrc } from '@/lib/skins';
 import type { Skin, SkinId } from '@/lib/skins';
@@ -12,6 +12,7 @@ import { useFinanceStore } from '@/store';
 import { levelFromXp } from '@/lib/slots-meta';
 import { selectionChanged } from '@/lib/haptics';
 import { fmtDec, fmtNum, skinText, useT } from '@/i18n';
+import '@/pages/casino.css';
 
 /** Заработанный скин — первым: он тут главный приз, а не строчка списка. */
 function order(a: Skin, b: Skin): number {
@@ -60,79 +61,92 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   }, [skin, level, topX, granted, owner, setPrefs]);
 
   return (
-    <Sheet title={t('slots.skin.title')} onClose={onClose}>
-      <div className="skin-grid">
+    <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
+      <div className="skn px">
         {[...SKINS].sort(order).map((sk) => {
           const available = isSkinAvailable(sk, level, topX, granted);
+          const active = sk.id === skin;
           // Выдан владельцу, а не добыт спином: подпись должна говорить
           // правду, иначе карточка приписывает игроку чужой рекорд.
           const byGrant = !!sk.earn && granted && topX < sk.earn.topX;
           return (
             <button
               key={sk.id}
-              className={`skin-card${sk.id === skin ? ' is-active' : ''}${
-                available ? '' : ' is-locked'
-              }${sk.earn ? ' is-relic' : ''}`}
-              data-skin={sk.id}
-              disabled={!available}
-              onClick={() => pick(sk.id)}
+              type="button"
+              className={`skn-card px-f${active ? ' is-on' : ''}${available ? '' : ' is-locked'}`}
+              aria-pressed={active}
+              aria-disabled={available ? undefined : true}
+              data-autofocus={active ? '' : undefined}
+              onClick={() => available && pick(sk.id)}
             >
-              {/* У заработанного скина карточка живёт своей жизнью: ореол
-                  крутится, имя переливается. Всё это — только здесь: если
-                  так выглядит каждая карточка, ни одна не выглядит редкой. */}
-              {sk.earn && <i className="skin-card__halo" aria-hidden="true" />}
-              {sk.earn && (
-                <span className="skin-card__limit is-relic">
-                  {byGrant
-                    ? t('slots.skin.granted')
-                    : available
-                      ? t('slots.skin.earned')
-                      : t('slots.skin.relic')}
+              {/* Витрина скина — в его же палитре (как раньше). У заработанного
+                  она живёт своей жизнью: ореол крутится, имя переливается.
+                  Всё это — только здесь: если так выглядит каждая карточка,
+                  ни одна не выглядит редкой. */}
+              <span
+                className={`skn-card__art skin-card${available ? '' : ' is-locked'}${
+                  sk.earn ? ' is-relic' : ''
+                }`}
+                data-skin={sk.id}
+              >
+                {sk.earn && <i className="skin-card__halo" aria-hidden="true" />}
+                {sk.earn && (
+                  <span className="skin-card__limit is-relic">
+                    {byGrant
+                      ? t('slots.skin.granted')
+                      : available
+                        ? t('slots.skin.earned')
+                        : t('slots.skin.relic')}
+                  </span>
+                )}
+                <span className="skin-card__reels">
+                  <img src={symbolSrc(sk.id, 'seven')} alt="" />
+                  <img src={symbolSrc(sk.id, 'star')} alt="" />
+                  <img src={symbolSrc(sk.id, 'bell')} alt="" />
                 </span>
-              )}
-              <span className="skin-card__reels">
-                <img src={symbolSrc(sk.id, 'seven')} width={26} height={26} alt="" />
-                <img src={symbolSrc(sk.id, 'star')} width={26} height={26} alt="" />
-                <img src={symbolSrc(sk.id, 'bell')} width={26} height={26} alt="" />
+                <span className="skin-card__name">{skinText(sk.id, 'name')}</span>
               </span>
-              <span className="skin-card__name">{skinText(sk.id, 'name')}</span>
-              <span className="skin-card__hint">{skinText(sk.id, 'hint')}</span>
-              {sk.earn ? (
-                <span className={`skin-card__quest${available ? ' is-done' : ''}`}>
-                  {byGrant ? (
-                    t('slots.skin.grantedNote')
-                  ) : available ? (
-                    t('slots.skin.earnedBy', { x: fmtX(topX) })
-                  ) : (
-                    <>
-                      {t('slots.skin.relicWhat', { x: sk.earn.topX })}
-                      {/* Прогресс обязателен: условие без «сколько уже» — это
-                          не цель, а отказ. */}
-                      <i
-                        className="skin-card__bar"
-                        style={{ '--p': Math.min(1, topX / sk.earn.topX) } as React.CSSProperties}
-                      >
-                        <b />
-                      </i>
-                      <em>{t('slots.skin.yourBest', { x: fmtX(topX), goal: sk.earn.topX })}</em>
-                    </>
-                  )}
-                </span>
-              ) : (
-                !available && (
-                  <span className="skin-card__lock">
-                    <IconLock size={15} />
+              <span className="skn-card__hint">{skinText(sk.id, 'hint')}</span>
+              {/* Строка состояния стоит всегда: выбран / заперт / условие. */}
+              <span className="skn-card__state">
+                {sk.earn && !available && !byGrant ? (
+                  <span className="skn-quest">
+                    <i>{t('slots.skin.relicWhat', { x: sk.earn.topX })}</i>
+                    {/* Прогресс обязателен: условие без «сколько уже» — это
+                        не цель, а отказ. */}
+                    <Bar value={Math.min(1, topX / sk.earn.topX)} />
+                    <em className="px-num">
+                      {t('slots.skin.yourBest', { x: fmtX(topX), goal: sk.earn.topX })}
+                    </em>
+                  </span>
+                ) : !available ? (
+                  <span className="skn-lock">
+                    <Icon name="lock" />
                     {t('slots.skin.fromLevel', { n: SKIN_UNLOCK[sk.id] })}
                   </span>
-                )
-              )}
+                ) : (
+                  <>
+                    {active && (
+                      <span className="skn-on">
+                        <Icon name="check" />
+                        {t('slots.skin.current')}
+                      </span>
+                    )}
+                    {sk.earn && (
+                      <span className="skn-earned">
+                        {byGrant
+                          ? t('slots.skin.grantedNote')
+                          : t('slots.skin.earnedBy', { x: fmtX(topX) })}
+                      </span>
+                    )}
+                  </>
+                )}
+              </span>
             </button>
           );
         })}
       </div>
-      <p className="muted" style={{ marginTop: 14, marginBottom: 0, fontSize: 12 }}>
-        {t('slots.skin.note')}
-      </p>
-    </Sheet>
+      <p className="skn-note">{t('slots.skin.note')}</p>
+    </GxSheet>
   );
 }

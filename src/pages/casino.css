@@ -908,3 +908,246 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__ico .px-i {
   --i-w: 11;
   --i-h: 11;
 }
+
+/* ==== Skins sheet (SkinSheet): kit cards; the skin's own palette plate stays its showcase ==== */
+.skn {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(72 * var(--u)), 1fr));
+  gap: calc(4 * var(--u));
+  /* Room for the select frame drawn outside the first row. */
+  padding: calc(3 * var(--u)) var(--u) 0;
+}
+html[data-ff='phone-portrait'] .skn {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.skn-card {
+  position: relative;
+  appearance: none;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: var(--px-text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  padding: calc(3 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+.skn-card[aria-disabled='true'] {
+  cursor: default;
+}
+/* The current skin: the kit's selection frame round the card. */
+.skn-card.is-on::before {
+  content: '';
+  position: absolute;
+  inset: calc(-3 * var(--u));
+  z-index: 3;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-select);
+  border-image-slice: var(--pxk-select-s);
+  border-image-width: var(--pxk-select-w);
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+/* The showcase plate keeps the old card's palette; only its shape follows the kit. */
+.skn-card__art.skin-card {
+  width: 100%;
+  border-radius: 0;
+  border: 0;
+  padding: calc(4 * var(--u));
+  gap: calc(2 * var(--u));
+}
+.skn-card__art.skin-card.is-relic {
+  padding-top: calc(14 * var(--u));
+}
+.skn-card__art .skin-card__reels {
+  border-radius: 0;
+}
+.skn-card__art .skin-card__reels img {
+  width: calc(13 * var(--u));
+  height: calc(13 * var(--u));
+}
+.skn-card__art .skin-card__name {
+  margin: 0;
+  font-family: var(--px-head);
+  font-weight: 400;
+  font-size: var(--px-fs);
+  line-height: 1.15;
+}
+.skn-card__hint {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+  text-wrap: pretty;
+}
+.skn-card__state {
+  display: grid;
+  align-content: end;
+  gap: var(--u);
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+}
+.skn-on,
+.skn-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.skn-on {
+  color: var(--px-green);
+}
+.skn-lock {
+  color: var(--px-muted);
+}
+.skn-earned {
+  color: var(--px-green);
+  font-weight: 600;
+}
+.skn-quest {
+  display: grid;
+  gap: var(--u);
+  color: var(--px-gold);
+}
+.skn-quest > i {
+  font-style: normal;
+}
+.skn-quest > em {
+  font: 600 var(--px-fs-tiny) / 1.2 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+}
+.skn-note {
+  margin: calc(4 * var(--u)) 0 0;
+  font: 500 var(--px-fs-tiny) / 1.3 var(--px-font);
+  color: var(--px-muted);
+}
+
+/* ==== Cash desk (CashDesk, owner only): kit buttons in a well; also in the mine settings ===== */
+.cash {
+  display: grid;
+  gap: calc(3 * var(--u));
+  padding: calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+.cash__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.cash__meta {
+  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cash__row {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.cash__what {
+  display: inline-flex;
+  justify-content: center;
+  min-width: calc(11 * var(--u));
+  color: var(--px-muted);
+}
+.cash__btn.px-btn {
+  min-width: 0;
+  padding-left: var(--u);
+  padding-right: var(--u);
+  gap: var(--u);
+}
+.cash__btn > b {
+  min-width: 0;
+  font-size: var(--px-fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The creative row is another section's button (CreativeRow): dressed as a kit iron button. */
+.cash__creative .cash-row {
+  display: grid;
+  margin: 0;
+}
+.cash__creative .cash-btn {
+  min-height: calc(19 * var(--u));
+  margin: 0;
+  padding: calc(2 * var(--u)) calc(6 * var(--u)) calc(5 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-btn-iron-n);
+  border-image-slice: var(--pxk-btn-iron-n-s);
+  border-image-width: var(--pxk-btn-iron-n-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  font: 700 var(--px-fs) / 1.1 var(--px-font);
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+.cash__creative .cash-btn:active {
+  border-image-source: var(--pxk-btn-iron-p);
+  border-image-slice: var(--pxk-btn-iron-p-s);
+  border-image-width: var(--pxk-btn-iron-p-w);
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+.cash__hint {
+  margin: 0;
+  font: 500 var(--px-fs-tiny) / 1.3 var(--px-font);
+  color: var(--px-muted);
+}
+.cash-health {
+  display: grid;
+  gap: var(--u);
+  padding-top: calc(2 * var(--u));
+}
+.cash-health__row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+.cash-health__row > b {
+  font-weight: 700;
+  text-align: right;
+}
+.cash-health .is-ok {
+  color: var(--px-green);
+}
+.cash-health .is-bad {
+  color: var(--px-red);
+}
+.cash-health__err {
+  margin: 0;
+  font: 500 var(--px-fs-tiny) / 1.3 var(--px-font);
+  color: var(--px-red);
+  overflow-wrap: anywhere;
+}

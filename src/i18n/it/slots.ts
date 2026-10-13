@@ -66,6 +66,7 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'una vincita da ×{x} in un solo giro',
     yourBest: 'il tuo record: {x} su ×{goal}',
     fromLevel: 'dal livello {n}',
+    current: 'scelto',
     note: 'La «Reliquia» non si sblocca col livello: si guadagna con un solo giro grosso e resta per sempre. Simboli: Twemoji (CC-BY 4.0, Twitter Inc. e collaboratori).',
   },
   hud: {
