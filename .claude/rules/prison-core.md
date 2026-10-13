@@ -355,3 +355,40 @@ paths:
   вагонетки: тап опрокидывает, доля денег падает в счётчик; в конце —
   находки разведки. Бригада нарисована рабочими у штольни (у каждого своя
   рубаха); кончилась смена — сидят и ждут.
+
+## Mine screen UI v2 (wave 2 — M, 13.10.2026) — `PrisonPage.tsx`, `pages/mine.css`
+
+The mine screen is on the pixel kit (`@/ui-px`); all its CSS is in `pages/mine.css` (`.mn-*`).
+Field drawing, mining, timings, critters and their animations are untouched.
+
+- **Root `.gx.px.mn`**, fixed to the viewport, the page never scrolls. `mn--tall` when w ≤ h,
+  `mn--wide` otherwise (from `useFormFactor`, not media queries).
+- **Field is the hero.** `useFieldCell` (bottom of `PrisonPage.tsx`) measures the frame chrome and
+  the free slot and sets inline `--cell` (20…160 px); wide reserves 2 × (84 + 4) u for the side
+  columns. Cell per format (was → now): 390×844 50 → 50, 844×390 32 + page scroll → 37, 820×1180
+  60 → 72, 1180×820 52 → 81, 1440×900 60 → 90, 1920×1080 60 → 107.
+- **Tall order:** HUD (back · money · tokens → books · keys → chests · ⚙) → rank row (floor chip +
+  rank bar) → quest (guide only) → field (streak strip on the top edge, buffs bottom-left, parcels
+  bottom-right, pets bottom-centre) → items → backpack → dock 3 × 2.
+- **Wide:** left column = HUD (back · floor · ⚙ / money full width / tokens + keys — they wrap
+  into two rows in a narrow column instead of clipping), rank, streak panel, quest; right column
+  = items (3 per row), backpack (sell button under the bar), dock (`auto-fit` min 60u: two per row
+  or one in a narrow column — tablet landscape). Columns: basis 132u, min 88u.
+- **Dock** — six iron buttons, icon + label: forge, books, chests, pets, backpack (inventory moved
+  here from the header), more (camp). Labels wrap by words, never ellipsis; tr labels carry soft
+  hyphens (`Demir\u00adhane`, `Hay\u00advan\u00adlar`).
+- **Hotkeys** (`useHotkeys`, scope = dock): F B C P I M L, E sell, R rank, 1–6 items; pad VIEW /
+  X / Y. `KeyHint` is hidden by CSS for `data-input` touch / mouse.
+- **Nothing jumps:** fixed heights for stats, rank box, needs row, streak strip, backpack, dock;
+  tabular numbers; buffs / parcels / pets / toasts are absolute over the frame edges. Checked
+  with a rect diff over money 0 → 1e9, tokens, keys, bag empty/full, items 0/333, parcels,
+  buffs, rank ready, no pets — 6 formats, nothing moved.
+- **Pitfalls:** the kit focus ring (`.px-f::after`, inset −3u) made the side columns scroll by 1u
+  and got clipped — `.mn-side` has padding 3u and margin −2u. Stand scripts must import the
+  store by the exact module URL from `performance.getEntriesByType('resource')` (after HMR the
+  app uses `?t=…`; a bare `/src/store.ts` is a second store) and raise the resource-timing
+  buffer first. Old mine `.pmx-*` CSS (35 classes) was pruned from `game-ui.css`; shared `.pmx`
+  / `.pstrip` / `.pmx .prison` stay for Forest and Fishing.
+- Sheets (floors, rank, prestige, settings) are `GxModal` with kit rows (`.mn-sheet`, portal ⇒
+  unscoped classes); the rank-up scene (`prank`) keeps its animations, the look is kit (wood
+  frame, ribbon that wraps, gold badge letter, gold button).
