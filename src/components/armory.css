@@ -836,3 +836,15 @@ html[data-fullscene] .gx-win {
 html[data-fullwin] :is(.arm.is-window, .arm-scn) {
   visibility: visible;
 }
+
+/* List sections after the first are laid out and painted only when scrolled near: the window's
+   first frame does not pay for the books, gear and items below the fold (critic: open latency).
+   `auto` keeps the real height once seen, so the scroll bar does not jump back. */
+.arm-list > section + section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(80 * var(--u));
+  /* its paint containment clips at the box: the focus rings and badges (3 u outside a cell) get
+     the list's own ring room back */
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+}
