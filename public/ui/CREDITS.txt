@@ -14,6 +14,8 @@ icons/   — game-icons.net, лицензия CC BY 3.0
 fonts/rubik.woff2 — Rubik (Hubert & Fischer, Meir Sadan, Cyreal),
            SIL Open Font License 1.1 (fonts/OFL.txt). Изменения: оставлены
            только латиница, кириллица и знаки; формат woff2.
+fonts/rubik-ext.woff2 — тот же Rubik (OFL 1.1), отдельный кусок «Latin Extended-A»
+           (турецкие ş ğ ı İ, французская œ, €) для переводов игры; формат woff2.
 
 fonts/tiny5.woff2 — Tiny5 (Gissio, github.com/Gissio/font_tiny5), SIL Open
            Font License 1.1 (fonts/OFL-tiny5.txt). Изменения: оставлены латиница

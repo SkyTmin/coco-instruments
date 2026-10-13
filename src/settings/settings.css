@@ -2,6 +2,16 @@
    kit restyles it later. Phone portrait: icon tabs on top; a wide window
    (container ≥ 520 px): a rail on the left, the pane on the right. */
 
+/* Latin Extended-A for GxRubik (Turkish ş ğ ı İ, French œ, €): the base
+   rubik.woff2 is cut to Latin-1 + Cyrillic. Same family, picked by range. */
+@font-face {
+  font-family: 'GxRubik';
+  src: url('/ui/fonts/rubik-ext.woff2') format('woff2');
+  font-weight: 300 900;
+  font-display: swap;
+  unicode-range: U+0100-017F, U+0218-021B, U+1E9E, U+20AC;
+}
+
 .gx-modal__box:has(.gset) {
   width: min(760px, 100%);
 }
@@ -27,8 +37,8 @@
   scrollbar-width: none;
 }
 .gset__tab {
-  flex: 1 0 auto;
-  min-width: 52px;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 52px;
   display: flex;
   flex-direction: column;
@@ -53,7 +63,7 @@
   box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
 }
 .gset__tab span {
-  max-width: 76px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

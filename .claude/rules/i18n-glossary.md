@@ -126,3 +126,20 @@ Mittsommernacht / Noche del solsticio / Notte di mezza estate» — the saint's-
 San Juan) are avoided (religion). «Сладость или гадость» → each language's own trick-or-treat
 formula (Süßes oder Saures, Dolcetto o scherzetto, Truco o trato, Şeker mi şaka mı, Des bonbons
 ou un sort).
+
+### Slots and Cascade — `src/i18n/*/slots.ts`
+| ru | en | fr | tr | de | es | it |
+|---|---|---|---|---|---|---|
+| спин / Крутить | spin / Spin | tour / Lancer | spin / Çevir | Spin / Drehen | giro / Girar | giro / Gira |
+| ставка | bet | mise | bahis | Einsatz | apuesta | puntata |
+| выплата | payout | gain | ödeme | Gewinn | pago | vincita |
+| джекпот / копилка | jackpot / pot | jackpot / cagnotte | jackpot / kumbara | Jackpot / Pott | **bote** / hucha | jackpot / piatto |
+| каскад / цепочка | cascade / chain | cascade / chaîne | şelale / zincir | Kaskade / Kette | cascada / cadena | cascata / catena |
+| сфера | orb | orbe | küre | Kugel | orbe | sfera |
+
+ES «bote» is what Spanish fruit machines (tragaperras) call the jackpot. Win steps follow the
+genre's own ladder (NICE → BIG → HUGE → MEGA → … → MAX WIN) with one local spice each:
+FR «GAIN DE OUF» (verlan «fou»), ES «PREMIO BRUTAL» (Spain: brutal = awesome), IT «VINCITA
+PAZZESCA», ES «Partidón» / IT «Partitona» for a great session, ES «tres en raya» and IT «tris»
+(tic-tac-toe = three in a row). Orb tiers are adjectives agreeing with the orb's gender (FR/IT
+feminine, ES masculine «el orbe»); the top tier stays a noun («Relic»), as in Russian.

@@ -8,6 +8,7 @@
 // `onBreak`. Так шахта подземелья выглядит и бьётся точь-в-точь как шахта
 // каторги, но копает в свой сидор, а не в рюкзак.
 
+import { t } from '@/i18n';
 import {
   forwardRef,
   memo,
@@ -907,7 +908,7 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
     tierBreak(1);
     field.current?.trauma(0.3);
     tapMedium();
-    field.current?.float(c, 'ЛУЧ', 'pfloat--beam');
+    field.current?.float(c, t('field.beam'), 'pfloat--beam');
     wave(rings(c, cells), 'blast', 40);
   };
 
@@ -926,7 +927,7 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
   const veinFrom = (c: number, rock: number, max: number) => {
     const cells = R.current.vein(c, rock, max);
     if (!cells.length) return;
-    field.current?.float(c, `ЖИЛА ×${cells.length + 1}`, 'pfloat--vein');
+    field.current?.float(c, t('field.vein', { n: cells.length + 1 }), 'pfloat--vein');
     cells.forEach((cell, i) =>
       later(
         () => {
@@ -975,7 +976,7 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
     const left = (hp.current[c] < 0 ? def.hp : hp.current[c]) - dmg;
 
     if (crit) {
-      f?.float(c, 'КРИТ', 'pfloat--crit');
+      f?.float(c, t('field.crit'), 'pfloat--crit');
       f?.trauma(0.16);
       tapMedium();
     }
@@ -997,9 +998,9 @@ export function useMineDig(field: RefObject<MineFieldHandle | null>, rules: DigR
 
     // Зачарования. Срабатывает одно, старшее: отбойник, луч, взрыв, жила —
     // несколько сразу превращают поле в кашу, в которой не видно ни одного.
-    if (Math.random() < m.hammer) hammerFrom(c, 'ОТБОЙНИК');
+    if (Math.random() < m.hammer) hammerFrom(c, t('field.hammer'));
     else if (Math.random() < m.beam) beamFrom(c);
-    else if (Math.random() < m.blast) blastAt(c, 1, 'ВЗРЫВ');
+    else if (Math.random() < m.blast) blastAt(c, 1, t('field.blast'));
     else if (Math.random() < m.vein) veinFrom(c, rock, m.veinMax);
     if (Math.random() < m.frenzy) r.onFrenzy?.(c);
   };

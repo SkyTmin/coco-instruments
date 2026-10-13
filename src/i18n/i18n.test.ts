@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { flatten, matchLang, tIn, fmtNum, upper } from './core';
+import { AUTO_DETECT, flatten, matchLang, tIn, fmtNum, upper } from './core';
 import { ru } from './ru';
 import en from './en';
 import fr from './fr';
@@ -15,6 +15,12 @@ import type { Lang, Leaf, Plural } from './types';
 import { cyrillicLines, hasCyrillic } from './scan';
 import { SKINS } from '@/lib/skins';
 import { PETS } from '@/lib/pets';
+import * as P from '@/lib/prison';
+import { PICKS } from '@/lib/economy';
+import { RARITIES } from '@/lib/rarity';
+import { WIN_TIERS } from '@/lib/rollup';
+import { ORB_TIERS } from '@/lib/orb-rarity';
+import { PAYLINES } from '@/lib/slots';
 
 const CATALOGS = { en, fr, tr, de, es, it: it_ } as const;
 
@@ -150,9 +156,7 @@ const INSTRUMENT_DIRS = ['src/pages/clothing/', 'src/pages/finance/', 'src/pages
  * test — new game code is written with `t()` from the start.
  */
 const NOT_YET_TRANSLATED = [
-  'src/components/AudioToggles.tsx',
   'src/components/BooksTab.tsx',
-  'src/components/CashDesk.tsx',
   'src/components/ChestTab.tsx',
   'src/components/CreativePanel.tsx',
   'src/components/Critters.tsx',
@@ -163,20 +167,13 @@ const NOT_YET_TRANSLATED = [
   'src/components/FishingCamp.tsx',
   'src/components/ForgeScreen.tsx',
   'src/components/Inventory.tsx',
-  'src/components/MineField.tsx',
-  'src/components/MinePets.tsx',
   'src/components/PetsTab.tsx',
   'src/components/PrisonCamp.tsx',
-  'src/components/SessionCard.tsx',
-  'src/components/SkinSheet.tsx',
   'src/components/YardBits.tsx',
-  'src/components/gx.tsx',
   'src/pages/DungeonPage.tsx',
   'src/pages/FishingPage.tsx',
   'src/pages/ForestPage.tsx',
   'src/pages/PrisonPage.tsx',
-  'src/pages/ScatterPage.tsx',
-  'src/pages/SlotsPage.tsx',
   'src/pages/YardPage.tsx',
 ];
 /** The list as it was on 12.10.2026 — never extend, only the list above shrinks. */
@@ -197,6 +194,11 @@ function isInstrument(f: string): boolean {
 
 describe('game files (b): no hard-coded Cyrillic text', () => {
   const files = GAME_DIRS.flatMap(walk).filter((f) => !isInstrument(f));
+
+  it('auto-detect waits for the whole game to be translated', () => {
+    // A non-Russian Telegram must not get a half-Russian game.
+    expect(AUTO_DETECT && NOT_YET_TRANSLATED.length > 0).toBe(false);
+  });
 
   it('the not-yet-translated list only shrinks', () => {
     expect(NOT_YET_TRANSLATED.length).toBeLessThanOrEqual(ORIGINAL_COUNT);
@@ -240,6 +242,42 @@ describe('data areas match src/lib', () => {
     expect(Object.keys(ru.skins).sort()).toEqual(SKINS.map((s) => s.id).sort());
   });
 
+  it('slots (win steps, orb tiers, paylines)', () => {
+    const by = <T extends { id: string | number }>(
+      a: T[],
+      key: (x: T) => string,
+      f: (x: T) => string,
+    ) => Object.fromEntries(a.map((x) => [key(x), f(x)]));
+    expect(ru.slots.step).toEqual(
+      by(
+        WIN_TIERS,
+        (w) => w.id,
+        (w) => w.name,
+      ),
+    );
+    expect(ru.slots.orb).toEqual(
+      by(
+        ORB_TIERS,
+        (o) => o.id,
+        (o) => o.name,
+      ),
+    );
+    expect(ru.slots.line).toEqual(
+      by(
+        PAYLINES,
+        (l) => `l${l.id}`,
+        (l) => l.name,
+      ),
+    );
+    expect(ru.slots.lineIn).toEqual(
+      by(
+        PAYLINES,
+        (l) => `l${l.id}`,
+        (l) => l.name.toLowerCase(),
+      ),
+    );
+  });
+
   it('pets', () => {
     for (const p of PETS) {
       const c = ru.pets[p.id];
@@ -247,5 +285,25 @@ describe('data areas match src/lib', () => {
       expect([c.name, c.lore]).toEqual([p.name, p.lore]);
     }
     expect(Object.keys(ru.pets).sort()).toEqual(PETS.map((p) => p.id).sort());
+  });
+
+  it('mine (rocks, picks, rarities, enchants, items, runes, streak, chests, crew, perks, horizons)', () => {
+    const ix = (a: string[]) => Object.fromEntries(a.map((v, i) => [String(i), v]));
+    const by = <T extends { id: string }>(a: T[], f: (x: T) => unknown) =>
+      Object.fromEntries(a.map((x) => [x.id, f(x)]));
+    expect(ru.mine).toEqual({
+      rock: ix(P.ROCKS.map((r) => r.name)),
+      block: ix(P.ROCKS.map((r) => r.blockName)),
+      pick: ix(PICKS.map((p) => p.name)),
+      rarity: by(RARITIES, (r) => r.name),
+      enchant: by(P.ENCHANTS, (e) => e.name),
+      item: by(P.ITEMS, (i) => ({ name: i.name, text: i.text })),
+      rune: by(P.RUNES, (r) => ({ name: r.name, text: r.text })),
+      streak: ix(P.STREAK_TIERS.map((s) => s.name)),
+      chest: by(P.CASE_TIERS, (c) => c.name),
+      crew: by(P.CREW_SHIFTS, (c) => ({ name: c.name, text: c.text })),
+      perk: by(P.PERKS, (p) => ({ name: p.name, per: p.per })),
+      horizon: ix(P.HORIZONS.map((h) => h.name)),
+    });
   });
 });

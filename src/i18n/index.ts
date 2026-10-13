@@ -18,11 +18,13 @@ export {
   savedLang,
   detectLang,
   autoLang,
+  AUTO_DETECT,
   matchLang,
   loadLang,
   subscribeLang,
   hasKey,
   fmtNum,
+  fmtShort,
   fmtDec,
   fmtDate,
   upper,
@@ -33,3 +35,4 @@ export type { Catalog, Key } from './core';
 export { LANGS } from './types';
 export type { Lang, Params, Plural, Translation } from './types';
 export { LOCALE, NATIVE_NAME } from './langs';
+export * from './data';
