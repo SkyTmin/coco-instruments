@@ -16,10 +16,18 @@
   position: absolute;
   z-index: 0;
 }
-/* The page never scrolls: the stage takes what the info and the deck leave. */
+/* The page never scrolls: the stage takes what the info and the deck leave. `html[data-ff]`
+   because the shell's `html[data-ff='phone-landscape'] .gs__main { overflow-y: auto }` (0,2,1)
+   beat the plain rule, and a touch swipe scrolled the machine 194 px off screen. */
+html[data-ff] .cas-page .gs__body,
+html[data-ff] .cas-page .gs__main,
 .cas-page .gs__body,
 .cas-page .gs__main {
   overflow: hidden;
+}
+/* The old `.slots::before` glow (theme.css: absolute, 460 px tall) stuck out below the page. */
+.slots.cas::before {
+  content: none;
 }
 .cas-page .gs__main {
   flex: 1 1 auto;
@@ -177,6 +185,12 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
     'lvl lvl lvl'
     'best best sp';
 }
+/* Slots, phone portrait: jackpot and spins take what they need, the best win gets the rest —
+   in three equal thirds «988 тыс.» stepped down beside 20-px neighbours and lost its coin. */
+[data-lay='tall']:not(.cas--scatter) > .cas-info {
+  grid-template-columns: auto auto minmax(0, 1fr);
+  column-gap: calc(2 * var(--u));
+}
 .cas-info > .cas-lvl {
   grid-area: lvl;
 }
@@ -253,9 +267,17 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   white-space: nowrap;
   overflow: hidden;
 }
+/* The coin never gives way to the digits (it was squeezed to 0–9 px beside «988 тыс.»). */
+.cas-stat__v > svg {
+  flex: none;
+}
 /* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): one step smaller,
    then the coin goes — the 777 / ★ picture and the caption still say what it is. */
 html .cas .cas-info .cas-stat .cas-stat__v:is([data-fit='1'], [data-fit='2']) {
+  font-size: var(--px-fs-sm);
+}
+/* One digit size across the strip: when one record steps down, all of them do. */
+html .cas .cas-info:has(.cas-stat__v:is([data-fit='1'], [data-fit='2'])) .cas-stat .cas-stat__v {
   font-size: var(--px-fs-sm);
 }
 html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
@@ -826,10 +848,12 @@ html[data-ff='tablet'] .cas--scatter[data-lay='tall'] > .cas-info {
 }
 /* One line per fact there: icon, caption, the number at the right edge. */
 html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat {
-  /* The caption keeps its longest word; a big number steps down (`useFitText`) instead. */
-  grid-template-columns: auto minmax(min-content, 1fr) minmax(0, max-content);
-  grid-template-areas: 'ico k v';
+  /* Caption over the number, the icon beside both: on one line «лучший выигрыш» + «988 тыс.» +
+     coin needed 269 of 258 px and the number stepped down beside its neighbours. */
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico k' 'ico v';
   column-gap: calc(3 * var(--u));
+  row-gap: 0;
   padding: 0;
   border-image-source: none;
 }
@@ -1072,7 +1096,7 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   pointer-events: none;
 }
 
-/* ---- «Каторга»: one slim row — cover, name, rank, tokens, arrow ----------------------------- */
+/* ---- «Каторга»: one slim row — cover (rank badge on it), name, tokens, arrow ---------------- */
 .hall-row {
   appearance: none;
   margin: 0;
@@ -1086,7 +1110,7 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   -webkit-user-select: none;
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: calc(4 * var(--u));
   min-height: var(--gx-hit);
@@ -1111,12 +1135,31 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   object-fit: cover;
   image-rendering: pixelated;
 }
+/* The rank letter: an ink pill in the cover's corner (cream on ink, like the rarity pills). */
+.hall-row__rank {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: calc(9 * var(--u));
+  padding: 0 var(--u);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  text-align: center;
+  color: #fff3d6;
+  background: var(--px-text);
+}
+/* Never clip a name: it wraps to two lines instead (two 20-px lines fit the 48-px row). */
 .hall-row__t {
   min-width: 0;
   font-size: var(--px-fs-head);
   line-height: 1.05;
-  white-space: nowrap;
-  overflow: clip;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+@media (max-width: 400px) {
+  .hall-row__t {
+    font-size: var(--px-fs);
+    line-height: 1;
+  }
 }
 .hall-row__fact {
   display: inline-flex;
