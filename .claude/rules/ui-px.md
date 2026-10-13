@@ -239,6 +239,14 @@ owner. Each agent ships as its own version after the lead reviews its shots (6 f
 Wave rules: new CSS in the screen's own file (like `nursery.css`), `game-ui.css` only loses the
 screen's old blocks; no logic changes in `src/lib`; every new string through `t()` in 7 languages.
 
+**Critic gate (owner 13.10: «агент критик… возвращать правки для других агентов»).** The `critic`
+agent (`.claude/agents/critic.md`, checklist `.claude/critic/checklist.md`) reviews before
+anything ships. It looks at every UI agent's AFTER shots and at every batch of owner screenshots.
+It returns prioritised, measured fixes per agent and does not touch code. The lead relays the
+fixes to the agent (SendMessage while its cache is alive, else a new agent with the fix list).
+A screen ships only when the critic's P0 list is empty. Until a session reloads the agent
+types, run it as `general-purpose` whose first step is to read `critic.md` as its role.
+
 ### Owner's verdicts on the v1 look (13.10, iPhone screenshots) — binding for every screen
 
 - The pixel fonts (Tiny5, Press Start 2P) are «непонятный, сложно читаемый» → readable text font;
