@@ -2,10 +2,12 @@ import type { Catalog } from '../core';
 import type { Translation } from '../types';
 import { cash } from './cash';
 import { common } from './common';
+import { creative } from './creative';
 import { dungeon } from './dungeon';
 import { field } from './field';
 import { hall } from './hall';
 import { input } from './input';
+import { inv } from './inv';
 import { mine } from './mine';
 import { nursery } from './nursery';
 import { pets } from './pets';
@@ -17,10 +19,12 @@ import { ui } from './ui';
 const de: Translation<Catalog> = {
   cash,
   common,
+  creative,
   dungeon,
   field,
   hall,
   input,
+  inv,
   mine,
   nursery,
   pets,

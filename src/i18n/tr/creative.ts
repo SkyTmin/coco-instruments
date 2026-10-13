@@ -1,0 +1,32 @@
+import type { Translation } from '../types';
+import type { creative as ru } from '../ru/creative';
+
+export const creative: Translation<typeof ru> = {
+  lead1: "Kum havuzu: tüm katlar, asansörler ve boss'lar açık, altın, jeton ve anahtar istediğin kadar; rütbeyi, kazmayı ve ekipmanı kendin seçersin.",
+  lead2: "Gerçek kaydına dokunulmaz: yaratıcı mod ayrı kayıtlara yazar. Çıkınca her şey eskisi gibi olur, yaratıcıda yaptıkların yaratıcıda kalır.",
+  enter: "Yaratıcıyı aç",
+  where: "Git",
+  yard: "Avlu",
+  mine: "Maden",
+  dungeon: "Zindan",
+  hall: "Kumarhane",
+  wallet: "Cüzdan",
+  money: "{coins} altın · {tokens} jeton · {keys} anahtar",
+  addCoins: "+100 milyon altın",
+  addStuff: "Jeton, anahtar, yumurta",
+  rank: "Rütbe",
+  prestige: "Prestij",
+  pick: "Kazma",
+  floors: "Açık kat: {n}/{total}",
+  tier: "Kademe",
+  plus: "Bileme",
+  god: "Ölümsüzlük (yeni seferden itibaren)",
+  bosses: "Boss'lar hazır",
+  stash: "Depo 99'ar",
+  leaveSure: "Emin misin? Yaratıcıda yaptıkların silinecek",
+  leave: "Yaratıcıdan çık",
+  badge: "YARATICI",
+  title: "Yaratıcı",
+  rowOn: "Yaratıcı açık — ayarla",
+  row: "Yaratıcı mod",
+};

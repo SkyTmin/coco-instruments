@@ -1,5 +1,6 @@
 import { cash } from './cash';
 import { common } from './common';
+import { creative } from './creative';
 import { dfloors } from './dfloors';
 import { dgear } from './dgear';
 import { dlines } from './dlines';
@@ -9,6 +10,7 @@ import { dungeon } from './dungeon';
 import { field } from './field';
 import { hall } from './hall';
 import { input } from './input';
+import { inv } from './inv';
 import { mine } from './mine';
 import { nursery } from './nursery';
 import { pets } from './pets';
@@ -24,6 +26,7 @@ import { ui } from './ui';
 export const ru = {
   cash,
   common,
+  creative,
   dfloors,
   dgear,
   dlines,
@@ -33,6 +36,7 @@ export const ru = {
   field,
   hall,
   input,
+  inv,
   mine,
   nursery,
   pets,

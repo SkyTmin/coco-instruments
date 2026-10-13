@@ -12,8 +12,10 @@ import { PICKS } from '@/lib/economy';
 import { LAST_RANK, rankLetter } from '@/lib/prison';
 import { notifySuccess, notifyWarning, tapLight } from '@/lib/haptics';
 import { GxIcon, GxModal } from '@/components/gx';
+import { fmtNum, pickName, t, useT } from '@/i18n';
+import { setName } from '@/i18n/data-dungeon';
 
-const fmt = (n: number) => n.toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 
 /** Владелец (или разработка): только ему видна песочница. */
 export function useOwner(): boolean {
@@ -72,6 +74,7 @@ function Stepper({
 }
 
 function Panel({ onClose }: { onClose: () => void }) {
+  useT();
   const nav = useNavigate();
   const creative = useFinanceStore((s) => s.creative);
   const prison = useFinanceStore((s) => s.prison);
@@ -101,14 +104,8 @@ function Panel({ onClose }: { onClose: () => void }) {
   if (!creative.on)
     return (
       <div className="crv">
-        <p className="crv__lead">
-          Песочница: все этажи, лифты и боссы открыты, денег, токенов и ключей — сколько угодно,
-          ранг, кирку и снаряжение выбираешь сам.
-        </p>
-        <p className="crv__lead">
-          Настоящее сохранение не трогается: креатив пишется в отдельные записи. Выйдешь — всё
-          вернётся как было, а сделанное в креативе останется в креативе.
-        </p>
+        <p className="crv__lead">{t('creative.lead1')}</p>
+        <p className="crv__lead">{t('creative.lead2')}</p>
         <button
           type="button"
           className="gx-btn gx-btn--big gx-btn--block"
@@ -120,7 +117,7 @@ function Panel({ onClose }: { onClose: () => void }) {
             notifySuccess();
           }}
         >
-          <GxIcon name="magic" /> Включить креатив
+          <GxIcon name="magic" /> {t('creative.enter')}
         </button>
       </div>
     );
@@ -129,46 +126,50 @@ function Panel({ onClose }: { onClose: () => void }) {
   return (
     <div className="crv">
       <section className="crv__sec">
-        <h4>Куда</h4>
+        <h4>{t('creative.where')}</h4>
         <div className="crv__row">
           <button type="button" className="gx-btn gx-btn--sm" onClick={() => go('/yard')}>
-            Двор
+            {t('creative.yard')}
           </button>
           <button type="button" className="gx-btn gx-btn--sm" onClick={() => go('/prison')}>
-            Шахта
+            {t('creative.mine')}
           </button>
           <button type="button" className="gx-btn gx-btn--sm" onClick={() => go('/dungeon')}>
-            Подземелье
+            {t('creative.dungeon')}
           </button>
           <button type="button" className="gx-btn gx-btn--sm" onClick={() => go('/games')}>
-            Зал
+            {t('creative.hall')}
           </button>
         </div>
       </section>
 
       <section className="crv__sec">
-        <h4>Кошелёк</h4>
+        <h4>{t('creative.wallet')}</h4>
         <p className="crv__note">
-          {fmt(balance)} монет · {fmt(prison.tokens)} токенов · {fmt(prison.keys)} ключей
+          {t('creative.money', {
+            coins: fmt(balance),
+            tokens: fmt(prison.tokens),
+            keys: fmt(prison.keys),
+          })}
         </p>
         <div className="crv__row">
           <button type="button" className="gx-btn gx-btn--sm" onClick={coins}>
-            +100 млн монет
+            {t('creative.addCoins')}
           </button>
           <button
             type="button"
             className="gx-btn gx-btn--sm"
             onClick={() => setPrison({ fill: true })}
           >
-            Токены, ключи, яйца
+            {t('creative.addStuff')}
           </button>
         </div>
       </section>
 
       <section className="crv__sec">
-        <h4>Шахта</h4>
+        <h4>{t('creative.mine')}</h4>
         <Stepper
-          label="Ранг"
+          label={t('creative.rank')}
           value={prison.rank}
           min={0}
           max={LAST_RANK}
@@ -176,7 +177,7 @@ function Panel({ onClose }: { onClose: () => void }) {
           onChange={(rank) => setPrison({ rank })}
         />
         <Stepper
-          label="Престиж"
+          label={t('creative.prestige')}
           value={prison.prestige}
           min={0}
           max={30}
@@ -184,30 +185,33 @@ function Panel({ onClose }: { onClose: () => void }) {
           onChange={(prestige) => setPrison({ prestige })}
         />
         <Stepper
-          label="Кирка"
+          label={t('creative.pick')}
           value={prison.pick}
           min={0}
           max={PICKS.length - 1}
-          show={(v) => PICKS[v].name}
+          show={(v) => (PICKS[v] ? pickName(v) : String(v))}
           onChange={(pick) => setPrison({ pick })}
         />
       </section>
 
       <section className="crv__sec">
-        <h4>Подземелье</h4>
+        <h4>{t('creative.dungeon')}</h4>
         <p className="crv__note">
-          Открыто этажей: {Math.min(dungeon.reached, OPEN_FLOORS.length)} из {OPEN_FLOORS.length}
+          {t('creative.floors', {
+            n: String(Math.min(dungeon.reached, OPEN_FLOORS.length)),
+            total: String(OPEN_FLOORS.length),
+          })}
         </p>
         <Stepper
-          label="Ступень"
+          label={t('creative.tier')}
           value={g.tier}
           min={1}
           max={SETS.length}
-          show={(v) => `${v} · ${SETS[v - 1].name}`}
+          show={(v) => `${v} · ${SETS[v - 1] ? setName(v) : ''}`}
           onChange={(tier) => setDungeon({ tier })}
         />
         <Stepper
-          label="Заточка"
+          label={t('creative.plus')}
           value={g.plus}
           min={0}
           max={PLUS_SAFE}
@@ -223,7 +227,7 @@ function Panel({ onClose }: { onClose: () => void }) {
               god(e.target.checked);
             }}
           />
-          Бессмертие (с новой вылазки)
+          {t('creative.god')}
         </label>
         <div className="crv__row">
           <button
@@ -231,14 +235,14 @@ function Panel({ onClose }: { onClose: () => void }) {
             className="gx-btn gx-btn--sm"
             onClick={() => setDungeon({ open: true, bosses: true })}
           >
-            Боссы готовы
+            {t('creative.bosses')}
           </button>
           <button
             type="button"
             className="gx-btn gx-btn--sm"
             onClick={() => setDungeon({ stash: true })}
           >
-            Склад по 99
+            {t('creative.stash')}
           </button>
         </div>
       </section>
@@ -260,7 +264,7 @@ function Panel({ onClose }: { onClose: () => void }) {
           notifySuccess();
         }}
       >
-        {armed ? 'Точно? Сделанное в креативе пропадёт' : 'Выйти из креатива'}
+        {armed ? t('creative.leaveSure') : t('creative.leave')}
       </button>
     </div>
   );
@@ -271,6 +275,7 @@ function Panel({ onClose }: { onClose: () => void }) {
  * открывается через `openCreative()`, плашка видна, пока креатив включён.
  */
 export function CreativeHost() {
+  useT();
   const on = useFinanceStore((s) => s.creative.on);
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -290,11 +295,11 @@ export function CreativeHost() {
             setOpen(true);
           }}
         >
-          КРЕАТИВ
+          {t('creative.badge')}
         </button>
       )}
       {open && (
-        <GxModal title="Креатив" onClose={() => setOpen(false)}>
+        <GxModal title={t('creative.title')} onClose={() => setOpen(false)}>
           <Panel onClose={() => setOpen(false)} />
         </GxModal>
       )}
@@ -304,6 +309,7 @@ export function CreativeHost() {
 
 /** Строка в «Кассе»: войти в песочницу или открыть её настройки. */
 export function CreativeRow() {
+  useT();
   const on = useFinanceStore((s) => s.creative.on);
   return (
     <div className="cash-row">
@@ -315,7 +321,7 @@ export function CreativeRow() {
           openCreative();
         }}
       >
-        {on ? 'Креатив включён — настроить' : 'Режим креатива'}
+        {on ? t('creative.rowOn') : t('creative.row')}
       </button>
     </div>
   );

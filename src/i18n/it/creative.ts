@@ -1,0 +1,32 @@
+import type { Translation } from '../types';
+import type { creative as ru } from '../ru/creative';
+
+export const creative: Translation<typeof ru> = {
+  lead1: "Sandbox: tutti i piani, montacarichi e boss aperti, monete, gettoni e chiavi a volontà; grado, piccone ed equipaggiamento li scegli tu.",
+  lead2: "Il tuo salvataggio vero resta intatto: la creativa salva a parte. Uscendo torna tutto com'era, e ciò che hai fatto in creativa resta in creativa.",
+  enter: "Attiva creativa",
+  where: "Vai a",
+  yard: "Cortile",
+  mine: "Miniera",
+  dungeon: "Segrete",
+  hall: "Casinò",
+  wallet: "Borsellino",
+  money: "{coins} monete · {tokens} gettoni · {keys} chiavi",
+  addCoins: "+100 mln di monete",
+  addStuff: "Gettoni, chiavi, uova",
+  rank: "Grado",
+  prestige: "Prestigio",
+  pick: "Piccone",
+  floors: "Piani aperti: {n} su {total}",
+  tier: "Livello",
+  plus: "Affilatura",
+  god: "Immortalità (dalla prossima spedizione)",
+  bosses: "Boss pronti",
+  stash: "Magazzino a 99",
+  leaveSure: "Sicuro? Ciò che hai fatto in creativa andrà perso",
+  leave: "Esci dalla creativa",
+  badge: "CREATIVA",
+  title: "Creativa",
+  rowOn: "Creativa attiva — imposta",
+  row: "Modalità creativa",
+};
