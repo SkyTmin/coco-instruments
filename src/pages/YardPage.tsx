@@ -467,10 +467,12 @@ function HubWorld() {
       // speaker stand in the part above it. `offsetTop` ignores the box's slide-in transform.
       const talkEl = root.querySelector<HTMLElement>('.hub-talk');
       const talkH = talkEl ? root.clientHeight - talkEl.offsetTop : 0;
+      // Reduced motion: the camera takes its new place at once, like every CSS animation.
+      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
       r.setInsets(
         Math.max(0, top - root.getBoundingClientRect().top),
         Math.max(land ? 0 : BOTTOM_INSET, talkH),
-        ease,
+        ease && !still,
       );
     };
     insetsRef.current = insets;
@@ -877,6 +879,8 @@ function HubWorld() {
 
 /** Букв в секунду: реплика печатается быстро — читать, а не ждать. */
 const TYPE_CPS = 55;
+/** Options are inert this long after a talk opens: the second tap of a double tap on «Говорить». */
+const ARM_MS = 300;
 
 function HubTalk({
   name,
@@ -899,18 +903,32 @@ function HubTalk({
   const press = usePress();
   const [i, setI] = useState(0);
   const [done, setDone] = useState(false);
-  const textRef = useRef<HTMLSpanElement>(null);
+  const shownRef = useRef<HTMLSpanElement>(null);
+  const restRef = useRef<HTMLSpanElement>(null);
   const skip = useRef(false);
+  // A double tap on «Говорить» must not land on «Пока», which opens under the same thumb: the
+  // options are inert for the first 300 ms (no press shows either).
+  const born = useRef(performance.now());
+  const [arming, setArming] = useState(true);
+  useEffect(() => {
+    const id = window.setTimeout(() => setArming(false), ARM_MS);
+    return () => clearTimeout(id);
+  }, []);
+  const armed = () => performance.now() - born.current >= ARM_MS;
   const line = lines[Math.min(i, lines.length - 1)] ?? '';
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => registerEscape(() => closeRef.current()), []);
 
   // Печать — прямо в текст узла, мимо React: шестьдесят перерисовок окна в
-  // секунду ради одной буквы незачем.
+  // секунду ради одной буквы незачем. The whole line is always laid out — the typed part
+  // shown, the rest hidden — and every line of the talk sits hidden in the same grid cell, so
+  // the box has its final height from the first frame (it grew a line at a time and the
+  // camera re-panned after each growth) and a word never jumps to the next line mid-typing.
   useEffect(() => {
-    const el = textRef.current;
-    if (!el) return undefined;
+    const el = shownRef.current;
+    const rest = restRef.current;
+    if (!el || !rest) return undefined;
     skip.current = false;
     setDone(false);
     const still =
@@ -918,9 +936,12 @@ function HubTalk({
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
     if (still) {
       el.textContent = line;
+      rest.textContent = '';
       setDone(true);
       return undefined;
     }
+    el.textContent = '';
+    rest.textContent = line;
     const t0 = performance.now();
     let raf = 0;
     const tick = () => {
@@ -928,6 +949,7 @@ function HubTalk({
         ? line.length
         : Math.min(line.length, Math.floor(((performance.now() - t0) / 1000) * TYPE_CPS));
       el.textContent = line.slice(0, n);
+      rest.textContent = line.slice(n);
       if (n >= line.length) setDone(true);
       else raf = requestAnimationFrame(tick);
     };
@@ -957,18 +979,30 @@ function HubTalk({
           </span>
           <button type="button" className="gx-panel hub-talk__say" onClick={next}>
             <b className="hub-talk__name">{name}</b>
-            <span className="hub-talk__text" ref={textRef} />
+            <span className="hub-talk__text">
+              {lines.map((l, k) => (
+                <span key={k} className="hub-talk__ghost" aria-hidden="true">
+                  {l}
+                </span>
+              ))}
+              <span>
+                <span ref={shownRef} />
+                <span ref={restRef} className="hub-talk__rest" aria-hidden="true" />
+              </span>
+            </span>
             {done && more && <i className="hub-talk__more" aria-hidden="true" />}
           </button>
         </div>
-        <div className="hub-talk__opts">
+        <div className={`hub-talk__opts${arming ? ' is-arming' : ''}`}>
           {options.map((o) => (
             <button
               key={o.label}
               type="button"
               className="gx-btn gx-btn--red"
               {...press}
-              onClick={() => onOption(o)}
+              onClick={() => {
+                if (armed()) onOption(o);
+              }}
             >
               {o.label}
             </button>
@@ -978,6 +1012,7 @@ function HubTalk({
             className="gx-btn gx-btn--grey"
             {...press}
             onClick={() => {
+              if (!armed()) return;
               uiTap();
               onClose();
             }}
@@ -1012,15 +1047,33 @@ function HubMapSheet({
   const m = sim.map;
   // Pins at kit type size collide (Шахта / Особая шахта stand side by side) and the edge ones
   // ran past the frame: keep each inside the frame and move it below any pin above it that it
-  // overlaps, 18 px apart: the 44-px hit areas (9 px past the plate) touch but never overlap, so
-  // a stacked pin keeps its full area. A moved plate gets a tail
-  // (`.hub-map__tail`, the element before it) from its edge to its door, ending in a dot.
+  // overlaps, 18 px apart: the 44-px hit areas (9 px above and below the plate) touch but never
+  // overlap, so a stacked pin keeps its full area. The bottom row stays high enough for its area
+  // to end inside the frame's margin (an area past it made the body scroll). A moved plate gets
+  // a tail (`.hub-map__tail`, the element before it) from its edge to its door, ending in a dot.
   // Offsets are in the frame's own units (the window body may be zoomed).
   useLayoutEffect(() => {
     const fr = frameRef.current;
     if (!fr) return;
     const GAP = 18;
     const lay = () => {
+      // The frame fits the window body: on a landscape phone the body scrolled (352 / 320) and
+      // the bottom row of doors opened half under the window edge. Too tall — sized by the
+      // height left in the body (centred by its auto margins).
+      const fcs = getComputedStyle(fr);
+      const body = fr.parentElement;
+      fr.style.width = '';
+      if (body) {
+        const bcs = getComputedStyle(body);
+        const room =
+          body.clientHeight -
+          parseFloat(bcs.paddingTop) -
+          parseFloat(bcs.paddingBottom) -
+          parseFloat(fcs.marginTop) -
+          parseFloat(fcs.marginBottom);
+        if (fr.offsetHeight > room + 0.5) fr.style.width = `${Math.floor((room * m.w) / m.h)}px`;
+      }
+      const low = Math.max(1, 9 - (parseFloat(fcs.marginBottom) || 0));
       const pins = [...fr.querySelectorAll<HTMLElement>('.hub-map__pin')];
       const boxes = pins.map((el) => {
         el.style.transform = '';
@@ -1033,14 +1086,14 @@ function HubMapSheet({
       boxes.sort((a, b) => a.t - b.t || a.l - b.l);
       const fw = fr.clientWidth;
       const fh = fr.clientHeight;
-      const placed: { l: number; t: number; r: number; b: number }[] = [];
+      const placed: { el: HTMLElement; l: number; t: number; r: number; b: number }[] = [];
       for (const p of boxes) {
         // 1 px inside the frame: offsetWidth is whole px, the plate is not.
         const dx = Math.max(0, 1 - p.l) - Math.max(0, p.l + p.w + 1 - fw);
         const l = p.l + dx;
         // Below the pins in the way; no room below (the bottom row of doors) — above them.
         const settle = (down: boolean) => {
-          let y = Math.max(1, Math.min(p.t, fh - p.h - 1));
+          let y = Math.max(1, Math.min(p.t, fh - p.h - low));
           for (let n = 0; n < boxes.length; n++) {
             const hit = placed.find(
               (q) => l < q.r && l + p.w > q.l && y < q.b + GAP && y + p.h + GAP > q.t,
@@ -1051,14 +1104,14 @@ function HubMapSheet({
           return y;
         };
         let top = settle(true);
-        if (top + p.h > fh - 1) {
+        if (top + p.h > fh - low) {
           const up = settle(false);
           if (up >= 1 && p.t - up < top - p.t) top = up;
         }
-        top = Math.max(1, Math.min(top, fh - p.h - 1));
+        top = Math.max(1, Math.min(top, fh - p.h - low));
         const dy = top - p.t;
         p.el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
-        placed.push({ l, t: top, r: l + p.w, b: top + p.h });
+        placed.push({ el: p.el, l, t: top, r: l + p.w, b: top + p.h });
         // Tail: straight up or down from the door point to the near plate edge (the door's x is
         // always inside the plate: an edge clamp shifts it by less than half its width).
         const tail = p.el.previousElementSibling as HTMLElement | null;
@@ -1073,6 +1126,19 @@ function HubMapSheet({
         tail.style.left = `${p.ax}px`;
         tail.style.top = `${Math.min(edge, p.ay)}px`;
         tail.style.height = `${Math.abs(edge - p.ay)}px`;
+      }
+      // Areas reach 9 px above and below, but only half-way to a plate closer than 18 px (the
+      // clamped bottom row): no area ever covers another plate's pixels.
+      for (const a of placed) {
+        let up = 9;
+        let down = 9;
+        for (const q of placed) {
+          if (q === a || a.l >= q.r || a.r <= q.l) continue;
+          if (q.b <= a.t + 0.5) up = Math.min(up, (a.t - q.b) / 2);
+          else if (q.t >= a.b - 0.5) down = Math.min(down, (q.t - a.b) / 2);
+        }
+        a.el.style.setProperty('--hit-t', `${Math.max(0, up)}px`);
+        a.el.style.setProperty('--hit-b', `${Math.max(0, down)}px`);
       }
     };
     lay();

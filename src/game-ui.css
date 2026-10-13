@@ -1887,7 +1887,6 @@
   right: 0;
   bottom: 0;
   padding: 0 8px calc(var(--safe-bottom) + 10px);
-  animation: hub-talk-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.08) both;
 }
 .hub-talk__box {
   max-width: 560px;
@@ -1909,8 +1908,6 @@
   place-items: center;
   width: 84px;
   height: 84px;
-  border-radius: 6px;
-  background: radial-gradient(circle at 50% 40%, #3a2a1c, #140e0a 75%);
   box-shadow:
     inset 0 0 0 2px var(--gx-wood-dd),
     inset 0 0 0 4px var(--gx-wood);
@@ -1965,44 +1962,22 @@
 .hub-map__frame {
   position: relative;
   width: 100%;
-  margin: 18px 0 4px;
 }
 .hub-map__cv {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 4px;
   image-rendering: pixelated;
   box-shadow: 0 0 0 2px var(--gx-wood-dd);
 }
 .hub-map__me {
   position: absolute;
-  width: 10px;
-  height: 10px;
-  margin: -5px 0 0 -5px;
-  border-radius: 50%;
-  background: #7fe6d0;
-  box-shadow:
-    0 0 0 2px #0b1e1a,
-    0 0 8px #7fe6d0;
-  animation: hub-me 1.2s ease-in-out infinite;
   pointer-events: none;
 }
 
-@keyframes hub-talk-in {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-}
 @keyframes hub-more {
   to {
     transform: translateY(2px);
-  }
-}
-@keyframes hub-me {
-  50% {
-    transform: scale(1.35);
   }
 }
 @media (prefers-reduced-motion: reduce) {
