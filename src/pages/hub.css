@@ -165,6 +165,52 @@
   min-width: 18px;
   height: 18px;
 }
+/* ≥ 44 px to tap (the plate is 27 px on phones; insets count from the padding box, hence the
+   border). Stacked plates stand 18 px apart, so their areas touch; side by side they may still
+   overlap, so the areas sit at z −1 in the frame (isolated; the map canvas lets taps through),
+   under every plate: a tap on a plate's pixels is always that plate. */
+.hub-map .hub-map__frame {
+  isolation: isolate;
+  margin-bottom: 10px; /* the bottom plates' areas reach 9 px below the frame */
+}
+.hub-map .hub-map__cv {
+  pointer-events: none;
+}
+.hub-map__pin::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-9px - var(--u)) calc(-2px - var(--u));
+}
+.hub-map__pin:is(:active, .is-down) {
+  translate: -50% calc(-100% + var(--u));
+}
+/* A plate moved off its door (collision / edge) points back at it: a 1-art-px line in plate
+   colours (parchment between ink) from the plate edge to the door, ending in a 3-u dot. */
+.hub-map__tail {
+  position: absolute;
+  width: var(--u);
+  margin-left: calc(-0.5 * var(--u));
+  background: #fff4dc;
+  box-shadow:
+    var(--u) 0 0 #140c08,
+    calc(-1 * var(--u)) 0 0 #140c08;
+  pointer-events: none;
+}
+.hub-map__tail::before {
+  content: '';
+  position: absolute;
+  left: calc(-1.5 * var(--u));
+  top: calc(-2 * var(--u));
+  width: calc(2 * var(--u));
+  height: calc(2 * var(--u));
+  border: var(--u) solid #140c08;
+  background: #fff4dc;
+}
+.hub-map__tail.is-up::before {
+  top: auto;
+  bottom: calc(-2 * var(--u));
+}
 
 /* The idle joystick ring is a hint for the thumb: mouse, keyboard and pad players don't get it. */
 html:not([data-input='touch']) .hub .dg-stick.is-idle {

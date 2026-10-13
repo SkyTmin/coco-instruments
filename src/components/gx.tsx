@@ -609,7 +609,7 @@ export function GameTop({
               data-pri={pri}
               aria-label={label}
               aria-expanded={open}
-              aria-haspopup="dialog"
+              aria-controls={open ? 'gx-wallet' : undefined}
               data-tip={label}
               {...press}
               onClick={(e) => {
@@ -693,7 +693,9 @@ export function GameTop({
   );
 }
 
-/** The shared wallet: every value chip of the row with its exact number. */
+/** The shared wallet: every value chip of the row with its exact number. A non-modal disclosure
+ *  (closes on any outside tap): `role="region"` + the chip's `aria-expanded` / `aria-controls`,
+ *  focus stays on the chip — not a dialog (R23). */
 function Wallet({ chips, x, onClose }: { chips: TopChip[]; x: number; onClose: () => void }) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
@@ -710,8 +712,9 @@ function Wallet({ chips, x, onClose }: { chips: TopChip[]; x: number; onClose: (
   return (
     <div
       ref={ref}
+      id="gx-wallet"
       className="gx-wallet px"
-      role="dialog"
+      role="region"
       aria-label={t('hall.wallet')}
       style={{ left } as CSSProperties}
       onClick={onClose}

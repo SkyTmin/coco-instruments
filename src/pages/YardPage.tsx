@@ -11,7 +11,15 @@
 // в цикле `requestAnimationFrame` мимо React; React перерисовывает табло,
 // только когда оно поменялось.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GameTop, GxBar, GxHud, GxIcon, GxModal } from '@/components/gx';
@@ -978,32 +986,58 @@ function HubMapSheet({
   const m = sim.map;
   // Pins at kit type size collide (Шахта / Особая шахта stand side by side) and the edge ones
   // ran past the frame: keep each inside the frame and move it below any pin above it that it
-  // overlaps. Offsets are in the frame's own units (the window body may be zoomed).
+  // overlaps, 18 px apart: the 44-px hit areas (9 px past the plate) touch but never overlap, so
+  // a stacked pin keeps its full area. A moved plate gets a tail
+  // (`.hub-map__tail`, the element before it) from its edge to its door, ending in a dot.
+  // Offsets are in the frame's own units (the window body may be zoomed).
   useLayoutEffect(() => {
     const fr = frameRef.current;
     if (!fr) return;
+    const GAP = 18;
     const lay = () => {
       const pins = [...fr.querySelectorAll<HTMLElement>('.hub-map__pin')];
       const boxes = pins.map((el) => {
         el.style.transform = '';
         const w = el.offsetWidth;
         const h = el.offsetHeight;
-        return { el, l: el.offsetLeft - w / 2, t: el.offsetTop - h, w, h };
+        const ax = el.offsetLeft;
+        const ay = el.offsetTop;
+        return { el, ax, ay, l: ax - w / 2, t: ay - h, w, h };
       });
       boxes.sort((a, b) => a.t - b.t || a.l - b.l);
       const fw = fr.clientWidth;
+      const fh = fr.clientHeight;
       const placed: { l: number; t: number; r: number; b: number }[] = [];
       for (const p of boxes) {
-        const dx = Math.max(0, -p.l) - Math.max(0, p.l + p.w - fw);
+        // 1 px inside the frame: offsetWidth is whole px, the plate is not.
+        const dx = Math.max(0, 1 - p.l) - Math.max(0, p.l + p.w + 1 - fw);
         const l = p.l + dx;
         let top = p.t;
         for (let n = 0; n < boxes.length; n++) {
-          const hit = placed.find((q) => l < q.r && l + p.w > q.l && top < q.b && top + p.h > q.t);
+          const hit = placed.find(
+            (q) => l < q.r && l + p.w > q.l && top < q.b + GAP && top + p.h + GAP > q.t,
+          );
           if (!hit) break;
-          top = hit.b + 1;
+          top = hit.b + GAP;
         }
-        if (dx || top !== p.t) p.el.style.transform = `translate(${dx}px, ${top - p.t}px)`;
+        top = Math.max(1, Math.min(top, fh - p.h - 1));
+        const dy = top - p.t;
+        p.el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
         placed.push({ l, t: top, r: l + p.w, b: top + p.h });
+        // Tail: straight up or down from the door point to the near plate edge (the door's x is
+        // always inside the plate: an edge clamp shifts it by less than half its width).
+        const tail = p.el.previousElementSibling as HTMLElement | null;
+        if (!tail?.classList.contains('hub-map__tail')) continue;
+        const edge = top > p.ay ? top : top + p.h < p.ay ? top + p.h : NaN;
+        if (Number.isNaN(edge) || Math.abs(edge - p.ay) < 2) {
+          tail.hidden = true;
+          continue;
+        }
+        tail.hidden = false;
+        tail.classList.toggle('is-up', edge < p.ay);
+        tail.style.left = `${p.ax}px`;
+        tail.style.top = `${Math.min(edge, p.ay)}px`;
+        tail.style.height = `${Math.abs(edge - p.ay)}px`;
       }
     };
     lay();
@@ -1051,20 +1085,22 @@ function HubMapSheet({
         <canvas ref={cvRef} className="hub-map__cv" />
         <i className="hub-map__me" style={{ left: `${hx}%`, top: `${hy}%` }} aria-hidden="true" />
         {places.map((d) => (
-          <button
-            key={d.i}
-            type="button"
-            className="hub-map__pin"
-            {...press}
-            style={{ left: `${((d.x + d.w / 2) / m.w) * 100}%`, top: `${(d.y / m.h) * 100}%` }}
-            onClick={() => {
-              tapLight();
-              onPick(d);
-            }}
-          >
-            {d.label ? doorLabel(d) : hubMapName(d.to, HUB_MAPS[d.to].name)}
-            {flags.has(d.i) && <span className="gx-badge gx-badge--gold">!</span>}
-          </button>
+          <Fragment key={d.i}>
+            <i className="hub-map__tail" hidden aria-hidden="true" />
+            <button
+              type="button"
+              className="hub-map__pin"
+              {...press}
+              style={{ left: `${((d.x + d.w / 2) / m.w) * 100}%`, top: `${(d.y / m.h) * 100}%` }}
+              onClick={() => {
+                tapLight();
+                onPick(d);
+              }}
+            >
+              {d.label ? doorLabel(d) : hubMapName(d.to, HUB_MAPS[d.to].name)}
+              {flags.has(d.i) && <span className="gx-badge gx-badge--gold">!</span>}
+            </button>
+          </Fragment>
         ))}
       </div>
     </GxModal>
