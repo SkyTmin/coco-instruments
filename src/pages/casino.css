@@ -807,11 +807,20 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   gap: calc(2 * var(--u));
   min-width: 0;
 }
+/* `clip`, not `hidden`: a scroll container may be squeezed to 0 by the grid — the title vanished.
+   A long name (skins: up to ~20 letters) is a step smaller and may take two lines — no ellipsis. */
 .hall-card__t {
+  min-width: 0;
   font-size: var(--px-fs-big);
+  line-height: 1.05;
   white-space: nowrap;
-  overflow: hidden;
+  overflow: clip;
   text-overflow: ellipsis;
+}
+.hall-card__t.is-long {
+  font-size: var(--px-fs-head);
+  white-space: normal;
+  text-wrap: balance;
 }
 .hall-card__tags {
   display: flex;
@@ -836,6 +845,17 @@ html .hall .hall-card__facts .cas-stat {
 }
 html .hall .hall-card__facts .cas-stat__v {
   font-size: var(--px-fs-head);
+}
+/* `useFitText`: a long number steps down instead of losing its tail. */
+html .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
+  font-size: var(--px-fs);
+}
+html .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
+  font-size: var(--px-fs-sm);
+}
+/* Last step: the coin goes (the star and the label already say «best win»), the digits stay. */
+html .hall .hall-card__facts .cas-stat__v[data-fit='2'] > svg {
+  display: none;
 }
 html .hall .hall-card__facts .cas-stat__ico .px-i {
   --i-w: 9;
@@ -896,6 +916,10 @@ html .hall[data-lay='tall'] {
 }
 html .hall[data-lay='tall'] .hall-cards {
   grid-auto-rows: minmax(0, 1fr);
+}
+/* Spins are short, the best win is long: the first fact takes what it needs, the second the rest. */
+html .hall[data-lay='tall'] .hall-card__facts {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 html .hall[data-lay='tall'] .hall-card__art,
 html[data-ff='phone-landscape'] .hall .hall-card__art {
@@ -964,6 +988,9 @@ html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid {
 html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid {
   grid-template-rows: repeat(2, minmax(0, 1fr));
 }
+/* Phones: the tags (reels, lines, field) give their room to the title, facts and «Play»; the
+   game's rules sheet still says it all. */
+html[data-ff='phone-portrait'] .hall-card__tags,
 html[data-ff='phone-landscape'] .hall-card__tags {
   display: none;
 }
@@ -995,6 +1022,10 @@ html[data-ff='tablet'] .hall-card__t,
 html[data-ff='desktop'] .hall-card__t {
   font-size: var(--px-fs-hero);
 }
+html[data-ff='tablet'] .hall-card__t.is-long,
+html[data-ff='desktop'] .hall-card__t.is-long {
+  font-size: var(--px-fs-big);
+}
 html[data-ff='tablet'] .hall-card__tags > i,
 html[data-ff='desktop'] .hall-card__tags > i,
 html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__k,
@@ -1004,6 +1035,14 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__k {
 html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v,
 html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v {
   font-size: var(--px-fs-big);
+}
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v[data-fit='1'],
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
+  font-size: var(--px-fs-head);
+}
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v[data-fit='2'],
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
+  font-size: var(--px-fs);
 }
 html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__ico .px-i,
 html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__ico .px-i {
@@ -1401,9 +1440,6 @@ html[data-ff='phone-portrait'] .skn {
     justify-items: center;
     align-content: center;
     gap: calc(3 * var(--u));
-  }
-  .sesk__actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (prefers-reduced-motion: reduce) {

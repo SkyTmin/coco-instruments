@@ -78,25 +78,53 @@ export function useCasLayout(): 'tall' | 'wide' {
 }
 
 /** One fact: icon + number (+ a small word under it on roomy formats). */
+/**
+ * Steps the font of a box down (`data-fit` 1, 2) until its text fits the width — a long number
+ * gets smaller instead of losing its tail. Measured before paint and again on resize.
+ */
+function useFitText(dep: unknown, on: boolean) {
+  const ref = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !on) return;
+    const fit = () => {
+      el.dataset.fit = '0';
+      for (let i = 1; i <= 2 && el.scrollWidth > el.clientWidth + 1; i++)
+        el.dataset.fit = String(i);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [dep, on]);
+  return ref;
+}
+
 export function CasStat({
   icon,
   value,
   label,
   tone,
   className,
+  fit = false,
 }: {
   icon: ReactNode;
   value: ReactNode;
   label: ReactNode;
   tone?: 'gold';
   className?: string;
+  /** Shrink a long value to fit (the hall: static numbers; not in play, where it would jump). */
+  fit?: boolean;
 }) {
+  const vRef = useFitText(value, fit);
   return (
     <div
       className={`cas-stat${tone ? ` cas-stat--${tone}` : ''}${className ? ` ${className}` : ''}`}
     >
       <span className="cas-stat__ico">{icon}</span>
-      <b className="cas-stat__v px-num">{value}</b>
+      <b ref={vRef} className="cas-stat__v px-num">
+        {value}
+      </b>
       <i className="cas-stat__k">{label}</i>
     </div>
   );

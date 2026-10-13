@@ -359,20 +359,33 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   portrait (info / stage / deck in the thumb zone; tablet portrait: full-width stage, info | deck
   side by side under it); `wide` = phone landscape, tablet landscape, desktop (info | stage |
   deck). The page never scrolls (all 6 formats).
-- **Nothing jumps** — `{SCR}/jump.mjs` compares rects (info, stage, deck, balance, bet, spin,
-  auto, turbo, bonus) across bet ±, Minus/Equal/Tab/Shift+Tab, Space spin, ante, auto 10 on/off.
+- **Nothing jumps** — checked with a Playwright script (not in the repo) that compares rects
+  (info, stage, deck, balance, bet, spin, auto, turbo, bonus) across bet ±,
+  Minus/Equal/Tab/Shift+Tab, Space spin, ante, auto 10 on/off.
   Bet value has a fixed width; the recent-spins row always exists (an empty well before the
   first spin); the bonus row hides with `visibility`; auto/turbo have a fixed width in `tall` and
   their key hint / counter are absolute badges — an inline key hint once pushed Spin by 18 px.
+  Spin's own key hint is a corner badge too (inline it cut «DREHEN · 10» on desktop); Spin has no
+  `overflow: hidden` — it clipped the kit focus frame (`.px-f::after` sits 3u outside).
+- **Long words:** bonus plates have 2u side padding, the buy label wraps, the ante hint gets up
+  to 3 lines (fr/it need them). Measure every language, not only ru: a text check over
+  `.cas-deck *` / `.cas-info *` (box outside its button, or clipped with ellipsis/line-clamp).
 - **Deck input:** Space/Enter (pad A) = spin (page `confirm`, scoped to the page); Tab/Shift+Tab
   (RB/LB), ←/→ (when nothing is focused) and −/+ (Minus/Equal/Numpad) = bet; X (pad Y,
-  `inspect`) = auto sheet. Pad checked through `emitAction` (`{SCR}/pad.mjs`).
+  `inspect`) = auto sheet. Pad checked by firing `emitAction(…, 'gamepad', …, 'pad:0')`.
 - **Dark surfaces:** the session card's peak sits on an ink plate (`--sesk-plate: var(--px-text)`
   resolved on the light card, then `.px-dark` on the plate) — rarity colours read only on dark.
   The hall note over the yard background is `.px-dark`.
 - Touch targets ≥ `--gx-hit` (44 px): bet −/+/value, auto/turbo in landscape, bonus buttons.
 - Hall: wallet (coins + casino level) and three cards — Slots, Cascade, «Каторга» (→ `/prison`,
-  rank letter + tokens). A card is one button; «Играть» is drawn, not a nested button.
+  rank letter + tokens). A card is one button; «Играть» is drawn, not a nested button. The hall
+  gets the screen height and no more (`.gs__main` / `.hall` flex 1 1 + `min-height: 0`); the
+  cards share it and the art is what gives way: symbols are `object-fit: contain` in a definite
+  grid cell. Phone landscape: the wallet is one line and the note is hidden — else «Play» fell
+  under the edge. Watch `.gs__main` scrollHeight, not `#root`: the shell clips, it does not scroll.
+- Session card: on a low screen (`orientation: landscape` and `max-height: 520px`) it is two
+  columns (peak + net | stats + buttons via `.sesk__col`, `display: contents` elsewhere); the
+  veil row is `minmax(0, 1fr)` so `max-height: 100%` holds.
 - Skins sheet: kit cards; the old `.skin-card` palette plate stays as the showcase (the relic's
   halo and shimmer live there); current skin = kit select frame; locked = `aria-disabled`
   (focusable, shows why). Cash desk: kit buttons with the row icon in front (a per-button coin
@@ -380,8 +393,9 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   section's) is dressed as an iron kit button through `.cash__creative`.
 - Settings / auto / bet sheets of both games share `CasToggles` / `CasAutoPicker` /
   `CasBetPicker`; handlers stay in the pages. New kit icons: `auto`, `buzz` (vibration).
-- Dead CSS of the old HUD, sheets and session card was removed from `theme.css` with
-  `{SCR}/deadcss.mjs` (postcss; a class counts as used if any src file mentions it or a template
-  prefix `foo-${`). Re-run it rather than deleting by eye.
+- Dead CSS of the old HUD, sheets and session card was removed from `theme.css` with a postcss
+  script (not in the repo): a class counts as used if any src file mentions it or a template
+  prefix `foo-${`; selectors with dead classes dropped, emptied rules removed. Do the same rather
+  than deleting by eye.
 - Not verified: a real phone / Telegram webview, a real gamepad, the big-win totem in the new
   frame (the rig reached only combo ×2).

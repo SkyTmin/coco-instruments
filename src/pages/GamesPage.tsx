@@ -15,7 +15,7 @@ import { useGameAudio } from '@/lib/use-game-audio';
 import { AudioToggles } from '@/components/AudioToggles';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { Bar } from '@/ui-px';
-import { fmtNum as fmt, skinText, useT } from '@/i18n';
+import { fmtNum as fmt, fmtShort, skinText, useT } from '@/i18n';
 import { GameSettings } from '@/settings';
 import { CasStat, KitIcon, useCasLayout } from './casino-ui';
 
@@ -53,9 +53,13 @@ export function GamesPage() {
   };
 
   const sym = (id: SlotSymbolId) => <img key={id} src={symbolSrc(skin, id)} alt="" />;
+  // От сотни тысяч — коротко и без десятых до миллиона («988 тыс.», «1,2 млн»): в карточке
+  // телефона на число около сотни пикселей.
+  const compact = (n: number) =>
+    n >= 1_000_000 ? fmtShort(n) : n >= 100_000 ? fmtShort(Math.round(n / 1000) * 1000) : fmt(n);
   const coins = (n: number) => (
     <>
-      {fmt(n)}
+      {compact(n)}
       <CoinIcon size={16} />
     </>
   );
@@ -116,11 +120,13 @@ export function GamesPage() {
             facts={
               <>
                 <CasStat
+                  fit
                   icon={<KitIcon name="play" />}
                   value={fmt(slotsSpins)}
                   label={t('slots.statSpins')}
                 />
                 <CasStat
+                  fit
                   tone="gold"
                   icon={<KitIcon name="star" />}
                   value={coins(slotsBest)}
@@ -145,11 +151,13 @@ export function GamesPage() {
             facts={
               <>
                 <CasStat
+                  fit
                   icon={<KitIcon name="play" />}
                   value={fmt(scatterSpins)}
                   label={t('slots.session.spins')}
                 />
                 <CasStat
+                  fit
                   tone="gold"
                   icon={<KitIcon name="star" />}
                   value={coins(scatterBest)}
@@ -167,13 +175,15 @@ export function GamesPage() {
             facts={
               <>
                 <CasStat
+                  fit
                   icon={<KitIcon name="up" />}
                   value={rankLetter(rank)}
                   label={t('hall.rank')}
                 />
                 <CasStat
+                  fit
                   icon={<KitIcon name="token" />}
-                  value={fmt(tokens)}
+                  value={compact(tokens)}
                   label={t('hall.tokens')}
                 />
               </>
@@ -222,7 +232,9 @@ function HallCard({
         {art}
       </span>
       <span className="hall-card__body">
-        <b className="hall-card__t px-h">{title}</b>
+        {/* Длинное имя скина («Nuit des citrouilles») — шрифт на ступень меньше и две строки,
+            а не многоточие. */}
+        <b className={`hall-card__t px-h${title.length > 10 ? ' is-long' : ''}`}>{title}</b>
         <span className="hall-card__tags">
           {tags.map((tag) => (
             <i key={tag} className="cas-well">
