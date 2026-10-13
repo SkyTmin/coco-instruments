@@ -36,6 +36,7 @@ export const nursery: Translation<typeof ru> = {
   details: 'Ayrıntılar',
   unknown: 'Bu kim?',
   from: 'Çıktığı yumurtalar',
+  eggPct: '%{v}',
   allWithYou: 'Tüm hayvanlar zaten yanında',
   hatchFirst: 'Önce bir yumurtadan hayvan çıkar',
   rarity: {

@@ -53,6 +53,7 @@
 }
 .nur--one .nur-anims {
   justify-content: center;
+  gap: calc(2 * var(--u));
 }
 /* The measured box of the hero stage: its size comes from the grid only (contain), the pet is
    sized from it in Nursery.tsx and sits in the middle on its pedestal. */
@@ -114,7 +115,7 @@
 .nur-anims {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(2 * var(--u));
+  gap: var(--u);
 }
 .nur-anim {
   padding-left: calc(3 * var(--u));
@@ -128,6 +129,7 @@
   .nur-anims {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(2 * var(--u));
   }
   .nur-anim {
     justify-content: flex-start;
@@ -367,18 +369,18 @@ html[data-ff='phone-landscape'] .nur-side .nur-id__name {
   gap: calc(2 * var(--u));
   color: var(--px-muted);
 }
-.nur-info__eggs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(2 * var(--u)) calc(4 * var(--u));
-}
 .nur-egg {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--u);
+  gap: calc(2 * var(--u));
   color: var(--px-text);
 }
 .nur-egg > .px-i {
+  color: var(--px-gold);
+}
+.nur-egg > b {
+  font-weight: 400;
   color: var(--px-gold);
 }
 

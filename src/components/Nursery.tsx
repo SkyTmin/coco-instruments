@@ -83,7 +83,9 @@ function useBox(ref: RefObject<HTMLElement | null>, on: boolean) {
     const el = ref.current;
     if (!on || !el) return;
     const put = (w: number, h: number) =>
-      setBox((b) => (b.w === Math.floor(w) && b.h === Math.floor(h) ? b : { w: Math.floor(w), h: Math.floor(h) }));
+      setBox((b) =>
+        b.w === Math.floor(w) && b.h === Math.floor(h) ? b : { w: Math.floor(w), h: Math.floor(h) },
+      );
     put(el.clientWidth, el.clientHeight);
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(([e]) => put(e.contentRect.width, e.contentRect.height));
@@ -95,8 +97,7 @@ function useBox(ref: RefObject<HTMLElement | null>, on: boolean) {
 
 /** Pedestal pixel in CSS px: the pet's own pixel (large strip, 112) in whole screen dots, never
  *  under the UI pixel — under a big pet a UI-scale pedestal looks like a coin. */
-const pedPx = (s: number, dpr: number, u: number) =>
-  Math.max(u, Math.round((s * dpr) / 112) / dpr);
+const pedPx = (s: number, dpr: number, u: number) => Math.max(u, Math.round((s * dpr) / 112) / dpr);
 
 /** The biggest pet frame that fits `w` × `h` with its pedestal, at a whole number of screen dots
  *  per art pixel (what `pxFit` will draw — it may round up by 15%, so the check is on its result). */
@@ -610,19 +611,25 @@ function PetInfo({
   const b = rec ? petBonus(id, rec) : {};
   // Which eggs it hatches from: those with a chance for its rarity.
   const from = EGGS.filter((e) => eggChances(e.id)[def.rarity] > 0);
+  // The species is picked evenly inside the rolled rarity (`rollEgg`), so one pet's chance is
+  // the rarity's share divided by how many pets share it.
+  const kin = PETS.filter((d) => d.rarity === def.rarity).length || 1;
   let rows: ReactNode;
   if (!rec)
     rows = (
       <div className="nur-info__from">
         <span>{t('nursery.from')}</span>
-        <span className="nur-info__eggs">
-          {from.map((e) => (
-            <span key={e.id} className="nur-egg">
-              <Icon name="egg" />
-              {t(`nursery.egg.${e.id}`)}
-            </span>
-          ))}
-        </span>
+        {from.map((e) => (
+          <span key={e.id} className="nur-egg">
+            <Icon name="egg" />
+            <span>{t(`nursery.egg.${e.id}`)}</span>
+            <b>
+              {t('nursery.eggPct', {
+                v: Math.round((eggChances(e.id)[def.rarity] / kin) * 1000) / 10,
+              })}
+            </b>
+          </span>
+        ))}
       </div>
     );
   else

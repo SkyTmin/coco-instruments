@@ -77,7 +77,8 @@ black on the stage) + small lock bottom-right.
 - Sizes are whole multiples of the 8-px em: `--ts = max(2, ui-scale − 1 + --ts-add)`;
   `--px-fs` 8·ts (body, ≥ 16 px), `--px-fs-big` 8·(ts+1), `--px-fs-hero` 8·(ts+2).
   L's text-size setting (`html[data-text=s|l]`) shifts `--ts-add` by a whole step (fractional
-  scales give uneven pixel rows). `font-synthesis: none` (no fake bold).
+  scales give uneven pixel rows). L's `--ui-text` (0.9/1/1.15) is for vector text — the kit
+  deliberately ignores it. `font-synthesis: none` (no fake bold).
 - **Legibility floor (lead review, 13.10)**: nothing user-facing under `--px-fs-sm` =
   max(floor, 8·(ts−1)), floor by DPR so a font pixel is whole screen dots: 13.333 px at DPR ≥ 2.5
   (5 dots), 12 px at DPR ≥ 1.5 (3 dots), 16 px at DPR 1. Used by bar labels, badges, key-hint

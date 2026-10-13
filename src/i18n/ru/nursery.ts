@@ -34,6 +34,8 @@ export const nursery = {
   details: 'Подробнее',
   unknown: 'Кто это?',
   from: 'Из яиц',
+  /** Chance of this very pet from one egg. */
+  eggPct: '{v}%',
   allWithYou: 'Все питомцы уже с тобой',
   hatchFirst: 'Сначала вырасти питомца из яйца',
   rarity: {
