@@ -1,7 +1,7 @@
 // Shared bits of the inventory-style screens (forge, backpack, books) on the pixel kit: the
 // layout by the shell's format and the measured hero stage. Styles — `armory.css`.
 
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { useFormFactor } from '@/game-shell';
 
@@ -87,3 +87,25 @@ export function nameFit(name: ReactNode): CSSProperties {
   const w = Math.max(8, ...s.split(/\s+/).map((x) => x.length));
   return { '--wlen': w, '--nlen': Math.max(8, s.length) } as CSSProperties;
 }
+
+/**
+ * Two-tap confirmations («В пыль», «Снять», «Перековать», the big chest): `mark()` when the first
+ * tap arms the button, `tooSoon()` is true for 400 ms after it — a confirming tap that soon is the
+ * second half of a double tap and is ignored (critic: two taps 90 ms apart dusted a book; Android's
+ * double-tap window is 300 ms).
+ */
+export const ARM_GUARD_MS = 400;
+export function useArmGuard(): { mark: () => void; tooSoon: () => boolean } {
+  const at = useRef(-Infinity);
+  return {
+    mark: () => {
+      at.current = performance.now();
+    },
+    tooSoon: () => performance.now() - at.current < ARM_GUARD_MS,
+  };
+}
+
+/** A keyboard / gamepad click (Enter, Space, the bus) has `detail === 0`; a tap or a mouse click
+ *  counts its clicks. A second tap on a selected cell must not act — touch acts only through the
+ *  action button (critic: a long press to read the tip forged the pick on release). */
+export const fromKeys = (e: { detail: number }) => e.detail === 0;

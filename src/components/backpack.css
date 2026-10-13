@@ -1,10 +1,28 @@
 /* Backpack and bunk chest (components/Inventory.tsx) on the pixel kit — the screen's own parts.
    Skeleton (columns, showcase, stats, actions) — armory.css. Kit rules: .claude/rules/ui-px.md. */
 
-/* The showcased thing: a square box sized from the stage, the icon centred in it. */
+/* The grid is this screen's content (critic ruling 1): on a phone it gets 9/20 of the height —
+   the tab rows and three full rows of cells on open at 390x844. */
+.ivx.arm--one {
+  grid-template:
+    'top' auto
+    'show' minmax(0, 11fr)
+    'list' minmax(0, 9fr)
+    'acts' auto
+    / minmax(0, 1fr);
+}
+.ivx.arm--two {
+  grid-template:
+    'top top' auto
+    'show show' minmax(0, 12fr)
+    'list side' minmax(0, 8fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+/* The showcased thing: a square box sized from the stage with the pedestal, the icon standing on
+   it (an ore block hovered 10 px above the pedestal). */
 .ivx-hero {
   display: grid;
-  place-items: center;
+  place-items: end center;
 }
 .ivx-hero :is(img, canvas, svg) {
   image-rendering: pixelated;
@@ -13,13 +31,12 @@
   filter: grayscale(1) brightness(0.55);
 }
 /* Two lines reserved under the name: a long line never pushes the art or the stats. */
-/* Phone portrait has no side column, the plate carries the whole line: three lines of the small
-   size («Zehn Minuten zählt jeder zweite Block als nächsthöheres Gestein» lost its end). */
+/* Phone portrait has no side column, the plate carries the line: two lines of the small size at a
+   fixed height (the whole line is in the cell's tip). */
 .arm--one .ivx-sub {
-  min-height: calc(3 * 1.2 * var(--px-fs-sm));
+  height: calc(2 * 1.2 * var(--px-fs-sm));
+  min-height: 0;
   font-size: var(--px-fs-sm);
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
 }
 /* Two and three columns: the side column says it in full (beside the art on a phone held sideways
    the plate is 165 px — five lines); the plate keeps the name. */
@@ -70,9 +87,37 @@
 .ivx-tabs::-webkit-scrollbar {
   display: none;
 }
+/* Icon tabs of a finger's size (the kit tab was 36x44 on a phone). */
 .ivx-tabs > .px-tab {
   flex: none;
-  min-height: var(--gx-hit); /* kit tab is 34 px on a phone — under the 44-px finger */
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+  padding-inline: calc(2 * var(--u));
+}
+/* Phone portrait: all tabs at once, wrapped into two rows (one scrolling row showed 4 of 9). */
+.arm--one .ivx-tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+/* The section's count: ink on parchment at the tab's corner — the red kit badge read as an alert.
+   Placed against the tab (the kit label clips its overflow, the count would be cut). */
+.ivx-count {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: calc(8 * var(--u));
+  padding: 0 var(--u);
+  font: 700 var(--px-fs-tiny) / 1.15 var(--px-font);
+  text-align: center;
+  color: var(--px-ink);
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  text-shadow: none;
 }
 /* Wide formats: the narrow list column wraps the tabs instead of hiding them off-screen. */
 .arm--two .ivx-tabs,
@@ -88,6 +133,12 @@ html[data-ff='phone-landscape'] .arm .ivx-tabs {
 .ivx-tab {
   display: inline-grid;
   place-items: center;
+}
+/* «Всё»: one grid, each section's row group opens with its marker cell (icon + fill bar). */
+.ivx-all > .ivx-mark {
+  grid-column-start: 1;
+  background: color-mix(in srgb, var(--px-ink) 85%, transparent);
+  color: var(--px-gold);
 }
 .ivx-scroll {
   min-height: 0;
@@ -136,16 +187,13 @@ html[data-ff='phone-landscape'] .arm .ivx-tabs {
   z-index: 1;
 }
 
-/* Bunk chest: nine in a row like Minecraft, cells follow the column width. */
+/* Bunk chest: kit cells of a finger's size, as many in a row as the column holds (nine in a row
+   made them 21–34 px, smaller than the text); the list scrolls. */
 .ivx-chest {
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
-  gap: calc(2 * var(--u));
-}
-.ivx-chest > .px-slot {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 1 / 1;
+  grid-template-columns: repeat(auto-fill, var(--slot, calc(26 * var(--u))));
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
 }
 .ivx-lock {
   margin-top: calc(2 * var(--u));

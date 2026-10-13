@@ -119,11 +119,15 @@
   white-space: normal;
   text-align: left;
 }
+/* a block, not a flex row: the text was an anonymous flex item that could not wrap below its
+   longest word (12 px past the side column on a phone held sideways) */
 .bkx-note {
-  display: flex;
-  align-items: center;
-  gap: calc(2 * var(--u));
+  display: block;
   color: var(--px-gold);
+}
+.bkx-note > .gx-icon {
+  vertical-align: middle;
+  margin-right: calc(2 * var(--u));
 }
 .bkx-note.is-bad {
   color: var(--px-red);
@@ -191,8 +195,10 @@
 .arm--three .bkx-seller {
   grid-template-columns: minmax(0, 1fr);
 }
+/* as many tiers in a row as the column holds (four overflowed the 182-px list on a phone held
+   sideways — the whole list scrolled sideways) */
 .arm--three .bkx-tiers {
-  grid-template-columns: repeat(4, var(--slot, calc(26 * var(--u))));
+  grid-template-columns: repeat(auto-fill, var(--slot, calc(26 * var(--u))));
   justify-content: space-between;
 }
 

@@ -22,7 +22,14 @@ import { ItemIcon, KeyIcon, OreIcon, RuneIcon, TokenIcon } from '@/components/Pr
 import { EggArt } from '@/components/PetArt';
 import { BookArt, DustIcon, TIER_RARITY } from '@/components/BooksTab';
 import { RarityChip, rarityVars } from '@/components/PickArt';
-import { heroSize, nameFit, useArmLayout, useBox, useFirstFrame } from '@/components/armory';
+import {
+  heroFit,
+  nameFit,
+  useArmGuard,
+  useArmLayout,
+  useBox,
+  useFirstFrame,
+} from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import {
   actsOf,
@@ -208,6 +215,43 @@ function ItemTip({ item }: { item: InvItem }): ReactNode {
   );
 }
 
+/**
+ * «Всё»: the cell that opens each section's row group — its icon and, when it has one, a fill bar
+ * of its first limit (Рюкзак 542/40). Tap = that section's tab; the tip names it with its limits.
+ * One cell instead of a heading line: the grid shows ≥ 3 rows on a phone (critic: 4 of 62 cells).
+ */
+function SecMark({ s, u, onPick }: { s: InvSectionView; u: number; onPick: () => void }) {
+  const l = s.limits[0];
+  const label = [s.name, ...s.limits.map((x) => `${x.label} ${x.used}/${x.max}`)].join(' · ');
+  return (
+    <Slot
+      className="ivx-mark px-dark"
+      aria-label={label}
+      tip={
+        <span className="arm-tip">
+          <b>{s.name}</b>
+          {s.limits.map((x) => (
+            <span key={x.label} className="arm-tip__row">
+              {x.label} {x.used}/{x.max}
+            </span>
+          ))}
+        </span>
+      }
+      onClick={onPick}
+    >
+      <GxIcon name={s.icon as GxIconName} size={u * 13} />
+      {l && (
+        <Bar
+          value={l.max ? Math.min(1, l.used / l.max) : 0}
+          tone={limitFull(l) ? 'gold' : 'blue'}
+          height={4}
+          className="ivx-slot-bar"
+        />
+      )}
+    </Slot>
+  );
+}
+
 function Limit({ l }: { l: InvSectionView['limits'][number] }) {
   const full = limitFull(l);
   return (
@@ -294,6 +338,7 @@ export function Inventory({
   const [byRarity, setByRarity] = useState(false);
   const [note, setNote] = useState<{ key: number; text: string; bad?: boolean } | null>(null);
   const [armed, setArmed] = useState(false);
+  const guard = useArmGuard();
 
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -405,9 +450,11 @@ export function Inventory({
   const buyBig = () => {
     if (!armed) {
       tapLight();
+      guard.mark();
       setArmed(true);
       return;
     }
+    if (guard.tooSoon()) return; // the second half of a double tap is not a confirmation
     setArmed(false);
     if (bunkBuyBig()) {
       chestLatch();
@@ -554,10 +601,11 @@ export function Inventory({
   const roomRef = useRef<HTMLSpanElement>(null);
   const roomBox = useBox(roomRef);
   const ready = useFirstFrame();
-  const stage = heroSize(roomBox, u, 160 * u);
-  const art = Math.max(u, Math.floor((stage * 0.72) / u) * u);
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  const ped = Math.max(u, Math.round((stage * 0.8 * dpr) / 112) / dpr);
+  const pedOf = (a: number) => Math.max(u, Math.round((a * 0.8 * dpr) / 112) / dpr);
+  const stage = heroFit(roomBox, u, 160 * u, pedOf);
+  const art = Math.max(u, Math.floor((stage * 0.8) / u) * u);
+  const ped = pedOf(stage);
 
   const rarity = item ? rarityOfIcon(item.icon) : 0;
   const sec = item ? sections.find((s) => s.id === item.section) : undefined;
@@ -705,10 +753,10 @@ export function Inventory({
         id: s.id as Filter,
         label: (
           <span className="ivx-tab" aria-label={s.name}>
-            <GxIcon name={s.icon as GxIconName} size={u * 8} />
+            <GxIcon name={s.icon as GxIconName} size={u * 10} />
+            {k > 0 && <span className="ivx-count">{k > 99 ? '99+' : k}</span>}
           </span>
         ),
-        badge: k > 0 ? (k > 99 ? '99+' : k) : undefined,
       };
     }),
   ];
@@ -728,7 +776,7 @@ export function Inventory({
             <ItemSlot
               key={i}
               item={it}
-              icon={u * 12}
+              icon={cell}
               on={sel?.key === it.key}
               onPick={() => pick(it)}
             />
@@ -788,7 +836,31 @@ export function Inventory({
       </div>
       <div className="ivx-scroll">
         {ready && chest}
-        {(ready ? shown : []).map((s) => (
+        {filter === 'all' && ready && shown.length > 0 && (
+          <div className="arm-grid ivx-grid ivx-all" role="group" aria-label={t('inv.filterAll')}>
+            {shown.flatMap((s) => [
+              <SecMark
+                key={`m-${s.id}`}
+                s={s}
+                u={u}
+                onPick={() => {
+                  tapLight();
+                  setFilter(s.id);
+                }}
+              />,
+              ...order(s.items).map((it) => (
+                <ItemSlot
+                  key={it.key}
+                  item={it}
+                  icon={cell}
+                  on={sel?.key === it.key}
+                  onPick={() => pick(it)}
+                />
+              )),
+            ])}
+          </div>
+        )}
+        {(ready && filter !== 'all' ? shown : []).map((s) => (
           <section key={s.id} className="ivx-sec">
             <div className="arm-head">
               <Heading>
@@ -825,7 +897,7 @@ export function Inventory({
   );
 
   // Мест под кнопки — всегда одно и то же число на это место; лишние спрятаны (ничего не прыгает).
-  const slots = ACT_SLOTS[place];
+  const slots = ACT_SLOTS[place] ? Math.max(1, Math.min(acts.length, ACT_SLOTS[place])) : 0;
   const pad = Math.max(0, slots - acts.length);
   const actBar =
     slots > 0 ? (

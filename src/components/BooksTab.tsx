@@ -498,7 +498,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const painted = useFirstFrame(); // the shelf grid comes a frame after the window
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const pedOf = (a: number) => Math.max(u, Math.round((a * 0.8 * dpr) / 112) / dpr);
-  const art = heroFit(roomBox, u, 112 * u, pedOf);
+  const art = heroFit(roomBox, u, 160 * u, pedOf);
   const ped = pedOf(art);
 
   let rarity = 0;
