@@ -262,5 +262,33 @@ Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventor
 - Old CSS removed (`.fg*` in `game-ui.css`, the old `.inv*` layout in `inventory.css`) by
   `{SCR}/cleancss.py`: a rule goes when its scoped class is in no `src/**/*.ts*`; template
   prefixes (`mcinv__set`, `inv-px`, `pench-bulk__b`, `fgr`) protected.
+- **Critic round 2** (13.10, `critic-armory.md`; forge, backpack, books, bunk chest):
+  - `.arm-list` is one `minmax(0, 1fr)` column — the forge's 17-pick strip scrolls inside
+    `.frg-grid`, not the whole list (992 px in a 374-px list).
+  - Phone landscape stage: the art takes the full stage height on the left, the plate and the
+    stats (one line each: number · delta · label) stack on the right.
+  - Plate: name on one line shrinking by its whole length (`--nlen` from `nameFit`; beside the
+    art by the longest word `--wlen`), `overflow-wrap: normal; hyphens: auto` — no breaks inside
+    a word. Fixed heights for name, state and effect.
+  - Touch: a second tap on the selected slot does nothing — keys act (`fromKeys(e)` =
+    `e.detail === 0`), fingers use the action button. Two-tap confirms ignore a tap < 400 ms after
+    arming (`useArmGuard`, `ARM_GUARD_MS`).
+  - `useFullWin(on, scene)` → `html[data-fullwin]` (and `data-fullscene` for a scene): `.pmx` and,
+    under a scene, `.gx-win` get `visibility: hidden`; `.arm.is-window` / `.arm-scn` set
+    `visible` back (a scene may live inside the camp). `predecodeArmory(pick)` runs from
+    `PrisonPage` in `requestIdleCallback`: kit frame PNGs (read from `--pxk-*` on `:root`), the
+    pick spin, pick icons, book idle strips, ore icons — 4 at a time.
+  - `content-visibility: auto` on list sections after the first, with `padding: 3u; margin:
+    -3u` — its paint containment clipped the focus rings and corner badges.
+  - Result scenes `.arm-scn` (`ForgeReveal`, `RevealScene`, `ApplyScene`): the dark backdrop is
+    `::before` and fades at `.is-lit` to the kit veil; a parchment card (`.arm-scn__card`, frame
+    on its `::before`, so it fades in without moving anything) holds the art and the text;
+    lines `--px-fs-sm`, name `--px-fs-big` with an ink outline, CTA = kit primary `Button`
+    (`--gx-hit` high, `data-autofocus`, root `data-ui-layer`). Phone landscape: art beside text.
+  - Backpack: «Всё» is one grid with a marker cell per section (`SecMark`: section icon + bar of
+    its first limit, tap = that tab) instead of heading lines; tabs are 44×44 icon tabs that wrap
+    on phones, the count in ink on a well frame at the corner (positioned against `.px-tab`: the
+    kit label clips). Bunk chest: kit-size cells `repeat(auto-fill, --slot)`; action places =
+    min(actions, `ACT_SLOTS`). Tooltip icons 24 px, rarity as the kit pill.
 - **Not verified**: a real phone / Telegram webview, hyphenation (the stand's Linux Chromium has no
   dictionaries — `hyphens: auto` is for phones), gamepad hardware (actions emitted on the bus).
