@@ -277,6 +277,18 @@ interface Act {
   run?: () => void;
 }
 
+/** Dust puff: where its eight motes fly, in art pixels (whole steps, as the kit moves art). */
+const PUFF: [number, number][] = [
+  [0, -40],
+  [30, -30],
+  [40, 0],
+  [30, 26],
+  [0, 36],
+  [-30, 26],
+  [-40, 0],
+  [-30, -30],
+];
+
 /** Green «+2» / red «−1» beside a big number. */
 function Delta({ v }: { v: number }) {
   if (!v) return null;
@@ -382,6 +394,8 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   /** The armed two-tap action («В пыль», «Снять», «Перековать»): its id. */
   const [armed, setArmed] = useState<string | null>(null);
   const guard = useArmGuard();
+  /** Dust puffs so far: each salvage / wipe plays one and ticks the dust counter. */
+  const [puff, setPuff] = useState(0);
   const plus = usePlusPct();
   const [dustOn, setDustOn] = useState(true);
   const [asking, setAsking] = useState(false);
@@ -514,7 +528,10 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     const got = salvage(bi);
     softChime(1);
     tapLight();
-    if (got) say(t('books.crumbled', { name }));
+    if (got) {
+      setPuff((n) => n + 1);
+      say(t('books.crumbled', { name }));
+    }
   };
   const doWipe = (id: EnchantId) => {
     if (armed !== 'wipe') {
@@ -528,7 +545,10 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     const got = wipe(id);
     softThud();
     tapMedium();
-    if (got) say(t('books.crumbled', { name: bookName({ id, lvl: p.ench[id] }) }));
+    if (got) {
+      setPuff((n) => n + 1);
+      say(t('books.crumbled', { name: bookName({ id, lvl: p.ench[id] }) }));
+    }
   };
   const doStar = () => {
     primeAudio();
@@ -868,6 +888,21 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
           {art > 0 && (
             <span className="arm-ped" style={{ '--ped': `${ped}px` } as CSSProperties}>
               {hero}
+            </span>
+          )}
+          {puff > 0 && (
+            <span key={puff} className="bkx-puff" aria-hidden="true">
+              {PUFF.map(([x, y], i) => (
+                <i
+                  key={i}
+                  style={
+                    {
+                      '--dx': `calc(${x} * var(--u))`,
+                      '--dy': `calc(${y} * var(--u))`,
+                    } as CSSProperties
+                  }
+                />
+              ))}
             </span>
           )}
         </span>
@@ -1229,7 +1264,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         <TokenIcon size={u * 8} />
         <b className="arm-num">{fmt(p.tokens)}</b>
       </span>
-      <span className="bkx-dust">
+      <span key={puff} className={`bkx-dust${puff ? ' is-tick' : ''}`}>
         <DustIcon size={u * 8} />
         <b className="arm-num">{fmt(p.dust)}</b>
       </span>
@@ -1506,15 +1541,25 @@ function RevealScene({
     void preloadPx('books', strip, REVEAL_SIZE);
     if (scene.kind !== 'anvil') return undefined;
     const at = (ms: number, fn: () => void) => timers.current.push(setTimeout(fn, ms));
+    // A simple or rare merge is everyday work: three quick strikes, the flash and the book — under
+    // 1.5 s (critic: ~4 s for every merge). Epic and legend keep the full reveal strip.
+    const quick = t === 'simple' || t === 'rare';
     const beats = slow ? 5 : 3;
+    const step = quick ? 260 : 360;
     for (let k = 0; k < beats; k++)
-      at(k * 360, () => {
+      at(k * step, () => {
         forgeStrike(k);
         tapLight();
       });
-    at(beats * 360 + 80, () => {
+    at(beats * step + 80, () => {
       flashFrame(slow ? 'mega' : 'big');
-      setPhase('play');
+      if (!quick) {
+        setPhase('play');
+        return;
+      }
+      forgeReveal(r);
+      notifySuccess();
+      show();
     });
     return () => {
       timers.current.forEach(clearTimeout);

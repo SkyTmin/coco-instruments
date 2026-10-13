@@ -301,3 +301,77 @@
 .bkx-replace__fx {
   font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
 }
+
+/* Dust: a 4-frame puff where the book was, the dust counter ticks (critic: only a text note). */
+.bkx .arm-room {
+  position: relative;
+}
+.bkx-puff {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  pointer-events: none;
+}
+.bkx-puff > i {
+  position: absolute;
+  left: calc(-5 * var(--u));
+  top: calc(-5 * var(--u));
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  background: var(--px-violet);
+  border: var(--u) solid var(--px-ink);
+  opacity: 0;
+  animation: bkx-puff 420ms steps(4, jump-none);
+}
+.bkx-puff > i:nth-child(odd) {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  background: color-mix(in srgb, var(--px-violet) 55%, transparent);
+}
+@keyframes bkx-puff {
+  from {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  75% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+.bkx-dust.is-tick > b {
+  animation: bkx-tick 480ms steps(2, jump-none);
+}
+@keyframes bkx-tick {
+  0%,
+  60% {
+    translate: 0 calc(-1 * var(--u));
+    color: var(--px-violet);
+  }
+}
+/* Reduced motion: no puff, the armed button stays lit instead of blinking. */
+@media (prefers-reduced-motion: reduce) {
+  .bkx-puff {
+    display: none;
+  }
+  .bkx-dust.is-tick > b,
+  :is(.bkx, .ivx) .px-btn.is-armed {
+    animation: none;
+  }
+  :is(.bkx, .ivx) .px-btn.is-armed {
+    filter: brightness(1.15);
+  }
+}
+html[data-motion='reduce'] .bkx-puff {
+  display: none;
+}
+html[data-motion='reduce']
+  :is(.bkx .bkx-dust.is-tick > b, .bkx .px-btn.is-armed, .ivx .px-btn.is-armed) {
+  animation: none;
+}
+html[data-motion='reduce'] :is(.bkx, .ivx) .px-btn.is-armed {
+  filter: brightness(1.15);
+}
