@@ -118,6 +118,9 @@
   --pximg-pedestal: url('/ui/kit/pedestal.png?v=63948753');
   --pximg-pedestal-w: 56;
   --pximg-pedestal-h: 18;
+  --pxk-tab-side-on: url('/ui/kit/tab-side-on.png?v=a6df9f31');
+  --pxk-tab-side-on-s: 2 1 2 2 fill;
+  --pxk-tab-side-on-w: 2 1 2 2;
 }
 
 .pxk-frame-stone {
@@ -719,8 +722,8 @@
 }
 
 .pxi-key {
-  -webkit-mask-image: url('/ui/kit/i-key.png?v=48078356');
-  mask-image: url('/ui/kit/i-key.png?v=48078356');
+  -webkit-mask-image: url('/ui/kit/i-key.png?v=501fda2b');
+  mask-image: url('/ui/kit/i-key.png?v=501fda2b');
   --i-w: 9;
   --i-h: 9;
 }
@@ -730,6 +733,17 @@
   mask-image: url('/ui/kit/i-egg.png?v=6195c514');
   --i-w: 9;
   --i-h: 9;
+}
+
+.pxk-tab-side-on {
+  border-image-source: var(--pxk-tab-side-on);
+  border-image-slice: var(--pxk-tab-side-on-s);
+  border-image-width: var(--pxk-tab-side-on-w);
+  border-image-repeat: stretch;
+}
+
+.pxk-tab-side-on.px-nofill {
+  border-image-slice: 2 1 2 2;
 }
 
 .px-btn--gold {
