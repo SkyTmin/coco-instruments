@@ -164,3 +164,24 @@ wants it; German keeps them as a model name («Spitzhacke Rostig») because «Ro
 cannot be compounded. Names inside a sentence go through `nameIn()` (`src/i18n/data-mine.ts`):
 lower case everywhere except German. FR strings use a no-break space before `: ! ? ; %` and
 inside « » (as in round 1). DE «Kumpel» stays the pet; the dock's «Питомцы» is «Tiere» (short).
+
+## Wave 2 — Books, chests, eggs (T4: `books`, `chests`, `eggs`)
+| ru | en | fr | tr | de | es | it | why |
+|---|---|---|---|---|---|---|---|
+| пыль (чар) | dust | poussière | toz | Staub | polvo | polvere | the plain word; «Dust 37» on the purse |
+| Вписать (книгу) | Enchant | Enchanter | Büyüle | Verzaubern | Encantar | Incanta | the Minecraft enchanting-table verb players know |
+| Склеить (две книги) | Merge | Fusionner | Birleştir | Verschmelzen | Fusionar | Fondi | merge-game word, short |
+| В пыль | To dust | En poussière | Toza çevir | Zu Staub | A polvo | In polvere | |
+| Перековать (кирку ★) | Reforge | Reforger | Yeniden döv | Umschmieden | Reforjar | Riforgia | |
+| Полка | Shelf | Étagère | Raf | Regal | Estante | Scaffale | |
+| Простая / Редкая / Эпическая / Легендарная книга | Simple / Rare / Epic / Legendary | Simple / Rare / Épique / Légendaire | Basit / Nadir / Destansı / Efsanevi | Einfach / Selten / Episch / Legendär | Simple / Raro / Épico / Legendario | Semplice / Raro / Epico / Leggendario | book tiers follow the rarity ladder; «Простая» ≠ «Обычная» kept |
+| Лакомство питомцу | Pet treat | Friandise | Ödül maması | Leckerli | Chuche para mascota | Bocconcino | what you give a dog; short where the icon says «pet» |
+| Вылупить | Hatch | Éclore | Çatlat | Schlüpfen | Eclosionar | Schiudi | TR «çatlat» = crack open, the egg-game verb |
+| Гнездо / корзина | Nest / basket | Nid / panier | Yuva / sepet | Nest / Korb | Nido / cesta | Nido / cesto | |
+| Ключ (сундука) | Key | Clé | Anahtar | Schlüssel | Llave | Chiave | as in round 1 |
+
+Full pick names of the books tab (`books.pick`, «Опаловая кирка») are Minecraft-style material
+names: en «Opal Pickaxe», fr «Pioche en opale», de compounds «Opalspitzhacke», es «Pico de ópalo»,
+it «Piccone di opale», tr «Opal Kazma». Enchant effects (`enchantEffect` in `data-books.ts`) keep
+the number first, TR puts % before it («%8 3×3 patlatma şansı»). Bare chip percents go through
+`books.pct` / `books.pctRange` (tr «%40», fr/de/es «40 %» with a no-break space).

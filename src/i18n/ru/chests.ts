@@ -1,0 +1,47 @@
+/** Chests tab and the opening scenes (`src/components/ChestTab.tsx`). «Сундук» is masculine. */
+export const chests = {
+  tier: { common: 'Обычный', rare: 'Редкий', epic: 'Эпический', legend: 'Легендарный' },
+  full: {
+    common: 'Обычный сундук',
+    rare: 'Редкий сундук',
+    epic: 'Эпический сундук',
+    legend: 'Легендарный сундук',
+  },
+  key: 'Ключ',
+  keys: { one: '{n} ключ', few: '{n} ключа', many: '{n} ключей', other: '{n} ключа' },
+  /** Full reward labels (batch summary, tooltips). `v` = short money, `n` picks the plural. */
+  coins: { one: '{v} монета', few: '{v} монеты', many: '{v} монет', other: '{v} монеты' },
+  tokens: { one: '{n} токен', few: '{n} токена', many: '{n} токенов', other: '{n} токена' },
+  rune: 'Руна {name}',
+  treat: 'Лакомство питомцу',
+  treats: 'Лакомство питомцу ×{n}',
+  /** Second line of a prize card: what it is and where it went. */
+  sub: {
+    book: 'книга · шанс {v}%',
+    rune: 'руна · в мешочек',
+    find: 'находка · в коллекцию',
+    pet: 'новый питомец',
+    egg: 'яйцо · в гнездо',
+    keys: 'ещё сундук',
+    item: 'в ряд расходников',
+  },
+  openAria: 'Открыть сундук',
+  open: 'Открыть',
+  all: 'Все · {n}',
+  hint: 'Ключи падают с блоков, по одному дают за ранг, пачкой — за престиж',
+  recent: 'Последнее из сундуков',
+  shattered: 'Мешочек рун полон — руна разбита на {n} ✦',
+  shatteredMany: 'Мешочек рун полон — лишние разбиты на {n} ✦',
+  again: 'Ещё · {key} {n}',
+  skipOpen: 'тап — сразу открыть',
+  skipSum: 'тап — показать итог',
+  opened: {
+    one: 'Открыто {n} сундук',
+    few: 'Открыто {n} сундука',
+    many: 'Открыто {n} сундуков',
+    other: 'Открыто {n} сундука',
+  },
+  total: 'Итого',
+  newPets: 'Новый питомец: {names}',
+  takeAll: 'Забрать всё',
+} as const;

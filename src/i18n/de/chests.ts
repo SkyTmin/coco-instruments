@@ -1,0 +1,42 @@
+import type { Translation } from '../types';
+import type { chests as ru } from '../ru/chests';
+
+export const chests: Translation<typeof ru> = {
+  tier: { common: 'Gewöhnlich', rare: 'Selten', epic: 'Episch', legend: 'Legendär' },
+  full: {
+    common: 'Gewöhnliche Truhe',
+    rare: 'Seltene Truhe',
+    epic: 'Epische Truhe',
+    legend: 'Legendäre Truhe',
+  },
+  key: 'Schlüssel',
+  keys: { one: '{n} Schlüssel', other: '{n} Schlüssel' },
+  coins: { one: '{v} Münze', other: '{v} Münzen' },
+  tokens: { one: '{n} Token', other: '{n} Tokens' },
+  rune: 'Rune {name}',
+  treat: 'Leckerli',
+  treats: 'Leckerli ×{n}',
+  sub: {
+    book: 'Buch · {v} % Chance',
+    rune: 'Rune · in den Beutel',
+    find: 'Fund · in die Sammlung',
+    pet: 'neues Tier',
+    egg: 'Ei · ins Nest',
+    keys: 'noch eine Truhe',
+    item: 'zu den Verbrauchsgütern',
+  },
+  openAria: 'Truhe öffnen',
+  open: 'Öffnen',
+  all: 'Alle · {n}',
+  hint: 'Schlüssel fallen aus Blöcken, einen gibt’s pro Rang, einen Stapel pro Prestige',
+  recent: 'Zuletzt aus Truhen',
+  shattered: 'Runenbeutel voll — die Rune zerfällt zu {n} ✦',
+  shatteredMany: 'Runenbeutel voll — der Rest zerfällt zu {n} ✦',
+  again: 'Noch mal · {key} {n}',
+  skipOpen: 'tippen — sofort öffnen',
+  skipSum: 'tippen — Ergebnis zeigen',
+  opened: { one: '{n} Truhe geöffnet', other: '{n} Truhen geöffnet' },
+  total: 'Ergebnis',
+  newPets: 'Neues Tier: {names}',
+  takeAll: 'Alles nehmen',
+};

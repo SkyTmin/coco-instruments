@@ -1,7 +1,10 @@
 import type { Catalog } from '../core';
 import type { Translation } from '../types';
+import { books } from './books';
 import { cash } from './cash';
+import { chests } from './chests';
 import { common } from './common';
+import { eggs } from './eggs';
 import { field } from './field';
 import { finds } from './finds';
 import { forge } from './forge';
@@ -19,8 +22,11 @@ import { slots } from './slots';
 import { ui } from './ui';
 
 const tr: Translation<Catalog> = {
+  books,
   cash,
+  chests,
   common,
+  eggs,
   field,
   finds,
   forge,

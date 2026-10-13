@@ -1,5 +1,8 @@
+import { books } from './books';
 import { cash } from './cash';
+import { chests } from './chests';
 import { common } from './common';
+import { eggs } from './eggs';
 import { field } from './field';
 import { finds } from './finds';
 import { forge } from './forge';
@@ -21,8 +24,11 @@ import { ui } from './ui';
  * area; add an area here AND in every `<lang>/index.ts` (tsc enforces it).
  */
 export const ru = {
+  books,
   cash,
+  chests,
   common,
+  eggs,
   field,
   finds,
   forge,

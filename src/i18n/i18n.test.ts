@@ -158,8 +158,6 @@ const INSTRUMENT_DIRS = ['src/pages/clothing/', 'src/pages/finance/', 'src/pages
  * test — new game code is written with `t()` from the start.
  */
 const NOT_YET_TRANSLATED = [
-  'src/components/BooksTab.tsx',
-  'src/components/ChestTab.tsx',
   'src/components/CreativePanel.tsx',
   'src/components/Critters.tsx',
   'src/components/DungeonCamp.tsx',
@@ -168,7 +166,6 @@ const NOT_YET_TRANSLATED = [
   'src/components/DungeonRun.tsx',
   'src/components/FishingCamp.tsx',
   'src/components/Inventory.tsx',
-  'src/components/PetsTab.tsx',
   'src/components/PrisonCamp.tsx',
   'src/components/YardBits.tsx',
   'src/pages/DungeonPage.tsx',
