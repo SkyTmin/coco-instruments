@@ -81,6 +81,8 @@ describe('runtime', () => {
     expect(tIn('ru', 'common.coins', { n: 25 })).toBe('25 монет');
     expect(fmtNum(12345, 'de')).toBe('12.345');
     expect(fmtNum(12345, 'en')).toBe('12,345');
+    // fr: no-break space, not the narrow one the game font can't show
+    expect(fmtNum(54321, 'fr')).toBe('54\u00a0321');
   });
 
   it('Turkish casing keeps the dotted İ', () => {
