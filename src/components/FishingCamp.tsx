@@ -26,15 +26,13 @@ import {
   NET_AUTO_TOKENS,
 } from '@/lib/fishing';
 import type { FishDef } from '@/lib/fishing';
-import { CASE_TIERS, rankLetter, shortMoney } from '@/lib/prison';
+import { CASE_TIERS, rankLetter } from '@/lib/prison';
 import { coinDing, primeAudio, tierBreak, uiBuy } from '@/lib/sound';
 import { notifySuccess, notifyWarning } from '@/lib/haptics';
+import { fmtDec, fmtNum, fmtShort, t as tNow, useT } from '@/i18n';
+import { fishName, kgText, rodName, spotName } from '@/i18n/data-fishing';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
-export const kgText = (kg: number) =>
-  kg < 1
-    ? `${Math.round(kg * 1000)} г`
-    : `${kg.toLocaleString('ru-RU', { maximumFractionDigits: kg < 10 ? 1 : 0 })} кг`;
+const fmt = (n: number) => fmtNum(n);
 
 /** Лист `ui/fish/fish.png`: 40×16, по 8 в ряд; 26 рыб, ракушка, жемчуг, поплавок. */
 const TILE_W = 40;
@@ -72,17 +70,13 @@ export const fishIndex = (f: FishDef) => FISH.indexOf(f);
 
 /** Цвет редкости — тот же, что у сундуков: редкость читается одинаково везде. */
 export const rarityColor = (f: FishDef) => CASE_TIERS.find((t) => t.id === f.rarity)!.color;
-export const RARITY_NAME = {
-  common: 'обычная',
-  rare: 'редкая',
-  epic: 'эпическая',
-  legend: 'легенда',
-};
+/** Fish rarity in the current language, lower case («редкая», «rare»). */
+export const rarityName = (r: FishDef['rarity']) => tNow(`fishing.rarity.${r}`);
 
 const reachText = (rod: number) =>
   rod === RODS.length - 1
-    ? 'тянет даже тунца и осетра'
-    : `по силе — до места «${SPOTS[rodReach(rod)].name}»`;
+    ? tNow('fishing.rods.reachTop')
+    : tNow('fishing.rods.reach', { spot: spotName(rodReach(rod)) });
 
 function RodArt({ rod, size = 34 }: { rod: number; size?: number }) {
   // Удочка одна, ступени различает цвет удилища: от ветки до золота.
@@ -98,6 +92,7 @@ function RodArt({ rod, size = 34 }: { rod: number; size?: number }) {
 }
 
 export function RodsTab({ onSpend }: { onSpend: () => void }) {
+  const t = useT();
   const f = useFinanceStore((s) => s.fishing);
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
@@ -125,9 +120,9 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
       <div className="pforge__now">
         <RodArt rod={f.rod} size={40} />
         <span>
-          <b>{cur.name}</b>
+          <b>{rodName(f.rod)}</b>
           <i>
-            сила {cur.power} · катушка ×{cur.reel} · {reachText(f.rod)}
+            {t('fishing.rods.now', { power: cur.power, reel: cur.reel, reach: reachText(f.rod) })}
           </i>
         </span>
       </div>
@@ -136,11 +131,17 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
           <RodArt rod={next ? f.rod + 1 : f.rod} size={30} />
         </span>
         <span className="pforge__info">
-          <b>{next ? next.name : 'Лучше не бывает'}</b>
+          <b>{next ? rodName(f.rod + 1) : t('fishing.rods.best')}</b>
           <i>
             {next
-              ? `сила ${cur.power} → ${next.power}, катушка ×${cur.reel} → ×${next.reel} · ${reachText(f.rod + 1)}`
-              : 'Золотая удочка вытащит даже осетра'}
+              ? t('fishing.rods.next', {
+                  power: cur.power,
+                  power2: next.power,
+                  reel: cur.reel,
+                  reel2: next.reel,
+                  reach: reachText(f.rod + 1),
+                })
+              : t('fishing.rods.top')}
           </i>
         </span>
         {next ? (
@@ -150,10 +151,10 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
             disabled={balance < next.price}
             onClick={() => buy(fishBuyRod(), 1)}
           >
-            {shortMoney(next.price)} <CoinIcon size={12} />
+            {fmtShort(next.price)} <CoinIcon size={12} />
           </button>
         ) : (
-          <span className="pforge__done">Есть</span>
+          <span className="pforge__done">{t('camp.have')}</span>
         )}
       </div>
       <div className="pforge__row">
@@ -161,11 +162,11 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
           <GxIcon name="fish-bucket" size={28} />
         </span>
         <span className="pforge__info">
-          <b>Садок на {cap}</b>
+          <b>{t('fishing.rods.net', { n: cap })}</b>
           <i>
             {f.netLevel < NET_MAX
-              ? `${cap} → ${netCapacity(f.netLevel + 1)} рыб`
-              : 'Больше не влезет'}
+              ? t('fishing.rods.netNext', { a: cap, n: netCapacity(f.netLevel + 1) })
+              : t('fishing.rods.netMax')}
           </i>
         </span>
         {f.netLevel < NET_MAX ? (
@@ -175,10 +176,10 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
             disabled={balance < netCost(f.netLevel)}
             onClick={() => buy(fishNetUp(), 0)}
           >
-            {shortMoney(netCost(f.netLevel))} <CoinIcon size={12} />
+            {fmtShort(netCost(f.netLevel))} <CoinIcon size={12} />
           </button>
         ) : (
-          <span className="pforge__done">Есть</span>
+          <span className="pforge__done">{t('camp.have')}</span>
         )}
       </div>
       <div className="pforge__row">
@@ -186,11 +187,11 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
           <GxIcon name="fish-bucket" size={28} />
         </span>
         <span className="pforge__info">
-          <b>Садок продаёт сам</b>
-          <i>Полный садок сам уходит торговцу — удочку не бросать</i>
+          <b>{t('fishing.rods.auto')}</b>
+          <i>{t('fishing.rods.autoText')}</i>
         </span>
         {f.auto ? (
-          <span className="pforge__done">Есть</span>
+          <span className="pforge__done">{t('camp.have')}</span>
         ) : (
           <button
             type="button"
@@ -198,7 +199,7 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
             disabled={p.tokens < NET_AUTO_TOKENS}
             onClick={() => buy(fishNetAuto(), 1)}
           >
-            {shortMoney(NET_AUTO_TOKENS)} <TokenIcon size={12} />
+            {fmtShort(NET_AUTO_TOKENS)} <TokenIcon size={12} />
           </button>
         )}
       </div>
@@ -207,23 +208,19 @@ export function RodsTab({ onSpend }: { onSpend: () => void }) {
           <FishSprite index={PEARL_TILE} scale={1} />
         </span>
         <span className="pforge__info">
-          <b>
-            Жемчуг {pearls}/{PEARL_MAX}
-          </b>
-          <i>
-            +{(pearls * PEARL_SELL * 100).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}% к
-            продаже везде — в шахте, в лесу и здесь. Прячется в ракушках пруда, озера и моря
-          </i>
+          <b>{t('fishing.rods.pearls', { n: pearls, max: PEARL_MAX })}</b>
+          <i>{t('fishing.rods.pearlsText', { pct: fmtDec(pearls * PEARL_SELL * 100, 1) })}</i>
         </span>
       </div>
       <p className="pcamp-note">
-        Поймано рыб: {fmt(f.total)} · мастерство {skillOf(f.xp).level}
+        {t('fishing.rods.stats', { n: f.total, lvl: skillOf(f.xp).level })}
       </p>
     </div>
   );
 }
 
 export function TrophiesTab() {
+  const t = useT();
   const f = useFinanceStore((s) => s.fishing);
   const p = useFinanceStore((s) => s.prison);
   const skill = skillOf(f.xp).level;
@@ -234,20 +231,20 @@ export function TrophiesTab() {
         <b>
           {kinds} / {FISH.length}
         </b>{' '}
-        видов · первая рыба вида — токены
+        {t('fishing.trophies.kinds')}
       </div>
       {SPOTS.map((s, si) => {
         const open = spotOpen(si, skill, p.rank, p.prestige);
         return (
           <section key={s.id} className={`ftrophy${open ? '' : ' is-locked'}`}>
             <h4 className="ftrophy__head">
-              {s.name}
+              {spotName(si)}
               {!open && (
                 <span>
                   <KIcon name="locked" size={12} />{' '}
                   {skill < s.skill
-                    ? `${s.skill} ур. мастерства`
-                    : `ранг шахты ${rankLetter(SPOT_GATE[si])}`}
+                    ? t('fishing.trophies.lockSkill', { n: s.skill })
+                    : t('fishing.trophies.lockRank', { r: rankLetter(SPOT_GATE[si]) })}
                 </span>
               )}
             </h4>
@@ -262,8 +259,8 @@ export function TrophiesTab() {
                     style={{ '--tier': rarityColor(x) } as CSSProperties}
                   >
                     <FishSprite index={fishIndex(x)} scale={2} className={n ? '' : 'is-shadow'} />
-                    <b>{n ? x.name : '???'}</b>
-                    <i>{n ? `${kgText(best)} · ×${fmt(n)}` : RARITY_NAME[x.rarity]}</i>
+                    <b>{n ? fishName(x.id) : '???'}</b>
+                    <i>{n ? `${kgText(best)} · ×${fmt(n)}` : rarityName(x.rarity)}</i>
                   </div>
                 );
               })}

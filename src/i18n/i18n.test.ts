@@ -157,11 +157,7 @@ const INSTRUMENT_DIRS = ['src/pages/clothing/', 'src/pages/finance/', 'src/pages
  * SHRINK: convert a file → delete its line. Adding a file here fails the
  * test — new game code is written with `t()` from the start.
  */
-const NOT_YET_TRANSLATED = [
-  'src/components/FishingCamp.tsx',
-  'src/pages/FishingPage.tsx',
-  'src/pages/ForestPage.tsx',
-];
+const NOT_YET_TRANSLATED: string[] = [];
 /** The list as it was on 12.10.2026 — never extend, only the list above shrinks. */
 const ORIGINAL_COUNT = 29;
 

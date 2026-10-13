@@ -1,0 +1,48 @@
+import type { Translation } from '../types';
+import type { fishingData as ru } from '../ru/fishingData';
+
+export const fishingData: Translation<typeof ru> = {
+  spot: {
+    pond: 'Pond',
+    river: 'River',
+    lake: 'Lake',
+    mount: 'Mountain Lake',
+    sea: 'Sea',
+  },
+  fish: {
+    crucian: 'Crucian Carp',
+    roach: 'Roach',
+    perch: 'Perch',
+    tench: 'Tench',
+    goldfish: 'Goldfish',
+    chub: 'Chub',
+    ide: 'Ide',
+    pike: 'Pike',
+    zander: 'Zander',
+    catfish: 'Catfish',
+    bream: 'Bream',
+    carp: 'Carp',
+    burbot: 'Burbot',
+    eel: 'Eel',
+    amur: 'Grass Carp',
+    grayling: 'Grayling',
+    trout: 'Trout',
+    char: 'Char',
+    lenok: 'Lenok',
+    taimen: 'Taimen',
+    mackerel: 'Mackerel',
+    flounder: 'Flounder',
+    cod: 'Cod',
+    halibut: 'Halibut',
+    tuna: 'Tuna',
+    sturgeon: 'Sturgeon',
+  },
+  rod: {
+    '0': 'Homemade Rod',
+    '1': 'Bamboo Rod',
+    '2': 'Telescopic Rod',
+    '3': 'Carbon Rod',
+    '4': 'Sea Rod',
+    '5': 'Golden Rod',
+  },
+};

@@ -22,7 +22,6 @@ import {
   FishSprite,
   fishIndex,
   FLOAT_TILE,
-  kgText,
   MUSSEL_TILE,
   PEARL_TILE,
   rarityColor,
@@ -49,7 +48,7 @@ import {
   stepFight,
 } from '@/lib/fishing';
 import type { Bite, Fight, FishDef } from '@/lib/fishing';
-import { modsOf, petOf, rankLetter, shortMoney } from '@/lib/prison';
+import { modsOf, rankLetter } from '@/lib/prison';
 import { petLook } from '@/lib/pets';
 import { PetArt } from '@/components/PetArt';
 import { createFx } from '@/lib/prison-fx';
@@ -72,8 +71,11 @@ import {
   tierBreak,
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, tapLight, tapMedium } from '@/lib/haptics';
+import { fmtNum, fmtShort, petName, t as tNow, useT } from '@/i18n';
+import { fishName, kgText, spotName } from '@/i18n/data-fishing';
+import { nameIn } from '@/i18n/data-mine';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -261,6 +263,7 @@ function NearDecor({ spot, w, h }: { spot: number; w: number; h: number }) {
 }
 
 export function FishingPage() {
+  const t = useT();
   const nav = useNavigate();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const prison = useFinanceStore((s) => s.prison);
@@ -477,7 +480,7 @@ export function FishingPage() {
       if (r.phase === 'bite') {
         under += 12;
         if (now2 > r.hookUntil) {
-          miss('Сорвалась — не успел подсечь');
+          miss(tNow('fishing.say.early'));
           return;
         }
       }
@@ -590,17 +593,17 @@ export function FishingPage() {
     if (end === 'snap') {
       lineSnap();
       notifyWarning();
-      miss('Леска лопнула — сильная рыба. Отпускай, когда краснеет');
+      miss(t('fishing.say.snap'));
       return;
     }
     if (end === 'escape') {
-      miss('Ушла — леска провисла');
+      miss(t('fishing.say.slack'));
       return;
     }
     const bite = r.bite!;
     const got = fishCatch(bite);
     if (!got) {
-      miss('Садок полон — рыбу пришлось отпустить');
+      miss(t('fishing.say.netLost'));
       return;
     }
     setPh('result');
@@ -609,7 +612,7 @@ export function FishingPage() {
       const to = useFinanceStore.getState().slotsBalance;
       rollBalance(to - got.sold, to);
       coinDing();
-      say(`Садок полон — продан сам: +${shortMoney(got.sold)}`);
+      say(t('fishing.say.netSold', { sum: fmtShort(got.sold) }));
     }
     const g = geoRef.current;
     fx.current?.chips(g.near.x, g.near.y, ['#cfe8ff', '#ffffff', '#ffd257'], 20, 1.4);
@@ -657,7 +660,7 @@ export function FishingPage() {
       ) {
         notifyWarning();
         squashPop(netRef.current, 0.6);
-        say('Садок полон — продай улов или покорми питомца');
+        say(t('fishing.say.netFull'));
         return;
       }
       r.t0 = performance.now();
@@ -667,7 +670,7 @@ export function FishingPage() {
       return;
     }
     if (r.phase === 'wait') {
-      miss('Рано — спугнул. Жди, пока поплавок уйдёт под воду');
+      miss(t('fishing.say.spooked'));
       return;
     }
     if (r.phase === 'bite') {
@@ -735,7 +738,7 @@ export function FishingPage() {
     const got = fishSell();
     if (!got) {
       tapLight();
-      say('Садок пуст — лови');
+      say(t('fishing.say.netEmpty'));
       return;
     }
     rollBalance(from, from + got);
@@ -749,20 +752,22 @@ export function FishingPage() {
     const pet = useFinanceStore.getState().prison.squad[0];
     if (!pet) {
       tapLight();
-      say('Питомцев нет — они вылупляются из яиц');
+      say(t('fishing.say.noPets'));
       return;
     }
     const got = fishFeed();
     if (!got) {
       tapLight();
-      say('Садок пуст — кормить нечем');
+      say(t('fishing.say.noFeed'));
       return;
     }
     tierBreak(1);
     notifySuccess();
     const many = useFinanceStore.getState().prison.squad.length > 1;
+    const who = many ? t('fishing.say.squad') : petName(pet);
+    const xp = Math.round(got.xp);
     say(
-      `${many ? 'Отряд' : petOf(pet).name}: +${fmt(got.xp)} опыта${got.up ? ` · ${got.up} уровень` : ''}`,
+      got.up ? t('fishing.say.fedUp', { who, xp, lvl: got.up }) : t('fishing.say.fed', { who, xp }),
     );
   };
 
@@ -771,15 +776,15 @@ export function FishingPage() {
     const r = run.current;
     if (r.phase === 'bite' || r.phase === 'fight') {
       tapLight();
-      say('Сначала вытащи, что на крючке');
+      say(t('fishing.say.onHook'));
       return;
     }
     if (!spotOpen(i, skill.level, prison.rank, prison.prestige)) {
       notifyWarning();
       say(
         skill.level < SPOTS[i].skill
-          ? `${SPOTS[i].name} откроется с ${SPOTS[i].skill} уровня мастерства`
-          : `${SPOTS[i].name} откроется с ранга шахты ${rankLetter(SPOT_GATE[i])}`,
+          ? t('fishing.say.spotSkill', { spot: spotName(i), n: SPOTS[i].skill })
+          : t('fishing.say.spotRank', { spot: spotName(i), r: rankLetter(SPOT_GATE[i]) }),
       );
       return;
     }
@@ -806,8 +811,8 @@ export function FishingPage() {
     else coinDing();
     say(
       got.shattered
-        ? `Мешочек рун полон — руна разбита на ${got.shattered} ✦`
-        : `${rewardLabel(r)} — твоё`,
+        ? t('mineHud.say.runeShattered', { n: got.shattered })
+        : t('fishing.say.yours', { reward: rewardLabel(r) }),
     );
   };
 
@@ -826,7 +831,7 @@ export function FishingPage() {
       <button
         type="button"
         className="gx-round gx-round--dark pmx-top__btn"
-        aria-label="Назад"
+        aria-label={t('common.back')}
         onClick={() => {
           tapLight();
           nav(-1);
@@ -835,7 +840,7 @@ export function FishingPage() {
         <KIcon name="arrowLeft" />
       </button>
       <div className="gx-ribbon pmx-top__title">
-        {locked ? 'Рыбалка' : `Рыбалка · ${SPOTS[spot].name.toLowerCase()}`}
+        {locked ? t('fishing.title') : t('fishing.titleAt', { spot: nameIn(spotName(spot)) })}
       </div>
       <AudioToggles />
     </div>
@@ -852,13 +857,13 @@ export function FishingPage() {
               <FishSprite index={2} scale={3} />
               <KIcon name="locked" size={24} />
             </span>
-            <b>Откроется с ранга {rankLetter(FISH_UNLOCK_RANK)}</b>
+            <b>{t('fishing.fromRank', { r: rankLetter(FISH_UNLOCK_RANK) })}</b>
             <button
               type="button"
               className="gx-btn gx-btn--red gx-btn--block"
               onClick={() => nav('/prison')}
             >
-              <GxIcon name="pick" size={18} /> В шахту
+              <GxIcon name="pick" size={18} /> {t('mineHud.scene.toMine')}
             </button>
           </div>
         </div>
@@ -870,16 +875,16 @@ export function FishingPage() {
   const hint =
     phase === 'idle'
       ? netFull
-        ? 'Садок полон — продай'
-        : 'Держи палец — отпусти, чтобы забросить'
+        ? t('fishing.hint.netFull')
+        : t('fishing.hint.idle')
       : phase === 'aim'
-        ? 'Отпусти!'
+        ? t('fishing.hint.aim')
         : phase === 'wait'
-          ? 'Жди — поплавок уйдёт под воду'
+          ? t('fishing.hint.wait')
           : phase === 'bite'
-            ? 'Клюёт! Тапни!'
+            ? t('fishing.hint.bite')
             : phase === 'fight'
-              ? 'Держи — подматывай. Краснеет — отпусти'
+              ? t('fishing.hint.fight')
               : '';
   const petOn = prison.squad[0];
   // Садок продаётся с той же надбавкой, что порода и лес: показываем то, что придёт.
@@ -899,7 +904,7 @@ export function FishingPage() {
           <span className="gx-chip" ref={tokenRef}>
             <TokenIcon size={17} /> {fmt(prison.tokens)}
           </span>
-          <span className="gx-chip fsx-pearls" title="Жемчуг: +0,5% к продаже везде">
+          <span className="gx-chip fsx-pearls" title={t('fishing.pearlsChip')}>
             <FishSprite index={PEARL_TILE} scale={1} /> {Math.min(PEARL_MAX, prison.pearls)}/
             {PEARL_MAX}
           </span>
@@ -912,14 +917,18 @@ export function FishingPage() {
             tapLight();
             setCamp('trophies');
           }}
-          aria-label={`Мастерство ${skill.level}`}
+          aria-label={t('fishing.mastery', { n: skill.level })}
         >
           <span className="gx-hex pmx-rank__hex">{skill.level}</span>
           <span className="pmx-rank__mid">
             <GxBar
               value={skill.need ? skill.into / skill.need : 1}
               tone="blue"
-              label={skill.need ? `Мастерство · ${skill.into}/${skill.need}` : 'Мастер'}
+              label={
+                skill.need
+                  ? t('fishing.masteryBar', { a: skill.into, b: skill.need })
+                  : t('fishing.master')
+              }
             />
           </span>
           <span className="gx-hex gx-hex--dark pmx-rank__hex">
@@ -927,11 +936,13 @@ export function FishingPage() {
           </span>
         </button>
 
-        <div className="fsx-spots" role="tablist" aria-label="Места">
+        <div className="fsx-spots" role="tablist" aria-label={t('fishing.spots')}>
           {SPOTS.map((s, i) => {
             const open = spotOpen(i, skill.level, prison.rank, prison.prestige);
             const lockText =
-              skill.level < s.skill ? `${s.skill} ур.` : `шахта ${rankLetter(SPOT_GATE[i])}`;
+              skill.level < s.skill
+                ? t('fishing.spotLv', { n: s.skill })
+                : t('fishing.spotMine', { r: rankLetter(SPOT_GATE[i]) });
             return (
               <button
                 key={s.id}
@@ -941,9 +952,9 @@ export function FishingPage() {
                 className={`fsx-spot${spot === i ? ' is-on' : ''}${open ? '' : ' is-locked'}`}
                 onClick={() => goSpot(i)}
               >
-                <b>{open ? s.name : lockText}</b>
+                <b>{open ? spotName(i) : lockText}</b>
                 {open ? (
-                  <span className="fsx-spot__bite" title="Клёв">
+                  <span className="fsx-spot__bite" title={t('fishing.bite')}>
                     <i style={{ transform: `scaleX(${bites[i]})` }} />
                   </span>
                 ) : (
@@ -989,8 +1000,9 @@ export function FishingPage() {
             </div>
             <canvas className="pmine__fx" ref={canvasRef} />
 
-            <div className="fsx-bite" title="Клёв здесь">
-              <GxIcon name="fish" size={13} /> клёв {Math.round(bites[spot] * 100)}%
+            <div className="fsx-bite" title={t('fishing.biteHere')}>
+              <GxIcon name="fish" size={13} />{' '}
+              {t('fishing.biteNow', { pct: Math.round(bites[spot] * 100) })}
             </div>
 
             {phase === 'aim' && (
@@ -1021,22 +1033,28 @@ export function FishingPage() {
                       index={fishIndex(cardFish.fish)}
                       scale={Math.max(3, Math.floor(size.w / 100))}
                     />
-                    <b>{cardFish.fish.name}</b>
+                    <b>{fishName(cardFish.fish.id)}</b>
                     <span className="fsx-card__kg">{kgText(cardFish.kg)}</span>
                     <span className="fsx-card__price">
-                      {fmt(card.got.value * sellMult)} <CoinIcon size={14} /> · в садок
+                      {fmt(card.got.value * sellMult)} <CoinIcon size={14} />{' '}
+                      {t('fishing.card.toNet')}
                     </span>
                     {card.got.firstTokens > 0 && (
                       <em className="fsx-card__tag is-new">
-                        Новый вид! +{card.got.firstTokens} <TokenIcon size={12} />
+                        {t('fishing.card.newKind', { n: card.got.firstTokens })}{' '}
+                        <TokenIcon size={12} />
                       </em>
                     )}
-                    {card.got.record > 0 && <em className="fsx-card__tag">Рекорд вида!</em>}
+                    {card.got.record > 0 && (
+                      <em className="fsx-card__tag">{t('fishing.card.record')}</em>
+                    )}
                     {card.got.levelUp > 0 && (
                       <em className="fsx-card__tag is-level">
-                        Мастерство {card.got.levelUp}
+                        {t('fishing.card.level', { n: card.got.levelUp })}
                         {SPOTS.some((s) => s.skill === card.got.levelUp)
-                          ? ` · открыто: ${SPOTS.find((s) => s.skill === card.got.levelUp)!.name}`
+                          ? t('fishing.card.opened', {
+                              spot: spotName(SPOTS.findIndex((s) => s.skill === card.got.levelUp)),
+                            })
                           : ''}
                       </em>
                     )}
@@ -1044,25 +1062,25 @@ export function FishingPage() {
                 ) : card.bite.kind === 'mussel' ? (
                   <>
                     <FishSprite index={card.got.pearl ? PEARL_TILE : MUSSEL_TILE} scale={4} />
-                    <b>{card.got.pearl ? 'Жемчужина!' : 'Ракушка'}</b>
+                    <b>{card.got.pearl ? t('fishing.card.pearl') : t('fishing.card.mussel')}</b>
                     <span className="fsx-card__kg">
                       {card.got.pearl
                         ? card.got.tokens
-                          ? `Жемчуга хватает — +${card.got.tokens} ✦`
-                          : '+0,5% к продаже везде'
-                        : 'Пустая'}
+                          ? t('fishing.card.pearlsFull', { n: card.got.tokens })
+                          : t('fishing.card.pearlBonus')
+                        : t('fishing.card.empty')}
                     </span>
                   </>
                 ) : (
                   <>
                     <GxIcon name="chest" size={64} />
-                    <b>Шкатулка со дна</b>
+                    <b>{t('fishing.card.box')}</b>
                     <span className="fsx-card__kg">
-                      {card.got.tokens ? `+${card.got.tokens} ✦` : 'Открой — выбери одно из трёх'}
+                      {card.got.tokens ? `+${card.got.tokens} ✦` : t('fishing.card.boxText')}
                     </span>
                   </>
                 )}
-                <i className="fsx-card__cta">Тапни — дальше</i>
+                <i className="fsx-card__cta">{t('fishing.card.next')}</i>
               </div>
             )}
             {toast && (
@@ -1071,10 +1089,7 @@ export function FishingPage() {
               </div>
             )}
             {phase === 'idle' && (
-              <TreasurePanel
-                onGot={onTreasureGot}
-                onLost={() => say('Сгорело. В другой раз повезёт')}
-              />
+              <TreasurePanel onGot={onTreasureGot} onLost={() => say(t('fishing.say.lost'))} />
             )}
           </div>
         </div>
@@ -1098,10 +1113,10 @@ export function FishingPage() {
               >
                 {fishing.net.n ? (
                   <>
-                    {shortMoney(Math.round(fishing.net.value * sellMult))} <CoinIcon size={13} />
+                    {fmtShort(Math.round(fishing.net.value * sellMult))} <CoinIcon size={13} />
                   </>
                 ) : (
-                  'Пусто'
+                  t('mineHud.bag.empty')
                 )}
               </span>
             </span>
@@ -1110,14 +1125,14 @@ export function FishingPage() {
             type="button"
             className={`gx-panel gx-panel--wood pmx-camp fsx-feed${petOn && fishing.net.n ? '' : ' is-off'}`}
             onClick={feed}
-            aria-label="Покормить питомца уловом"
+            aria-label={t('fishing.feedAria')}
           >
             {petOn ? (
               <PetArt id={petOn} size={30} v={petLook(prison.pets[petOn])} still />
             ) : (
               <GxIcon name="paw" size={28} />
             )}
-            <b>Кормить</b>
+            <b>{t('fishing.feed')}</b>
           </button>
           <button
             type="button"
@@ -1128,7 +1143,7 @@ export function FishingPage() {
             }}
           >
             <GxIcon name="fishing" size={28} />
-            <b>Лагерь</b>
+            <b>{t('mineHud.dock.camp')}</b>
             {prison.keys > 0 && (
               <i className="gx-badge gx-badge--gold pmx-camp__keys">
                 <KeyIcon size={10} />

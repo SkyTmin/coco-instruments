@@ -288,3 +288,35 @@ Koğuş 1 / Baracke 1 / Barracón 1 / Baracca 1; book tiers follow T4 («simple�
 Lead decisions after wave 2: TR «Fare Kral» stays (the Nutcracker's Mouse King) while the rats
 themselves are «sıçan»; TR «İblis» stays for fantasy demons — the usual Turkish game word, the
 Russian source says «демон» too; DE camp tab «Ausrüstung» → «Gear» (did not fit at 390 px).
+
+## Wave 2 — Forest & fishing (T5: `forest`, `fishing`, `fishingData`)
+Species, axes, axe enchants and bench orders are T2's `campData` (`speciesName`, `woodOf`,
+`axeEnchName`); fishing data names are `fishingData` by id (`spotName`, `fishName`, `rodName`,
+`kgText` in `src/i18n/data-fishing.ts`, test `fishingData.test.ts`). Fish are dictionary names
+(en/de/fr/es/it Wiktionary translations; TR checked on tr.wikipedia/en.wiktionary: Havuz balığı,
+Tatlısu levreği, Sudak balığı, Tatlısu gelinciği, Gölge balığı, Sarıbalık, Pisi balığı).
+| ru | en | fr | tr | de | es | it | why |
+|---|---|---|---|---|---|---|---|
+| Разряд (forest ladder) | Grade | Échelon | Kademe | Stufe | Grado | Categoria | not the mine's «rank»; IT «grado» is taken by rank, «categoria» = worker grade |
+| Делянка | plot | parcelle | kesim alanı | Waldstück | parcela | lotto | |
+| План (м³) | quota | quota | kota | Soll | cuota | quota | as T1's work quota |
+| Штабель / бревно | log pile / log | pile / bûche | yığın / kütük | Stapel / Stamm | pila / tronco | catasta / tronco | same as T2's camp tab |
+| Пилорама | Sawmill | Scierie | Hızar | Sägewerk | Aserradero | Segheria | T2's word |
+| БОЙСЯ! (tree falls) | TIMBER! | ÇA TOMBE ! | DİKKAT! | BAUM FÄLLT! | ¡QUE CAE! | CADE! | the lumberjack's shout each language uses |
+| Сучок (hits you) | BRANCH! | BRANCHE ! | BUDAK! | AST! | ¡RAMA! | RAMO! | float; T2's enchant text says «knot/nœud/nudo/nodo» — lead may unify |
+| Капокорень / свиль | Burl / Curly grain | Loupe / Bois madré | Yumru / Desenli | Maserknolle / Maserholz | Raíz / Veteado | Radica / Marezzato | the cabinet-maker's words (IT «radica» as in briar pipes) |
+| Дупло | Hollow | Creux | Kovuk | Astloch | Hueco | Cavità | |
+| Сейд-сосна | Seid Pine | Pin seid | Seyit çamı | Seid-Kiefer | Pino seid | Pino seid | follows «сейд» above |
+| Передачка | parcel | colis | koli | Paket | paquete | pacco | = посылка |
+| Садок | Keepnet | Bourriche | File | Kescher | Cesta | Nassa | anglers' everyday words; ES «cesta» (creel) beats the rare «rejón» |
+| Мастерство / Мастер | Mastery / Master | Maîtrise / Maître | Ustalık / Usta | Geschick / Meister | Maestría / Maestro | Maestria / Maestro | DE «Meisterschaft» reads as «championship» — rejected |
+| Клёв | bite | touches | vuruş | Biss | picada | abboccate | what anglers say about fish activity |
+| Удочка / катушка / леска / поплавок | rod / reel / line / float | canne / moulinet / ligne / bouchon | olta / makara / misina / şamandıra | Rute / Rolle / Schnur / Pose | caña / carrete / sedal / boya | canna / mulinello / lenza / galleggiante | |
+| Отряд (pets) | Squad | La bande | Takım | Rudel | La banda | La banda | DE «Rudel» = pack |
+| Шкатулка со дна | Sunken Box | Coffret englouti | Dipten bir kutu | Kästchen vom Grund | Cofre del fondo | Scrigno dal fondo | |
+
+Rods are full names: Homemade/Bamboo/Telescopic/Carbon/Sea/Golden Rod; DE «Bastelrute … Goldrute»
+(Goldrute is also the goldenrod flower — a free pun), FR «Canne bricolée … Canne dorée». Spots:
+Pond/River/Lake/Mountain Lake/Sea (fr Étang… Lac de montagne, tr Gölet… Dağ gölü, de Teich…
+Bergsee). Forest floats «ВАЛКА!/БУРЕЛОМ!/ЗАМАХ ×2» are built from `axeEnchName` in upper case, so
+they always match the enchant names.
