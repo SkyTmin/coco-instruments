@@ -188,7 +188,7 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
 - Layouts (`Layout` in the component; round 3 — N3): `one` phone portrait — stage (room, plate
   under it) / squad / action bar `[▦ 18/18] [take/leave] [i]`; `land` phone landscape — stage
   (room only) | side 1fr/1fr (plate, squad with the stat grid beside the slots, actions);
-  `tall` tablet portrait — stage on top, side below (grid rows 16fr/9fr); `wide` tablet
+  `tall` tablet portrait — stage on top, side below (grid rows 33fr/20fr); `wide` tablet
   landscape & desktop — stage (room | anim column) | side (plate on top, squad + full grid as ONE
   scrolling list `.nur-side__mid`, action bar at the bottom). `plateSide` (land, wide) moves the
   plate into the side column. On `one`/`land` (`drawerMode`) the full collection is a **drawer**
@@ -204,26 +204,29 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
   pick and on a tap outside, focus in/out on keyboard/pad) — the column cost the portrait pet its
   width. Name plate (`.px-dark` ink plate: name in the rarity colour + power picture and number on
   the right; rarity pill, ★ gold, level; at most 3 chips — stat picture + whole percent, biggest
-  first, ties in the fixed stat order — + «+N» that opens details; XP bar «into / need» or
-  «Предел», on `one` a slim 4-u bar with the text as its tip). Pet size: `useBox` measures
+  first, ties in the fixed stat order — + «+N» that opens details; the level row says «25 ур. ·
+  41 %» (`nursery.lvPct`; at the cap only «25 ур.»), right-aligned; a slim 4-u XP bar on every
+  layout with «into / need» / «Предел» as its tip). Pet size: `useBox` measures
   `.nur-room` (`contain: size`), `pedFor` = pedestal pixel from the room (not the pet), `fitPet`
   picks the biggest whole-dot frame that fits above the pedestal; offsets rounded to 1/dpr.
 - **Pet size per format (N3, asserted by `scripts/ui-px/nursery-check.mjs` against a running dev
   server — frame ≥ target, identical boxes across 4 pets, no change on a key press; run it after
   any Nursery/camp/kit change)**: phone 390×844@3 299 (k 8 of the
-  112 strip), 360×780@3 224, 440×956@3 336, 844×390@3 224, 956×440@3 299, tablet 820×1180@2
-  336, 1180×820@2 448, desktop 1440×900 and 1920×1080 560. Before N3 (critic round 2, same order):
-  261/187/299/187/224/280/280/336/336.
+  112 strip), 360×780@3 224, 440×956@3 336, 844×390@3 261 (round 4), 956×440@3 299, tablet
+  820×1180@2 336, 1180×820@2 448, desktop 1440×900 and 1920×1080 560. Before N3 (critic round 2,
+  same order): 261/187/299/187/224/280/280/336/336. The same script asserts the collection cells
+  fully visible on open (`CELLS`, phones in the drawer): 18/16/18/15/18/12/10/18/12 — prod
+  v2.152 had pp 10, p360 4, pl 12, tp 12, tl 10, d1 18, d2 12; never go below prod.
 - **Fixed layout (owner: «чтобы картинка не дёргалась»)**: every row has a fixed height from
   the TYPE scale (`calc(var(--px-fs-sm) * 1.65)`, not from `--u` — u-based rows made the plate
   tall on desktop and shrank the pet 448 → 336), names shrink to fit instead of wrapping, chips
   are capped, absent things keep their box. Check: `{SCR}/jump.mjs` selects the pets with the
   fewest/most roles + an unhatched one and compares bounding boxes of stage, room, pet, plate,
   anims, squad, collection, actions — all identical on all 6 formats.
-- Squad («Отряд» + hint «Идут с тобой в шахту», `nursery.squad/squadHint`; on `land` the hint is
-  the title's `data-tip`): three BIG slots (34 u, 26 u on phone landscape) — filled = select,
+- Squad («Отряд» + hint «Идут с тобой в шахту», `nursery.squad/squadHint`; on `land`/`wide` the
+  hint is the title's `data-tip`): three BIG slots (34 u, 26 u on `land`/`wide`) — filled = select,
   empty = dashed frame + plus (picker), locked = lock + what unlocks it. Under them (beside them
-  on `land`, 2 × 3 column-flow) ALL SIX summed stats in a fixed grid, order loot sell dmg / token
+  on `land`/`wide`, 2 × 3 column-flow) ALL SIX summed stats in a fixed grid, order loot sell dmg / token
   luck rate; a missing stat keeps its cell (dim picture, «—»). 3 columns; 6 only via
   `@container nur-squad (min-width: 36em)` (em = the label size); never 4/5; it never scrolls.
 - **Stat pictures (wave 3 — N2)**: `paint.ts` `STAT_ART` — 12 × 12 images `st-loot` gem, `st-sell`
@@ -283,8 +286,10 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
   - Phone landscape: `PetsTab` turns the pets/eggs tabs into a 24-u rail on the left
     (`ppn--rail`, `Tabs vertical`, `name` = aria + tip, labels hidden, key hint absolute under the
     rail) — the full-width tab row cost the pet 75 px of height.
-  - Tight tabs: `PetsTab` measures `.px-tab__label` (scrollWidth > clientWidth) in a layout effect
-    + ResizeObserver and sets `.ppn__tabs.is-tight`, which hides the tab icons (tr «Hayvanlar»
+  - Tight tabs: `PetsTab` measures `.px-tab__label` (round 4: a `Range` over its text vs the
+    box width + 0.01 — `scrollWidth` is an integer, tr «Yumurtalar» 113.16 / 113 never fired;
+    re-run after `document.fonts.ready`) in a layout effect + ResizeObserver and sets
+    `.ppn__tabs.is-tight`, which hides the tab icons (tr «Hayvanlar»
     at 360 px was an ellipsis); the large text size on phone portrait hides them by CSS.
   - Cold switch (critic P1-5, slow link): if the strip isn't decoded 100 ms after the pick
     (`cold`), the plate switches and `.nur-ph` shows the 48-px thumbnail at the biggest whole
@@ -303,6 +308,24 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
   - The 4–8 px «latent scroll» (critic P2-13) is the kit's hidden focus ring `.px-f::after`
     (inset −3 u) and the hit-area `::before`s; no container scrolls by it (page and `.nur` 0),
     `.nur-side__mid` has a 3-u padding with a −3-u margin so its rings are not clipped.
+- **Round 4 (N3) details.**
+  - Kit `Tabs` press: one `usePress()` spread on every tab; `.px-tab.is-down` moves 1 u down and
+    an unselected tab gets a flat veil one ramp step darker (`::before` z 0, children z 1, NO
+    `isolation` — it would trap the focus ring under the neighbours). Measured at 4×: pets/eggs
+    tabs and the camp rail −6…8 ms (`{SCR}/critic7/press.mjs`, `{SCR}/ui3N3/campress.mjs`).
+  - Collection rows back: wide squad stats beside the slots; in `.nur-side__mid` the grid has no
+    block padding (the list's own 3 u keeps the rings) and gaps 3 u / 2 u; `tall` rows 33fr/20fr
+    (room 372, the 336 pet needs 362) and the head's gap 2 u; sort/filter are icon-only on
+    `tall`/`wide` (word + value in `label` = aria + tip, filter `on` when set). Phone portrait:
+    the drawer covers stage-bottom → side (`grid-area: show-start / 1 / side-end / 2`) from the
+    room's bottom edge (`--nur-dtop`, measured in a layout effect, rounded to 1/dpr), drawer gap 0
+    and head row gap 1 u (the 360-px head takes 3 lines in ru/de/tr).
+  - Phone landscape stage `padding-block: 5u` (not the frame's 6): room 280, pet 224 → 261.
+  - The stage pet (`PetArt focusable`): `tabIndex 0` + `px-f`; Enter / Space pat it, pad A
+    clicks it through the shell; arrows reach it from the tab row (pp, tp, tl) and the rail (pl).
+  - Stand pitfall: after editing i18n / store-adjacent files a running Vite may hand
+    `page.evaluate(() => import('/src/store.ts'))` another module instance — seeding silently
+    does nothing (ghost pet, frame 0). Restart Vite.
 - **Not checked on a real phone / Telegram webview / gamepad hardware** (stand: Playwright at
   390×844@3, 360×780@3, 440×956@3, 844×390@3, 956×440@3, 820×1180@2, 1180×820@2, 1440×900,
   1920×1080; keyboard by real key presses, gamepad by emitted actions).
