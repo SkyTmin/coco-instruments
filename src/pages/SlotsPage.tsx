@@ -1196,7 +1196,7 @@ export function SlotsPage() {
             value={
               <>
                 {fmtCompact(best)}
-                <CoinIcon size={14} />
+                <CoinIcon size={16} />
               </>
             }
             label={tr('slots.statBestWin')}

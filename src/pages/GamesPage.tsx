@@ -299,17 +299,18 @@ function HallRow({
       type="button"
       {...press}
       className="hall-row px-f"
-      aria-label={`${title} · ${play}`}
+      aria-label={`${title} · ${rankTip}: ${rank} · ${play}`}
       onClick={onClick}
     >
-      <span className="hall-row__art pxk-frame-obsidian px-nofill" aria-hidden="true">
+      {/* The rank letter sits on the cover as a corner badge: beside the name it took 36 px and
+          cut «Каторга» mid-letter at 360 px. */}
+      <span className="hall-row__art pxk-frame-obsidian px-nofill" data-tip={rankTip}>
         <img src="/ui/areas/mouth.png" alt="" loading="lazy" decoding="async" />
+        <b className="hall-row__rank px-num" aria-hidden="true">
+          {rank}
+        </b>
       </span>
       <b className="hall-row__t px-h">{title}</b>
-      <span className="hall-row__fact" data-tip={rankTip}>
-        <KitIcon name="up" />
-        <b className="px-num">{rank}</b>
-      </span>
       <span className="hall-row__fact" data-tip={tokensTip}>
         <KitIcon name="token" />
         <b className="px-num">{tokens}</b>
