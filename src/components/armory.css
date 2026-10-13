@@ -1,0 +1,441 @@
+/* Inventory-style screens on the pixel kit (forge, backpack, books) — the shared skeleton.
+   Screen parts: forge.css, inventory.css, books.css. Kit rules: .claude/rules/ui-px.md.
+   Every size is a whole number of art pixels (var(--u)); colours and fonts only from the kit
+   (--px-* vars, kit frames, rarity colours from lib/rarity via --rc).
+
+   Formats (armory.ts → arm--one|two|three):
+   - one   phone portrait: top / showcase (≥ half the height) / list (own scroll) / actions;
+   - two   tablet portrait: top / showcase over the full width (≥ half) / list | details;
+   - three landscape, tablet landscape, desktop: top / list | showcase (half the width) | details.
+   Nothing jumps when the selection changes: every track is a fixed fraction, the name keeps two
+   lines, the stats row and the action bar have fixed heights, long content scrolls inside. */
+
+.arm {
+  --gap: calc(4 * var(--u));
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--gap);
+  min-height: 0;
+  color: var(--px-text);
+}
+.arm *,
+.arm *::before,
+.arm *::after {
+  box-sizing: border-box;
+}
+/* A full-screen window (forge, backpack): a wood frame over the whole viewport. */
+.arm.is-window {
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  padding: calc(var(--safe-top, 0px) + 6 * var(--u)) calc(6 * var(--u))
+    calc(var(--safe-bottom, 0px) + 6 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: repeat;
+  image-rendering: pixelated;
+  animation: px-fade 120ms steps(3, jump-none);
+}
+.arm--one {
+  grid-template:
+    'top' auto
+    'show' minmax(0, 12fr)
+    'list' minmax(0, 8fr)
+    'acts' auto
+    / minmax(0, 1fr);
+}
+.arm--two {
+  grid-template:
+    'top top' auto
+    'show show' minmax(0, 11fr)
+    'list side' minmax(0, 9fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+.arm--three {
+  grid-template:
+    'top top top' auto
+    'list show side' minmax(0, 1fr)
+    / minmax(0, 6fr) minmax(0, 12fr) minmax(0, 7fr);
+}
+/* Embedded (books in the camp sheet): no own top bar. */
+.arm.is-embed {
+  flex: 1 1 auto;
+}
+.arm--one.is-embed {
+  grid-template:
+    'top' auto
+    'show' minmax(0, 11fr)
+    'list' minmax(0, 9fr)
+    'acts' auto
+    / minmax(0, 1fr);
+}
+
+/* ---- Top bar: back · ribbon title · purse ---------------------------------------------------- */
+.arm-top {
+  grid-area: top;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  min-width: 0;
+}
+.arm-top__title {
+  justify-self: center;
+  max-width: 100%;
+}
+.arm-purse {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: calc(2 * var(--u));
+}
+.arm-purse > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-height: calc(15 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  color: var(--px-gold);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  white-space: nowrap;
+}
+.arm-num {
+  font-family: var(--px-head);
+  font-variant-numeric: tabular-nums;
+}
+.arm-muted {
+  margin: 0;
+  color: var(--px-muted);
+}
+
+/* ---- Showcase: the selected thing BIG on its stage ------------------------------------------- */
+.arm-show {
+  grid-area: show;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+}
+.arm-stage {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template:
+    'room' minmax(0, 1fr)
+    'id' auto
+    'stats' auto
+    / minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+  overflow: hidden;
+}
+/* The measured box of the art: its size comes from the grid only (contain), the art is sized
+   from it in the component and never feeds back. */
+.arm-room {
+  grid-area: room;
+  min-height: 0;
+  contain: size;
+  display: grid;
+  place-items: center;
+}
+/* Pedestal under the art at the UI pixel. */
+.arm-ped {
+  display: grid;
+  place-items: center;
+  padding-bottom: calc(3 * var(--ped, var(--u)));
+  background: var(--pximg-pedestal) no-repeat center bottom /
+    calc(var(--pximg-pedestal-w) * var(--ped, var(--u)))
+    calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
+  image-rendering: pixelated;
+}
+.arm-id {
+  grid-area: id;
+  display: grid;
+  justify-items: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  text-align: center;
+  text-shadow: var(--u) var(--u) 0 var(--px-ink);
+}
+/* Two lines reserved for the name: a long name never pushes the art or the stats. */
+.arm-name {
+  margin: 0;
+  display: grid;
+  align-items: end;
+  min-height: calc(2 * 1.1 * var(--px-fs-big));
+  max-width: 100%;
+  font: 400 var(--px-fs-big) / 1.1 var(--px-head);
+  color: var(--rc, var(--px-gold));
+  overflow-wrap: anywhere;
+}
+html:not([data-ff='phone-portrait']) .arm-name {
+  min-height: calc(2 * 1.1 * var(--px-fs-hero));
+  font-size: var(--px-fs-hero);
+}
+html[data-ff='phone-landscape'] .arm-name {
+  min-height: calc(2 * 1.1 * var(--px-fs-big));
+  font-size: var(--px-fs-big);
+}
+.arm-sub {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-height: calc(11 * var(--u));
+  white-space: nowrap;
+}
+.arm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--px-text);
+}
+.arm-status.is-hand {
+  color: var(--px-green);
+}
+.arm-status.is-locked {
+  color: var(--px-red);
+}
+.arm-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  color: var(--px-gold);
+  font-family: var(--px-head);
+}
+
+/* Three big numbers under the art: fixed cells, tabular digits, deltas in green/red. */
+.arm-stats {
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+}
+.arm-stat {
+  display: grid;
+  grid-template:
+    'num delta' auto
+    'lbl lbl' auto
+    / auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: calc(2 * var(--u));
+  min-width: 0;
+  padding: calc(3 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+}
+.arm-stat > b {
+  grid-area: num;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  font: 400 var(--px-fs-big) / 1 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  white-space: nowrap;
+}
+.arm-stat > b > :is(.px-i, .gx-icon) {
+  color: var(--px-gold);
+}
+.arm-stat > i {
+  grid-area: lbl;
+  font: 400 var(--px-fs-sm) / 1.15 var(--px-font);
+  color: var(--px-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.arm-stat > .arm-delta {
+  grid-area: delta;
+}
+.arm-delta {
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+.arm-delta.is-up {
+  color: var(--px-green);
+}
+.arm-delta.is-down {
+  color: var(--px-red);
+}
+
+/* ---- List column: headings, grids --------------------------------------------------------- */
+.arm-list {
+  grid-area: list;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: calc(6 * var(--u));
+  /* room for the focus ring and the corner badges inside the scroller */
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+.arm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+  margin-bottom: calc(3 * var(--u));
+}
+.arm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--slot, calc(26 * var(--u))));
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+}
+
+/* ---- Details column (two, three) ----------------------------------------------------------- */
+.arm-side {
+  grid-area: side;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.arm-info {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  scrollbar-width: thin;
+}
+.arm-info__head {
+  display: grid;
+  justify-items: start;
+  gap: calc(2 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+  border-bottom: var(--u) solid var(--px-dim);
+}
+.arm-info__head .rname {
+  font: 400 var(--px-fs-big) / 1.15 var(--px-head);
+}
+.arm-details {
+  display: grid;
+  align-content: start;
+  gap: calc(5 * var(--u));
+  min-width: 0;
+}
+/* Phone portrait: the details sit in the list column at a fixed height (scroll inside). */
+.arm--one .arm-details {
+  height: calc(60 * var(--u));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+}
+
+/* ---- Action bar: thumb zone on phones, bottom of the details column elsewhere ------------- */
+.arm-acts {
+  grid-area: acts;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+  align-items: stretch;
+}
+.arm-side > .arm-acts {
+  flex: none;
+  grid-auto-flow: row;
+}
+.arm-acts > .px-btn {
+  min-height: calc(26 * var(--u));
+  white-space: normal;
+  text-align: center;
+  line-height: 1.1;
+}
+.arm-acts > .px-btn.is-hidden {
+  visibility: hidden;
+}
+.arm-btn-txt {
+  min-width: 0;
+}
+.arm-btn-price {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font-family: var(--px-head);
+  white-space: nowrap;
+}
+
+/* ---- Toast and tooltip --------------------------------------------------------------------- */
+.arm-note {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom, 0px) + 40 * var(--u));
+  z-index: 90;
+  width: min(calc(100% - 12 * var(--u)), calc(200 * var(--u)));
+  transform: translateX(-50%);
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  font: 400 var(--px-fs) / 1.25 var(--px-font);
+  color: var(--px-text);
+  text-align: center;
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  pointer-events: none;
+  animation: px-fade 120ms steps(3, jump-none);
+}
+.arm-tip {
+  display: grid;
+  gap: var(--u);
+  text-align: left;
+  font: 400 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-text);
+}
+.arm-tip > b {
+  font-family: var(--px-head);
+  color: var(--rc, var(--px-gold));
+}
+.arm-tip > i {
+  color: var(--rc, var(--px-muted));
+}
+.arm-tip__row {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  white-space: nowrap;
+}
+.arm-tip__vs {
+  color: var(--px-muted) !important;
+  font-size: var(--px-fs-sm);
+}

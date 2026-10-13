@@ -1,0 +1,152 @@
+/* Forge (components/ForgeScreen.tsx) on the pixel kit — the parts that are the forge's own.
+   Skeleton (columns, showcase, stats, actions) — armory.css. Kit rules: .claude/rules/ui-px.md.
+   The forging scene (.fgr*) and PickArt (.pkart*) keep their styles in game-ui.css. */
+
+/* Recipe: one row per ingredient — slot | name + progress bar (have / need) — then coins. */
+.frg-recipe {
+  display: grid;
+  gap: calc(3 * var(--u));
+}
+.frg-ing {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(4 * var(--u));
+}
+.frg-ing .px-slot {
+  --slot: calc(24 * var(--u));
+}
+.frg-ing__txt {
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.frg-ing__txt > b {
+  color: var(--rc, var(--px-text));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.frg-ing.is-ok .frg-ing__txt > b {
+  color: var(--px-green);
+}
+.frg-ing__txt > b.arm-num {
+  font-size: var(--px-fs-big);
+  color: var(--px-gold);
+}
+.frg-ing__txt > b.is-short {
+  color: var(--px-red);
+}
+.frg-ing__coin {
+  display: grid;
+  place-items: center;
+  width: calc(24 * var(--u));
+}
+
+/* Which ores the selected pick breaks. */
+.frg-opens {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.frg-opens > span:first-child {
+  margin-right: calc(2 * var(--u));
+}
+.frg-opens__ore {
+  display: inline-grid;
+}
+.frg-opens .pore-ico {
+  image-rendering: pixelated;
+}
+
+/* In-hand pick: level bar and enchantments. */
+.frg-level {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(3 * var(--u));
+}
+.frg-level__lv {
+  font-family: var(--px-head);
+  color: var(--px-blue);
+}
+.frg-ench {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.frg-ench__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: calc(3 * var(--u));
+}
+.frg-ench__row > b {
+  color: var(--px-violet);
+}
+.frg-ench__row > span {
+  text-align: right;
+  color: var(--px-text);
+}
+.frg-ench__row.is-off > * {
+  color: var(--px-muted);
+}
+
+/* Ladder of all picks: not forged yet = silhouette; the count is the power ⛏. */
+.frg-grid .px-slot__n {
+  font-size: var(--px-fs-tiny);
+}
+.frg-ghost {
+  display: grid;
+  filter: brightness(0) invert(0.35);
+}
+.arm--one .arm-details {
+  height: calc(72 * var(--u));
+}
+.arm--one .frg-grid {
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  grid-auto-columns: var(--slot, calc(26 * var(--u)));
+  justify-content: start;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+
+/* Gear: backpack and minecart rows. */
+.frg-gear {
+  display: grid;
+  gap: calc(3 * var(--u));
+}
+.frg-gear__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  padding: calc(3 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+}
+.frg-gear__ico {
+  display: grid;
+  color: var(--px-gold);
+}
+.frg-gear__info {
+  display: grid;
+  gap: var(--u);
+  min-width: 0;
+}
+.frg-gear__info > i {
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+.frg-gear__ok {
+  color: var(--px-green);
+}
