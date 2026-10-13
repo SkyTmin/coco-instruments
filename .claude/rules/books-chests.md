@@ -190,4 +190,10 @@ and the scenes (`RevealScene`, `ApplyScene`, `BookLift`, portaled) are as before
   - Dust: an 8-mote puff (`PUFF`, `steps(4)` 420 ms) where the book was and a tick on the dust
     counter (`.bkx-dust.is-tick`); under reduced motion (media or `html[data-motion=reduce]`) no
     puff and the armed button is lit, not blinking.
+  - Measured on the stand (ru/de/tr; 360×800, 390×844, 844×390, 820×1180, 1180×820, 1440×900):
+    no list scrolls sideways but the pick strips; 0 px drift of plate, stats, actions and side
+    over 14 selections, the no-room «Взрыв X» included («Мест нет»); no word split in the plate,
+    stats, actions or details. Prod build at 4× CPU: window open 300–530 ms (unchanged — JS
+    self time < 20 ms, the rest is style/layout/paint of the window); anvil frames > 20 ms 55 of
+    300 (was 117 of 189), apply 81 of 276, p95 67 ms (was 94 of 177, p95 133).
 - Not verified on a phone / webview / gamepad hardware.
