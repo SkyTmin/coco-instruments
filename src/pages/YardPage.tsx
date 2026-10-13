@@ -63,7 +63,7 @@ import { registerEscape } from '@/lib/escape-stack';
 import { useAction, useGameplayCapture, useHotkeys, useMoveAxis } from '@/input/hooks';
 import { inTopLayer } from '@/input/focus-nav';
 import { Prompt } from '@/input/Prompt';
-import { fmtNum, fmtShort, t as tNow, useT } from '@/i18n';
+import { fmtNum, t as tNow, useT } from '@/i18n';
 import { doorLabel, eventLead, eventName, hubMapName, npcName } from '@/i18n/data-yard';
 
 const fmt = (n: number) => fmtNum(Math.round(n));
@@ -612,22 +612,40 @@ function HubWorld() {
           title={hubMapName(sim.map.id, sim.map.data.name) || t('yard.title')}
           onBack={exit}
           right={<AudioToggles />}
-          chips={
-            <>
-              <span className="gx-chip">
-                <CoinIcon size={18} /> {fmtShort(balance)}
-              </span>
-              <span className="gx-chip">
-                <TokenIcon size={17} /> {fmt(prison.tokens)}
-              </span>
-              <span className="gx-chip">
-                <KeyIcon size={17} /> {prison.keys}
-              </span>
-              <span className="gx-chip yardx__rank" title={t('yard.rankTip')}>
-                <GxIcon name="pick" size={16} /> {rankLetter(prison.rank)}
-              </span>
-            </>
-          }
+          chips={[
+            {
+              id: 'coins',
+              icon: <CoinIcon size={18} />,
+              value: balance,
+              name: t('inv.coins'),
+              pri: 1,
+              ch: 6,
+            },
+            {
+              id: 'tokens',
+              icon: <TokenIcon size={17} />,
+              value: prison.tokens,
+              name: t('inv.tokens'),
+              pri: 2,
+              ch: 6,
+            },
+            {
+              id: 'keys',
+              icon: <KeyIcon size={17} />,
+              value: prison.keys,
+              name: t('inv.section.keys'),
+              pri: 3,
+              ch: 3,
+            },
+            {
+              id: 'rank',
+              icon: <GxIcon name="pick" size={16} />,
+              value: rankLetter(prison.rank),
+              name: t('yard.rankTip'),
+              pri: 3,
+              className: 'yardx__rank',
+            },
+          ]}
         />
         {ev && def && (
           <button

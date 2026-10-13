@@ -3,14 +3,15 @@
 // `gx-px.css`, старые виджеты — src/game-ui.css; картинки — public/ui (Kenney CC0,
 // game-icons CC BY 3.0). Правила: .claude/rules/game-ui.md (часть «Окна и шапка»).
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
 import { registerEscape } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
 import { uiClose, uiOpen, uiTap } from '@/lib/sound';
-import { useT } from '@/i18n';
+import { fmtCompact, fmtNum, useT } from '@/i18n';
 import { useFormFactor } from '@/game-shell';
-import { Button, Panel } from '@/ui-px';
+import { Button, Panel, usePress } from '@/ui-px';
 import type { Material, PxIconName } from '@/ui-px';
 import './gx-px.css';
 
@@ -413,8 +414,65 @@ export function GxSheet({
   );
 }
 
+const GameSettingsLazy = lazy(() =>
+  import('@/settings').then((m) => ({ default: m.GameSettings })),
+);
+
+/**
+ * A GameTop chip given as data (preferred over ready nodes): GameTop prints the number short
+ * (`fmtCompact`) at a fixed width, hides it by priority when the row runs out of room, and shows
+ * the exact value in the mouse tip and in the wallet popover (opened by the money chip — the
+ * first priority-1 chip that is not an action).
+ */
+export interface TopChip {
+  id: string;
+  icon: ReactNode;
+  /** Number — short in the chip, exact in the tip / wallet; text — as is. None — icon only. */
+  value?: number | string;
+  /** What it is: the tip, the wallet row, the screen reader. */
+  name: string;
+  /** 1 — never hidden (money; actions always are); 3 — hidden first. Default 2. */
+  pri?: 1 | 2 | 3;
+  /** Minimum width of the value in `ch`: a changing number never moves its neighbours. */
+  ch?: number;
+  /** An action chip (the dungeon's backpack): a button, never hidden, not in the wallet. */
+  onClick?: () => void;
+  className?: string;
+}
+
+// Fit levels — `data-fit` on the row, set straight on the DOM before paint (no React render, so
+// nothing flashes): 0 everything; 1 the title goes (sr-only, `is-tight`); 2 the right-hand group
+// folds into one ⚙ (GameSettings on the Sound tab); 3 chips `data-pri=3` go; 4 `data-pri=2` go.
+// Money and action chips never go. The first level that fits wins.
+const FIT_MAX = 4;
+
+function rowFits(el: HTMLElement, level: number): boolean {
+  if (el.scrollWidth > el.clientWidth + 1) return false;
+  if (level > 0) return true;
+  // The title never ends in «…»: a cut title is a hidden title.
+  const title = el.querySelector<HTMLElement>('.gx-top__title > span');
+  return !title || title.scrollWidth <= title.clientWidth + 1;
+}
+
+function fitRow(el: HTMLElement, hasRight: boolean): void {
+  for (let level = 0; level <= FIT_MAX; level++) {
+    if (level === 2 && !hasRight) continue;
+    el.dataset.fit = String(level);
+    el.classList.toggle('is-tight', level > 0);
+    if (rowFits(el, level)) return;
+  }
+}
+
+function chipValue(c: TopChip): { short: string; exact: string } | null {
+  if (c.value == null || c.value === '') return null;
+  if (typeof c.value === 'number') return { short: fmtCompact(c.value), exact: fmtNum(c.value) };
+  return { short: c.value, exact: c.value };
+}
+
 /** Шапка игрового экрана в одну строку: назад, лента с названием, фишки валют, кнопки справа.
- *  Высота — `--gx-top-h`: окна начинаются ниже неё, крестик окна не ложится на ⚙ шапки. */
+ *  Высота — `--gx-top-h`: окна начинаются ниже неё, крестик окна не ложится на ⚙ шапки.
+ *  Не влезает — по очереди: прячется название, правые кнопки сворачиваются в ⚙, уходят фишки
+ *  по приоритету (деньги — никогда). */
 export function GameTop({
   title,
   onBack,
@@ -423,37 +481,131 @@ export function GameTop({
 }: {
   title: ReactNode;
   onBack?: () => void;
-  chips?: ReactNode;
+  /** `TopChip[]` (short numbers, priorities, wallet) or ready nodes (kept as they are). */
+  chips?: ReactNode | TopChip[];
+  /** Sound / music / ⚙ — only what GameSettings also has: a short row folds it into one ⚙. */
   right?: ReactNode;
 }) {
   const t = useT();
-  // One row: when back + title + chips + buttons don't fit, the title is hidden (`is-tight`)
-  // until the row is as wide as it was when it overflowed.
   const row = useRef<HTMLDivElement>(null);
-  const need = useRef(0);
-  const [tight, setTight] = useState(false);
-  const hasChips = chips != null;
-  const hasRight = right != null;
+  const top = useRef<HTMLDivElement>(null);
+  const press = usePress();
+  const [gear, setGear] = useState(false);
+  const [purse, setPurse] = useState<number | null>(null);
+  const hasChips = chips != null && chips !== false;
+  const hasRight = right != null && right !== false;
+  const list = Array.isArray(chips) ? (chips as TopChip[]) : null;
+  const walletId = list?.find((c) => !c.onClick && (c.pri ?? 2) === 1 && c.value != null)?.id;
+
+  const fit = useRef(() => {});
+  fit.current = () => {
+    if (row.current) fitRow(row.current, hasRight);
+  };
+  // Every render: a new number, language or chip set may need another level.
+  useLayoutEffect(() => fit.current());
   useLayoutEffect(() => {
     const el = row.current;
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
-    const check = () => {
-      if (!el.classList.contains('is-tight')) {
-        if (el.scrollWidth > el.clientWidth + 1) {
-          need.current = el.scrollWidth;
-          setTight(true);
-        }
-      } else if (el.clientWidth >= need.current) setTight(false);
-    };
-    check();
-    const ro = new ResizeObserver(check);
+    const again = () => fit.current();
+    const ro = new ResizeObserver(again);
     ro.observe(el);
     for (const c of el.children) ro.observe(c);
-    return () => ro.disconnect();
-  }, [title, hasChips, hasRight]);
+    // A web font that arrives later widens the title / numbers without resizing their boxes.
+    document.fonts?.addEventListener?.('loadingdone', again);
+    return () => {
+      ro.disconnect();
+      document.fonts?.removeEventListener?.('loadingdone', again);
+    };
+  }, [hasChips, hasRight]);
+
+  // Wallet popover: Esc / «Назад» / a tap anywhere else closes it.
+  const open = purse != null;
+  useEffect(() => {
+    if (!open) return undefined;
+    const off = registerEscape(() => setPurse(null));
+    const away = (e: PointerEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el?.closest?.('.gx-wallet, .gx-chip--purse')) setPurse(null);
+    };
+    window.addEventListener('pointerdown', away, true);
+    return () => {
+      off();
+      window.removeEventListener('pointerdown', away, true);
+    };
+  }, [open]);
+
+  const chipEls = list
+    ? list.map((c) => {
+        const v = chipValue(c);
+        const pri = c.onClick ? 1 : (c.pri ?? 2);
+        const label = v ? `${c.name}: ${v.exact}` : c.name;
+        const body = (
+          <>
+            {c.icon}
+            {v && (
+              <span className="gx-chip__v" style={c.ch ? { minWidth: `${c.ch}ch` } : undefined}>
+                {v.short}
+              </span>
+            )}
+          </>
+        );
+        const cls = `gx-chip${c.className ? ` ${c.className}` : ''}`;
+        if (c.onClick)
+          return (
+            <button
+              key={c.id}
+              type="button"
+              className={`${cls} gx-chip--btn`}
+              data-pri={pri}
+              aria-label={label}
+              data-tip={label}
+              {...press}
+              onClick={c.onClick}
+            >
+              {body}
+            </button>
+          );
+        if (c.id === walletId)
+          return (
+            <button
+              key={c.id}
+              type="button"
+              className={`${cls} gx-chip--btn gx-chip--purse`}
+              data-pri={pri}
+              aria-label={label}
+              aria-expanded={open}
+              aria-haspopup="dialog"
+              data-tip={label}
+              {...press}
+              onClick={(e) => {
+                tapLight();
+                uiTap();
+                const box = top.current?.getBoundingClientRect();
+                const r = e.currentTarget.getBoundingClientRect();
+                setPurse(open ? null : r.left - (box?.left ?? 0));
+              }}
+            >
+              {body}
+            </button>
+          );
+        return (
+          <span
+            key={c.id}
+            className={cls}
+            data-pri={pri}
+            role="img"
+            aria-label={label}
+            data-tip={label}
+          >
+            {body}
+          </span>
+        );
+      })
+    : (chips as ReactNode);
+
   return (
-    <div className={`gx gx-top${chips ? ' has-chips' : ''}`}>
-      <div ref={row} className={`gx-top__row${tight ? ' is-tight' : ''}`}>
+    <div ref={top} className={`gx gx-top${hasChips ? ' has-chips' : ''}`}>
+      <div ref={row} className="gx-top__row">
         {onBack ? (
           <Button
             icon="left"
@@ -471,9 +623,70 @@ export function GameTop({
         <div className="px-ribbon gx-top__title">
           <span>{title}</span>
         </div>
-        {chips && <div className="gx-top__chips">{chips}</div>}
+        {hasChips && <div className="gx-top__chips">{chipEls}</div>}
         <div className="gx-top__right">{right}</div>
+        {hasRight && (
+          <button
+            type="button"
+            className="gx-round gx-round--dark gx-top__gear"
+            aria-label={t('common.settings')}
+            data-tip={t('common.settings')}
+            {...press}
+            onClick={() => {
+              tapLight();
+              uiTap();
+              setGear(true);
+            }}
+          >
+            <KIcon name="gear" />
+          </button>
+        )}
       </div>
+      {open && list && <Wallet chips={list} x={purse} onClose={() => setPurse(null)} />}
+      {gear &&
+        createPortal(
+          <Suspense fallback={null}>
+            <GameSettingsLazy initial="sound" onClose={() => setGear(false)} />
+          </Suspense>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+/** The shared wallet: every value chip of the row with its exact number. */
+function Wallet({ chips, x, onClose }: { chips: TopChip[]; x: number; onClose: () => void }) {
+  const t = useT();
+  const ref = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState(x);
+  // Keep it on screen: shift left when it would run past the right edge.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const box = el?.offsetParent?.getBoundingClientRect();
+    if (!el || !box) return;
+    const over = box.left + x + el.offsetWidth - (window.innerWidth - 4);
+    setLeft(Math.max(-box.left + 4, x - Math.max(0, over)));
+  }, [x]);
+  const rows = chips.filter((c) => !c.onClick && chipValue(c));
+  return (
+    <div
+      ref={ref}
+      className="gx-wallet px"
+      role="dialog"
+      aria-label={t('hall.wallet')}
+      style={{ left } as CSSProperties}
+      onClick={onClose}
+    >
+      <Panel material="parch" className="gx-wallet__box">
+        <b className="gx-wallet__h">{t('hall.wallet')}</b>
+        {rows.map((c) => (
+          <div key={c.id} className="gx-wallet__row">
+            <span className="gx-wallet__i">{c.icon}</span>
+            <span className="gx-wallet__n">{c.name}</span>
+            <b className="gx-wallet__v px-num">{chipValue(c)?.exact}</b>
+          </div>
+        ))}
+      </Panel>
     </div>
   );
 }

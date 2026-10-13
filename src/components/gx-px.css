@@ -278,6 +278,95 @@ span.gx-top__side {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/* Fit levels (GameTop sets `data-fit` before paint, wave 3 — Q): 2 — the right-hand group folds
+   into one ⚙ (GameSettings, Sound tab); 3 — chips of priority 3 go; 4 — priority 2 too. Money
+   (priority 1) and action chips never go. */
+.gx-top .gx-top__gear {
+  display: none;
+}
+.gx-top__row:is([data-fit='2'], [data-fit='3'], [data-fit='4']) .gx-top__right {
+  display: none;
+}
+.gx-top .gx-top__row:is([data-fit='2'], [data-fit='3'], [data-fit='4']) .gx-top__gear {
+  display: inline-grid;
+  flex: none;
+}
+.gx-top__row:is([data-fit='3'], [data-fit='4']) .gx-chip[data-pri='3'],
+.gx-top__row[data-fit='4'] .gx-chip[data-pri='2'] {
+  display: none;
+}
+/* Phone portrait: chips one type step down (17 px, above the 16 px floor) — the row is 340–420 px. */
+html[data-ff='phone-portrait'] .gx-top .gx-chip {
+  font-size: var(--px-fs-sm);
+}
+/* The value keeps its box (min-width in ch from the caller): a growing number never pushes. */
+.gx-chip__v {
+  display: inline-block;
+  text-align: center;
+}
+/* The money chip opens the wallet; action chips (backpack) act. Pressed in the first frame
+   (`usePress` → `.is-down`): the well one ramp step darker, the content one art pixel lower. */
+.gx-chip--btn {
+  position: relative;
+  isolation: isolate;
+  margin: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.gx-chip--btn:is(:active, .is-down)::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: -1;
+  background: #c9a56d;
+}
+.gx-chip--btn:is(:active, .is-down) > * {
+  translate: 0 var(--u);
+}
+.gx-chip--purse[aria-expanded='true']::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: -1;
+  background: #c9a56d;
+}
+/* Wallet popover under the money chip: every value of the row in exact numbers. */
+.gx-wallet {
+  position: absolute;
+  top: calc(var(--gx-top-h) + 2 * var(--u));
+  z-index: 6;
+  color: var(--px-text);
+  pointer-events: auto;
+}
+.gx-wallet__box {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  white-space: nowrap;
+}
+.gx-wallet__h {
+  grid-column: 1 / -1;
+  font: 400 var(--px-fs-sm) / 1.2 var(--px-head);
+  color: var(--px-gold);
+}
+.gx-wallet__row {
+  display: contents;
+}
+.gx-wallet__i {
+  display: inline-grid;
+  place-items: center;
+}
+.gx-wallet__v {
+  font: 700 var(--px-fs) / 1.2 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
 
 /* ==============================================================================================
    The camp (PrisonCamp): kit tabs with game-icons pictures. Phones — icons only (the word is
