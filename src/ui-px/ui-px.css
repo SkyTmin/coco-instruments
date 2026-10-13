@@ -4,60 +4,65 @@
    4 at 1080p…). Every size below is a whole number of art pixels. */
 @import './kit.gen.css';
 
+/* Type (wave 2, owner 13.10: the pixel fonts were «сложно читаемый»). Text, labels and numbers:
+   GxRubik (Rubik variable 300–900, its faces live in game-ui.css + settings.css: base +
+   Latin Ext-A). Headings: Russo One renamed «Coco Title» (OFL, Reserved Font Name «Russo»;
+   subset by scripts/ui-px/fonts.py). Vector text, so sizes follow readability, not the art grid. */
 @font-face {
-  font-family: 'CocoPx';
-  src: url('/ui/fonts/tiny5.woff2') format('woff2');
-  font-display: swap;
-}
-@font-face {
-  font-family: 'CocoHead';
-  src: url('/ui/fonts/coco-head.woff2') format('woff2');
+  font-family: 'CocoTitle';
+  src: url('/ui/fonts/coco-title.woff2') format('woff2');
   font-display: swap;
 }
 
 :root {
   --u: var(--ui-px, 2px);
-  /* Text scale: the fonts have an 8-px em; text is one step under the art on big scales
-     (an art pixel of 4 CSS px would make 32-px body text on 1080p). */
-  --ts: max(2, calc(var(--ui-scale, 2) - 1 + var(--ts-add, 0)));
-  /* Digits on slot counters / key caps only — never words (8 px on phones is unreadable). */
-  --px-fs-tiny: calc(8px * (var(--ts) - 1));
-  /* Smallest user-facing text: a whole number of device pixels per font pixel, never under
-     12 CSS px — 13.33 px at DPR 3 (5 dots), 12 px at DPR 2 (3 dots), 16 px at DPR 1. */
-  --px-fs-sm: max(var(--px-sm-floor), calc(8px * (var(--ts) - 1)));
-  --px-sm-floor: 16px;
-  --px-fs: calc(8px * var(--ts));
-  --px-fs-big: calc(8px * (var(--ts) + 1));
-  --px-fs-hero: calc(8px * (var(--ts) + 2));
-  --px-font: 'CocoPx', 'GxRubik', system-ui, sans-serif;
-  --px-head: 'CocoHead', 'CocoPx', 'GxRubik', sans-serif;
-  --px-text: #f2e4c4;
-  --px-muted: #b9a988;
-  --px-dim: #7e735f;
+  /* Body size by UI scale: 20 px on phones (2), 22.5 tablet/laptop (3), 25 at 1080p (4), 27.5 at
+     1440p+ — then L's text-size setting (`data-text` s/m/l → --px-tx). «m» is what the owner's
+     «large» gave in v1 («стало гораздо лучше»). */
+  --px-tx: 1;
+  --px-fs: calc((15px + 2.5px * var(--ui-scale, 2)) * var(--px-tx));
+  /* labels, bar texts, badges, key words — 17 px on phones */
+  --px-fs-sm: calc(var(--px-fs) * 0.85);
+  /* digits on slot counters / key caps only — 14 px on phones */
+  --px-fs-tiny: calc(var(--px-fs) * 0.7);
+  /* headings 23 / 26, the showcased name 28 px on phones */
+  --px-fs-head: calc(var(--px-fs) * 1.15);
+  --px-fs-big: calc(var(--px-fs) * 1.3);
+  --px-fs-hero: calc(var(--px-fs) * 1.4);
+  --px-font: 'GxRubik', system-ui, sans-serif;
+  --px-head: 'CocoTitle', 'GxRubik', system-ui, sans-serif;
+  /* Text on the kit's light interiors (parchment fill of every frame, wells, slots): dark ink.
+     Every pair ≥ 4.5:1 on the fill #f0dfba and the well #e4cc9c — table in ui-px.md. */
+  --px-text: #2a190c;
+  --px-muted: #5a3d22;
+  --px-dim: #6e5034;
   --px-ink: #120a0e;
-  --px-gold: #ffcf5a;
-  --px-red: #ff7a5a;
-  --px-green: #8fe07a;
-  --px-blue: #8cc8ff;
-  --px-violet: #c6a6ff;
+  --px-gold: #804400;
+  --px-red: #a52a1a;
+  --px-green: #255c18;
+  --px-blue: #1d5a96;
+  --px-violet: #6236a8;
+  /* bright accents for marks drawn over art or dark faces (slot stars, counters) */
+  --px-gold-hi: #ffd25e;
 }
-/* L's text-size setting (`data-text` on <html>): whole font steps only — a pixel font at a
-   fractional scale gets uneven rows. «s» never goes under the 2× floor. */
-@media (min-resolution: 1.5dppx) {
-  :root {
-    --px-sm-floor: 12px;
-  }
-}
-@media (min-resolution: 2.5dppx) {
-  :root {
-    --px-sm-floor: 13.333px;
-  }
+/* Text on DARK surfaces (dark wood, iron faces, plates over a stage, a HUD over the game):
+   cream ink and bright accents — every pair ≥ 4.5:1 on wood #6b3f20 / iron #404853. */
+.px-dark {
+  --px-text: #fff4dc;
+  --px-muted: #ecdcbc;
+  --px-dim: #d4c2a3;
+  --px-gold: #ffd25e;
+  --px-red: #ffa78c;
+  --px-green: #9be887;
+  --px-blue: #a6d6ff;
+  --px-violet: #d8c0ff;
+  color: var(--px-text);
 }
 html[data-text='s'] {
-  --ts-add: -1;
+  --px-tx: 0.87;
 }
 html[data-text='l'] {
-  --ts-add: 1;
+  --px-tx: 1.15;
 }
 
 /* ---- Typography ------------------------------------------------------------------------- */
@@ -65,20 +70,24 @@ html[data-text='l'] {
   font-family: var(--px-font);
   font-size: var(--px-fs);
   line-height: 1.25;
-  font-weight: 400;
+  font-weight: 500;
   font-synthesis: none;
   color: var(--px-text);
-  -webkit-font-smoothing: none;
-  text-rendering: optimizeSpeed;
   letter-spacing: 0;
 }
-.px :is(b, strong, em, i, h1, h2, h3, h4) {
+.px :is(h1, h2, h3, h4) {
   font-weight: inherit;
+}
+.px :is(b, strong) {
+  font-weight: 700;
+}
+.px :is(em, i) {
   font-style: normal;
 }
+/* Headings: the title face with a hard one-art-pixel ink shadow (never blur). */
 .px-h {
   margin: 0;
-  font: 400 var(--px-fs) / 1.15 var(--px-head);
+  font: 400 var(--px-fs-head) / 1.15 var(--px-head);
   color: var(--px-gold);
   text-shadow: 0 var(--u) 0 var(--px-ink);
   text-transform: none;
@@ -88,10 +97,13 @@ html[data-text='l'] {
 }
 .px-h--sub {
   font-family: var(--px-font);
+  font-weight: 600;
+  font-size: var(--px-fs);
   color: var(--px-muted);
 }
 .px-num {
-  font-family: var(--px-head);
+  font-family: var(--px-font);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .px-shadow {
@@ -189,7 +201,7 @@ html[data-text='l'] {
   border-image-repeat: stretch;
   image-rendering: pixelated;
   background: none;
-  font: 400 var(--px-fs) / 1 var(--px-font);
+  font: 700 var(--px-fs) / 1.1 var(--px-font);
   font-synthesis: none;
   color: #fff6e0;
   text-shadow: 0 var(--u) 0 var(--px-ink);
@@ -318,8 +330,9 @@ html[data-game][data-input] .px-f:focus-visible {
   border-image-width: var(--pxk-tab-off-w);
   image-rendering: pixelated;
   background: none;
-  font: 400 var(--px-fs) / 1 var(--px-font);
-  color: var(--px-muted);
+  font: 700 var(--px-fs) / 1.1 var(--px-font);
+  /* own face (iron), so fixed colours, not the panel text vars */
+  color: #efe2c4;
   text-shadow: 0 var(--u) 0 var(--px-ink);
   cursor: pointer;
   white-space: nowrap;
@@ -330,7 +343,8 @@ html[data-game][data-input] .px-f:focus-visible {
   border-image-source: var(--pxk-tab-on);
   border-image-slice: var(--pxk-tab-on-s);
   border-image-width: var(--pxk-tab-on-w);
-  color: var(--px-gold);
+  color: #2a1405;
+  text-shadow: 0 var(--u) 0 #e3a25c;
 }
 .px-tab .ip-prompt {
   font-size: var(--px-fs-tiny);
@@ -400,7 +414,8 @@ html[data-game][data-input] .px-f:focus-visible {
   right: calc(2 * var(--u));
   bottom: calc(1 * var(--u));
   z-index: 2;
-  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  font: 700 var(--px-fs-tiny) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
   color: #fff;
   text-shadow:
     var(--u) 0 0 var(--px-ink),
@@ -413,8 +428,8 @@ html[data-game][data-input] .px-f:focus-visible {
   left: calc(2 * var(--u));
   top: calc(2 * var(--u));
   z-index: 2;
-  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
-  color: var(--px-gold);
+  font: 700 var(--px-fs-tiny) / 1 var(--px-font);
+  color: var(--px-gold-hi);
   text-shadow:
     var(--u) 0 0 var(--px-ink),
     0 var(--u) 0 var(--px-ink);
@@ -496,7 +511,8 @@ html[data-game][data-input] .px-f:focus-visible {
   z-index: 1;
   display: grid;
   place-items: center;
-  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
   color: #fff;
   text-shadow:
     var(--u) 0 0 var(--px-ink),
@@ -519,7 +535,7 @@ html[data-game][data-input] .px-f:focus-visible {
   border-image-slice: var(--pxk-badge-s);
   border-image-width: var(--pxk-badge-w);
   image-rendering: pixelated;
-  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
   color: #fff;
   text-shadow: 0 var(--u) 0 var(--px-ink);
   box-sizing: border-box;
@@ -552,7 +568,7 @@ html[data-game][data-input] .px-f:focus-visible {
   border-image-slice: var(--pxk-ribbon-s);
   border-image-width: 0 5 0 5;
   image-rendering: pixelated;
-  font: 400 var(--px-fs) / 1 var(--px-head);
+  font: 400 var(--px-fs-head) / 1 var(--px-head);
   color: #fff3d6;
   text-shadow: 0 var(--u) 0 #3a0a0c;
   white-space: nowrap;
@@ -561,12 +577,12 @@ html[data-game][data-input] .px-f:focus-visible {
 
 /* ---- Key hint (S's <Prompt> in kit clothes) ---------------------------------------------- */
 .px-keyhint {
-  font: 400 var(--px-fs-sm) / 1 var(--px-font);
+  font: 600 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-muted);
   gap: calc(2 * var(--u));
 }
 .px-keyhint .ip {
-  font: 400 var(--px-fs-tiny) / 1 var(--px-head);
+  font: 700 var(--px-fs-tiny) / 1 var(--px-font);
 }
 .px-keyhint .ip--key {
   min-height: calc(11 * var(--u));
@@ -609,9 +625,14 @@ html[data-game][data-input] .px-f:focus-visible {
   border-bottom: var(--u) solid #32283f;
 }
 .px-inspect__name {
-  font: 400 var(--px-fs) / 1.2 var(--px-head);
+  font: 400 var(--px-fs-head) / 1.15 var(--px-head);
   color: var(--rc);
-  text-shadow: 0 var(--u) 0 var(--px-ink);
+  /* rarity colours are bright: on the light fill they read only inside a hard ink outline */
+  text-shadow:
+    var(--u) 0 0 var(--px-ink),
+    calc(-1 * var(--u)) 0 0 var(--px-ink),
+    0 var(--u) 0 var(--px-ink),
+    0 calc(-1 * var(--u)) 0 var(--px-ink);
   overflow-wrap: anywhere;
 }
 .px-inspect__sub {
