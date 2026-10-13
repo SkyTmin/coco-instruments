@@ -4,7 +4,9 @@ import type { nursery as ru } from '../ru/nursery';
 export const nursery: Translation<typeof ru> = {
   tabPets: 'Animali',
   tabEggs: 'Uova',
-  squad: 'Con me',
+  squad: 'La banda',
+  squadHint: 'Scende con te in miniera',
+  notYet: 'Non ancora nato',
   pick: 'Chi viene?',
   lockRank: 'Grado {rank}',
   lockPrestige: 'Prestigio',
@@ -37,6 +39,8 @@ export const nursery: Translation<typeof ru> = {
   unknown: 'Chi è?',
   from: 'Nasce dalle uova',
   eggPct: '{v}%',
+  /** A role bonus on a chip: icon + this. */
+  bonus: '+{v}%',
   allWithYou: 'Tutti gli animali sono già con te',
   hatchFirst: 'Prima fai schiudere un uovo',
   rarity: {

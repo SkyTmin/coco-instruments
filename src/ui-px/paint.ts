@@ -942,6 +942,18 @@ const ICONS: Record<string, string[]> = {
     '.#######.',
     '..#####..',
   ],
+  // wave 2 — N
+  grid: [
+    '.........',
+    '.###.###.',
+    '.###.###.',
+    '.###.###.',
+    '.........',
+    '.###.###.',
+    '.###.###.',
+    '.###.###.',
+    '.........',
+  ],
   // wave 2 — C: system icons for the old Kenney `KIcon`s (settings, sound, music, ?, !, −).
   gear: [
     '...###...',

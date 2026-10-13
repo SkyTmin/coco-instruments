@@ -56,6 +56,8 @@ export type PxIconName =
   | 'clock'
   | 'key'
   | 'egg'
+  // wave 2 — N
+  | 'grid'
   // wave 2 — C
   | 'gear'
   | 'sound'
