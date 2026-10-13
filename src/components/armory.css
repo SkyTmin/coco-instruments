@@ -472,7 +472,7 @@ html[data-ff='phone-landscape'] .arm-name {
    «Эффективность» at the big size broke inside the word). */
 /* Rarity word: ink on the rarity colour (the kit's pill, as `.nur-rar`) — the old dark chip with
    the colour as text read 1.4:1 on the light panels. */
-:is(.arm, .arm-scn) .rchip {
+:is(.arm, .arm-scn, .arm-tip) .rchip {
   height: calc(var(--px-fs-sm) * 1.45);
   padding: 0 calc(3 * var(--u));
   border-radius: 0;
@@ -645,6 +645,9 @@ html[data-ff='phone-landscape'] .arm-acts > .px-btn > .gx-icon {
 }
 .arm-tip > i {
   color: var(--px-muted);
+}
+.arm-tip > .rchip {
+  justify-self: start;
 }
 .arm-tip__row {
   display: flex;

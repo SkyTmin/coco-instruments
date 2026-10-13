@@ -224,7 +224,7 @@
 .bkx-replace__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(2 * var(--u));
+  gap: calc(3 * var(--u));
 }
 
 /* Phone portrait list: the pick's places in one strip (scrolls sideways, as the forge's ladder),
@@ -258,4 +258,46 @@
    347-px side column and the details collapsed to ~30 px). */
 .bkx.arm--two .arm-side > .arm-acts {
   grid-auto-flow: column;
+}
+
+/* Details: the book against the same enchant in the pick — one row and a verdict chip; the
+   sentence is the row's tooltip (critic: nine lines that said «в кирке» twice). */
+.bkx-cmp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--u) calc(3 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+}
+.bkx-cmp__side {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  white-space: nowrap;
+}
+.bkx-cmp__side > b {
+  font-family: var(--px-head);
+  font-weight: 400;
+}
+.bkx-cmp__arrow {
+  color: var(--px-green);
+}
+.bkx-cmp__arrow.is-down {
+  color: var(--px-red);
+}
+.bkx-verdict {
+  padding: 0 calc(3 * var(--u));
+  border: var(--u) solid currentColor;
+  color: var(--px-red);
+  line-height: 1.4;
+}
+
+/* Replace window: the enchants as kit slots with their number under each. */
+.bkx-replace__chip {
+  display: grid;
+  justify-items: center;
+  gap: var(--u);
+}
+.bkx-replace__fx {
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
 }

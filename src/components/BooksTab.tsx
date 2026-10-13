@@ -36,6 +36,7 @@ import {
   bookName,
   bookTierBook,
   enchantEffect,
+  enchantPct,
   mageLine,
   pickFull,
   rarityPick,
@@ -93,7 +94,7 @@ import {
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 import { useAction } from '@/input';
-import { Bar, Button, Heading, Icon, Modal, Panel, Slot } from '@/ui-px';
+import { Bar, Button, Heading, Icon, Modal, Panel, Slot, useTip } from '@/ui-px';
 
 const fmt = (n: number) => fmtNum(n);
 
@@ -284,6 +285,66 @@ function Delta({ v }: { v: number }) {
   );
 }
 
+/** «+252 %» — the effect of enchant `id` at level `lvl` as one number (tr «+%252»). */
+function usePlusPct() {
+  const t = useT();
+  return (id: EnchantId, lvl: number, stars: number) =>
+    `+${t('books.pct', { v: enchantPct(id, enchUnits(id, lvl, stars)) })}`;
+}
+
+/**
+ * The book against the same enchant in the pick, as one row: `[✦] I +42 % ⌄ [⛏] VI +252 %` and a
+ * verdict chip. The sentence that said it in nine lines is the row's tooltip (critic).
+ */
+function Compare({
+  book,
+  have,
+  pick,
+  stars,
+  lower,
+  tip,
+  u,
+}: {
+  book: Pick<Book, 'id' | 'lvl'>;
+  have: number;
+  pick: number;
+  stars: number;
+  lower: boolean;
+  tip: string;
+  u: number;
+}) {
+  const t = useT();
+  const plus = usePlusPct();
+  const ref = useRef<HTMLDivElement>(null);
+  const tipNode = useTip(ref, <span className="arm-tip">{tip}</span>);
+  return (
+    <div ref={ref} className="bkx-cmp" role="group" aria-label={tip}>
+      <span className="bkx-cmp__side">
+        <GxIcon name={ENCH_ICON[book.id]} size={u * 10} />
+        <b>{ROMAN[book.lvl - 1]}</b>
+        <span className="arm-num">{plus(book.id, book.lvl, stars)}</span>
+      </span>
+      <Icon
+        name={lower ? 'down' : 'up'}
+        className={lower ? 'bkx-cmp__arrow is-down' : 'bkx-cmp__arrow'}
+      />
+      <span className="bkx-cmp__side">
+        <PickPx pick={pick} size={u * 12} />
+        {have > 0 ? (
+          <>
+            <b>{ROMAN[have - 1]}</b>
+            <span className="arm-num">{plus(book.id, have, stars)}</span>
+          </>
+        ) : (
+          <b className="arm-muted">—</b>
+        )}
+      </span>
+      {lower && <span className="bkx-verdict">{t('books.weakerShort')}</span>}
+      {tipNode}
+    </div>
+  );
+}
+
 /**
  * The books: with `onClose` a full-screen window like the forge and the backpack (the mine dock
  * opens it so — critic ruling 4: the one-tab camp cost 64 px on top and closed with a ✕ at the
@@ -321,6 +382,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   /** The armed two-tap action («В пыль», «Снять», «Перековать»): its id. */
   const [armed, setArmed] = useState<string | null>(null);
   const guard = useArmGuard();
+  const plus = usePlusPct();
   const [dustOn, setDustOn] = useState(true);
   const [asking, setAsking] = useState(false);
   const [replace, setReplace] = useState<EnchantId | null>(null);
@@ -828,18 +890,26 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       <div className="arm-details bkx-details">
         <div className="bkx-block">
           <Heading sub>{t('books.inPickHead')}</Heading>
-          <p>
-            {inPick > 0
-              ? t('books.inPick', {
-                  name: bookName({ id: b.id, lvl: inPick }),
-                  fx: effectOf(b.id, inPick, p.pickStars),
-                })
-              : t('books.notInPick')}
-          </p>
+          <Compare
+            book={b}
+            have={inPick}
+            pick={p.pickMax}
+            stars={p.pickStars}
+            lower={check === 'lower'}
+            u={u}
+            tip={
+              check === 'lower'
+                ? lowerText()
+                : inPick > 0
+                  ? t('books.inPick', {
+                      name: bookName({ id: b.id, lvl: inPick }),
+                      fx: effectOf(b.id, inPick, p.pickStars),
+                    })
+                  : t('books.notInPick')
+            }
+          />
         </div>
-        {check === 'lower' ? (
-          <p className="bkx-note is-bad">{lowerText()}</p>
-        ) : (
+        {check === 'lower' ? null : (
           <div className="bkx-block">
             <Heading sub>{t('books.statChance')}</Heading>
             <Bar
@@ -1230,25 +1300,32 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       {asking && b && (
         <Modal title={t('books.replaceTitle')} sheet width={220} onClose={() => setAsking(false)}>
           <div className="bkx-replace">
-            <p>{t('books.replace')}</p>
-            <div className="bkx-replace__chips" role="group">
+            <p>{t('books.replacePick')}</p>
+            <div className="bkx-replace__chips" role="group" aria-label={t('books.replacePick')}>
               {onPick
                 .filter((e) => e.id !== b.id)
-                .map((e) => (
-                  <Button
-                    key={e.id}
-                    size="sm"
-                    kind="secondary"
-                    on={replace === e.id}
-                    onClick={() => {
-                      selectionChanged();
-                      setReplace(e.id);
-                    }}
-                  >
-                    <GxIcon name={ENCH_ICON[e.id]} size={u * 7} />
-                    {bookName({ id: e.id, lvl: p.ench[e.id] })}
-                  </Button>
-                ))}
+                .map((e, i) => {
+                  const l = p.ench[e.id];
+                  return (
+                    <span key={e.id} className="bkx-replace__chip">
+                      <Slot
+                        rarity={rarityOfLevel(l)}
+                        selected={replace === e.id}
+                        count={ROMAN[l - 1]}
+                        aria-label={`${bookName({ id: e.id, lvl: l })} · ${effectOf(e.id, l, p.pickStars)}`}
+                        tip={<BookTip book={{ id: e.id, lvl: l }} stars={p.pickStars} />}
+                        data-autofocus={i === 0 ? '' : undefined}
+                        onClick={() => {
+                          selectionChanged();
+                          setReplace(e.id);
+                        }}
+                      >
+                        <GxIcon name={ENCH_ICON[e.id]} size={u * 13} />
+                      </Slot>
+                      <span className="bkx-replace__fx arm-num">{plus(e.id, l, p.pickStars)}</span>
+                    </span>
+                  );
+                })}
             </div>
             <Button
               kind="confirm"
@@ -1264,7 +1341,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
                 doApply(replace);
               }}
             >
-              {t('books.apply', { v: chance })}
+              {replace ? t('books.apply', { v: chance }) : t('books.replaceFirst')}
             </Button>
           </div>
         </Modal>
@@ -1308,7 +1385,7 @@ function BookTip({
   return (
     <span className="arm-tip" style={rarityVars(r)}>
       <b>{bookName(book)}</b>
-      <i>{bookTierBook(tierOfLevel(book.lvl))}</i>
+      <span className={`rchip r${r}`}>{bookTierBook(tierOfLevel(book.lvl))}</span>
       <span className="arm-tip__row">{effectOf(book.id, book.lvl, stars)}</span>
       {chance !== undefined && (
         <span className="arm-tip__row">{t('books.chance', { v: chance })}</span>

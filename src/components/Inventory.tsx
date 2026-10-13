@@ -205,11 +205,11 @@ function ItemTip({ item }: { item: InvItem }): ReactNode {
       <b>{item.name}</b>
       {item.sub && <i>{item.sub}</i>}
       <span className="arm-tip__row">
-        <GxIcon name={whereIcon(item)} size={14} /> {t(`inv.where.${item.where}`)}
+        <GxIcon name={whereIcon(item)} size={24} /> {t(`inv.where.${item.where}`)}
       </span>
       {item.price ? (
         <span className="arm-tip__row">
-          <CoinIcon size={14} /> {t('inv.perPiece', { price: fmt(item.price) })}
+          <CoinIcon size={24} /> {t('inv.perPiece', { price: fmt(item.price) })}
         </span>
       ) : null}
     </span>

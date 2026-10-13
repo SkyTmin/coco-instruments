@@ -757,12 +757,12 @@ function PickTip({
   return (
     <span className="arm-tip" style={rarityVars(d.rarity)}>
       <b>{pickTitle(i)}</b>
-      <i>{rarityName(rarityOf(d.rarity).id)}</i>
+      <RarityChip rarity={d.rarity} />
       <span className="arm-tip__row">
-        <GxIcon name="pick" size={14} /> {d.power} {i !== hand && <Delta v={d.power - h.power} />}
+        <GxIcon name="pick" size={24} /> {d.power} {i !== hand && <Delta v={d.power - h.power} />}
       </span>
       <span className="arm-tip__row">
-        <GxIcon name="energy" size={14} /> {fmt(sp)} {t('forge.perMin')}{' '}
+        <GxIcon name="energy" size={24} /> {fmt(sp)} {t('forge.perMin')}{' '}
         {i !== hand && <Delta v={sp - hs} />}
       </span>
       {i !== hand && <i className="arm-tip__vs">{t('forge.vsHand')}</i>}
