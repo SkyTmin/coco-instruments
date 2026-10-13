@@ -69,7 +69,7 @@ html[data-ff='phone-portrait'] .gx-win {
 }
 /* Old tab content in such a wide window: a phone-made column, so a sane width, centred. */
 .gx-camp .gx-win__body:not(:has(.px, .px-tabs)) > .pcamp-body {
-  max-width: 640px;
+  max-width: 720px;
   margin-inline: auto;
 }
 /* Beats callers' old px widths (they were for a phone; the body is zoomed on big screens). */
@@ -260,6 +260,14 @@ span.gx-top__side {
 .gx-top :is(.gx-round, .gx-audio__btn) {
   --gx-size: var(--gx-hit);
 }
+/* Sound and music (AudioToggles): two square kit buttons, a full touch target everywhere. */
+.gx-audio {
+  display: inline-flex;
+  gap: calc(3 * var(--u));
+}
+.gx-audio__btn {
+  --gx-size: var(--gx-hit);
+}
 /* No room for everything in one row (GameTop measures it: `is-tight`) — the title goes, the
    screen names itself; it stays for screen readers. Chips and buttons never shrink. */
 .gx-top__row.is-tight .gx-top__title {
@@ -298,17 +306,38 @@ span.gx-top__side {
   justify-content: center;
   padding-inline: calc(2 * var(--u));
 }
-/* Rail: as wide as the longest word allows, never wider than a third of the window. */
+/* The phone strip: every tab gets an equal share — all of them visible, none cut at the edge. */
+.gx-camp.is-compact .gx-camp__tabs:not(.px-tabs--rail) .px-tab {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Rail: as wide as the longest word, at most ~a quarter of the camp; a longer word (de, tr)
+   wraps with hyphens onto a second line — never an ellipsis on a tab name. */
 .gx-camp__tabs.px-tabs--rail {
   gap: calc(2 * var(--u));
-  max-width: calc(78 * var(--u));
+  max-width: calc(104 * var(--u));
   padding: calc(1 * var(--u)) 0;
+}
+.gx-camp__tabs.px-tabs--rail .px-tab__label {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  line-height: 1.1;
+  text-align: start;
 }
 .gx-camp.is-compact .gx-camp__tabs.px-tabs--rail {
   max-width: none;
 }
 .gx-camp__tabs.px-tabs--rail .px-tab {
-  padding: calc(3 * var(--u)) calc(5 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+  /* the right end keeps room for a badge on EVERY tab: a badge coming or going never resizes
+     the rail (and so never moves the body) */
+  padding: calc(3 * var(--u)) calc(10 * var(--u)) calc(3 * var(--u)) calc(4 * var(--u));
+}
+.gx-camp.is-compact .gx-camp__tabs.px-tabs--rail .px-tab {
+  padding-inline: calc(2 * var(--u));
 }
 
 /* ==============================================================================================
