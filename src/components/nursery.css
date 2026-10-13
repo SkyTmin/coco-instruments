@@ -627,7 +627,6 @@
   color: var(--px-muted);
 }
 
-/* ==============================================================================================
    The camp sheet around the Nursery. PrisonCamp's GxSheet is not ours to edit, so the Nursery
    screen restyles it through :has(): pixel wood frame, ribbon title, dark body, full height,
    wide on landscape/desktop. The eggs tab keeps the parchment body (its content is still drawn
@@ -671,36 +670,14 @@ html[data-ff='tablet'] .gx-camp.is-single:has(.ppn) {
   border-image-repeat: stretch;
   padding: calc(4 * var(--u));
 }
+=======
+/* The camp window chrome (frame, ribbon, well body for kit content) lives in gx-px.css (agent C,
+   wave 2) for every camp; here only the Nursery's own fill of the body. */
 .gx-camp:has(.nur) .pcamp-body {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__title {
-  /* the kit ribbon instead of the Kenney one */
-  top: calc(-4 * var(--u));
-  height: calc(16 * var(--u));
-  display: flex;
-  align-items: center;
-  padding: 0 calc(10 * var(--u));
-  border-width: 0 var(--u);
-  border-style: solid;
-  border-color: transparent;
-  border-image-source: var(--pxk-ribbon);
-  border-image-slice: var(--pxk-ribbon-s);
-  border-image-width: var(--pxk-ribbon-w);
-  border-image-repeat: stretch;
-  background: none;
-  image-rendering: pixelated;
-  font: 400 var(--px-fs-head) / 1 var(--px-head);
-  color: #fff3d0;
-  text-shadow: var(--u) var(--u) 0 var(--px-ink);
-  filter: none;
-}
-.gx-camp.is-single:has(.ppn) .gx-sheet__close {
-  top: calc(-4 * var(--u));
-  right: calc(4 * var(--u));
 }
 
 /* PetsTab around the Nursery: tabs on top; the egg blocks hide on the pets tab. */

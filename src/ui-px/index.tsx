@@ -57,7 +57,16 @@ export type PxIconName =
   | 'key'
   | 'egg'
   // wave 2 — N
-  | 'grid';
+  | 'grid'
+  // wave 2 — C
+  | 'gear'
+  | 'sound'
+  | 'mute'
+  | 'music'
+  | 'nomusic'
+  | 'question'
+  | 'excl'
+  | 'minus';
 
 /** A 9×9 pixel icon (mask), colour = currentColor. */
 export function Icon({ name, className }: { name: PxIconName; className?: string }) {
@@ -167,16 +176,23 @@ export interface TabItem<K extends string> {
   id: K;
   label: ReactNode;
   icon?: PxIconName;
+  /** A picture of its own instead of a kit icon (e.g. a game-icons `GxIcon`). */
+  art?: ReactNode;
+  /** Accessible name + mouse tip — for tabs whose label CSS may hide (icon-only strips). */
+  name?: string;
   badge?: ReactNode;
 }
 
-/** Tabs with LB/RB (`tabPrev`/`tabNext`) for keyboard and gamepad. */
+/** Tabs with LB/RB (`tabPrev`/`tabNext`) for keyboard and gamepad. `vertical` — a rail (the
+ *  selected tab joins the panel on its right). */
 export function Tabs<K extends string>({
   items,
   value,
   onChange,
   className,
   keys = true,
+  vertical,
+  main,
 }: {
   items: TabItem<K>[];
   value: K;
@@ -184,6 +200,11 @@ export function Tabs<K extends string>({
   className?: string;
   /** Listen to tabPrev/tabNext (only one tab row on screen should). */
   keys?: boolean;
+  vertical?: boolean;
+  /** wave 2 — C: the window's own tab row (the camp). A tab row inside the same window's
+      content (PetsTab's «Питомцы / Яйца») then leaves tabPrev/tabNext to it — otherwise the inner
+      row, registered later, eats LB/RB and the player is stuck on that tab. */
+  main?: boolean;
 }) {
   const scope = useRef<HTMLDivElement>(null);
   // Keyboard: Tab cycles (one hint on the right); gamepad: LB / RB on both sides.
@@ -191,6 +212,9 @@ export function Tabs<K extends string>({
   useAction(
     ['tabPrev', 'tabNext'],
     (e) => {
+      const el = scope.current;
+      const owner = el?.closest('[data-ui-layer]')?.querySelector('.px-tabs[data-tabs-main]');
+      if (owner && owner !== el) return false;
       const i = items.findIndex((x) => x.id === value);
       const n = (i + (e.action === 'tabNext' ? 1 : -1) + items.length) % items.length;
       onChange(items[n].id);
@@ -198,7 +222,13 @@ export function Tabs<K extends string>({
     { enabled: keys && items.length > 1, scope },
   );
   return (
-    <div ref={scope} className={cx('px-tabs', className)} role="tablist">
+    <div
+      ref={scope}
+      className={cx('px-tabs', vertical && 'px-tabs--rail', className)}
+      role="tablist"
+      aria-orientation={vertical ? 'vertical' : undefined}
+      data-tabs-main={main ? '' : undefined}
+    >
       {keys && pad && items.length > 1 && <Prompt action="tabPrev" className="px-keyhint" />}
       {items.map((it) => (
         <button
@@ -206,11 +236,13 @@ export function Tabs<K extends string>({
           type="button"
           role="tab"
           aria-selected={it.id === value}
+          aria-label={it.name}
+          data-tip={it.name}
           className="px-tab px-f"
           onClick={() => it.id !== value && onChange(it.id)}
         >
-          {it.icon && <Icon name={it.icon} />}
-          <span>{it.label}</span>
+          {it.icon ? <Icon name={it.icon} /> : it.art}
+          <span className="px-tab__label">{it.label}</span>
           {it.badge != null && it.badge !== false && <Badge>{it.badge}</Badge>}
         </button>
       ))}

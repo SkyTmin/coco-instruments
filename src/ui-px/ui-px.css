@@ -349,6 +349,34 @@ html[data-game][data-input] .px-f:focus-visible {
 .px-tab .ip-prompt {
   font-size: var(--px-fs-tiny);
 }
+/* wave 2 — C: a tab row inside a window that has its own (main) row leaves the keys to it, so
+   no key hints on the inner row. */
+[data-ui-layer]:has(.px-tabs[data-tabs-main]) .px-tabs:not([data-tabs-main]) > .px-keyhint {
+  display: none;
+}
+/* Rail (wave 2 — C): vertical tabs; the selected one joins the panel on its right. */
+.px-tabs--rail {
+  flex-direction: column;
+  align-items: stretch;
+}
+.px-tabs--rail > .px-tab {
+  flex: none;
+  justify-content: flex-start;
+}
+.px-tabs--rail > .px-tab[aria-selected='true'] {
+  min-height: calc(16 * var(--u));
+  border-image-source: var(--pxk-tab-side-on);
+  border-image-slice: var(--pxk-tab-side-on-s);
+  border-image-width: var(--pxk-tab-side-on-w);
+}
+.px-tabs--rail > .px-keyhint {
+  align-self: center;
+}
+.px-tab__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ---- Item cell --------------------------------------------------------------------------- */
 :where(.px-slot) {

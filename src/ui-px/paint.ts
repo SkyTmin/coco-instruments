@@ -480,6 +480,22 @@ function tab(on: boolean): Pix {
   return p;
 }
 
+// wave 2 — C: a rail tab (camp windows on landscape/tablet/desktop). Same plaque as the selected
+// top tab, turned on its side: no right edge, it joins the panel to its right.
+function tabSide(): Pix {
+  const tone = MAT.wood;
+  const p = new Pix(12, 12);
+  const d = depthMap(13, 12, 2);
+  for (let y = 0; y < 12; y++)
+    for (let x = 0; x < 12; x++) {
+      const k = d[y * 13 + x];
+      if (k < 0) continue;
+      const L = lit(x, y, 13, 12);
+      p.set(x, y, k === 0 ? INK : k === 1 ? (L ? tone[4] : tone[1]) : tone[3]);
+    }
+  return p;
+}
+
 /** Progress bar trough: ink outline, dark inset with a lit bottom lip. */
 function trough(): Pix {
   const p = new Pix(8, 8);
@@ -902,16 +918,18 @@ const ICONS: Record<string, string[]> = {
     '.##...##.',
     '..#####..',
   ],
+  // Upright key (wave 2 — C): the old lying one read as the letters «От». Ring bow with a
+  // hole, a 2-px shaft, two teeth to the right.
   key: [
-    '.........',
-    '.........',
-    '.###.....',
-    '#...#....',
-    '#...#####',
-    '#...#.#.#',
-    '.###..#.#',
-    '.........',
-    '.........',
+    '...###...',
+    '..##.##..',
+    '..#...#..',
+    '..##.##..',
+    '...###...',
+    '....##...',
+    '....####.',
+    '....##...',
+    '....###..',
   ],
   egg: [
     '...###...',
@@ -934,6 +952,95 @@ const ICONS: Record<string, string[]> = {
     '.###.###.',
     '.###.###.',
     '.###.###.',
+    '.........',
+  ],
+  // wave 2 — C: system icons for the old Kenney `KIcon`s (settings, sound, music, ?, !, −).
+  gear: [
+    '...###...',
+    '.#.###.#.',
+    '.#######.',
+    '###...###',
+    '###...###',
+    '###...###',
+    '.#######.',
+    '.#.###.#.',
+    '...###...',
+  ],
+  sound: [
+    '.........',
+    '...#.....',
+    '..##..#..',
+    '####.#.#.',
+    '####.#.#.',
+    '####.#.#.',
+    '..##..#..',
+    '...#.....',
+    '.........',
+  ],
+  mute: [
+    '.........',
+    '...#.....',
+    '..##.....',
+    '####.#.#.',
+    '####..#..',
+    '####.#.#.',
+    '..##.....',
+    '...#.....',
+    '.........',
+  ],
+  music: [
+    '...#.....',
+    '...##....',
+    '...#.#...',
+    '...#..#..',
+    '...#..#..',
+    '.###.....',
+    '####.....',
+    '###......',
+    '.........',
+  ],
+  nomusic: [
+    '#..#.....',
+    '.#.##....',
+    '..##.#...',
+    '...##.#..',
+    '...#.#...',
+    '.###..#..',
+    '####...#.',
+    '###.....#',
+    '.........',
+  ],
+  question: [
+    '..####...',
+    '.##..##..',
+    '.....##..',
+    '....##...',
+    '...##....',
+    '...##....',
+    '.........',
+    '...##....',
+    '...##....',
+  ],
+  excl: [
+    '...##....',
+    '...##....',
+    '...##....',
+    '...##....',
+    '...##....',
+    '.........',
+    '...##....',
+    '...##....',
+    '.........',
+  ],
+  minus: [
+    '.........',
+    '.........',
+    '.........',
+    '.........',
+    '.#######.',
+    '.........',
+    '.........',
+    '.........',
     '.........',
   ],
 };
@@ -1094,6 +1201,15 @@ export const PIECES: Piece[] = [
   ...Object.entries(ICONS).map(
     ([n, rows]): Piece => ({ name: `i-${n}`, kind: 'icon', draw: () => icon(rows) }),
   ),
+  // wave 2 — C
+  {
+    name: 'tab-side-on',
+    kind: 'frame',
+    slice: [2, 1, 2, 2],
+    repeat: 'stretch',
+    fill: true,
+    draw: tabSide,
+  },
 ];
 
 const same = (a: RGBA, b: RGBA) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
