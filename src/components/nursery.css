@@ -330,9 +330,6 @@
 .nur-plate__row > .nur-lv {
   margin-inline-start: auto;
 }
-.nur-plate > .px-bar {
-  height: calc(var(--px-fs-sm) * 1.3);
-}
 /* Rarity as a pill: ink on the rarity colour reads on any surface (≥ 4.5:1 for every rarity). */
 .nur-rar {
   display: inline-flex;

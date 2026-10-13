@@ -606,10 +606,12 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
           </span>
         )}
         {srec && (
+          // at the cap only the level: «25 ур. · Предел» didn't fit a 360-px plate beside a
+          // mythic pill; the full bar and its tip say «Предел»
           <span className="nur-lv px-num">
             {slv.need
               ? t('nursery.lvPct', { n: slv.level, p: Math.floor(xpV * 100) })
-              : `${t('common.level', { n: slv.level })} · ${t('nursery.lvMax')}`}
+              : t('common.level', { n: slv.level })}
           </span>
         )}
       </div>
