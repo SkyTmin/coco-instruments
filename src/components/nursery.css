@@ -663,3 +663,15 @@
 .ppn.is-pets > .ppn__tabs {
   margin-bottom: 0;
 }
+/* The count sits on the tab's corner (like the camp tabs), so «Yumurtalar» keeps its full word
+   on a phone instead of an ellipsis. */
+.ppn__tabs .px-tab > .px-badge {
+  position: absolute;
+  top: calc(-2 * var(--u));
+  right: calc(-2 * var(--u));
+  z-index: 2;
+}
+/* Large text on a phone: the word wins over the icon (Turkish «Yumurtalar» at 23 px). */
+html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i {
+  display: none;
+}
