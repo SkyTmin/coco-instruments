@@ -4,7 +4,16 @@ import { GxModal, KIcon } from '@/components/gx';
 import { useFinanceStore } from '@/store';
 import { primeAudio, uiTap, uiTab } from '@/lib/sound';
 import { selectionChanged, tapMedium } from '@/lib/haptics';
-import { NATIVE_NAME, autoLang, resetLang, savedLang, setLang, useLang, useT } from '@/i18n';
+import {
+  AUTO_DETECT,
+  NATIVE_NAME,
+  autoLang,
+  resetLang,
+  savedLang,
+  setLang,
+  useLang,
+  useT,
+} from '@/i18n';
 import type { Lang } from '@/i18n';
 import { useSettings } from './store';
 import type { MotionPref, TextSize, UiScalePref } from './store';
@@ -106,27 +115,30 @@ export function GameSettings({
 function LanguagePane() {
   const t = useT();
   const lang = useLang();
-  const auto = !savedLang();
+  // Without auto-detect there is no «Авто» row: no saved choice = Russian.
+  const auto = AUTO_DETECT && !savedLang();
   const detected = autoLang();
   return (
     <div className="gset-langs" role="radiogroup" aria-label={t('settings.section.language')}>
-      <button
-        type="button"
-        role="radio"
-        aria-checked={auto}
-        className={`gset-opt gset-opt--auto${auto ? ' is-on' : ''}`}
-        onClick={() => {
-          selectionChanged();
-          void resetLang();
-        }}
-      >
-        <SectionIcon name="language" />
-        <span className="gset-opt__txt">
-          <b>{t('settings.language.auto')}</b>
-          <i>{t('settings.language.autoHint', { name: NATIVE_NAME[detected] })}</i>
-        </span>
-        {auto && <KIcon name="checkmark" size={18} />}
-      </button>
+      {AUTO_DETECT && (
+        <button
+          type="button"
+          role="radio"
+          aria-checked={auto}
+          className={`gset-opt gset-opt--auto${auto ? ' is-on' : ''}`}
+          onClick={() => {
+            selectionChanged();
+            void resetLang();
+          }}
+        >
+          <SectionIcon name="language" />
+          <span className="gset-opt__txt">
+            <b>{t('settings.language.auto')}</b>
+            <i>{t('settings.language.autoHint', { name: NATIVE_NAME[detected] })}</i>
+          </span>
+          {auto && <KIcon name="checkmark" size={18} />}
+        </button>
+      )}
       {MENU_ORDER.map((l) => {
         const on = !auto && lang === l;
         return (

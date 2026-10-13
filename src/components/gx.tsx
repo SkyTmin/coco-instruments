@@ -6,6 +6,7 @@ import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
 import { registerEscape } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
 import { uiClose, uiOpen, uiTap } from '@/lib/sound';
+import { t } from '@/i18n';
 
 /** Иконки game-icons.net — имена файлов в public/ui/icons. */
 export type GxIconName =
@@ -242,7 +243,7 @@ export function GxModal({
         <button
           type="button"
           className="gx-round gx-round--red gx-modal__close"
-          aria-label="Закрыть"
+          aria-label={t('common.close')}
           onClick={() => {
             tapLight();
             onClose();
@@ -297,7 +298,7 @@ export function GxSheet({
         <button
           type="button"
           className="gx-round gx-round--red gx-sheet__close"
-          aria-label="Закрыть"
+          aria-label={t('common.close')}
           onClick={() => {
             tapLight();
             onClose();
@@ -333,7 +334,7 @@ export function GameTop({
           <button
             type="button"
             className="gx-round gx-round--dark gx-top__side"
-            aria-label="Назад"
+            aria-label={t('common.back')}
             onClick={() => {
               tapLight();
               uiTap();

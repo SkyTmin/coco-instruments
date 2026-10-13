@@ -101,11 +101,19 @@ export function savedLang(): Lang | null {
 }
 
 /**
- * Saved choice → Telegram `language_code` → browser languages → English.
- * Russian players get Russian through either source.
+ * Auto-detect stays OFF while part of the game is still Russian-only
+ * (`NOT_YET_TRANSLATED` in `i18n.test.ts`, lib data): a player with an English
+ * Telegram would get a mixed game. Until then everyone starts in Russian and
+ * picks a language in ⚙ → Язык; the test turns this on when the list is empty.
+ */
+export const AUTO_DETECT = false;
+
+/**
+ * Saved choice → (with `AUTO_DETECT`) Telegram `language_code` → browser
+ * languages → English; without it → Russian.
  */
 export function detectLang(): Lang {
-  return savedLang() ?? autoLang();
+  return savedLang() ?? (AUTO_DETECT ? autoLang() : 'ru');
 }
 
 /** What auto-detect picks, ignoring the saved choice (Telegram → browser → en). */
@@ -196,6 +204,18 @@ function nf(l: Lang, digits: number): Intl.NumberFormat {
 export function fmtNum(n: number, l: Lang = lang): string {
   if (!Number.isFinite(n)) return '—';
   return nf(l, 0).format(Math.round(n));
+}
+
+/**
+ * Short money like the old `shortMoney`: below 10 000 in full, above — the
+ * language's compact form (ru «12,3 тыс.», «1,2 млн»; en «12.3K»; de «1,2 Mio.»).
+ */
+export function fmtShort(n: number, l: Lang = lang): string {
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) < 1e4) return fmtNum(n, l);
+  return new Intl.NumberFormat(LOCALE[l], { notation: 'compact', maximumFractionDigits: 1 }).format(
+    n,
+  );
 }
 
 /** Number with up to `digits` decimals in the language's style («1,5» / «1.5»). */

@@ -11,6 +11,7 @@ import { SKIN_UNLOCK, isSkinAvailable } from '@/lib/slots-meta';
 import { useFinanceStore } from '@/store';
 import { levelFromXp } from '@/lib/slots-meta';
 import { selectionChanged } from '@/lib/haptics';
+import { fmtDec, fmtNum, skinText, useT } from '@/i18n';
 
 /** Заработанный скин — первым: он тут главный приз, а не строчка списка. */
 function order(a: Skin, b: Skin): number {
@@ -18,7 +19,7 @@ function order(a: Skin, b: Skin): number {
 }
 
 /** «×83 из ×200» — сколько ещё до «Реликвии». */
-const fmtX = (x: number) => `×${x >= 10 ? Math.round(x) : x.toFixed(1)}`;
+const fmtX = (x: number) => `×${x >= 10 ? fmtNum(x) : fmtDec(x, 1)}`;
 
 export function SkinSheet({ onClose }: { onClose: () => void }) {
   const skin = useFinanceStore((s) => s.slotsSkin);
@@ -26,6 +27,7 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   const topX = useFinanceStore((s) => s.slotsTopX);
   const setPrefs = useFinanceStore((s) => s.setSlotsPrefs);
   const level = levelFromXp(xp).level;
+  const t = useT();
 
   // Владелец автомата получает заработанные скины без условия. `null` —
   // «сервер ещё не ответил»: до ответа ничего не решаем, иначе на первом
@@ -58,7 +60,7 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   }, [skin, level, topX, granted, owner, setPrefs]);
 
   return (
-    <Sheet title="Скины автомата" onClose={onClose}>
+    <Sheet title={t('slots.skin.title')} onClose={onClose}>
       <div className="skin-grid">
         {[...SKINS].sort(order).map((sk) => {
           const available = isSkinAvailable(sk, level, topX, granted);
@@ -81,7 +83,11 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
               {sk.earn && <i className="skin-card__halo" aria-hidden="true" />}
               {sk.earn && (
                 <span className="skin-card__limit is-relic">
-                  {byGrant ? 'выдано' : available ? 'добыто' : 'реликвия'}
+                  {byGrant
+                    ? t('slots.skin.granted')
+                    : available
+                      ? t('slots.skin.earned')
+                      : t('slots.skin.relic')}
                 </span>
               )}
               <span className="skin-card__reels">
@@ -89,17 +95,17 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
                 <img src={symbolSrc(sk.id, 'star')} width={26} height={26} alt="" />
                 <img src={symbolSrc(sk.id, 'bell')} width={26} height={26} alt="" />
               </span>
-              <span className="skin-card__name">{sk.name}</span>
-              <span className="skin-card__hint">{sk.hint}</span>
+              <span className="skin-card__name">{skinText(sk.id, 'name')}</span>
+              <span className="skin-card__hint">{skinText(sk.id, 'hint')}</span>
               {sk.earn ? (
                 <span className={`skin-card__quest${available ? ' is-done' : ''}`}>
                   {byGrant ? (
-                    'выдан владельцу автомата'
+                    t('slots.skin.grantedNote')
                   ) : available ? (
-                    `добыт спином ${fmtX(topX)}`
+                    t('slots.skin.earnedBy', { x: fmtX(topX) })
                   ) : (
                     <>
-                      {sk.earn.what}
+                      {t('slots.skin.relicWhat', { x: sk.earn.topX })}
                       {/* Прогресс обязателен: условие без «сколько уже» — это
                           не цель, а отказ. */}
                       <i
@@ -108,16 +114,15 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
                       >
                         <b />
                       </i>
-                      <em>
-                        ваш лучший — {fmtX(topX)} из ×{sk.earn.topX}
-                      </em>
+                      <em>{t('slots.skin.yourBest', { x: fmtX(topX), goal: sk.earn.topX })}</em>
                     </>
                   )}
                 </span>
               ) : (
                 !available && (
                   <span className="skin-card__lock">
-                    <IconLock size={15} />с {SKIN_UNLOCK[sk.id]} уровня
+                    <IconLock size={15} />
+                    {t('slots.skin.fromLevel', { n: SKIN_UNLOCK[sk.id] })}
                   </span>
                 )
               )}
@@ -126,8 +131,7 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
         })}
       </div>
       <p className="muted" style={{ marginTop: 14, marginBottom: 0, fontSize: 12 }}>
-        «Реликвию» не открывает уровень — её зарабатывают одним крупным спином, и она остаётся
-        навсегда. Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).
+        {t('slots.skin.note')}
       </p>
     </Sheet>
   );
