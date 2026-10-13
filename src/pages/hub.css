@@ -162,7 +162,11 @@
   color: var(--gx-red-d);
   text-shadow: none;
 }
+/* The reply: every line of the talk laid out hidden in one grid cell (the box has its final
+   height from the first frame), the current line typed as shown + hidden rest (no re-wrap). */
 .hub-talk__text {
+  display: grid;
+  width: 100%;
   font-size: var(--px-fs);
   font-weight: 700;
   line-height: 1.35;
@@ -186,21 +190,18 @@
   height: 18px;
 }
 /* ≥ 44 px to tap (the plate is 27 px on phones; insets count from the padding box, hence the
-   border). Stacked plates stand 18 px apart, so their areas touch; side by side they may still
-   overlap, so the areas sit at z −1 in the frame (isolated; the map canvas lets taps through),
-   under every plate: a tap on a plate's pixels is always that plate. */
+   border): 9 px above and below, not sideways. Plates never overlap and stacked ones stand 18 px
+   apart; a closer pair (the clamped bottom row) splits the gap (`--hit-t/-b` from the layout),
+   so no area reaches another plate (a pin is a stacking context — `translate` — so a
+   z-index on `::after` can't put areas under the neighbours; only geometry can). */
 .hub-map .hub-map__frame {
-  isolation: isolate;
-  margin-bottom: 10px; /* the bottom plates' areas reach 9 px below the frame */
-}
-.hub-map .hub-map__cv {
-  pointer-events: none;
+  margin: var(--u) auto 4px;
 }
 .hub-map__pin::after {
   content: '';
   position: absolute;
-  z-index: -1;
-  inset: calc(-9px - var(--u)) calc(-2px - var(--u));
+  inset: calc(-1 * var(--hit-t, 9px) - var(--u)) calc(-1 * var(--u))
+    calc(-1 * var(--hit-b, 9px) - var(--u));
 }
 .hub-map__pin:is(:active, .is-down) {
   translate: -50% calc(-100% + var(--u));
@@ -255,4 +256,51 @@ html:not([data-input='touch']) .hub .dg-stick.is-idle,
   bottom: calc(-2 * var(--u));
   background: var(--px-ink);
   pointer-events: none;
+}
+
+.hub-talk__text > * {
+  grid-area: 1 / 1;
+}
+.hub-talk__ghost,
+.hub-talk__rest {
+  visibility: hidden;
+}
+/* The options are inert for 300 ms after the talk opens (a double tap on «Говорить»). */
+.hub-talk__opts.is-arming {
+  pointer-events: none;
+}
+
+/* Pixel motion (R31): the talk box appears in three hard opacity steps and doesn't move (its
+   rect is the same from the first frame); the portrait sits on flat wood with square corners;
+   the hero's dot on the map is a 3u square with a 1u ink ring that blinks in two steps. */
+.hub .hub-talk {
+  animation: hub-show 0.18s steps(3) both;
+}
+.hub-talk .hub-talk__face {
+  border-radius: 0;
+  background: var(--gx-wood-dd);
+}
+.hub-map .hub-map__me {
+  width: calc(3 * var(--u));
+  height: calc(3 * var(--u));
+  margin: calc(-1.5 * var(--u)) 0 0 calc(-1.5 * var(--u));
+  background: #7fe6d0;
+  box-shadow: 0 0 0 var(--u) #0b1e1a;
+  animation: hub-blink 1.2s steps(2, jump-none) infinite;
+}
+@keyframes hub-show {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes hub-blink {
+  to {
+    opacity: 0.2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub .hub-talk,
+  .hub-map .hub-map__me {
+    animation: none;
+  }
 }

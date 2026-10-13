@@ -132,8 +132,8 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   fit at 360/390/440 portrait and 6 formats × ru/de/tr with 510 812 345 coins.
   Round 2 (critic): `ch` — the widest compact form in any language is 6.71 ch of the chip font
   (ru «1,2 млрд»; `scratchpad/ui3Q/mtext.mjs`), so money reserves 7 ch; tokens 6 (7 hid them at
-  360 px). At fit 0 the chips are right-aligned (`justify-content: flex-end`) so a new map title
-  doesn't move them. Button chips get a ≥ 44 px hit area by `::after` (insets count from the
+  360 px). At fit 0 and 1 the chips are right-aligned (`justify-content: flex-end`) so a new map
+  title doesn't move them (a long one flips fit 0 → 1: at fit 0 only, chips jumped 111 px on pl). Button chips get a ≥ 44 px hit area by `::after` (insets count from the
   padding box: add the 1u border). The settings chunk is fetched on idle after a header with ⚙
   mounts and on the gear's pointerdown (first open 349 → ~270 ms at 4× in dev — the rest is
   the window's own mount).

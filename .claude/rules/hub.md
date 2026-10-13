@@ -182,10 +182,16 @@ Owner: «Когда альбомный, персонаж и всё его окр
   size collided (Шахта / Особая шахта): `HubMapSheet` lays them out in a layout effect — clamp
   into the frame (1 px in: offsetWidth is whole px), push below a pin above that is closer than
   18 px, offsets in the frame's own units (`offsetLeft/Top`; the window body may be zoomed ×2).
-  Why 18: each pin's `::after` reaches 9 px past the plate (44 px to tap), so stacked areas
-  touch but never overlap; with the critic's 8 the lower pin took the upper one's bottom. The
-  areas sit at z −1 in an isolated frame (the map canvas has `pointer-events: none`): a tap on
-  a plate's pixels is always that plate. A moved plate gets a tail (`.hub-map__tail`, the `<i>`
+  Why 18: each pin's `::after` reaches 9 px above and below the plate (44 px to tap), never
+  sideways, so stacked areas touch but never overlap and side-by-side plates (which never
+  overlap) keep their own pixels; with the critic's 8 the lower pin took the upper one's bottom.
+  A z-index on `::after` can't help: `translate` makes every pin a stacking context, so its
+  area stays at the pin's own paint level (round 2 claimed otherwise — a «Club» area took 4.5 %
+  of «Zucht» at 360 de). Only geometry keeps taps apart. The bottom row is clamped high enough
+  for its area to end inside the frame's 4-px margin (an area past it made the body scroll).
+  The frame fits the window body: if it is taller than the room left (landscape phone: body
+  scrolled 352 / 320), the layout effect sets its width from that height (`margin: 1u auto`).
+  A moved plate gets a tail (`.hub-map__tail`, the `<i>`
   before its button): a 1-art-px parchment line between ink from the plate edge to the door,
   ending in a dot. Pressed pins drop 1u (`translate`). A pin with no room below (the bottom row
   of doors) goes above instead when that moves it less; otherwise it is clamped, and only there
@@ -195,12 +201,22 @@ Owner: «Когда альбомный, персонаж и всё его окр
   (`root.clientHeight − offsetTop`, unaffected by its slide-in), eased in the renderer
   (`setInsets(top, bottom, ease)`, k = 1 − e^(−10·dt)), re-measured by a ResizeObserver on the
   box. Phone landscape forge: smith's feet 194 → 78 px against the box top at 185 (was under).
-  The idle stick ring hides while talking (`.hub:has(.hub-talk)`).
+  The idle stick ring hides while talking (`.hub:has(.hub-talk)`). Under reduced motion the
+  inset is set at once (no glide).
+- **Talk box never grows (round 3, R42):** typing grew the box a line at a time and the camera
+  re-panned after each growth (pp: 80 px in 25 steps). `.hub-talk__text` is a one-cell grid:
+  every line of the talk hidden (`.hub-talk__ghost`), plus the current line as typed `shown` +
+  hidden `rest` — the box has its final height from the first frame and a word never jumps
+  lines mid-typing. The box appears in `steps(3)` opacity only (no slide), so its rect is fixed
+  from the first frame. Double tap (R44): «Пока» opens under the thumb that pressed «Говорить»
+  — the options are inert for `ARM_MS` = 300 ms (`.is-arming`, `pointer-events: none`, and a
+  time check in the click).
 - **HUD band:** `.hub-top .gx-top::before` — flat `--px-ink` from the screen top to 2u under the
   row (z −1 in `.hub-top`): world sign plates at the spawn read as part of the HUD before.
 - **Motion and type:** the pill, toast and «Говорить» come in with `hub-in` — 2u up + opacity in
-  `steps(3)`, no scale (kit frames must not scale); the old `hub-pop` / `hub-use` keyframes are
-  gone. Weights: 700 text (toast, talk text, wallet names), 800 the talk name; `.hub-ev b`
+  `steps(3)`, no scale (kit frames must not scale); the old `hub-pop` / `hub-use` /
+  `hub-talk-in` / `hub-me` keyframes are gone. The portrait sits on flat `--gx-wood-dd` with
+  square corners; the map's hero dot is a 3u square with a 1u ink ring blinking in `steps(2)`. Weights: 700 text (toast, talk text, wallet names), 800 the talk name; `.hub-ev b`
   inherits (was 900).
 - **Press:** `usePress()` on the pad buttons, the event pill, map pins and the talk buttons
   (`.is-down` in the first frame). Pad and talk buttons are `--px-fs-sm` (`.gx-btn`'s own 15 px

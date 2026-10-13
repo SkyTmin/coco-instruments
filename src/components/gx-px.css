@@ -248,9 +248,10 @@ span.gx-top__side {
   gap: calc(3 * var(--u));
   min-width: 0;
 }
-/* With the title shown (fit 0) the chips hug the right group: a new map title (Площадь → Башня
-   Чародея) must not move them. */
-.gx-top__row[data-fit='0'] .gx-top__chips {
+/* With the title shown or just folded (fit 0–1) the chips hug the right group: a new map title
+   (Площадь → Башня Чародея) must not move them — a long one flips fit 0 → 1, and centred chips
+   jumped 111 px on a landscape phone. */
+.gx-top__row:is([data-fit='0'], [data-fit='1']) .gx-top__chips {
   justify-content: flex-end;
 }
 .gx-top__right {
