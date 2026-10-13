@@ -826,6 +826,72 @@ html[data-ff='phone-landscape'] .cas-bonus .px-btn > b {
   font-size: var(--px-fs-sm);
 }
 
+/* ---- Slots on tablet landscape and desktop: the machine is the show -------------------------- */
+/* The info column was 60 % empty parchment beside a cabinet of 11 % of the screen (critic9 #4).
+   The facts move into the top of the deck column as a 2 × 2 block, the stage takes the rest and
+   the cabinet becomes height-bound (≥ 75 % of the height). Cascade keeps its three columns: its
+   board is height-bound already. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] {
+  --cas-r: calc(140 * var(--u));
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--cas-r));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'stage info' 'stage deck' 'status deck';
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] > .cas-info {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto auto;
+  grid-template-areas: 'lvl lvl' 'jp best' 'sp hist';
+  align-content: start;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-lvl {
+  flex-wrap: nowrap;
+}
+/* A fact: icon and caption on one line, the number under them at full width. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-stat {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico k' 'v v';
+  column-gap: calc(2 * var(--u));
+  row-gap: 0;
+  padding: 0;
+  border-image-source: none;
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-stat__k {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.05;
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-hist {
+  height: auto;
+  grid-template-rows: auto auto;
+  row-gap: var(--u);
+  align-self: start;
+}
+/* The deck gives up a little height for the facts (the wood frame keeps its 8-u padding). */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-bal__v {
+  height: calc(16 * var(--u));
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-deck,
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-deck__money {
+  row-gap: calc(2 * var(--u));
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-mini {
+  min-height: calc(22 * var(--u));
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-spin {
+  min-height: calc(28 * var(--u));
+}
+/* One row of whole chips: the ones that do not fit wrap to a hidden second line (no half chip). */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-hist__row {
+  flex-wrap: wrap;
+  height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
+  overflow: hidden;
+}
+/* The quick bets go to one row of six: the deck gives the facts its height. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-chips {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 /* ---- Tablet portrait: the stage takes the whole width on top; info | deck share the bottom -- */
 html[data-ff='tablet'] .cas[data-lay='tall'] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
