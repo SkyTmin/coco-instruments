@@ -68,8 +68,9 @@ html[data-input='touch'] .mn .px-keyhint {
   padding: 0 0 calc(6 * var(--u));
 }
 .mn-side {
-  flex: 0 1 calc(124 * var(--u));
-  min-width: calc(84 * var(--u));
+  /* +4u к ширине — на поля под кольцо фокуса (см. padding ниже). */
+  flex: 0 1 calc(132 * var(--u));
+  min-width: calc(88 * var(--u));
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -80,7 +81,10 @@ html[data-input='touch'] .mn .px-keyhint {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
-  padding: calc(1 * var(--u));
+  /* Кольцо фокуса набора выступает на 3u: запас внутри колонки, чтобы оно не
+     обрезалось и не давало прокрутку; отрицательное поле возвращает геометрию. */
+  padding: calc(3 * var(--u));
+  margin: calc(-2 * var(--u));
 }
 .mn-side::-webkit-scrollbar {
   display: none;
@@ -276,9 +280,9 @@ html[data-input='touch'] .mn .px-keyhint {
   height: calc(12 * var(--u));
   padding: 0 calc(3 * var(--u));
   border: var(--u) solid transparent;
-  border-image-source: var(--pxk-badge);
-  border-image-slice: var(--pxk-badge-s);
-  border-image-width: var(--pxk-badge-w);
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
   image-rendering: pixelated;
   box-sizing: border-box;
   font-size: var(--px-fs-sm);
@@ -287,6 +291,8 @@ html[data-input='touch'] .mn .px-keyhint {
 }
 .mn-buff--frenzy {
   border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
   color: var(--px-ink);
 }
 .mn-buff--energy {
@@ -465,26 +471,44 @@ html[data-input='touch'] .mn .px-keyhint {
     calc(19 * var(--u)) calc(19 * var(--u));
   grid-template-areas: 'back money tokens keys forest gear';
 }
-/* Широкий: назад · деньги · настройки, ниже токены · ключи · этаж. */
+/* Широкий: назад · этаж · настройки, ниже деньги во всю ширину, ниже токены
+   и ключи. Колонка бывает узкой (планшет лёжа) — тогда токены и ключи сами
+   переносятся в две строки, а не обрезаются. */
 .mn--wide .mn-hud {
-  grid-template-columns:
-    calc(24 * var(--u)) minmax(0, 1fr) minmax(0, 1fr)
-    calc(24 * var(--u));
-  grid-template-areas:
-    'back money money gear'
-    'tokens tokens keys floor';
-  row-gap: calc(3 * var(--u));
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(3 * var(--u)) calc(2 * var(--u));
 }
-.mn--wide .mn-hud:has(.mn-hud__forest) {
-  grid-template-areas:
-    'back money money gear'
-    'tokens forest keys floor';
+.mn--wide .mn-hud > * {
+  flex: none;
 }
 .mn--wide .mn-hud__back {
-  justify-self: start;
+  order: 1;
+  width: calc(19 * var(--u));
+}
+.mn--wide .mn-floor {
+  order: 2;
+  flex: 1 1 0;
+  height: calc(19 * var(--u));
+}
+.mn--wide .mn-hud__forest {
+  order: 3;
 }
 .mn--wide .mn-hud__gear {
-  justify-self: end;
+  order: 4;
+  width: calc(19 * var(--u));
+}
+.mn--wide .mn-stat--coins {
+  order: 5;
+  flex: 1 1 100%;
+}
+.mn--wide .mn-stat--tokens {
+  order: 6;
+  flex: 1 1 calc(52 * var(--u));
+}
+.mn--wide .mn-stat--keys {
+  order: 7;
+  flex: 1 1 calc(34 * var(--u));
 }
 .mn--wide .mn-stat--coins .mn-stat__n {
   font-size: var(--px-fs-hero);
@@ -750,6 +774,20 @@ html[data-input='touch'] .mn .px-keyhint {
   font: 400 var(--px-fs) / 1 var(--px-font);
   color: var(--px-gold);
 }
+/* В боковой колонке счёт уходит под название — иначе оно ломается в три строки. */
+.mn--wide .mn-quest {
+  grid-template-columns: calc(16 * var(--u)) minmax(0, 1fr);
+  row-gap: calc(1 * var(--u));
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+.mn--wide .mn-quest > :first-child {
+  grid-row: span 2;
+}
+.mn--wide .mn-quest > :last-child {
+  grid-column: 2;
+  justify-self: start;
+}
 .mn-quest.is-ready {
   border-image-source: var(--pxk-frame-parch);
   border-image-slice: var(--pxk-frame-parch-s);
@@ -860,6 +898,19 @@ html[data-input='touch'] .mn .px-keyhint {
   right: calc(-1 * var(--u));
   top: calc(-4 * var(--u));
 }
+/* В боковой колонке: значок и заполненность сверху, кнопка продажи — под ними
+   во всю ширину, чтобы подпись не обрезалась. */
+.mn--wide .mn-bag {
+  grid-template-columns: calc(14 * var(--u)) minmax(0, 1fr);
+  grid-template-rows: auto calc(15 * var(--u));
+  row-gap: calc(2 * var(--u));
+  height: auto;
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(4 * var(--u));
+}
+.mn--wide .mn-bag__sell {
+  grid-column: 1 / -1;
+}
 
 /* ---- Док ------------------------------------------------------------------------------ */
 /* Кнопки лёжа: значок слева, подпись справа (до двух строк) — на телефоне
@@ -874,27 +925,29 @@ html[data-input='touch'] .mn .px-keyhint {
   border: 0;
   border-image: none;
 }
+/* В боковой колонке — по две кнопки в ряд, а в узкой колонке (планшет лёжа)
+   по одной: подпись важнее, слово не рвётся посередине. */
 .mn--wide .mn-dock {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(calc(60 * var(--u)), 1fr));
 }
 .mn-dock__btn {
   justify-content: flex-start;
-  gap: calc(2 * var(--u));
+  gap: calc(1 * var(--u));
   min-width: 0;
   height: calc(21 * var(--u));
-  padding-left: calc(3 * var(--u));
-  padding-right: calc(2 * var(--u));
+  padding-left: calc(2 * var(--u));
+  padding-right: 0;
   white-space: normal;
 }
 .mn-dock__btn:active {
-  padding-left: calc(3 * var(--u));
-  padding-right: calc(2 * var(--u));
+  padding-left: calc(2 * var(--u));
+  padding-right: 0;
 }
 .mn-dock__ico {
   display: grid;
   place-items: center;
-  width: calc(14 * var(--u));
-  height: calc(14 * var(--u));
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
   flex: none;
   line-height: 0;
 }
@@ -903,8 +956,8 @@ html[data-input='touch'] .mn .px-keyhint {
   max-height: 100%;
 }
 .mn-dock__mask {
-  width: calc(14 * var(--u));
-  height: calc(14 * var(--u));
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
   color: var(--px-text);
@@ -954,6 +1007,91 @@ html:not([data-ff^='phone']) .mn :is(.mn-dock__label, .mn-bag__title, .mn-strip_
 html:not([data-ff^='phone']) .mn :is(.mn-rank, .mn-bag) .px-bar__label,
 html:not([data-ff^='phone']) .mn .mn-bag__sell {
   font-size: var(--px-fs);
+}
+
+/* ---- Сцена нового ранга (prank): анимации прежние (theme.css), рамка, лента,
+   кнопка и шрифты — набора. ------------------------------------------------------------ */
+.mn .prank {
+  padding: calc(6 * var(--u));
+}
+.mn .prank__card {
+  gap: calc(4 * var(--u));
+  width: min(100%, calc(170 * var(--u)));
+  padding: calc(10 * var(--u)) calc(8 * var(--u)) calc(8 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  color: var(--px-text);
+  font: 400 var(--px-fs) / 1.2 var(--px-font);
+}
+/* «Новый горизонт · Серебряный» длиннее карточки: лента переносится в две
+   строки, а не раздвигает карточку за край экрана. */
+.mn .prank__label {
+  box-sizing: border-box;
+  max-width: 100%;
+  height: auto;
+  min-height: calc(12 * var(--u));
+  margin-top: calc(-17 * var(--u));
+  padding-top: calc(2 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+  font-size: var(--px-fs);
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: none;
+  white-space: normal;
+}
+.mn .prank__letter {
+  display: grid;
+  place-items: center;
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  image-rendering: pixelated;
+  font: 400 calc(var(--px-fs-hero) * 2) / 1 var(--px-head);
+  color: var(--px-gold);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+.mn .prank__mine {
+  gap: calc(3 * var(--u));
+  font: 600 var(--px-fs) / 1.2 var(--px-font);
+  text-align: left;
+}
+.mn .prank__mine img {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  border-radius: 0;
+}
+.mn .prank__key {
+  gap: calc(2 * var(--u));
+  font: 600 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-gold);
+}
+.mn .prank__lvl {
+  font: 600 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-green);
+}
+.mn .prank__norm {
+  gap: calc(2 * var(--u));
+  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+}
+.mn .prank__cta {
+  margin-top: calc(2 * var(--u));
+  min-width: calc(80 * var(--u));
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 
 /* ==== Окна шахты: этажи, ранг, престиж, сброс. Рамка и лента — GxModal на наборе

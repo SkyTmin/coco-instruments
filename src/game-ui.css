@@ -2437,10 +2437,7 @@
 .pmx-top,
 .pmx-chips,
 .pmx-rank,
-.pmx-items,
-.pmx-foot,
-.pmx-quest,
-.pmx-mix {
+.pmx-foot {
   width: var(--pw);
   max-width: 100%;
 }
@@ -2593,7 +2590,6 @@
 .pmx .pstrip[class*='is-t'] .pstrip__name .gx-icon {
   color: #ff9a3a;
 }
-.pmx .pstrip__xp,
 .pmx .pstrip__bar {
   height: 5px;
 }
@@ -2616,54 +2612,6 @@
   gap: 6px;
 }
 
-/* Расходники — круглые кнопки с картинкой и числом. */
-.pmx-items {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-.pmx-item {
-  --gx-size: 48px;
-}
-.pmx-item .gx-icon {
-  width: 60%;
-  height: 60%;
-}
-.pmx-item.is-empty .gx-icon {
-  opacity: 0.4;
-}
-.pmx-item__n {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  display: grid;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--gx-wood-d);
-  box-shadow: 0 0 0 2px var(--gx-wood-dd);
-  color: var(--gx-paper);
-  font:
-    800 12px/1 'GxRubik',
-    system-ui,
-    sans-serif;
-  font-style: normal;
-}
-.pmx-item__n.is-buy {
-  background: var(--gx-green);
-  box-shadow: 0 0 0 2px var(--gx-green-d);
-  color: #fff;
-}
-.pmx-item.is-armed {
-  transform: translateY(-4px);
-  box-shadow:
-    0 4px 0 var(--gx-round-shadow),
-    0 0 0 3px var(--gx-gold),
-    0 0 16px rgba(255, 210, 90, 0.8);
-}
-
 /* Рюкзак и лагерь. */
 .pmx-foot {
   display: flex;
@@ -2671,8 +2619,7 @@
 }
 .pmx-rank,
 .pmx-bag,
-.pmx-camp,
-.pmx-quest {
+.pmx-camp {
   background: none;
 }
 .pmx-bag,
@@ -2744,123 +2691,6 @@
   gap: 2px;
 }
 
-/* Задание: номер, что сделать, полоска. Подсказка — по тапу. */
-.pmx-quest {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 0 4px;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.pmx-quest__n {
-  width: 24px;
-  height: 32px;
-  font-size: 12px;
-}
-.pmx-quest__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.pmx-quest__body b {
-  font-size: 14px;
-  font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pmx-quest__body em {
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--gx-green-d);
-}
-.pmx-quest__n2 {
-  flex: none;
-  font-weight: 800;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: var(--gx-wood-d);
-}
-.pmx-quest__n2 .gx-icon {
-  width: 20px;
-  height: 20px;
-}
-.pmx-quest.is-ready::after {
-  content: '';
-  position: absolute;
-  inset: -8px;
-  border-radius: 6px;
-  box-shadow:
-    0 0 0 3px var(--gx-gold),
-    0 0 16px rgba(255, 210, 90, 0.7);
-  opacity: 0;
-  animation: prank-call 1.2s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.pmx-mix {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.pmx-mix__rock {
-  height: 26px;
-  font-size: 13px;
-}
-
-/* Окно «Шахты». */
-.pmx-mines__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 4px;
-  border-radius: 6px;
-}
-.pmx-mines__row + .pmx-mines__row {
-  border-top: 2px dashed rgba(109, 75, 39, 0.25);
-}
-.pmx-mines__row.is-here {
-  background: rgba(255, 255, 255, 0.45);
-}
-.pmx-mines__row.is-locked {
-  opacity: 0.55;
-}
-.pmx-mines__info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pmx-mines__info b {
-  font-size: 15px;
-  font-weight: 800;
-}
-.pmx-mines__rocks {
-  display: flex;
-  gap: 3px;
-}
-.pmx-mines__rocks img {
-  width: 18px;
-  height: 18px;
-  image-rendering: pixelated;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
-}
-.pmx-mines__lock {
-  color: var(--gx-wood-d);
-  padding-right: 8px;
-}
-.pmx-mines .gx-btn {
-  gap: 4px;
-}
-
 /* Окно ранга: порода и монеты полосками. */
 .pmx-norm__row {
   display: flex;
@@ -2891,44 +2721,6 @@
   gap: 8px;
   margin-top: 10px;
 }
-
-/* Окно престижа. */
-.pmx-pres__swap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin: 2px 0 8px;
-  color: var(--gx-wood-d);
-}
-.pmx-pres__swap .gx-hex {
-  width: 36px;
-  height: 46px;
-  font-size: 18px;
-}
-.pmx-pres__keep {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 8px 0 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--gx-wood-d);
-}
-
-/* Настройки. */
-.pmx-wipe {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 12px;
-}
-.pmx-wipe p {
-  margin: 0 0 6px;
-  font-size: 12px;
-  opacity: 0.75;
-}
 /* Всё, кроме девяти рядов поля (замерено на стенде, v2.67). Лес и рыбалка
    носят тот же каркас `.pmx`, но меряют себя сами. */
 .pmx .prison {
@@ -2946,173 +2738,11 @@
    ряда фишек, ниже расходники, рюкзак, панель и задание, зазоры 6 px.
    `--below` замерен на стенде (430×805, 390×750, 375×667, 412×915): всё,
    кроме девяти рядов клеток. Поменяли строку — перемерьте. */
-.pmx--mine {
-  padding: calc(var(--safe-top) + var(--content-top) + 6px) 10px calc(var(--safe-bottom) + 8px);
-}
-.pmx--mine .prison {
-  --below: 300px;
-  --cell: min(
-    calc((min(100vw, 560px) - 40px) / 7),
-    max(32px, calc((100vh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
-    60px
-  );
-  --cell: min(
-    calc((min(100vw, 560px) - 40px) / 7),
-    max(32px, calc((100dvh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
-    60px
-  );
-  --pw: max(calc(var(--cell) * 7 + 16px), min(100%, 340px));
-  gap: 6px;
-}
-.pmx--mine .prison.has-guide {
-  --below: 345px;
-}
 /* Клетка — в целых пикселях, где браузер умеет round(): границы рядов не
    падают на полпикселя (см. «.pcell.is-top» в theme.css). */
-@supports (width: round(down, 10.5px, 1px)) {
-  .pmx--mine .prison {
-    --cell: round(
-      down,
-      min(
-        calc((min(100vw, 560px) - 40px) / 7),
-        max(32px, calc((100dvh - var(--safe-top) - var(--content-top) - var(--below)) / 9)),
-        60px
-      ),
-      1px
-    );
-  }
-}
-.pmx-bar {
-  gap: 4px;
-}
-.pmx-bar .pmx-top__btn {
-  --gx-size: 34px;
-}
-.pmx-bar .gx-chip {
-  height: 30px;
-  flex: none;
-  gap: 4px;
-  padding: 0 8px 0 5px;
-  font-size: 14px;
-}
-.pmx-bar .pmx-chip--coins {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.pmx-bar .gx-chip > :not(.mnum) {
-  flex: none;
-}
-.pmx-bar .pmx-chip--coins .mnum {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.pmx-bar .mnum {
-  font: inherit;
-}
 .pmx-top__btn.is-locked {
   filter: grayscale(1);
   opacity: 0.55;
-}
-/* Этаж: руда этажа и буква. Руда — квадрат с тёмной рамкой, как клетка. */
-.pmx-floor {
-  gap: 5px;
-  padding: 0 10px 0 4px;
-  font-weight: 800;
-}
-.pmx-floor__ore {
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  box-shadow: 0 0 0 2px var(--gx-wood-dd);
-  image-rendering: pixelated;
-}
-.pmx--mine .pmx-rank {
-  min-height: 0;
-}
-.pmx--mine .pmx-rank__hex {
-  width: 22px;
-  height: 28px;
-  font-size: 13px;
-}
-.pmx--mine .pmx-items {
-  gap: 10px;
-}
-.pmx--mine .pmx-item {
-  --gx-size: 42px;
-}
-.pmx--mine .pmx-item__n {
-  right: -5px;
-  bottom: -5px;
-  min-width: 18px;
-  height: 18px;
-  font-size: 11px;
-}
-.pmx--mine .pmx-bag {
-  padding: 0 4px;
-}
-.pmx--mine .pmx-bag__ico {
-  width: 28px;
-  height: 28px;
-}
-.pmx--mine .pmx-bag__body .gx-bar {
-  height: 18px;
-}
-.pmx--mine .pmx-bag__sell {
-  min-height: 30px;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-.pmx--mine .pmx-dock {
-  padding: 0 2px;
-}
-.pmx--mine .pmx-dock__btn {
-  min-height: 0;
-  gap: 1px;
-  padding: 1px 0 0;
-}
-.pmx--mine .pmx-dock__btn > .gx-icon,
-.pmx--mine .pmx-dock__btn > .ppick-ico,
-.pmx--mine .pmx-dock__pet {
-  width: 24px;
-  height: 24px;
-}
-.pmx--mine .pmx-dock__btn b {
-  font-size: 10px;
-  line-height: 1.1;
-}
-/* Задание — одной строкой: номер, название и полоска под ним, счёт справа. */
-.pmx--mine .pmx-quest {
-  min-height: 0;
-  gap: 6px;
-  padding: 0 4px;
-}
-.pmx--mine .pmx-quest__n {
-  width: 20px;
-  height: 26px;
-  font-size: 11px;
-}
-.pmx--mine .pmx-quest__body {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-}
-.pmx--mine .pmx-quest__body b {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 1.15;
-}
-.pmx--mine .pmx-quest__bar {
-  flex: none;
-  width: 56px;
-}
-.pmx--mine .pmx-quest__body em {
-  font-size: 11px;
-  line-height: 1.1;
-}
-.pmx--mine .pmx-quest .gx-btn--sm {
-  min-height: 28px;
 }
 
 /* ==========================================================================
@@ -3225,7 +2855,6 @@
   .fmx-tap .gx-icon,
   .fmx-mill.is-busy .fmx-mill__saw,
   .pmx-rank.is-ready::after,
-  .pmx-quest.is-ready::after,
   .pmx-bag.is-full .pmx-bag__sell {
     animation: none;
   }
@@ -3470,11 +3099,6 @@ html[data-ff='desktop'] .gxh__cards {
 }
 .dgx-menu__audio {
   align-self: center;
-}
-.pmx-sound {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 10px;
 }
 
 /* ==========================================================================
@@ -4663,38 +4287,6 @@ html[data-ff='desktop'] .gxh__cards {
 }
 
 /* Лестница этажей (v2.66): горизонты, цельный блок руды, цена руды и блока. */
-.pmx-mines__item + .pmx-mines__item .pmx-mines__row {
-  border-top: 2px dashed rgba(109, 75, 39, 0.25);
-}
-.pmx-mines__band {
-  margin: 10px 0 4px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--gx-wood-d);
-  opacity: 0.8;
-}
-.pmx-mines__item:first-child .pmx-mines__band {
-  margin-top: 0;
-}
-.pmx-mines__ore {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 4px;
-  box-shadow:
-    0 0 0 1.5px rgba(0, 0, 0, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.3);
-}
-.pmx-mines__row.is-locked .pmx-mines__ore {
-  filter: brightness(0.15) saturate(0);
-}
-.pmx-mines__price {
-  font-size: 12px;
-  font-weight: 700;
-  opacity: 0.75;
-}
 .pmx-norm__row > img {
   image-rendering: auto;
 }
@@ -4719,9 +4311,6 @@ html[data-ff='desktop'] .gxh__cards {
   margin: 0 0 12px;
   font-size: 12px;
   opacity: 0.75;
-}
-.pmx-mines__price {
-  white-space: nowrap;
 }
 
 /* ==== Кузница и редкость (v2.67) ==========================================
@@ -5367,70 +4956,6 @@ button.fg-slot {
 .pmx-foot .pmx-bag {
   flex: 1;
 }
-.pmx-dock {
-  width: var(--pw);
-  max-width: 100%;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
-  padding: 2px 2px 3px;
-}
-.pmx-dock__btn {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-height: 50px;
-  padding: 3px 0 2px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--gx-paper);
-  font: inherit;
-  cursor: pointer;
-  transition: transform 70ms ease-out;
-  touch-action: manipulation;
-}
-.pmx-dock__btn:active {
-  transform: translateY(2px);
-}
-.pmx-dock__btn + .pmx-dock__btn::before {
-  content: '';
-  position: absolute;
-  left: -2px;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  background: rgba(0, 0, 0, 0.28);
-}
-.pmx-dock__btn > .gx-icon,
-.pmx-dock__btn > .ppick-ico,
-.pmx-dock__pet {
-  width: 28px;
-  height: 28px;
-  color: var(--gx-gold);
-}
-.pmx-dock__pet {
-  image-rendering: pixelated;
-  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.4));
-}
-.pmx-dock__btn b {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
-}
-.pmx-dock__btn .gx-badge {
-  top: -4px;
-  right: 2px;
-  gap: 2px;
-}
-/* Кирку можно выковать: кузница светится, пока не зайдёшь. */
-.pmx-dock__btn.is-ready {
-  background: radial-gradient(closest-side, rgba(255, 190, 80, 0.35), transparent);
-}
 
 /* Руда твёрже кирки: тусклее и с меткой, какая кирка её берёт. */
 .pcell.is-hard .pcell__face {
@@ -5463,28 +4988,6 @@ button.fg-slot {
 }
 .pquota__chip.is-pick .gx-icon {
   color: #ffb4a0;
-}
-.pmx-mines__hard {
-  margin-left: 6px;
-  padding: 0 5px;
-  border-radius: 6px;
-  background: rgba(109, 75, 39, 0.16);
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 800;
-}
-.pmx-mines__hard.is-no {
-  background: rgba(226, 102, 91, 0.2);
-  color: var(--gx-red-d);
-}
-.pmx-norm__sub {
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.72;
-}
-.pmx-norm__go {
-  align-self: flex-start;
 }
 
 /* ==========================================================================
@@ -8573,11 +8076,6 @@ button.fg-slot {
     transform: scale(1.05);
     opacity: 1;
   }
-}
-.pmx-dock__pets {
-  position: relative;
-  display: grid;
-  place-items: center;
 }
 
 /* ---- Креатив владельца (v2.81) ------------------------------------------ */

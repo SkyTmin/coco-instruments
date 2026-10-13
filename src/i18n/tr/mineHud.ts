@@ -118,10 +118,11 @@ export const mineHud: Translation<typeof ru> = {
   },
   dock: {
     camp: 'Kamp',
-    forge: 'Demirhane',
+    // \u00ad — мягкий перенос: в узкой кнопке дока слово делится по слогу.
+    forge: 'Demir\u00adhane',
     books: 'Kitaplar',
     chests: 'Sandıklar',
-    pets: 'Hayvanlar',
+    pets: 'Hay\u00advan\u00adlar',
     more: 'Diğer',
     nursery: 'Kuluçka',
   },

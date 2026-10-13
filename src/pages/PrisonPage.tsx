@@ -1649,7 +1649,7 @@ export function PrisonPage() {
   const cell = useFieldCell(rootRef, slotRef, frameRef, wide, shell.scale);
   // Отряд на кромке рамы растёт вместе с клеткой; на телефоне — прежние 44.
   const petSize = Math.max(44, Math.min(112, Math.round(cell * 0.9)));
-  const dockIco = 14 * shell.scale;
+  const dockIco = 12 * shell.scale;
 
   // Горячие клавиши шахты (слой действий src/input): I инвентарь, P питомцы,
   // F кузница, B книги, C сундуки, M этажи, L лагерь, E продать рюкзак,
@@ -1973,7 +1973,7 @@ export function PrisonPage() {
       >
         {!wide && streakBox}
         {(anyBuff || rush || yardEv || prison.zone.on) && (
-          <div className="mn-buffs px-dark">
+          <div className="mn-buffs">
             {prison.zone.on && (
               <button
                 type="button"
@@ -2761,7 +2761,7 @@ export function PrisonPage() {
           }}
         >
           <div className="prank__card">
-            <span className="prank__label">
+            <span className="prank__label px-ribbon">
               {horizonOf(sceneShown.rank).from === sceneShown.rank
                 ? t('mineHud.scene.horizon', {
                     name: horizonName(HORIZONS.indexOf(horizonOf(sceneShown.rank))),
@@ -2779,7 +2779,7 @@ export function PrisonPage() {
               })}
             </span>
             <span className="prank__key">
-              <KeyIcon size={13} /> {t('mineHud.scene.key')}
+              <KeyIcon size={10 * u} /> {t('mineHud.scene.key')}
             </span>
             {FOREST_ON && sceneShown.rank === FOREST_UNLOCK_RANK && (
               <span className="prank__lvl">{t('mineHud.scene.forest')}</span>
@@ -2810,7 +2810,7 @@ export function PrisonPage() {
                 })}
               </span>
             )}
-            <span className="prank__cta">{t('mineHud.scene.toMine')}</span>
+            <span className="prank__cta px-btn px-btn--gold px-f">{t('mineHud.scene.toMine')}</span>
           </div>
         </div>
       )}
