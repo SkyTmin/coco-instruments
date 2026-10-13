@@ -26,7 +26,7 @@ describe('fmtCompact', () => {
 
   it('never prints the narrow no-break space the game font can’t show', () => {
     for (const l of ['ru', 'fr', 'de', 'tr', 'en', 'es', 'it'] as const)
-      expect(fmtCompact(510_812_345, l)).not.toMatch(/ /);
+      expect(fmtCompact(510_812_345, l)).not.toMatch(/\u202f/);
     expect(fmtCompact(Number.NaN, 'ru')).toBe('—');
   });
 });

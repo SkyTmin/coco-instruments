@@ -3,7 +3,7 @@
 // cells. The cabinet itself (reels, grid, lever, skins) is untouched: it is drawn at its old
 // fixed pixel size and scaled as one piece, because the reel motion moves in those pixels.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode, RefObject } from 'react';
 import { Button, Icon, KeyHint, usePress } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
 import { useAction } from '@/input/hooks';
@@ -126,6 +126,21 @@ export function useCasLayout(): 'tall' | 'wide' {
 /** Phone landscape: the page renders no GameTop row (critic 7c: it took 62 of 390 px). */
 export function useCasLying(): boolean {
   return useFormFactor().ff === 'phone-landscape';
+}
+
+/** Круглая кнопка шапки (`gx-round`): нажатие видно в первый кадр (`usePress` → `.is-down`). */
+export function CasRound({ className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const press = usePress(ref);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      {...rest}
+      {...press}
+      className={`gx-round gx-round--dark${className ? ` ${className}` : ''}`}
+    />
+  );
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   CasStat,
   CasToggles,
   fitStyles,
+  CasRound,
   CasTools,
   keepDot,
   KitIcon,
@@ -1068,9 +1069,8 @@ export function SlotsPage() {
   // съедал 62 из 390 px: те же кнопки и «Назад» стоят строкой наверху сводки (CasTools).
   const topRight = (
     <>
-      <button
-        type="button"
-        className="gx-round gx-round--dark cas-skin-btn"
+      <CasRound
+        className="cas-skin-btn"
         onClick={() => {
           tapLight();
           setSkinSheet(true);
@@ -1080,10 +1080,8 @@ export function SlotsPage() {
         data-act="skin"
       >
         <Sym id={skinOf(skin).preview} skin={skin} size={22} />
-      </button>
-      <button
-        type="button"
-        className="gx-round gx-round--dark"
+      </CasRound>
+      <CasRound
         onClick={() => {
           tapLight();
           setSheet(true);
@@ -1092,10 +1090,8 @@ export function SlotsPage() {
         data-tip={tr('slots.a11y.rules')}
       >
         <KIcon name="information" />
-      </button>
-      <button
-        type="button"
-        className="gx-round gx-round--dark"
+      </CasRound>
+      <CasRound
         onClick={() => {
           tapLight();
           primeAudio();
@@ -1106,7 +1102,7 @@ export function SlotsPage() {
         data-act="settings"
       >
         <KIcon name="gear" />
-      </button>
+      </CasRound>
     </>
   );
 

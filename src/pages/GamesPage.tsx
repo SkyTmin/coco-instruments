@@ -17,7 +17,7 @@ import { GameScreen } from '@/game-shell/GameScreen';
 import { Bar, usePress } from '@/ui-px';
 import { fmtCompact, fmtNum as fmt, skinText, useT } from '@/i18n';
 import { GameSettings } from '@/settings';
-import { CasStat, KitIcon, useCasLayout } from './casino-ui';
+import { CasRound, CasStat, KitIcon, useCasLayout } from './casino-ui';
 
 /**
  * Казино — здание двора (v2.66). Каторга — главная игра, автоматы — её
@@ -76,9 +76,7 @@ export function GamesPage() {
           right={
             <>
               <AudioToggles />
-              <button
-                type="button"
-                className="gx-round gx-round--dark"
+              <CasRound
                 aria-label={t('common.settings')}
                 onClick={() => {
                   tapLight();
@@ -86,7 +84,7 @@ export function GamesPage() {
                 }}
               >
                 <KIcon name="gear" />
-              </button>
+              </CasRound>
             </>
           }
         />
