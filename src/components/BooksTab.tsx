@@ -94,7 +94,7 @@ import {
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
 import { useAction } from '@/input';
-import { Bar, Button, Heading, Icon, Modal, Panel, Slot, useTip } from '@/ui-px';
+import { Bar, Button, Heading, Icon, Modal, Panel, Slot, usePress, useTip } from '@/ui-px';
 
 const fmt = (n: number) => fmtNum(n);
 
@@ -364,6 +364,7 @@ function Compare({
  */
 export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const t = useT();
+  const press = usePress();
   const win = !!onClose;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -647,6 +648,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
                   : t('books.dustOff', { n: Math.min(p.dust, need) })
           }
           onClick={toggleDust}
+          {...press}
         >
           <b>{t('books.pct', { v: check === 'lower' ? b.chance : chance })}</b>
           {canDust && (
@@ -1452,6 +1454,7 @@ function BookTip({
  */
 function MageCard({ poor }: { poor: boolean }) {
   const t = useT();
+  const press = usePress();
   const [k, setK] = useState(0);
   const line =
     poor && k === 0 ? t('books.magePoor') : mageLine((poor ? k - 1 : k) % MAGE_LINES.length);
@@ -1461,6 +1464,7 @@ function MageCard({ poor }: { poor: boolean }) {
         type="button"
         className="pbk-mage px-f"
         aria-label={t('books.mageName')}
+        {...press}
         onClick={() => {
           primeAudio();
           softChime(1);

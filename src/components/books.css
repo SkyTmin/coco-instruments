@@ -74,6 +74,12 @@
   text-align: left;
   cursor: pointer;
 }
+/* Pressed (kit `usePress`): the non-kit buttons sink one step like a kit button. */
+.bkx-chance:is(:active, .is-down),
+.bkx .pbk-mage:is(:active, .is-down) {
+  translate: 0 var(--u);
+  filter: brightness(0.9);
+}
 .bkx-chance.is-hi > b {
   color: var(--px-green);
 }

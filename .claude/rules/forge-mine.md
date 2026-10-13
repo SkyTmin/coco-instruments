@@ -290,5 +290,9 @@ Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventor
     on phones, the count in ink on a well frame at the corner (positioned against `.px-tab`: the
     kit label clips). Bunk chest: kit-size cells `repeat(auto-fill, --slot)`; action places =
     min(actions, `ACT_SLOTS`). Tooltip icons 24 px, rarity as the kit pill.
+  - Phone portrait forge list: the 17-pick strip first, the 72u details under it — details first
+    left 0 of 17 picks on screen at 360×800. Stat number line-height = its row (1.15): at 1 a
+    tablet's 1em icon stuck 3 px out. Phone-landscape backpack tabs: `grid-auto-columns:
+    max-content` (an auto track shrank to the kit label's `min-width: 0` and cut «Alles»).
 - **Not verified**: a real phone / Telegram webview, hyphenation (the stand's Linux Chromium has no
   dictionaries — `hyphens: auto` is for phones), gamepad hardware (actions emitted on the bus).
