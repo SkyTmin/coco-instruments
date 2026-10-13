@@ -376,13 +376,20 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
 - **Dark surfaces:** the session card's peak sits on an ink plate (`--sesk-plate: var(--px-text)`
   resolved on the light card, then `.px-dark` on the plate) — rarity colours read only on dark.
   The hall note over the yard background is `.px-dark`.
-- Touch targets ≥ `--gx-hit` (44 px): bet −/+/value, auto/turbo in landscape, bonus buttons.
+- Touch targets ≥ `--gx-hit` (44 px): bet −/+/value, auto/turbo in landscape, bonus buttons;
+  in `tall` the bet −/+/value are 24u (48 px on phones, critic R13). Landscape keeps 44 — the
+  deck has no height to spare there (Spin ends 2 px above the edge).
 - Hall: wallet (coins + casino level) and three cards — Slots, Cascade, «Каторга» (→ `/prison`,
   rank letter + tokens). A card is one button; «Играть» is drawn, not a nested button. The hall
   gets the screen height and no more (`.gs__main` / `.hall` flex 1 1 + `min-height: 0`); the
   cards share it and the art is what gives way: symbols are `object-fit: contain` in a definite
   grid cell. Phone landscape: the wallet is one line and the note is hidden — else «Play» fell
   under the edge. Watch `.gs__main` scrollHeight, not `#root`: the shell clips, it does not scroll.
+  Long skin names («Nuit des citrouilles») get `.is-long` (> 10 letters): a step smaller, two
+  lines. Fact values: ≥ 100 000 compact without decimals below a million («988 тыс.»), and
+  `CasStat fit` steps the font down (`data-fit` 1–2, the coin goes at 2) instead of clipping —
+  only in the hall: in play a changing font would move the info strip. Stress values used for the
+  check: spins 12 345, best 987 654, tokens 1 234 567, balance 123 456 789, in all 7 languages.
 - Session card: on a low screen (`orientation: landscape` and `max-height: 520px`) it is two
   columns (peak + net | stats + buttons via `.sesk__col`, `display: contents` elsewhere); the
   veil row is `minmax(0, 1fr)` so `max-height: 100%` holds.
