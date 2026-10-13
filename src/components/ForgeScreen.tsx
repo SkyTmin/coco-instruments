@@ -24,6 +24,8 @@ import {
 } from '@/components/PickArt';
 import { preloadPx, PxStrip } from '@/components/PxStrip';
 import { useFinanceStore } from '@/store';
+import { fmtNum, fmtShort, pickName, rarityName, rich, rockName, t, useT } from '@/i18n';
+import { nameIn, pickTitle } from '@/i18n/data-mine';
 import {
   AUTOSELL_TOKENS,
   BAG_MAX,
@@ -39,8 +41,6 @@ import {
   pickSpeed,
   PICKS,
   rankLetter,
-  ROCKS,
-  shortMoney,
 } from '@/lib/prison';
 import { rarityOf } from '@/lib/rarity';
 import { registerEscape } from '@/lib/escape-stack';
@@ -59,7 +59,7 @@ import {
 } from '@/lib/sound';
 import { notifySuccess, notifyWarning, tapLight, tapMedium } from '@/lib/haptics';
 
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
+const fmt = (n: number) => fmtNum(n);
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -67,9 +67,9 @@ const reduceMotion = () =>
 
 /** Руды списком: «гранат и топаз». */
 function oreList(rocks: number[]): string {
-  const names = rocks.map((r) => ROCKS[r].name.toLowerCase());
+  const names = rocks.map((r) => nameIn(rockName(r)));
   if (names.length < 2) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} и ${names[names.length - 1]}`;
+  return t('forge.listAnd', { a: names.slice(0, -1).join(', '), b: names[names.length - 1] });
 }
 
 export function ForgeScreen({
@@ -80,6 +80,7 @@ export function ForgeScreen({
   /** Монеты ушли — табло встаёт на новое значение. */
   onSpend?: () => void;
 }) {
+  const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonForge = useFinanceStore((s) => s.prisonForge);
@@ -141,20 +142,23 @@ export function ForgeScreen({
       notifyWarning();
       say(
         next?.prestige
-          ? `Откроется после ${next.prestige}-го престижа`
-          : `Куётся на этаже ${rankLetter(next!.floor)}: там лежит ${ROCKS[next!.floor].name.toLowerCase()}`,
+          ? t('forge.say.prestige', { n: next.prestige })
+          : t('forge.say.floor', {
+              rank: rankLetter(next!.floor),
+              rock: nameIn(rockName(next!.floor)),
+            }),
       );
       return;
     }
     if (!check.ore) {
       notifyWarning();
       const [rock, k] = check.missing[0];
-      say(`Не хватает: ${ROCKS[rock].name.toLowerCase()} ×${fmt(k)}`);
+      say(t('forge.say.ore', { rock: nameIn(rockName(rock)), n: fmt(k) }));
       return;
     }
     if (balance < coins) {
       notifyWarning();
-      say(`Не хватает ${fmt(coins - balance)} монет`);
+      say(t('forge.say.coins', { n: Math.round(coins - balance) }));
       return;
     }
     const got = prisonForge();
@@ -172,8 +176,13 @@ export function ForgeScreen({
     const left = Math.max(0, need - box - bag);
     say(
       left
-        ? `${ROCKS[rock].name}: в ящике ${fmt(box)}, в рюкзаке ${fmt(bag)}, ещё ${fmt(left)}. Продай рюкзак — нужная руда ляжет в ящик сама`
-        : `${ROCKS[rock].name}: есть всё — в ящике ${fmt(box)}, в рюкзаке ${fmt(bag)}`,
+        ? t('forge.say.oreLeft', {
+            rock: rockName(rock),
+            box: fmt(box),
+            bag: fmt(bag),
+            left: fmt(left),
+          })
+        : t('forge.say.oreAll', { rock: rockName(rock), box: fmt(box), bag: fmt(bag) }),
     );
   };
 
@@ -193,10 +202,10 @@ export function ForgeScreen({
   // лестнице. Лучшая при этом никуда не девается — от неё кузница и ранг.
   const ladderTap = (i: number) => {
     const d = PICKS[i];
-    const r = rarityOf(d.rarity).name.toLowerCase();
+    const r = nameIn(rarityName(rarityOf(d.rarity).id));
     if (i === p.pick) {
       tapLight();
-      say(`${d.name} кирка в руке · ${r} · ⛏${d.power}`);
+      say(t('forge.say.inHand', { name: pickName(i), rarity: r, power: d.power }));
       return;
     }
     if (i <= p.pickMax) {
@@ -204,14 +213,20 @@ export function ForgeScreen({
       if (!prisonEquip(i)) return;
       tapMedium();
       uiTap();
-      say(`В руке: ${d.name.toLowerCase()} кирка · ⛏${d.power}`);
+      say(t('forge.say.equip', { name: nameIn(pickName(i)), power: d.power }));
       return;
     }
     tapLight();
     say(
       d.prestige
-        ? `${d.name} · ${r} · после ${d.prestige}-го престижа, из руды особой шахты`
-        : `${d.name} · ${r} · ⛏${d.power}: куётся на этаже ${rankLetter(d.floor)}, открывает ${oreList(opensRocks(i))}`,
+        ? t('forge.say.ladderPrestige', { name: pickName(i), rarity: r, n: d.prestige })
+        : t('forge.say.ladderFloor', {
+            name: pickName(i),
+            rarity: r,
+            power: d.power,
+            rank: rankLetter(d.floor),
+            list: oreList(opensRocks(i)),
+          }),
     );
   };
 
@@ -219,21 +234,21 @@ export function ForgeScreen({
   if (!check) cta = '';
   else if (!check.open)
     cta = next?.prestige
-      ? `После ${next.prestige}-го престижа`
-      : `Откроется на этаже ${rankLetter(next!.floor)}`;
-  else if (!check.ore) cta = 'Не хватает руды';
-  else if (balance < coins) cta = `Не хватает ${shortMoney(coins - balance)}`;
-  else cta = 'Выковать';
+      ? t('forge.cta.prestige', { n: next.prestige })
+      : t('forge.cta.floor', { rank: rankLetter(next!.floor) });
+  else if (!check.ore) cta = t('forge.cta.ore');
+  else if (balance < coins) cta = t('forge.cta.coins', { sum: fmtShort(coins - balance) });
+  else cta = t('forge.cta.go');
 
   return createPortal(
-    <div className="gx fg" role="dialog" aria-label="Кузница">
+    <div className="gx fg" role="dialog" aria-label={t('forge.title')}>
       <div className="fg__glow" aria-hidden="true" />
       <div className="fg__wrap">
         <div className="fg__top">
           <button
             type="button"
             className="gx-round gx-round--dark fg__back"
-            aria-label="Назад"
+            aria-label={t('common.back')}
             onClick={() => {
               tapLight();
               onClose();
@@ -241,9 +256,9 @@ export function ForgeScreen({
           >
             <KIcon name="arrowLeft" />
           </button>
-          <div className="gx-ribbon fg__title">Кузница</div>
+          <div className="gx-ribbon fg__title">{t('forge.title')}</div>
           <span className="gx-chip fg__coins">
-            <CoinIcon size={16} /> {shortMoney(balance)}
+            <CoinIcon size={16} /> {fmtShort(balance)}
           </span>
         </div>
 
@@ -253,20 +268,20 @@ export function ForgeScreen({
             <PickArt pick={p.pick} size={164} />
             <i className="fg-hero__plinth" aria-hidden="true" />
           </div>
-          <RarityName rarity={cur.rarity}>{cur.name} кирка</RarityName>
+          <RarityName rarity={cur.rarity}>{pickTitle(p.pick)}</RarityName>
           <RarityChip rarity={cur.rarity} />
           <div className="fg-stats">
             <span className="fg-stat">
               <b>⛏ {cur.power}</b>
-              <i>Сила</i>
+              <i>{t('forge.power')}</i>
             </span>
             <span className="fg-stat">
               <b>{fmt(speed)}</b>
-              <i>блоков/мин</i>
+              <i>{t('forge.perMin')}</i>
             </span>
             <span className="fg-stat">
               <b>{lvl.level}</b>
-              <i>уровень</i>
+              <i>{t('forge.level')}</i>
             </span>
           </div>
         </div>
@@ -274,11 +289,11 @@ export function ForgeScreen({
         {next && (
           <div className="gx-panel gx-panel--wood fg-recipe">
             <div className="fg-recipe__head">
-              <span>Следующая</span>
-              <RarityName rarity={next.rarity}>{next.name} кирка</RarityName>
+              <span>{t('forge.next')}</span>
+              <RarityName rarity={next.rarity}>{pickTitle(n)}</RarityName>
             </div>
             <div className="fg-recipe__row">
-              <span className="fg-slot" title={PICKS[p.pickMax].name}>
+              <span className="fg-slot" title={pickName(p.pickMax)}>
                 <PickArt pick={p.pickMax} size={40} fx={false} />
               </span>
               <i className="fg-recipe__plus">+</i>
@@ -291,7 +306,11 @@ export function ForgeScreen({
                     type="button"
                     className={`fg-slot fg-slot--ore${ok ? ' is-ok' : ''}`}
                     onClick={() => oreTap(o.rock, o.need, o.box, o.bag)}
-                    aria-label={`${ROCKS[o.rock].name}: ${have} из ${o.need}`}
+                    aria-label={t('forge.ore', {
+                      rock: rockName(o.rock),
+                      have: String(have),
+                      need: String(o.need),
+                    })}
                   >
                     <OreIcon rock={o.rock} size={36} />
                     <span className="fg-slot__bar">
@@ -308,7 +327,7 @@ export function ForgeScreen({
                     </span>
                     <b>
                       {ok ? <KIcon name="checkmark" size={11} /> : null}
-                      {shortMoney(have)}/{shortMoney(o.need)}
+                      {fmtShort(have)}/{fmtShort(o.need)}
                     </b>
                   </button>
                 );
@@ -325,11 +344,12 @@ export function ForgeScreen({
             </div>
             <div className="fg-gain">
               <span>
-                <GxIcon name="pick" size={16} /> Сила ⛏ {cur.power} → <b>{next.power}</b>
+                <GxIcon name="pick" size={16} />{' '}
+                {rich('forge.gainPower', { a: String(cur.power), b: <b>{next.power}</b> })}
                 {opens.length > 0 && (
                   <em>
                     {' '}
-                    · берёт {oreList(opens)}
+                    {t('forge.takes', { list: oreList(opens) })}
                     {opens.map((r) => (
                       <OreIcon key={r} rock={r} size={16} />
                     ))}
@@ -337,7 +357,8 @@ export function ForgeScreen({
                 )}
               </span>
               <span>
-                <GxIcon name="energy" size={16} /> {fmt(speed)} → <b>{fmt(nextSpeed)}</b> блоков/мин
+                <GxIcon name="energy" size={16} />{' '}
+                {rich('forge.gainSpeed', { a: fmt(speed), b: <b>{fmt(nextSpeed)}</b> })}
               </span>
             </div>
             <button
@@ -355,10 +376,10 @@ export function ForgeScreen({
               {ready &&
                 (coins > 0 ? (
                   <small>
-                    · {shortMoney(coins)} <CoinIcon size={13} />
+                    · {fmtShort(coins)} <CoinIcon size={13} />
                   </small>
                 ) : (
-                  <small>· оплачено</small>
+                  <small>{t('forge.paid')}</small>
                 ))}
             </button>
           </div>
@@ -368,8 +389,11 @@ export function ForgeScreen({
             <GxIcon name="laurels" size={28} />
             <span>
               {lockedByPrestige
-                ? `Лучшая кирка до престижа. ${lockedByPrestige.name} — после ${lockedByPrestige.prestige}-го`
-                : 'Лучше этой кирки нет'}
+                ? t('forge.bestBeforePrestige', {
+                    name: pickName(p.pickMax + 1),
+                    n: lockedByPrestige.prestige,
+                  })
+                : t('forge.best')}
             </span>
           </div>
         )}
@@ -387,16 +411,16 @@ export function ForgeScreen({
               onClick={() => ladderTap(i)}
               aria-label={
                 i === p.pick
-                  ? `${d.name}, в руке`
+                  ? t('forge.rungHand', { name: pickName(i) })
                   : i <= p.pickMax
-                    ? `${d.name}, взять в руку`
-                    : d.name
+                    ? t('forge.rungTake', { name: pickName(i) })
+                    : pickName(i)
               }
               aria-pressed={i <= p.pickMax ? i === p.pick : undefined}
             >
               <PickPx pick={i} size={34} />
-              <b>{d.prestige ? `П${d.prestige}` : `⛏${d.power}`}</b>
-              {i === p.pick && <i className="fg-rung__hand">в руке</i>}
+              <b>{d.prestige ? t('forge.rungPrestige', { n: d.prestige }) : `⛏${d.power}`}</b>
+              {i === p.pick && <i className="fg-rung__hand">{t('forge.hand')}</i>}
             </button>
           ))}
         </div>
@@ -405,7 +429,7 @@ export function ForgeScreen({
           <div className="fg-gear__row">
             <BagIcon size={30} />
             <span className="fg-gear__info">
-              <b>Рюкзак {fmt(bagCapacity(p.bagLevel))}</b>
+              <b>{t('forge.bag', { n: fmt(bagCapacity(p.bagLevel)) })}</b>
               {p.bagLevel < BAG_MAX && (
                 <i>
                   {fmt(bagCapacity(p.bagLevel))} → {fmt(bagCapacity(p.bagLevel + 1))}
@@ -419,7 +443,7 @@ export function ForgeScreen({
                 disabled={balance < bagCost(p.bagLevel)}
                 onClick={() => buy('bag')}
               >
-                {shortMoney(bagCost(p.bagLevel))} <CoinIcon size={12} />
+                {fmtShort(bagCost(p.bagLevel))} <CoinIcon size={12} />
               </button>
             ) : (
               <KIcon name="checkmark" size={20} />
@@ -428,8 +452,8 @@ export function ForgeScreen({
           <div className="fg-gear__row">
             <GxIcon name="minecart" size={30} />
             <span className="fg-gear__info">
-              <b>Вагонетка</b>
-              <i>{p.cart ? 'продаёт полный рюкзак сама' : 'сама продаёт полный рюкзак'}</i>
+              <b>{t('forge.cart')}</b>
+              <i>{p.cart ? t('forge.cartOn') : t('forge.cartOff')}</i>
             </span>
             {p.cart ? (
               <KIcon name="checkmark" size={20} />
@@ -440,7 +464,7 @@ export function ForgeScreen({
                 disabled={p.tokens < AUTOSELL_TOKENS}
                 onClick={() => buy('cart')}
               >
-                {shortMoney(AUTOSELL_TOKENS)} <TokenIcon size={12} />
+                {fmtShort(AUTOSELL_TOKENS)} <TokenIcon size={12} />
               </button>
             )}
           </div>
@@ -477,6 +501,7 @@ const FORGE_ART = Math.round(FORGE_PX / PICK_ART);
  * поза), полоса доигрывает вспышку и кончается пустой. Звук и дрожь — на метках полосы.
  */
 function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
+  const t = useT();
   const d = PICKS[pick];
   const r = rarityOf(d.rarity);
   const still = reduceMotion();
@@ -580,19 +605,19 @@ function ForgeReveal({ pick, onDone }: { pick: number; onDone: () => void }) {
       {/* Подпись занимает место с начала сцены (скрыта): иначе по вспышке сцена прыгнула бы вверх. */}
       <div className={`fgr__text${shown ? '' : ' is-wait'}`} aria-hidden={!shown}>
         <RarityChip rarity={d.rarity} />
-        <RarityName rarity={d.rarity}>{d.name} кирка</RarityName>
+        <RarityName rarity={d.rarity}>{pickTitle(pick)}</RarityName>
         <span className="fgr__stats">
-          ⛏ {d.power} · {fmt(pickSpeed(p.mine.id, pick, m))} блоков/мин
+          {t('forge.stats', { power: d.power, speed: fmt(pickSpeed(p.mine.id, pick, m)) })}
         </span>
         {opens.length > 0 && (
           <span className="fgr__opens">
-            Берёт {oreList(opens)}
+            {t('forge.opens', { list: oreList(opens) })}
             {opens.map((x) => (
               <OreIcon key={x} rock={x} size={18} />
             ))}
           </span>
         )}
-        <span className="fgr__cta">В шахту</span>
+        <span className="fgr__cta">{t('forge.toMine')}</span>
       </div>
     </div>
   );

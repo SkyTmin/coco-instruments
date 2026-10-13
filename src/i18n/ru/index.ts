@@ -1,9 +1,14 @@
 import { cash } from './cash';
 import { common } from './common';
 import { field } from './field';
+import { finds } from './finds';
+import { forge } from './forge';
+import { guide } from './guide';
 import { hall } from './hall';
 import { input } from './input';
+import { miles } from './miles';
 import { mine } from './mine';
+import { mineHud } from './mineHud';
 import { nursery } from './nursery';
 import { pets } from './pets';
 import { settings } from './settings';
@@ -19,9 +24,14 @@ export const ru = {
   cash,
   common,
   field,
+  finds,
+  forge,
+  guide,
   hall,
   input,
+  miles,
   mine,
+  mineHud,
   nursery,
   pets,
   settings,

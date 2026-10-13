@@ -1,0 +1,51 @@
+import type { Translation } from '../types';
+import type { forge as ru } from '../ru/forge';
+
+export const forge: Translation<typeof ru> = {
+  title: 'Fucina',
+  pick: 'Piccone {name}',
+  listAnd: '{a} e {b}',
+  power: 'Forza',
+  perMin: 'blocchi/min',
+  level: 'livello',
+  next: 'Prossimo',
+  ore: '{rock}: {have} su {need}',
+  gainPower: 'Forza ⛏ {a} → {b}',
+  takes: '· rompe {list}',
+  gainSpeed: '{a} → {b} blocchi/min',
+  paid: '· pagato',
+  bestBeforePrestige: 'Il miglior piccone prima del prestigio. {name}: dopo il prestigio {n}',
+  best: 'Non c’è piccone migliore',
+  rungHand: '{name}, in mano',
+  rungTake: '{name}, prendi in mano',
+  rungPrestige: 'P{n}',
+  hand: 'in mano',
+  bag: 'Zaino {n}',
+  cart: 'Carrello',
+  cartOn: 'vende lo zaino pieno per te',
+  cartOff: 'vende da solo lo zaino pieno',
+  stats: '⛏ {power} · {speed} blocchi/min',
+  opens: 'Rompe {list}',
+  toMine: 'In miniera',
+  cta: {
+    prestige: 'Dopo il prestigio {n}',
+    floor: 'Si apre al piano {rank}',
+    ore: 'Manca minerale',
+    coins: 'Mancano {sum}',
+    go: 'Forgia',
+  },
+  say: {
+    prestige: 'Si apre dopo il prestigio {n}',
+    floor: 'Si forgia al piano {rank}: lì c’è {rock}',
+    ore: 'Manca: {rock} ×{n}',
+    coins: { one: 'Manca {n} moneta', many: 'Mancano {n} di monete', other: 'Mancano {n} monete' },
+    oreLeft:
+      '{rock}: {box} nella cassa, {bag} nello zaino, ne mancano {left}. Vendi lo zaino: il minerale che serve finirà da solo nella cassa',
+    oreAll: '{rock}: c’è tutto — {box} nella cassa, {bag} nello zaino',
+    inHand: 'Piccone {name} in mano · {rarity} · ⛏{power}',
+    equip: 'In mano: piccone {name} · ⛏{power}',
+    ladderPrestige:
+      '{name} · {rarity} · dopo il prestigio {n}, col minerale della miniera speciale',
+    ladderFloor: '{name} · {rarity} · ⛏{power}: si forgia al piano {rank}, rompe {list}',
+  },
+};

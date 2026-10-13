@@ -165,7 +165,6 @@ const NOT_YET_TRANSLATED = [
   'src/components/DungeonMine.tsx',
   'src/components/DungeonRun.tsx',
   'src/components/FishingCamp.tsx',
-  'src/components/ForgeScreen.tsx',
   'src/components/Inventory.tsx',
   'src/components/PetsTab.tsx',
   'src/components/PrisonCamp.tsx',
@@ -173,7 +172,6 @@ const NOT_YET_TRANSLATED = [
   'src/pages/DungeonPage.tsx',
   'src/pages/FishingPage.tsx',
   'src/pages/ForestPage.tsx',
-  'src/pages/PrisonPage.tsx',
   'src/pages/YardPage.tsx',
 ];
 /** The list as it was on 12.10.2026 — never extend, only the list above shrinks. */

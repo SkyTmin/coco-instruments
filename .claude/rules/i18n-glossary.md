@@ -143,3 +143,24 @@ FR «GAIN DE OUF» (verlan «fou»), ES «PREMIO BRUTAL» (Spain: brutal = aweso
 PAZZESCA», ES «Partidón» / IT «Partitona» for a great session, ES «tres en raya» and IT «tris»
 (tic-tac-toe = three in a row). Orb tiers are adjectives agreeing with the orb's gender (FR/IT
 feminine, ES masculine «el orbe»); the top tier stays a noun («Relic»), as in Russian.
+
+## Wave 2 — Шахта и кузня (T1: `mineHud`, `forge`, `finds`, `miles`, `guide`)
+| ru | en | fr | tr | de | es | it |
+|---|---|---|---|---|---|---|
+| «{name} кирка» (pick title) | {name} pickaxe | Pioche {name} | {name} kazma | Spitzhacke {name} | Pico {name} | Piccone {name} |
+| Сила (pick power) | Power | Force | Güç | Kraft | Fuerza | Forza |
+| Выработка (work quota) | Work quota | Quota de travail | Çalışma kotası | Arbeitssoll | Cuota de trabajo | Quota di lavoro |
+| Спецзона | special zone | zone spéciale | özel bölge | Sonderzone | zona especial | zona speciale |
+| Лагерь (dock «more» sheet) | Camp | Camp | Kamp | Lager | Campo | Campo |
+| Питомник | Nursery | Nurserie | Kuluçka | Zucht | Criadero | Allevamento |
+| Находка | find | trouvaille | buluntu | Fund | hallazgo | reperto |
+| Смена (5-min summary) | Shift | Poste | Vardiya | Schicht | Turno | Turno |
+| Вагонетка | Minecart | Wagonnet | Vagon | Lore | Vagoneta | Carrello |
+| очки навыков | skill points | points de talent | yetenek puanı | Skillpunkte | puntos de habilidad | punti abilità |
+| Гарантия (pity block) | guaranteed | garanti | garanti | Garantie | garantizado | garantito |
+
+Pick names (`mine.pick`) are standalone modifiers, so the title puts the noun where each language
+wants it; German keeps them as a model name («Spitzhacke Rostig») because «Rostig»/«Geschmiedet»
+cannot be compounded. Names inside a sentence go through `nameIn()` (`src/i18n/data-mine.ts`):
+lower case everywhere except German. FR strings use a no-break space before `: ! ? ; %` and
+inside « » (as in round 1). DE «Kumpel» stays the pet; the dock's «Питомцы» is «Tiere» (short).
