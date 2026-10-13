@@ -355,7 +355,19 @@ export function Nursery({ say }: { say: (text: string) => void }) {
       <h3 className="nur-plate__name">{name}</h3>
       <div className="nur-plate__row">
         <span className="nur-rar">{t(`nursery.rarity.r${def.rarity}` as 'nursery.rarity.r0')}</span>
-        {!!rec?.v && <Badge gold>{t('nursery.gold')}</Badge>}
+        {!!rec?.v && (
+          <span
+            className="nur-gold"
+            role="img"
+            aria-label={t('nursery.gold')}
+            data-tip={t('nursery.gold')}
+          >
+            <Badge gold>
+              <Icon name="star" />
+              <span className="nur-gold__w">{t('nursery.gold')}</span>
+            </Badge>
+          </span>
+        )}
         {rec && (
           <span className="nur-pow" data-tip={t('nursery.power')}>
             <Icon name="bolt" />
@@ -603,6 +615,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
   const drawerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!drawer) return;
+    const host = root.current;
     const off = registerEscape(() => setDrawer(false));
     const dev = getInputDevice();
     if (dev === 'keyboard' || dev === 'gamepad') {
@@ -612,7 +625,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
     return () => {
       off();
       const d = getInputDevice();
-      const open = root.current?.querySelector<HTMLElement>('.nur-strip__open');
+      const open = host?.querySelector<HTMLElement>('.nur-strip__open');
       if ((d === 'keyboard' || d === 'gamepad') && open) focusEl(open);
     };
   }, [drawer]);

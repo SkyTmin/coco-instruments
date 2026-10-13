@@ -228,6 +228,23 @@
     display: none;
   }
 }
+/* Gold: a star (as on the collection slots) + the word where the plate is wide. The threshold is
+   in em of the plate's text, so a larger text size drops the word too: the row never overflows
+   (a phone plate fits «Легендарный» + ★ + power at the large size). */
+.nur-gold {
+  display: inline-flex;
+  flex: none;
+}
+.nur-gold .px-badge {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: var(--u);
+}
+@container nur-plate (max-width: 17em) {
+  .nur-gold__w {
+    display: none;
+  }
+}
 .nur-chip {
   display: inline-flex;
   align-items: center;
