@@ -1322,6 +1322,10 @@ const DOCK_PAL: Record<string, RGBA> = {
   '2': MAT.gold[2],
   '3': MAT.gold[3],
   '4': MAT.gold[4],
+  // iron (the work pick's head)
+  i: MAT.iron[2],
+  j: MAT.iron[3],
+  k: MAT.iron[4],
 };
 
 const DOCK_ART: Record<string, string[]> = {
@@ -1382,6 +1386,20 @@ const DOCK_ART: Record<string, string[]> = {
     'KxxxK43KxxyK',
     'KyyyyyyyyyzK',
     '.KKKKKKKKKK.',
+  ],
+  // 10×10 pick for the rank's «blocks mined» chip (the 10-u needs row; critic r2: the vector
+  // pick was unreadable at 20 px). Iron head lit from the upper left, oak handle.
+  work: [
+    '..KKKKKK..',
+    '.KkkkkjjK.',
+    'KkjKwyKjiK',
+    'KK.KwyK.KK',
+    '...KwyK...',
+    '...KwyK...',
+    '...KxyK...',
+    '...KxzK...',
+    '...KxzK...',
+    '...KKKK...',
   ],
 };
 

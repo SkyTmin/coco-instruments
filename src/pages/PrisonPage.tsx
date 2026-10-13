@@ -19,7 +19,6 @@ import { FOREST_UNLOCK_RANK } from '@/lib/forest';
 import { CREW_ON, FOREST_ON } from '@/lib/features';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
-import { CoinIcon } from '@/components/slot-art';
 import {
   ItemIcon,
   KeyIcon,
@@ -389,7 +388,7 @@ function RankChips({ need, floor }: { need: RankNeeds; floor: number }) {
       )}
       {need.workNeed > 0 && (
         <span className={`pquota__chip${workOk ? ' is-done' : ''}`}>
-          <GxIcon name="pick" size={12} />
+          <i className="mn-pic mn-pic--work" aria-hidden="true" />
           {workOk ? '✓' : `${fmtShort(need.work)}/${fmtShort(need.workNeed)}`}
         </span>
       )}
@@ -2082,6 +2081,13 @@ export function PrisonPage() {
         />
         <span className="mn-rank__needs">
           {!atTop && !rankReady && <RankChips need={need} floor={rank} />}
+          {/* Широкий: «Новый ранг — жми!» строкой во всю ширину — в полосе между буквами
+              она ломалась на три строки. */}
+          {rankOk && (
+            <b className="mn-rank__go" aria-hidden="true">
+              {atTop ? t('mineHud.hud.prestigeGo') : t('mineHud.hud.rankGo')}
+            </b>
+          )}
         </span>
       </span>
       <span className="mn-hex mn-hex--next px-num">
@@ -2111,9 +2117,13 @@ export function PrisonPage() {
         <span className="mn-strip__name">
           <i className="px-i pxi-m-flame" data-hop="" aria-hidden="true" />
           <b>{sTier >= 0 ? streakName(sTier) : t('mineHud.hud.streak')}</b>
+        </span>
+        {/* Ступень — справа от полосы, а не за названием: «Легенда забоя» на 360 px
+            иначе обрезалась до двух букв. */}
+        <span className="mn-strip__barrow">
+          <Bar value={Math.max(0, Math.min(1, streak > 0 ? sFill : 0))} height={4} />
           {sTier >= 0 && <em className="px-num">+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
         </span>
-        <Bar value={Math.max(0, Math.min(1, streak > 0 ? sFill : 0))} height={4} />
       </span>
       {/* Колонка темпа шириной по самой длинной строке языка (невидимая копия в той же
           клетке): живые числа её не раздвигают и на полосу серии не залезают (R51). */}
@@ -2125,7 +2135,6 @@ export function PrisonPage() {
             <i className="mn-coin mn-coin--s" />
             {t('mineHud.perMin')}
           </span>
-          <span>{t('mineHud.hud.inARow', { n: paceCount(99_999) })}</span>
         </span>
         <span className="mn-strip__live">
           {pace ? (
@@ -2138,7 +2147,11 @@ export function PrisonPage() {
               </span>
             </>
           ) : (
-            streak > 0 && <span>{t('mineHud.hud.inARow', { n: paceCount(streak) })}</span>
+            streak > 0 && (
+              <span className="mn-strip__row">
+                {t('mineHud.hud.inARow', { n: paceCount(streak) })}
+              </span>
+            )
           )}
         </span>
       </span>
@@ -2391,7 +2404,7 @@ export function PrisonPage() {
                   n: Math.round(shiftShown.blocks),
                   coins: fmtShort(shiftShown.coins),
                 })}{' '}
-                <CoinIcon size={12} />
+                <i className="mn-coin mn-coin--s" aria-hidden="true" />
               </b>
               <em>
                 +{fmt(shiftShown.tokens)} ✦
@@ -2926,7 +2939,7 @@ export function PrisonPage() {
             )}
             <div className={`mn-norm__row${balance >= cost ? ' is-done' : ''}`}>
               <span className="mn-norm__ico">
-                <CoinIcon size={13 * u} />
+                <i className="mn-coin" aria-hidden="true" />
               </span>
               <span className="mn-norm__info">
                 <b>{t('mineHud.norm.coins')}</b>
@@ -2970,7 +2983,7 @@ export function PrisonPage() {
                       sum: fmtShort(buyout),
                     },
                   )}{' '}
-                  <CoinIcon size={7 * u} />
+                  <i className="mn-coin mn-coin--s" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -3027,7 +3040,7 @@ export function PrisonPage() {
               onClick={prestigeNow}
             >
               {t('mineHud.pres.go', { sum: fmtShort(prestigeCost(prestige)) })}{' '}
-              <CoinIcon size={7 * u} />
+              <i className="mn-coin mn-coin--s" aria-hidden="true" />
             </button>
           </div>
         </GxModal>

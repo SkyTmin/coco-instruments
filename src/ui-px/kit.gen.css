@@ -160,6 +160,9 @@
   --pximg-m-dock-inv: url('/ui/kit/m-dock-inv.png?v=8f27f18c');
   --pximg-m-dock-inv-w: 12;
   --pximg-m-dock-inv-h: 12;
+  --pximg-m-dock-work: url('/ui/kit/m-dock-work.png?v=547d8497');
+  --pximg-m-dock-work-w: 10;
+  --pximg-m-dock-work-h: 10;
 }
 
 .pxk-frame-stone {

@@ -63,12 +63,24 @@ html[data-input='touch'] .mn .px-keyhint {
   padding-right: calc(1 * var(--u));
 }
 /* Низкий телефон (360×740): зазоры 1u — полю нужна каждая точка (клетка ≥ 40 px). */
+/* Док стоя (значок над подписью, 26u) отнял 8 px — их возвращают шапка, расходники,
+   рюкзак и зазор дока по 2 px (клетка 360×740 снова 40). */
 @media (orientation: portrait) and (max-height: 760px) {
   .mn--tall {
     gap: var(--u);
   }
   .mn--tall .mn-dock {
-    row-gap: calc(2 * var(--u));
+    row-gap: var(--u);
+  }
+  .mn--tall .mn-hud > * {
+    height: calc(18 * var(--u));
+    min-height: 0;
+  }
+  .mn--tall .mn-bag {
+    height: calc(22 * var(--u));
+  }
+  .mn--tall .mn-items {
+    --slot: calc(22 * var(--u));
   }
 }
 /* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
@@ -150,8 +162,16 @@ html:not([data-ff^='phone']) .mn-side--r .mn-dock__btn {
   padding-left: calc(4 * var(--u));
 }
 /* На компьютере колонка 118–126u: четыре крупные ячейки в ряд (на планшете 85u — три обычные). */
-html[data-ff='desktop'] .mn--wide .mn-side--l:not(:has(.mn-quest)) .mn-items {
-  --slot: calc(28 * var(--u));
+/* На компьютере все расходники — одним рядом (критик r2: лупа одна во втором ряду):
+   ячейка — до 28u, но не шире пятой (шестой, если есть крепь) доли колонки, целыми u. */
+html[data-ff='desktop'] .mn--wide .mn-items {
+  container-type: inline-size;
+}
+html[data-ff='desktop'] .mn--wide .mn-items__row {
+  --slot: min(calc(28 * var(--u)), round(down, calc((100cqi - 8 * var(--u)) / 5), var(--u)));
+}
+html[data-ff='desktop'] .mn--wide .mn-items[data-n='6'] .mn-items__row {
+  --slot: min(calc(28 * var(--u)), round(down, calc((100cqi - 10 * var(--u)) / 6), var(--u)));
 }
 .mn-side--r .mn-dock__btn {
   height: auto;
@@ -245,7 +265,9 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   color: var(--px-text);
 }
 /* Полоса на верхней кромке рамы. Рама узкая, когда поле упирается в высоту (360×740:
-   263 px) — тогда полоса шире рамы, до 150u, но не шире экрана; по центру, на целом px. */
+   263 px) — тогда полоса шире рамы, до 150u, но не шире экрана; по центру, на целом px.
+   Телефон: во всю ширину экрана — названию серии («Легенда забоя») нужно место рядом
+   с колонкой темпа. */
 .mn-frame > .mn-strip {
   --sw: max(calc(100% - 20 * var(--u)), min(calc(100vw - 8 * var(--u)), calc(150 * var(--u))));
   position: absolute;
@@ -254,6 +276,9 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   left: round(down, calc((100% - var(--sw)) / 2), 1px);
   width: var(--sw);
   top: calc(-10 * var(--u));
+}
+html[data-ff^='phone'] .mn-frame > .mn-strip {
+  --sw: max(calc(100% - 20 * var(--u)), calc(100vw - 8 * var(--u)));
 }
 .mn-panel > .mn-strip {
   height: calc(24 * var(--u));
@@ -297,7 +322,21 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   overflow: hidden;
   color: var(--px-muted);
 }
-.mn-strip__name > em {
+/* Ступень серии — под названием, справа от полосы: название получает всю ширину. */
+.mn-strip__barrow {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.mn-strip__barrow > .px-bar {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.mn-strip__barrow > em {
+  flex: none;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  font-style: normal;
   color: var(--px-gold);
 }
 .mn-strip__name > .px-i {
@@ -346,6 +385,11 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   flex-direction: column;
   align-items: flex-end;
 }
+/* Живой текст ширину колонке не задаёт (contain): её задаёт копия, он лишь заполняет. */
+.mn-strip__live {
+  contain: inline-size;
+  justify-self: stretch;
+}
 /* Копия даёт колонке ширину, но не высоту и не видна. */
 .mn-strip__ghost {
   height: 0;
@@ -357,6 +401,13 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   display: inline-flex;
   align-items: center;
   gap: calc(1 * var(--u));
+}
+/* «12,3к подряд» без темпа — в ширину темпа, переносом на две строки (de «am Stück»). */
+.mn-strip__live > .mn-strip__row {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  text-align: right;
 }
 
 /* Нижняя кромка рамы: баффы слева, отряд посередине, посылки справа. */
@@ -713,8 +764,8 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
      (--fs-n), но не больше, чем помещается самое длинное число (--res знаков по ~0,55 em),
      и не меньше 16 px: длиннее — короче запись (chipMoney, chipCount), а не мельче. */
   font: 700
-    max(16px, min(var(--fs-n), calc((100cqi - var(--ico) - 2 * var(--u)) / (var(--res) * 0.55))))
-    / 1 var(--px-font);
+    max(16px, min(var(--fs-n), calc((100cqi - var(--ico) - 2 * var(--u)) / (var(--res) * 0.55)))) /
+    1 var(--px-font);
   font-variant-numeric: tabular-nums;
   color: var(--px-text);
   text-shadow: 0 var(--u) 0 var(--px-ink);
@@ -755,6 +806,11 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
 }
 .mn-pic--camp {
   --pic: var(--pximg-m-dock-camp);
+}
+.mn-pic--work {
+  --pic: var(--pximg-m-dock-work);
+  --pic-w: 10;
+  --pic-h: 10;
 }
 .mn-pic--inv {
   --pic: var(--pximg-m-dock-inv);
@@ -911,6 +967,19 @@ html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   grid-column: 1 / -1;
   grid-row: 2;
   overflow: visible;
+}
+.mn-rank__go {
+  display: none;
+}
+.mn--wide .mn-rank.is-ready .mn-rank__go {
+  display: block;
+  font: 700 var(--px-fs-sm) / calc(10 * var(--u)) var(--px-font);
+  color: var(--px-gold);
+  text-align: center;
+  white-space: nowrap;
+}
+.mn--wide .mn-rank.is-ready .mn-rank__bar > .px-bar__label {
+  display: none;
 }
 .mn-rank .pquota {
   display: flex;
