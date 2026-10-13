@@ -398,7 +398,7 @@ export function DungeonPage() {
       value: balance,
       name: t('inv.coins'),
       pri: 1,
-      ch: 6,
+      ch: 7,
     },
     {
       id: 'skin',
@@ -406,7 +406,7 @@ export function DungeonPage() {
       value: d.stash.skin ?? 0,
       name: matName('skin'),
       pri: 3,
-      ch: 5,
+      ch: 7,
     },
     {
       id: 'pyrite',
@@ -414,7 +414,7 @@ export function DungeonPage() {
       value: d.stash.pyrite ?? 0,
       name: matName('pyrite'),
       pri: 3,
-      ch: 5,
+      ch: 7,
     },
     {
       id: 'inv',

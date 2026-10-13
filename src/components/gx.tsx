@@ -414,9 +414,11 @@ export function GxSheet({
   );
 }
 
-const GameSettingsLazy = lazy(() =>
-  import('@/settings').then((m) => ({ default: m.GameSettings })),
-);
+// The settings chunk: fetched on idle after the first header with a ⚙ mounts and again on the
+// gear's pointerdown, so the first open doesn't wait for the network (was 349 ms at 4× CPU).
+let settingsChunk: Promise<typeof import('@/settings')> | null = null;
+const loadSettings = () => (settingsChunk ??= import('@/settings'));
+const GameSettingsLazy = lazy(() => loadSettings().then((m) => ({ default: m.GameSettings })));
 
 /**
  * A GameTop chip given as data (preferred over ready nodes): GameTop prints the number short
@@ -517,6 +519,20 @@ export function GameTop({
       document.fonts?.removeEventListener?.('loadingdone', again);
     };
   }, [hasChips, hasRight]);
+
+  useEffect(() => {
+    if (!hasRight || settingsChunk) return undefined;
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(() => void loadSettings(), { timeout: 4000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(() => void loadSettings(), 1500);
+    return () => window.clearTimeout(id);
+  }, [hasRight]);
 
   // Wallet popover: Esc / «Назад» / a tap anywhere else closes it.
   const open = purse != null;
@@ -632,6 +648,10 @@ export function GameTop({
             aria-label={t('common.settings')}
             data-tip={t('common.settings')}
             {...press}
+            onPointerDown={(e) => {
+              press.onPointerDown(e);
+              void loadSettings();
+            }}
             onClick={() => {
               tapLight();
               uiTap();

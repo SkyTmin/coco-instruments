@@ -130,6 +130,13 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   a value opens the wallet popover (`.gx-wallet`, exact values of all chips, Esc / outside tap
   closes). A ReactNode `chips` still works (old callers). Measured: yard / casino / dungeon rows
   fit at 360/390/440 portrait and 6 formats × ru/de/tr with 510 812 345 coins.
+  Round 2 (critic): `ch` — the widest compact form in any language is 6.71 ch of the chip font
+  (ru «1,2 млрд»; `scratchpad/ui3Q/mtext.mjs`), so money reserves 7 ch; tokens 6 (7 hid them at
+  360 px). At fit 0 the chips are right-aligned (`justify-content: flex-end`) so a new map title
+  doesn't move them. Button chips get a ≥ 44 px hit area by `::after` (insets count from the
+  padding box: add the 1u border). The settings chunk is fetched on idle after a header with ⚙
+  mounts and on the gear's pointerdown (first open 349 → ~270 ms at 4× in dev — the rest is
+  the window's own mount).
 - **Widgets:** `gx-btn` / `gx-round` → kit button frames via `--b/--bs/--bw` (gold default;
   iron for `--grey/--dark/--steel`; red; green; `:disabled` / `.is-off` ash), text colours
   `--gx-on-*` = the `.px-btn` face pairs. `gx-badge` → kit badge (1-art-px bob), `gx-bar` → kit

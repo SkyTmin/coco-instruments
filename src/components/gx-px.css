@@ -248,6 +248,11 @@ span.gx-top__side {
   gap: calc(3 * var(--u));
   min-width: 0;
 }
+/* With the title shown (fit 0) the chips hug the right group: a new map title (Площадь → Башня
+   Чародея) must not move them. */
+.gx-top__row[data-fit='0'] .gx-top__chips {
+  justify-content: flex-end;
+}
 .gx-top__right {
   display: flex;
   flex: none;
@@ -315,6 +320,14 @@ html[data-ff='phone-portrait'] .gx-top .gx-chip {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+.gx-chip--btn::after {
+  /* Touch target ≥ 44 px: the chip is 14u (28 px) tall on phones; the row has room above and
+     below (it is `--gx-top-h` tall) and a 3u gap to the sides. Insets count from the padding box,
+     so the 1u border is added. */
+  content: '';
+  position: absolute;
+  inset: calc(-9px - var(--u)) calc(-2px - var(--u));
 }
 .gx-chip--btn:is(:active, .is-down)::before {
   content: '';

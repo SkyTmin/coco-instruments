@@ -25,27 +25,21 @@
   overflow: hidden;
   pointer-events: none;
 }
-/* NPC name over the head: screen letters with an ink outline (was canvas `strokeText`). */
+/* NPC name over the head: screen letters at kit size with a hard one-art-px ink outline (was
+   canvas `strokeText`, then 11.5 px — below the owner's floor). */
 .hub-name {
   position: absolute;
   left: 0;
   top: 0;
   display: none;
-  color: #f7ead0;
-  font:
-    800 11.5px / 1 'GxRubik',
-    system-ui,
-    sans-serif;
+  color: #fff4dc;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
   white-space: nowrap;
   text-shadow:
-    -1.5px 0 rgba(12, 8, 6, 0.9),
-    1.5px 0 rgba(12, 8, 6, 0.9),
-    0 -1.5px rgba(12, 8, 6, 0.9),
-    0 1.5px rgba(12, 8, 6, 0.9),
-    -1px -1px rgba(12, 8, 6, 0.9),
-    1px -1px rgba(12, 8, 6, 0.9),
-    -1px 1px rgba(12, 8, 6, 0.9),
-    1px 1px rgba(12, 8, 6, 0.9);
+    var(--u) 0 0 #140c08,
+    calc(-1 * var(--u)) 0 0 #140c08,
+    0 var(--u) 0 #140c08,
+    0 calc(-1 * var(--u)) 0 #140c08;
   will-change: transform, opacity;
 }
 
@@ -115,20 +109,31 @@
   translate: 0 var(--u);
 }
 
+/* Centred by insets + `fit-content`, not `left: 50%` + translate: that shrink-to-fit used only the
+   right half of the screen and broke one line into 4–6 (CSS 2.1 §10.3.7, R33). */
 .hub-toast {
   position: absolute;
   z-index: 5;
-  left: 50%;
+  left: 16px;
+  right: 16px;
   top: calc(
     var(--safe-top) + var(--content-top) + var(--gx-top-h) + max(40px, calc(16 * var(--u))) + 28px
   );
-  max-width: calc(100vw - 32px);
+  width: fit-content;
+  max-width: min(560px, calc(100vw - 32px));
+  margin-inline: auto;
   padding: calc(3 * var(--u)) calc(6 * var(--u));
   font: 600 var(--px-fs-sm) / 1.3 var(--px-font);
   text-align: center;
-  translate: -50% 0;
+  translate: none;
   pointer-events: none;
   animation: hub-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* Buttons at kit size: `.gx-btn`'s own 15 px beat the old 17 px of «Говорить». */
+.hub-pad .hub-pad__use,
+.hub-talk__opts .gx-btn {
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
 }
 
 .hub-talk .hub-talk__name {

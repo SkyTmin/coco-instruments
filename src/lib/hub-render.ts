@@ -343,16 +343,24 @@ export class HubRenderer {
     const vis = this.gh - this.insetTop - this.insetBottom;
     // Точка середины видимой части в кадре.
     const sy = this.insetTop + vis / 2;
-    const tx = h.x * TS;
-    const ty = h.y * TS - 6;
-    if (!this.camReady) {
+    // The camera aims at the hero's own art pixel: the sprite is drawn there, so the hero stands
+    // still on screen and the world steps whole art px. An eased camera and the rounded sprite
+    // stepped out of phase and shook the hero ±1 art px on ~40 % of walking frames (R32).
+    const tx = Math.round(h.x * TS);
+    const ty = Math.round(h.y * TS) - 6;
+    if (!this.camReady || h.moving) {
+      // New map — at once; walking — locked to the hero, no easing.
       this.camX = tx;
       this.camY = ty;
       this.camReady = true;
+    } else {
+      // Standing (the hero was moved by other means): ease over.
+      const k = 1 - Math.exp(-6 * dt);
+      this.camX += (tx - this.camX) * k;
+      this.camY += (ty - this.camY) * k;
+      if (Math.abs(tx - this.camX) < 0.02) this.camX = tx;
+      if (Math.abs(ty - this.camY) < 0.02) this.camY = ty;
     }
-    const k = 1 - Math.exp(-6 * dt);
-    this.camX += (tx - this.camX) * k;
-    this.camY += (ty - this.camY) * k;
     const mw = sim.map.w * TS;
     const mh = sim.map.h * TS;
     this.left = this.q(this.edge(this.camX - this.gw / 2, mw, this.gw, 0, 0));
@@ -932,7 +940,7 @@ export class HubRenderer {
       if (!this.flags.npcs.has(n.id) || sim.talking === n.id) continue;
       // Над именем: имя висит сразу над макушкой, «!» — выше него. Та же целая
       // точка мира, что у спрайта жителя.
-      bangs.push([Math.round(n.x * TS) - this.left, Math.round(n.y * TS) - this.top - 36 + bob]);
+      bangs.push([Math.round(n.x * TS) - this.left, Math.round(n.y * TS) - this.top - 42 + bob]);
     }
     for (const d of sim.map.doors) {
       if (!this.flags.doors.has(d.i)) continue;

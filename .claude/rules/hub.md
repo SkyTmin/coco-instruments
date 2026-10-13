@@ -151,18 +151,28 @@ Owner: «Когда альбомный, персонаж и всё его окр
   A smaller backing store dropped the frame to ~17 ms at once. Now (`hub.css`, YardPage):
   1. `.hub__canvas` world: 1 art px = 1 canvas px (`ceil(gw)+1` × `ceil(gh)+1`), scaled by CSS
      width/height with `image-rendering: pixelated`. The camera origin `ox/oy` is a WHOLE art px
-     (`floor(camL)`); the sub-art-px remainder goes into a `translate3d` rounded to whole device
-     px (`place()`).
+     (`floor(camL)`); a sub-art-px remainder would go into a `translate3d` rounded to whole device
+     px (`place()`), but today the camera itself is whole art px (see «Camera lock»), so it is 0.
   2. `.hub__light` darkness: its own art-px canvas, scaled SMOOTHLY (`image-rendering: auto`),
      `display:none` while `dark.a ≤ 0.004` (all day). Glows and cones still go `lighter` into
      the world canvas.
   3. `.hub__marks` «!» bangs: cleared only when something was drawn before or is due now.
   4. `.hub__names` NPC names: DOM `.hub-name` spans (screen-sharp text with an ink outline),
-     created once per NPC, moved by transform. They are still 11.5 px fixed: not kit type.
+     created once per NPC, moved by transform; `--px-fs-sm` with a hard 4-direction `--u` ink
+     outline (critic round 2; 11.5 px was below the floor). The «!» sits 42 art px over the feet
+     so it clears the taller name.
   `setCss` caches transform/display/opacity per element (no style writes when nothing moved).
-- **Trade-off:** sprites (hero included) sit on whole art px of the world, so the hero may wobble
-  up to ±0.5 art px on screen while the camera glides (measured 3.6–4 device px on a scale-6
-  phone; old renderer 4.1). Smooth camera, no off-grid sprites.
+- **Camera lock (critic round 2, R32 — the camera target must be still on screen).** The first
+  version claimed «smooth camera, hero on the art grid», but `camera()` rounded `left/top` with
+  `q()` (whole art px) after an eased follow: camera and rounded sprite stepped out of phase and
+  the DRAWN hero jumped 6 device px on 52 of 92 walking frames (my old metric read `toScreen()`,
+  the smooth hero, and missed it). Now (option B): the camera aims at `round(hero × 16)` and,
+  while `hero.moving`, is locked to it with no easing; easing is left for a hero moved by other
+  means; a new map snaps. Drawn hero: 0/93 frames moved on the walk right; the world steps whole
+  art px 1-1-2 (6/12 device px). The hero moves on screen only where the edge clamp holds the
+  camera (that is correct). Option A (hero on its own device-px canvas, world camera on the
+  device grid, a `front` canvas for what covers the hero) is the next step for a smooth world —
+  not done. Measure with `scratchpad/ui3Q/walk2.mjs` (critic's script + `drawnX/drawnY`).
 - **Numbers (pp 390×844 DPR 3, 4× CPU, day, same walk right then down):** old p50 83 ms, 100 %
   of frames > 33 ms, 95 long tasks; new p50 16.5 ms, 1.6–3.5 % > 33 ms, 0–1 long tasks; camera
   steps on whole art px 176/176. Landscape 844×390: p50 16.5, 0.3 % > 33 ms.
@@ -172,12 +182,15 @@ Owner: «Когда альбомный, персонаж и всё его окр
   size collided (Шахта / Особая шахта): `HubMapSheet` lays them out in a layout effect — clamp
   into the frame, push below an overlapped pin above, offsets in the frame's own units
   (`offsetLeft/Top`; the window body may be zoomed ×2).
-- **Press:** `usePress()` on the pad buttons, the event pill and map pins (`.is-down` in the first
-  frame; pad button 17.6 ms from pointerdown on the stand).
+- **Press:** `usePress()` on the pad buttons, the event pill, map pins and the talk buttons
+  (`.is-down` in the first frame). Pad and talk buttons are `--px-fs-sm` (`.gx-btn`'s own 15 px
+  beat the page's size before). The toast is centred by `left/right: 16px` + `margin-inline:
+  auto` + `width: fit-content` — `left: 50%` + translate shrink-wrapped it to half the screen.
 - **Stick ring** shows idle only for `html[data-input='touch']`.
 - **Stand:** `window.__hub` (DEV) has `sim`, `r`, `go(to, at)`, `phase(p)`, `say(text)` (toast).
   Scripts must import the store by the URL the app loaded (`performance.getEntriesByType
   ('resource')` → `/src/store.ts?t=…`), or they write into a second store instance.
 - **Left:** per-language sign art (ШАХТА, ЛИФТ, ПИТОМНИК, КПП are drawn Russian in
-  `scripts/hub`); NPC names in kit type; a real phone / Telegram webview / iOS Safari check of
+  `scripts/hub`; critic: replace the words with pictograms — a separate art task); camera
+  option A; a real phone / Telegram webview / iOS Safari check of
   `image-rendering: pixelated` on a CSS-scaled canvas (Chromium only on the stand).

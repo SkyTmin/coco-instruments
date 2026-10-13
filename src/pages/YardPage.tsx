@@ -636,7 +636,7 @@ function HubWorld() {
               value: balance,
               name: t('inv.coins'),
               pri: 1,
-              ch: 6,
+              ch: 7,
             },
             {
               id: 'tokens',
@@ -863,6 +863,7 @@ function HubTalk({
   onClose: () => void;
 }) {
   const t = useT();
+  const press = usePress();
   const [i, setI] = useState(0);
   const [done, setDone] = useState(false);
   const textRef = useRef<HTMLSpanElement>(null);
@@ -933,6 +934,7 @@ function HubTalk({
               key={o.label}
               type="button"
               className="gx-btn gx-btn--red"
+              {...press}
               onClick={() => onOption(o)}
             >
               {o.label}
@@ -941,6 +943,7 @@ function HubTalk({
           <button
             type="button"
             className="gx-btn gx-btn--grey"
+            {...press}
             onClick={() => {
               uiTap();
               onClose();
