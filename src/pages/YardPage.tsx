@@ -14,9 +14,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GameTop, GxBar, GxIcon, GxModal } from '@/components/gx';
-import { CoinIcon } from '@/components/slot-art';
-import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
+import { GameTop, GxBar, GxHud, GxIcon, GxModal } from '@/components/gx';
+import { PrisonCamp, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { ForgeScreen } from '@/components/ForgeScreen';
 import { Inventory } from '@/components/Inventory';
@@ -632,7 +631,7 @@ function HubWorld() {
           chips={[
             {
               id: 'coins',
-              icon: <CoinIcon size={18} />,
+              icon: <GxHud name="coin" />,
               value: balance,
               name: t('inv.coins'),
               pri: 1,
@@ -640,7 +639,7 @@ function HubWorld() {
             },
             {
               id: 'tokens',
-              icon: <TokenIcon size={17} />,
+              icon: <GxHud name="token" />,
               value: prison.tokens,
               name: t('inv.tokens'),
               pri: 2,
@@ -648,7 +647,7 @@ function HubWorld() {
             },
             {
               id: 'keys',
-              icon: <KeyIcon size={17} />,
+              icon: <GxHud name="key" />,
               value: prison.keys,
               name: t('inv.section.keys'),
               pri: 3,
@@ -656,7 +655,7 @@ function HubWorld() {
             },
             {
               id: 'rank',
-              icon: <GxIcon name="pick" size={16} />,
+              icon: <GxHud name="rank" />,
               value: rankLetter(prison.rank),
               name: t('yard.rankTip'),
               pri: 3,

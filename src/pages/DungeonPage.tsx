@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GameTop, GxBar, GxIcon, KIcon } from '@/components/gx';
+import { GameTop, GxBar, GxHud, GxIcon, KIcon } from '@/components/gx';
 import type { TopChip } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
@@ -394,7 +394,7 @@ export function DungeonPage() {
   const chips: TopChip[] = [
     {
       id: 'coins',
-      icon: <CoinIcon size={18} />,
+      icon: <GxHud name="coin" />,
       value: balance,
       name: t('inv.coins'),
       pri: 1,
@@ -418,7 +418,7 @@ export function DungeonPage() {
     },
     {
       id: 'inv',
-      icon: <GxIcon name="backpack" size={18} />,
+      icon: <GxIcon name="backpack" />,
       name: t('dungeon.lobby.inventory'),
       onClick: () => {
         tapLight();

@@ -303,6 +303,10 @@ span.gx-top__side {
 /* Phone portrait: chips one type step down (17 px, above the 16 px floor) — the row is 340–420 px. */
 html[data-ff='phone-portrait'] .gx-top .gx-chip {
   font-size: var(--px-fs-sm);
+  /* the 24-px HUD pictures took 12 px per chip: the gap and side padding give it back (360 px
+     still shows money + tokens; the number is centred in its reserved `ch` box anyway) */
+  gap: var(--u);
+  padding: 0 calc(3 * var(--u)) 0 calc(2 * var(--u));
 }
 /* The value keeps its box (min-width in ch from the caller): a growing number never pushes. */
 .gx-chip__v {
@@ -804,6 +808,33 @@ html[data-ff='phone-portrait'] .gx-top .gx-chip {
 .gx-chip .gx-icon {
   width: calc(9 * var(--u));
   height: calc(9 * var(--u));
+}
+/* wave 3 — Q: HUD chip pictures (`paint.ts` `hud-*`, 12 × 12 with a 1-art-px ink outline). GameTop
+   sets `--hud` = twice the cap height of the chip number, snapped to whole device px per art px
+   (24 px on phones, 36 at ui-scale 4); mask icons in header chips (backpack) take the same box. */
+.gx-hud {
+  display: inline-block;
+  flex: none;
+  width: var(--hud, 24px);
+  height: var(--hud, 24px);
+  background: no-repeat center / 100% 100%;
+  image-rendering: pixelated;
+}
+.gx-hud--coin {
+  background-image: var(--pximg-hud-coin);
+}
+.gx-hud--token {
+  background-image: var(--pximg-hud-token);
+}
+.gx-hud--key {
+  background-image: var(--pximg-hud-key);
+}
+.gx-hud--rank {
+  background-image: var(--pximg-hud-rank);
+}
+.gx-top .gx-chip > .gx-icon {
+  width: var(--hud, 24px);
+  height: var(--hud, 24px);
 }
 
 @media (prefers-reduced-motion: reduce) {

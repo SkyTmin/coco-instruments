@@ -144,6 +144,12 @@ export type KIconName =
   | 'singleplayer'
   | 'warning';
 
+/** A HUD chip picture (`paint.ts` `hud-*`, 12 × 12) at `--hud`: GameTop sizes it to twice the
+ *  cap height of the chip number in whole device px per art px. */
+export function GxHud({ name }: { name: 'coin' | 'token' | 'key' | 'rank' }) {
+  return <i className={`gx-hud gx-hud--${name}`} aria-hidden="true" />;
+}
+
 export function GxIcon({
   name,
   size,
@@ -456,6 +462,18 @@ function rowFits(el: HTMLElement, level: number): boolean {
   return !title || title.scrollWidth <= title.clientWidth + 1;
 }
 
+/** `--hud` on the header: chip pictures at twice the cap height (≈ 1.4 em) of the chip number,
+ *  snapped to whole device px per art px of a 12 × 12 picture (24 px phone, 36 on 1080p). */
+function hudSize(top: HTMLElement): void {
+  const v = top.querySelector<HTMLElement>('.gx-chip__v, .gx-chip');
+  if (!v) return;
+  const fs = parseFloat(getComputedStyle(v).fontSize) || 17;
+  const dpr = window.devicePixelRatio || 1;
+  const k = Math.max(1, Math.round((fs * 1.4 * dpr) / 12));
+  const px = `${(k * 12) / dpr}px`;
+  if (top.style.getPropertyValue('--hud') !== px) top.style.setProperty('--hud', px);
+}
+
 function fitRow(el: HTMLElement, hasRight: boolean): void {
   for (let level = 0; level <= FIT_MAX; level++) {
     if (level === 2 && !hasRight) continue;
@@ -501,6 +519,7 @@ export function GameTop({
 
   const fit = useRef(() => {});
   fit.current = () => {
+    if (top.current) hudSize(top.current);
     if (row.current) fitRow(row.current, hasRight);
   };
   // Every render: a new number, language or chip set may need another level.

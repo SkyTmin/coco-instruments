@@ -142,6 +142,18 @@
   --pximg-st-power: url('/ui/kit/st-power.png?v=5b6f3ef5');
   --pximg-st-power-w: 12;
   --pximg-st-power-h: 12;
+  --pximg-hud-coin: url('/ui/kit/hud-coin.png?v=9cb78553');
+  --pximg-hud-coin-w: 12;
+  --pximg-hud-coin-h: 12;
+  --pximg-hud-token: url('/ui/kit/hud-token.png?v=bbf71fd8');
+  --pximg-hud-token-w: 12;
+  --pximg-hud-token-h: 12;
+  --pximg-hud-rank: url('/ui/kit/hud-rank.png?v=2deb2f4d');
+  --pximg-hud-rank-w: 12;
+  --pximg-hud-rank-h: 12;
+  --pximg-hud-key: url('/ui/kit/hud-key.png?v=4e00f54b');
+  --pximg-hud-key-w: 12;
+  --pximg-hud-key-h: 12;
 }
 
 .pxk-frame-stone {
