@@ -186,3 +186,18 @@ owner. Each agent ships as its own version after the lead reviews its shots (6 f
 
 Wave rules: new CSS in the screen's own file (like `nursery.css`), `game-ui.css` only loses the
 screen's old blocks; no logic changes in `src/lib`; every new string through `t()` in 7 languages.
+
+### Owner's verdicts on the v1 look (13.10, iPhone screenshots) — binding for every screen
+
+- The pixel fonts (Tiny5, Press Start 2P) are «непонятный, сложно читаемый» → readable text font;
+  he set the text size to «large» and «стало гораздо лучше» → today's «large» is the new default.
+- Dark stone/obsidian palette: «на её фоне не особо всё хорошо видно» → lighter, warmer
+  materials, measured text contrast (≥ 4.5:1), bright stage behind showcased art.
+- The showcased thing is BIG: a pet «почти на весь экран, хотя бы на половину».
+- **Nothing jumps:** «должно быть фиксированное, чтобы картинка не дёргалась» — selecting another
+  pet/item or changing numbers never changes the size or position of panels, art or buttons
+  (fixed rows, scroll inside, tabular numbers). Check by comparing bounding boxes in a script.
+- **Things are bigger than the text about them:** three squad pets smaller than their bonus text
+  = «ужасно». Owned/equipped things (slots, icons) dominate; bonuses are a secondary line.
+- Every block must be obvious to a new player («„С собой“ непонятная»): a short title that says
+  what it is and what to do, empty slots that look tappable, locks that say what unlocks them.
