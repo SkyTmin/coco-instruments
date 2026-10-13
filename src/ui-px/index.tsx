@@ -11,6 +11,7 @@ import type {
   ButtonHTMLAttributes,
   CSSProperties,
   HTMLAttributes,
+  PointerEvent as ReactPointerEvent,
   PropsWithChildren,
   ReactNode,
 } from 'react';
@@ -105,6 +106,64 @@ export function Panel({
   );
 }
 
+// ---- Press -----------------------------------------------------------------------------------
+// The pressed look shows on POINTERDOWN, in the first frame. `:active` alone came late on touch
+// (Android waits for its show-press delay, iOS WebKit needs a touch listener; on the stand it
+// appeared 80–90 ms AFTER the finger was lifted). The class goes straight onto the element —
+// no React render — and comes off on pointerup / pointercancel / leaving it / any scroll / blur.
+// Style it as `.your-button.is-down` (no transition: the change must land in one frame).
+
+const DOWN = 'is-down';
+let downEl: HTMLElement | null = null;
+
+function pressUp(): void {
+  downEl?.classList.remove(DOWN);
+  downEl = null;
+  window.removeEventListener('pointerup', pressUp, true);
+  window.removeEventListener('pointercancel', pressUp, true);
+  window.removeEventListener('scroll', pressUp, true);
+  window.removeEventListener('blur', pressUp);
+}
+
+function pressDown(e: ReactPointerEvent<HTMLElement>): void {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const el = e.currentTarget;
+  // Greyed buttons stay flat (they only explain themselves), like `[aria-disabled]:active`.
+  if (el.matches(':disabled, [aria-disabled="true"]')) return;
+  pressUp();
+  downEl = el;
+  el.classList.add(DOWN);
+  window.addEventListener('pointerup', pressUp, true);
+  window.addEventListener('pointercancel', pressUp, true);
+  window.addEventListener('scroll', pressUp, { capture: true, passive: true });
+  window.addEventListener('blur', pressUp);
+}
+
+function pressLeave(e: ReactPointerEvent<HTMLElement>): void {
+  if (e.currentTarget === downEl) pressUp();
+}
+
+export interface PressProps<T extends HTMLElement = HTMLElement> {
+  onPointerDown: (e: ReactPointerEvent<T>) => void;
+  onPointerLeave: (e: ReactPointerEvent<T>) => void;
+}
+const PRESS: PressProps = { onPointerDown: pressDown, onPointerLeave: pressLeave };
+
+/** Visible press for any button (kit or not): spread the returned props on it and style
+ *  `.is-down`. The handlers are stable (one pair for the whole app). Pass the element's `ref` if
+ *  the component may re-render DURING a press with a new `className` (a slot that selects on
+ *  focus): React rewrites `className` and would drop the class — the layout effect puts it back
+ *  before the frame is painted. With handlers of your own, call `press.onPointerDown(e)` first. */
+export function usePress<T extends HTMLElement = HTMLElement>(
+  ref?: RefObject<T | null>,
+): PressProps<T> {
+  useLayoutEffect(() => {
+    const el = ref?.current;
+    if (el && el === downEl) el.classList.add(DOWN);
+  });
+  return PRESS as unknown as PressProps<T>;
+}
+
 // ---- Button ----------------------------------------------------------------------------------
 
 export type ButtonKind = 'primary' | 'secondary' | 'danger' | 'confirm';
@@ -142,12 +201,25 @@ export function Button({
   className,
   children,
   onClick,
+  onPointerDown,
+  onPointerLeave,
   ...rest
 }: ButtonProps) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const press = usePress(ref);
   return (
     <button
+      ref={ref}
       type="button"
       {...rest}
+      onPointerDown={(e) => {
+        press.onPointerDown(e);
+        onPointerDown?.(e);
+      }}
+      onPointerLeave={(e) => {
+        press.onPointerLeave(e);
+        onPointerLeave?.(e);
+      }}
       aria-label={icon && !children ? label : rest['aria-label']}
       aria-pressed={on === undefined ? undefined : on}
       aria-disabled={off || undefined}
@@ -324,6 +396,8 @@ export function Slot({
   tip,
   className,
   children,
+  onPointerDown,
+  onPointerLeave,
   ...rest
 }: {
   rarity?: number;
@@ -341,11 +415,20 @@ export function Slot({
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & { children?: ReactNode }) {
   const ref = useRef<HTMLButtonElement>(null);
   const tipState = useTip(ref, tip);
+  const press = usePress(ref);
   return (
     <button
       ref={ref}
       type="button"
       {...rest}
+      onPointerDown={(e) => {
+        press.onPointerDown(e);
+        onPointerDown?.(e);
+      }}
+      onPointerLeave={(e) => {
+        press.onPointerLeave(e);
+        onPointerLeave?.(e);
+      }}
       className={cx(
         'px-slot px-f',
         `px-slot--r${Math.max(0, Math.min(6, rarity))}`,
