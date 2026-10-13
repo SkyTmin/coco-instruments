@@ -367,10 +367,7 @@
   text-transform: uppercase;
 }
 .cas-spin .px-keyhint {
-  position: absolute;
-  right: calc(3 * var(--u));
-  top: 50%;
-  translate: 0 -50%;
+  flex: none;
 }
 
 /* Cascade: ante + buy bonus — two equal plates, fixed height. */
@@ -378,6 +375,9 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: calc(3 * var(--u));
+}
+.cas-bonus.is-hidden {
+  visibility: hidden;
 }
 .cas-bonus .px-btn {
   flex-direction: column;
@@ -401,20 +401,18 @@
 }
 
 /* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
-html[data-ff='phone-portrait'] .cas-info {
+[data-lay='tall'] > .cas-info {
   border-image-source: var(--pxk-frame-parch);
   border-image-slice: var(--pxk-frame-parch-s);
   border-image-width: var(--pxk-frame-parch-w);
   padding: calc(4 * var(--u)) calc(5 * var(--u));
 }
-html[data-ff='phone-portrait'] .cas-stat__k {
+[data-lay='tall'] .cas-stat__k {
   font-size: var(--px-fs-tiny);
 }
 
 /* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
-html[data-ff='phone-landscape'] .cas,
-html[data-ff='desktop'] .cas,
-html[data-ff='tablet'] .cas {
+.cas[data-lay='wide'] {
   grid-template-columns: minmax(0, var(--cas-l)) minmax(0, 1fr) minmax(0, var(--cas-r));
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas: 'info stage deck';
@@ -426,12 +424,8 @@ html[data-ff='phone-landscape'] .cas {
   --cas-r: calc(118 * var(--u));
   gap: calc(2 * var(--u));
 }
-html[data-ff='phone-landscape'] .cas-info,
-html[data-ff='desktop'] .cas-info,
-html[data-ff='tablet'] .cas-info,
-html[data-ff='phone-landscape'] .cas--scatter .cas-info,
-html[data-ff='desktop'] .cas--scatter .cas-info,
-html[data-ff='tablet'] .cas--scatter .cas-info {
+.cas[data-lay='wide'] .cas-info,
+.cas--scatter[data-lay='wide'] .cas-info {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto auto auto minmax(0, 1fr);
   grid-template-areas: 'lvl' 'jp' 'best' 'sp' 'hist';
@@ -442,26 +436,18 @@ html[data-ff='tablet'] .cas--scatter .cas-info {
 html[data-ff='phone-landscape'] .cas-info {
   gap: calc(2 * var(--u));
 }
-html[data-ff='phone-landscape'] .cas-lvl,
-html[data-ff='desktop'] .cas-lvl,
-html[data-ff='tablet'] .cas-lvl {
+.cas[data-lay='wide'] .cas-lvl {
   flex-wrap: wrap;
 }
-html[data-ff='phone-landscape'] .cas-lvl .px-bar,
-html[data-ff='desktop'] .cas-lvl .px-bar,
-html[data-ff='tablet'] .cas-lvl .px-bar {
+.cas[data-lay='wide'] .cas-lvl .px-bar {
   order: 3;
   flex-basis: 100%;
 }
-html[data-ff='phone-landscape'] .cas-lvl__free,
-html[data-ff='desktop'] .cas-lvl__free,
-html[data-ff='tablet'] .cas-lvl__free {
+.cas[data-lay='wide'] .cas-lvl__free {
   margin-left: auto;
 }
 /* Stats as wells with the caption on top and a big number under it. */
-html[data-ff='phone-landscape'] .cas-stat,
-html[data-ff='desktop'] .cas-stat,
-html[data-ff='tablet'] .cas-stat {
+.cas[data-lay='wide'] .cas-stat {
   grid-template-areas: 'k k' 'ico v';
   row-gap: var(--u);
 }
@@ -494,9 +480,7 @@ html[data-ff='tablet'] .cas-777 .sym {
   height: calc(9 * var(--u));
 }
 /* Recent spins become a wrapped list there (newest first, scroll inside). */
-html[data-ff='phone-landscape'] .cas-hist,
-html[data-ff='desktop'] .cas-hist,
-html[data-ff='tablet'] .cas-hist {
+.cas[data-lay='wide'] .cas-hist {
   height: auto;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr);
@@ -504,24 +488,18 @@ html[data-ff='tablet'] .cas-hist {
   align-items: start;
   align-self: stretch;
 }
-html[data-ff='phone-landscape'] .cas-hist__row,
-html[data-ff='desktop'] .cas-hist__row,
-html[data-ff='tablet'] .cas-hist__row {
+.cas[data-lay='wide'] .cas-hist__row {
   flex-wrap: wrap;
   align-content: flex-start;
   overflow: hidden auto;
   max-height: 100%;
 }
 
-html[data-ff='phone-landscape'] .cas-deck,
-html[data-ff='desktop'] .cas-deck,
-html[data-ff='tablet'] .cas-deck {
+.cas[data-lay='wide'] .cas-deck {
   overflow: hidden;
   align-content: space-between;
 }
-html[data-ff='phone-landscape'] .cas-deck__money,
-html[data-ff='desktop'] .cas-deck__money,
-html[data-ff='tablet'] .cas-deck__money {
+.cas[data-lay='wide'] .cas-deck__money {
   grid-template-columns: minmax(0, 1fr);
   gap: calc(3 * var(--u));
 }
@@ -530,39 +508,28 @@ html[data-ff='tablet'] .cas-bal__v {
   height: calc(20 * var(--u));
   font-size: var(--px-fs-hero);
 }
-html[data-ff='phone-landscape'] .cas-bet,
-html[data-ff='desktop'] .cas-bet,
-html[data-ff='tablet'] .cas-bet {
+.cas[data-lay='wide'] .cas-bet {
   justify-self: stretch;
 }
-html[data-ff='phone-landscape'] .cas-bet__row,
-html[data-ff='desktop'] .cas-bet__row,
-html[data-ff='tablet'] .cas-bet__row {
+.cas[data-lay='wide'] .cas-bet__row {
   justify-content: space-between;
 }
-html[data-ff='phone-landscape'] .cas-bet__v,
-html[data-ff='desktop'] .cas-bet__v,
-html[data-ff='tablet'] .cas-bet__v {
+.cas[data-lay='wide'] .cas-bet__v {
   flex: 1 1 auto;
   width: auto;
 }
 /* Quick bets (the old chip row) on roomy formats: 3 × 2 under the stepper. */
-html[data-ff='desktop'] .cas-chips,
-html[data-ff='tablet'] .cas-chips {
+html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chips {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(2 * var(--u));
 }
 /* Spin gets a row of its own under the thumb; auto and turbo above it. */
-html[data-ff='phone-landscape'] .cas-deck__go,
-html[data-ff='desktop'] .cas-deck__go,
-html[data-ff='tablet'] .cas-deck__go {
+.cas[data-lay='wide'] .cas-deck__go {
   grid-template-columns: 1fr 1fr;
   grid-template-areas: 'auto turbo' 'spin spin';
 }
-html[data-ff='phone-landscape'] .cas-deck__go > .cas-spin,
-html[data-ff='desktop'] .cas-deck__go > .cas-spin,
-html[data-ff='tablet'] .cas-deck__go > .cas-spin {
+.cas[data-lay='wide'] .cas-deck__go > .cas-spin {
   grid-area: spin;
 }
 html[data-ff='phone-landscape'] .cas-mini {
@@ -582,22 +549,9 @@ html[data-ff='desktop'] .cas-spin__t,
 html[data-ff='tablet'] .cas-spin__t {
   font-size: var(--px-fs-hero);
 }
-
-/* Tablet portrait: the stage on top across the width, info | deck under it. */
-@media (orientation: portrait) {
-  html[data-ff='tablet'] .cas {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-    grid-template-areas: 'stage stage' 'info deck';
-  }
-  html[data-ff='tablet'] .cas-info,
-  html[data-ff='tablet'] .cas--scatter .cas-info {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto auto minmax(0, 1fr);
-    grid-template-areas: 'lvl lvl' 'jp best' 'sp sp' 'hist hist';
-  }
-  html[data-ff='tablet'] .cas--scatter .cas-info {
-    grid-template-areas: 'lvl lvl' 'best sp';
-    grid-template-rows: auto auto;
-  }
+html[data-ff='phone-landscape'] .cas-spin__t {
+  font-size: var(--px-fs);
+}
+html[data-ff='phone-landscape'] .cas-bonus .px-btn > b {
+  font-size: var(--px-fs-sm);
 }

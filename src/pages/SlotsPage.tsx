@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
 import { Bar } from '@/ui-px';
-import { CasDeck, CasStat, KitIcon, fitStyles, useFit } from './casino-ui';
+import { CasDeck, CasStat, KitIcon, fitStyles, useCasLayout, useFit } from './casino-ui';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
 import { CoinIcon, SlotArtDefs } from '@/components/slot-art';
@@ -441,6 +441,7 @@ export function SlotsPage() {
   const stageRef = useRef<HTMLDivElement>(null);
   const fit = useFit(stageRef, cabinetRef);
   const fitCss = fitStyles(fit);
+  const lay = useCasLayout();
   const nav = useNavigate();
   const goBack = () => {
     if (window.history.length > 1) nav(-1);
@@ -1083,6 +1084,7 @@ export function SlotsPage() {
         className="slots cas cas--slots"
         data-skin={skin}
         ref={pageRef}
+        data-lay={lay}
         style={{ '--speed': turbo ? 0.55 : 1 } as React.CSSProperties}
       >
         <SlotArtDefs />

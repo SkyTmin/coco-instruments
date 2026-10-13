@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { Button, Icon, KeyHint } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
 import { useAction } from '@/input/hooks';
+import { useFormFactor } from '@/game-shell';
 import { inTopLayer } from '@/input/focus-nav';
 import { CoinIcon } from '@/components/slot-art';
 import { BETS } from '@/lib/slots';
@@ -64,6 +65,16 @@ export function fitStyles(fit: { k: number; w: number; h: number }): {
       marginTop: -fit.h / 2,
     } as CSSProperties,
   };
+}
+
+/**
+ * Page layout: «tall» = info strip, stage, deck in one column (phone portrait and tablet
+ * portrait — there the width is the limit, so the stage gets all the height left); «wide» =
+ * info | stage | deck columns (phone landscape, tablet landscape, desktop).
+ */
+export function useCasLayout(): 'tall' | 'wide' {
+  const { ff, landscape } = useFormFactor();
+  return ff === 'phone-portrait' || (ff === 'tablet' && !landscape) ? 'tall' : 'wide';
 }
 
 /** One fact: icon + number (+ a small word under it on roomy formats). */
