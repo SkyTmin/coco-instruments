@@ -132,3 +132,7 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   old callers — don't delete them with their blocks. Settings' `.gx-modal__box:has(.gset)`
   760-px width is beaten by `.gx-win > .gx-win__box.px-panel`. Stand: the Vite watcher must not
   ignore `**/.claude/**` (a worktree lives under `.claude/`) — CSS edits looked dead.
+- **Not verified:** a real phone / Telegram webview (safe areas in fullscreen, iOS hyphenation of
+  long rail words), gamepad hardware (LB/RB/B checked through `emitAction` only). Stand checks:
+  6 formats × ru/de (+tr for the rail), no page scroll, rects equal across all camp tabs,
+  NestSheet inside a zoomed camp at 1920×1080.
