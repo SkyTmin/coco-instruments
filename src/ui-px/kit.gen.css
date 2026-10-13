@@ -732,6 +732,13 @@
   --i-h: 9;
 }
 
+.pxi-grid {
+  -webkit-mask-image: url('/ui/kit/i-grid.png?v=a3494626');
+  mask-image: url('/ui/kit/i-grid.png?v=a3494626');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .px-btn--gold {
   --b: var(--pxk-btn-gold-n);
   --bs: var(--pxk-btn-gold-n-s);
