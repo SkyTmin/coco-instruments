@@ -935,3 +935,10 @@ html[data-input='touch'] .mn .px-keyhint {
     animation: none;
   }
 }
+
+/* Вне телефона стоя места хватает — подписи на ступень крупнее. */
+html:not([data-ff='phone-portrait']) .mn :is(.mn-dock__label, .mn-bag__title, .mn-strip__name),
+html:not([data-ff='phone-portrait']) .mn :is(.mn-rank, .mn-bag) .px-bar__label,
+html:not([data-ff='phone-portrait']) .mn .mn-bag__sell {
+  font-size: var(--px-fs);
+}
