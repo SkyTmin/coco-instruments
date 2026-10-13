@@ -204,6 +204,9 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
           : 'wide';
   // Phones: the collection opens in a drawer from the action bar; tablets and desktops show the grid.
   const drawerMode = layout === 'one' || layout === 'land';
+  // Phone landscape and wide screens: the name plate tops the side column, so the room keeps
+  // the whole stage height (the pet there is limited by the height).
+  const plateSide = layout === 'land' || layout === 'wide';
   const root = useRef<HTMLDivElement>(null);
 
   const owned = PETS.filter((d) => p.pets[d.id]).length;
@@ -219,6 +222,8 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const [pick, setPick] = useState<number | null>(null);
   const [info, setInfo] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [animsOpen, setAnimsOpen] = useState(false);
+  const animsRef = useRef<HTMLDivElement>(null);
   const morePress = usePress<HTMLButtonElement>();
 
   const rec = p.pets[sel];
@@ -355,7 +360,7 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const size = stageId === sel ? want.size : artFor(stageId).size;
   // Slot art: the drawer/grid cell is 26 art px, the squad cells bigger (nursery.css `--slot`).
   const thumb = 20 * u;
-  const big = (layout === 'land' ? 20 : 26) * u;
+  const big = (layout === 'land' ? 20 : layout === 'one' ? 22 : 26) * u;
 
   const name = t(`pets.${stageId}.name`);
 
@@ -399,34 +404,65 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   );
 
   // Six framed buttons, always all six (a pet not hatched yet: greyed, a tap says why) — the row
-  // never changes. The word is the tip / aria label.
-  const anims = (
+  // never changes. The word is the tip / aria label. Tablets and desktops: a column beside the
+  // room (the room is limited by its height there). Phones: one ▶ toggle in the room's corner
+  // opens them as a 3 × 2 menu (pitch ≥ 44 px) — the column cost the portrait pet its width.
+  const animBtns = ANIMS.map((a) => {
+    const word = t(`nursery.anim.${a.id}`);
+    return (
+      <Button
+        key={a.id}
+        size={drawerMode ? 'md' : 'sm'}
+        icon={a.icon}
+        label={word}
+        className="nur-anim"
+        off={!srec}
+        on={srec && a.loop ? base === a.id && !show : undefined}
+        data-autofocus={drawerMode && a.loop && base === a.id && !show ? '' : undefined}
+        onClick={() => {
+          tapLight();
+          setAnimsOpen(false);
+          if (!srec) {
+            say(t('nursery.hatchFirst'));
+            return;
+          }
+          if (a.loop) {
+            setBase(a.id);
+            setShow(null);
+          } else setShow((s) => ({ anim: a.id, k: (s?.k ?? 0) + 1 }));
+        }}
+      />
+    );
+  });
+  const anims = drawerMode ? (
+    <>
+      <Button
+        size="sm"
+        icon="play"
+        label={t('nursery.anims')}
+        className="nur-anim-tog"
+        on={animsOpen}
+        aria-expanded={animsOpen}
+        onClick={() => {
+          tapLight();
+          setAnimsOpen((o) => !o);
+        }}
+      />
+      {animsOpen && (
+        <div
+          ref={animsRef}
+          className="nur-anims nur-anims--pop"
+          role="toolbar"
+          aria-label={t('nursery.anims')}
+          data-ui-layer=""
+        >
+          {animBtns}
+        </div>
+      )}
+    </>
+  ) : (
     <div className="nur-anims" role="toolbar">
-      {ANIMS.map((a) => {
-        const word = t(`nursery.anim.${a.id}`);
-        return (
-          <Button
-            key={a.id}
-            size="sm"
-            icon={a.icon}
-            label={word}
-            className="nur-anim"
-            off={!srec}
-            on={srec && a.loop ? base === a.id && !show : undefined}
-            onClick={() => {
-              tapLight();
-              if (!srec) {
-                say(t('nursery.hatchFirst'));
-                return;
-              }
-              if (a.loop) {
-                setBase(a.id);
-                setShow(null);
-              } else setShow((s) => ({ anim: a.id, k: (s?.k ?? 0) + 1 }));
-            }}
-          />
-        );
-      })}
+      {animBtns}
     </div>
   );
 
@@ -479,6 +515,12 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
 
   // The plate under the pet: name (one line, sized to fit) + power, rarity pill + gold + level,
   // the chips and the level bar. Fixed rows — switching pets never changes its height.
+  const xpV = srec ? (slv.need ? slv.into / slv.need : 1) : 0;
+  const xpText = !srec
+    ? ''
+    : !slv.need
+      ? t('nursery.lvMax')
+      : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`;
   const plate = (
     <div
       className="px-dark nur-plate"
@@ -521,12 +563,15 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       >
         {roles}
       </div>
-      <Bar
-        value={srec ? (slv.need ? slv.into / slv.need : 1) : 0}
-        label={
-          !srec ? '' : !slv.need ? t('nursery.lvMax') : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`
-        }
-      />
+      {layout === 'one' ? (
+        // phone portrait: a slim bar (the pet takes the height); the numbers are its tip and
+        // the details sheet's bar
+        <span className="nur-xp" data-tip={xpText || undefined} aria-label={xpText || undefined}>
+          <Bar value={xpV} height={4} />
+        </span>
+      ) : (
+        <Bar value={xpV} label={xpText} />
+      )}
     </div>
   );
 
@@ -545,7 +590,7 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
           {pet}
         </span>
         {anims}
-        {layout !== 'land' && plate}
+        {!plateSide && plate}
         {xp}
       </Panel>
     </section>
@@ -736,8 +781,41 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
     };
   }, [drawer]);
   useEffect(() => {
-    if (!drawerMode) setDrawer(false);
+    if (!drawerMode) {
+      setDrawer(false);
+      setAnimsOpen(false);
+    }
   }, [drawerMode]);
+
+  // The phone anims menu: Esc / Back / pad B and a tap outside close it; keyboard and pad focus
+  // go into it (the current loop) and back to the toggle.
+  useEffect(() => {
+    if (!animsOpen) return undefined;
+    const host = root.current;
+    const tog = () => host?.querySelector<HTMLElement>('.nur-anim-tog') ?? null;
+    const off = registerEscape(() => setAnimsOpen(false));
+    const dev = getInputDevice();
+    if (dev === 'keyboard' || dev === 'gamepad') {
+      const box = animsRef.current;
+      const el =
+        box?.querySelector<HTMLElement>('[data-autofocus]') ??
+        box?.querySelector<HTMLElement>('button');
+      if (el) focusEl(el);
+    }
+    const outside = (e: PointerEvent) => {
+      const tg = e.target as Node | null;
+      if (animsRef.current?.contains(tg) || tog()?.contains(tg)) return;
+      setAnimsOpen(false);
+    };
+    document.addEventListener('pointerdown', outside, true);
+    return () => {
+      off();
+      document.removeEventListener('pointerdown', outside, true);
+      const d = getInputDevice();
+      const el = tog();
+      if ((d === 'keyboard' || d === 'gamepad') && el) focusEl(el);
+    };
+  }, [animsOpen]);
 
   const acts = (
     <div className="nur-acts">
@@ -773,9 +851,20 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
     <div ref={root} className={`px nur nur--${layout}`} style={{ '--st': stPx } as CSSProperties}>
       {showcase}
       <div className="nur-side">
-        {layout === 'land' && plate}
-        {squad}
-        {collection}
+        {plateSide && plate}
+        {layout === 'wide' ? (
+          // the plate on top and the action bar at the bottom stay put; the squad and the
+          // collection scroll between them as one list (a grid-only scroll was 0.2–1 row high)
+          <div className="nur-side__mid">
+            {squad}
+            {collection}
+          </div>
+        ) : (
+          <>
+            {squad}
+            {collection}
+          </>
+        )}
         {acts}
       </div>
       {drawer && drawerMode && (

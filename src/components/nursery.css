@@ -39,11 +39,12 @@
 .nur--land {
   grid-template: 'show side' minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1fr);
 }
-/* Tablet portrait: the stage on top (11/20 of the height), squad | collection under it. */
+/* Tablet portrait: the stage on top (16/25 of the height — critic round 2 (c); the side column
+   scrolls a few px inside instead), squad | collection under it. */
 .nur--tall {
   grid-template:
-    'show' minmax(0, 3fr)
-    'side' minmax(0, 2fr)
+    'show' minmax(0, 16fr)
+    'side' minmax(0, 9fr)
     / minmax(0, 1fr);
 }
 /* Tablet landscape, desktop: the stage is the hero, 55 % of the width. */
@@ -97,6 +98,63 @@
   flex-direction: column;
   justify-content: center;
   gap: calc(2 * var(--u));
+}
+/* Round 3 (critic P0-1): the pet as big as each format allows. Phones have no anims column (one
+   ▶ toggle in the room's corner instead); phone landscape and wide screens carry the plate in
+   the side column, so the room is the whole stage. */
+.nur--one .nur-stage {
+  grid-template:
+    'room' minmax(0, 1fr)
+    'plate' auto
+    / minmax(0, 1fr);
+}
+.nur--land .nur-stage {
+  grid-template: 'room' minmax(0, 1fr) / minmax(0, 1fr);
+}
+.nur--wide .nur-stage {
+  grid-template: 'room anims' minmax(0, 1fr) / minmax(0, 1fr) auto;
+}
+/* The phone toggle stands in the room's top-right corner over the pet; its hit area (≥ 46 × 50
+   at u 2) reaches into the stage's frame. */
+.nur .nur-anim-tog {
+  grid-area: room;
+  justify-self: end;
+  align-self: start;
+  z-index: 3;
+}
+.nur-anim-tog::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(-5 * var(--u)) calc(-4 * var(--u));
+}
+/* …and opens the six as a 3 × 2 menu under it: 19-u buttons, 3-u gaps = a 44-px pitch on a
+   phone (critic P1-4). An ink plate under them, like the name plate. */
+.nur .nur-anims--pop {
+  grid-area: room;
+  justify-self: end;
+  align-self: start;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: calc(3 * var(--u));
+  margin-top: calc(17 * var(--u));
+  padding: calc(2 * var(--u));
+  background: #2a190c;
+  border: var(--u) solid var(--px-ink);
+  box-shadow:
+    inset 0 var(--u) 0 #6b4a2c,
+    inset 0 calc(-1 * var(--u)) 0 #1a0f07;
+  animation: nur-drop 80ms steps(2, jump-none);
+}
+@keyframes nur-drop {
+  from {
+    translate: 0 calc(-2 * var(--u));
+  }
+}
+/* the slim level bar of phone portrait: 4 u, no label (numbers = its tip + the details sheet) */
+.nur-xp {
+  display: block;
 }
 /* The measured room: its size comes from the grid only (contain), the pet is sized from it in
    Nursery.tsx and stands on a pedestal of the room's size (--ped, whole screen dots). */
@@ -353,11 +411,12 @@
   white-space: nowrap;
 }
 /* «+N»: 36 × 28 visible, the hit area ≥ 48 × 48 (Android 48 dp). The row paints above the bar
-   (z 1), so the bar doesn't cover the area's lower part; to the left the area only reaches into
+   (z 2), so the bar doesn't cover the area's lower part; to the left the area only reaches into
    the gap (the chip before it paints over the rest), to the right the row is free. */
 .nur-plate__roles {
   position: relative;
-  z-index: 1;
+  /* above the bar's label too (z 1 in the kit) */
+  z-index: 2;
 }
 .nur-chip--more {
   justify-content: center;
@@ -421,6 +480,10 @@
 .nur--land .nur-squad__row {
   --slot: calc(26 * var(--u));
   gap: calc(4 * var(--u));
+}
+/* phone portrait: 30 u (60 px) — still 2.5 × the bonus rows, and the room gets 8 px */
+.nur--one .nur-squad__row {
+  --slot: calc(30 * var(--u));
 }
 /* Empty place: a dashed outline and a big plus — «tap to add». */
 .nur-squad__row > .nur-squad__add {
@@ -654,8 +717,26 @@
   padding-bottom: calc(3 * var(--u));
   gap: var(--u);
 }
-.nur--wide .nur-side > .nur-coll {
+/* Wide: plate on top, the action bar at the bottom, the squad and the whole collection scroll
+   between them as one list (round 3: with the plate in this column a grid-only scroll showed
+   0.2 row on 1180 × 820). Padding keeps the focus rings and the selected ring inside. */
+.nur-side__mid {
   flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+}
+.nur-side__mid > .nur-coll {
+  flex: none;
+}
+.nur-side__mid > .nur-coll > .nur-grid {
+  flex: none;
+  overflow: visible;
 }
 .nur--tall .nur-side {
   display: grid;
@@ -884,4 +965,44 @@
 /* Large text on a phone: the word wins over the icon (Turkish «Yumurtalar» at 23 px). */
 html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i {
   display: none;
+}
+
+/* Phone landscape (critic round 2 (d)): «Питомцы / Яйца» as a rail of two icon tabs on the left
+   of both tabs (the word is the tip and the aria name), so the stage gets the 44 px the
+   full-width row took. Absolutely placed: the eggs tab's blocks keep their own flow. */
+.ppn.ppn--rail {
+  padding-left: calc(27 * var(--u));
+}
+.ppn.ppn--rail > .ppn__tabs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(24 * var(--u));
+  margin: 0;
+  gap: calc(3 * var(--u));
+}
+.ppn--rail > .ppn__tabs > .px-tab {
+  justify-content: center;
+  min-height: calc(24 * var(--u));
+  padding: calc(2 * var(--u));
+}
+.ppn--rail > .ppn__tabs .px-tab__label {
+  display: none;
+}
+/* the key cap (Tab / RB) hangs under the rail, out of its box: a key press moves nothing */
+.ppn--rail > .ppn__tabs > .px-keyhint {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  translate: -50% calc(3 * var(--u));
+}
+/* gamepad: LB (before the tabs) stacks under RB */
+.ppn--rail > .ppn__tabs > .px-keyhint:first-child {
+  translate: -50% calc(18 * var(--u));
+}
+.ppn--rail > .ppn__note {
+  position: absolute;
+  left: 50%;
+  bottom: calc(4 * var(--u));
+  translate: -50% 0;
 }

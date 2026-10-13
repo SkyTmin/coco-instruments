@@ -15,6 +15,7 @@ import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
 import { Nursery } from '@/components/Nursery';
 import { Tabs } from '@/ui-px';
+import { useFormFactor } from '@/game-shell';
 import { fmtNum, fmtShort, petName, t as tl, useT } from '@/i18n';
 import { eggName } from '@/i18n/data-books';
 import { PxStrip, preloadPx } from '@/components/PxStrip';
@@ -92,6 +93,9 @@ export const PetsTab = memo(function PetsTab() {
   const hatch = useFinanceStore((s) => s.prisonHatch);
   const buyEgg = useFinanceStore((s) => s.prisonEggBuy);
   const t = useT();
+  // Phone landscape: the «Питомцы / Яйца» tabs are a rail on the left (icons; the word is the
+  // tip and the aria name) — the full-width row cost the stage 44 px of a 390-px screen.
+  const rail = useFormFactor().ff === 'phone-landscape';
   /** Pets (the pixel Nursery) or eggs; a ready nest opens straight on the eggs. */
   const [view, setView] = useState<'pets' | 'eggs'>(() =>
     p.nest.some((n) => n.left <= 0) ? 'eggs' : 'pets',
@@ -184,15 +188,22 @@ export const PetsTab = memo(function PetsTab() {
   };
 
   return (
-    <div className={`ppn is-${view}`}>
+    <div className={`ppn is-${view}${rail ? ' ppn--rail' : ''}`}>
       <Tabs
         className="ppn__tabs"
+        vertical={rail}
         items={[
-          { id: 'pets', label: t('nursery.tabPets'), icon: 'paw' },
+          {
+            id: 'pets',
+            label: t('nursery.tabPets'),
+            icon: 'paw',
+            name: rail ? t('nursery.tabPets') : undefined,
+          },
           {
             id: 'eggs',
             label: t('nursery.tabEggs'),
             icon: 'egg',
+            name: rail ? t('nursery.tabEggs') : undefined,
             badge: p.nest.some((n) => n.left <= 0) ? '!' : eggsAll || null,
           },
         ]}

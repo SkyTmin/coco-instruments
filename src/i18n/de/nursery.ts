@@ -36,6 +36,7 @@ export const nursery: Translation<typeof ru> = {
   take: 'Mitnehmen',
   leave: 'Daheim lassen',
   details: 'Details',
+  anims: 'Bewegungen',
   unknown: 'Wer ist das?',
   from: 'Schlüpft aus',
   eggPct: '{v} %',
