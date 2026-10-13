@@ -392,3 +392,8 @@ Field drawing, mining, timings, critters and their animations are untouched.
 - Sheets (floors, rank, prestige, settings) are `GxModal` with kit rows (`.mn-sheet`, portal ⇒
   unscoped classes); the rank-up scene (`prank`) keeps its animations, the look is kit (wood
   frame, ribbon that wraps, gold badge letter, gold button).
+- **Sheet content is a `.px` root** (`<div className="px mn-sheet …">` inside the body): C's
+  chrome then treats it as kit content — no ×2 body zoom at scale ≥ 4 (icons sized in px from
+  `shell.scale` doubled to 88 px over the text at 1920×1080) and the kit well; the div scrolls
+  itself (the kit body is `overflow: hidden`). Kit content also gets C's 420u width — the mine
+  sheets put it back to 200u (`.gx-win .gx-win__box:has(.gx-win__body > .mn-sheet)`).
