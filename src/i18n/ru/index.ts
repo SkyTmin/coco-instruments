@@ -1,3 +1,5 @@
+import { camp } from './camp';
+import { campData } from './campData';
 import { cash } from './cash';
 import { common } from './common';
 import { field } from './field';
@@ -16,6 +18,8 @@ import { ui } from './ui';
  * area; add an area here AND in every `<lang>/index.ts` (tsc enforces it).
  */
 export const ru = {
+  camp,
+  campData,
   cash,
   common,
   field,

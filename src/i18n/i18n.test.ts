@@ -168,7 +168,6 @@ const NOT_YET_TRANSLATED = [
   'src/components/ForgeScreen.tsx',
   'src/components/Inventory.tsx',
   'src/components/PetsTab.tsx',
-  'src/components/PrisonCamp.tsx',
   'src/components/YardBits.tsx',
   'src/pages/DungeonPage.tsx',
   'src/pages/FishingPage.tsx',
