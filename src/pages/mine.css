@@ -42,6 +42,10 @@ html[data-input='touch'] .mn .px-keyhint {
   padding-left: calc(1 * var(--u));
   padding-right: calc(1 * var(--u));
 }
+/* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
+.mn--tall :is(.mn-stat--tokens, .mn-stat--keys) .mn-stat__n {
+  font-size: var(--px-fs);
+}
 .mn--tall > .mn-field {
   flex: 1 1 0;
   min-height: 0;
@@ -858,42 +862,49 @@ html[data-input='touch'] .mn .px-keyhint {
 }
 
 /* ---- Док ------------------------------------------------------------------------------ */
+/* Кнопки лёжа: значок слева, подпись справа (до двух строк) — на телефоне
+   шесть стоячих кнопок в ряд не вмещают читаемые подписи. Стоя — 3 × 2,
+   в боковой колонке — 2 × 3. */
 .mn-dock {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: calc(1 * var(--u));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
   /* Без рамы-панели: у каждой кнопки своя рама, а высота нужна полю. */
   padding: 0;
   border: 0;
   border-image: none;
 }
 .mn--wide .mn-dock {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .mn-dock__btn {
-  flex-direction: column;
-  gap: calc(1 * var(--u));
+  justify-content: flex-start;
+  gap: calc(2 * var(--u));
   min-width: 0;
-  height: calc(32 * var(--u));
-  padding-left: 0;
-  padding-right: 0;
+  height: calc(21 * var(--u));
+  padding-left: calc(3 * var(--u));
+  padding-right: calc(2 * var(--u));
   white-space: normal;
 }
 .mn-dock__btn:active {
-  padding-left: 0;
-  padding-right: 0;
+  padding-left: calc(3 * var(--u));
+  padding-right: calc(2 * var(--u));
 }
 .mn-dock__ico {
   display: grid;
   place-items: center;
-  width: calc(16 * var(--u));
-  height: calc(16 * var(--u));
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
   flex: none;
   line-height: 0;
 }
+.mn-dock__ico > * {
+  max-width: 100%;
+  max-height: 100%;
+}
 .mn-dock__mask {
-  width: calc(16 * var(--u));
-  height: calc(16 * var(--u));
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
   color: var(--px-text);
@@ -908,23 +919,25 @@ html[data-input='touch'] .mn .px-keyhint {
   color: var(--px-red);
 }
 .mn-dock__label {
-  /* Одна строка; длинное слово может зайти на кромку рамы кнопки, но не
-     обрезается многоточием. */
+  min-width: 0;
   font-size: var(--px-fs-sm);
-  line-height: 1;
-  text-align: center;
-  white-space: nowrap;
+  line-height: 1.05;
+  text-align: left;
+  /* Длинное слово (de, tr) переносится по слогам, а не режется. */
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  overflow-wrap: break-word;
 }
 .mn-dock__badge {
   position: absolute;
   z-index: 4;
-  top: calc(-3 * var(--u));
-  right: calc(-2 * var(--u));
+  top: calc(-5 * var(--u));
+  right: calc(-3 * var(--u));
   pointer-events: none;
 }
 .mn-dock__btn > .px-keyhint {
-  left: calc(-1 * var(--u));
-  top: calc(-4 * var(--u));
+  right: calc(1 * var(--u));
+  bottom: calc(2 * var(--u));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -936,9 +949,188 @@ html[data-input='touch'] .mn .px-keyhint {
   }
 }
 
-/* Вне телефона стоя места хватает — подписи на ступень крупнее. */
-html:not([data-ff='phone-portrait']) .mn :is(.mn-dock__label, .mn-bag__title, .mn-strip__name),
-html:not([data-ff='phone-portrait']) .mn :is(.mn-rank, .mn-bag) .px-bar__label,
-html:not([data-ff='phone-portrait']) .mn .mn-bag__sell {
+/* Вне телефона места хватает — подписи на ступень крупнее. */
+html:not([data-ff^='phone']) .mn :is(.mn-dock__label, .mn-bag__title, .mn-strip__name),
+html:not([data-ff^='phone']) .mn :is(.mn-rank, .mn-bag) .px-bar__label,
+html:not([data-ff^='phone']) .mn .mn-bag__sell {
   font-size: var(--px-fs);
+}
+
+/* ==== Окна шахты: этажи, ранг, престиж, сброс. Рамка и лента — GxModal на наборе
+   (окна живут в портале, поэтому классы без .mn). ==================================== */
+.mn-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+}
+.mn-sheet b {
+  font-weight: 700;
+}
+.mn-sheet .px-btn[disabled] {
+  cursor: default;
+}
+/* Строка-карточка: углублённая лунка набора. */
+.mn-mines__row,
+.mn-norm__row,
+.mn-pres__row {
+  display: grid;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  box-sizing: border-box;
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  color: var(--px-text);
+}
+
+/* Этажи */
+.mn-mines__item {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+}
+.mn-mines__band {
+  margin: calc(2 * var(--u)) 0 0;
+  font-size: var(--px-fs-sm);
+}
+.mn-mines__row {
+  grid-template-columns: calc(16 * var(--u)) calc(14 * var(--u)) minmax(0, 1fr) auto;
+  min-height: calc(22 * var(--u));
+}
+.mn-mines__row.is-here {
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+}
+.mn-mines__row.is-locked > :not(.mn-hex) {
+  opacity: 0.55;
+}
+.mn-mines__ore {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-mines__info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+  line-height: 1.15;
+}
+.mn-mines__info > b {
+  font-size: var(--px-fs);
+}
+.mn-mines__hard {
+  font-style: normal;
+  font-size: var(--px-fs-sm);
+  font-weight: 500;
+  color: var(--px-muted);
+}
+.mn-mines__hard.is-no {
+  color: var(--px-red);
+}
+.mn-mines__price {
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+.mn-mines__lock {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  color: var(--px-muted);
+}
+
+/* Ранг: условия полосами */
+.mn-norm__row {
+  grid-template-columns: calc(18 * var(--u)) minmax(0, 1fr);
+}
+.mn-norm__ico {
+  display: grid;
+  place-items: center;
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+}
+.mn-norm__ico > img {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-norm__info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  line-height: 1.15;
+}
+.mn-norm__info > b {
+  font-size: var(--px-fs);
+}
+.mn-norm__info .px-bar__label {
+  font-size: var(--px-fs-sm);
+}
+.mn-norm__sub {
+  font-style: normal;
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+.mn-norm__go {
+  align-self: flex-start;
+}
+.mn-norm__actions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  margin-top: calc(2 * var(--u));
+}
+
+/* Престиж */
+.mn-pres__swap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(4 * var(--u));
+}
+.mn-pres__swap > .px-i {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  color: var(--px-text);
+}
+.mn-pres__row {
+  grid-template-columns: calc(12 * var(--u)) minmax(0, 1fr) auto;
+  font-size: var(--px-fs);
+}
+.mn-pres__row > b {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mn-pres__keep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+
+/* Сброс прогресса (вкладка «Прогресс» настроек игры) */
+.mn-wipe {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  margin-bottom: calc(4 * var(--u));
+}
+.mn-wipe > .px-btn {
+  white-space: normal;
+}
+.mn-wipe > p {
+  margin: 0 0 calc(3 * var(--u));
+  font-size: var(--px-fs-sm);
+  line-height: 1.25;
+  color: var(--px-muted);
 }
