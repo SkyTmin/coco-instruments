@@ -35,37 +35,21 @@ import {
   CREW_SHIFTS,
   crewRate,
   crewYield,
-  bonusOf,
   CASE_TIERS as TIERS_OF,
-  fusePlan,
-  MILES,
-  mileReady,
   milesReady,
-  RUNE_BAG,
   RUNE_ROMAN,
-  RUNE_SHATTER,
   runePower,
-  SOCKET_UNLOCK,
   runesIdle,
-  socketsOpen,
-  FINDS,
-  findsFound,
-  findsMult,
   handleRate,
   HANDLES,
-  ITEMS,
-  itemPrice,
-  PERKS,
   perkPointsFree,
   PICKS,
   rankLetter,
 } from '@/lib/prison';
 import type {
-  Bonus,
   CrewShift,
   CaseTier,
   ItemId,
-  PerkId,
   PetId,
   PrisonState,
   Reward,
@@ -140,9 +124,6 @@ import {
   fmtNum,
   fmtShort,
   itemName,
-  itemText,
-  perkName,
-  perkText,
   petLore,
   petName,
   rich,
@@ -162,7 +143,7 @@ import {
   woodOf,
 } from '@/i18n/data-camp';
 import { eggName } from '@/i18n/data-books';
-import { bookName, findName, findText, mileText, mileTitle, nameIn } from '@/i18n/data-mine';
+import { bookName, findName, nameIn } from '@/i18n/data-mine';
 
 const fmt = (n: number) => fmtNum(n);
 const pct = (x: number) => `${fmtDec(Math.round(x * 1000) / 10, 2)}%`;

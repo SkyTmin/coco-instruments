@@ -173,7 +173,12 @@ export function ShopTab() {
     if (p.tokens < cost) {
       // The old button was greyed out; now the tap says how much is missing.
       notifyWarning();
-      setPop({ id, text: t('ctabs.shop.short', { v: fmtNum(cost - p.tokens) }), bad: true, k: Date.now() });
+      setPop({
+        id,
+        text: t('ctabs.shop.short', { v: fmtNum(cost - p.tokens) }),
+        bad: true,
+        k: Date.now(),
+      });
       return;
     }
     uiBuy();
@@ -244,7 +249,11 @@ export function ShopTab() {
                 <TokenIcon size={16} />
               </Button>
               {pop?.id === it.id && (
-                <span key={pop.k} className={`ctab-pop${pop.bad ? ' is-bad' : ''}`} aria-live="polite">
+                <span
+                  key={pop.k}
+                  className={`ctab-pop${pop.bad ? ' is-bad' : ''}`}
+                  aria-live="polite"
+                >
                   {pop.text}
                 </span>
               )}
@@ -370,7 +379,12 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   // Sizes: runes are 40-texel pictures — whole device pixels per texel.
   const bagPx = fit(40, lay === 'tall' ? 20 : 22, scale, dpr);
   const bagSlot = slotFor(bagPx, scale, 6);
-  const sockPx = fit(40, lay === 'wide' ? 30 : lay === 'one' ? 26 : lay === 'tall' ? 18 : 22, scale, dpr);
+  const sockPx = fit(
+    40,
+    lay === 'wide' ? 30 : lay === 'one' ? 26 : lay === 'tall' ? 18 : 22,
+    scale,
+    dpr,
+  );
   const sockSlot = slotFor(sockPx, scale, 6);
   const inspPx = fit(40, lay === 'wide' ? 30 : 24, scale, dpr);
   const actSize = lay === 'tall' || lay === 'land' ? 'sm' : undefined;
@@ -382,51 +396,51 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
     <section className="ctab-amulet">
       <Head title={t('ctabs.runes.amulet')} hint={t('ctabs.runes.amuletHint')} />
       <Panel material="stone" stage className="ctab-stage">
-      <div
-        className={`ctab-socks${cross ? ' is-cross' : quad ? ' is-quad' : ''}`}
-        style={slotVar(sockSlot)}
-      >
-        {cross && (
-          <span className="ctab-socks__core" aria-hidden="true">
-            <GxIcon name="pick" />
-            <GxIcon name="axe" />
-          </span>
-        )}
-        {[0, 1, 2, 3].map((i) => {
-          const id = p.sockets[i];
-          const r = id ? (p.runes.find((z) => z.id === id) ?? null) : null;
-          const locked = i >= open;
-          return (
-            <div key={i} className={`ctab-sock ctab-sock--${i}`}>
-              <Slot
-                rarity={r ? TIER_RAR[r.tier - 1] : 0}
-                selected={!!r && sel === r.id}
-                locked={locked}
-                empty={!r && !locked}
-                count={r ? RUNE_ROMAN[r.tier - 1] : undefined}
-                className={rune && !worn && !locked ? 'is-target' : undefined}
-                aria-label={
-                  r
-                    ? `${runeName(r.kind)}, ${runeLine(r)}`
-                    : locked
-                      ? t('camp.runes.slotLocked')
-                      : t('camp.runes.slotEmpty')
-                }
-                onClick={() => tapSocket(i)}
-              >
-                {r ? (
-                  <RuneIcon kind={r.kind} tier={r.tier} size={sockPx} />
-                ) : locked ? null : (
-                  <Icon name="plus" />
-                )}
-              </Slot>
-              <span className={`ctab-sock__cap${r ? ' is-on' : ''}`}>
-                {r ? pctText(runePower(r)) : locked ? lockText(i) : t('camp.runes.empty')}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+        <div
+          className={`ctab-socks${cross ? ' is-cross' : quad ? ' is-quad' : ''}`}
+          style={slotVar(sockSlot)}
+        >
+          {cross && (
+            <span className="ctab-socks__core" aria-hidden="true">
+              <GxIcon name="pick" />
+              <GxIcon name="axe" />
+            </span>
+          )}
+          {[0, 1, 2, 3].map((i) => {
+            const id = p.sockets[i];
+            const r = id ? (p.runes.find((z) => z.id === id) ?? null) : null;
+            const locked = i >= open;
+            return (
+              <div key={i} className={`ctab-sock ctab-sock--${i}`}>
+                <Slot
+                  rarity={r ? TIER_RAR[r.tier - 1] : 0}
+                  selected={!!r && sel === r.id}
+                  locked={locked}
+                  empty={!r && !locked}
+                  count={r ? RUNE_ROMAN[r.tier - 1] : undefined}
+                  className={rune && !worn && !locked ? 'is-target' : undefined}
+                  aria-label={
+                    r
+                      ? `${runeName(r.kind)}, ${runeLine(r)}`
+                      : locked
+                        ? t('camp.runes.slotLocked')
+                        : t('camp.runes.slotEmpty')
+                  }
+                  onClick={() => tapSocket(i)}
+                >
+                  {r ? (
+                    <RuneIcon kind={r.kind} tier={r.tier} size={sockPx} />
+                  ) : locked ? null : (
+                    <Icon name="plus" />
+                  )}
+                </Slot>
+                <span className={`ctab-sock__cap${r ? ' is-on' : ''}`}>
+                  {r ? pctText(runePower(r)) : locked ? lockText(i) : t('camp.runes.empty')}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </Panel>
       <div className="ctab-bonus">
         {bonus.length ? (
@@ -868,7 +882,7 @@ function perkAt(id: PerkId, n: number): string | null {
 
 export function PerksTab() {
   const t = useT();
-  const { lay, scale } = useLay();
+  const { lay } = useLay();
   const p = useFinanceStore((s) => s.prison);
   const prisonPerk = useFinanceStore((s) => s.prisonPerk);
   const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
@@ -946,7 +960,13 @@ export function PerksTab() {
     <div ref={root} className={`px ctab ctab-perks ctab--${lay}`}>
       <Head
         title={t('camp.tab.perks')}
-        hint={locked ? t('camp.perks.locked') : lay === 'land' || lay === 'tall' ? undefined : t('ctabs.perks.hint')}
+        hint={
+          locked
+            ? t('camp.perks.locked')
+            : lay === 'land' || lay === 'tall'
+              ? undefined
+              : t('ctabs.perks.hint')
+        }
         right={
           locked ? (
             <span className="px-dark ctab-points is-locked">
