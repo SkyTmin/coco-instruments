@@ -173,7 +173,7 @@ export function CasTools({ onBack, children }: { onBack: () => void; children: R
 
 /**
  * Steps the font of a box down (`data-fit` 1, 2) until its text fits the width — a long number
- * gets smaller instead of losing its tail. Measured before paint and again on resize.
+ * gets smaller instead of losing its tail. Measured before paint, on resize and on a text change.
  */
 function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boolean) {
   const ref = useRef<T>(null);
@@ -188,7 +188,14 @@ function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boole
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
-    return () => ro.disconnect();
+    // A rolling number (AnimatedNumber) changes its text without a new `dep` — «18 тыс.» →
+    // «988 тыс.» kept the step measured for the short text and lost its tail.
+    const mo = new MutationObserver(fit);
+    mo.observe(el, { characterData: true, childList: true, subtree: true });
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
   }, [dep, on]);
   return ref;
 }

@@ -253,6 +253,14 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   white-space: nowrap;
   overflow: hidden;
 }
+/* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): one step smaller,
+   then the coin goes — the 777 / ★ picture and the caption still say what it is. */
+html .cas .cas-info .cas-stat .cas-stat__v:is([data-fit='1'], [data-fit='2']) {
+  font-size: var(--px-fs-sm);
+}
+html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
+  display: none;
+}
 .cas-stat--gold .cas-stat__v {
   color: var(--px-gold);
 }
@@ -818,7 +826,8 @@ html[data-ff='tablet'] .cas--scatter[data-lay='tall'] > .cas-info {
 }
 /* One line per fact there: icon, caption, the number at the right edge. */
 html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* The caption keeps its longest word; a big number steps down (`useFitText`) instead. */
+  grid-template-columns: auto minmax(min-content, 1fr) minmax(0, max-content);
   grid-template-areas: 'ico k v';
   column-gap: calc(3 * var(--u));
   padding: 0;

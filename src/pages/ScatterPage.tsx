@@ -1598,6 +1598,7 @@ export function ScatterPage() {
             <p className="cas-broke cas-stat--best">{tr('slots.brokeHint')}</p>
           ) : (
             <CasStat
+              fit
               className="cas-stat--best"
               tone="gold"
               icon={<KitIcon name="star" />}
@@ -1613,6 +1614,7 @@ export function ScatterPage() {
             />
           )}
           <CasStat
+            fit
             className="cas-stat--sp"
             icon={<KitIcon name="play" />}
             value={fmt(spins)}

@@ -1163,6 +1163,7 @@ export function SlotsPage() {
             </span>
           </div>
           <CasStat
+            fit
             className="cas-stat--jp"
             tone="gold"
             icon={
@@ -1182,12 +1183,14 @@ export function SlotsPage() {
             tip={`${tr('slots.hud.jackpot')}: ${fmt(jackpotPrize)}`}
           />
           <CasStat
+            fit
             className="cas-stat--sp"
             icon={<KitIcon name="play" />}
             value={fmt(spins)}
             label={tr('slots.statSpins')}
           />
           <CasStat
+            fit
             className="cas-stat--best"
             icon={<KitIcon name="star" />}
             value={
