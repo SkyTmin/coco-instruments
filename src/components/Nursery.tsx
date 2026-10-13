@@ -257,7 +257,7 @@ export function Nursery({ say }: { say: (text: string) => void }) {
         return (
           <Button
             key={a.id}
-            size={hero ? 'md' : 'sm'}
+            size={layout === 'three' && ff !== 'phone-landscape' ? 'md' : 'sm'}
             icon={a.icon}
             className="nur-anim"
             aria-label={word}

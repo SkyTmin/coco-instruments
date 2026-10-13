@@ -75,9 +75,19 @@ black on the stage) + small lock bottom-right.
   `public/ui/fonts/`). Coverage: Latin + Latin-1/Extended-A (fr, tr, de, es, it) + Cyrillic; checked
   by `scripts/ui-px/fonts.py` (subset + coverage report). Fallbacks: GxRubik, system.
 - Sizes are whole multiples of the 8-px em: `--ts = max(2, ui-scale − 1 + --ts-add)`;
-  `--px-fs-tiny` 8·(ts−1), `--px-fs` 8·ts, `--px-fs-big` 8·(ts+1), `--px-fs-hero` 8·(ts+2).
+  `--px-fs` 8·ts (body, ≥ 16 px), `--px-fs-big` 8·(ts+1), `--px-fs-hero` 8·(ts+2).
   L's text-size setting (`html[data-text=s|l]`) shifts `--ts-add` by a whole step (fractional
   scales give uneven pixel rows). `font-synthesis: none` (no fake bold).
+- **Legibility floor (lead review, 13.10)**: nothing user-facing under `--px-fs-sm` =
+  max(floor, 8·(ts−1)), floor by DPR so a font pixel is whole screen dots: 13.333 px at DPR ≥ 2.5
+  (5 dots), 12 px at DPR ≥ 1.5 (3 dots), 16 px at DPR 1. Used by bar labels, badges, key-hint
+  words. `--px-fs-tiny` (8 px on phones) is ONLY for digits/glyphs on slot counters and key caps.
+  Tiny5 16 px has a 10-px cap and ~8-px x-height (≈ a 14–15 px system font), so body stays 16.
+- **Why Tiny5 stays the body font** (side-by-side at 16 px, DPR 2 and 3, 7 languages): Pixelify
+  Sans has no «О»/«П» in its cmap and its Cyrillic reads wrong (д≈a, ь≈b, Э≈З, 5≈S); DotGothic16
+  lacks Turkish İ Ğ ğ Ş ş and its Cyrillic is full-width; Rubik Pixels is textured mush at body
+  sizes; VT323 has no Cyrillic; Handjet rendered blank. Taller body = next whole step, not
+  another font.
 - Short labels; names in the rarity colour; numbers via `fmtNum`/`t()` params (locale).
 
 ### Spacing
@@ -113,8 +123,13 @@ disabled (`aria-disabled`: ash material, still clickable to show why).
   with `hint`/`KeyHint` (nothing on touch).
 - Layout by S's format: `useFormFactor()` → `ff`, `landscape`, `scale`. Phone portrait: one
   column, selected thing on top, list scrolls, actions in the thumb zone. Phone landscape /
-  tablet landscape / desktop: list | showcase | details. Tablet portrait: showcase | details on
-  top, wide list below (more columns). Each column scrolls on its own; the page never scrolls.
+  tablet landscape / desktop: list | showcase (hero, 40 %) | details column. Tablet portrait:
+  showcase | details on top, wide list below (more columns). Each column scrolls on its own; the
+  page never scrolls. No dead strips: grids spread spare width between columns
+  (`justify-content: space-between`), a details column spreads its groups over its height.
+- **Never give a grid child a `grid-area` name its parent doesn't define** (e.g. a block reused in
+  two containers): the browser adds implicit tracks and the parent's layout explodes into
+  columns. Scope it: `.nur-stage > .nur-id { grid-area: id }`.
 
 ### Nursery pilot (v1) — `src/components/Nursery.tsx`, `nursery.css`, tabs in `PetsTab.tsx`
 
@@ -122,11 +137,19 @@ disabled (`aria-disabled`: ash material, still clickable to show why).
   all, shop, `NestSheet`, `HatchScene`, `HatchBatch`) are untouched and live on the «Яйца» tab;
   a ready nest opens the screen on that tab. On the pets tab the egg blocks are hidden by CSS
   (`.ppn.is-pets > :not(...)`), not by JSX — less conflict with the eggs code.
-- Showcase: stone stage + pedestal, big `PetArt` (64/52/72/88 art px by format), six animation
-  buttons (loops idle/walk/sleep switch `anim`, one-shots happy/work/attack via `play`), tap =
-  pat (+XP every 10 min, as before), name in rarity colour, rarity, gold badge, level bar, perks
-  with values, power (`petScore × 10`).
-- Squad bar (3 slots: filled = select, empty = picker modal, locked = rank J / prestige), squad
+- Showcase: stone stage + pedestal, tap = pat (+XP every 10 min, as before). Phone portrait:
+  name/rarity/level/perks/power beside a 64-art-px pet, six animation buttons under them. Other
+  formats: the stage is the HERO — `useBox` measures `.nur-stage__room` (`contain: size`, so the
+  pet can't feed back into it) and `fitPet` picks the biggest frame whose `pxFit` result (it can
+  round UP 15 %) fits with the pedestal; the pedestal is drawn at the pet's own pixel (`--ped` =
+  round(s·dpr/112)/dpr, ≥ UI px). Name (hero size), rarity, gold, power, level bar with XP
+  numbers and the animation buttons move to the details column (`.nur-side`, a size container
+  `nur-side`: ≥ 290 px → icon + word in 2 columns, ≥ 470 px → 3; tablet portrait and phone
+  landscape: small icon-only). Animation icons: idle = pause bars, walk = paw prints, happy =
+  heart, trick = star, attack = claw, sleep = moon + z; the word is the `data-tip` (S's TipHost)
+  and `aria-label`.
+- Squad bar (3 slots: filled = select, empty = picker modal, locked = rank J / prestige — tap
+  says why; no captions under slots, names in the tip), squad
   totals in the header; collection: count, zoo bonus, sort (rarity/level/power) and filter
   (all/owned/missing) cycle buttons, grid of `Slot`s (level, ★ gold, «!» can merge, paw = along,
   hover/long-press tooltip). Details (column or sheet on phones): lore, roles with values, XP

@@ -140,7 +140,7 @@ export function Button({
       aria-label={icon && !children ? label : rest['aria-label']}
       aria-pressed={on === undefined ? undefined : on}
       aria-disabled={off || undefined}
-      data-tip={icon && !children ? label : undefined}
+      data-tip={icon && !children ? label : (rest as { 'data-tip'?: string })['data-tip']}
       className={cx(
         'px-btn px-f',
         `px-btn--${BTN[kind]}`,
