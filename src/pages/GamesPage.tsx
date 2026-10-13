@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { AnimatedNumber } from '@/components/ui';
@@ -14,8 +14,8 @@ import { tapLight } from '@/lib/haptics';
 import { useGameAudio } from '@/lib/use-game-audio';
 import { AudioToggles } from '@/components/AudioToggles';
 import { GameScreen } from '@/game-shell/GameScreen';
-import { Bar } from '@/ui-px';
-import { fmtNum as fmt, fmtShort, skinText, useT } from '@/i18n';
+import { Bar, usePress } from '@/ui-px';
+import { fmtCompact, fmtNum as fmt, skinText, useT } from '@/i18n';
 import { GameSettings } from '@/settings';
 import { CasStat, KitIcon, useCasLayout } from './casino-ui';
 
@@ -24,10 +24,11 @@ import { CasStat, KitIcon, useCasLayout } from './casino-ui';
  * дополнение на тех же монетах: сюда приходят рискнуть заработанным в шахте.
  * Бесплатных денег здесь больше нет — ни лесенки, ни колеса, ни наград.
  *
- * UI v2 (K): зал — пусковая панель. Сверху общий кошелёк и уровень казино,
- * под ним три большие карточки: «Слоты», «Каскад» и сама «Каторга» — у каждой
- * картинка, два главных факта числом и «Играть». Стрелками/крестовиной — по
- * карточкам, Enter/«A» — войти.
+ * UI v2 (K, K2): зал — пусковая панель. Сверху общий кошелёк и уровень казино,
+ * под ним две большие карточки — «Слоты» и «Каскад»: картинка, два главных
+ * факта числом и «Играть». «Каторга» — тонкая строка под ними (она дублировала
+ * «Назад» и съедала треть зала). Стрелками/крестовиной — по карточкам,
+ * Enter/«A» — войти.
  */
 export function GamesPage() {
   const nav = useNavigate();
@@ -52,14 +53,14 @@ export function GamesPage() {
     nav(path);
   };
 
-  const sym = (id: SlotSymbolId) => <img key={id} src={symbolSrc(skin, id)} alt="" />;
-  // От сотни тысяч — коротко и без десятых до миллиона («988 тыс.», «1,2 млн»): в карточке
-  // телефона на число около сотни пикселей.
-  const compact = (n: number) =>
-    n >= 1_000_000 ? fmtShort(n) : n >= 100_000 ? fmtShort(Math.round(n / 1000) * 1000) : fmt(n);
+  const sym = (id: SlotSymbolId, i: number) => (
+    <img key={i} src={symbolSrc(skin, id)} alt="" loading="lazy" decoding="async" />
+  );
+  // Рекорды — общей короткой записью игры (fmtCompact: «18 тыс.», «1,2 млн»), точное — в
+  // подсказке. Кошелёк — точный.
   const coins = (n: number) => (
     <>
-      {compact(n)}
+      {fmtCompact(n)}
       <CoinIcon size={16} />
     </>
   );
@@ -94,6 +95,8 @@ export function GamesPage() {
       <div className="hall px" data-lay={lay}>
         {/* Общий кошелёк: те же монеты, что в шахте, и уровень казино. */}
         <section className="hall-wallet" aria-label={t('hall.wallet')}>
+          {/* Ширина числа — под максимум (11 знаков): уровень рядом не едет, пока
+              баланс докручивается. */}
           <div className="hall-wallet__money">
             <i className="cas-cap">{t('hall.wallet')}</i>
             <b className="hall-wallet__v px-num">
@@ -112,8 +115,20 @@ export function GamesPage() {
             autoFocus
             title={skinText(skin, 'title')}
             art={
-              <span className="hall-card__reels">
-                {(['seven', 'star', 'bell'] as const).map(sym)}
+              <span className="hall-card__syms">
+                {(
+                  [
+                    'cherry',
+                    'lemon',
+                    'bell',
+                    'seven',
+                    'seven',
+                    'seven',
+                    'star',
+                    'grape',
+                    'diamond',
+                  ] as const
+                ).map(sym)}
               </span>
             }
             tags={[t('hall.reels', { n: 3 }), t('hall.lines', { n: 5 })]}
@@ -124,6 +139,7 @@ export function GamesPage() {
                   icon={<KitIcon name="play" />}
                   value={fmt(slotsSpins)}
                   label={t('slots.statSpins')}
+                  tip={`${t('slots.statSpins')}: ${fmt(slotsSpins)}`}
                 />
                 <CasStat
                   fit
@@ -131,6 +147,7 @@ export function GamesPage() {
                   icon={<KitIcon name="star" />}
                   value={coins(slotsBest)}
                   label={t('slots.statBestWin')}
+                  tip={`${t('slots.statBestWin')}: ${fmt(slotsBest)}`}
                 />
               </>
             }
@@ -140,8 +157,20 @@ export function GamesPage() {
           <HallCard
             title={t('hall.cascade')}
             art={
-              <span className="hall-card__grid">
-                {(['diamond', 'grape', 'cherry', 'bell', 'lemon', 'star'] as const).map(sym)}
+              <span className="hall-card__syms">
+                {(
+                  [
+                    'diamond',
+                    'grape',
+                    'cherry',
+                    'bell',
+                    'diamond',
+                    'star',
+                    'diamond',
+                    'lemon',
+                    'grape',
+                  ] as const
+                ).map(sym)}
               </span>
             }
             tags={[
@@ -155,6 +184,7 @@ export function GamesPage() {
                   icon={<KitIcon name="play" />}
                   value={fmt(scatterSpins)}
                   label={t('slots.session.spins')}
+                  tip={`${t('slots.session.spins')}: ${fmt(scatterSpins)}`}
                 />
                 <CasStat
                   fit
@@ -162,36 +192,23 @@ export function GamesPage() {
                   icon={<KitIcon name="star" />}
                   value={coins(scatterBest)}
                   label={t('slots.hud.best')}
+                  tip={`${t('slots.hud.best')}: ${fmt(scatterBest)}`}
                 />
               </>
             }
             play={t('hall.play')}
             onClick={() => go('/scatter')}
           />
-          <HallCard
-            title={t('hall.prison')}
-            art={<img className="hall-card__cover" src="/ui/areas/mouth.png" alt="" />}
-            tags={[t('hall.main')]}
-            facts={
-              <>
-                <CasStat
-                  fit
-                  icon={<KitIcon name="up" />}
-                  value={rankLetter(rank)}
-                  label={t('hall.rank')}
-                />
-                <CasStat
-                  fit
-                  icon={<KitIcon name="token" />}
-                  value={compact(tokens)}
-                  label={t('hall.tokens')}
-                />
-              </>
-            }
-            play={t('hall.play')}
-            onClick={() => go('/prison')}
-          />
         </div>
+        <HallRow
+          title={t('hall.prison')}
+          rank={rankLetter(rank)}
+          rankTip={t('hall.rank')}
+          tokens={fmtCompact(tokens)}
+          tokensTip={`${t('hall.tokens')}: ${fmt(tokens)}`}
+          play={t('hall.play')}
+          onClick={() => go('/prison')}
+        />
         <p className="hall-note px-dark px-shadow">{t('hall.note')}</p>
       </div>
       {settingsOpen && <GameSettings onClose={() => setSettingsOpen(false)} />}
@@ -218,9 +235,15 @@ function HallCard({
   autoFocus?: boolean;
   onClick: () => void;
 }) {
+  // Нажатие видно в первый же кадр (`.is-down` на pointerdown): переход на экран игры
+  // случается после отпускания, и `:active` на телефоне до него не доживал.
+  const ref = useRef<HTMLButtonElement>(null);
+  const press = usePress(ref);
   return (
     <button
+      ref={ref}
       type="button"
+      {...press}
       className="hall-card px-f"
       data-autofocus={autoFocus ? '' : undefined}
       onClick={onClick}
@@ -246,6 +269,54 @@ function HallCard({
       </span>
       <span className="hall-card__go px-btn px-btn--gold" aria-hidden="true">
         {play}
+        <KitIcon name="right" />
+      </span>
+    </button>
+  );
+}
+
+/** «Каторга» — тонкая строка под автоматами: обложка, имя, ранг, токены, стрелка. */
+function HallRow({
+  title,
+  rank,
+  rankTip,
+  tokens,
+  tokensTip,
+  play,
+  onClick,
+}: {
+  title: string;
+  rank: string;
+  rankTip: string;
+  tokens: string;
+  tokensTip: string;
+  play: string;
+  onClick: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const press = usePress(ref);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      {...press}
+      className="hall-row px-f"
+      aria-label={`${title} · ${play}`}
+      onClick={onClick}
+    >
+      <span className="hall-row__art pxk-frame-obsidian px-nofill" aria-hidden="true">
+        <img src="/ui/areas/mouth.png" alt="" loading="lazy" decoding="async" />
+      </span>
+      <b className="hall-row__t px-h">{title}</b>
+      <span className="hall-row__fact" data-tip={rankTip}>
+        <KitIcon name="up" />
+        <b className="px-num">{rank}</b>
+      </span>
+      <span className="hall-row__fact" data-tip={tokensTip}>
+        <KitIcon name="token" />
+        <b className="px-num">{tokens}</b>
+      </span>
+      <span className="hall-row__go px-btn px-btn--gold" aria-hidden="true">
         <KitIcon name="right" />
       </span>
     </button>

@@ -815,9 +815,10 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   height: calc(16 * var(--u));
 }
 
-/* ==== Hall (GamesPage): wallet on top, three big game cards ================================= */
-/* The hall takes the height the screen gives (never more): the cards share it and the pictures
-   fit inside them, so the last card's «Play» never goes under the edge. */
+/* ==== Hall (GamesPage): wallet, two big game cards, the «Каторга» row, the note ============= */
+/* The hall takes the height the screen gives (never more): the two cards share it and their
+   pictures fit inside, so nothing goes under the edge. «Каторга» is a slim row (critic 12: as a
+   third card it repeated Back and took a third of the hall) — its height went to the art. */
 .cas-hall .gs__main {
   flex: 1 1 0;
   min-height: 0;
@@ -831,13 +832,13 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   max-width: calc(400 * var(--u));
   margin: 0 auto;
   display: grid;
-  grid-template-rows: auto auto auto;
-  align-content: start;
-  gap: calc(4 * var(--u));
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: calc(3 * var(--u));
   padding: 0 calc(3 * var(--u)) calc(3 * var(--u));
 }
 .hall-wallet,
-.hall-card {
+.hall-card,
+.hall-row {
   border-width: var(--u);
   border-style: solid;
   border-color: transparent;
@@ -852,18 +853,21 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: end;
-  gap: calc(8 * var(--u));
-  padding: calc(8 * var(--u)) calc(10 * var(--u));
+  gap: calc(3 * var(--u)) calc(8 * var(--u));
+  padding: calc(7 * var(--u)) calc(10 * var(--u));
 }
 .hall-wallet__money {
   display: grid;
   gap: var(--u);
   min-width: 0;
 }
+/* Sized for the maximum — 11 tabular digits and the coin — so the level next to it never moves
+   or shrinks while the balance rolls (critic 9: 9 990 → 510 812 345 moved it by 73 px). */
 .hall-wallet__v {
   display: inline-flex;
   align-items: center;
   gap: calc(2 * var(--u));
+  min-width: calc(11ch + 26px + 2 * var(--u));
   font-size: var(--px-fs-hero);
   line-height: 1.05;
   color: var(--px-text);
@@ -879,13 +883,26 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   font-size: var(--px-fs);
   line-height: 1;
   color: var(--px-gold);
+  white-space: nowrap;
+}
+/* Phone portrait: the level is its own row under the money (no room beside 11 digits). */
+html[data-ff='phone-portrait'] .hall-wallet {
+  grid-template-columns: minmax(0, 1fr);
+}
+html[data-ff='phone-portrait'] .hall-wallet__lvl {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(4 * var(--u));
+  padding-bottom: 0;
 }
 
+/* ---- Cards ---------------------------------------------------------------------------------- */
 .hall-cards {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: calc(4 * var(--u));
-  align-content: start;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+  min-height: 0;
 }
 .hall-card {
   position: relative;
@@ -898,58 +915,57 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  padding: calc(9 * var(--u));
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 0;
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
   display: grid;
-  grid-template-columns: calc(50 * var(--u)) minmax(0, 1fr);
+  /* Art | text, the art spans the «Play» row too: the picture is the biggest thing. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: 'art body' 'art go';
   gap: calc(3 * var(--u)) calc(5 * var(--u));
 }
-.hall-card:active {
+/* Pressed: `.is-down` from `usePress` lands on pointerdown (`:active` came after the finger
+   left on touch, and the route had already changed). */
+.hall-card:is(:active, .is-down),
+.hall-row:is(:active, .is-down) {
   translate: 0 var(--u);
 }
-/* The art sits in a dark obsidian plate: symbols and the mine cover read on it. */
+.hall-card:is(:active, .is-down) .hall-card__go,
+.hall-row:is(:active, .is-down) .hall-row__go {
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+/* The art sits in an obsidian plate on the stone tile; the symbols are a square 3 × 3 window,
+   as big as the plate allows (size container). */
 .hall-card__art {
   grid-area: art;
   position: relative;
   overflow: hidden;
+  min-height: 0;
+  container-type: size;
   display: grid;
   place-items: center;
-  min-height: calc(40 * var(--u));
   border-width: var(--u);
   border-style: solid;
   border-color: transparent;
-  padding: calc(5 * var(--u));
+  padding: calc(3 * var(--u));
 }
-/* Phone portrait: the slots art is one reel (three symbols down), the cascade two columns. */
-.hall-card__reels {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--u);
-  width: 56%;
-}
-.hall-card__reels img {
-  width: 100%;
-  height: auto;
-}
-.hall-card__grid {
+.hall-card__syms {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: var(--u);
-  width: 100%;
+  /* Explicit height, not `aspect-ratio`: with it the images' own height grew the rows. */
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
 }
-.hall-card__grid img {
+.hall-card__syms img {
   width: 100%;
-  height: auto;
-}
-.hall-card__cover {
-  position: absolute;
-  inset: calc(2 * var(--u));
-  width: calc(100% - 4 * var(--u));
-  height: calc(100% - 4 * var(--u));
-  object-fit: cover;
-  image-rendering: pixelated;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
 }
 .hall-card__body {
   grid-area: body;
@@ -957,6 +973,7 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   align-content: start;
   gap: calc(2 * var(--u));
   min-width: 0;
+  min-height: 0;
 }
 /* `clip`, not `hidden`: a scroll container may be squeezed to 0 by the grid — the title vanished.
    A long name (skins: up to ~20 letters) is a step smaller and may take two lines — no ellipsis. */
@@ -966,7 +983,6 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   line-height: 1.05;
   white-space: nowrap;
   overflow: clip;
-  text-overflow: ellipsis;
 }
 .hall-card__t.is-long {
   font-size: var(--px-fs-head);
@@ -986,8 +1002,8 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
 }
 .hall-card__facts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: calc(4 * var(--u));
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(2 * var(--u));
 }
 html .hall .hall-card__facts .cas-stat {
   grid-template-areas: 'ico v' 'k k';
@@ -1019,9 +1035,74 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
 }
 .hall-card__go {
   grid-area: go;
-  justify-self: end;
+  justify-self: stretch;
   pointer-events: none;
 }
+
+/* ---- «Каторга»: one slim row — cover, name, rank, tokens, arrow ----------------------------- */
+.hall-row {
+  appearance: none;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: var(--px-text);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  min-height: var(--gx-hit);
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  text-align: left;
+}
+.hall-row__art {
+  position: relative;
+  display: block;
+  width: calc(20 * var(--u));
+  height: calc(16 * var(--u));
+  overflow: hidden;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+}
+.hall-row__art img {
+  position: absolute;
+  inset: var(--u);
+  width: calc(100% - 2 * var(--u));
+  height: calc(100% - 2 * var(--u));
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+.hall-row__t {
+  min-width: 0;
+  font-size: var(--px-fs-head);
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: clip;
+}
+.hall-row__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--px-gold);
+  white-space: nowrap;
+}
+.hall-row__fact > b {
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-text);
+}
+.hall-row__go {
+  min-height: calc(16 * var(--u));
+  pointer-events: none;
+  padding-left: calc(3 * var(--u));
+  padding-right: calc(3 * var(--u));
+}
+
 .hall-note {
   margin: 0;
   padding: 0 calc(2 * var(--u));
@@ -1030,86 +1111,39 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   text-align: center;
 }
 
-/* Wide formats: three cards side by side, picture on top. */
-html .hall[data-lay='wide'] .hall-cards {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+/* ---- Formats -------------------------------------------------------------------------------- */
+/* Phones: the tags (reels, lines, field) give their room to the art; the rules sheet says it. */
+html[data-ff='phone-portrait'] .hall-card__tags,
+html[data-ff='phone-landscape'] .hall-card__tags {
+  display: none;
 }
-html .hall[data-lay='wide'] .hall-card {
+/* Wide formats: the two cards side by side. */
+html .hall[data-lay='wide'] .hall-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Tablet landscape / desktop: the picture on top of each card — it takes the height. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .hall[data-lay='wide'] .hall-card {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   grid-template-areas: 'art' 'body' 'go';
 }
-html .hall[data-lay='wide'] .hall-card__art {
-  aspect-ratio: 3 / 2;
+html:is([data-ff='tablet'], [data-ff='desktop']) .hall[data-lay='wide'] .hall-card__facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-html .hall[data-lay='wide'] .hall-card__reels {
-  flex-direction: row;
-  justify-content: center;
-  width: 100%;
+/* Tablet portrait: room for both facts in a row. */
+html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card__facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-html .hall[data-lay='wide'] .hall-card__reels img {
-  width: 28%;
-}
-html .hall[data-lay='wide'] .hall-card__grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: 76%;
-}
-html .hall[data-lay='wide'] .hall-card__go {
-  justify-self: stretch;
-}
+/* Phone lying: the wallet is one line and the note gives its line to the cards (ruling 9). */
 html[data-ff='phone-landscape'] .hall {
-  gap: calc(3 * var(--u));
-}
-/* Phone portrait / tablet portrait: the cards share the height the wallet leaves; the picture
-   column is as tall as the card and the symbols fit it (contain), whatever the language. */
-html .hall[data-lay='tall'] {
   grid-template-rows: auto minmax(0, 1fr) auto;
-}
-html .hall[data-lay='tall'] .hall-cards {
-  grid-auto-rows: minmax(0, 1fr);
-}
-/* Spins are short, the best win is long: the first fact takes what it needs, the second the rest. */
-html .hall[data-lay='tall'] .hall-card__facts {
-  grid-template-columns: auto minmax(0, 1fr);
-}
-html .hall[data-lay='tall'] .hall-card__art,
-html[data-ff='phone-landscape'] .hall .hall-card__art {
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-  min-height: 0;
-}
-html .hall[data-lay='tall'] .hall-card__reels {
-  display: grid;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  height: 100%;
-}
-html .hall[data-lay='tall'] .hall-card__grid {
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  height: 100%;
-}
-html .hall[data-lay='tall'] .hall-card__reels img,
-html .hall[data-lay='tall'] .hall-card__grid img,
-html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__reels img,
-html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid img {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  object-fit: contain;
-}
-/* Phone lying: the wallet is one line, the note gives its line to the cards, and the picture
-   gives way first (it takes the room the text leaves). */
-html[data-ff='phone-landscape'] .hall {
-  grid-template-rows: auto minmax(0, 1fr);
-  align-content: stretch;
 }
 html[data-ff='phone-landscape'] .hall-note {
   display: none;
 }
-html[data-ff='phone-landscape'] .hall-cards {
-  grid-auto-rows: minmax(0, 1fr);
-}
 html[data-ff='phone-landscape'] .hall-wallet {
   align-items: center;
-  padding: calc(6 * var(--u)) calc(10 * var(--u));
+  padding: calc(5 * var(--u)) calc(10 * var(--u));
 }
 html[data-ff='phone-landscape'] .hall-wallet__money {
   grid-auto-flow: column;
@@ -1120,55 +1154,30 @@ html[data-ff='phone-landscape'] .hall-wallet__money {
 html[data-ff='phone-landscape'] .hall-wallet__v {
   font-size: var(--px-fs-head);
 }
-html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card {
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  padding: calc(8 * var(--u)) calc(9 * var(--u));
+/* Phone lying: the cards are one short row — the art is a square as tall as the card
+   (`.hall-cards` is the size container), the two facts stand in one line and their captions go
+   to the tooltip; otherwise the second caption slid under «Play». */
+html[data-ff='phone-landscape'] .hall-cards {
+  container-type: size;
 }
-html[data-ff='phone-landscape'] .hall .hall-card__art {
-  aspect-ratio: auto;
-  height: auto;
-  padding: calc(3 * var(--u));
+html[data-ff='phone-landscape'] .hall-card {
+  padding: calc(6 * var(--u)) calc(7 * var(--u));
+  grid-template-columns: calc(100cqh - 14 * var(--u)) minmax(0, 1fr);
 }
-html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__reels,
-html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: 100%;
-  height: 100%;
+html[data-ff='phone-landscape'] .hall-card__facts {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(5 * var(--u));
 }
-html[data-ff='phone-landscape'] .hall[data-lay='wide'] .hall-card__grid {
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+html[data-ff='phone-landscape'] .hall .hall-card__facts .cas-stat {
+  grid-template-areas: 'ico v';
 }
-/* Phones: the tags (reels, lines, field) give their room to the title, facts and «Play»; the
-   game's rules sheet still says it all. */
-html[data-ff='phone-portrait'] .hall-card__tags,
-html[data-ff='phone-landscape'] .hall-card__tags {
+html[data-ff='phone-landscape'] .hall-card__facts .cas-stat__k {
   display: none;
 }
-html[data-ff='phone-portrait'] .hall,
-html[data-ff='phone-portrait'] .hall-cards {
-  gap: calc(3 * var(--u));
-}
-html[data-ff='phone-portrait'] .hall-card {
-  padding: calc(8 * var(--u)) calc(9 * var(--u));
-}
-html[data-ff='phone-portrait'] .hall-wallet {
-  padding: calc(7 * var(--u)) calc(10 * var(--u));
+html[data-ff='phone-landscape'] .hall-card__t {
+  font-size: var(--px-fs-head);
 }
 /* Tablet / desktop: the cards are big — so is everything on them. */
-html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card {
-  grid-template-columns: calc(56 * var(--u)) minmax(0, 1fr);
-}
-html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card__reels {
-  width: 46%;
-}
-html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card__grid {
-  width: 84%;
-}
-/* Wide: the hall sits in the middle of the height, not glued to the top. */
-.hall[data-lay='wide'] {
-  align-content: center;
-}
 html[data-ff='tablet'] .hall-card__t,
 html[data-ff='desktop'] .hall-card__t {
   font-size: var(--px-fs-hero);
@@ -1176,12 +1185,6 @@ html[data-ff='desktop'] .hall-card__t {
 html[data-ff='tablet'] .hall-card__t.is-long,
 html[data-ff='desktop'] .hall-card__t.is-long {
   font-size: var(--px-fs-big);
-}
-html[data-ff='tablet'] .hall-card__tags > i,
-html[data-ff='desktop'] .hall-card__tags > i,
-html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__k,
-html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__k {
-  font-size: var(--px-fs-sm);
 }
 html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v,
 html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v {
@@ -1194,11 +1197,6 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
 html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v[data-fit='2'],
 html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   font-size: var(--px-fs);
-}
-html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__ico .px-i,
-html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__ico .px-i {
-  --i-w: 11;
-  --i-h: 11;
 }
 
 /* ==== Skins sheet (SkinSheet): kit cards; the skin's own palette plate stays its showcase ==== */
