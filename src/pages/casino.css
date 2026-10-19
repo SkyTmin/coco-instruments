@@ -1,0 +1,1964 @@
+/* Casino frame (UI wave 2 — K): the hall launcher, the Slots / Cascade page around the skin
+   cabinet, the deck. Kit materials and type only (src/ui-px); sizes in whole art pixels
+   (var(--u)). The cabinet, reels, grid and their skins live in theme.css and are untouched:
+   the page draws the cabinet at its old pixel size and scales it to the stage (casino-ui.tsx).
+   Frames are set by longhands (the `border` / `border-image` shorthands would reset them). */
+
+/* ---- Page shell ----------------------------------------------------------------------------- */
+.cas-page {
+  --cg: calc(3 * var(--u));
+}
+.cas-bg {
+  position: absolute;
+  inset: 0;
+}
+.cas-bg .slots-scene {
+  position: absolute;
+  z-index: 0;
+}
+/* The page never scrolls: the stage takes what the info and the deck leave. `html[data-ff]`
+   because the shell's `html[data-ff='phone-landscape'] .gs__main { overflow-y: auto }` (0,2,1)
+   beat the plain rule, and a touch swipe scrolled the machine 194 px off screen. */
+html[data-ff] .cas-page .gs__body,
+html[data-ff] .cas-page .gs__main,
+.cas-page .gs__body,
+.cas-page .gs__main {
+  overflow: hidden;
+}
+/* The old `.slots::before` glow (theme.css: absolute, 460 px tall) stuck out below the page. */
+.slots.cas::before {
+  content: none;
+}
+.cas-page .gs__main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cas {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  gap: var(--cg);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'info' 'stage' 'status' 'deck';
+  padding: 0 calc(2 * var(--u)) calc(2 * var(--u));
+}
+/* The JS reel motion moves in 68-px cells: the old landscape rule (56 px) must not reach the
+   field now that the whole cabinet scales instead. */
+.cas.scatter {
+  --scell: 68px;
+}
+.cas > .cas-info {
+  grid-area: info;
+}
+.cas > .cas-stage {
+  grid-area: stage;
+}
+.cas > .cas-deck {
+  grid-area: deck;
+}
+.cas > .cas-status {
+  grid-area: status;
+}
+
+/* ---- Status and win line: out of the scaled cabinet, kit type, one fixed height -------------- */
+/* It keeps the skin's recessed plate (`.cabinet__status` in theme.css: dark, the skin's neon
+   edge) — cream text on dark — but its size is the kit's: the text is --px-fs (20 px on
+   phones) instead of the cabinet's 13.5 px × the stage scale (critic R20: 9–14 px). The height
+   never changes: spins swap only what is inside. */
+.cas .cas-status {
+  height: calc(var(--px-fs) * 2.2);
+  margin: 0;
+  padding: 0 calc(4 * var(--u));
+  border-radius: 0;
+  gap: 0 calc(3 * var(--u));
+  font-family: var(--px-font);
+  min-width: 0;
+}
+.cas .cas-status .status {
+  min-width: 0;
+  font: 700 var(--px-fs) / 1.05 var(--px-font);
+  text-wrap: balance;
+}
+.cas .cas-status .status--hint,
+.cas .cas-status .status--spin {
+  font-weight: 500;
+  font-size: var(--px-fs-sm);
+  color: rgba(255, 236, 214, 0.86);
+}
+.cas .cas-status .status__win {
+  flex: none;
+  font: 700 var(--px-fs-big) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cas .cas-status :is(.status__mult, .status__streak, .status__pool) {
+  flex: none;
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  white-space: nowrap;
+}
+/* Phones: the GameTop ribbon (or, lying, the stage itself) names the game — the cabinet's
+   marquee gives its height to the field. */
+html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__sign {
+  display: none;
+}
+
+/* Frames by material (longhands; widths are multiples of the 1-art-px border). */
+.cas-info,
+.cas-deck {
+  position: relative;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  padding: calc(8 * var(--u));
+  min-width: 0;
+  min-height: 0;
+}
+.cas-well {
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+
+/* ---- Stage: the cabinet, scaled as one piece -------------------------------------------------- */
+.cas-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  contain: size;
+  display: grid;
+  place-items: center;
+}
+.cas-fit {
+  position: relative;
+}
+.cas-fit > .cabinet {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: 0;
+}
+/* Natural widths = the old phone layout (a phone sees about ×1); other formats scale up. */
+.cas--slots .cas-fit > .cabinet {
+  width: 358px;
+}
+.cas--scatter .cas-fit > .cabinet {
+  width: 372px;
+}
+
+/* ---- Small caption over a value ------------------------------------------------------------- */
+.cas-cap {
+  display: block;
+  font: 600 var(--px-fs-sm) / 1.1 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Info: level, jackpot, stats, recent spins ------------------------------------------------ */
+.cas-info {
+  display: grid;
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    'lvl lvl lvl'
+    'jp sp best'
+    'hist hist hist';
+}
+.cas--scatter .cas-info {
+  grid-template-areas:
+    'lvl lvl lvl'
+    'best best sp';
+}
+/* Slots, phone portrait: jackpot and spins take what they need, the best win gets the rest —
+   in three equal thirds «988 тыс.» stepped down beside 20-px neighbours and lost its coin. */
+[data-lay='tall']:not(.cas--scatter) > .cas-info {
+  grid-template-columns: auto auto minmax(0, 1fr);
+  column-gap: calc(2 * var(--u));
+}
+.cas-info > .cas-lvl {
+  grid-area: lvl;
+}
+.cas-info > .cas-stat--jp {
+  grid-area: jp;
+}
+.cas-info > .cas-stat--sp {
+  grid-area: sp;
+}
+.cas-info > .cas-stat--best {
+  grid-area: best;
+}
+.cas-info > .cas-hist {
+  grid-area: hist;
+}
+
+.cas-lvl {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.cas-lvl__n {
+  flex: none;
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-gold);
+  white-space: nowrap;
+}
+.cas-lvl .px-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cas-lvl__free {
+  flex: none;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  white-space: nowrap;
+}
+.cas-lvl__free.is-none {
+  visibility: hidden;
+}
+
+.cas-stat {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico v' 'k k';
+  align-items: center;
+  column-gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.cas-stat__ico {
+  grid-area: ico;
+  display: inline-flex;
+  align-items: center;
+  color: var(--px-gold);
+}
+.cas-stat__k {
+  grid-area: k;
+  font: 600 var(--px-fs-sm) / 1.1 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cas-stat__v {
+  grid-area: v;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  min-width: 0;
+  font: 700 var(--px-fs) / 1.1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* The coin never gives way to the digits (it was squeezed to 0–9 px beside «988 тыс.»). */
+.cas-stat__v > svg {
+  flex: none;
+}
+/* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): one step smaller,
+   then the coin goes — the 777 / ★ picture and the caption still say what it is. */
+html .cas .cas-info .cas-stat .cas-stat__v:is([data-fit='1'], [data-fit='2']) {
+  font-size: var(--px-fs-sm);
+}
+/* One digit size across the strip: when one record steps down, all of them do. */
+html .cas .cas-info:has(.cas-stat__v:is([data-fit='1'], [data-fit='2'])) .cas-stat .cas-stat__v {
+  font-size: var(--px-fs-sm);
+}
+html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
+  display: none;
+}
+.cas-stat--gold .cas-stat__v {
+  color: var(--px-gold);
+}
+.cas-777 {
+  display: inline-flex;
+}
+
+/* Recent spins: one fixed row; chips scroll sideways inside it. */
+.cas-hist {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(3 * var(--u));
+  /* One chip tall (17-px symbols + the sum line + padding and frame): chips were cut at 16 u. */
+  min-height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
+}
+.cas-hist__row {
+  display: flex;
+  gap: calc(2 * var(--u));
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  min-width: 0;
+}
+.cas-hchip {
+  flex: none;
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  min-width: calc(51px + 6 * var(--u));
+  height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
+  padding: var(--u) calc(2 * var(--u));
+}
+.cas-hchip__reels {
+  display: inline-flex;
+}
+.cas-hchip__sum {
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-red);
+}
+.cas-hchip.is-win .cas-hchip__sum {
+  color: var(--px-green);
+}
+/* Before the first spin: five dashed outlines of a chip — «spins will line up here». Only the
+   ones that fit whole are shown (the rest wrap to a hidden line), so no outline is cut. */
+.cas-hchip.is-empty {
+  border: var(--u) dashed rgb(42 25 12 / 0.4);
+}
+.cas-hist__row:has(> .is-empty) {
+  flex-wrap: wrap;
+  height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
+  overflow: hidden;
+}
+.cas-broke {
+  margin: 0;
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
+  color: var(--px-red);
+}
+
+/* ---- Deck: balance, bet, Spin --------------------------------------------------------------- */
+.cas-deck {
+  display: grid;
+  gap: calc(3 * var(--u));
+  grid-template-columns: minmax(0, 1fr);
+  align-content: end;
+}
+.cas-deck__money {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: calc(4 * var(--u));
+}
+.cas-bal,
+.cas-bet {
+  position: relative;
+  min-width: 0;
+}
+.cas-bal__v {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  height: calc(17 * var(--u));
+  font: 700 var(--px-fs-big) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cas-bet {
+  justify-self: end;
+}
+.cas-bet__row {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.cas-bet__v {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--u);
+  /* fixed width, sized for «500» + coin: 5 and 500 take the same room — nothing moves when the
+     bet changes, nothing overflows the well */
+  width: calc(3ch + 18px + 8 * var(--u));
+  height: var(--gx-hit);
+  margin: 0;
+  padding: 0 calc(2 * var(--u));
+  background: none;
+  font: 700 var(--px-fs-big) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  cursor: pointer;
+}
+.cas-bet__v:disabled {
+  color: var(--px-dim);
+  cursor: default;
+}
+/* Pressed (`usePress` → `.is-down` on pointerdown, `:active` for the keyboard): the well one
+   ramp step darker and its content one art pixel lower, in the first frame. */
+.cas-bet__v {
+  isolation: isolate;
+}
+.cas-bet__v:is(:active, .is-down):not(:disabled) {
+  padding-top: calc(2 * var(--u));
+}
+/* The well's fill is painted over the element's own background — the darker step is a layer
+   between the fill and the digits. */
+.cas-bet__v:is(:active, .is-down):not(:disabled)::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: -1;
+  background: #c9a56d;
+}
+/* Key prompts for the bet (Tab / LB …) sit over the caption, right-aligned; nothing on touch. */
+.cas-bet__keys {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: var(--u);
+}
+
+.cas-chips {
+  display: none;
+}
+.cas-chip {
+  width: 100%;
+}
+
+.cas-deck__go {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: calc(3 * var(--u));
+  align-items: stretch;
+}
+.cas-mini {
+  min-width: calc(24 * var(--u));
+  min-height: calc(26 * var(--u));
+}
+/* Fixed width in the thumb row: a key hint or the auto counter must never push Spin. */
+.cas[data-lay='tall'] .cas-mini {
+  width: calc(24 * var(--u));
+  padding-left: 0;
+  padding-right: 0;
+}
+/* The icon is the button (critic K2 #15: 18 px on a 48 × 52 face was 37 %): ×2 of the 9-px mask. */
+.cas-mini > .px-i {
+  --i-w: 18;
+  --i-h: 18;
+}
+.cas-mini > .px-keyhint {
+  position: absolute;
+  right: calc(-2 * var(--u));
+  bottom: calc(-2 * var(--u));
+  z-index: 2;
+}
+.cas-mini__n {
+  position: absolute;
+  right: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
+  min-width: calc(9 * var(--u));
+  padding: 0 var(--u);
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-gold-s);
+  border-image-width: var(--pxk-badge-gold-w);
+  border-image-repeat: stretch;
+  font: 700 var(--px-fs-tiny) / 1.2 var(--px-font);
+  color: var(--px-text);
+  text-shadow: none;
+}
+.cas-spin {
+  min-height: calc(26 * var(--u));
+  min-width: 0;
+}
+/* The verb only, never cut: a long word steps the font down (`useFitText`: big → body →
+   small), and only the smallest step may wrap to two lines — inside the plate's fixed height. */
+.cas-spin__t {
+  min-width: 0;
+  max-width: 100%;
+  font: 400 var(--px-fs-big) / 1.05 var(--px-head);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.cas-spin__t[data-fit='1'] {
+  font-size: var(--px-fs);
+}
+.cas-spin__t[data-fit='2'] {
+  font-size: var(--px-fs-sm);
+  line-height: 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+/* Free spins / bonus spins left: a gold counter on the plate's corner (like auto's). */
+.cas-spin > .cas-spin__n {
+  right: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
+  z-index: 2;
+}
+/* Skip: the same gold plate (a press always does something), the skip arrows in front. */
+.cas-spin.is-skip {
+  gap: calc(2 * var(--u));
+}
+.cas-spin.is-skip > .px-i {
+  flex: none;
+}
+/* The key sits on the corner like on the small buttons: the label keeps the whole width. */
+.cas-spin > .px-keyhint {
+  position: absolute;
+  right: calc(-2 * var(--u));
+  bottom: calc(-2 * var(--u));
+  z-index: 2;
+}
+
+/* Cascade: ante + buy bonus — two equal plates, fixed height. */
+.cas-bonus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+}
+.cas-bonus.is-hidden {
+  visibility: hidden;
+}
+.cas-bonus .px-btn {
+  flex-direction: column;
+  gap: 0;
+  /* One 44-px row (critic 10): a name line and a line of numbers, no paragraph inside. */
+  min-height: var(--gx-hit);
+  padding-top: var(--u);
+  padding-bottom: calc(3 * var(--u));
+  width: 100%;
+  min-width: 0;
+}
+.cas-bonus .px-btn:is(:active, .is-down):not([aria-disabled='true']) {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: var(--u);
+}
+.cas-bonus .px-btn > b {
+  max-width: 100%;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  /* A narrow plate (phone landscape, fr/de) takes two lines instead of cutting the name. */
+  text-wrap: balance;
+  text-align: center;
+}
+.cas-bonus .px-btn > i {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  max-width: 100%;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cas-bonus__sep {
+  padding: 0 var(--u);
+}
+
+/* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
+/* Money in rows, each caption inline on the left: «Баланс … 510 812 345 🪙», «Ставка … [−] [10] [+]».
+   The balance box is sized for the maximum (11 tabular digits + coin), so a growing balance is
+   never cut and never moves anything (critic R19). Phone and tablet portrait alike. */
+.cas[data-lay='tall'] .cas-deck__money {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+}
+.cas[data-lay='tall'] .cas-bal,
+.cas[data-lay='tall'] .cas-bet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  justify-self: stretch;
+}
+.cas[data-lay='tall'] :is(.cas-bal, .cas-bet) > .cas-cap {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.cas[data-lay='tall'] .cas-bal__v {
+  flex: none;
+  justify-content: flex-end;
+  min-width: calc(11ch + 22px + 2 * var(--u));
+  height: calc(15 * var(--u));
+}
+/* 360-px phones: the 11-digit box one step smaller, so the caption keeps its whole word
+   («Guthaben» was «Gutha…» next to 510.812.345). One fixed size per width — nothing jumps. */
+@media (max-width: 374px) {
+  .cas[data-lay='tall'] .cas-bal__v {
+    font-size: var(--px-fs-head);
+  }
+}
+.cas[data-lay='tall'] .cas-bet__keys {
+  top: auto;
+  right: auto;
+  left: 0;
+  bottom: calc(-3 * var(--u));
+}
+[data-lay='tall'] > .cas-info {
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  padding: calc(4 * var(--u)) calc(5 * var(--u));
+}
+[data-lay='tall'] .cas-stat__k {
+  font-size: var(--px-fs-sm);
+  white-space: normal;
+  line-height: 1.05;
+}
+
+/* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
+.cas[data-lay='wide'] {
+  grid-template-columns: minmax(0, var(--cas-l)) minmax(0, 1fr) minmax(0, var(--cas-r));
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: 'info stage deck' 'info status deck';
+  --cas-l: calc(100 * var(--u));
+  --cas-r: calc(116 * var(--u));
+}
+html[data-ff='phone-landscape'] .cas {
+  /* 4 × 44-px tools + 3 gaps of 1 u + the wood frame (2 × 9 u) — they were cut at 92 u. */
+  --cas-l: calc(109 * var(--u));
+  --cas-r: calc(118 * var(--u));
+  gap: calc(2 * var(--u));
+}
+.cas[data-lay='wide'] .cas-info,
+.cas--scatter[data-lay='wide'] .cas-info {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-areas: 'lvl' 'jp' 'best' 'sp' 'hist';
+  align-content: start;
+  gap: calc(4 * var(--u));
+  overflow: hidden;
+}
+html[data-ff='phone-landscape'] .cas-info {
+  gap: calc(2 * var(--u));
+}
+/* Phone landscape has no GameTop row: back, skins, rules and settings are one row of 44-px
+   icons at the top of the info column (4 × 44 + 3 × 1 u = 182 px inside its 218). */
+html[data-ff='phone-landscape'] .cas[data-lay='wide'] .cas-info {
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  grid-template-areas: 'tools' 'lvl' 'jp' 'best' 'sp' 'hist';
+}
+.cas-info > .cas-tools {
+  grid-area: tools;
+}
+.cas-tools {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--u);
+}
+.cas-tools > :is(.gx-round, .px-btn) {
+  --gx-size: var(--gx-hit);
+  flex: none;
+  width: var(--gx-hit);
+  height: var(--gx-hit);
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+  padding: 0;
+}
+.cas[data-lay='wide'] .cas-lvl {
+  flex-wrap: wrap;
+}
+.cas[data-lay='wide'] .cas-lvl .px-bar {
+  order: 3;
+  flex-basis: 100%;
+}
+.cas[data-lay='wide'] .cas-lvl__free {
+  margin-left: auto;
+}
+/* Stats as wells with the caption on top and a big number under it. */
+.cas[data-lay='wide'] .cas-stat {
+  grid-template-areas: 'k k' 'ico v';
+  row-gap: var(--u);
+}
+/* A caption never loses its tail («лучший выигры…»): it wraps. */
+.cas[data-lay='wide'] .cas-stat__k {
+  white-space: normal;
+  line-height: 1.05;
+}
+html[data-ff='desktop'] .cas-stat,
+html[data-ff='tablet'] .cas-stat {
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+html[data-ff='desktop'] .cas-stat__v,
+html[data-ff='tablet'] .cas-stat__v,
+html[data-ff='desktop'] .cas-lvl__n,
+html[data-ff='tablet'] .cas-lvl__n {
+  font-size: var(--px-fs-big);
+}
+/* One icon size per format for all three facts (critic 13): 9 art px = 18 px on phones,
+   27 px at u = 3. Bigger, the 2-art-px strokes turned into blobs next to a 27-px reel. */
+html[data-ff='desktop'] .cas-stat__ico .px-i,
+html[data-ff='tablet'] .cas-stat__ico .px-i {
+  --i-w: 9;
+  --i-h: 9;
+}
+.cas-777 .sym {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+html[data-ff='desktop'] .cas-777 .sym,
+html[data-ff='tablet'] .cas-777 .sym {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+/* Recent spins become a wrapped list there (newest first, scroll inside). */
+.cas[data-lay='wide'] .cas-hist {
+  height: auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: start;
+  align-self: stretch;
+}
+.cas[data-lay='wide'] .cas-hist__row {
+  flex-wrap: wrap;
+  align-content: flex-start;
+  overflow: hidden auto;
+  max-height: 100%;
+}
+
+.cas[data-lay='wide'] .cas-deck {
+  overflow: hidden;
+  align-content: space-between;
+}
+.cas[data-lay='wide'] .cas-deck__money {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+}
+html[data-ff='desktop'] .cas-bal__v,
+html[data-ff='tablet'] .cas-bal__v {
+  height: calc(20 * var(--u));
+  font-size: var(--px-fs-hero);
+}
+/* Touch targets: never under 44 px (the shell's --gx-hit). */
+.cas-bet__step.px-btn {
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+}
+/* Thumb zone of the tall layouts: 48 px (Android's 48 dp); lying keeps 44 — no height to spare. */
+.cas[data-lay='tall'] .cas-bet__step.px-btn {
+  min-width: max(var(--gx-hit), calc(24 * var(--u)));
+  min-height: max(var(--gx-hit), calc(24 * var(--u)));
+}
+.cas[data-lay='tall'] .cas-bet__v {
+  height: max(var(--gx-hit), calc(24 * var(--u)));
+}
+.cas[data-lay='wide'] .cas-bet {
+  justify-self: stretch;
+}
+.cas[data-lay='wide'] .cas-bet__row {
+  justify-content: space-between;
+}
+.cas[data-lay='wide'] .cas-bet__v {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: calc(3ch + 18px + 8 * var(--u));
+}
+/* Quick bets (the old chip row) on roomy formats: 3 × 2 under the stepper. */
+html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+}
+/* Spin gets a row of its own under the thumb; auto and turbo above it. */
+.cas[data-lay='wide'] .cas-deck__go {
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: 'auto turbo' 'spin spin';
+}
+.cas[data-lay='wide'] .cas-deck__go > .cas-spin {
+  grid-area: spin;
+}
+/* The two bonus plates are narrow — thinner side padding. */
+.cas .cas-bonus .px-btn {
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+html[data-ff='phone-landscape'] .cas-mini {
+  min-height: var(--gx-hit);
+}
+html[data-ff='phone-landscape'] .cas-bonus .px-btn {
+  min-height: var(--gx-hit);
+}
+html[data-ff='phone-landscape'] .cas-bonus .px-btn > i {
+  display: none;
+}
+html[data-ff='phone-landscape'] .cas-spin {
+  min-height: var(--gx-hit);
+}
+html[data-ff='phone-landscape'] .cas-deck,
+html[data-ff='phone-landscape'] .cas-deck__money,
+html[data-ff='phone-landscape'] .cas-deck__go {
+  gap: calc(2 * var(--u));
+}
+html[data-ff='desktop'] .cas-spin,
+html[data-ff='tablet'] .cas-spin {
+  min-height: calc(32 * var(--u));
+}
+html[data-ff='desktop'] .cas-spin__t,
+html[data-ff='tablet'] .cas-spin__t {
+  font-size: var(--px-fs-hero);
+}
+html[data-ff='phone-landscape'] .cas-spin__t {
+  font-size: var(--px-fs);
+}
+html[data-ff='phone-landscape'] .cas-bonus .px-btn > b {
+  font-size: var(--px-fs-sm);
+}
+
+/* ---- Tablet portrait: the stage takes the whole width on top; info | deck share the bottom -- */
+html[data-ff='tablet'] .cas[data-lay='tall'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas: 'stage stage' 'status status' 'info deck';
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] > .cas-info {
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  padding: calc(8 * var(--u));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'lvl' 'jp' 'best' 'sp' 'hist';
+  align-content: space-between;
+}
+html[data-ff='tablet'] .cas--scatter[data-lay='tall'] > .cas-info {
+  grid-template-areas: 'lvl' 'best' 'sp';
+  align-content: start;
+  row-gap: calc(5 * var(--u));
+}
+/* One line per fact there: icon, caption, the number at the right edge. */
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat {
+  /* Caption over the number, the icon beside both: on one line «лучший выигрыш» + «988 тыс.» +
+     coin needed 269 of 258 px and the number stepped down beside its neighbours. */
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico k' 'ico v';
+  column-gap: calc(3 * var(--u));
+  row-gap: 0;
+  padding: 0;
+  border-image-source: none;
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-spin__t {
+  font-size: var(--px-fs-big);
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__k {
+  font-size: var(--px-fs-sm);
+  white-space: normal;
+  line-height: 1.05;
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-stat__v {
+  font-size: var(--px-fs-head);
+}
+html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
+  height: calc(16 * var(--u));
+}
+
+/* ==== Hall (GamesPage): wallet, two big game cards, the «Каторга» row, the note ============= */
+/* The hall takes the height the screen gives (never more): the two cards share it and their
+   pictures fit inside, so nothing goes under the edge. «Каторга» is a slim row (critic 12: as a
+   third card it repeated Back and took a third of the hall) — its height went to the art. */
+.cas-hall .gs__main {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.hall {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: calc(400 * var(--u));
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: calc(3 * var(--u));
+  padding: 0 calc(3 * var(--u)) calc(3 * var(--u));
+}
+.hall-wallet,
+.hall-card,
+.hall-row {
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  min-width: 0;
+}
+.hall-wallet {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: calc(3 * var(--u)) calc(8 * var(--u));
+  padding: calc(7 * var(--u)) calc(10 * var(--u));
+}
+.hall-wallet__money {
+  display: grid;
+  gap: var(--u);
+  min-width: 0;
+}
+/* Sized for the maximum — 11 tabular digits and the coin — so the level next to it never moves
+   or shrinks while the balance rolls (critic 9: 9 990 → 510 812 345 moved it by 73 px). */
+.hall-wallet__v {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-width: calc(11ch + 26px + 2 * var(--u));
+  font-size: var(--px-fs-hero);
+  line-height: 1.05;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.hall-wallet__lvl {
+  display: grid;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  padding-bottom: var(--u);
+}
+.hall-wallet__n {
+  font-size: var(--px-fs);
+  line-height: 1;
+  color: var(--px-gold);
+  white-space: nowrap;
+}
+/* Phone portrait: the level is its own row under the money (no room beside 11 digits). */
+html[data-ff='phone-portrait'] .hall-wallet {
+  grid-template-columns: minmax(0, 1fr);
+}
+html[data-ff='phone-portrait'] .hall-wallet__lvl {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(4 * var(--u));
+  padding-bottom: 0;
+}
+
+/* ---- Cards ---------------------------------------------------------------------------------- */
+.hall-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+  min-height: 0;
+}
+.hall-card {
+  position: relative;
+  appearance: none;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: var(--px-text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 0;
+  padding: calc(8 * var(--u)) calc(9 * var(--u));
+  display: grid;
+  /* Art | text, the art spans the «Play» row too: the picture is the biggest thing. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: 'art body' 'art go';
+  gap: calc(3 * var(--u)) calc(5 * var(--u));
+}
+/* Pressed: `.is-down` from `usePress` lands on pointerdown (`:active` came after the finger
+   left on touch, and the route had already changed). */
+.hall-card:is(:active, .is-down),
+.hall-row:is(:active, .is-down) {
+  translate: 0 var(--u);
+}
+.hall-card:is(:active, .is-down) .hall-card__go,
+.hall-row:is(:active, .is-down) .hall-row__go {
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+/* The art sits in an obsidian plate on the stone tile; the symbols are a square 3 × 3 window,
+   as big as the plate allows (size container). */
+.hall-card__art {
+  grid-area: art;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  padding: calc(3 * var(--u));
+}
+.hall-card__syms {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: var(--u);
+  /* Explicit height, not `aspect-ratio`: with it the images' own height grew the rows. */
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+}
+.hall-card__syms img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+.hall-card__body {
+  grid-area: body;
+  display: grid;
+  align-content: start;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  min-height: 0;
+}
+/* `clip`, not `hidden`: a scroll container may be squeezed to 0 by the grid — the title vanished.
+   A long name (skins: up to ~20 letters) is a step smaller and may take two lines — no ellipsis. */
+.hall-card__t {
+  min-width: 0;
+  font-size: var(--px-fs-big);
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: clip;
+}
+.hall-card__t.is-long {
+  font-size: var(--px-fs-head);
+  white-space: normal;
+  text-wrap: balance;
+}
+.hall-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(2 * var(--u));
+}
+.hall-card__tags > i {
+  padding: 0 calc(2 * var(--u));
+  font: 600 var(--px-fs-sm) / 1.5 var(--px-font);
+  color: var(--px-muted);
+  white-space: nowrap;
+}
+.hall-card__facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+}
+html .hall .hall-card__facts .cas-stat {
+  grid-template-areas: 'ico v' 'k k';
+  padding: 0;
+  border-image-source: none;
+}
+html .hall .hall-card__facts .cas-stat__v {
+  font-size: var(--px-fs-head);
+}
+/* `useFitText`: a long number steps down instead of losing its tail. */
+html .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
+  font-size: var(--px-fs);
+}
+html .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
+  font-size: var(--px-fs-sm);
+}
+/* Last step: the coin goes (the star and the label already say «best win»), the digits stay. */
+html .hall .hall-card__facts .cas-stat__v[data-fit='2'] > svg {
+  display: none;
+}
+html .hall .hall-card__facts .cas-stat__ico .px-i {
+  --i-w: 9;
+  --i-h: 9;
+}
+.hall-card__facts .cas-stat__k {
+  font-size: var(--px-fs-sm);
+  white-space: normal;
+  line-height: 1.05;
+}
+.hall-card__go {
+  grid-area: go;
+  justify-self: stretch;
+  pointer-events: none;
+}
+
+/* ---- «Каторга»: one slim row — cover (rank badge on it), name, tokens, arrow ---------------- */
+.hall-row {
+  appearance: none;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: var(--px-text);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  min-height: var(--gx-hit);
+  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  text-align: left;
+}
+.hall-row__art {
+  position: relative;
+  display: block;
+  width: calc(20 * var(--u));
+  height: calc(16 * var(--u));
+  overflow: hidden;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+}
+.hall-row__art img {
+  position: absolute;
+  inset: var(--u);
+  width: calc(100% - 2 * var(--u));
+  height: calc(100% - 2 * var(--u));
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+/* The rank letter: an ink pill in the cover's corner (cream on ink, like the rarity pills). */
+.hall-row__rank {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: calc(9 * var(--u));
+  padding: 0 var(--u);
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  text-align: center;
+  color: #fff3d6;
+  background: var(--px-text);
+}
+/* Never clip a name: it wraps to two lines instead (two 20-px lines fit the 48-px row). */
+.hall-row__t {
+  min-width: 0;
+  font-size: var(--px-fs-head);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+@media (max-width: 400px) {
+  .hall-row__t {
+    font-size: var(--px-fs);
+    line-height: 1;
+  }
+}
+.hall-row__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--px-gold);
+  white-space: nowrap;
+}
+.hall-row__fact > b {
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-text);
+}
+.hall-row__go {
+  min-height: calc(16 * var(--u));
+  pointer-events: none;
+  padding-left: calc(3 * var(--u));
+  padding-right: calc(3 * var(--u));
+}
+
+.hall-note {
+  margin: 0;
+  padding: 0 calc(2 * var(--u));
+  font: 600 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-text);
+  text-align: center;
+}
+
+/* ---- Formats -------------------------------------------------------------------------------- */
+/* Phones: the tags (reels, lines, field) give their room to the art; the rules sheet says it. */
+html[data-ff='phone-portrait'] .hall-card__tags,
+html[data-ff='phone-landscape'] .hall-card__tags {
+  display: none;
+}
+/* Wide formats: the two cards side by side. */
+html .hall[data-lay='wide'] .hall-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Tablet landscape / desktop: the picture on top of each card — it takes the height. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .hall[data-lay='wide'] .hall-card {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas: 'art' 'body' 'go';
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .hall[data-lay='wide'] .hall-card__facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Tablet portrait: room for both facts in a row. */
+html[data-ff='tablet'] .hall[data-lay='tall'] .hall-card__facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Phone lying: the wallet is one line and the note gives its line to the cards (ruling 9). */
+html[data-ff='phone-landscape'] .hall {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+html[data-ff='phone-landscape'] .hall-note {
+  display: none;
+}
+html[data-ff='phone-landscape'] .hall-wallet {
+  align-items: center;
+  padding: calc(5 * var(--u)) calc(10 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall-wallet__money {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: calc(4 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall-wallet__v {
+  font-size: var(--px-fs-head);
+}
+/* Phone lying: the cards are one short row — the art is a square as tall as the card
+   (`.hall-cards` is the size container), the two facts stand in one line and their captions go
+   to the tooltip; otherwise the second caption slid under «Play». */
+html[data-ff='phone-landscape'] .hall-cards {
+  container-type: size;
+}
+html[data-ff='phone-landscape'] .hall-card {
+  padding: calc(6 * var(--u)) calc(7 * var(--u));
+  grid-template-columns: calc(100cqh - 14 * var(--u)) minmax(0, 1fr);
+}
+html[data-ff='phone-landscape'] .hall-card__facts {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(5 * var(--u));
+}
+html[data-ff='phone-landscape'] .hall .hall-card__facts .cas-stat {
+  grid-template-areas: 'ico v';
+}
+html[data-ff='phone-landscape'] .hall-card__facts .cas-stat__k {
+  display: none;
+}
+html[data-ff='phone-landscape'] .hall-card__t {
+  font-size: var(--px-fs-head);
+}
+/* Tablet / desktop: the cards are big — so is everything on them. */
+html[data-ff='tablet'] .hall-card__t,
+html[data-ff='desktop'] .hall-card__t {
+  font-size: var(--px-fs-hero);
+}
+html[data-ff='tablet'] .hall-card__t.is-long,
+html[data-ff='desktop'] .hall-card__t.is-long {
+  font-size: var(--px-fs-big);
+}
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v,
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v {
+  font-size: var(--px-fs-big);
+}
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v[data-fit='1'],
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
+  font-size: var(--px-fs-head);
+}
+html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v[data-fit='2'],
+html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
+  font-size: var(--px-fs);
+}
+
+/* ==== Skins sheet (SkinSheet): the art is the card ========================================== */
+/* critic K2 #11: previews were 3 symbols of 20–25 px under a 20-px name and 2–5 lines of text.
+   Now each card is a row: the skin's palette plate with three 20-u symbols (≥ 40 px, most of the
+   card's height) | the name on one line and one state line. The description is the tooltip. */
+.skn {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(150 * var(--u))), 1fr));
+  /* Every card as tall as the tallest (the relic's progress bar): one even list. */
+  grid-auto-rows: 1fr;
+  gap: calc(3 * var(--u));
+  /* Room for the select frame drawn outside the first row. */
+  padding: calc(3 * var(--u)) calc(3 * var(--u)) 0;
+}
+.skn-card {
+  position: relative;
+  appearance: none;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: var(--px-text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  grid-template-areas: 'art name' 'art state';
+  align-content: center;
+  column-gap: calc(4 * var(--u));
+  row-gap: calc(2 * var(--u));
+  min-width: 0;
+  padding: calc(2 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+.skn-card[aria-disabled='true'] {
+  cursor: default;
+}
+/* The current skin: the kit's selection frame round the card. */
+.skn-card.is-on::before {
+  content: '';
+  position: absolute;
+  inset: calc(-3 * var(--u));
+  z-index: 3;
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-select);
+  border-image-slice: var(--pxk-select-s);
+  border-image-width: var(--pxk-select-w);
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+/* The showcase plate keeps the old card's palette; only its shape follows the kit. One class
+   deeper than theme.css `.skin-card.is-relic` (its 28-px top padding was room for the old badge). */
+.skn-card .skn-card__art.skin-card {
+  grid-area: art;
+  position: relative;
+  overflow: hidden;
+  width: auto;
+  border-radius: 0;
+  border: 0;
+  padding: calc(2 * var(--u));
+  gap: 0;
+}
+.skn-card__art .skin-card__reels {
+  gap: var(--u);
+  padding: var(--u) calc(2 * var(--u));
+  border-radius: 0;
+}
+/* Fixed box, even before the images come (`art` false on the first frame): nothing jumps. */
+.skn-card__art .skin-card__reels img {
+  width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
+}
+.skn-card__art .skin-card__reels:empty {
+  width: calc(64 * var(--u));
+  height: calc(22 * var(--u));
+}
+.skn-card__name {
+  grid-area: name;
+  align-self: end;
+  min-width: 0;
+  font: 400 var(--px-fs) / 1.1 var(--px-head);
+  color: var(--px-text);
+  white-space: nowrap;
+  overflow: clip;
+}
+/* A long name on a narrow (phone) card: a step smaller; over 20 letters («Notte di mezza
+   estate») it may take two lines. By length class, not by measuring: 13 measurements forced
+   13 layouts while the sheet opened. */
+.skn-card {
+  container: skn / inline-size;
+}
+@container skn (max-width: 420px) {
+  .skn-card__name:is(.is-long, .is-xlong) {
+    font-size: var(--px-fs-sm);
+  }
+  .skn-card__name.is-xlong {
+    white-space: normal;
+  }
+}
+.skn-card__state {
+  grid-area: state;
+  align-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--u) calc(2 * var(--u));
+  min-width: 0;
+  font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
+}
+.skn-on,
+.skn-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  white-space: nowrap;
+}
+.skn-on {
+  color: var(--px-green);
+}
+.skn-lock {
+  color: var(--px-muted);
+}
+/* Relic badge: an ink pill on gold, 17 px (it was 9 px / 900 over the art). */
+.skn-badge {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--px-fs-sm) * 1.45);
+  padding: 0 calc(3 * var(--u));
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-ink);
+  background: #ffc94d;
+  border: var(--u) solid var(--px-ink);
+  box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.5);
+  white-space: nowrap;
+}
+/* Locked relic: lock + «×83 / ×200» on one line, the progress bar under it. */
+.skn-quest {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico x' 'bar bar';
+  align-items: center;
+  flex: 1 1 auto;
+  gap: var(--u) calc(2 * var(--u));
+  min-width: 0;
+  color: var(--px-gold);
+}
+.skn-quest > .px-bar {
+  grid-area: bar;
+}
+.skn-quest > em {
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  font-style: normal;
+  color: var(--px-gold);
+  white-space: nowrap;
+}
+.skn-note {
+  margin: calc(4 * var(--u)) 0 0;
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
+  color: var(--px-muted);
+}
+
+/* ==== Cash desk (CashDesk, owner only): kit buttons in a well; also in the mine settings ===== */
+.cash {
+  display: grid;
+  gap: calc(3 * var(--u));
+  padding: calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+.cash__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.cash__meta {
+  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cash__row {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.cash__what {
+  display: inline-flex;
+  justify-content: center;
+  min-width: calc(11 * var(--u));
+  color: var(--px-muted);
+}
+.cash__btn.px-btn {
+  min-width: 0;
+  padding-left: var(--u);
+  padding-right: var(--u);
+  gap: var(--u);
+}
+.cash__btn > b {
+  min-width: 0;
+  font-size: var(--px-fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The creative row is another section's button (`CreativeRow`): it comes in the kit's iron
+   button classes (`className` prop), so only the row's grid is set here. */
+.cash__creative .cash-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+}
+.cash__creative .px-btn {
+  margin: 0;
+}
+.cash__hint {
+  margin: 0;
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
+  color: var(--px-muted);
+}
+.cash-health {
+  display: grid;
+  gap: var(--u);
+  padding-top: calc(2 * var(--u));
+}
+.cash-health__row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+.cash-health__row > b {
+  font-weight: 700;
+  text-align: right;
+}
+.cash-health .is-ok {
+  color: var(--px-green);
+}
+.cash-health .is-bad {
+  color: var(--px-red);
+}
+.cash-health__err {
+  margin: 0;
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
+  color: var(--px-red);
+  overflow-wrap: anywhere;
+}
+
+/* ==== Session card (SessionCard): a kit wood card over the old veil `.ses` ================== */
+.ses > .sesk {
+  width: min(100%, calc(190 * var(--u, 2px)));
+  max-height: 100%;
+  overflow: hidden auto;
+  display: grid;
+  justify-items: center;
+  gap: calc(4 * var(--u));
+  text-align: center;
+  animation: ses-in 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.sesk {
+  --sesk-plate: var(--px-text);
+}
+/* Everything over the rays of the unforgettable session. */
+.sesk > *:not(.ses__rays),
+.sesk__col > * {
+  position: relative;
+  z-index: 1;
+}
+/* The veil row is definite, so the card's max-height: 100% holds (it scrolls inside, never off-screen). */
+.ses {
+  grid-template-rows: minmax(0, 1fr);
+}
+/* Column wrappers are see-through unless the screen is low (below). */
+.sesk__col {
+  display: contents;
+}
+.sesk__grade {
+  max-width: 100%;
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  white-space: nowrap;
+}
+/* The peak: a dark iron plate — the rarity colour reads only on dark. */
+.sesk__peak {
+  justify-self: stretch;
+  display: grid;
+  gap: var(--u);
+  padding: calc(6 * var(--u)) calc(5 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  image-rendering: pixelated;
+  /* Ink of the light context (resolved on .sesk, before .px-dark turns the vars cream). */
+  background: var(--sesk-plate);
+  background-clip: padding-box;
+  --pk: var(--px-text);
+}
+.sesk__peak--rare {
+  --pk: var(--px-blue);
+}
+.sesk__peak--epic {
+  --pk: var(--px-violet);
+}
+.sesk__peak--legendary,
+.sesk__peak--mythic {
+  --pk: var(--px-gold);
+}
+.sesk__peak-label {
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  color: var(--px-muted);
+}
+.sesk__peak-title {
+  font: 400 var(--px-fs-hero) / 1.1 var(--px-head);
+  color: var(--pk);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  overflow-wrap: anywhere;
+}
+.sesk__peak--mythic .sesk__peak-title {
+  background: linear-gradient(100deg, #ff5ec7, #ffd83d 25%, #5ee7ff 50%, #a06bff 75%, #ff5ec7);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  animation: ses-holo 2s linear infinite;
+}
+.sesk__peak-detail {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-text);
+}
+.sesk__net {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  font-size: var(--px-fs-hero);
+  line-height: 1;
+}
+.sesk__net.is-up {
+  color: var(--px-green);
+}
+.sesk__net.is-down {
+  color: var(--px-red);
+}
+.sesk__rank {
+  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-gold);
+}
+.sesk__stats {
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+}
+.sesk__stats > span {
+  display: grid;
+  align-content: center;
+  gap: var(--u);
+  min-width: 0;
+  padding: calc(3 * var(--u)) var(--u);
+}
+.sesk__stats b {
+  font-size: var(--px-fs);
+  line-height: 1.1;
+  color: var(--px-text);
+}
+.sesk__stats i {
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+}
+.sesk__hook {
+  font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
+}
+.sesk__actions {
+  justify-self: stretch;
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+/* Low screen (phone lying): peak and net on the left, stats and the buttons on the right. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .ses > .sesk {
+    width: min(100%, calc(330 * var(--u, 2px)));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    column-gap: calc(6 * var(--u));
+  }
+  .sesk__grade {
+    grid-column: 1 / -1;
+  }
+  .sesk__col {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: calc(3 * var(--u));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ses > .sesk,
+  .sesk__peak--mythic .sesk__peak-title {
+    animation: none;
+  }
+}
+
+/* ==== Rules and paytable sheets (critic K2 #8) =============================================== */
+/* The parchment sheet kept the old dark-theme colours (cream `.muted` = 1.3:1, 10–12 px). Now:
+   ink of the kit, nothing under `--px-fs-sm`, one line per section next to its picture, the long
+   paragraphs under «Подробнее». Rarity names are ink pills on the rarity colour (`.nur-rar`). */
+.cas-rules {
+  display: grid;
+  gap: calc(5 * var(--u));
+  color: var(--px-text);
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
+}
+.cas-rules__sec {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.cas-rules__h {
+  margin: 0;
+  font: 400 var(--px-fs) / 1.1 var(--px-head);
+  color: var(--px-text);
+}
+.cas-rules__lead {
+  margin: 0;
+  font: 600 var(--px-fs-sm) / 1.3 var(--px-font);
+  color: var(--px-text);
+  text-wrap: balance;
+}
+.cas-rules .paytable {
+  gap: var(--u);
+}
+.cas-rules .paytable__row {
+  gap: calc(4 * var(--u));
+  padding: var(--u) calc(4 * var(--u));
+  border-radius: 0;
+  background: none;
+}
+.cas-rules .paytable__mult {
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  color: var(--px-gold);
+}
+.cas-rules .paytable__pair {
+  font: 600 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-muted);
+}
+/* Lines: the picture is the content; the name is the tooltip (it was 10 px under it). */
+.cas-rules .lines-grid {
+  gap: calc(2 * var(--u));
+}
+.cas-rules .line-card {
+  padding: calc(2 * var(--u));
+  border-radius: 0;
+  background: none;
+}
+.cas-rules .line-card svg {
+  width: 100%;
+  max-width: calc(22 * var(--u));
+  height: auto;
+  aspect-ratio: 1;
+}
+.cas-rules .line-card rect {
+  fill: rgb(42 25 12 / 0.16);
+}
+.cas-rules .line-card rect.is-on {
+  fill: var(--px-gold);
+}
+.cas-rules .combo-rules__ladder {
+  gap: calc(2 * var(--u));
+}
+.cas-rules .combo-rules__step {
+  gap: 0;
+  padding: var(--u) 0;
+  border-radius: 0;
+  background: none;
+}
+.cas-rules .combo-rules__step b {
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
+  color: var(--px-muted);
+  opacity: 1;
+}
+.cas-rules .combo-rules__step i {
+  font: 700 var(--px-fs) / 1.15 var(--px-font);
+  color: var(--px-gold);
+}
+.cas-rules .combo-rules__step:last-child i {
+  color: var(--px-red);
+  text-shadow: none;
+}
+.cas-rules .rarity-ladder {
+  margin: 0;
+  gap: var(--u);
+}
+.cas-rules .rarity-row {
+  gap: calc(3 * var(--u));
+  padding: var(--u) calc(3 * var(--u));
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  color: var(--px-text);
+}
+.cas-rules .rarity-row__name {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--px-fs-sm) * 1.45);
+  padding: 0 calc(3 * var(--u));
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-ink);
+  background: var(--rar);
+  border: var(--u) solid var(--px-ink);
+  box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.45);
+  white-space: nowrap;
+}
+.cas-rules .rarity-row__range {
+  opacity: 1;
+}
+.cas-rules .rarity-row__odds {
+  min-width: 5ch;
+  color: var(--px-muted);
+  opacity: 1;
+}
+/* «Подробнее»: a 44-px row with a pixel triangle; the long texts open under it. */
+.cas-more > summary {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-height: var(--gx-hit);
+  list-style: none;
+  cursor: pointer;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-text);
+  touch-action: manipulation;
+}
+.cas-more > summary::-webkit-details-marker {
+  display: none;
+}
+.cas-more > summary::before {
+  content: '';
+  width: calc(3 * var(--u));
+  height: calc(6 * var(--u));
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.cas-more[open] > summary::before {
+  rotate: 90deg;
+}
+.cas-more > p {
+  margin: 0 0 calc(3 * var(--u));
+  font: 500 var(--px-fs-sm) / 1.35 var(--px-font);
+  color: var(--px-text);
+}
+
+/* ==== Game sheets (settings toggles, auto-spin, bet picker) ================================== */
+.cas-sheet-note {
+  margin: 0;
+  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
+  color: var(--px-muted);
+}
+.cas-toggles {
+  display: grid;
+  gap: calc(2 * var(--u));
+  margin-bottom: calc(4 * var(--u));
+}
+.cas-toggle {
+  position: relative;
+  appearance: none;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: var(--px-text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+}
+.cas-toggle__ico {
+  display: inline-flex;
+  color: var(--px-muted);
+}
+.cas-toggle__ico .px-i {
+  --i-w: 11;
+  --i-h: 11;
+}
+.cas-toggle.is-on .cas-toggle__ico {
+  color: var(--px-gold);
+}
+.cas-toggle__text {
+  display: grid;
+  gap: var(--u);
+  min-width: 0;
+}
+.cas-toggle__text > b {
+  font: 700 var(--px-fs) / 1.1 var(--px-font);
+}
+.cas-toggle__text > i {
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  font-style: normal;
+  color: var(--px-muted);
+}
+/* The box: an empty well = off, a green check = on. Same size either way. */
+.cas-toggle__box {
+  display: grid;
+  place-items: center;
+  width: calc(15 * var(--u));
+  height: calc(15 * var(--u));
+  color: var(--px-green);
+}
+.cas-autos {
+  display: grid;
+  gap: calc(4 * var(--u));
+}
+.cas-autos__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(3 * var(--u));
+}
+.cas-autos__opt.px-btn {
+  flex-direction: column;
+  gap: var(--u);
+  min-height: calc(32 * var(--u));
+  white-space: normal;
+}
+.cas-autos__n {
+  font-size: var(--px-fs-hero);
+  line-height: 1;
+}
+.cas-autos__h {
+  font: 600 var(--px-fs-sm) / 1.15 var(--px-font);
+  font-style: normal;
+  text-align: center;
+}
+.cas-betpick {
+  display: grid;
+  gap: calc(4 * var(--u));
+}
+.cas-betpick__v {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  padding: calc(2 * var(--u)) calc(8 * var(--u));
+  font-size: var(--px-fs-hero);
+  line-height: 1.1;
+}
+.cas-betpick__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(3 * var(--u));
+}
+.cas-betpick__range {
+  width: 100%;
+  accent-color: var(--px-gold);
+}

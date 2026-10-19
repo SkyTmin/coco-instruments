@@ -5,7 +5,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GameTop, GxBar, GxIcon, KIcon } from '@/components/gx';
+import { GameTop, GxBar, GxHud, GxIcon, KIcon } from '@/components/gx';
+import type { TopChip } from '@/components/gx';
 import { CoinIcon } from '@/components/slot-art';
 import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
@@ -43,7 +44,7 @@ import { gearIcon, heroFrame, itemUrl, propArt } from '@/lib/dungeon-art';
 import { heroPortrait, useDungeonSprites } from '@/lib/dungeon-sprites';
 import { MINE_CELLS, minedShare, rankLetter } from '@/lib/prison';
 import { liftClank, primeAudio } from '@/lib/sound';
-import { fmtNum, fmtShort, t, useT } from '@/i18n';
+import { fmtNum, t, useT } from '@/i18n';
 import {
   areaLead,
   areaName,
@@ -390,30 +391,41 @@ export function DungeonPage() {
   const floorOpen = floorSel <= d.reached;
   const floorMines = floor.mines.map((m) => m.id);
   const ups = upgradable(d, balance);
-  const chips = (
-    <>
-      <span className="gx-chip">
-        <CoinIcon size={18} /> {fmtShort(balance)}
-      </span>
-      <span className="gx-chip" title={matName('skin')}>
-        <img src={itemUrl('skin')} alt="" /> {fmt(d.stash.skin ?? 0)}
-      </span>
-      <span className="gx-chip" title={matName('pyrite')}>
-        <img src={itemUrl('pyrite')} alt="" /> {fmt(d.stash.pyrite ?? 0)}
-      </span>
-      <button
-        type="button"
-        className="gx-chip inv-chip"
-        aria-label={t('dungeon.lobby.inventory')}
-        onClick={() => {
-          tapLight();
-          setInvOpen(true);
-        }}
-      >
-        <GxIcon name="backpack" size={18} />
-      </button>
-    </>
-  );
+  const chips: TopChip[] = [
+    {
+      id: 'coins',
+      icon: <GxHud name="coin" />,
+      value: balance,
+      name: t('inv.coins'),
+      pri: 1,
+      ch: 7,
+    },
+    {
+      id: 'skin',
+      icon: <img src={itemUrl('skin')} alt="" />,
+      value: d.stash.skin ?? 0,
+      name: matName('skin'),
+      pri: 3,
+      ch: 7,
+    },
+    {
+      id: 'pyrite',
+      icon: <img src={itemUrl('pyrite')} alt="" />,
+      value: d.stash.pyrite ?? 0,
+      name: matName('pyrite'),
+      pri: 3,
+      ch: 7,
+    },
+    {
+      id: 'inv',
+      icon: <GxIcon name="backpack" />,
+      name: t('dungeon.lobby.inventory'),
+      onClick: () => {
+        tapLight();
+        setInvOpen(true);
+      },
+    },
+  ];
 
   return (
     <div className="gx dgl">

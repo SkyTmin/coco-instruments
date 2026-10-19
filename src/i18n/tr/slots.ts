@@ -63,10 +63,12 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'tek spinde ×{x} kazanç',
     yourBest: 'en iyin: {x} / ×{goal}',
     fromLevel: 'seviye {n} ile açılır',
+    current: 'seçili',
     note: '“Kalıntı” seviyeyle açılmaz — tek bir büyük spinle kazanılır ve sonsuza dek kalır. Semboller: Twemoji (CC-BY 4.0, Twitter Inc. ve katkıda bulunanlar).',
   },
   hud: {
     balance: 'Bakiye',
+    betLabel: 'Bahis',
     jackpot: 'Jackpot',
     best: 'En iyi spin',
     lvl: 'Sv. {n}',
@@ -106,6 +108,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: '{n} aynısını toplayın',
   },
   btn: {
+    spinShort: 'Çevir',
+    freeShort: 'Bedava',
+    brokeShort: 'Altın bitti',
+    bonusShort: 'Bonus',
+    stopShort: 'Dur',
+    skip: 'Geç',
     stopInf: 'Dur · ∞',
     stopN: 'Dur ({n})',
     combo: 'Kombo ×{n}…',
@@ -121,6 +129,9 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'spin',
   statBestWin: 'en iyi kazanç',
   pay: {
+    more: 'Ayrıntılar',
+    cascShort: 'Kazananlar kaybolur, yenileri düşer — çarpan büyür',
+    introShort: '5 hat, soldan sağa · 3 aynı = ödeme',
     title: 'Ödemeler ve hatlar',
     intro:
       'Beş hat var, her biri soldan sağa öder: üç aynı sembol asıl kazançtır, ilk ikisi küçük bir geri ödeme verir. Tablodaki çarpan bahis ÷ {unit} ile çarpılır — {bet} bahiste bu {line} eder.',
@@ -164,6 +175,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Altın bitince kendiliğinden durur',
     h10: 'on spin',
     h25: 'yirmi beş',
     h50: 'elli',
@@ -182,6 +194,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Spinler ve şelaleler iki kat hızlı',
   },
   bet: {
+    short: '{min}–{max}, adım {step}',
+    lineShort: 'hat = bahis ÷ {unit}',
     less: 'Azalt',
     more: 'Artır',
     note: '{min} ile {max} altın arası, {step} adımla. Hat ödemesi bahis ÷ {unit} üzerinden hesaplanır — şu an {line}.',
@@ -209,6 +223,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MAKSİMUM',
   },
   cascade: {
+    howShort: 'Her yerde {n} aynı sembol = kazanç, alan çöker',
+    anteChip: '×{n}',
     subtitle: '{cols}×{rows} alan · her yerde {n} aynı',
     bonus: 'BONUS',
     left: '{n} kaldı',
@@ -216,6 +232,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Bonus satın al',
   },
   rules: {
+    orbShort: '×2 ile ×500 arası küre, spinin kazancını katlar',
+    scatShort: 'Her yerde {trigger}+ scatter — {fs} bedava spin',
+    anteShort: 'Ante: bahis ×{ante}, bonus iki kat sık · satın alma — {buy} bahis',
     title: 'Nasıl çalışır',
     anyTitle: 'Her yerde sekiz aynı',
     any: 'Hat yok: {cols}×{rows} alanın tamamında kaç aynı sembol olduğu sayılır. {n} ve fazlası kazandırır, nerede durdukları önemli değil. Kazananlar kaybolur, üsttekiler yerlerine düşer, alan yeniden sayılır; kazanç geldikçe bu sürer.',

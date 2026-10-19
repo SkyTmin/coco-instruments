@@ -3,6 +3,7 @@ import type { cash as ru } from '../ru/cash';
 
 export const cash: Translation<typeof ru> = {
   title: 'Kasa',
+  hintShort: 'Makinenin ödeme oranı değişmez',
   meta: 'altınlar sanal',
   hint: 'Makinenin ödemesi değişmez: spinleri yine dürüst bir rastgele sayı üreteci belirler, kaybetmek de olur. Sadece günlük bonusları beklememenin bir yolu.',
   telegram: 'Telegram bağlantısı',

@@ -25,6 +25,7 @@ export {
   hasKey,
   fmtNum,
   fmtShort,
+  fmtCompact,
   fmtDec,
   fmtDate,
   upper,

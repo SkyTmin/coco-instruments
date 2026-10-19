@@ -3,6 +3,7 @@ import type { cash as ru } from '../ru/cash';
 
 export const cash: Translation<typeof ru> = {
   title: 'Kasse',
+  hintShort: 'Die Auszahlungsquote bleibt gleich',
   meta: 'Münzen sind virtuell',
   hint: 'Die Auszahlung des Automaten ändert sich nicht: Die Spins bestimmt weiter ein fairer Zufallsgenerator, verlieren kann man also auch. Es spart nur das Warten auf Tagesboni.',
   telegram: 'Verbindung zu Telegram',

@@ -142,6 +142,18 @@
   --pximg-st-power: url('/ui/kit/st-power.png?v=5b6f3ef5');
   --pximg-st-power-w: 12;
   --pximg-st-power-h: 12;
+  --pximg-hud-coin: url('/ui/kit/hud-coin.png?v=9cb78553');
+  --pximg-hud-coin-w: 12;
+  --pximg-hud-coin-h: 12;
+  --pximg-hud-token: url('/ui/kit/hud-token.png?v=bbf71fd8');
+  --pximg-hud-token-w: 12;
+  --pximg-hud-token-h: 12;
+  --pximg-hud-rank: url('/ui/kit/hud-rank.png?v=2deb2f4d');
+  --pximg-hud-rank-w: 12;
+  --pximg-hud-rank-h: 12;
+  --pximg-hud-key: url('/ui/kit/hud-key.png?v=4e00f54b');
+  --pximg-hud-key-w: 12;
+  --pximg-hud-key-h: 12;
 }
 
 .pxk-frame-stone {
@@ -815,6 +827,27 @@
 .pxi-minus {
   -webkit-mask-image: url('/ui/kit/i-minus.png?v=832e4510');
   mask-image: url('/ui/kit/i-minus.png?v=832e4510');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-auto {
+  -webkit-mask-image: url('/ui/kit/i-auto.png?v=c479d44b');
+  mask-image: url('/ui/kit/i-auto.png?v=c479d44b');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-buzz {
+  -webkit-mask-image: url('/ui/kit/i-buzz.png?v=68702f4b');
+  mask-image: url('/ui/kit/i-buzz.png?v=68702f4b');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-skip {
+  -webkit-mask-image: url('/ui/kit/i-skip.png?v=fbb41476');
+  mask-image: url('/ui/kit/i-skip.png?v=fbb41476');
   --i-w: 9;
   --i-h: 9;
 }
