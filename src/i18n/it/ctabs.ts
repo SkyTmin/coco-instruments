@@ -7,6 +7,15 @@ export const ctabs: Translation<typeof ru> = {
     hint: 'Ciò che compri scende con te in miniera',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Mancano {v} ✦',
+    /** Phones: one effect chip per good instead of the sentence (the sentence is its tip). */
+    fx: {
+      bomb3: 'Esplode 3×3',
+      bomb5: 'Esplode 5×5',
+      charge: 'Strato intero',
+      energy: 'Piccone ×2 · 1 min',
+      lens: 'Strato sotto · 90 s',
+      prop: 'Roccia superiore · 10 min',
+    },
   },
   runes: {
     amulet: 'Amuleto',
@@ -17,8 +26,14 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Spezza per gettoni',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'forza {n}/100',
-    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
-    fuse: 'Fondi',
+    /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
+    fuseNeedShort: 'Fusione: servono 2 {tier} libere',
+    fuseGoShort: 'Fusione: 2× {tier} → {rune}',
+    /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
+    shatterArm: 'Ancora: frantuma',
+    wornNoShatter: 'Prima toglila dall’amuleto',
+    /** Short phone (no socket captions): a locked socket tapped — its condition. */
+    lockedShort: 'Incastro: {cond}',
   },
   finds: {
     title: 'Reperti',
@@ -28,6 +43,8 @@ export const ctabs: Translation<typeof ru> = {
   },
   miles: {
     hint: 'Completalo e riscuoti il premio',
+    /** Phone reward chip «+ гнездо» (the full «четвёртое гнездо» is its tip). */
+    socket: 'incastro',
   },
   perks: {
     hint: 'Il prestigio dà punti: spendili',
@@ -36,7 +53,8 @@ export const ctabs: Translation<typeof ru> = {
     prestige: 'prestigio {n}',
     per: 'per livello',
     now: 'Ora',
-    next: 'Poi',
+    /** One line of the skill panel: the value now → after «Learn». */
+    step: 'Ora {now} → {next}',
     learn: 'Impara',
     noPoints: 'Nessun punto libero: li dà il prestigio',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
