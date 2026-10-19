@@ -137,8 +137,9 @@ export const slots = {
   },
   brokeHint: 'Монеты кончились — заработай в шахте',
   recent: 'Последние',
-  statSpins: 'спинов',
-  statBestWin: 'лучший выигрыш',
+  statSpins: 'Спины',
+  statTurns: 'Вращения',
+  statBestWin: 'Лучший выигрыш',
   pay: {
     more: 'Подробнее',
     cascShort: 'Сыгравшие исчезают, новые падают — множитель растёт',

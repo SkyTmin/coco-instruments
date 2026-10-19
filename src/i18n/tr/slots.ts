@@ -129,7 +129,8 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Altın bitti — madende kazan',
   recent: 'Son spinler',
-  statSpins: 'spin',
+  statSpins: 'Spin',
+  statTurns: 'Spin',
   statBestWin: 'En iyi kazanç',
   pay: {
     more: 'Ayrıntılar',

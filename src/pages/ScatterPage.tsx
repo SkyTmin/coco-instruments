@@ -1756,7 +1756,7 @@ export function ScatterPage() {
             className="cas-stat--sp"
             icon={<KitIcon name="play" />}
             value={fmt(spins)}
-            label={tr('slots.session.spins')}
+            label={tr('slots.statTurns')}
           />
           {lay === 'tall' && buyBtn}
         </section>

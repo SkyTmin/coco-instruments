@@ -208,9 +208,10 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
 }
 /* Slots, phone portrait: jackpot and spins take what they need, the best win gets the rest —
    in three equal thirds «988 тыс.» stepped down beside 20-px neighbours and lost its coin. */
+/* 6 u between facts (critic12 #4, R59): at 2 u «Спины» and «Лучший выигрыш» read as one phrase. */
 [data-lay='tall']:not(.cas--scatter) > .cas-info {
   grid-template-columns: auto auto minmax(0, 1fr);
-  column-gap: calc(2 * var(--u));
+  column-gap: calc(6 * var(--u));
 }
 .cas-info > .cas-lvl {
   grid-area: lvl;
@@ -658,12 +659,10 @@ html .cas .cas-info:has(.cas-stat__v:is([data-fit='1'], [data-fit='2'])) .cas-st
   position: relative;
   flex-direction: column;
   gap: 0;
-  padding-top: var(--u);
-  padding-bottom: calc(2 * var(--u));
+  padding: var(--u) var(--u) calc(2 * var(--u));
 }
 .cas-ante.px-btn.is-on {
-  padding-top: calc(2 * var(--u));
-  padding-bottom: var(--u);
+  padding: calc(2 * var(--u)) var(--u) var(--u);
 }
 .cas-ante.px-btn > i.px-num {
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
@@ -696,8 +695,40 @@ html .cas .cas-info:has(.cas-stat__v:is([data-fit='1'], [data-fit='2'])) .cas-st
   grid-template-areas:
     'lvl lvl lvl'
     'best sp buy';
-  column-gap: calc(2 * var(--u));
+  column-gap: calc(6 * var(--u));
   align-items: center;
+}
+/* Phones: with 12-px gaps three facts left the best spin 45 px at 360 and 75 at 390 (it needs
+   93 at 17 px). The buy plate now stands beside both lines and is as narrow as its longest word or
+   its price (sized for «50 000» + coin, so a bet change never moves it): the name may take two
+   lines there. */
+/* (Short phones keep their one-line plate: there the strip is two 20-px lines.) */
+@media (min-height: 681px) {
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info {
+    grid-template-areas:
+      'lvl lvl buy'
+      'best sp buy';
+  }
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info > .cas-buy {
+    align-self: stretch;
+    width: min-content;
+  }
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info > .cas-buy > i {
+    width: auto;
+    min-width: calc(6ch + 1.1em + var(--u));
+  }
+}
+/* Under 380 px the spins counter goes, as on short phones: the best spin keeps its coin. */
+@media (max-width: 380px) and (min-height: 681px) {
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'lvl buy'
+      'best buy';
+  }
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info > .cas-stat--sp {
+    display: none;
+  }
 }
 
 /* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
@@ -1574,10 +1605,13 @@ html[data-ff='phone-landscape'] .hall-card__t {
 }
 /* 320 px: a long one-word name (es «Tragaperras», 140 px in a 125-px column) one more step down —
    a single word cannot wrap. */
-@media (max-width: 340px) {
+/* (360 × 800 too: there it was 1 px over its column.) */
+@media (max-width: 380px) {
   html[data-ff='phone-portrait'] .hall-card__t.is-long {
     font-size: var(--px-fs);
   }
+}
+@media (max-width: 340px) {
   /* «Каторга» in 20 px was 78 px in a 72-px column: with ≥ 99 999 tokens it broke mid-word
      («Каторг / а») and the row grew 48 → 52 px (critic12 #2). The small size fits it whole. */
   html[data-ff='phone-portrait'] .hall-row {

@@ -130,7 +130,8 @@ export const slots: Translation<typeof ru> = {
   brokeHint: 'Keine Münzen mehr — verdien welche in der Mine',
   recent: 'Zuletzt',
   statSpins: 'Spins',
-  statBestWin: 'bester Gewinn',
+  statTurns: 'Spins',
+  statBestWin: 'Bester Gewinn',
   pay: {
     more: 'Details',
     cascShort: 'Gewinner verschwinden, neue fallen nach — der Multiplikator steigt',

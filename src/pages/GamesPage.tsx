@@ -181,8 +181,8 @@ export function GamesPage() {
                   fit
                   icon={<KitIcon name="play" />}
                   value={fmt(scatterSpins)}
-                  label={t('slots.session.spins')}
-                  tip={`${t('slots.session.spins')}: ${fmt(scatterSpins)}`}
+                  label={t('slots.statTurns')}
+                  tip={`${t('slots.statTurns')}: ${fmt(scatterSpins)}`}
                 />
                 <CasStat
                   fit

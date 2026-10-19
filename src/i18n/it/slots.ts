@@ -134,8 +134,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Monete finite: guadagnale in miniera',
   recent: 'Ultimi',
-  statSpins: 'giri',
-  statBestWin: 'vincita migliore',
+  statSpins: 'Giri',
+  statTurns: 'Giri',
+  statBestWin: 'Vincita migliore',
   pay: {
     more: 'Dettagli',
     cascShort: 'I vincenti spariscono, ne cadono altri: il moltiplicatore sale',

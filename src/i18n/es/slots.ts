@@ -134,8 +134,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Sin monedas: gánalas en la mina',
   recent: 'Últimos',
-  statSpins: 'giros',
-  statBestWin: 'mejor premio',
+  statSpins: 'Giros',
+  statTurns: 'Giros',
+  statBestWin: 'Mejor premio',
   pay: {
     more: 'Detalles',
     cascShort: 'Los ganadores desaparecen, caen otros: el multiplicador sube',

@@ -237,10 +237,16 @@ function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boole
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !on) return;
+    // Fractional widths (R36): `scrollWidth` is an integer, so text 0.4–1 px wider than its box
+    // (fr «★ 988 k 🪙» 75.6 in 75) passed and lost its coin's edge.
+    const range = document.createRange();
+    const over = () => {
+      range.selectNodeContents(el);
+      return range.getBoundingClientRect().width > el.getBoundingClientRect().width + 0.25;
+    };
     const fit = () => {
       el.dataset.fit = '0';
-      for (let i = 1; i <= 2 && el.scrollWidth > el.clientWidth + 1; i++)
-        el.dataset.fit = String(i);
+      for (let i = 1; i <= 2 && over(); i++) el.dataset.fit = String(i);
     };
     fit();
     const ro = new ResizeObserver(fit);

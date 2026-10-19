@@ -129,8 +129,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Out of coins — earn some in the mine',
   recent: 'Recent',
-  statSpins: 'spins',
-  statBestWin: 'best win',
+  statSpins: 'Spins',
+  statTurns: 'Spins',
+  statBestWin: 'Best win',
   pay: {
     more: 'Details',
     cascShort: 'Winners vanish, new symbols fall — the multiplier grows',

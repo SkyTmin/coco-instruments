@@ -134,8 +134,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Plus de pièces — va en gagner à la mine',
   recent: 'Récents',
-  statSpins: 'tours',
-  statBestWin: 'meilleur gain',
+  statSpins: 'Tours',
+  statTurns: 'Tours',
+  statBestWin: 'Meilleur gain',
   pay: {
     more: 'Détails',
     cascShort: 'Les gagnants disparaissent, d’autres tombent — le multiplicateur monte',
