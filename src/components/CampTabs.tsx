@@ -425,7 +425,13 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     if (fuse) {
       fuse.classList.remove('is-tight', 'is-bare');
       const name = fuse.querySelector<HTMLElement>(':scope.is-fuse > b');
-      const cut = () => !!name && name.scrollWidth > name.clientWidth + 1;
+      // the text's own box, not scrollWidth: a 1-px overrun («Jera III», 59.3 in 58.1) rounds away
+      const cut = () => {
+        if (!name) return false;
+        const rg = document.createRange();
+        rg.selectNodeContents(name);
+        return rg.getBoundingClientRect().right > name.getBoundingClientRect().right + 0.5;
+      };
       if (cut()) {
         fuse.classList.add('is-tight');
         if (cut()) fuse.classList.add('is-bare');
@@ -653,7 +659,7 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
                 {/* A worn rune's % is in the bonus box below and an empty socket has its gold «+»
                     (the name is its aria-label) — no caption; a locked socket says its condition
                     on a cream plate (R53: no text straight on the stone, critic14 #4). */}
-                <span className={`ctab-sock__cap${locked ? ' is-lock' : ''}`}>
+                <span className={`ctab-sock__cap${!r && locked ? ' is-lock' : ''}`}>
                   {!r && locked ? lockText(i) : ''}
                 </span>
               </div>
