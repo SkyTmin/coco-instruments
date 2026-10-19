@@ -720,9 +720,10 @@ html[data-ff='tablet']
 .ctab-runes.ctab--short .ctab-insp__body {
   flex: 1 1 auto;
 }
-/* a 4u frame margin: fr «d’enchantement» is 135 px, the 5u panel gave 134 */
+/* a 3.5u frame margin: fr «d’enchantement» is 135 px, the 5u panel gave 134; 4u left the stacked
+   name / effect / note / three buttons 0.8 px over the panel at 320×568 (the tab ran 5 px over) */
 .ctab-runes.ctab--short > .ctab-insp {
-  --pad: 4;
+  --pad: 3.5;
 }
 /* The note names the action and its condition in two lines (short keys `fuse*Short`); the room
    comes from a thinner stage frame, tighter bonus rows and 1u gaps. */
