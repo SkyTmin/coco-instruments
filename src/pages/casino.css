@@ -228,7 +228,11 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
     'hist hist';
   column-gap: calc(6 * var(--u));
 }
-[data-lay='tall']:not(.cas--scatter) > .cas-info > .cas-stat--sp {
+/* Phones only: tablet portrait lists the facts one per line ('sp' row below) and keeps it. */
+html[data-ff='phone-portrait']
+  .cas[data-lay='tall']:not(.cas--scatter)
+  > .cas-info
+  > .cas-stat--sp {
   display: none;
 }
 .cas-info > .cas-lvl {
