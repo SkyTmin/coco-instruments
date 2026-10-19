@@ -332,7 +332,7 @@ export function PrisonCamp({
   onSpend: () => void;
 }) {
   const t = useT();
-  const { ff } = useFormFactor();
+  const { ff, landscape } = useFormFactor();
   const p = useFinanceStore((s) => s.prison);
   const f = useFinanceStore((s) => s.forest);
   const now = useNow(1000);
@@ -352,7 +352,9 @@ export function PrisonCamp({
   // window's ribbon names the open tab; landscape/tablet/desktop: a rail of icon + word on the
   // left and the camp's own title on the ribbon. Tab / Shift+Tab, LB / RB switch tabs.
   const multi = tabs.length > 1;
-  const compact = ff === 'phone-portrait' || ff === 'phone-landscape';
+  // tablet portrait's top strip too: five icon + word tabs cut «Колл…», «Дост…» in 754 px
+  const compact =
+    ff === 'phone-portrait' || ff === 'phone-landscape' || (ff === 'tablet' && !landscape);
   const items: TabItem<CampTab>[] = tabs.map((id) => ({
     id,
     label: t(`camp.tab.${id}`),
@@ -370,7 +372,8 @@ export function PrisonCamp({
           <Tabs
             items={items}
             value={tab}
-            vertical={ff !== 'phone-portrait'}
+            // tablet portrait: a top strip too — the rail took 79u of a 265u-wide window
+            vertical={ff !== 'phone-portrait' && !(ff === 'tablet' && !landscape)}
             main
             className="gx-camp__tabs"
             onChange={(id) => {

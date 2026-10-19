@@ -4,6 +4,20 @@
    text have FIXED heights from the type scale, so picking another rune / skill / find never
    moves a box. The camp body (gx-px.css) gives kit content a well and no zoom. */
 
+/* Tablet portrait: the camp's tabs are a top strip (PrisonCamp `vertical`; the rail took 79u of
+   the 265u-wide window), so the box stacks strip and body like phone portrait instead of the
+   rail grid gx-px.css gives every non-phone-portrait window. The window's size is untouched. */
+html[data-ff='tablet']
+  .gx-win__box.gx-camp.has-tabs:not(:has(> .gx-win__tabs [aria-orientation='vertical'])) {
+  display: flex;
+}
+html[data-ff='tablet']
+  .gx-win__box.gx-camp.has-tabs:not(:has(> .gx-win__tabs [aria-orientation='vertical']))
+  > .gx-win__tabs {
+  margin: 0 0 calc(2 * var(--u));
+  overflow: visible;
+}
+
 .ctab {
   --gap: calc(4 * var(--u));
   /* chip background: a shade of the surface it sits on */
