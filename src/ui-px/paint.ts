@@ -1422,6 +1422,27 @@ function art(rows: string[], pal: Record<string, RGBA>): Pix {
   return p;
 }
 
+// wave 5 — M5: «hardness» 7 × 7 — a grey crystal (the hardest thing a pick meets), lit from the
+// upper left: glint `w`, light facet `l`, ridge `m`, shadow facet `d`. It replaces «⛏N» set in a
+// system glyph (Rubik has no U+26CF: Chromium fell back to a thin smooth font, iOS to an emoji)
+// and is not a pick, so it never reads as the pick-power / blocks-mined icons beside it.
+// prettier-ignore
+const HARD_ART = [
+  '...K...',
+  '..KwK..',
+  '.KwlmK.',
+  'KwllmdK',
+  'KllmddK',
+  '.KlmdK.',
+  '..KKK..',
+];
+const HARD_PAL: Record<string, RGBA> = {
+  w: hex('#f4f8fc'),
+  l: hex('#b6c2cf'),
+  m: hex('#7f8b99'),
+  d: hex('#4e5865'),
+};
+
 const DOCK_PAL: Record<string, RGBA> = {
   // books: blue cover, red cover, pages
   A: hex('#9cc8f0'),
@@ -1693,6 +1714,8 @@ export const PIECES: Piece[] = [
   ...Object.entries(DOCK_ART).map(
     ([n, rows]): Piece => ({ name: `m-dock-${n}`, kind: 'img', draw: () => art(rows, DOCK_PAL) }),
   ),
+  // wave 5 — M5: hardness of a rock (floors sheet, the «pick too weak» pop-up), not a glyph
+  { name: 'm-hard', kind: 'img', draw: () => art(HARD_ART, HARD_PAL) },
 ];
 
 const same = (a: RGBA, b: RGBA) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];

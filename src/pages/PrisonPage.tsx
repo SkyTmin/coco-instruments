@@ -379,14 +379,25 @@ function RewardChip({ r, size }: { r: GuideReward; size: number }) {
   );
 }
 
-function RankChips({ need }: { need: RankNeeds }) {
+function RankChips({ need, needPick, u }: { need: RankNeeds; needPick: number; u: number }) {
   const workOk = need.work >= need.workNeed;
+  // Кирка, которую просит ранг, — пиксельной картинкой (та же, что в листе ранга) и сила
+  // рядом. Было «⛏12» системным символом: в Rubik его нет, Chromium брал запасной шрифт с
+  // тонкими сглаженными линиями, iOS — цветной эмодзи (критик r4). Наковальня (розовая
+  // #ffb4a0 на пергаменте) ушла ещё в круге 4.
+  const pickTip = need.pickOk
+    ? ''
+    : t('mineHud.norm.pick', {
+        power: need.power,
+        name: needPick >= 0 ? nameIn(pickName(needPick)) : '',
+      });
   return (
     <span className="pquota">
       {!need.pickOk && (
-        // Только «⛏12» — та же запись силы, что в полосе серии. Наковальня была розовой
-        // (#ffb4a0 из game-ui.css) на пергаменте — почти не видна — и съедала 20–30 px строки.
-        <span className="pquota__chip is-pick">⛏{need.power}</span>
+        <span className="pquota__chip is-pick" role="img" data-tip={pickTip} aria-label={pickTip}>
+          <PickIcon pick={needPick} size={8 * u} />
+          <span aria-hidden="true">{need.power}</span>
+        </span>
       )}
       {need.workNeed > 0 && (
         <span className={`pquota__chip is-work${workOk ? ' is-done' : ''}`}>
@@ -1107,9 +1118,10 @@ export function PrisonPage() {
     say(t('mineHud.say.riskLost', { sum: fmtShort(stake) }));
   };
 
-  /** Звон о руду твёрже кирки: подсказка, какая кирка её берёт. */
+  /** Звон о руду твёрже кирки: подсказка, какая кирка её берёт. Значок твёрдости (`m-hard`)
+   *  ставит CSS (`.mn .pfloat--hard::before`) — надпись пишется через textContent. */
   const onHardOre = (c: number, power: number) => {
-    floatText(c, `⛏${power}`, 'pfloat--hard');
+    floatText(c, String(power), 'pfloat--hard');
     const now = Date.now();
     if (now - hardSayAt.current < 6000) return;
     hardSayAt.current = now;
@@ -2100,7 +2112,7 @@ export function PrisonPage() {
         />
         {!atTop && !rankReady && <RankBlocks need={need} floor={rank} />}
         <span className="mn-rank__needs">
-          {!atTop && !rankReady && <RankChips need={need} />}
+          {!atTop && !rankReady && <RankChips need={need} needPick={needPick} u={u} />}
           {/* Широкий: «Новый ранг — жми!» строкой во всю ширину — в полосе между буквами
               она ломалась на три строки. */}
           {rankOk && (
@@ -2807,7 +2819,8 @@ export function PrisonPage() {
                       <b>
                         {rockName(id)}{' '}
                         <em className={`mn-mines__hard${canMine(pick, id) ? '' : ' is-no'}`}>
-                          ⛏{rockHardness(id)}
+                          <i className="mn-pic mn-pic--hard" aria-hidden="true" />
+                          {rockHardness(id)}
                         </em>
                       </b>
                       <span className="mn-mines__price">

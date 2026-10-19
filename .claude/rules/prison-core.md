@@ -537,3 +537,30 @@ Field drawing, mining, timings, critters and their animations are untouched.
   - Not fixed (outside M4): finding 4 (sheet host) is the lead's; 667×375 and 1280×720 /
     1366×768 with the quest overflow the left column (pre-existing, `{SCR}/ui6M/side.mjs`);
     keys chip at 99,9 млн overflows on tl/d1/pl tr (unrealistic count).
+- **Round 5 (M5, critic r4 findings 1–3; scripts `{SCR}/ui7M/`: `deskfit.mjs`, `m3.mjs`,
+  `row9b.mjs`, `needs2.mjs`, `sellfit.mjs`, `coins.mjs`, `f3shot.mjs`).**
+  - Bag column (`useSideFit`, bottom of `PrisonPage.tsx`, every wide layout): the bag sits at the
+    bottom of the left column while the column fits, else at the top of the right one over the
+    dock. The hook sums the left column's children + the bag WHEREVER it stands (no flip-flop),
+    ResizeObserver on both columns' children + MutationObserver for moves. A column that still
+    overflows gets `data-more` → a 2u stepped shade at its bottom edge (sticky `::after`); none of
+    the measured windows shows it. Right dock `min-height: 0` (the flex item's auto minimum kept
+    the rows at 36u: 1366×657 right column overflowed 60 px).
+  - Wide quest = one height on every step: title row 2.2 × `--px-fs-sm` (always two lines), end
+    row 15u, padding 2u, no progress bar (the «N/M» count is in the card). It changed 96 → 135 px
+    between steps (1280×720 de) and would move the bag on some steps only. No «Расходники»
+    heading on any wide layout while the quest shows.
+  - Phone landscape ≤ 400 px high (`mn--short`: 667×375, 844×390): `itemsCol` → the items are a
+    21u column at the frame's LEFT edge (field `padding-left` 23u only; `useFieldCell` subtracts
+    the slot padding on wide too), six items one column; dock one column of 6 rows (icon left,
+    17-px label, rows ≥ 21u, `::before` ±1 px → hit 44); side gaps 1u, HUD row gap 1u, bag
+    padding 3u/2u, sell padding 2u; quest end row spans the card under the hex (ready «Забрать»
+    was 18 px out of the 177-px column); squad `bottom: cell/2 − 18u` (3 pets covered 5 / 3
+    bottom-row centres). Cell 667×375 35 → 32, 844×390 37 → 37. Without the quest the bag fits
+    the left column there too (dock rows 58 / 61 px), with it the bag is on the right (43 / 46).
+  - Sell sum = `chipCount` (≤ 5 chars, «244к», «10,5м»), not `fmtShort` («244,1 тыс.» was 31 px
+    out of the tl button, de «Verkaufen 244.091» out on every phone).
+  - Rank pick chip = `PickIcon pick={needPick}` 8u + the power (tip / aria `mineHud.norm.pick`);
+    floors sheet and the «too hard» pop-up use the painted 7×7 `m-hard` crystal (`paint.ts`
+    `HARD_ART`, `.mn-pic--hard`, `.mn .pfloat--hard::before`; the pop-up text is just the
+    number). `.mn-rank` has no «⛏». `MineField`'s own cell label `pcell__hard` still uses «⛏».

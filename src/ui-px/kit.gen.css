@@ -178,6 +178,9 @@
   --pximg-m-dock-work: url('/ui/kit/m-dock-work.png?v=547d8497');
   --pximg-m-dock-work-w: 10;
   --pximg-m-dock-work-h: 10;
+  --pximg-m-hard: url('/ui/kit/m-hard.png?v=cd55b9cc');
+  --pximg-m-hard-w: 7;
+  --pximg-m-hard-h: 7;
 }
 
 .pxk-frame-stone {

@@ -1275,7 +1275,9 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
 .mn-rank .pquota__chip.is-pick {
   color: var(--px-ink);
 }
-.mn-rank .pquota__chip img {
+/* `> img` — текстура блоков этажа; картинку кирки (`PickIcon`, img внутри полосы `.pxs`) не
+   трогаем: ей 8u из `size`. */
+.mn-rank .pquota__chip > img {
   width: calc(10 * var(--u));
   height: calc(10 * var(--u));
   image-rendering: pixelated;
@@ -2044,6 +2046,24 @@ html:not([data-ff^='phone']) .mn .mn-bag__sell {
 }
 .mn-mines__hard.is-no {
   color: var(--px-red);
+}
+/* Твёрдость породы — пиксельный кристалл 7×7 (`m-hard`), а не «⛏» системным шрифтом. */
+.mn-pic--hard {
+  --pic: var(--pximg-m-hard);
+  --pic-w: 7;
+  --pic-h: 7;
+  margin-right: var(--u);
+  vertical-align: -0.05em;
+}
+.mn .pfloat--hard::before {
+  content: '';
+  display: inline-block;
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  margin-right: var(--u);
+  vertical-align: -0.1em;
+  background: var(--pximg-m-hard) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
 }
 .mn-mines__price {
   font-size: var(--px-fs-sm);
