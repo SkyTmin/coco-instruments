@@ -40,7 +40,8 @@ export const ctabs = {
     prestige: 'престиж {n}',
     per: 'за уровень',
     now: 'Сейчас',
-    next: 'Дальше',
+    /** One line of the skill panel: the value now → after «Learn». */
+    step: 'Сейчас {now} → {next}',
     learn: 'Изучить',
     noPoints: 'Нет свободных очков — их дают престижи',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */

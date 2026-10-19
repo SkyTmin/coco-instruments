@@ -42,7 +42,8 @@ export const ctabs: Translation<typeof ru> = {
     prestige: 'prestij {n}',
     per: 'seviye başına',
     now: 'Şimdi',
-    next: 'Sonra',
+    /** One line of the skill panel: the value now → after «Learn». */
+    step: 'Şimdi {now} → {next}',
     learn: 'Öğren',
     noPoints: 'Boş puan yok — prestij verir',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */

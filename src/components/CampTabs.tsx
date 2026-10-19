@@ -980,6 +980,12 @@ function perkAt(id: PerkId, n: number): string | null {
   return /\d/.test(s) ? s.replace(/\d+/, (d) => fmtNum(Number(d) * n)) : null;
 }
 
+/** The bare value of a skill text: «+6%», fr «+8 %», tr «+%6» (the noun stays in the line above). */
+function perkVal(text: string | null): string | null {
+  const m = text?.match(/[+\u2212-]?\s?%?\s?\d[\d\s.,]*(?:\s?%)?/);
+  return m ? m[0].trim() : null;
+}
+
 export function PerksTab() {
   const t = useT();
   // A short phone takes the tablet-portrait skills (one-line values, smaller nodes) — the tree
@@ -1001,6 +1007,7 @@ export function PerksTab() {
   // Short phone: the nodes are one sideways strip; a › at its right end while more skills lie
   // beyond (a strip that ends on a whole node gave no hint of the other three).
   const strip = useRef<HTMLDivElement>(null);
+  const lastLearn = useRef(0);
   const [more, setMore] = useState(false);
   const fitStrip = useCallback(() => {
     const el = strip.current;
@@ -1028,6 +1035,10 @@ export function PerksTab() {
   }, [armed]);
 
   const learn = () => {
+    // a double tap is one level, not two (300 ms; real fast taps still count)
+    const at = performance.now();
+    if (at - lastLearn.current < 300) return;
+    lastLearn.current = at;
     setArmed(false);
     if (locked) {
       notifyWarning();
@@ -1079,8 +1090,15 @@ export function PerksTab() {
 
   const nodeSlot = lay === 'tall' ? 24 : 30;
   const line = armed ? t('ctabs.perks.resetArm') : note;
-  const now = perkAt(k.id, lv);
-  const next = perkAt(k.id, lv + 1);
+  const now = perkVal(perkAt(k.id, lv));
+  const next = perkVal(perkAt(k.id, lv + 1));
+  // One line «Сейчас +6% → +12%» (the rows took 106 px; the effect's noun is the line above).
+  const step = max
+    ? `${t('ctabs.perks.now')} ${now ?? `${lv}/${k.max}`}`
+    : t('ctabs.perks.step', {
+        now: lv ? (now ?? `${lv}/${k.max}`) : '—',
+        next: next ?? `${lv + 1}/${k.max}`,
+      });
 
   return (
     <div ref={root} className={`px ctab ctab-perks ctab--${lay}${short ? ' ctab--short' : ''}`}>
@@ -1140,6 +1158,7 @@ export function PerksTab() {
                     rarity={l >= x.max ? 4 : l > 0 ? 2 : 0}
                     selected={x.id === sel}
                     locked={locked}
+                    count={`${l}/${x.max}`}
                     aria-label={`${perkName(x.id)} ${l}/${x.max}`}
                     onFocus={() => kbd() && pick(x.id)}
                     onClick={() => pick(x.id)}
@@ -1150,11 +1169,6 @@ export function PerksTab() {
                     />
                   </Slot>
                   <span className="ctab-node__name">{perkName(x.id)}</span>
-                  <span className="ctab-pips" aria-hidden="true">
-                    {Array.from({ length: x.max }, (_, i) => (
-                      <i key={i} className={i < l ? 'is-on' : undefined} />
-                    ))}
-                  </span>
                 </div>
               );
             })}
@@ -1163,6 +1177,9 @@ export function PerksTab() {
       </Panel>
       <Panel material="obsidian" className="ctab-insp ctab-insp--perk" aria-live="polite">
         <div className="ctab-insp__top">
+          <span className="ctab-insp__art ctab-perk-art" aria-hidden="true">
+            <GxIcon name={PERK_ICON[k.id]} style={{ color: PERK_TONE[k.id] } as CSSProperties} />
+          </span>
           <span className="ctab-insp__head">
             <span className="ctab-insp__name is-plain">
               {perkName(k.id)}{' '}
@@ -1175,14 +1192,7 @@ export function PerksTab() {
             </span>
           </span>
         </div>
-        <div className="ctab-insp__rows">
-          <span className="ctab-insp__k">{t('ctabs.perks.now')}</span>
-          <span className="ctab-insp__v">{lv ? (now ?? `${lv}/${k.max}`) : '—'}</span>
-          <span className="ctab-insp__k">{t('ctabs.perks.next')}</span>
-          <span className="ctab-insp__v is-next">
-            {max ? t('camp.maxDone') : (next ?? `${lv + 1}/${k.max}`)}
-          </span>
-        </div>
+        <div className="px-num ctab-insp__step">{step}</div>
         <div className={`ctab-insp__line${line ? ' is-note' : ''}`}>{line ?? ''}</div>
         <div className="ctab-insp__acts">
           {max ? (

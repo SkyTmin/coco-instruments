@@ -42,7 +42,8 @@ export const ctabs: Translation<typeof ru> = {
     prestige: 'prestige {n}',
     per: 'per level',
     now: 'Now',
-    next: 'Next',
+    /** One line of the skill panel: the value now → after «Learn». */
+    step: 'Now {now} → {next}',
     learn: 'Learn',
     noPoints: 'No free points — prestige gives them',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */

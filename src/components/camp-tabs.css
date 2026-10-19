@@ -1103,7 +1103,8 @@
 .ctab-points__n {
   min-width: 2ch;
   text-align: center;
-  font-size: var(--px-fs-hero);
+  /* 23 px on a phone: the kit's digits at a whole size, not the 30-px hero */
+  font-size: calc(var(--px-fs) * 1.15);
   line-height: 1.1;
   color: var(--px-dim);
 }
@@ -1140,7 +1141,8 @@
   justify-content: space-evenly;
   align-content: flex-start;
   gap: calc(4 * var(--u)) calc(2 * var(--u));
-  padding: calc(2 * var(--u));
+  /* 3u on top: the selection corners stick out of the slot and the scroller clips them */
+  padding: calc(3 * var(--u)) calc(2 * var(--u)) calc(2 * var(--u));
 }
 .ctab-node {
   flex: 0 0 auto;
@@ -1163,20 +1165,6 @@
   text-align: center;
   white-space: nowrap;
   background: rgb(255 246 224 / 0.82);
-}
-.ctab-pips {
-  display: flex;
-  gap: var(--u);
-}
-.ctab-pips > i {
-  width: calc(4 * var(--u));
-  height: calc(4 * var(--u));
-  background: #c9a56d;
-  border: var(--u) solid var(--px-ink);
-}
-.ctab-pips > i.is-on {
-  background: #ffd25e;
-  box-shadow: inset var(--u) var(--u) 0 #fff3c4;
 }
 /* Reset is secondary and free: a small ↶ button at the plate's right end (critic5 P0 — in the
    action row it fell out of the 844×390 window). Armed (first tap) it turns red. */
@@ -1231,37 +1219,49 @@
   height: var(--ln-sm);
   -webkit-line-clamp: 1;
 }
-/* French «+8 % de vitesse de pioche» does not fit one line beside «Suivant» — the effect and the
-   now / next values keep two lines each, for every skill (the panel never changes height).
-   Tablet portrait is too short for that, and its full-width panel fits one line. */
-.ctab:not(.ctab--tall) .ctab-insp--perk :is(.ctab-insp__sub, .ctab-insp__v) {
+/* French «+8 % de vitesse de pioche · par niveau» takes two lines: the effect keeps two lines
+   for every skill (the panel never changes height). Tablet portrait / short phone: one line. */
+.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__sub {
+  height: calc(var(--ln-sm) * 2);
   white-space: normal;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__sub {
-  height: calc(var(--ln-sm) * 2);
+/* «Сейчас +6% → +12%»: the bare values in one line (the noun is the effect above). */
+.ctab-insp__step {
+  height: calc(var(--px-fs) * 1.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 var(--px-fs) / 1.3 var(--px-font);
+  color: var(--px-green);
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__rows {
-  align-items: start;
+/* The skill's own picture, 2× its node icon's art pixels, on a cream tile. */
+.ctab-perk-art {
+  width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
+  background: #fff6e0;
+  box-shadow: 0 0 0 var(--u) var(--px-ink);
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__v {
-  height: calc(var(--px-fs) * 1.3 * 2);
+.ctab-perk-art > .gx-icon {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__k {
-  padding-top: calc((var(--px-fs) - var(--px-fs-sm)) * 0.65);
+.ctab--tall .ctab-perk-art {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
 }
-/* The note line must show (the reset's «tap again» lives there): phone landscape's panel had no
-   height left for it — the per-level effect goes (the now / next values say it) and the rows sit
-   1u apart (the panel is 223 px inside, the rows need 229 with 2u). A short phone drops the
-   per-level effect too and gives the note a second line (German / French prompts). */
-.ctab.ctab--land .ctab-insp--perk .ctab-insp__sub,
+.ctab--tall .ctab-perk-art > .gx-icon {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+}
 .ctab.ctab--short .ctab-insp--perk .ctab-insp__sub {
-  display: none;
-}
-.ctab--land .ctab-insp--perk {
-  gap: var(--u);
+  height: calc(var(--ln-sm) * 2);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .ctab--short .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
