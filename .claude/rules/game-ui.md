@@ -285,6 +285,9 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
     18, p430 273 → 18, tp 149 → 27.
   - **Achievements** use the compact row on every format; `land` / `tall` / `wide` lay rows in
     two columns; a ready row on tall / wide puts the claim beside two chip lines (bar hidden).
+    Rows (7 languages): p320 81–104 px (3 visible), pp 68–94 (6), pl 81–94 (4), tp 94–99 (8; fr /
+    tr / it one grid row 125 — a 2-line title beside), tl / d1 87–99 (10; were 103–256, 4); a
+    claim moves no row.
   - **Amulet bonus = what the runes really add**: `bonusOf(p) − bonusOf(no runes)` per kind,
     sell as the ratio of `modsOf().sell` with / without runes (the +100% sell cap); a chip below
     its rune sum gets a red `excl` and the reason (`ctabs.runes.capTip` / `capSellTip`). Phone
@@ -295,7 +298,10 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
     `min-width` of the final value; reduced motion jumps), shatter token 24 px.
   - Checks (`scratchpad/ui6T`): `sweep.mjs fmts langs [tabs]`, `strip2.mjs`, `milesw2.mjs`,
     `capshot.mjs` (runes over the sell cap), `purse.mjs`, `cutprobe.mjs fmt lang text`,
-    `shots.mjs` + `sheet.py`, `blank.mjs`, `press.mjs`.
+    `shots.mjs` + `sheet.py`, `blank.mjs`, `press.mjs` (pp at 4× CPU: first changed frame 20–31
+    ms on every control). `allfmt.mjs` flags `TAB-OVF 4` on p320 runes and `OFF-X 3` on
+    the short-phone skills: the first is the bottom button's invisible focus ring (`inset −3u`)
+    past the tab, the second the strip's other pages — neither scrolls or shows.
 - **Pitfalls:**
   - The kit `Grid` prop `slot` clashes with the HTML `slot` attribute type: pass
     `style={{ '--slot': … }}` instead.
