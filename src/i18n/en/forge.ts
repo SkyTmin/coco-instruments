@@ -34,6 +34,7 @@ export const forge: Translation<typeof ru> = {
   noEnch: 'No enchantments yet',
   forgedOn: 'Forged on floor {rank}',
   takesShort: 'Breaks',
+  enchShort: 'Enchants',
   picks: 'Pickaxes',
   equip: 'Take in hand',
   inHandBtn: 'In hand',

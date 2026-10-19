@@ -173,9 +173,10 @@ export interface SocketInk {
 /** A round enchant socket, 20×20: ink rim, bevelled ring (dark on top = sunken), well, + or a gem. */
 export function socket(c: SocketInk, d = 20): string {
   const mid = d / 2;
+  const a = Math.max(2, Math.round(d / 5)); // the plus arm: 4 on the 20-px socket, 2 on 12
   const plus = (x: number, y: number) =>
-    (x >= mid - 1 && x <= mid && y >= mid - 4 && y < mid + 4) ||
-    (y >= mid - 1 && y <= mid && x >= mid - 4 && x < mid + 4);
+    (x >= mid - 1 && x <= mid && y >= mid - a && y < mid + a) ||
+    (y >= mid - 1 && y <= mid && x >= mid - a && x < mid + a);
   const gem = c.gem ? gemGrid(c.gem, c.ink) : null;
   const g0 = Math.round(mid - 4);
   return svgUrl(

@@ -34,6 +34,7 @@ export const forge: Translation<typeof ru> = {
   noEnch: 'Noch keine Verzauberung',
   forgedOn: 'Wird auf Ebene {rank} geschmiedet',
   takesShort: 'Schafft',
+  enchShort: 'Zauber',
   picks: 'Spitzhacken',
   equip: 'In die Hand',
   inHandBtn: 'In der Hand',
@@ -52,8 +53,8 @@ export const forge: Translation<typeof ru> = {
   collCount: '{n} von {all}',
   allTile: 'Alle',
   allPicks: {
-    one: '{n} Spitzhacke',
-    other: '{n} Spitzhacken',
+    one: '{n} Stück',
+    other: '{n} Stück',
   },
   allTitle: 'Alle Spitzhacken',
   recipeShort: 'Rezept',

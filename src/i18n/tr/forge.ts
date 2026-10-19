@@ -34,6 +34,7 @@ export const forge: Translation<typeof ru> = {
   noEnch: 'Henüz büyü yok',
   forgedOn: '{rank} katında dövülür',
   takesShort: 'Kırar',
+  enchShort: 'Büyüler',
   picks: 'Kazmalar',
   equip: 'Ele al',
   inHandBtn: 'Elde',

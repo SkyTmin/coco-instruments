@@ -18,7 +18,14 @@ import { CoinIcon } from '@/components/slot-art';
 import { OreIcon, TokenIcon } from '@/components/PrisonCamp';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
-import { PICK_ART, PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
+import {
+  PICK_ART,
+  PickArt,
+  PickPx,
+  RarityChip,
+  RarityName,
+  rarityVars,
+} from '@/components/PickArt';
 import { preloadPx, pxFitOf, PxStrip } from '@/components/PxStrip';
 import {
   fromKeys,
@@ -443,7 +450,14 @@ export function ForgeScreen({
   const lvPips = lvl.need ? Math.floor((10 * lvl.into) / lvl.need) : 10;
   const stats = (
     <div className="frg-stats">
-      {tile('power', 'pick', d.power, t('forge.power'), null, st === 'hand' ? 0 : d.power - cur.power)}
+      {tile(
+        'power',
+        'pick',
+        d.power,
+        t('forge.power'),
+        null,
+        st === 'hand' ? 0 : d.power - cur.power,
+      )}
       {tile(
         'speed',
         'stopwatch',
@@ -502,20 +516,28 @@ export function ForgeScreen({
         : t('forge.enchEmpty1')
       : onPick.map((e) => `${enchantName(e.id)} ${ROMAN[p.ench[e.id] - 1]}`).join(', ');
   const ench = (
-    <div className={`frg-line frg-ench${slots > 2 ? ' is-many' : ''}`}>
-      <i className="frg-line__k">{t('forge.enchants')}</i>
-      <span className="frg-socks">
-        {Array.from({ length: slots }, (_, k) => {
-          const e = onPick[k];
-          return (
-            <PxdSocket
-              key={k}
-              gem={e ? (p.off.includes(e.id) ? ENCH_OFF : (ENCH_GEM[e.id] ?? ENCH_OFF)) : undefined}
-            />
-          );
-        })}
+    <div
+      className={`frg-line frg-ench${slots > 2 ? ' is-many' : ''}${slots > 4 ? ' is-lots' : ''}`}
+      title={onPick.length > 0 ? enchText : undefined}
+    >
+      <i className="frg-line__k">{t('forge.enchShort')}</i>
+      <span className="frg-line__v frg-ench__v">
+        <span className="frg-socks" role="img" aria-label={enchText}>
+          {Array.from({ length: slots }, (_, k) => {
+            const e = onPick[k];
+            return (
+              <PxdSocket
+                key={k}
+                d={slots > 4 ? 12 : slots > 2 ? 14 : 20}
+                gem={
+                  e ? (p.off.includes(e.id) ? ENCH_OFF : (ENCH_GEM[e.id] ?? ENCH_OFF)) : undefined
+                }
+              />
+            );
+          })}
+        </span>
+        <small className="frg-ench__txt">{enchText}</small>
       </span>
-      <small className="frg-ench__txt">{enchText}</small>
       <PxdButton
         className={`frg-round${onBooks ? '' : ' is-hidden'}`}
         aria-label={t('forge.toBooks')}
@@ -532,7 +554,8 @@ export function ForgeScreen({
   // ---- Collection: four picks around the selected one + «all 17» ----------------------------
   const rowRef = useRef<HTMLDivElement>(null);
   const row = useBox(rowRef);
-  const cellArt = fitPick((row.w - 4 * 4 * u) / 5 - 8 * u);
+  // the icon's box has a transparent margin: it may reach over the cell's 2-px ring
+  const cellArt = fitPick((row.w - 4 * 4 * u) / 5 - 2 * u);
   const fullArt = fitPick(24 * u);
   const cell = (i: number, size: number, after?: () => void) => {
     const s = statusOf(i);
@@ -572,6 +595,8 @@ export function ForgeScreen({
     );
   };
   const forged = p.pickMax + 1;
+  // «17 кирок»: a narrow cell keeps only the number (every language puts it first)
+  const [allNum, ...allWord] = t('forge.allPicks', { n: PICKS.length }).split(' ');
   const collHead = (
     <div className="frg-coll__h">
       <h3>{t('forge.collection')}</h3>
@@ -592,7 +617,10 @@ export function ForgeScreen({
             }}
           >
             <b>{t('forge.allTile')}</b>
-            <small>{t('forge.allPicks', { n: PICKS.length })}</small>
+            <small>
+              {allNum}
+              <span className="frg-all__w"> {allWord.join(' ')}</span>
+            </small>
           </PxdButton>
         </div>
       </section>
@@ -636,7 +664,8 @@ export function ForgeScreen({
                 {coins > 0 && <CoinIcon size={u * 8} />}
               </>
             ) : (
-              why || (lockedByPrestige ? t('forge.cta.prestige', { n: lockedByPrestige.prestige }) : '')
+              why ||
+              (lockedByPrestige ? t('forge.cta.prestige', { n: lockedByPrestige.prestige }) : '')
             )}
           </small>
         </span>
@@ -653,7 +682,11 @@ export function ForgeScreen({
         key={o.rock}
         frame={ok ? 'sel' : 'panel'}
         className={`frg-bt${ok ? ' is-ok' : ''}`}
-        aria-label={t('forge.ore', { rock: rockName(o.rock), have: String(have), need: String(o.need) })}
+        aria-label={t('forge.ore', {
+          rock: rockName(o.rock),
+          have: String(have),
+          need: String(o.need),
+        })}
         onClick={() => oreTap(o.rock, o.need, o.box, o.bag)}
       >
         <PxdGem color={oreGem(o.rock)} className="frg-bt__gem" />
@@ -701,7 +734,9 @@ export function ForgeScreen({
             {ores.map(oreTile)}
           </div>
           <div className="frg-recipe__row">
-            <span className={`frg-coins pxd-chip pxd-f pxd-f--well${balance < coins ? ' is-short' : ''}`}>
+            <span
+              className={`frg-coins pxd-chip pxd-f pxd-f--well${balance < coins ? ' is-short' : ''}`}
+            >
               <CoinIcon size={u * 8} />
               {coins > 0 ? fmt(coins) : t('forge.paidShort')}
             </span>

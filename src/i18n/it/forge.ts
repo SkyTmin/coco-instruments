@@ -34,6 +34,7 @@ export const forge: Translation<typeof ru> = {
   noEnch: 'Ancora nessun incantesimo',
   forgedOn: 'Si forgia al piano {rank}',
   takesShort: 'Rompe',
+  enchShort: 'Incanti',
   picks: 'Picconi',
   equip: 'Prendi in mano',
   inHandBtn: 'In mano',

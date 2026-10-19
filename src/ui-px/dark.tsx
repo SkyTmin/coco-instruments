@@ -151,13 +151,21 @@ function Img({
   );
 }
 
-/** A round enchant socket (20 art px): empty = «+», filled = a gem of `gem` colour. */
-export function PxdSocket({ gem: g, className }: { gem?: string; className?: string }) {
+/** A round enchant socket (`d` art px, 20 by default): empty = «+», filled = a gem of `gem` colour. */
+export function PxdSocket({
+  gem: g,
+  d = 20,
+  className,
+}: {
+  gem?: string;
+  d?: number;
+  className?: string;
+}) {
   const v = pxdTokens();
-  const url = pic(`sock:${g ?? ''}`, () =>
-    socket({ ink: v.ink, hi: v.hi, lo: v.lo, well: v.well, mark: v.muted, gem: g }),
+  const url = pic(`sock:${d}:${g ?? ''}`, () =>
+    socket({ ink: v.ink, hi: v.hi, lo: v.lo, well: v.well, mark: v.muted, gem: g }, d),
   );
-  return <Img url={url} w={20} h={20} className={cx('pxd-socket', className)} />;
+  return <Img url={url} w={d} h={d} className={cx('pxd-socket', className)} />;
 }
 
 /** An 8×8 cut gem of an ore / enchant colour. */

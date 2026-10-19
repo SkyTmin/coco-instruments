@@ -34,6 +34,7 @@ export const forge = {
   noEnch: 'Чар пока нет',
   forgedOn: 'Куётся на этаже {rank}',
   takesShort: 'Берёт',
+  enchShort: 'Чары',
   picks: 'Кирки',
   equip: 'Взять в руку',
   inHandBtn: 'В руке',
