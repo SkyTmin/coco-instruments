@@ -198,6 +198,17 @@
     0 var(--u) 0 var(--pd-ink),
     0 calc(-1 * var(--u)) 0 var(--pd-ink);
 }
+/* A rarity name outside a ribbon (a card, an offer, a list row): the same `--rc` colour and the
+   same one-art-pixel ink outline — never a rarity colour as plain text on a panel. Size and
+   font come from the parent. */
+.pxd-rname {
+  color: var(--rc, var(--pd-text));
+  text-shadow:
+    var(--u) 0 0 var(--pd-ink),
+    calc(-1 * var(--u)) 0 0 var(--pd-ink),
+    0 var(--u) 0 var(--pd-ink),
+    0 calc(-1 * var(--u)) 0 var(--pd-ink);
+}
 
 /* ---- Pips: N small squares on an ink strip, progress without a long bar -------------------- */
 .pxd-pips {

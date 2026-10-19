@@ -25,6 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { GameTop, GxBar, GxHud, GxIcon, GxModal } from '@/components/gx';
 import { PrisonCamp, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
+import { BooksTab } from '@/components/BooksTab';
 import { ForgeScreen } from '@/components/ForgeScreen';
 import { Inventory } from '@/components/Inventory';
 import { BarygaSheet, useYardEvent } from '@/components/YardBits';
@@ -213,6 +214,7 @@ function HubWorld() {
   const [talk, setTalk] = useState<Talk | null>(null);
   const [camp, setCamp] = useState<CampOpen | null>(null);
   const [forgeOpen, setForgeOpen] = useState(false);
+  const [booksOpen, setBooksOpen] = useState(false);
   const [baryga, setBaryga] = useState(false);
   const [board, setBoard] = useState(false);
   /** Инвентарь (v2.81): 'yard' — посмотреть, 'bunk' — у койки, с сундуком. */
@@ -395,7 +397,9 @@ function HubWorld() {
           setForgeOpen(true);
           return;
         case 'camp':
-          setCamp({ tabs: a.tabs, title: a.title, tab: a.tabs[0] });
+          // the books are their own dark window (like the forge), not a tab of the light camp
+          if (a.tabs.length === 1 && a.tabs[0] === 'enchant') setBooksOpen(true);
+          else setCamp({ tabs: a.tabs, title: a.title, tab: a.tabs[0] });
           return;
         case 'baryga':
           setBaryga(true);
@@ -839,6 +843,7 @@ function HubWorld() {
       )}
       {baryga && <BarygaSheet onClose={() => setBaryga(false)} />}
       {forgeOpen && <ForgeScreen onClose={() => setForgeOpen(false)} />}
+      {booksOpen && <BooksTab onClose={() => setBooksOpen(false)} />}
       {inv && <Inventory place={inv} onClose={() => setInv(null)} />}
       {newTerm && (
         <GxModal title={t('yard.term.title')} onClose={dismissNewTerm} className="yard-term">
