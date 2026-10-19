@@ -465,3 +465,35 @@ Field drawing, mining, timings, critters and their animations are untouched.
   - **Stand pitfall:** a Vite started with `watch.ignored: ['**/.claude/**']` ignores EVERY file
     of a worktree under `.claude/worktrees/` — the page silently keeps old CSS/TSX. Ignore by a
     function relative to the root (`{SCR}/ui4M/vite.mjs`) and check the served file with curl.
+- **Round 3′ (M3′, 19.10, verified with `{SCR}/ui5M/m3.mjs <fmts> quest,nums,dock,pace,hit,fit`).**
+  Items 1–4 hold on p320 (320×568@2), pp, p430, 360×740 in ru/de/tr: quest `uniqueFrames 1`; pace
+  inside its column, 8 px (4u) to the bar; one digit size per chip (coins 26 / p320 21.1, tokens
+  20 / p320 17.2), ≥ 16 px; dock labels 17 px, one line. `fit` = no page scroll, no element out of
+  the viewport, no clipped text Range (vertical tolerance 0.3 em — line-height 1 boxes are not
+  clips; sprite strips `.pet`/`pxs__img` are false positives).
+  - 320×568: the field was height-bound at the old min cell 20 and its frame overlapped the
+    items row by 20 px. Now `useFieldCell` min 12; `max-height: 640px` → dock tiles 24u, quest
+    24u. Cell p320 21 (16 with the quest). `max-width: 340px` → strip `--sw` 100vw − 2u, pick
+    column 22u («⛏50»), gaps 3u + pace `margin-left: 1u` (4u to the bar), HUD 1.25fr : 1fr,
+    rank `padding-inline: 2u` («1/5» touched the frame). Pitfall: these media blocks sit ABOVE
+    the base rules — raise specificity (`.mn .mn-frame > .mn-strip`, `.mn-dock .mn-dock__btn`).
+  - Slim frame (`7·cell < 124u`, not wide — p320, 360×740 with the quest): `.mn-field.is-slim`
+    puts the parcels in a column right of the frame (the centred squad covered them; hit 34 → 47).
+  - Phone landscape dock: the column tile (icon over a fixed 17-px label) applies to every phone
+    (`html[data-ff^='phone'] .mn-dock__btn`), height 26u only on tall — tr «Demir-hane» wrapped
+    at 15.1 px in the 123 × 72 tile.
+  - Tablet/desktop strip panel: rows `'name name' 'pick bar' 'pace pace'` (`.mn-strip__streak`
+    `display: contents`), pace row fixed `var(--px-fs-sm)` — tl de «Stollenlegende» (195 px) was
+    clipped to 130. Tablet + quest: no «Расходники» heading, items one row (cqi slots) — the bag
+    and «Продать» were 88 px below the tl column.
+  - `chipCount` from 1e9: the shorter of «999м+» and `shortCount` (tr «1 Mr»); tokens `--res 6.5`.
+  - Item 5 (probe `{SCR}/ui5M/i5.mjs`): floor letter only on another floor, `slot-r0` ink badge;
+    wide floor chip 19u square; `m-dock-inv` ≠ bag; camp «!» opens miles/perks/crew; wide HUD
+    focus order back → floor → ⚙ → tokens → keys = visual. Hit ≥ 44 everywhere (back/⚙ 45 on
+    36-px HUDs via `::before` −4u vertical).
+  - NOT met: windows at 4× (dev, `motion.mjs pp win`, THR=4): forge 298, books 294, chests 228,
+    pets 312, inventory 263, camp 236, floors 182, rank 191, settings 177 ms (targets 250 / 100).
+    Every opener re-renders the whole `PrisonPage` (sheet state lives there) — next step: a
+    sheet host with its own state. Digging at 4× (`motion.mjs pp dig`): 55/296 = 19 % frames
+    > 20 ms (r2 24 %), p95 67, 12 long tasks, worst 150; 1×: 6/415. HUD/strip rects unchanged
+    while digging (pp, tl). The rest is the field engine (`MineField`/`useMineDig`).
