@@ -810,17 +810,6 @@ select {
 .next-pay--tap:active {
   transform: scale(0.99);
 }
-.pay-row--tap {
-  cursor: pointer;
-  border-radius: 12px;
-  margin: 0 -8px;
-  padding-left: 8px;
-  padding-right: 8px;
-  transition: background 0.12s ease;
-}
-.pay-row--tap:active {
-  background: var(--surface-2);
-}
 
 /* Small "belongs to a list" tag on cards */
 .list-tag {
@@ -10959,65 +10948,10 @@ input[type='datetime-local'] {
 }
 
 /* Табло: баланс и текущий джекпот */
-.slot-hud {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.slot-hud__cell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 9px 13px;
-  border-radius: 14px;
-  /* Ламповое табло: тёмное стекло, точечная сетка и светящиеся цифры */
-  border: 1px solid color-mix(in srgb, var(--neon) 32%, transparent);
-  background:
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.25) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, color-mix(in srgb, var(--cab-2) 90%, #000), var(--cab-3));
-  box-shadow:
-    inset 0 2px 8px rgba(0, 0, 0, 0.75),
-    0 6px 16px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-}
-.slot-hud__cell--jackpot {
-  border-color: color-mix(in srgb, var(--neon) 55%, transparent);
-  box-shadow:
-    inset 0 2px 8px rgba(0, 0, 0, 0.75),
-    0 0 18px color-mix(in srgb, var(--neon) 28%, transparent);
-}
-.slot-hud__label {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--neon) 40%, #fff);
-  opacity: 0.7;
-}
-.slot-hud__value {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
-  font-size: 21px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--neon) 45%, #fff8e2);
-  text-shadow: 0 0 10px color-mix(in srgb, var(--neon) 60%, transparent);
-}
 /* Монета — иконка, а не текст: под девятизначным балансом flex сплющивал
    её вдвое, и она превращалась в неопознаваемое пятнышко. */
-.slot-hud__value svg,
 .status__win svg {
   flex: none;
-}
-.slot-hud__value--jackpot {
-  color: var(--neon);
-  text-shadow: 0 0 20px color-mix(in srgb, var(--neon-2) 70%, transparent);
-  will-change: opacity;
-  animation: jackpot-glow 2.4s ease-in-out infinite;
 }
 @keyframes jackpot-glow {
   0%,
@@ -11610,42 +11544,6 @@ input[type='datetime-local'] {
 }
 
 /* ---- Управление --------------------------------------------------------- */
-.slot-bets {
-  /* Семь кнопок (шесть быстрых ставок + «⋯») в две ровные строки */
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-.slot-bet {
-  min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
-  cursor: pointer;
-  padding: 11px 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--cab-1) 70%, #000);
-  color: #fff2e0;
-  font-size: 14px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  transition: transform 0.12s ease;
-}
-.slot-bet:active {
-  transform: scale(0.94);
-}
-.slot-bet.is-active {
-  background: linear-gradient(180deg, var(--btn-1), var(--btn-2));
-  color: #2a1206;
-  border-color: color-mix(in srgb, var(--btn-1) 70%, #fff);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--btn-3) 45%, transparent);
-}
-.slot-bet:disabled {
-  opacity: 0.4;
-}
-
-.slot-actions {
-  display: flex;
-  gap: 8px;
-}
 .spin-btn {
   flex: 1;
   cursor: pointer;
@@ -11696,111 +11594,8 @@ input[type='datetime-local'] {
     opacity: 0.86;
   }
 }
-.slot-mini {
-  flex: none;
-  min-width: 52px;
-  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
-  cursor: pointer;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--cab-1) 70%, #000);
-  color: #fff2e0;
-  font-size: 15px;
-  font-weight: 800;
-  transition: transform 0.12s ease;
-}
-.slot-mini:active {
-  transform: scale(0.94);
-}
-.slot-mini:disabled {
-  opacity: 0.4;
-}
-.slot-mini.is-on {
-  background: linear-gradient(180deg, var(--btn-1), var(--btn-2));
-  color: #2a1206;
-  border-color: color-mix(in srgb, var(--btn-1) 70%, #fff);
-}
-
-.slot-bonus-hint {
-  margin: -4px 0 0;
-  text-align: center;
-  font-size: 12.5px;
-  color: rgba(255, 240, 220, 0.6);
-}
 
 /* ---- История и статистика ----------------------------------------------- */
-.slot-history__label {
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--neon) 40%, #fff);
-  opacity: 0.7;
-  margin-bottom: 8px;
-}
-.slot-history__row {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none;
-}
-.slot-history__row::-webkit-scrollbar {
-  display: none;
-}
-.slot-chip {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 7px 10px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--cab-1) 68%, #000);
-  border: 1px solid color-mix(in srgb, var(--neon) 18%, transparent);
-  color: #fff2e0;
-}
-.slot-chip.is-win {
-  border-color: color-mix(in srgb, var(--pos) 55%, transparent);
-  background: color-mix(in srgb, var(--pos) 16%, var(--cab-1));
-}
-.slot-chip__reels {
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: -1px;
-}
-.slot-chip__sum {
-  font-size: 11.5px;
-  font-weight: 800;
-  color: rgba(255, 240, 220, 0.7);
-  font-variant-numeric: tabular-nums;
-}
-.slot-chip.is-win .slot-chip__sum {
-  color: var(--pos);
-}
-
-.slot-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.slot-stat {
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--cab-1) 68%, #000);
-  border: 1px solid color-mix(in srgb, var(--neon) 18%, transparent);
-  color: #fff2e0;
-  text-align: center;
-}
-.slot-stat__num {
-  font-size: 18px;
-  font-weight: 850;
-  font-variant-numeric: tabular-nums;
-}
-.slot-stat__lbl {
-  font-size: 12px;
-  color: rgba(255, 240, 220, 0.62);
-  margin-top: 2px;
-}
 
 /* ---- Таблица выплат и схемы линий --------------------------------------- */
 .paytable {
@@ -11889,7 +11684,6 @@ input[type='datetime-local'] {
 @media (prefers-reduced-motion: reduce) {
   .cabinet__bulbs i,
   .cabinet__sign b,
-  .slot-hud__value--jackpot,
   .reels__mark,
   .spin-btn.is-busy {
     animation: none;
@@ -11931,28 +11725,14 @@ input[type='datetime-local'] {
 }
 
 /* Значения HUD и статуса встают в строку вместе с монетой/символом. */
-.slot-hud__value,
 .status,
-.status__win,
-.slot-stat__num {
+.status__win {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
-.slot-hud__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-.slot-hud__label .sym {
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
-}
 .status .sym {
   flex: none;
-}
-.slot-chip__reels {
-  display: inline-flex;
-  gap: 2px;
 }
 .paytable__syms {
   display: inline-flex;
@@ -12204,19 +11984,6 @@ input[type='datetime-local'] {
 }
 
 /* Выбор скина */
-.slot-mini--skin {
-  display: grid;
-  place-items: center;
-  padding: 0;
-}
-.skin-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  /* Метка «ЛИМИТ» выступает за верхний край карточки — без этого отступа
-     лист обрезал бы её у первого ряда. */
-  padding-top: 8px;
-}
 .skin-card {
   display: flex;
   flex-direction: column;
@@ -12258,12 +12025,6 @@ input[type='datetime-local'] {
   margin-top: 4px;
   font-size: 15px;
   font-weight: 850;
-}
-.skin-card__hint {
-  font-size: 11.5px;
-  line-height: 1.3;
-  color: rgba(255, 255, 255, 0.72);
-  text-wrap: pretty;
 }
 
 /* Кнопка смены скина в шапке показывает символ текущего набора. */
@@ -12507,74 +12268,6 @@ input[type='datetime-local'] {
    ========================================================================= */
 
 /* ---- Полоса уровня на главном экране ----------------------------------- */
-.slot-level {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--neon) 30%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--cab-1) 55%, transparent);
-  color: var(--reel-hi);
-  font: inherit;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.slot-level:active {
-  transform: scale(0.99);
-}
-.slot-level__lvl {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--neon) 70%, #fff);
-  white-space: nowrap;
-}
-.slot-level__bar {
-  position: relative;
-  flex: 1;
-  height: 8px;
-  min-width: 40px;
-  border-radius: 99px;
-  background: color-mix(in srgb, #000 45%, var(--cab-2));
-  overflow: hidden;
-}
-.slot-level__bar i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 99px;
-  background: linear-gradient(90deg, var(--neon-2), var(--neon));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--neon) 60%, transparent);
-  transition: width 0.5s ease;
-}
-.slot-level__free {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--bezel-1);
-  white-space: nowrap;
-}
-.slot-level__gift {
-  position: relative;
-  display: inline-flex;
-  color: color-mix(in srgb, var(--neon) 75%, #fff);
-}
-.slot-level__badge {
-  position: absolute;
-  top: -7px;
-  right: -9px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 99px;
-  background: var(--neg, #e5484d);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 16px;
-  text-align: center;
-  animation: badge-pop 1.8s ease-in-out infinite;
-}
 @keyframes badge-pop {
   50% {
     transform: scale(1.14);
@@ -12582,59 +12275,8 @@ input[type='datetime-local'] {
 }
 
 /* Главный призыв «забрать» — та же кнопка, что и внутри листа наград */
-.rewards-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: none;
-  background: linear-gradient(180deg, var(--btn-1), var(--btn-2) 45%, var(--btn-3));
-  color: var(--btn-fg);
-  font-weight: 800;
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--btn-3) 40%, transparent);
-}
-.rewards-cta:disabled {
-  opacity: 0.5;
-  box-shadow: none;
-}
 
 /* ---- Лист наград -------------------------------------------------------- */
-.reward-block {
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--cab-1) 30%, transparent);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.reward-block__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.reward-block__title {
-  font-size: 15px;
-  font-weight: 800;
-}
-.reward-block__meta {
-  font-size: 12px;
-  opacity: 0.7;
-}
-.reward-block__hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  opacity: 0.66;
-}
-.reward-block__warn {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: color-mix(in srgb, var(--neg, #e5484d) 70%, #fff);
-}
 .xpbar {
   position: relative;
   height: 10px;
@@ -12711,67 +12353,6 @@ input[type='datetime-local'] {
   border-radius: 50%;
   background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), transparent);
   pointer-events: none;
-}
-.wheel__disc {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  will-change: transform;
-}
-.wheel__rim {
-  fill: none;
-  stroke: var(--bezel-2);
-  stroke-width: 4;
-}
-.wheel__sec {
-  fill: color-mix(in srgb, var(--btn-4) 72%, #000);
-  stroke: color-mix(in srgb, var(--bezel-1) 30%, transparent);
-  stroke-width: 0.6;
-}
-.wheel__sec.is-alt {
-  fill: color-mix(in srgb, var(--neon-2) 30%, var(--cab-2));
-}
-.wheel__sec.is-top {
-  fill: color-mix(in srgb, var(--neon) 55%, var(--btn-3));
-}
-.wheel__label.is-small {
-  font-size: 4.4px;
-}
-.wheel__label {
-  fill: var(--reel-hi);
-  font-size: 5.6px;
-  font-weight: 800;
-  paint-order: stroke;
-  stroke: rgba(0, 0, 0, 0.45);
-  stroke-width: 1.2;
-}
-.wheel__hub {
-  fill: var(--bezel-2);
-  stroke: var(--bezel-1);
-  stroke-width: 1.5;
-}
-.wheel__pin {
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  z-index: 2;
-  /* Язычок качается от щелчков сектора вокруг своего крепления. */
-  transform-origin: 50% 0;
-  width: 0;
-  height: 0;
-  transform: translateX(-50%);
-  border-left: 9px solid transparent;
-  border-right: 9px solid transparent;
-  border-top: 16px solid var(--bezel-1);
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
-}
-.wheel__prize {
-  margin: 0;
-  text-align: center;
-  font-size: 16px;
-  font-weight: 800;
-  color: color-mix(in srgb, var(--bezel-1) 85%, #fff);
-  animation: prize-in 0.4s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 @keyframes prize-in {
   from {
@@ -12862,15 +12443,6 @@ input[type='datetime-local'] {
   opacity: 0.55;
   cursor: default;
 }
-.skin-card__lock {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.85;
-}
 
 /* ---- Плашка нового уровня ---------------------------------------------- */
 .levelup {
@@ -12934,58 +12506,13 @@ input[type='datetime-local'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slot-level__badge,
   .ladder__day.is-next {
     animation: none;
   }
 }
 
 /* ---- Выбор автоспина ---------------------------------------------------- */
-.auto-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-.auto-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 16px 10px;
-  border: 1px solid color-mix(in srgb, var(--neon) 28%, transparent);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--cab-1) 45%, transparent);
-  color: var(--reel-hi);
-  font: inherit;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.auto-card:active {
-  transform: scale(0.98);
-}
-.auto-card.is-endless {
-  border-color: var(--bezel-2);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--btn-1) 26%, transparent),
-    color-mix(in srgb, var(--cab-1) 45%, transparent)
-  );
-}
-.auto-card__num {
-  font-size: 30px;
-  font-weight: 800;
-  line-height: 1;
-  color: color-mix(in srgb, var(--bezel-1) 85%, #fff);
-}
-.auto-card__hint {
-  font-size: 12px;
-  text-align: center;
-  opacity: 0.7;
-}
 /* Знак бесконечности рисуется мельче цифр — выравниваем на глаз */
-.auto-card.is-endless .auto-card__num {
-  font-size: 40px;
-}
 
 /* =========================================================================
    Каскады и комбо: взрыв сыгравших символов и счётчик цепочки.
@@ -13691,141 +13218,8 @@ input[type='datetime-local'] {
 }
 
 /* ---- Произвольная ставка ------------------------------------------------ */
-.slot-bet--more {
-  letter-spacing: 0.08em;
-}
-.bet-sheet__value {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 40px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in srgb, var(--bezel-1) 88%, #fff);
-}
-.bet-sheet__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.bet-step {
-  flex: none;
-  width: 46px;
-  height: 46px;
-  border: 1px solid color-mix(in srgb, var(--neon) 30%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--cab-1) 60%, transparent);
-  color: var(--reel-hi);
-  font-size: 24px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-}
-.bet-step:active {
-  transform: scale(0.94);
-}
-.bet-slider {
-  flex: 1;
-  min-width: 0;
-  height: 30px;
-  appearance: none;
-  background: transparent;
-}
-.bet-slider::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, var(--neon-2), var(--neon));
-}
-.bet-slider::-moz-range-track {
-  height: 8px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, var(--neon-2), var(--neon));
-}
-.bet-slider::-webkit-slider-thumb {
-  appearance: none;
-  margin-top: -8px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--btn-1), var(--btn-3));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-.bet-slider::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 50%;
-  background: linear-gradient(180deg, var(--btn-1), var(--btn-3));
-}
 
 /* ---- Переключатели настроек -------------------------------------------- */
-.toggles {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--neon) 22%, transparent);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--cab-1) 40%, transparent);
-  color: var(--reel-hi);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.toggle__icon {
-  font-size: 22px;
-  line-height: 1;
-}
-.toggle__text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.toggle__text b {
-  font-size: 15px;
-  font-weight: 700;
-}
-.toggle__text i {
-  font-style: normal;
-  font-size: 12px;
-  opacity: 0.6;
-}
-.toggle__switch {
-  flex: none;
-  position: relative;
-  width: 46px;
-  height: 27px;
-  border-radius: 99px;
-  background: color-mix(in srgb, #000 45%, var(--cab-2));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neon) 20%, transparent);
-  transition: background 0.2s ease;
-}
-.toggle__switch::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 21px;
-  height: 21px;
-  border-radius: 50%;
-  background: #cfcfcf;
-  transition: transform 0.2s cubic-bezier(0.3, 1.4, 0.5, 1);
-}
-.toggle.is-on .toggle__switch {
-  background: linear-gradient(90deg, var(--btn-2), var(--btn-1));
-}
-.toggle.is-on .toggle__switch::after {
-  transform: translateX(19px);
-  background: #fff;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .bcell.is-fall,
@@ -15121,42 +14515,6 @@ input[type='datetime-local'] {
 }
 
 /* Условие и прогресс. Цель без «сколько уже пройдено» — это не цель, а отказ. */
-.skin-card__quest {
-  margin-top: 5px;
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: #ffd98a;
-}
-.skin-card__quest.is-done {
-  color: #b9f0a8;
-}
-.skin-card__bar {
-  display: block;
-  height: 4px;
-  margin: 5px 0 3px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-}
-.skin-card__bar b {
-  display: block;
-  height: 100%;
-  width: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #d79a1a, #ffd158 60%, #fff6d5);
-  /* Ширину даём трансформом: анимировать её не нужно, но и раскладку из-за
-     неё пересчитывать тоже незачем. */
-  transform-origin: left center;
-  transform: scaleX(var(--p, 0));
-}
-.skin-card__quest em {
-  display: block;
-  font-style: normal;
-  font-size: 9.5px;
-  font-weight: 700;
-  opacity: 0.75;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .skin-card__halo,
@@ -15375,47 +14733,6 @@ input[type='datetime-local'] {
 }
 
 /* Плашка бонуса над корпусом */
-.bonus-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: linear-gradient(90deg, rgba(20, 10, 0, 0.9), rgba(60, 30, 0, 0.82));
-  box-shadow:
-    inset 0 0 0 1px var(--bezel-2),
-    0 0 22px color-mix(in srgb, var(--neon) 40%, transparent);
-  animation: combo-in 0.34s cubic-bezier(0.2, 1.5, 0.4, 1);
-}
-.bonus-bar__label {
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  color: #ffd83d;
-  text-shadow: 0 0 10px rgba(255, 216, 61, 0.7);
-}
-.bonus-bar__left {
-  flex: 1;
-  font-size: 12px;
-  opacity: 0.75;
-  color: var(--reel-hi);
-}
-.bonus-bar__mult {
-  padding: 2px 10px;
-  border-radius: 99px;
-  background: linear-gradient(180deg, #fff3c4, #ffc53c 55%, #f09a1c);
-  color: #3a2000;
-  font-size: 15px;
-  font-weight: 900;
-}
-.bonus-bar__won {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 13px;
-  font-weight: 800;
-  color: color-mix(in srgb, var(--bezel-1) 88%, #fff);
-}
 /* Во время бонуса корпус светится золотом */
 .cabinet--wide.is-bonus {
   box-shadow:
@@ -15424,13 +14741,7 @@ input[type='datetime-local'] {
 }
 
 /* Ante и покупка бонуса */
-.bonus-row {
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-  gap: 10px;
-}
-.ante,
-.buy-bonus {
+.ante {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -15445,31 +14756,17 @@ input[type='datetime-local'] {
   cursor: pointer;
   position: relative;
 }
-.ante b,
-.buy-bonus b {
+.ante b {
   font-size: 14px;
   font-weight: 800;
 }
-.ante i,
-.buy-bonus i {
+.ante i {
   font-style: normal;
   font-size: 11px;
   opacity: 0.66;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-}
-.ante .toggle__switch {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 38px;
-  height: 22px;
-}
-.ante .toggle__switch::after {
-  width: 16px;
-  height: 16px;
 }
 .ante {
   padding-right: 58px;
@@ -15478,38 +14775,11 @@ input[type='datetime-local'] {
   border-color: var(--bezel-2);
   background: color-mix(in srgb, var(--btn-2) 22%, transparent);
 }
-.ante.is-on .toggle__switch {
-  background: linear-gradient(90deg, var(--btn-2), var(--btn-1));
-}
-.ante.is-on .toggle__switch::after {
-  transform: translateX(16px);
-  background: #fff;
-}
-.buy-bonus {
-  align-items: center;
-  text-align: center;
-  border-color: var(--bezel-2);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--btn-1) 30%, transparent),
-    transparent
-  );
-}
-.buy-bonus:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.buy-bonus i {
-  color: color-mix(in srgb, var(--bezel-1) 88%, #fff);
-  font-weight: 800;
-  opacity: 0.9;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .sbcell--orb,
   .orb__gem,
-  .sbcell.is-scatter img,
-  .bonus-bar {
+  .sbcell.is-scatter img {
     animation: none;
   }
 }
@@ -15801,40 +15071,6 @@ input[type='datetime-local'] {
 }
 
 /* Состояние бэкапов — видно только владельцу, в кассе */
-.backup-health {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(128, 128, 128, 0.22);
-  display: grid;
-  gap: 7px;
-}
-.backup-health__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-}
-.backup-health__row span {
-  opacity: 0.7;
-}
-.backup-health__row b {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.backup-health__row b.is-ok {
-  color: #4caf7d;
-}
-.backup-health__row b.is-bad {
-  color: #e2603f;
-}
-.backup-health__err {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.35;
-  color: #e2603f;
-  word-break: break-word;
-}
 
 /* ===========================================================================
    Итог захода
@@ -15854,23 +15090,6 @@ input[type='datetime-local'] {
   background: rgba(6, 3, 12, 0.82);
   animation: fade 0.24s ease both;
 }
-.ses__card {
-  position: relative;
-  width: min(360px, 100%);
-  max-height: 100%;
-  overflow: hidden auto;
-  display: grid;
-  gap: 14px;
-  padding: 22px 20px 18px;
-  border-radius: 24px;
-  text-align: center;
-  background: linear-gradient(180deg, #241633, #150c20 60%, #0e0716);
-  box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 220, 190, 0.16);
-  border: 1px solid rgba(255, 200, 140, 0.22);
-  animation: ses-in 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both;
-}
 @keyframes ses-in {
   from {
     opacity: 0;
@@ -15883,23 +15102,6 @@ input[type='datetime-local'] {
 }
 /* Чем ярче был заход, тем теплее рамка. Тихий не подсвечиваем вовсе —
    иначе подсветка перестаёт что-либо значить. */
-.ses__card--good {
-  border-color: rgba(120, 200, 255, 0.4);
-}
-.ses__card--great {
-  border-color: rgba(255, 176, 58, 0.55);
-  box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.6),
-    0 0 44px rgba(255, 160, 40, 0.22),
-    inset 0 1px 0 rgba(255, 220, 190, 0.16);
-}
-.ses__card--unforgettable {
-  border-color: rgba(255, 94, 199, 0.65);
-  box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.6),
-    0 0 58px rgba(255, 94, 199, 0.3),
-    inset 0 1px 0 rgba(255, 220, 190, 0.2);
-}
 /* Лучи — только у незабываемого. Градиент рисуется один раз, крутится
    трансформ: анимировать угол внутри conic-gradient значит перерисовывать
    кадр целиком. */
@@ -15933,158 +15135,17 @@ input[type='datetime-local'] {
 }
 
 /* Всё содержимое — над лучами. */
-.ses__card > *:not(.ses__rays) {
-  position: relative;
-  z-index: 1;
-}
-.ses__grade {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #e6d7f5;
-  opacity: 0.85;
-}
-
-.ses__peak {
-  position: relative;
-  display: grid;
-  gap: 3px;
-  padding: 14px 12px;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--pk, #ffd83d) 10%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pk, #ffd83d) 30%, transparent);
-}
-.ses__peak-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--pk, #ffd83d);
-  opacity: 0.85;
-}
-.ses__peak-title {
-  font-size: 30px;
-  font-weight: 900;
-  line-height: 1.12;
-  letter-spacing: -0.02em;
-  color: var(--pk, #ffd83d);
-}
-.ses__peak-detail {
-  font-size: 12.5px;
-  opacity: 0.85;
-}
-.ses__peak--plain {
-  --pk: #b9a7cc;
-}
-.ses__peak--rare {
-  --pk: #58b7ff;
-}
-.ses__peak--epic {
-  --pk: #c078ff;
-}
-.ses__peak--legendary {
-  --pk: #ffb03a;
-}
 /* Реликвия переливается: фон едет, а не пересчитывается — самая дешёвая
    из «радужных» уловок. */
-.ses__peak--mythic {
-  --pk: #ff5ec7;
-}
-.ses__peak--mythic .ses__peak-title {
-  background: linear-gradient(100deg, #ff5ec7, #ffd83d 25%, #5ee7ff 50%, #a06bff 75%, #ff5ec7);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: ses-holo 2s linear infinite;
-}
 @keyframes ses-holo {
   to {
     background-position: 300% 0;
   }
 }
 
-.ses__net {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 27px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-}
-.ses__net.is-up {
-  color: #7ee0a8;
-}
-.ses__net.is-down {
-  color: #e2856f;
-}
-
-.ses__rank {
-  font-size: 13px;
-  font-weight: 800;
-  color: #ffd489;
-}
-
-.ses__stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 12px 0;
-  border-top: 1px solid rgba(255, 220, 190, 0.12);
-  border-bottom: 1px solid rgba(255, 220, 190, 0.12);
-}
-.ses__stats span {
-  display: grid;
-  gap: 2px;
-}
-.ses__stats b {
-  font-size: 15px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.ses__stats i {
-  font-style: normal;
-  font-size: 10.5px;
-  opacity: 0.78;
-}
-
-.ses__hook {
-  font-size: 12.5px;
-  opacity: 0.85;
-}
-
-.ses__actions {
-  display: grid;
-  gap: 8px;
-  margin-top: 2px;
-}
-.ses__btn {
-  padding: 13px 16px;
-  border: 0;
-  border-radius: 14px;
-  font-size: 15px;
-  font-weight: 800;
-  color: #f3e9ff;
-  background: rgba(255, 255, 255, 0.09);
-  cursor: pointer;
-}
-.ses__btn--go {
-  color: #2a1400;
-  background: linear-gradient(180deg, #ffe9a3, #ffc53c 60%, #f0a01e);
-  box-shadow: 0 8px 22px rgba(255, 180, 60, 0.32);
-}
-.ses__btn:active {
-  transform: translateY(1px);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .ses,
-  .ses__card,
-  .ses__rays,
-  .ses__peak--mythic .ses__peak-title {
+  .ses__rays {
     animation: none;
   }
 }
@@ -16587,54 +15648,6 @@ input[type='datetime-local'] {
    ЭЛТ-сетки базы здесь нет: у лакового автомата табло — это прибор со
    стеклом, а не монитор. Подпись выгравирована, цифры остаются
    светящимися: их читаемость важнее материала. */
-.slots[data-skin='kupala'] .slot-hud__cell {
-  border: none;
-  border-radius: 10px;
-  padding: 9px 13px 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--cab-2) 92%, #000),
-    color-mix(in srgb, var(--cab-3) 70%, #000)
-  );
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--bezel-3) 75%, #000),
-    inset 0 2px 7px rgba(0, 0, 0, 0.85),
-    /* латунная полка по нижней кромке — обойма прибора */ 0 1px 0
-      color-mix(in srgb, var(--bezel-2) 60%, transparent),
-    0 6px 16px rgba(0, 0, 0, 0.45);
-}
-.slots[data-skin='kupala'] .slot-hud__cell::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background: linear-gradient(
-    116deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.02) 26%,
-    transparent 44%
-  );
-}
-.slots[data-skin='kupala'] .slot-hud__cell--jackpot {
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--bezel-1) 85%, transparent),
-    inset 0 2px 7px rgba(0, 0, 0, 0.85),
-    0 1px 0 color-mix(in srgb, var(--bezel-1) 70%, transparent),
-    0 0 18px color-mix(in srgb, var(--neon) 24%, transparent);
-}
-.slots[data-skin='kupala'] .slot-hud__label {
-  color: color-mix(in srgb, var(--bezel-4) 80%, #fff);
-  opacity: 0.55;
-  letter-spacing: 0.14em;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
-}
-.slots[data-skin='kupala'] .slot-hud__value {
-  color: color-mix(in srgb, var(--neon) 24%, #fff);
-  text-shadow:
-    0 0 12px color-mix(in srgb, var(--neon) 50%, transparent),
-    0 1px 0 rgba(0, 0, 0, 0.9);
-}
 
 /* --- 7a. Статус: прорезь в лаке ------------------------------------------
    Рельеф ПЕРЕВЁРНУТ относительно базы: свет по нижней кромке, тень по
@@ -16760,94 +15773,15 @@ input[type='datetime-local'] {
 }
 
 /* --- 8a. Мини-кнопки: тумблеры с латунной юбкой -------------------------- */
-.slots[data-skin='kupala'] .slot-mini {
-  border: none;
-  border-radius: 10px;
-  color: var(--ink);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--cab-1) 80%, #000),
-    color-mix(in srgb, var(--cab-2) 90%, #000)
-  );
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 0 0 1px color-mix(in srgb, var(--bezel-3) 80%, #000),
-    0 3px 0 rgba(0, 0, 0, 0.6),
-    0 6px 12px rgba(0, 0, 0, 0.45);
-  transition:
-    transform 0.1s steps(2, end),
-    box-shadow 0.1s ease;
-}
 /* Включено = тумблер УТОПЛЕН и подсвечен изнутри, а не «покрашен ярче»:
    у настоящего пульта включённая клавиша стоит ниже выключенных. */
-.slots[data-skin='kupala'] .slot-mini.is-on {
-  color: var(--btn-fg);
-  background: var(--brass);
-  transform: translateY(2px);
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.45),
-    inset 0 0 12px color-mix(in srgb, var(--neon) 40%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--bezel-1) 80%, #fff),
-    0 1px 0 rgba(0, 0, 0, 0.6);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
-}
 /* ПОРЯДОК ВАЖЕН: `:active` и `.is-on` имеют одинаковую специфичность,
    поэтому `:active` обязан идти ПОСЛЕ `.is-on` — иначе нажатие включённой
    клавиши не даёт никакой отдачи. */
-.slots[data-skin='kupala'] .slot-mini:active {
-  transform: translateY(3px);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.6),
-    0 0 0 1px color-mix(in srgb, var(--bezel-3) 80%, #000),
-    0 0 0 rgba(0, 0, 0, 0.6);
-}
 
 /* --- 8b. Ставки: латунные жетоны с рифлёным гуртом ----------------------- */
-.slots[data-skin='kupala'] .slot-bet {
-  position: relative;
-  overflow: hidden;
-  border: none;
-  border-radius: 999px;
-  color: var(--ink);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--cab-1) 75%, #000),
-    color-mix(in srgb, var(--cab-2) 92%, #000)
-  );
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 0 0 1px color-mix(in srgb, var(--bezel-3) 70%, #000),
-    0 2px 0 rgba(0, 0, 0, 0.55);
-}
 /* Рифление гурта живёт ТОЛЬКО в ::before: маска гасит середину, и поле под
    цифрой остаётся чистым. Штрихи в фоне самого жетона были бы под цифрой. */
-.slots[data-skin='kupala'] .slot-bet::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.22) 0 1px,
-    transparent 1px 4px
-  );
-  -webkit-mask-image: radial-gradient(120% 120% at 50% 50%, transparent 52%, #000 86%);
-  mask-image: radial-gradient(120% 120% at 50% 50%, transparent 52%, #000 86%);
-  opacity: 0.6;
-}
-.slots[data-skin='kupala'] .slot-bet.is-active {
-  color: var(--btn-fg);
-  background: var(--brass);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.4),
-    inset 0 0 10px color-mix(in srgb, var(--neon-2) 45%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--bezel-1) 85%, #fff);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-.slots[data-skin='kupala'] .slot-bet.is-active::before {
-  opacity: 0.25;
-}
 
 /* --- 8c. Ante и «Купить бонус» -------------------------------------------
    Ante — гравированная пластина: это НАСТРОЙКА, она не должна зазывать.
@@ -16880,47 +15814,9 @@ input[type='datetime-local'] {
     0 0 0 1px color-mix(in srgb, var(--bezel-1) 70%, transparent),
     0 0 16px color-mix(in srgb, var(--neon) 20%, transparent);
 }
-.slots[data-skin='kupala'] .ante.is-on .toggle__switch {
-  background: var(--brass);
-}
-.slots[data-skin='kupala'] .ante .toggle__switch::after {
-  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--neon-2) 35%, #fff));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-.slots[data-skin='kupala'] .buy-bonus {
-  position: relative;
-  overflow: hidden;
-  border: none;
-  border-radius: 10px;
-  color: #2a1700;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--neon-2) 55%, #fff) 0%,
-    var(--neon-2) 40%,
-    color-mix(in srgb, var(--neon-2) 60%, #000) 52%,
-    color-mix(in srgb, var(--neon-2) 35%, #000) 100%
-  );
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 0 0 1.5px color-mix(in srgb, var(--bezel-1) 80%, #fff),
-    0 0 0 3px color-mix(in srgb, var(--cab-2) 90%, #000),
-    0 4px 0 rgba(0, 0, 0, 0.6),
-    0 10px 20px rgba(0, 0, 0, 0.5);
-}
 /* Статичный лаковый блик по лицевой — та же кромка, что на корпусе. */
-.slots[data-skin='kupala'] .buy-bonus::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--spec);
-}
 /* Цена — та же гравировка, что и надпись, только тише. Светлить её здесь
    нельзя: лицевая панель янтарная, и светлая цифра на ней пропадает. */
-.slots[data-skin='kupala'] .buy-bonus i {
-  color: rgba(42, 23, 0, 0.7);
-}
 
 /* --- 9. Поддон: латунь на лаке («Слоты») --------------------------------- */
 .slots[data-skin='kupala'] .cabinet__tray {
@@ -18952,10 +17848,6 @@ input[type='datetime-local'] {
 }
 .pcash:empty {
   display: none;
-}
-.cash-btn--token {
-  background: linear-gradient(180deg, #b8f4e6, #5fd1bd 45%, #2a8f80);
-  color: #0e2e29;
 }
 /* Креатив (v2.81) — песочница владельца, своим цветом: её не спутать с кассой. */
 .cash-btn--creative {

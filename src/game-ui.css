@@ -1793,14 +1793,6 @@
   -webkit-touch-callout: none;
   color: var(--gx-paper);
 }
-.hub__canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  image-rendering: pixelated;
-}
 .hub-top {
   position: absolute;
   top: calc(var(--safe-top) + var(--content-top) + 8px);
@@ -1819,74 +1811,6 @@
 .hub-top .gx-top {
   margin: 0;
   gap: 6px;
-}
-
-/* Живое событие — одна строка под табло; тап ведёт туда, где оно идёт. */
-.hub-ev {
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 3px 10px 3px 4px;
-  border: 0;
-  border-radius: 16px;
-  background: rgba(28, 18, 10, 0.88);
-  box-shadow:
-    inset 0 0 0 2px var(--ev, var(--gx-gold)),
-    0 3px 0 rgba(0, 0, 0, 0.35);
-  color: var(--gx-paper);
-  font:
-    800 13px/1 'GxRubik',
-    system-ui,
-    sans-serif;
-  cursor: pointer;
-  animation: hub-pop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
-}
-.hub-ev__glyph {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--ev, var(--gx-wood));
-  font-size: 13px;
-}
-.hub-ev b {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hub-ev em {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.9;
-}
-
-.hub-toast {
-  position: absolute;
-  z-index: 5;
-  left: 50%;
-  top: calc(var(--safe-top) + var(--content-top) + 128px);
-  max-width: calc(100vw - 32px);
-  padding: 8px 14px;
-  border-radius: 10px;
-  background: rgba(61, 42, 22, 0.94);
-  box-shadow:
-    inset 0 0 0 2px var(--gx-wood-dd),
-    0 4px 0 rgba(0, 0, 0, 0.35);
-  color: var(--gx-paper);
-  font:
-    700 14px/1.3 'GxRubik',
-    system-ui,
-    sans-serif;
-  text-align: center;
-  translate: -50% 0;
-  pointer-events: none;
-  animation: hub-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 
 /* Под правый большой палец: карта и кнопка действия. */
@@ -1909,9 +1833,7 @@
 }
 .hub-pad__use {
   min-height: 52px;
-  font-size: 17px;
   white-space: nowrap;
-  animation: hub-use 0.3s cubic-bezier(0.2, 0.8, 0.3, 1.3) both;
 }
 
 /* Смена карты: в чёрное и из чёрного, по четверти секунды. */
@@ -1936,7 +1858,6 @@
   right: 0;
   bottom: 0;
   padding: 0 8px calc(var(--safe-bottom) + 10px);
-  animation: hub-talk-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.08) both;
 }
 .hub-talk__box {
   max-width: 560px;
@@ -1958,8 +1879,6 @@
   place-items: center;
   width: 84px;
   height: 84px;
-  border-radius: 6px;
-  background: radial-gradient(circle at 50% 40%, #3a2a1c, #140e0a 75%);
   box-shadow:
     inset 0 0 0 2px var(--gx-wood-dd),
     inset 0 0 0 4px var(--gx-wood);
@@ -1988,19 +1907,6 @@
   font: inherit;
   cursor: pointer;
 }
-.hub-talk .hub-talk__name {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--gx-red-d);
-  text-shadow: none;
-}
-.hub-talk__text {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--gx-ink);
-  white-space: pre-wrap;
-}
 .hub-talk__more {
   position: absolute;
   right: 8px;
@@ -2027,80 +1933,22 @@
 .hub-map__frame {
   position: relative;
   width: 100%;
-  margin: 18px 0 4px;
 }
 .hub-map__cv {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 4px;
   image-rendering: pixelated;
   box-shadow: 0 0 0 2px var(--gx-wood-dd);
 }
-.hub-map__pin {
-  position: absolute;
-  translate: -50% -100%;
-  padding: 3px 8px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(61, 42, 22, 0.94);
-  box-shadow:
-    0 0 0 2px var(--gx-wood-dd),
-    0 3px 0 rgba(0, 0, 0, 0.35);
-  color: var(--gx-paper);
-  font:
-    800 12px/1.1 'GxRubik',
-    system-ui,
-    sans-serif;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.hub-map__pin .gx-badge {
-  top: -9px;
-  right: -9px;
-  min-width: 18px;
-  height: 18px;
-}
 .hub-map__me {
   position: absolute;
-  width: 10px;
-  height: 10px;
-  margin: -5px 0 0 -5px;
-  border-radius: 50%;
-  background: #7fe6d0;
-  box-shadow:
-    0 0 0 2px #0b1e1a,
-    0 0 8px #7fe6d0;
-  animation: hub-me 1.2s ease-in-out infinite;
   pointer-events: none;
 }
 
-@keyframes hub-pop {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.94);
-  }
-}
-@keyframes hub-use {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.8);
-  }
-}
-@keyframes hub-talk-in {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-}
 @keyframes hub-more {
   to {
     transform: translateY(2px);
-  }
-}
-@keyframes hub-me {
-  50% {
-    transform: scale(1.35);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2949,144 +2797,6 @@
 .pcamp-lock span {
   font-size: 13px;
   font-weight: 600;
-}
-
-/* ==========================================================================
-   Зал игр (pages/GamesPage.tsx).
-   ========================================================================== */
-
-.gxh {
-  position: relative;
-  min-height: 100%;
-  padding: calc(var(--safe-top) + var(--content-top) + 14px) 14px calc(var(--safe-bottom) + 24px);
-  color: var(--gx-paper);
-}
-.gxh__wrap {
-  position: relative;
-  z-index: 1;
-  max-width: 560px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.gxh-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 8px 6px 6px;
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 70ms ease-out;
-}
-.gxh-card:active {
-  transform: translateY(2px);
-}
-.gxh-card__art {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 112px;
-  height: 64px;
-  border-radius: 10px;
-  background: #fff4dc;
-  box-shadow:
-    inset 0 0 0 3px var(--gx-wood-dd),
-    inset 0 5px 0 rgba(0, 0, 0, 0.12);
-}
-.gxh-card__art.is-dark {
-  background: #1a120c;
-}
-.gxh-card__reels {
-  display: flex;
-  gap: 3px;
-}
-.gxh-card__reels img {
-  width: 32px;
-  height: 32px;
-}
-.gxh-card__reels--rocks img {
-  image-rendering: pixelated;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
-}
-.gxh-card__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.gxh-card__body b {
-  font-size: 19px;
-  font-weight: 800;
-}
-.gxh-card__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.gxh-card__tags i {
-  padding: 3px 7px 4px;
-  border-radius: 7px;
-  background: var(--gx-wood-dd);
-  font:
-    700 11.5px/1 'GxRubik',
-    system-ui,
-    sans-serif;
-  font-style: normal;
-  color: #f3dcb4;
-}
-.gxh-card__body em {
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--gx-gold);
-}
-.gxh-card__go {
-  --gx-size: 42px;
-  flex: none;
-}
-.gxh-card__go .gx-icon {
-  width: 46%;
-  height: 46%;
-}
-.gxh__note {
-  margin: 0;
-  text-align: center;
-  font-size: 12px;
-  color: rgba(243, 220, 180, 0.55);
-}
-/* Зал на каркасе игры (src/game-shell, GameScreen): шапка и карточки — по
-   центру не шире 980, на широком экране карточки в два столбца. */
-.gs.gxh {
-  min-height: 0;
-}
-.gxh .gs__top,
-.gxh .gs__main {
-  justify-self: center;
-  width: 100%;
-  max-width: 980px;
-  margin: 0 auto;
-}
-.gxh .gs__top .gx-top {
-  margin-bottom: 0;
-}
-.gxh .gs__main {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.gxh__cards {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-}
-html[data-ff='phone-landscape'] .gxh__cards,
-html[data-ff='tablet'] .gxh__cards,
-html[data-ff='desktop'] .gxh__cards {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* Сцена нового ранга / разряда — в той же раме, что окна. */

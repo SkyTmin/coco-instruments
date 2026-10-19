@@ -248,6 +248,12 @@ span.gx-top__side {
   gap: calc(3 * var(--u));
   min-width: 0;
 }
+/* With the title shown or just folded (fit 0–1) the chips hug the right group: a new map title
+   (Площадь → Башня Чародея) must not move them — a long one flips fit 0 → 1, and centred chips
+   jumped 111 px on a landscape phone. */
+.gx-top__row:is([data-fit='0'], [data-fit='1']) .gx-top__chips {
+  justify-content: flex-end;
+}
 .gx-top__right {
   display: flex;
   flex: none;
@@ -277,6 +283,110 @@ span.gx-top__side {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+/* Fit levels (GameTop sets `data-fit` before paint, wave 3 — Q): 2 — the right-hand group folds
+   into one ⚙ (GameSettings, Sound tab); 3 — chips of priority 3 go; 4 — priority 2 too. Money
+   (priority 1) and action chips never go. */
+.gx-top .gx-top__gear {
+  display: none;
+}
+.gx-top__row:is([data-fit='2'], [data-fit='3'], [data-fit='4']) .gx-top__right {
+  display: none;
+}
+.gx-top .gx-top__row:is([data-fit='2'], [data-fit='3'], [data-fit='4']) .gx-top__gear {
+  display: inline-grid;
+  flex: none;
+}
+.gx-top__row:is([data-fit='3'], [data-fit='4']) .gx-chip[data-pri='3'],
+.gx-top__row[data-fit='4'] .gx-chip[data-pri='2'] {
+  display: none;
+}
+/* Phone portrait: chips one type step down (17 px, above the 16 px floor) — the row is 340–420 px. */
+html[data-ff='phone-portrait'] .gx-top .gx-chip {
+  font-size: var(--px-fs-sm);
+  /* the 24-px HUD pictures took 12 px per chip: the gap and side padding give it back (360 px
+     still shows money + tokens; the number is centred in its reserved `ch` box anyway) */
+  gap: var(--u);
+  padding: 0 calc(3 * var(--u)) 0 calc(2 * var(--u));
+}
+/* The value keeps its box (min-width in ch from the caller): a growing number never pushes. */
+.gx-chip__v {
+  display: inline-block;
+  text-align: center;
+}
+/* The money chip opens the wallet; action chips (backpack) act. Pressed in the first frame
+   (`usePress` → `.is-down`): the well one ramp step darker, the content one art pixel lower. */
+.gx-chip--btn {
+  position: relative;
+  isolation: isolate;
+  margin: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.gx-chip--btn::after {
+  /* Touch target ≥ 44 px: the chip is 14u (28 px) tall on phones; the row has room above and
+     below (it is `--gx-top-h` tall) and a 3u gap to the sides. Insets count from the padding box,
+     so the 1u border is added. */
+  content: '';
+  position: absolute;
+  inset: calc(-9px - var(--u)) calc(-2px - var(--u));
+}
+.gx-chip--btn:is(:active, .is-down)::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: -1;
+  background: #c9a56d;
+}
+.gx-chip--btn:is(:active, .is-down) > * {
+  translate: 0 var(--u);
+}
+.gx-chip--purse[aria-expanded='true']::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: -1;
+  background: #c9a56d;
+}
+/* Wallet popover under the money chip: every value of the row in exact numbers. */
+.gx-wallet {
+  position: absolute;
+  top: calc(var(--gx-top-h) + 2 * var(--u));
+  z-index: 6;
+  color: var(--px-text);
+  pointer-events: auto;
+}
+.gx-wallet__box {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
+  white-space: nowrap;
+}
+.gx-wallet__h {
+  grid-column: 1 / -1;
+  font: 400 var(--px-fs-sm) / 1.2 var(--px-head);
+  color: var(--px-gold);
+}
+.gx-wallet__row {
+  display: contents;
+}
+.gx-wallet__i {
+  display: inline-grid;
+  place-items: center;
+}
+.gx-wallet__n {
+  font-weight: 700;
+}
+.gx-wallet__v {
+  font: 700 var(--px-fs) / 1.2 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
 }
 
 /* ==============================================================================================
@@ -702,6 +812,33 @@ span.gx-top__side {
 .gx-chip .gx-icon {
   width: calc(9 * var(--u));
   height: calc(9 * var(--u));
+}
+/* wave 3 — Q: HUD chip pictures (`paint.ts` `hud-*`, 12 × 12 with a 1-art-px ink outline). GameTop
+   sets `--hud` = twice the cap height of the chip number, snapped to whole device px per art px
+   (24 px on phones, 36 at ui-scale 4); mask icons in header chips (backpack) take the same box. */
+.gx-hud {
+  display: inline-block;
+  flex: none;
+  width: var(--hud, 24px);
+  height: var(--hud, 24px);
+  background: no-repeat center / 100% 100%;
+  image-rendering: pixelated;
+}
+.gx-hud--coin {
+  background-image: var(--pximg-hud-coin);
+}
+.gx-hud--token {
+  background-image: var(--pximg-hud-token);
+}
+.gx-hud--key {
+  background-image: var(--pximg-hud-key);
+}
+.gx-hud--rank {
+  background-image: var(--pximg-hud-rank);
+}
+.gx-top .gx-chip > .gx-icon {
+  width: var(--hud, 24px);
+  height: var(--hud, 24px);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -305,15 +305,15 @@ export function CreativeHost() {
   );
 }
 
-/** Строка в «Кассе»: войти в песочницу или открыть её настройки. */
-export function CreativeRow() {
+/** Строка в «Кассе»: войти в песочницу или открыть её настройки. `className` — одежда кнопки. */
+export function CreativeRow({ className = 'cash-btn cash-btn--creative' }: { className?: string }) {
   useT();
   const on = useFinanceStore((s) => s.creative.on);
   return (
     <div className="cash-row">
       <button
         type="button"
-        className="cash-btn cash-btn--creative"
+        className={className}
         onClick={() => {
           tapLight();
           openCreative();

@@ -116,9 +116,37 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   `aria-label`; a left rail (`vertical`) on landscape / tablet / desktop, a top strip on phone
   portrait; compact phones hide the label and put the tab name in the ribbon. The camp row is
   `main`: an inner kit tab row (PetsTab) then leaves Tab / Shift+Tab / LB / RB to it.
-- **GameTop:** back `Button`, kit ribbon title, chips, right buttons in one row; a
-  ResizeObserver sets `is-tight` when the row overflows and the title goes (sr-only), never
-  wrapping into a second row.
+- **GameTop:** back `Button`, kit ribbon title, chips, right buttons in one row, never wrapping.
+  Fit levels (wave 3, Q) on `.gx-top__row[data-fit]`, set on the DOM (no render) by a layout
+  effect each render + ResizeObserver + `document.fonts` `loadingdone` (fit before the web font
+  loads cut the casino title): 0 all; 1 title goes (sr-only, `is-tight`; a title cut to «…» counts
+  as not fitting); 2 the `right` group folds into one ⚙ `.gx-top__gear` that opens
+  `GameSettings` on the Sound tab (lazy import: `@/settings` imports gx); 3 `data-pri='3'` chips
+  hide; 4 `data-pri='2'` too. Priority 1 (money) never hides. On phone portrait chips are
+  `--px-fs-sm`. Pass chips as `TopChip[]` (`id, icon, value, name, pri, ch, onClick`): values go
+  through `fmtCompact` (i18n/core: `Intl` compact ≥ 10 000, «511 млн», «9,8 Mio.»), the exact
+  value is in `data-tip` / `aria-label`, `ch` sets a `min-width` so a changing number doesn't
+  move neighbours. A chip with `onClick` is a button (`.gx-chip--btn`); the first pri-1 chip with
+  a value opens the wallet popover (`.gx-wallet`, exact values of all chips, Esc / outside tap
+  closes). A ReactNode `chips` still works (old callers). Measured: yard / casino / dungeon rows
+  fit at 360/390/440 portrait and 6 formats × ru/de/tr with 510 812 345 coins.
+  Round 2 (critic): `ch` — the widest compact form in any language is 6.71 ch of the chip font
+  (ru «1,2 млрд»; `scratchpad/ui3Q/mtext.mjs`), so money reserves 7 ch; tokens 6 (7 hid them at
+  360 px). At fit 0 and 1 the chips are right-aligned (`justify-content: flex-end`) so a new map
+  title doesn't move them (a long one flips fit 0 → 1: at fit 0 only, chips jumped 111 px on pl). Button chips get a ≥ 44 px hit area by `::after` (insets count from the
+  padding box: add the 1u border). The settings chunk is fetched on idle after a header with ⚙
+  mounts and on the gear's pointerdown (first open 349 → ~270 ms at 4× in dev — the rest is
+  the window's own mount).
+  HUD pictures: `GxHud name="coin|token|key|rank"` — baked 12 × 12 `hud-*` (`paint.ts`
+  `HUD_ART`: coin / token / pick are the `st-*` pixels, the key is upright brass, not the old
+  water drop). GameTop sets `--hud` on itself = 1.4 em of the chip number (twice its cap height)
+  snapped to whole device px per art px (24 px phone, 36 at ui-scale 4); mask icons in header
+  chips take the same box. On phone portrait the chip gap is 1u and padding 2u/3u — the bigger
+  pictures cost 12 px per chip and 360 px must still show money + tokens (340/340 at fit 3).
+  New picture: add it to `HUD_ART`, re-bake (`npx vite-node scripts/ui-px/bake.ts`), restart the
+  stand's Vite if it ignores `public/**` (a new PNG is otherwise the SPA's HTML). The wallet is a
+  disclosure, not a dialog: `role="region"`, the chip has `aria-expanded` + `aria-controls`,
+  focus stays on the chip (it closes on any outside tap).
 - **Widgets:** `gx-btn` / `gx-round` → kit button frames via `--b/--bs/--bw` (gold default;
   iron for `--grey/--dark/--steel`; red; green; `:disabled` / `.is-off` ash), text colours
   `--gx-on-*` = the `.px-btn` face pairs. `gx-badge` → kit badge (1-art-px bob), `gx-bar` → kit

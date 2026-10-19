@@ -2,6 +2,7 @@
 paths:
   - "src/lib/{hub-maps,hub-sim,hub-render,hub-dialog,hub-time,walk}.ts"
   - "src/pages/YardPage.tsx"
+  - "src/pages/hub.css"
   - "scripts/hub/**"
   - "src/components/FloatingStick.tsx"
   - "public/hub/**"
@@ -135,3 +136,97 @@ paths:
 
 Строить на плитках 0x72 подземелья не стали: см. «Площадь v2.80» выше —
 пиксели Ninja Adventure и Kenney в одной палитре, жители — листы NA.
+
+## Square wave 3 — camera, layered render, kit text (agent Q, 13.10.2026)
+
+Owner: «Когда альбомный, персонаж и всё его окружение слишком близкое.» Critic: the walk ran at
+~10 fps on a 4× CPU.
+
+- **Camera:** `resize()` takes `scale = max(1, min(floor(w/192), floor(h/176)))` in DEVICE px per
+  art px (was width-only, so landscape zoomed in to 13). Portrait is unchanged; landscape and
+  desktop show more. Table in the wave-3 report (`scratchpad/ui3Q`). `BOTTOM_INSET` is 0 in
+  landscape (stick and pad stand at the sides there), so the hero sits mid-height.
+- **Layered render (why):** a full-resolution canvas (1170×2532 on a DPR-3 phone) that changes
+  every frame was the whole cost: raster/composite, 88 % «(program)» in the profile, not our JS.
+  A smaller backing store dropped the frame to ~17 ms at once. Now (`hub.css`, YardPage):
+  1. `.hub__canvas` world: 1 art px = 1 canvas px (`ceil(gw)+1` × `ceil(gh)+1`), scaled by CSS
+     width/height with `image-rendering: pixelated`. The camera origin `ox/oy` is a WHOLE art px
+     (`floor(camL)`); a sub-art-px remainder would go into a `translate3d` rounded to whole device
+     px (`place()`), but today the camera itself is whole art px (see «Camera lock»), so it is 0.
+  2. `.hub__light` darkness: its own art-px canvas, scaled SMOOTHLY (`image-rendering: auto`),
+     `display:none` while `dark.a ≤ 0.004` (all day). Glows and cones still go `lighter` into
+     the world canvas.
+  3. `.hub__marks` «!» bangs: cleared only when something was drawn before or is due now.
+  4. `.hub__names` NPC names: DOM `.hub-name` spans (screen-sharp text with an ink outline),
+     created once per NPC, moved by transform; `--px-fs-sm` with a hard 4-direction `--u` ink
+     outline (critic round 2; 11.5 px was below the floor). The «!» sits 42 art px over the feet
+     so it clears the taller name.
+  `setCss` caches transform/display/opacity per element (no style writes when nothing moved).
+- **Camera lock (critic round 2, R32 — the camera target must be still on screen).** The first
+  version claimed «smooth camera, hero on the art grid», but `camera()` rounded `left/top` with
+  `q()` (whole art px) after an eased follow: camera and rounded sprite stepped out of phase and
+  the DRAWN hero jumped 6 device px on 52 of 92 walking frames (my old metric read `toScreen()`,
+  the smooth hero, and missed it). Now (option B): the camera aims at `round(hero × 16)` and,
+  while `hero.moving`, is locked to it with no easing; easing is left for a hero moved by other
+  means; a new map snaps. Drawn hero: 0/93 frames moved on the walk right; the world steps whole
+  art px 1-1-2 (6/12 device px). The hero moves on screen only where the edge clamp holds the
+  camera (that is correct). Option A (hero on its own device-px canvas, world camera on the
+  device grid, a `front` canvas for what covers the hero) is the next step for a smooth world —
+  not done. Measure with `scratchpad/ui3Q/walk2.mjs` (critic's script + `drawnX/drawnY`).
+- **Numbers (pp 390×844 DPR 3, 4× CPU, day, same walk right then down):** old p50 83 ms, 100 %
+  of frames > 33 ms, 95 long tasks; new p50 16.5 ms, 1.6–3.5 % > 33 ms, 0–1 long tasks; camera
+  steps on whole art px 176/176. Landscape 844×390: p50 16.5, 0.3 % > 33 ms.
+- **Kit text over the square (`hub.css`):** the event pill, toast and map pins are kit plates
+  (`--pxk-frame-obsidian` — its fill is PARCHMENT, so the ink is `--px-text`, not cream: cream on
+  it was unreadable); pill/toast/pins `--px-fs-sm`, talk name + text `--px-fs`. Map pins at kit
+  size collided (Шахта / Особая шахта): `HubMapSheet` lays them out in a layout effect — clamp
+  into the frame (1 px in: offsetWidth is whole px), push below a pin above that is closer than
+  18 px, offsets in the frame's own units (`offsetLeft/Top`; the window body may be zoomed ×2).
+  Why 18: each pin's `::after` reaches 9 px above and below the plate (44 px to tap), never
+  sideways, so stacked areas touch but never overlap and side-by-side plates (which never
+  overlap) keep their own pixels; with the critic's 8 the lower pin took the upper one's bottom.
+  A z-index on `::after` can't help: `translate` makes every pin a stacking context, so its
+  area stays at the pin's own paint level (round 2 claimed otherwise — a «Club» area took 4.5 %
+  of «Zucht» at 360 de). Only geometry keeps taps apart. The bottom row is clamped high enough
+  for its area to end inside the frame's 4-px margin (an area past it made the body scroll).
+  The frame fits the window body: if it is taller than the room left (landscape phone: body
+  scrolled 352 / 320), the layout effect sets its width from that height (`margin: 1u auto`).
+  A moved plate gets a tail (`.hub-map__tail`, the `<i>`
+  before its button): a 1-art-px parchment line between ink from the plate edge to the door,
+  ending in a dot. Pressed pins drop 1u (`translate`). A pin with no room below (the bottom row
+  of doors) goes above instead when that moves it less; otherwise it is clamped, and only there
+  two plates may stand 9–14 px apart. Cost: more pins move (7/12 on pp, the tower plate ~70 px)
+  — the tails keep their doors readable. Measure: `scratchpad/ui3Q/mapshot.mjs`.
+- **Talk camera:** while `.hub-talk` is open the bottom camera inset = the box's height
+  (`root.clientHeight − offsetTop`, unaffected by its slide-in), eased in the renderer
+  (`setInsets(top, bottom, ease)`, k = 1 − e^(−10·dt)), re-measured by a ResizeObserver on the
+  box. Phone landscape forge: smith's feet 194 → 78 px against the box top at 185 (was under).
+  The idle stick ring hides while talking (`.hub:has(.hub-talk)`). Under reduced motion the
+  inset is set at once (no glide).
+- **Talk box never grows (round 3, R42):** typing grew the box a line at a time and the camera
+  re-panned after each growth (pp: 80 px in 25 steps). `.hub-talk__text` is a one-cell grid:
+  every line of the talk hidden (`.hub-talk__ghost`), plus the current line as typed `shown` +
+  hidden `rest` — the box has its final height from the first frame and a word never jumps
+  lines mid-typing. The box appears in `steps(3)` opacity only (no slide), so its rect is fixed
+  from the first frame. Double tap (R44): «Пока» opens under the thumb that pressed «Говорить»
+  — the options are inert for `ARM_MS` = 300 ms (`.is-arming`, `pointer-events: none`, and a
+  time check in the click).
+- **HUD band:** `.hub-top .gx-top::before` — flat `--px-ink` from the screen top to 2u under the
+  row (z −1 in `.hub-top`): world sign plates at the spawn read as part of the HUD before.
+- **Motion and type:** the pill, toast and «Говорить» come in with `hub-in` — 2u up + opacity in
+  `steps(3)`, no scale (kit frames must not scale); the old `hub-pop` / `hub-use` /
+  `hub-talk-in` / `hub-me` keyframes are gone. The portrait sits on flat `--gx-wood-dd` with
+  square corners; the map's hero dot is a 3u square with a 1u ink ring blinking in `steps(2)`. Weights: 700 text (toast, talk text, wallet names), 800 the talk name; `.hub-ev b`
+  inherits (was 900).
+- **Press:** `usePress()` on the pad buttons, the event pill, map pins and the talk buttons
+  (`.is-down` in the first frame). Pad and talk buttons are `--px-fs-sm` (`.gx-btn`'s own 15 px
+  beat the page's size before). The toast is centred by `left/right: 16px` + `margin-inline:
+  auto` + `width: fit-content` — `left: 50%` + translate shrink-wrapped it to half the screen.
+- **Stick ring** shows idle only for `html[data-input='touch']` and not during a talk.
+- **Stand:** `window.__hub` (DEV) has `sim`, `r`, `go(to, at)`, `phase(p)`, `say(text)` (toast).
+  Scripts must import the store by the URL the app loaded (`performance.getEntriesByType
+  ('resource')` → `/src/store.ts?t=…`), or they write into a second store instance.
+- **Left:** per-language sign art (ШАХТА, ЛИФТ, ПИТОМНИК, КПП are drawn Russian in
+  `scripts/hub`; critic: replace the words with pictograms — a separate art task); camera
+  option A; a real phone / Telegram webview / iOS Safari check of
+  `image-rendering: pixelated` on a CSS-scaled canvas (Chromium only on the stand).

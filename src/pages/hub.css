@@ -1,0 +1,306 @@
+/* The square (YardPage, `lib/hub-render.ts`) — wave 3, agent Q. Rule: `.claude/rules/hub.md`.
+   Layers over the root, bottom to top: the world canvas in art pixels (the browser scales it ×scale
+   with nearest-neighbour), the darkness canvas (scaled smoothly), the «!» canvas, NPC names (DOM).
+   The renderer sets each layer's size and a transform with the camera's sub-art-pixel remainder. */
+.hub__canvas,
+.hub__light {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.hub__canvas {
+  image-rendering: pixelated;
+}
+.hub__light {
+  display: none;
+  image-rendering: auto;
+}
+.hub__names {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* NPC name over the head: screen letters at kit size with a hard one-art-px ink outline (was
+   canvas `strokeText`, then 11.5 px — below the owner's floor). */
+.hub-name {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: none;
+  color: #fff4dc;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  white-space: nowrap;
+  text-shadow:
+    var(--u) 0 0 #140c08,
+    calc(-1 * var(--u)) 0 0 #140c08,
+    0 var(--u) 0 #140c08,
+    0 calc(-1 * var(--u)) 0 #140c08;
+  will-change: transform, opacity;
+}
+
+/* Text over the square on the kit: kit plates (the obsidian frame, parchment fill — not rounded
+   pills), kit ink, kit type sizes — the pill, toast and map pins at `--px-fs-sm`, talk `--px-fs`. */
+.hub-ev,
+.hub-toast,
+.hub-map__pin {
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  color: var(--px-text);
+}
+
+/* Live event: one row under the header; a tap leads where it runs. */
+.hub-ev {
+  position: relative;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  max-width: 100%;
+  min-height: max(40px, calc(16 * var(--u)));
+  padding: 0 calc(5 * var(--u)) 0 calc(2 * var(--u));
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  animation: hub-in 0.18s steps(3) both;
+}
+.hub-ev__glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: max(24px, calc(11 * var(--u)));
+  height: max(24px, calc(11 * var(--u)));
+  background: var(--ev, #6b3f20);
+  box-shadow: inset 0 0 0 var(--u) rgba(0, 0, 0, 0.45);
+  font-size: var(--px-fs-sm);
+}
+.hub-ev b {
+  font-weight: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hub-ev em {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  color: var(--px-gold);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+/* Pressed (`usePress` → `.is-down`, first frame): the plate darker, the content an art px lower. */
+.hub-ev:is(:active, .is-down),
+.hub-map__pin:is(:active, .is-down) {
+  filter: brightness(0.8);
+}
+.hub-ev:is(:active, .is-down) > * {
+  translate: 0 var(--u);
+}
+
+/* Centred by insets + `fit-content`, not `left: 50%` + translate: that shrink-to-fit used only the
+   right half of the screen and broke one line into 4–6 (CSS 2.1 §10.3.7, R33). */
+.hub-toast {
+  position: absolute;
+  z-index: 5;
+  left: 16px;
+  right: 16px;
+  top: calc(
+    var(--safe-top) + var(--content-top) + var(--gx-top-h) + max(40px, calc(16 * var(--u))) + 28px
+  );
+  width: fit-content;
+  max-width: min(560px, calc(100vw - 32px));
+  margin-inline: auto;
+  padding: calc(3 * var(--u)) calc(6 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.3 var(--px-font);
+  text-align: center;
+  translate: none;
+  pointer-events: none;
+  animation: hub-in 0.18s steps(3) both;
+}
+
+/* Buttons at kit size: `.gx-btn`'s own 15 px beat the old 17 px of «Говорить». */
+.hub-pad .hub-pad__use,
+.hub-talk__opts .gx-btn {
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+}
+.hub-pad .hub-pad__use {
+  animation: hub-in 0.18s steps(3) both;
+}
+
+/* Kit frames don't scale: the pill, toast and «Говорить» come in like the kit — two art px up in
+   three hard steps with the opacity, no scale, no overshoot. Type: 700 text, 800 headings. */
+@keyframes hub-in {
+  from {
+    opacity: 0;
+    translate: 0 calc(2 * var(--u));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-ev,
+  .hub-toast,
+  .hub-pad .hub-pad__use {
+    animation: none;
+  }
+}
+
+.hub-talk .hub-talk__name {
+  font-size: var(--px-fs);
+  font-weight: 800;
+  color: var(--gx-red-d);
+  text-shadow: none;
+}
+/* The reply: every line of the talk laid out hidden in one grid cell (the box has its final
+   height from the first frame), the current line typed as shown + hidden rest (no re-wrap). */
+.hub-talk__text {
+  display: grid;
+  width: 100%;
+  font-size: var(--px-fs);
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--gx-ink);
+  white-space: pre-wrap;
+}
+
+.hub-map__pin {
+  position: absolute;
+  translate: -50% -100%;
+  padding: calc(1 * var(--u)) calc(3 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.hub-map__pin .gx-badge {
+  top: -9px;
+  right: -9px;
+  min-width: 18px;
+  height: 18px;
+}
+/* ≥ 44 px to tap (the plate is 27 px on phones; insets count from the padding box, hence the
+   border): 9 px above and below, not sideways. Plates never overlap and stacked ones stand 18 px
+   apart; a closer pair (the clamped bottom row) splits the gap (`--hit-t/-b` from the layout),
+   so no area reaches another plate (a pin is a stacking context — `translate` — so a
+   z-index on `::after` can't put areas under the neighbours; only geometry can). */
+.hub-map .hub-map__frame {
+  margin: var(--u) auto 4px;
+}
+.hub-map__pin::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--hit-t, 9px) - var(--u)) calc(-1 * var(--u))
+    calc(-1 * var(--hit-b, 9px) - var(--u));
+}
+.hub-map__pin:is(:active, .is-down) {
+  translate: -50% calc(-100% + var(--u));
+}
+/* A plate moved off its door (collision / edge) points back at it: a 1-art-px line in plate
+   colours (parchment between ink) from the plate edge to the door, ending in a 3-u dot. */
+.hub-map__tail {
+  position: absolute;
+  width: var(--u);
+  margin-left: calc(-0.5 * var(--u));
+  background: #fff4dc;
+  box-shadow:
+    var(--u) 0 0 #140c08,
+    calc(-1 * var(--u)) 0 0 #140c08;
+  pointer-events: none;
+}
+.hub-map__tail::before {
+  content: '';
+  position: absolute;
+  left: calc(-1.5 * var(--u));
+  top: calc(-2 * var(--u));
+  width: calc(2 * var(--u));
+  height: calc(2 * var(--u));
+  border: var(--u) solid #140c08;
+  background: #fff4dc;
+}
+.hub-map__tail.is-up::before {
+  top: auto;
+  bottom: calc(-2 * var(--u));
+}
+
+/* The idle joystick ring is a hint for the thumb: mouse, keyboard and pad players don't get it,
+   nor anyone while the talk box is open (it sat on the box on a landscape phone). */
+html:not([data-input='touch']) .hub .dg-stick.is-idle,
+.hub:has(.hub-talk) .dg-stick.is-idle {
+  opacity: 0;
+}
+
+/* The HUD row has its own ground: a flat ink band from the screen top to 2 art px under the row,
+   so world sign plates (ШАХТА, ПИТОМНИК at the spawn) never read as part of the HUD. The camera
+   already keeps the hero below it (`setInsets` top = the bottom of `.hub-top`). */
+.hub-top .gx-top {
+  position: relative;
+}
+.hub-top .gx-top::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: -10px;
+  right: -10px;
+  top: calc(-1 * (var(--safe-top) + var(--content-top) + 8px));
+  bottom: calc(-2 * var(--u));
+  background: var(--px-ink);
+  pointer-events: none;
+}
+
+.hub-talk__text > * {
+  grid-area: 1 / 1;
+}
+.hub-talk__ghost,
+.hub-talk__rest {
+  visibility: hidden;
+}
+/* The options are inert for 300 ms after the talk opens (a double tap on «Говорить»). */
+.hub-talk__opts.is-arming {
+  pointer-events: none;
+}
+
+/* Pixel motion (R31): the talk box appears in three hard opacity steps and doesn't move (its
+   rect is the same from the first frame); the portrait sits on flat wood with square corners;
+   the hero's dot on the map is a 3u square with a 1u ink ring that blinks in two steps. */
+.hub .hub-talk {
+  animation: hub-show 0.18s steps(3) both;
+}
+.hub-talk .hub-talk__face {
+  border-radius: 0;
+  background: var(--gx-wood-dd);
+}
+.hub-map .hub-map__me {
+  width: calc(3 * var(--u));
+  height: calc(3 * var(--u));
+  margin: calc(-1.5 * var(--u)) 0 0 calc(-1.5 * var(--u));
+  background: #7fe6d0;
+  box-shadow: 0 0 0 var(--u) #0b1e1a;
+  animation: hub-blink 1.2s steps(2, jump-none) infinite;
+}
+@keyframes hub-show {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes hub-blink {
+  to {
+    opacity: 0.2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub .hub-talk,
+  .hub-map .hub-map__me {
+    animation: none;
+  }
+}

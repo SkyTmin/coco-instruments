@@ -11,12 +11,19 @@
 // в цикле `requestAnimationFrame` мимо React; React перерисовывает табло,
 // только когда оно поменялось.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GameTop, GxBar, GxIcon, GxModal } from '@/components/gx';
-import { CoinIcon } from '@/components/slot-art';
-import { KeyIcon, PrisonCamp, TokenIcon, useNow } from '@/components/PrisonCamp';
+import { GameTop, GxBar, GxHud, GxIcon, GxModal } from '@/components/gx';
+import { PrisonCamp, useNow } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
 import { ForgeScreen } from '@/components/ForgeScreen';
 import { Inventory } from '@/components/Inventory';
@@ -63,8 +70,10 @@ import { registerEscape } from '@/lib/escape-stack';
 import { useAction, useGameplayCapture, useHotkeys, useMoveAxis } from '@/input/hooks';
 import { inTopLayer } from '@/input/focus-nav';
 import { Prompt } from '@/input/Prompt';
-import { fmtNum, fmtShort, t as tNow, useT } from '@/i18n';
+import { fmtNum, t as tNow, useT } from '@/i18n';
 import { doorLabel, eventLead, eventName, hubMapName, npcName } from '@/i18n/data-yard';
+import { usePress } from '@/ui-px';
+import './hub.css';
 
 const fmt = (n: number) => fmtNum(Math.round(n));
 const clock = (ms: number) => {
@@ -78,7 +87,7 @@ const clock = (ms: number) => {
 const STEP = 1 / 60;
 /** Затемнение при смене карты — половина уходит в чёрное, половина из него. */
 const FADE_MS = 250;
-/** Сколько снизу занимают джойстик и кнопки, CSS px. */
+/** Сколько снизу занимают джойстик и кнопки, CSS px (стоя; лёжа они по бокам — 0). */
 const BOTTOM_INSET = 100;
 /** Где стоял герой: удобство, не прогресс — пропало, значит встанет у ворот. */
 const POS_KEY = 'hub.pos.v1';
@@ -157,6 +166,7 @@ export function YardPage() {
 
 function HubWorld() {
   const t = useT();
+  const press = usePress();
   const nav = useNavigate();
   const owner = useOwner();
   const prison = useFinanceStore((s) => s.prison);
@@ -179,9 +189,14 @@ function HubWorld() {
 
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lightRef = useRef<HTMLCanvasElement>(null);
+  const marksRef = useRef<HTMLCanvasElement>(null);
+  const namesRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const [sim] = useState<HubSim>(() => createHubSim(firstPlace()));
   const rendRef = useRef<HubRenderer | null>(null);
+  /** Re-measures the camera insets (the talk box opening / growing): set by the world effect. */
+  const insetsRef = useRef<(ease: boolean) => void>(() => {});
   const input = useRef<HubInput>({ ...HUB_NO_INPUT });
   const busyRef = useRef(false);
   const fading = useRef(false);
@@ -423,7 +438,11 @@ function HubWorld() {
     const canvas = canvasRef.current;
     const root = rootRef.current;
     if (!canvas || !root) return undefined;
-    const r = new HubRenderer(canvas);
+    const r = new HubRenderer(canvas, {
+      light: lightRef.current ?? undefined,
+      marks: marksRef.current ?? undefined,
+      names: namesRef.current ?? undefined,
+    });
     rendRef.current = r;
     if (import.meta.env.DEV)
       Object.assign(window as unknown as Record<string, unknown>, {
@@ -431,18 +450,35 @@ function HubWorld() {
           sim,
           r,
           go: (to: string, at: string) => go(to, at),
+          say,
           /** Час суток для стенда: 0…1 или null — настоящий. */
           phase: (p: number | null) => {
             r.phaseOverride = p;
           },
         },
       });
-    const fit = () => {
-      r.resize(root.clientWidth, root.clientHeight, window.devicePixelRatio || 1);
+    const insets = (ease: boolean) => {
       const top = topRef.current?.getBoundingClientRect().bottom ?? 0;
       // Снизу — джойстик и кнопки: маленькая комната встаёт посередине между
       // табло и ними, а край большой карты не прячется под пальцем.
-      r.setInsets(Math.max(0, top - root.getBoundingClientRect().top), BOTTOM_INSET);
+      // Лёжа джойстик и кнопки стоят по бокам, а не снизу: герой — посередине высоты.
+      const land = root.clientWidth > root.clientHeight;
+      // Talking: the box covers the bottom (53 % of a landscape phone) — the hero and the
+      // speaker stand in the part above it. `offsetTop` ignores the box's slide-in transform.
+      const talkEl = root.querySelector<HTMLElement>('.hub-talk');
+      const talkH = talkEl ? root.clientHeight - talkEl.offsetTop : 0;
+      // Reduced motion: the camera takes its new place at once, like every CSS animation.
+      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+      r.setInsets(
+        Math.max(0, top - root.getBoundingClientRect().top),
+        Math.max(land ? 0 : BOTTOM_INSET, talkH),
+        ease && !still,
+      );
+    };
+    insetsRef.current = insets;
+    const fit = () => {
+      r.resize(root.clientWidth, root.clientHeight, window.devicePixelRatio || 1);
+      insets(false);
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -499,6 +535,7 @@ function HubWorld() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      insetsRef.current = () => {};
       document.removeEventListener('visibilitychange', onHide);
       if (!leaving.current) savePlace(placeOf(sim));
       rendRef.current = null;
@@ -506,6 +543,17 @@ function HubWorld() {
     // Мир один на заход на площадь.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim]);
+
+  // The talk box opens / closes / grows (more lines): the camera glides to the part above it.
+  const talkOpen = talk !== null;
+  useLayoutEffect(() => {
+    insetsRef.current(true);
+    const el = rootRef.current?.querySelector('.hub-talk');
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => insetsRef.current(true));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [talkOpen, talk?.id]);
 
   // «!» над жителями с делом и над дверями, за которыми такой житель.
   useEffect(() => {
@@ -605,34 +653,57 @@ function HubWorld() {
       onPointerCancel={onUp}
       onContextMenu={(e) => e.preventDefault()}
     >
+      {/* Мир в игровых пикселях (браузер увеличивает), темнота, «!» и имена — слоями. */}
       <canvas className="hub__canvas" ref={canvasRef} />
+      <canvas className="hub__light" ref={lightRef} />
+      <canvas className="hub__canvas hub__marks" ref={marksRef} />
+      <div className="hub__names" ref={namesRef} aria-hidden="true" />
 
       <div className="hub-top" ref={topRef} onPointerDown={stop}>
         <GameTop
           title={hubMapName(sim.map.id, sim.map.data.name) || t('yard.title')}
           onBack={exit}
           right={<AudioToggles />}
-          chips={
-            <>
-              <span className="gx-chip">
-                <CoinIcon size={18} /> {fmtShort(balance)}
-              </span>
-              <span className="gx-chip">
-                <TokenIcon size={17} /> {fmt(prison.tokens)}
-              </span>
-              <span className="gx-chip">
-                <KeyIcon size={17} /> {prison.keys}
-              </span>
-              <span className="gx-chip yardx__rank" title={t('yard.rankTip')}>
-                <GxIcon name="pick" size={16} /> {rankLetter(prison.rank)}
-              </span>
-            </>
-          }
+          chips={[
+            {
+              id: 'coins',
+              icon: <GxHud name="coin" />,
+              value: balance,
+              name: t('inv.coins'),
+              pri: 1,
+              ch: 7,
+            },
+            {
+              id: 'tokens',
+              icon: <GxHud name="token" />,
+              value: prison.tokens,
+              name: t('inv.tokens'),
+              pri: 2,
+              ch: 6,
+            },
+            {
+              id: 'keys',
+              icon: <GxHud name="key" />,
+              value: prison.keys,
+              name: t('inv.section.keys'),
+              pri: 3,
+              ch: 3,
+            },
+            {
+              id: 'rank',
+              icon: <GxHud name="rank" />,
+              value: rankLetter(prison.rank),
+              name: t('yard.rankTip'),
+              pri: 3,
+              className: 'yardx__rank',
+            },
+          ]}
         />
         {ev && def && (
           <button
             type="button"
             className="hub-ev"
+            {...press}
             style={{ '--ev': def.color } as CSSProperties}
             onClick={() => leave(ev.place === 'forest' ? '/forest' : '/prison')}
           >
@@ -659,6 +730,7 @@ function HubWorld() {
           <button
             type="button"
             className="gx-round gx-round--dark hub-pad__map"
+            {...press}
             aria-label={t('yard.creative')}
             onClick={() => {
               tapLight();
@@ -671,6 +743,7 @@ function HubWorld() {
         <button
           type="button"
           className="gx-round gx-round--dark hub-pad__map"
+          {...press}
           aria-label={t('yard.inventory')}
           data-tip={t('input.action.inventory')}
           data-tip-key="inventory"
@@ -685,6 +758,7 @@ function HubWorld() {
           <button
             type="button"
             className="gx-round gx-round--dark hub-pad__map"
+            {...press}
             aria-label={t('yard.map')}
             onClick={() => {
               tapLight();
@@ -698,6 +772,7 @@ function HubWorld() {
           <button
             type="button"
             className={`gx-btn hub-pad__use${use.kind === 'npc' ? ' gx-btn--red' : ''}`}
+            {...press}
             onClick={actNear}
           >
             <GxIcon name={use.kind === 'npc' ? 'scroll' : 'gate'} />
@@ -804,6 +879,8 @@ function HubWorld() {
 
 /** Букв в секунду: реплика печатается быстро — читать, а не ждать. */
 const TYPE_CPS = 55;
+/** Options are inert this long after a talk opens: the second tap of a double tap on «Говорить». */
+const ARM_MS = 300;
 
 function HubTalk({
   name,
@@ -823,20 +900,35 @@ function HubTalk({
   onClose: () => void;
 }) {
   const t = useT();
+  const press = usePress();
   const [i, setI] = useState(0);
   const [done, setDone] = useState(false);
-  const textRef = useRef<HTMLSpanElement>(null);
+  const shownRef = useRef<HTMLSpanElement>(null);
+  const restRef = useRef<HTMLSpanElement>(null);
   const skip = useRef(false);
+  // A double tap on «Говорить» must not land on «Пока», which opens under the same thumb: the
+  // options are inert for the first 300 ms (no press shows either).
+  const born = useRef(performance.now());
+  const [arming, setArming] = useState(true);
+  useEffect(() => {
+    const id = window.setTimeout(() => setArming(false), ARM_MS);
+    return () => clearTimeout(id);
+  }, []);
+  const armed = () => performance.now() - born.current >= ARM_MS;
   const line = lines[Math.min(i, lines.length - 1)] ?? '';
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => registerEscape(() => closeRef.current()), []);
 
   // Печать — прямо в текст узла, мимо React: шестьдесят перерисовок окна в
-  // секунду ради одной буквы незачем.
+  // секунду ради одной буквы незачем. The whole line is always laid out — the typed part
+  // shown, the rest hidden — and every line of the talk sits hidden in the same grid cell, so
+  // the box has its final height from the first frame (it grew a line at a time and the
+  // camera re-panned after each growth) and a word never jumps to the next line mid-typing.
   useEffect(() => {
-    const el = textRef.current;
-    if (!el) return undefined;
+    const el = shownRef.current;
+    const rest = restRef.current;
+    if (!el || !rest) return undefined;
     skip.current = false;
     setDone(false);
     const still =
@@ -844,9 +936,12 @@ function HubTalk({
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
     if (still) {
       el.textContent = line;
+      rest.textContent = '';
       setDone(true);
       return undefined;
     }
+    el.textContent = '';
+    rest.textContent = line;
     const t0 = performance.now();
     let raf = 0;
     const tick = () => {
@@ -854,6 +949,7 @@ function HubTalk({
         ? line.length
         : Math.min(line.length, Math.floor(((performance.now() - t0) / 1000) * TYPE_CPS));
       el.textContent = line.slice(0, n);
+      rest.textContent = line.slice(n);
       if (n >= line.length) setDone(true);
       else raf = requestAnimationFrame(tick);
     };
@@ -883,17 +979,30 @@ function HubTalk({
           </span>
           <button type="button" className="gx-panel hub-talk__say" onClick={next}>
             <b className="hub-talk__name">{name}</b>
-            <span className="hub-talk__text" ref={textRef} />
+            <span className="hub-talk__text">
+              {lines.map((l, k) => (
+                <span key={k} className="hub-talk__ghost" aria-hidden="true">
+                  {l}
+                </span>
+              ))}
+              <span>
+                <span ref={shownRef} />
+                <span ref={restRef} className="hub-talk__rest" aria-hidden="true" />
+              </span>
+            </span>
             {done && more && <i className="hub-talk__more" aria-hidden="true" />}
           </button>
         </div>
-        <div className="hub-talk__opts">
+        <div className={`hub-talk__opts${arming ? ' is-arming' : ''}`}>
           {options.map((o) => (
             <button
               key={o.label}
               type="button"
               className="gx-btn gx-btn--red"
-              onClick={() => onOption(o)}
+              {...press}
+              onClick={() => {
+                if (armed()) onOption(o);
+              }}
             >
               {o.label}
             </button>
@@ -901,7 +1010,9 @@ function HubTalk({
           <button
             type="button"
             className="gx-btn gx-btn--grey"
+            {...press}
             onClick={() => {
+              if (!armed()) return;
               uiTap();
               onClose();
             }}
@@ -930,8 +1041,115 @@ function HubMapSheet({
   onPick: (d: HubDoor) => void;
 }) {
   const t = useT();
+  const press = usePress();
   const cvRef = useRef<HTMLCanvasElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const m = sim.map;
+  // Pins at kit type size collide (Шахта / Особая шахта stand side by side) and the edge ones
+  // ran past the frame: keep each inside the frame and move it below any pin above it that it
+  // overlaps, 18 px apart: the 44-px hit areas (9 px above and below the plate) touch but never
+  // overlap, so a stacked pin keeps its full area. The bottom row stays high enough for its area
+  // to end inside the frame's margin (an area past it made the body scroll). A moved plate gets
+  // a tail (`.hub-map__tail`, the element before it) from its edge to its door, ending in a dot.
+  // Offsets are in the frame's own units (the window body may be zoomed).
+  useLayoutEffect(() => {
+    const fr = frameRef.current;
+    if (!fr) return;
+    const GAP = 18;
+    const lay = () => {
+      // The frame fits the window body: on a landscape phone the body scrolled (352 / 320) and
+      // the bottom row of doors opened half under the window edge. Too tall — sized by the
+      // height left in the body (centred by its auto margins).
+      const fcs = getComputedStyle(fr);
+      const body = fr.parentElement;
+      fr.style.width = '';
+      if (body) {
+        const bcs = getComputedStyle(body);
+        const room =
+          body.clientHeight -
+          parseFloat(bcs.paddingTop) -
+          parseFloat(bcs.paddingBottom) -
+          parseFloat(fcs.marginTop) -
+          parseFloat(fcs.marginBottom);
+        if (fr.offsetHeight > room + 0.5) fr.style.width = `${Math.floor((room * m.w) / m.h)}px`;
+      }
+      const low = Math.max(1, 9 - (parseFloat(fcs.marginBottom) || 0));
+      const pins = [...fr.querySelectorAll<HTMLElement>('.hub-map__pin')];
+      const boxes = pins.map((el) => {
+        el.style.transform = '';
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        const ax = el.offsetLeft;
+        const ay = el.offsetTop;
+        return { el, ax, ay, l: ax - w / 2, t: ay - h, w, h };
+      });
+      boxes.sort((a, b) => a.t - b.t || a.l - b.l);
+      const fw = fr.clientWidth;
+      const fh = fr.clientHeight;
+      const placed: { el: HTMLElement; l: number; t: number; r: number; b: number }[] = [];
+      for (const p of boxes) {
+        // 1 px inside the frame: offsetWidth is whole px, the plate is not.
+        const dx = Math.max(0, 1 - p.l) - Math.max(0, p.l + p.w + 1 - fw);
+        const l = p.l + dx;
+        // Below the pins in the way; no room below (the bottom row of doors) — above them.
+        const settle = (down: boolean) => {
+          let y = Math.max(1, Math.min(p.t, fh - p.h - low));
+          for (let n = 0; n < boxes.length; n++) {
+            const hit = placed.find(
+              (q) => l < q.r && l + p.w > q.l && y < q.b + GAP && y + p.h + GAP > q.t,
+            );
+            if (!hit) break;
+            y = down ? hit.b + GAP : hit.t - GAP - p.h;
+          }
+          return y;
+        };
+        let top = settle(true);
+        if (top + p.h > fh - low) {
+          const up = settle(false);
+          if (up >= 1 && p.t - up < top - p.t) top = up;
+        }
+        top = Math.max(1, Math.min(top, fh - p.h - low));
+        const dy = top - p.t;
+        p.el.style.transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
+        placed.push({ el: p.el, l, t: top, r: l + p.w, b: top + p.h });
+        // Tail: straight up or down from the door point to the near plate edge (the door's x is
+        // always inside the plate: an edge clamp shifts it by less than half its width).
+        const tail = p.el.previousElementSibling as HTMLElement | null;
+        if (!tail?.classList.contains('hub-map__tail')) continue;
+        const edge = top > p.ay ? top : top + p.h < p.ay ? top + p.h : NaN;
+        if (Number.isNaN(edge) || Math.abs(edge - p.ay) < 2) {
+          tail.hidden = true;
+          continue;
+        }
+        tail.hidden = false;
+        tail.classList.toggle('is-up', edge < p.ay);
+        tail.style.left = `${p.ax}px`;
+        tail.style.top = `${Math.min(edge, p.ay)}px`;
+        tail.style.height = `${Math.abs(edge - p.ay)}px`;
+      }
+      // Areas reach 9 px above and below, but only half-way to a plate closer than 18 px (the
+      // clamped bottom row): no area ever covers another plate's pixels.
+      for (const a of placed) {
+        let up = 9;
+        let down = 9;
+        for (const q of placed) {
+          if (q === a || a.l >= q.r || a.r <= q.l) continue;
+          if (q.b <= a.t + 0.5) up = Math.min(up, (a.t - q.b) / 2);
+          else if (q.t >= a.b - 0.5) down = Math.min(down, (q.t - a.b) / 2);
+        }
+        a.el.style.setProperty('--hit-t', `${Math.max(0, up)}px`);
+        a.el.style.setProperty('--hit-b', `${Math.max(0, down)}px`);
+      }
+    };
+    lay();
+    const ro = new ResizeObserver(lay);
+    ro.observe(fr);
+    document.fonts?.addEventListener?.('loadingdone', lay);
+    return () => {
+      ro.disconnect();
+      document.fonts?.removeEventListener?.('loadingdone', lay);
+    };
+  }, [m]);
   // Карта рисуется один раз: пол и все постройки кадром «покоя». Картинки
   // могли ещё не прийти — тогда повтор через миг.
   useEffect(() => {
@@ -964,23 +1182,26 @@ function HubMapSheet({
   const hy = (sim.hero.y / m.h) * 100;
   return (
     <GxModal title={t('yard.mapTitle')} onClose={onClose} className="hub-map">
-      <div className="hub-map__frame" style={{ aspectRatio: `${m.w} / ${m.h}` }}>
+      <div className="hub-map__frame" ref={frameRef} style={{ aspectRatio: `${m.w} / ${m.h}` }}>
         <canvas ref={cvRef} className="hub-map__cv" />
         <i className="hub-map__me" style={{ left: `${hx}%`, top: `${hy}%` }} aria-hidden="true" />
         {places.map((d) => (
-          <button
-            key={d.i}
-            type="button"
-            className="hub-map__pin"
-            style={{ left: `${((d.x + d.w / 2) / m.w) * 100}%`, top: `${(d.y / m.h) * 100}%` }}
-            onClick={() => {
-              tapLight();
-              onPick(d);
-            }}
-          >
-            {d.label ? doorLabel(d) : hubMapName(d.to, HUB_MAPS[d.to].name)}
-            {flags.has(d.i) && <span className="gx-badge gx-badge--gold">!</span>}
-          </button>
+          <Fragment key={d.i}>
+            <i className="hub-map__tail" hidden aria-hidden="true" />
+            <button
+              type="button"
+              className="hub-map__pin"
+              {...press}
+              style={{ left: `${((d.x + d.w / 2) / m.w) * 100}%`, top: `${(d.y / m.h) * 100}%` }}
+              onClick={() => {
+                tapLight();
+                onPick(d);
+              }}
+            >
+              {d.label ? doorLabel(d) : hubMapName(d.to, HUB_MAPS[d.to].name)}
+              {flags.has(d.i) && <span className="gx-badge gx-badge--gold">!</span>}
+            </button>
+          </Fragment>
         ))}
       </div>
     </GxModal>

@@ -1,7 +1,9 @@
 # UI critic — checklist and researched rules
 
 Read by the `critic` agent (`.claude/agents/critic.md`) before every review. Not auto-loaded.
-The critic appends researched rules at the bottom: one line each, with a number, a source and a date.
+These are the saved acceptance criteria (critic rule 8): don't change them without a new reason.
+The critic appends rules at the bottom: one line each, with a number, a source and a date.
+Old lines may say P0/P1/P2: read them as Блокирующее / Существенное / Полировка.
 
 ## Owner's verdicts (binding; full text in `.claude/rules/ui-px.md`)
 

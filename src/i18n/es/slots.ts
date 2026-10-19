@@ -66,10 +66,12 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'un premio de ×{x} en un solo giro',
     yourBest: 'tu mejor: {x} de ×{goal}',
     fromLevel: 'desde el nivel {n}',
+    current: 'elegido',
     note: 'La «Reliquia» no se desbloquea por nivel: se gana con un solo giro gordo y se queda para siempre. Símbolos: Twemoji (CC-BY 4.0, Twitter Inc. y colaboradores).',
   },
   hud: {
     balance: 'Saldo',
+    betLabel: 'Apuesta',
     jackpot: 'Bote',
     best: 'Mejor giro',
     lvl: 'Niv. {n}',
@@ -111,6 +113,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: 'Junta {n} iguales',
   },
   btn: {
+    spinShort: 'Girar',
+    freeShort: 'Gratis',
+    brokeShort: 'Sin monedas',
+    bonusShort: 'Bonus',
+    stopShort: 'Parar',
+    skip: 'Saltar',
     stopInf: 'Parar · ∞',
     stopN: 'Parar ({n})',
     combo: 'Combo ×{n}…',
@@ -126,6 +134,9 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'giros',
   statBestWin: 'mejor premio',
   pay: {
+    more: 'Detalles',
+    cascShort: 'Los ganadores desaparecen, caen otros: el multiplicador sube',
+    introShort: '5 líneas, de izquierda a derecha · 3 en raya = pago',
     title: 'Pagos y líneas',
     intro:
       'Cinco líneas, cada una paga de izquierda a derecha: tres iguales son el premio gordo, los dos primeros devuelven algo. El multiplicador de la tabla se aplica a la apuesta ÷ {unit}: con una apuesta de {bet}, son {line}.',
@@ -172,6 +183,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Se detiene solo si faltan monedas',
     h10: 'diez giros',
     h25: 'veinticinco',
     h50: 'cincuenta',
@@ -190,6 +202,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Giros y cascadas el doble de rápidos',
   },
   bet: {
+    short: '{min}–{max}, paso {step}',
+    lineShort: 'línea = apuesta ÷ {unit}',
     less: 'Menos',
     more: 'Más',
     note: 'De {min} a {max} monedas, de {step} en {step}. Una línea paga sobre la apuesta ÷ {unit}: ahora son {line}.',
@@ -217,6 +231,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MÁXIMO',
   },
   cascade: {
+    howShort: '{n} iguales en cualquier sitio = premio, el tablero cae',
+    anteChip: '×{n}',
     subtitle: 'Tablero {cols}×{rows} · {n} iguales en cualquier sitio',
     bonus: 'BONUS',
     left: 'quedan {n}',
@@ -224,6 +240,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Comprar bonus',
   },
   rules: {
+    orbShort: 'Un orbe de ×2 a ×500 multiplica el premio del giro',
+    scatShort: '{trigger}+ scatters en cualquier sitio: {fs} giros gratis',
+    anteShort: 'Ante: apuesta ×{ante}, bonus el doble de veces · compra: {buy} apuestas',
     title: 'Cómo funciona',
     anyTitle: 'Ocho iguales en cualquier sitio',
     any: 'No hay líneas: cuenta cuántos símbolos iguales caen en todo el tablero {cols}×{rows}. Desde {n} hay premio, estén donde estén. Los ganadores desaparecen, los de arriba caen a su sitio, el tablero se cuenta de nuevo, y así mientras salgan premios.',

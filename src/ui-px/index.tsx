@@ -68,6 +68,10 @@ export type PxIconName =
   | 'question'
   | 'excl'
   | 'minus'
+  // wave 2 — K
+  | 'auto'
+  | 'buzz'
+  | 'skip'
   // wave 3 — T2
   | 'undo';
 

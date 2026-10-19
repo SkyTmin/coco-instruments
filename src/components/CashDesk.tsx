@@ -7,11 +7,15 @@ import { rainCoins } from '@/lib/coins';
 import { coinDing, primeAudio } from '@/lib/sound';
 import { notifySuccess, tapMedium } from '@/lib/haptics';
 import { CreativeRow } from '@/components/CreativePanel';
-import { fmtDate, fmtNum as fmt, t, useT } from '@/i18n';
+import { Button, Icon } from '@/ui-px';
+import '@/pages/casino.css';
+import { fmtDate, fmtNum as fmt, fmtShort, t, useT } from '@/i18n';
 
 const AMOUNTS = [10_000, 100_000, 1_000_000];
 /** Токены каторги: их в игре добывать тяжелее всего. */
 const TOKENS = [1_000, 10_000, 100_000];
+/** Миллион — коротко («1 млн»): полная запись не влезает в кнопку на телефоне. */
+const amount = (n: number) => (n >= 1_000_000 ? fmtShort(n) : fmt(n));
 
 /**
  * Касса: кнопка «закинуть себе монет» — и токенов каторги. Монеты и токены
@@ -56,30 +60,41 @@ export function CashDesk() {
   if (!owner) return null;
 
   return (
-    <div className="reward-block">
-      <div className="reward-block__head">
-        <span className="reward-block__title">{t('cash.title')}</span>
-        <span className="reward-block__meta">{t('cash.meta')}</span>
+    <section className="cash px" aria-label={t('cash.title')}>
+      <div className="cash__head">
+        <h3 className="px-h">{t('cash.title')}</h3>
+        <span className="cash__meta">{t('cash.meta')}</span>
       </div>
-      <div className="cash-row">
+      {/* Что выдаёт ряд — значок в его начале; на кнопках только суммы. */}
+      <div className="cash__row">
+        <span className="cash__what">
+          <CoinIcon size={22} />
+        </span>
         {AMOUNTS.map((n) => (
-          <button key={n} className="cash-btn" onClick={() => give(n)}>
-            +{fmt(n)}
-            <CoinIcon size={14} />
-          </button>
+          <Button key={n} kind="primary" className="cash__btn" onClick={() => give(n)}>
+            <b className="px-num">+{amount(n)}</b>
+          </Button>
         ))}
       </div>
-      <div className="cash-row">
+      <div className="cash__row">
+        <span className="cash__what">
+          <Icon name="token" />
+        </span>
         {TOKENS.map((n) => (
-          <button key={n} className="cash-btn cash-btn--token" onClick={() => giveTokens(n)}>
-            +{fmt(n)} ✦
-          </button>
+          <Button key={n} className="cash__btn" onClick={() => giveTokens(n)}>
+            <b className="px-num">+{amount(n)}</b>
+          </Button>
         ))}
       </div>
-      <CreativeRow />
-      <p className="reward-block__hint">{t('cash.hint')}</p>
+      <div className="cash__creative px-dark">
+        <CreativeRow className="px-btn px-f px-btn--iron" />
+      </div>
+      {/* Одна строка; полный текст — в подсказке (critic K2 #14). */}
+      <p className="cash__hint" data-tip={t('cash.hint')}>
+        {t('cash.hintShort')}
+      </p>
       <BackupHealth s={status} />
-    </div>
+    </section>
   );
 }
 
@@ -105,23 +120,23 @@ function BackupHealth({ s }: { s: BackupStatus | null }) {
     !s.lastBackup || Date.now() - new Date(s.lastBackup.at).getTime() > 36 * 60 * 60 * 1000;
 
   return (
-    <div className="backup-health">
-      <div className="backup-health__row">
+    <div className="cash-health">
+      <div className="cash-health__row">
         <span>{t('cash.telegram')}</span>
         <b className={out?.ok ? 'is-ok' : 'is-bad'}>
           {out == null ? '—' : out.ok ? t('cash.linkOk', { ms: out.ms ?? 0 }) : t('cash.linkNo')}
         </b>
       </div>
-      {out && !out.ok && out.error && <p className="backup-health__err">{out.error}</p>}
+      {out && !out.ok && out.error && <p className="cash-health__err">{out.error}</p>}
 
-      <div className="backup-health__row">
+      <div className="cash-health__row">
         <span>{t('cash.disk')}</span>
         <b className={s.freeMb != null && s.freeMb < 300 ? 'is-bad' : 'is-ok'}>
           {s.freeMb != null ? t('cash.mb', { n: s.freeMb }) : '—'}
         </b>
       </div>
 
-      <div className="backup-health__row">
+      <div className="cash-health__row">
         <span>{t('cash.last')}</span>
         <b className={stale ? 'is-bad' : 'is-ok'}>
           {s.lastBackup
@@ -131,13 +146,11 @@ function BackupHealth({ s }: { s: BackupStatus | null }) {
       </div>
 
       {s.lastError && (
-        <p className="backup-health__err">
+        <p className="cash-health__err">
           {t('cash.failed', { stage: s.lastError.stage, error: s.lastError.error })}
         </p>
       )}
-      <p className="reward-block__hint" style={{ marginBottom: 0 }}>
-        {t('cash.schedule')}
-      </p>
+      <p className="cash__hint">{t('cash.schedule')}</p>
     </div>
   );
 }
