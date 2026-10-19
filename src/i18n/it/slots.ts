@@ -66,10 +66,12 @@ export const slots: Translation<typeof ru> = {
     relicWhat: 'una vincita da ×{x} in un solo giro',
     yourBest: 'il tuo record: {x} su ×{goal}',
     fromLevel: 'dal livello {n}',
+    current: 'scelto',
     note: 'La «Reliquia» non si sblocca col livello: si guadagna con un solo giro grosso e resta per sempre. Simboli: Twemoji (CC-BY 4.0, Twitter Inc. e collaboratori).',
   },
   hud: {
     balance: 'Saldo',
+    betLabel: 'Puntata',
     jackpot: 'Jackpot',
     best: 'Giro migliore',
     lvl: 'Liv. {n}',
@@ -111,6 +113,12 @@ export const slots: Translation<typeof ru> = {
     hintCollect: 'Raccogli {n} uguali',
   },
   btn: {
+    spinShort: 'Gira',
+    freeShort: 'Gratis',
+    brokeShort: 'Al verde',
+    bonusShort: 'Bonus',
+    stopShort: 'Stop',
+    skip: 'Salta',
     stopInf: 'Stop · ∞',
     stopN: 'Stop ({n})',
     combo: 'Combo ×{n}…',
@@ -126,6 +134,9 @@ export const slots: Translation<typeof ru> = {
   statSpins: 'giri',
   statBestWin: 'vincita migliore',
   pay: {
+    more: 'Dettagli',
+    cascShort: 'I vincenti spariscono, ne cadono altri: il moltiplicatore sale',
+    introShort: '5 linee, da sinistra a destra · 3 in fila = vincita',
     title: 'Vincite e linee',
     intro:
       'Cinque linee, ognuna paga da sinistra a destra: tre uguali sono la vincita grossa, i primi due ridanno qualcosa. Il moltiplicatore della tabella vale per la puntata ÷ {unit}: con una puntata di {bet} fa {line}.',
@@ -172,6 +183,7 @@ export const slots: Translation<typeof ru> = {
     },
   },
   auto: {
+    short: 'Si ferma da solo se mancano monete',
     h10: 'dieci giri',
     h25: 'venticinque',
     h50: 'cinquanta',
@@ -190,6 +202,8 @@ export const slots: Translation<typeof ru> = {
     turboHint: 'Giri e cascate il doppio più veloci',
   },
   bet: {
+    short: '{min}–{max}, passo {step}',
+    lineShort: 'linea = puntata ÷ {unit}',
     less: 'Meno',
     more: 'Più',
     note: 'Da {min} a {max} monete, a passi di {step}. Una linea paga sulla puntata ÷ {unit}: ora fa {line}.',
@@ -217,6 +231,8 @@ export const slots: Translation<typeof ru> = {
     max: 'MASSIMO',
   },
   cascade: {
+    howShort: '{n} uguali ovunque = vincita, il campo crolla',
+    anteChip: '×{n}',
     subtitle: 'Griglia {cols}×{rows} · {n} uguali ovunque',
     bonus: 'BONUS',
     left: 'ancora {n}',
@@ -224,6 +240,9 @@ export const slots: Translation<typeof ru> = {
     buy: 'Compra bonus',
   },
   rules: {
+    orbShort: 'Una sfera da ×2 a ×500 moltiplica la vincita del giro',
+    scatShort: '{trigger}+ scatter ovunque: {fs} giri gratis',
+    anteShort: 'Ante: puntata ×{ante}, bonus il doppio delle volte · acquisto: {buy} puntate',
     title: 'Come funziona',
     anyTitle: 'Otto uguali ovunque',
     any: 'Niente linee: conta quanti simboli uguali cadono in tutta la griglia {cols}×{rows}. Da {n} in su è vincita, ovunque siano. I vincenti spariscono, quelli sopra cadono al loro posto, la griglia si ricalcola, e così via finché escono vincite.',

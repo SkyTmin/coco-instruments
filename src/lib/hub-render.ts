@@ -177,11 +177,44 @@ export interface HubFlags {
   doors: Set<number>;
 }
 
+/**
+ * Слои площади поверх холста мира (их даёт страница). Без них — свет
+ * рисуется в невидимый холст, а имён нет (стенд, тесты).
+ */
+export interface HubLayers {
+  /** Темнота ночи и комнат: маленький холст, браузер растягивает его мягко. */
+  light?: HTMLCanvasElement;
+  /** «!» над жителями и дверями — поверх темноты, целыми игровыми пикселями. */
+  marks?: HTMLCanvasElement;
+  /** Имена жителей — буквами экрана (DOM), а не пикселями мира. */
+  names?: HTMLElement;
+}
+
 export class HubRenderer {
+  /**
+   * Холст мира — в игровых пикселях: пиксель холста = игровой пиксель, а
+   * увеличивает его браузер (CSS ×scale, `image-rendering: pixelated`).
+   * Раньше мир рисовался прямо в экранные точки (1170×2532 на телефоне):
+   * каждый кадр заливал и отдавал композитору 3 млн точек, и площадь шла
+   * рывками (на стенде при 4× замедлении — 50–60 мс кадр). Теперь 196×424.
+   * Спрайты стоят на целых игровых пикселях — не «едут» по плиткам пола;
+   * остаток камеры меньше игрового пикселя — сдвигом слоя в точках экрана,
+   * так прокрутка остаётся плавной.
+   */
   readonly view: HTMLCanvasElement;
   private g: CanvasRenderingContext2D;
+  /** Левый верхний угол холста мира в мире — всегда целый игровой пиксель. */
+  ox = 0;
+  oy = 0;
   private light: HTMLCanvasElement;
   private lctx: CanvasRenderingContext2D;
+  /** Левый верхний угол холста темноты в мире (игровые пиксели). */
+  private lightAt = { x: 0, y: 0, on: false };
+  private marks: HTMLCanvasElement;
+  private mctx: CanvasRenderingContext2D;
+  private marksDrawn = false;
+  private names: HTMLElement | null;
+  private nameEls = new Map<string, HTMLSpanElement>();
   /** Масштаб: игровой пиксель = столько экранных. */
   scale = 4;
   gw = 192;
@@ -194,6 +227,8 @@ export class HubRenderer {
   /** Сколько сверху и снизу закрыто табло, игровые пиксели. */
   private insetTop = 0;
   private insetBottom = 0;
+  /** Where `insetBottom` is heading: the talk box slides in, the camera follows it (eased). */
+  private insetBottomGoal = 0;
   /** Левый верхний угол кадра в мире — после прижатия к точкам экрана. */
   left = 0;
   top = 0;
@@ -212,35 +247,62 @@ export class HubRenderer {
   /** Час суток для стенда: null — настоящий. */
   phaseOverride: number | null = null;
 
-  constructor(view: HTMLCanvasElement) {
+  constructor(view: HTMLCanvasElement, layers: HubLayers = {}) {
     this.view = view;
     this.g = view.getContext('2d')!;
-    this.light = document.createElement('canvas');
+    this.light = layers.light ?? document.createElement('canvas');
     this.lctx = this.light.getContext('2d')!;
+    this.marks = layers.marks ?? document.createElement('canvas');
+    this.mctx = this.marks.getContext('2d')!;
+    this.names = layers.names ?? null;
   }
 
   /**
-   * Подогнать под экран: множитель целый, в ширину — около двенадцати
-   * плиток (192 игровых пикселя), как просит художественная библия.
+   * Подогнать под экран: множитель целый и считается по ОБЕИМ сторонам — не
+   * меньше двенадцати плиток в ширину (192 игровых пикселя, как просит
+   * художественная библия) и одиннадцати в высоту (176). По одной ширине
+   * телефон лёжа увеличивал всё в 2,2 раза: 5,6 клетки в высоту, герой —
+   * шестая часть экрана (владелец: «персонаж и окружение слишком близко»).
+   * Стоя ничего не меняется: там тесна ширина.
    */
   resize(cssW: number, cssH: number, dpr: number): void {
     this.dpr = Math.min(3, Math.max(1, dpr));
     const w = Math.max(1, Math.round(cssW * this.dpr));
     const h = Math.max(1, Math.round(cssH * this.dpr));
-    this.view.width = w;
-    this.view.height = h;
-    this.scale = Math.max(1, Math.floor(w / 192));
+    this.scale = Math.max(1, Math.min(Math.floor(w / 192), Math.floor(h / 176)));
     this.gw = w / this.scale;
     this.gh = h / this.scale;
-    this.light.width = Math.ceil(this.gw) + 2;
-    this.light.height = Math.ceil(this.gh) + 2;
+    const size = (c: HTMLCanvasElement, cw: number, ch: number) => {
+      c.width = cw;
+      c.height = ch;
+      // Точки экрана на игровой пиксель — целые: scale / dpr CSS px.
+      c.style.width = `${(cw * this.scale) / this.dpr}px`;
+      c.style.height = `${(ch * this.scale) / this.dpr}px`;
+    };
+    size(this.view, Math.ceil(this.gw) + 1, Math.ceil(this.gh) + 1);
+    size(this.marks, this.view.width, this.view.height);
+    size(this.light, Math.ceil(this.gw) + 2, Math.ceil(this.gh) + 2);
     this.g.imageSmoothingEnabled = false;
+    this.mctx.imageSmoothingEnabled = false;
+    this.marksDrawn = true;
   }
 
-  /** Сколько экрана занимает табло сверху и снизу (CSS px). */
-  setInsets(topCss: number, bottomCss: number): void {
+  /** Стиль слоя — только если поменялся (каждый кадр, без лишней работы стилям). */
+  private setCss(el: HTMLElement, prop: 'transform' | 'display' | 'opacity', v: string): void {
+    const key = `${prop}:${v}`;
+    const k = el as HTMLElement & { _hub?: Record<string, string> };
+    const prev = (k._hub ??= {});
+    if (prev[prop] === key) return;
+    prev[prop] = key;
+    el.style[prop] = v;
+  }
+
+  /** Сколько экрана занимает табло сверху и снизу (CSS px). `ease` — the bottom one glides
+   *  there (the talk box opening), not jumps; a resize sets it at once. */
+  setInsets(topCss: number, bottomCss: number, ease = false): void {
     this.insetTop = (topCss * this.dpr) / this.scale;
-    this.insetBottom = (bottomCss * this.dpr) / this.scale;
+    this.insetBottomGoal = (bottomCss * this.dpr) / this.scale;
+    if (!ease || !this.camReady) this.insetBottom = this.insetBottomGoal;
   }
 
   /** Камеру — сразу на героя (новая карта, быстрый переход). */
@@ -248,8 +310,8 @@ export class HubRenderer {
     this.camReady = false;
   }
 
-  /** Координата в игровых пикселях, прижатая к точке экрана. */
-  private q = (v: number) => Math.round(v * this.scale) / this.scale;
+  /** Координата в игровых пикселях, прижатая к целому игровому пикселю холста мира. */
+  private q = (v: number) => Math.round(v);
 
   toWorld(cssX: number, cssY: number): { x: number; y: number } {
     const gx = (cssX * this.dpr) / this.scale;
@@ -282,19 +344,32 @@ export class HubRenderer {
 
   private camera(sim: HubSim, dt: number): void {
     const h = sim.hero;
+    if (this.insetBottom !== this.insetBottomGoal) {
+      const d = this.insetBottomGoal - this.insetBottom;
+      this.insetBottom =
+        Math.abs(d) < 0.5 ? this.insetBottomGoal : this.insetBottom + d * (1 - Math.exp(-10 * dt));
+    }
     const vis = this.gh - this.insetTop - this.insetBottom;
     // Точка середины видимой части в кадре.
     const sy = this.insetTop + vis / 2;
-    const tx = h.x * TS;
-    const ty = h.y * TS - 6;
-    if (!this.camReady) {
+    // The camera aims at the hero's own art pixel: the sprite is drawn there, so the hero stands
+    // still on screen and the world steps whole art px. An eased camera and the rounded sprite
+    // stepped out of phase and shook the hero ±1 art px on ~40 % of walking frames (R32).
+    const tx = Math.round(h.x * TS);
+    const ty = Math.round(h.y * TS) - 6;
+    if (!this.camReady || h.moving) {
+      // New map — at once; walking — locked to the hero, no easing.
       this.camX = tx;
       this.camY = ty;
       this.camReady = true;
+    } else {
+      // Standing (the hero was moved by other means): ease over.
+      const k = 1 - Math.exp(-6 * dt);
+      this.camX += (tx - this.camX) * k;
+      this.camY += (ty - this.camY) * k;
+      if (Math.abs(tx - this.camX) < 0.02) this.camX = tx;
+      if (Math.abs(ty - this.camY) < 0.02) this.camY = ty;
     }
-    const k = 1 - Math.exp(-6 * dt);
-    this.camX += (tx - this.camX) * k;
-    this.camY += (ty - this.camY) * k;
     const mw = sim.map.w * TS;
     const mh = sim.map.h * TS;
     this.left = this.q(this.edge(this.camX - this.gw / 2, mw, this.gw, 0, 0));
@@ -320,16 +395,27 @@ export class HubRenderer {
       preloadHubMap(m);
     }
     this.camera(sim, dt);
+    // Мир рисуется от целого игрового пикселя слева сверху; на время кадра
+    // `left/top` — этот угол, потом снова настоящая камера (для `toWorld`).
+    const camL = this.left;
+    const camT = this.top;
+    const ix = Math.floor(camL + 1e-6);
+    const iy = Math.floor(camT + 1e-6);
+    this.ox = ix;
+    this.oy = iy;
+    this.left = ix;
+    this.top = iy;
     const g = this.g;
-    const left = this.left;
-    const top = this.top;
+    const left = ix;
+    const top = iy;
+    const VW = this.view.width;
+    const VH = this.view.height;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.imageSmoothingEnabled = false;
     g.globalAlpha = 1;
     g.globalCompositeOperation = 'source-over';
     g.fillStyle = m.bg || '#120c10';
-    g.fillRect(0, 0, this.view.width, this.view.height);
-    g.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+    g.fillRect(0, 0, VW, VH);
 
     // Пол и стены — одна картинка на карту.
     const ground = hubImage(`maps/${m.id}.png`);
@@ -342,7 +428,7 @@ export class HubRenderer {
     const list: D[] = [];
     const tops: D[] = [];
     const inView = (x: number, y: number, w: number, h: number) =>
-      x + w > left && x < left + this.gw && y + h > top && y < top + this.gh;
+      x + w > left && x < left + VW && y + h > top && y < top + VH;
     if (atlas) {
       for (const o of m.objs) {
         const sp = HUB_SPRITES[o[0]];
@@ -373,12 +459,31 @@ export class HubRenderer {
     this.emit(m, dt);
     this.drawParts(dt);
 
-    // Свет и сутки.
+    // Свет и сутки: подсвет — в холст мира, темнота — своим слоем сверху.
     const phase = this.phaseOverride ?? dayPhase(now);
     this.drawLight(sim, phase);
 
-    // «!» и имена — поверх темноты: их обязаны видеть и ночью.
+    // «!» — поверх темноты, имена — буквами экрана: их обязаны видеть и ночью.
     this.drawMarks(sim);
+
+    this.left = camL;
+    this.top = camT;
+    this.place(ix, iy);
+  }
+
+  /** Слои — на место: остаток камеры меньше игрового пикселя, в целых точках экрана. */
+  private place(ix: number, iy: number): void {
+    const at = (x: number, y: number) =>
+      `translate3d(${Math.round((x - this.left) * this.scale) / this.dpr}px, ${
+        Math.round((y - this.top) * this.scale) / this.dpr
+      }px, 0)`;
+    const t = at(ix, iy);
+    this.setCss(this.view, 'transform', t);
+    this.setCss(this.marks, 'transform', t);
+    const L = this.lightAt;
+    this.setCss(this.light, 'display', L.on ? 'block' : 'none');
+    if (L.on) this.setCss(this.light, 'transform', at(L.x, L.y));
+    this.placeNames();
   }
 
   /** Пошёл по тапу — кольцо на полу в точке, как в MMORPG: видно, что тап принят. */
@@ -747,6 +852,7 @@ export class HubRenderer {
     }
     const beams = outdoor && night > 0.02 ? m.searchlights : [];
 
+    this.lightAt.on = dark.a > 0.004;
     if (dark.a > 0.004) {
       const l = this.lctx;
       const lx = Math.floor(left) - 1;
@@ -774,16 +880,30 @@ export class HubRenderer {
         const a = this.beamAngle(ph);
         hole(x + Math.cos(a) * 96, y + Math.sin(a) * 96, 30, 0.8 * night);
       }
+      // Луч прожектора лежит ПОД слоем темноты (его подсвет — в холсте мира),
+      // поэтому вдоль луча темнота прорезается тем же клином.
+      if (beams.length) {
+        const cone = this.coneImg();
+        l.globalAlpha = Math.min(1, night);
+        for (const [x, y, ph] of beams) {
+          l.save();
+          l.translate(x - lx, y - ly);
+          l.rotate(this.beamAngle(ph));
+          l.drawImage(cone, 0, -48, 128 * 1.1, 96);
+          l.restore();
+        }
+      }
       l.globalAlpha = 1;
       l.globalCompositeOperation = 'source-over';
-      g.imageSmoothingEnabled = true;
-      g.drawImage(this.light, lx - left, ly - top);
-      g.imageSmoothingEnabled = false;
+      // Слой темноты браузер растягивает мягко (`image-rendering: auto`), как прежде.
+      this.lightAt.x = lx;
+      this.lightAt.y = ly;
     }
 
     // Цветной подсвет — сложением. Снаружи днём его почти не видно, ночью —
     // в полную силу; внутри — всегда.
     g.globalCompositeOperation = 'lighter';
+    g.imageSmoothingEnabled = true;
     // Сила — прозрачностью, а не цветом пятна: пятно кешируется по цвету, и
     // сила, плавно меняющаяся на закате, плодила бы по холсту на кадр.
     g.globalAlpha = outdoor ? 0.08 + 0.3 * night : 0.3;
@@ -808,6 +928,7 @@ export class HubRenderer {
       g.globalAlpha = 1;
     }
     g.globalCompositeOperation = 'source-over';
+    g.imageSmoothingEnabled = false;
   }
 
   /** Прожектор ходит по кругу — оборот за шестнадцать секунд, фаза своя у каждой вышки. */
@@ -817,13 +938,18 @@ export class HubRenderer {
 
   // ---- «!» и имена -------------------------------------------------------
 
+  /** Имена жителей этого кадра: мировая точка над макушкой и прозрачность. */
+  private nameList: { id: string; text: string; x: number; y: number; a: number }[] = [];
+
   private drawMarks(sim: HubSim): void {
-    const g = this.g;
+    const m = this.mctx;
     const bob = reduce() ? 0 : Math.round(Math.sin(this.time * 4) * 1.5);
+    const bangs: [number, number][] = [];
     for (const n of sim.npcs) {
       if (!this.flags.npcs.has(n.id) || sim.talking === n.id) continue;
-      // Над именем: имя висит сразу над макушкой, «!» — выше него.
-      this.bang(this.q(n.x * TS - this.left), this.q(n.y * TS - this.top) - 36 + bob);
+      // Над именем: имя висит сразу над макушкой, «!» — выше него. Та же целая
+      // точка мира, что у спрайта жителя.
+      bangs.push([Math.round(n.x * TS) - this.left, Math.round(n.y * TS) - this.top - 42 + bob]);
     }
     for (const d of sim.map.doors) {
       if (!this.flags.doors.has(d.i)) continue;
@@ -831,39 +957,56 @@ export class HubRenderer {
       // Дверь фасада (подходят снизу) — над проёмом: его верх в двух плитках
       // над нижней кромкой двери. Коврик в комнате — прямо над ним.
       const y = d.ny < 0 ? (d.y + d.h - 2) * TS - this.top - 14 : d.y * TS - this.top - 14;
-      this.bang(this.q(x), this.q(y) + bob);
+      bangs.push([this.q(x), this.q(y) + bob]);
     }
-    // Имена жителей — чёткими буквами экрана, не пикселями мира.
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    // Кегль — в точках CSS (11,5), а не в игровых пикселях: на плотном экране
-    // игровой пиксель мелкий, и имя в 3,4 таких было бы с булавочную головку.
-    const size = Math.round(11.5 * this.dpr);
-    g.font = `800 ${size}px GxRubik, system-ui, sans-serif`;
-    g.textAlign = 'center';
-    g.textBaseline = 'alphabetic';
-    g.lineJoin = 'round';
+    // Слой «!» чистим, только если на нём что-то было: пустой холст не трогаем.
+    if (bangs.length || this.marksDrawn) {
+      m.clearRect(0, 0, this.marks.width, this.marks.height);
+      for (const [x, y] of bangs) this.bang(m, x, y);
+      this.marksDrawn = bangs.length > 0;
+    }
+    // Имена жителей — чёткими буквами экрана (DOM-слой), не пикселями мира.
+    const names = this.nameList;
+    names.length = 0;
+    if (!this.names) return;
     for (const n of sim.npcs) {
-      const name = npcName(n.data.id, n.data.name);
-      if (!name) continue;
+      const text = npcName(n.data.id, n.data.name);
+      if (!text) continue;
       const d = Math.hypot(sim.hero.x - n.x, sim.hero.y - n.y);
       // Имя видно вблизи — вдали оно ничего не говорит, а поле загромождает.
       const a = Math.max(0, Math.min(1, (5 - d) / 1.5));
       if (a <= 0) continue;
-      const x = (n.x * TS - this.left) * this.scale;
-      const y = (n.y * TS - this.top - 15) * this.scale;
-      g.globalAlpha = a;
-      g.lineWidth = Math.max(2, Math.round(size / 4));
-      g.strokeStyle = 'rgba(12,8,6,0.9)';
-      g.strokeText(name, x, y);
-      g.fillStyle = '#f7ead0';
-      g.fillText(name, x, y);
+      names.push({ id: n.id, text, x: Math.round(n.x * TS), y: Math.round(n.y * TS) - 15, a });
     }
-    g.globalAlpha = 1;
+  }
+
+  /** Имена — на место (после кадра, от настоящей камеры). */
+  private placeNames(): void {
+    const box = this.names;
+    if (!box) return;
+    const k = this.scale / this.dpr;
+    const seen = new Set<string>();
+    for (const n of this.nameList) {
+      seen.add(n.id);
+      let el = this.nameEls.get(n.id);
+      if (!el) {
+        el = document.createElement('span');
+        el.className = 'hub-name';
+        box.appendChild(el);
+        this.nameEls.set(n.id, el);
+      }
+      if (el.textContent !== n.text) el.textContent = n.text;
+      const x = Math.round((n.x - this.left) * k * this.dpr) / this.dpr;
+      const y = Math.round((n.y - this.top) * k * this.dpr) / this.dpr;
+      this.setCss(el, 'display', 'block');
+      this.setCss(el, 'transform', `translate3d(${x}px, ${y}px, 0) translate(-50%, -100%)`);
+      this.setCss(el, 'opacity', n.a.toFixed(2));
+    }
+    for (const [id, el] of this.nameEls) if (!seen.has(id)) this.setCss(el, 'display', 'none');
   }
 
   /** Золотой «!» в пиксель — как у квестодателей в MMORPG. */
-  private bang(x: number, y: number): void {
-    const g = this.g;
+  private bang(g: CanvasRenderingContext2D, x: number, y: number): void {
     g.fillStyle = '#141b1b';
     g.fillRect(x - 3, y - 1, 6, 12);
     g.fillStyle = '#ffd24a';

@@ -223,6 +223,24 @@ export function fmtShort(n: number, l: Lang = lang): string {
   );
 }
 
+const compactCache = new Map<Lang, Intl.NumberFormat>();
+/**
+ * HUD number (GameTop chips, the mine's top bar): below 10 000 in full, above — the language's
+ * own compact form with its default rounding (ru «511 млн», «9,8 млн»; de «511 Mio.»; tr «511 Mn»;
+ * en «511M»). One formatter for every chip, so the same wallet never reads three ways. The exact
+ * value goes to the tip / wallet popover via `fmtNum`.
+ */
+export function fmtCompact(n: number, l: Lang = lang): string {
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) < 1e4) return fmtNum(n, l);
+  let f = compactCache.get(l);
+  if (!f) {
+    f = new Intl.NumberFormat(LOCALE[l], { notation: 'compact' });
+    compactCache.set(l, f);
+  }
+  return wide(f.format(n));
+}
+
 /** Number with up to `digits` decimals in the language's style («1,5» / «1.5»). */
 export function fmtDec(n: number, digits = 1, l: Lang = lang): string {
   if (!Number.isFinite(n)) return '—';
