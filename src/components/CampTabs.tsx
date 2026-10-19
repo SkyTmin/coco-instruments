@@ -7,7 +7,7 @@
 // `wide` tablet landscape / desktop (two columns), `tall` tablet portrait. Nothing jumps:
 // inspect panels and rows have fixed heights, selection only moves a ring.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
@@ -143,7 +143,8 @@ const pctText = (x: number) => `+${fmtDec(Math.round(x * 1000) / 10, 1)}%`;
 const SHOP_PACKS = [1, 5, 10] as const;
 let shopPack: number = 1;
 
-export function ShopTab() {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const ShopTab = memo(function ShopTab() {
   const t = useT();
   const { lay } = useLay();
   const p = useFinanceStore((s) => s.prison);
@@ -267,7 +268,7 @@ export function ShopTab() {
       </div>
     </div>
   );
-}
+});
 
 // ---- Руны -------------------------------------------------------------------------------------
 
@@ -276,7 +277,8 @@ const TIER_RAR = [0, 2, 3, 4, 5];
 
 const BONUS_KEYS: (keyof Bonus)[] = ['sell', 'dmg', 'rate', 'loot', 'token', 'proc', 'luck'];
 
-export function RunesTab({ axeLevel }: { axeLevel: number }) {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number }) {
   const t = useT();
   const { lay, scale, dpr, short } = useLay();
   const p = useFinanceStore((s) => s.prison);
@@ -485,10 +487,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
             const r = id ? (p.runes.find((z) => z.id === id) ?? null) : null;
             const locked = i >= open;
             return (
-              <div
-                key={i}
-                className={`ctab-sock ctab-sock--${i}${shake === i ? ' is-shake' : ''}`}
-              >
+              <div key={i} className={`ctab-sock ctab-sock--${i}${shake === i ? ' is-shake' : ''}`}>
                 <Slot
                   rarity={r ? TIER_RAR[r.tier - 1] : 0}
                   selected={!!r && sel === r.id}
@@ -583,14 +582,14 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
           rune: `${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`,
         })
       : plan
-      ? `${t('camp.runes.fuseGo')} ${plan.with
-          .map((r: Rune) => `${runeName(r.kind)} ${pctText(runePower(r))}`)
-          .join(', ')} → ${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`
-      : rune.tier < RUNE_ROMAN.length
-        ? t(short ? 'ctabs.runes.fuseNeedShort' : 'camp.runes.fuseNeed', {
-            tier: RUNE_ROMAN[rune.tier - 1],
-          })
-        : ''
+        ? `${t('camp.runes.fuseGo')} ${plan.with
+            .map((r: Rune) => `${runeName(r.kind)} ${pctText(runePower(r))}`)
+            .join(', ')} → ${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`
+        : rune.tier < RUNE_ROMAN.length
+          ? t(short ? 'ctabs.runes.fuseNeedShort' : 'camp.runes.fuseNeed', {
+              tier: RUNE_ROMAN[rune.tier - 1],
+            })
+          : ''
     : '';
 
   // The panel keeps one height: with nothing picked the same rows are laid out invisibly (a
@@ -664,11 +663,12 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
       {insp}
     </div>
   );
-}
+});
 
 // ---- Коллекция находок -----------------------------------------------------------------------
 
-export function FindsTab() {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const FindsTab = memo(function FindsTab() {
   const t = useT();
   const { lay, scale, dpr } = useLay();
   const p = useFinanceStore((s) => s.prison);
@@ -748,7 +748,7 @@ export function FindsTab() {
       </Panel>
     </div>
   );
-}
+});
 
 // ---- Достижения -------------------------------------------------------------------------------
 
@@ -817,7 +817,12 @@ function MileGifts({ m }: { m: (typeof MILES)[number] }) {
   );
 }
 
-export function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const MilesTab = memo(function MilesTab({
+  onGain,
+}: {
+  onGain: (from: number, to: number) => void;
+}) {
   const t = useT();
   const { lay } = useLay();
   const p = useFinanceStore((s) => s.prison);
@@ -953,7 +958,7 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
       {reveal && <ParcelReveal open={reveal} onClose={() => setReveal(null)} />}
     </div>
   );
-}
+});
 
 // ---- Навыки -----------------------------------------------------------------------------------
 
@@ -986,7 +991,8 @@ function perkVal(text: string | null): string | null {
   return m ? m[0].trim() : null;
 }
 
-export function PerksTab() {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const PerksTab = memo(function PerksTab() {
   const t = useT();
   // A short phone takes the tablet-portrait skills (one-line values, smaller nodes) — the tree
   // was squeezed to nothing at 320×568.
@@ -1209,4 +1215,4 @@ export function PerksTab() {
       </Panel>
     </div>
   );
-}
+});
