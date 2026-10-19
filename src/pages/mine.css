@@ -179,10 +179,28 @@ html[data-input='touch'] .mn .px-keyhint {
 .mn-side::-webkit-scrollbar {
   display: none;
 }
+/* Колонка всё равно длиннее окна (полоса скрыта): у нижней кромки — ступенчатая тень в 2u,
+   признак продолжения (критик r4, NN/g). Ставит `useSideFit`; на проверенных окнах её нет. */
+.mn-side[data-more]::after {
+  content: '';
+  position: sticky;
+  bottom: calc(-3 * var(--u));
+  flex: none;
+  height: calc(3 * var(--u));
+  margin-top: calc(-5 * var(--u));
+  background:
+    linear-gradient(rgb(46 30 18 / 0.55), rgb(46 30 18 / 0.55)) bottom / 100% var(--u) no-repeat,
+    linear-gradient(rgb(46 30 18 / 0.28), rgb(46 30 18 / 0.28)) bottom calc(1 * var(--u)) left 0 /
+      100% var(--u) no-repeat;
+  pointer-events: none;
+}
 /* Правая колонка: рюкзак сверху, док заполняет остаток — по кнопке в ряд, ряды растут
    до 32u (критик: без пустых полос, ≤ 15 % пустоты в колонке). */
 .mn-side--r > .mn-dock {
   flex: 1 1 0;
+  /* Без этого колонка-флекс не даёт сетке сжаться ниже рядов по 36u (min-height: auto) —
+     на 1366×657 правая колонка перебирала 60 px. Ряды ужимаются до 21u. */
+  min-height: 0;
   grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: minmax(calc(21 * var(--u)), calc(36 * var(--u)));
 }
@@ -240,9 +258,26 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
   margin: 0 0 calc(2 * var(--u));
   font-size: var(--px-fs);
 }
-/* Телефон лёжа: с заданием проводника заголовка «Расходники» нет — колонка низкая. */
-html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
+/* С заданием проводника заголовка «Расходники» нет — на любом широком экране (телефон лёжа,
+   планшет, компьютер: критик r4 — на 1280×720 рюкзак уходил под край). */
+.mn-side--l:has(.mn-quest) .mn-side__h {
   display: none;
+}
+/* Планшет и компьютер: задание одной высоты на всех шагах — название всегда занимает две
+   строки, конец — 16u, полосы нет (тот же счёт «N/M» стоит в карточке). Иначе карточка
+   менялась 96 → 135 px от шага к шагу, а рюкзак под ней прыгал (и мог переезжать в
+   правую колонку на одних шагах и не на других). */
+html:not([data-ff^='phone']) .mn--wide .mn-quest {
+  grid-template-rows: calc(2.2 * var(--px-fs-sm)) calc(15 * var(--u));
+  /* 2u, а не 3u: 1280×650 с заданием — левая колонка без рюкзака перебирала 9 px. */
+  padding-top: calc(2 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+html:not([data-ff^='phone']) .mn--wide .mn-quest .px-bar {
+  display: none;
+}
+html:not([data-ff^='phone']) .mn--wide .mn-quest > :last-child {
+  height: 100%;
 }
 /* …и ячейки 22u (44 px): полоса серии выросла на 3u (темп внутри рамки) — ряд расходников
    на 844×390 выходил за низ экрана на 1 px. */
@@ -252,11 +287,8 @@ html[data-ff^='phone'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items:not([data-
 html[data-ff^='phone'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items__row {
   height: calc(22 * var(--u));
 }
-/* Планшет лёжа с заданием: заголовка тоже нет, расходники — одним рядом (tl de: рюкзак
-   с «Продать» уходил под нижний край колонки на 88 px). */
-html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-side__h {
-  display: none;
-}
+/* Планшет лёжа с заданием: расходники — одним рядом (tl de: рюкзак с «Продать» уходил под
+   нижний край колонки на 88 px). */
 html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items {
   container-type: inline-size;
 }

@@ -1829,6 +1829,10 @@ export function PrisonPage() {
   const slotRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const cell = useFieldCell(rootRef, slotRef, frameRef, wide, shell.scale);
+  const leftRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+  /** Рюкзак — наверху правой колонки: левая на этом окне не помещается (см. `useSideFit`). */
+  const bagRight = useSideFit(leftRef, rightRef, wide, roomy);
   // Отряд на кромке рамы растёт вместе с клеткой; на телефоне — прежние 44.
   const petSize = Math.max(44, Math.min(112, Math.round(cell * 0.9)));
   const dockIco = (roomy ? 24 : 12) * shell.scale;
@@ -2717,18 +2721,18 @@ export function PrisonPage() {
 
   const layout = wide
     ? [
-        <div key="l" className="mn-side mn-side--l">
+        <div key="l" ref={leftRef} className="mn-side mn-side--l">
           {hud}
           {/* Обёртка — контейнер `mnrank`: по её ширине рамка ранга выбирает раскладку условий. */}
           <div className="mn-rankwrap">{rankBox}</div>
           <div className="mn-panel">{streakBox}</div>
           {questBox}
           {itemsRow}
-          {roomy && bagBox}
+          {roomy && !bagRight && bagBox}
         </div>,
         fieldBox,
-        <div key="r" className="mn-side mn-side--r">
-          {!roomy && bagBox}
+        <div key="r" ref={rightRef} className="mn-side mn-side--r">
+          {(!roomy || bagRight) && bagBox}
           {dock}
         </div>,
       ]
@@ -3189,6 +3193,68 @@ function useFieldCell(
     return () => ro.disconnect();
   }, [root, slot, frame, wide, scale]);
   return cell;
+}
+
+/**
+ * Широкий экран: помещается ли левая колонка. На планшете и компьютере (`roomy`) рюкзак
+ * стоит внизу левой колонки, пока она влезает в окно; не влезает — рюкзак переезжает наверх
+ * правой, над доком (критик r4: на 1280×720 с заданием «Продать» был под краем на 66 px, в
+ * окне браузера ноутбука 1280×650 — и без задания). Колонка меряется ВМЕСТЕ с рюкзаком, где
+ * бы он сейчас ни стоял, поэтому переезд не качается туда-обратно. Колонка, которая всё равно
+ * длиннее окна (полоса прокрутки скрыта), получает `data-more` — ступенчатая тень у нижней
+ * кромки: молча не обрезаем.
+ */
+function useSideFit(
+  left: RefObject<HTMLDivElement>,
+  right: RefObject<HTMLDivElement>,
+  wide: boolean,
+  roomy: boolean,
+): boolean {
+  const [moved, setMoved] = useState(false);
+  useLayoutEffect(() => {
+    const L = left.current;
+    const R = right.current;
+    if (!wide || !L || !R) {
+      setMoved(false);
+      return undefined;
+    }
+    const measure = () => {
+      if (roomy) {
+        const bag = L.querySelector(':scope > .mn-bag') ?? R.querySelector(':scope > .mn-bag');
+        const cs = getComputedStyle(L);
+        const gap = parseFloat(cs.rowGap) || 0;
+        let need = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+        let n = 0;
+        for (const el of [...L.children, ...(bag && !L.contains(bag) ? [bag] : [])]) {
+          const h = el.getBoundingClientRect().height;
+          if (!h) continue;
+          need += h;
+          n += 1;
+        }
+        need += gap * Math.max(0, n - 1);
+        setMoved(need > L.clientHeight + 0.5);
+      }
+      for (const c of [L, R]) c.toggleAttribute('data-more', c.scrollHeight > c.clientHeight + 1);
+    };
+    const ro = new ResizeObserver(measure);
+    const watch = () => {
+      ro.disconnect();
+      for (const c of [L, R]) {
+        ro.observe(c);
+        for (const el of c.children) ro.observe(el);
+      }
+      measure();
+    };
+    const mo = new MutationObserver(watch);
+    mo.observe(L, { childList: true });
+    mo.observe(R, { childList: true });
+    watch();
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [left, right, wide, roomy]);
+  return roomy && moved;
 }
 
 /** Перерисовка раз в секунду, пока `on` — для таймеров баффов. */
