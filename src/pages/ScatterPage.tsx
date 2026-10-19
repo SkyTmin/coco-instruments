@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAction } from '@/input/hooks';
 import { AnimatedNumber } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
@@ -66,7 +66,7 @@ import type {
 import type { SlotSymbolId } from '@/types';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
-import { fmtCompact, fmtDec, fmtNum, orbName, rich, t, useT, winStepName } from '@/i18n';
+import { fmtCompact, fmtDec, fmtNum, orbName, rich, t, useLang, useT, winStepName } from '@/i18n';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
 import type { OrbTier } from '@/lib/orb-rarity';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
@@ -501,6 +501,7 @@ const SpinCol = memo(
 
 export function ScatterPage() {
   const tr = useT();
+  const lang = useLang();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const bet = useFinanceStore((s) => s.slotsBet);
@@ -1641,6 +1642,16 @@ export function ScatterPage() {
     </>
   );
 
+  // The header is memoised: a new `right` on every page render re-ran GameTop's fit — a forced
+  // layout of the whole page (29 ms at 4×) inside the spin-start task (critic12, next pass 7).
+  // `topRight`'s handlers are stable; what it shows changes with the skin and the language.
+  const header = useMemo(
+    () =>
+      lying ? undefined : <GameTop title={tr('hall.cascade')} onBack={goBack} right={topRight} />,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lying, lang, skin, nav],
+  );
+
   // Ante — тумблер в ряду ставки (44 px); покупка бонуса — в полосе сводки на высоких
   // раскладках, над деньгами на широких. Под словом — его цена «×1,25»; включённый — ещё и
   // галочка в углу (не только цвет, R16/R57). Смысл — в подсказке и в правилах.
@@ -1701,9 +1712,7 @@ export function ScatterPage() {
           </div>
         </div>
       }
-      top={
-        lying ? undefined : <GameTop title={tr('hall.cascade')} onBack={goBack} right={topRight} />
-      }
+      top={header}
     >
       {/* --speed уезжает во ВСЕ анимации каскада. Без него турбо сжимал
           только паузы на таймерах, а CSS-анимации шли в полную длину и

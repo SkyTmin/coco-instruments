@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAction } from '@/input/hooks';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber } from '@/components/ui';
@@ -40,7 +40,17 @@ import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
 import type { SlotsSpinOutcome } from '@/store';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
-import { fmtCompact, fmtNum, lineIn, lineName, skinText, t, useT, winStepName } from '@/i18n';
+import {
+  fmtCompact,
+  fmtNum,
+  lineIn,
+  lineName,
+  skinText,
+  t,
+  useLang,
+  useT,
+  winStepName,
+} from '@/i18n';
 import {
   BET_STEP,
   BETS,
@@ -378,6 +388,7 @@ function PaylineOverlay({ wins }: { wins: SpinResult['wins'] }) {
 
 export function SlotsPage() {
   const tr = useT();
+  const lang = useLang();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const bet = useFinanceStore((s) => s.slotsBet);
@@ -1193,6 +1204,17 @@ export function SlotsPage() {
       </CasRound>
     </>
   );
+  // The header is memoised: a new `right` on every page render re-ran GameTop's fit — a forced
+  // layout of the whole page inside the spin-start task (critic12, next pass 7). `topRight`'s
+  // handlers are stable; what it shows changes with the skin and the language.
+  const header = useMemo(
+    () =>
+      lying ? undefined : (
+        <GameTop title={skinText(skin, 'title')} onBack={goBack} right={topRight} />
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lying, lang, skin, nav],
+  );
 
   return (
     <GameScreen
@@ -1205,11 +1227,7 @@ export function SlotsPage() {
           </div>
         </div>
       }
-      top={
-        lying ? undefined : (
-          <GameTop title={skinText(skin, 'title')} onBack={goBack} right={topRight} />
-        )
-      }
+      top={header}
     >
       {/* --speed уезжает во ВСЕ CSS-анимации страницы. Без него турбо сжимал
           только паузы на таймерах, а жетон, титул ступени, счётчик и рамки
