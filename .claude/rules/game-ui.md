@@ -168,19 +168,18 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
 ## Camp tabs on the kit (wave 3 — T, 13.10.2026) — `CampTabs.tsx`, `camp-tabs.css`
 
 Shop, Runes, Finds, Milestones, Skills left `PrisonCamp.tsx` for `components/CampTabs.tsx`
-(PrisonCamp imports them back; CampTabs takes `ItemIcon`, `RuneIcon`, `TokenIcon`, `KeyIcon`,
-`ParcelReveal`, `runeLine`, `RUNE_COLORS` from PrisonCamp — a cycle that is safe because both
-sides use them only while rendering). CSS lives in `camp-tabs.css`, scoped to `.ctab`; the old
+(PrisonCamp imports them back; the shared pictures are in `camp-art.tsx` since round 2 — see
+stage B below). CSS lives in `camp-tabs.css`, scoped to `.ctab`; the old
 `pshop-pack`, `prune-*`, `prunes-*`, `pamulet*`, `pfinds*`, `pmile`, `ppet-bar` blocks are
 deleted. New strings are in the area `ctabs`. Prices, effects and confirmations are unchanged.
 
 - **Layout = `ctab--one|land|tall|wide`** from `useFormFactor`. Body sizes measured in u:
-  phone portrait 171×341, phone landscape 374×152, tablet portrait 163×217 (C's rail takes about
-  95u, so the tablet is narrower AND shorter than a phone), tablet landscape and desktop
+  phone portrait 171×341, phone landscape 374×152, tablet portrait 163×217 (C's rail took about
+  95u; since round 2 a top strip: 251×206), tablet landscape and desktop
   283–326×214. `tall` is therefore the compact variant: sockets 2×2 beside the pouch, small
   rune buttons (the skills reset sits on the points plate since round 2).
 - **Shop:** rows with the price button on the right (phones, tablet portrait); a 3×2 grid of cards
-  on wide. The pack size is a tag on the button's corner, and the price keeps 5ch, so ×1/×5/×10
+  on wide. The pack size is a tag on the art's corner, and the price keeps 5ch, so ×1/×5/×10
   never resizes anything. Can't afford: an `off` button plus a floating pop with the shortfall.
 - **Runes:** sockets as a row, 2×2, or a cross around the pick+axe core (wide). The inspect panel
   keeps a fixed skeleton; with nothing picked it shows a hidden stand-in rune. Actions: «socket»
@@ -224,6 +223,43 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
     in a layout effect + ResizeObserver): words show at 342 px (pp) and up, not at 253–312.
   - Checks: `scratchpad/ui5T/stageA.mjs` (buttons vs body, reset arm timing, bonus box),
     `shots.mjs`, `armshot.mjs`, `strip.mjs`, `geo2.mjs`.
+- **Round 2, stage B (T2′, 19.10.2026):**
+  - **Pictures** (`TokenIcon`, `KeyIcon`, `ItemIcon`, `RuneIcon`, `RUNE_COLORS`, `runeLine`,
+    `PetIcon`, `RewardIcon`, `rewardLabel`, `ParcelReveal`) live in `components/camp-art.tsx`;
+    PrisonCamp re-exports them for old importers. CampTabs and BooksTab import camp-art, not
+    PrisonCamp (no cycle). New code: import from camp-art.
+  - **Clock:** the camp sheet has no `useNow`; `CampTabBar` (bench / crew badges) and
+    `MillTab` / `BenchTab` / `CrewTab` tick themselves. All five kit tabs are `memo`.
+  - **Tablet portrait:** the camp tabs are an icon strip on top (`vertical` false, `is-compact`,
+    the ribbon names the tab); camp-tabs.css turns the chrome's rail grid back into a column for
+    that case. Body 173×227u → 251×206u; window size unchanged; `lay` stays `tall`.
+  - **Runes:** no % under filled sockets; locked caption on cream; a tapped locked socket shakes
+    1u (320 ms) and the note says why (`lockedShort` on a short phone); shatter = `[hammer] +N ✦`,
+    tier ≥ III arms first (`shatterArm`), a worn rune says `wornNoShatter`; wear / shatter
+    guards; fuse 2fr : shatter 1fr; short phone: fuse notes `fuse*Short`, 2-line note.
+  - **Skills:** level = kit digits on the slot corner (`count="l/max"`), the skill art 2× in the
+    panel, one line `ctabs.perks.step` from `perkVal()` (the bare «+6%» of the text), 300-ms
+    Learn guard, plate digits 1.15 × fs.
+  - **Shop:** phones (`one`, `land`) show one effect chip `ctabs.shop.fx.<id>` (the sentence is
+    its tip); phone portrait stacks name / chip / price beside the art (in one row the chip had
+    65–110 px). Currency tokens 12u on phones, 28 px on tablet / desktop; the pack tag sits on
+    the art's top-left. The pack bar has 2u under it (the button edge stuck 4 px out of the tab).
+  - **Achievements:** `one` / `tall` row = art (the condition is its tip) | title + chips + bar |
+    small claim beside the title; ≤ 3 chips (2 on a short phone) + «+N» with a tip; compact chips
+    drop words (`ctabs.miles.socket`, `nursery.egg.*`, tier only). Short phone: a ready row puts
+    the claim in the bar's place (`:has(.ctab-mile__swap)`). Done rows: sunken well frame +
+    faded art, text stays. Rows 81–94 px on 360–430 phones (6–7 visible), 81–97 at 320/375.
+    Opening renders 8 rows, the rest in a transition a frame later (`MILES_FIRST`) plus
+    `content-visibility: auto`: second open 192 ms at 4× (dev; critic's 304).
+  - **Finds:** `one` / `wide` = 4×3 sized by a ResizeObserver (a quarter of the width, a third of
+    the height; `fitDown` keeps whole art multiples): 76–80-px slots with 64-px art (70 at 360),
+    52/60 at 320/375, ≈ 111–120 on tablet / desktop (wide columns 3fr : 2fr). Inspect art 96 on
+    phones with room, 48 on a short phone; on `one` the name runs over the whole panel (2 lines
+    reserved on short / land / wide), the text takes 3 lines.
+  - Checks (`scratchpad/ui5T`): `allfmt.mjs` (all tabs, buttons below the body, clipped text,
+    scroll), `milesB.mjs`, `milerow.mjs`, `claim.mjs`, `findsB.mjs`, `findnames.mjs` (every find
+    in 7 languages), `packshot.mjs`, `body.mjs`, `switch.mjs`, `perf.mjs`. Formats: p320, s375,
+    p360, pp, p430, pl, tp, tl, d1 (`lib.mjs` SIZES).
 - **Pitfalls:**
   - The kit `Grid` prop `slot` clashes with the HTML `slot` attribute type: pass
     `style={{ '--slot': … }}` instead.

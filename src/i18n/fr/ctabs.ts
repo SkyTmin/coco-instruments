@@ -7,6 +7,15 @@ export const ctabs: Translation<typeof ru> = {
     hint: 'Tes achats descendent avec toi à la mine',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Il manque {v} ✦',
+    /** Phones: one effect chip per good instead of the sentence (the sentence is its tip). */
+    fx: {
+      bomb3: 'Explose 3×3',
+      bomb5: 'Explose 5×5',
+      charge: 'Toute la couche',
+      energy: 'Pioche ×2 · 1 min',
+      lens: 'Couche du dessous · 90 s',
+      prop: 'Roche du dessus · 10 min',
+    },
   },
   runes: {
     amulet: 'Amulette',
@@ -17,8 +26,14 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Briser contre des jetons',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'force {n}/100',
-    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
-    fuse: 'Fusionner',
+    /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
+    fuseNeedShort: 'Fusion : encore 2 {tier} libres',
+    fuseGoShort: 'Fusion : 2× {tier} → {rune}',
+    /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
+    shatterArm: 'Encore : briser',
+    wornNoShatter: 'Portée — retire-la d’abord',
+    /** Short phone (no socket captions): a locked socket tapped — its condition. */
+    lockedShort: 'Emplacement : {cond}',
   },
   finds: {
     title: 'Trouvailles',
@@ -28,6 +43,8 @@ export const ctabs: Translation<typeof ru> = {
   },
   miles: {
     hint: 'Accomplis-le — récupère la récompense',
+    /** Phone reward chip «+ гнездо» (the full «четвёртое гнездо» is its tip). */
+    socket: 'emplacement',
   },
   perks: {
     hint: 'Le prestige donne des points — dépense-les',
@@ -36,7 +53,8 @@ export const ctabs: Translation<typeof ru> = {
     prestige: 'prestige {n}',
     per: 'par niveau',
     now: 'Actuel',
-    next: 'Suivant',
+    /** One line of the skill panel: the value now → after «Learn». */
+    step: 'Actuel {now} → {next}',
     learn: 'Apprendre',
     noPoints: 'Aucun point libre — le prestige en donne',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */

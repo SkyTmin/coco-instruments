@@ -4,6 +4,20 @@
    text have FIXED heights from the type scale, so picking another rune / skill / find never
    moves a box. The camp body (gx-px.css) gives kit content a well and no zoom. */
 
+/* Tablet portrait: the camp's tabs are a top strip (PrisonCamp `vertical`; the rail took 79u of
+   the 265u-wide window), so the box stacks strip and body like phone portrait instead of the
+   rail grid gx-px.css gives every non-phone-portrait window. The window's size is untouched. */
+html[data-ff='tablet']
+  .gx-win__box.gx-camp.has-tabs:not(:has(> .gx-win__tabs [aria-orientation='vertical'])) {
+  display: flex;
+}
+html[data-ff='tablet']
+  .gx-win__box.gx-camp.has-tabs:not(:has(> .gx-win__tabs [aria-orientation='vertical']))
+  > .gx-win__tabs {
+  margin: 0 0 calc(2 * var(--u));
+  overflow: visible;
+}
+
 .ctab {
   --gap: calc(4 * var(--u));
   /* chip background: a shade of the surface it sits on */
@@ -33,6 +47,15 @@
   flex: none;
   width: calc(8 * var(--u));
   height: calc(8 * var(--u));
+}
+/* The currency itself (purse, shop prices): 24 px on a phone (u = 2), 28 on tablet / desktop (u = 3). */
+.ctab :is(.ctab-purse, .ctab-good__buy) .ptoken-ico {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+}
+.ctab:is(.ctab--tall, .ctab--wide) :is(.ctab-purse, .ctab-good__buy) .ptoken-ico {
+  width: calc(var(--u) * 28 / 3);
+  height: calc(var(--u) * 28 / 3);
 }
 .ctab .ptear {
   flex: none;
@@ -101,7 +124,7 @@
   gap: var(--u);
   height: calc(var(--px-fs-sm) * 1.5);
   padding: 0 calc(2 * var(--u));
-  font: 600 var(--px-fs-sm) / 1 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-text);
   background: var(--chip);
   white-space: nowrap;
@@ -156,7 +179,7 @@
   justify-content: center;
   gap: calc(3 * var(--u));
   text-align: center;
-  font: 600 var(--px-fs) / 1.25 var(--px-font);
+  font: 500 var(--px-fs) / 1.25 var(--px-font);
   color: var(--px-muted);
 }
 .ctab-insp__empty > .px-i {
@@ -182,8 +205,7 @@
 }
 .ctab-insp__name,
 .ctab-insp__gives,
-.ctab-insp__sub,
-.ctab-insp__v {
+.ctab-insp__sub {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -241,22 +263,6 @@
   /* equal shares: a longer label (В оберег / Снять, +5 / +250) never moves its neighbours */
   flex: 1 1 0;
   min-width: 0;
-}
-.ctab-insp__rows {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: var(--u) calc(4 * var(--u));
-}
-.ctab-insp__k {
-  font: 600 var(--px-fs-sm) / 1.3 var(--px-font);
-  color: var(--px-muted);
-}
-.ctab-insp__v {
-  font: 700 var(--px-fs) / 1.3 var(--px-font);
-}
-.ctab-insp__v.is-next {
-  color: var(--px-green);
 }
 .ctab-insp__max {
   display: inline-flex;
@@ -341,7 +347,7 @@
   min-width: 0;
 }
 .ctab-pack__label {
-  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-muted);
 }
 .ctab-pack__row {
@@ -352,9 +358,10 @@
 .ctab-pack__opt {
   min-width: calc(24 * var(--u));
 }
-/* Phone portrait: the amount is a bar at the bottom (the thumb zone), big buttons. */
+/* Phone portrait: the amount is a bar at the bottom (the thumb zone), big buttons; 2u under them
+   for the buttons' bottom edge (it stuck 4 px out of the tab). */
 .ctab--one > .ctab-pack {
-  padding: calc(2 * var(--u)) var(--u) 0;
+  padding: calc(2 * var(--u)) var(--u);
 }
 .ctab--one .ctab-pack__opt {
   min-width: calc(30 * var(--u));
@@ -410,13 +417,27 @@
   grid-area: buy;
   min-width: calc(40 * var(--u));
 }
-/* The pack rides as a tag on the button's corner and the price keeps five digits of room:
-   switching ×1 / ×5 / ×10 never resizes the button or the row (checked by script). */
+/* Phones: one effect chip («Взрыв 3×3») instead of the sentence; the sentence is its tip. */
+.ctab-good__fx {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0 calc(2 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.35 var(--px-font);
+  color: var(--px-ink);
+  background: #fff6e0;
+  box-shadow: 0 0 0 var(--u) rgb(42 25 12 / 0.35);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* The pack rides as a tag on the art's top-left corner (nothing covers the price's token) and the
+   price keeps five digits of room: switching ×1 / ×5 / ×10 never resizes the button or the row. */
 .ctab-good__pack {
   position: absolute;
   z-index: 1;
-  top: calc(-4 * var(--u));
-  right: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
+  left: calc(-3 * var(--u));
   padding: 0 calc(2 * var(--u));
   font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
   color: #fff3c4;
@@ -427,6 +448,37 @@
 .ctab-good__buy .px-num {
   min-width: 5ch;
   text-align: center;
+}
+/* Phone portrait: name, chip and price stacked beside the art (in one row with the price the chip
+   had 65–110 px: «Spreng|t» at 320, «Schicht darunter · 9…» at 390). Short phone (320×568,
+   375×600 inside Telegram): no hint line either. */
+.ctab-shop.ctab--short .ctab-head__hint {
+  display: none;
+}
+.ctab-shop.ctab--one .ctab-good {
+  grid-template:
+    'art name' auto
+    'art fx' auto
+    'art buy' auto
+    / auto minmax(0, 1fr);
+  gap: var(--u) calc(3 * var(--u));
+  padding: calc(2 * var(--u)) calc(3 * var(--u));
+}
+.ctab-shop.ctab--one .ctab-good__info {
+  display: contents;
+}
+.ctab-shop.ctab--one .ctab-good__name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctab-shop.ctab--one .ctab-good__fx {
+  grid-area: fx;
+  justify-self: start;
+}
+.ctab-shop.ctab--one .ctab-good__buy {
+  min-width: 0;
 }
 .ctab--land .ctab-goods {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -578,7 +630,8 @@
    buttons there (its panel is 150u wide). */
 .ctab-runes:not(.ctab--tall) .ctab-insp__acts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* ⅔ fuse (German «Verschmelzen»), ⅓ shatter ([hammer] +25 ✦) */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 .ctab-runes:not(.ctab--tall) .ctab-insp__acts > :first-child {
   grid-column: 1 / -1;
@@ -633,9 +686,24 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+/* The note names the action and its condition in two lines (short keys `fuse*Short`); the room
+   comes from a thinner stage frame, tighter bonus rows and 1u gaps. */
 .ctab-runes.ctab--short .ctab-insp__line {
-  height: var(--ln-sm);
-  -webkit-line-clamp: 1;
+  height: calc(var(--ln-sm) * 2);
+  -webkit-line-clamp: 2;
+}
+.ctab-runes.ctab--short .ctab-insp__body {
+  gap: var(--u);
+}
+.ctab-runes.ctab--short .ctab-insp__gives {
+  line-height: 1.2;
+  height: calc(var(--px-fs) * 1.2 * 2);
+}
+.ctab--short .ctab-amulet > .ctab-stage {
+  --pad: 4;
+}
+.ctab--short .ctab-bonus {
+  --row-st: calc(var(--px-fs-sm) * 1.5);
 }
 .ctab-runes.ctab--short .ctab-insp__acts {
   grid-template-columns: minmax(0, 1fr);
@@ -778,8 +846,42 @@
   gap: calc(2 * var(--u));
   padding: var(--u) 0;
 }
-.ctab-sock__cap.is-on {
-  color: var(--px-green);
+.ctab-sock__cap.is-lock {
+  padding: 0 var(--u);
+  color: var(--px-text);
+  background: #fff6e0;
+  box-shadow: 0 0 0 var(--u) var(--px-ink);
+  text-shadow: none;
+}
+/* A locked socket tapped: a 1u shake, the reason is its own caption. */
+.ctab-sock.is-shake {
+  animation: ctab-shake 320ms steps(1, end);
+}
+@keyframes ctab-shake {
+  0%,
+  50% {
+    transform: translateX(calc(-1 * var(--u)));
+  }
+  25%,
+  75% {
+    transform: translateX(var(--u));
+  }
+  100% {
+    transform: none;
+  }
+}
+.ctab-insp__acts .ctab-shatter__ico {
+  flex: none;
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+}
+/* tablet portrait's one-row 5:4:3 shares: «+600 ✦» alone fits the third */
+.ctab--tall .ctab-insp__acts .ctab-shatter__ico {
+  display: none;
+}
+.ctab-insp__acts > .px-btn.is-armed {
+  outline: var(--u) solid var(--px-gold);
+  outline-offset: var(--u);
 }
 /* Bonus of the worn runes: a FIXED 2×2 grid — four sockets give at most four kinds, so the box
    never scrolls (critic5 P0: a third bonus hid in a 55-px scroller). Chip = [stat picture 24]
@@ -864,12 +966,22 @@
     'insp' auto
     / minmax(0, 1fr);
 }
-.ctab-finds.ctab--land,
-.ctab-finds.ctab--wide {
+.ctab-finds.ctab--land {
   grid-template:
     'head head' auto
     'grid insp' minmax(0, 1fr)
     / minmax(0, 11fr) minmax(0, 9fr);
+}
+/* Tablet landscape / desktop: 3 : 2, so four ≈ 120-px slots fit the case's width. */
+.ctab-finds.ctab--wide {
+  grid-template:
+    'head head' auto
+    'grid insp' minmax(0, 1fr)
+    / minmax(0, 3fr) minmax(0, 2fr);
+}
+/* Short phone: a 1u margin around the case — 3 rows of 60-px slots fit 199 px at 320×568. */
+.ctab-finds.ctab--short .ctab-grid {
+  padding: var(--u);
 }
 .ctab-finds > .ctab-head {
   grid-area: head;
@@ -899,6 +1011,62 @@
   color: var(--px-text);
   font-weight: 500;
   height: calc(var(--px-fs) * 2.5);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* Phone portrait: the name over the whole panel, the art (96 px; 48 on a short phone) beside the
+   text — beside a 96-px art «Отпечаток папоротника», fr «Empreinte de fougère» were cut. The
+   text takes three lines where the big art gives the room. */
+.ctab--one .ctab-insp--find .ctab-insp__top {
+  display: grid;
+  grid-template:
+    'name name' auto
+    'art gives' minmax(0, 1fr)
+    'art sub' auto
+    / auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--u) calc(4 * var(--u));
+}
+.ctab--one .ctab-insp--find .ctab-insp__head {
+  display: contents;
+}
+.ctab--one .ctab-insp--find .ctab-insp__art {
+  grid-area: art;
+  align-self: center;
+}
+.ctab--one .ctab-insp--find .ctab-insp__name {
+  grid-area: name;
+}
+.ctab--one .ctab-insp--find .ctab-insp__gives {
+  grid-area: gives;
+}
+.ctab--one .ctab-insp--find .ctab-insp__sub {
+  grid-area: sub;
+}
+/* Short phone: the two-line name costs a line — the count line goes (the slot's corner says ×N)
+   and the panel's frame margin is 3u: the case keeps its three rows at 320×568. */
+.ctab-finds.ctab--short .ctab-insp {
+  --pad: 3;
+}
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__sub {
+  display: none;
+}
+/* three small lines fit beside the 48-px art («Раковина, закрученная спиралью» needs three) */
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__gives {
+  font-size: var(--px-fs-sm);
+  height: calc(var(--px-fs-sm) * 3.75);
+  -webkit-line-clamp: 3;
+}
+.ctab--one:not(.ctab--short) .ctab-insp--find .ctab-insp__gives {
+  height: calc(var(--px-fs) * 3.75);
+  -webkit-line-clamp: 3;
+}
+/* the showcase column (phone landscape, tablet landscape, desktop) and the short phone (248 px
+   for «Отпечаток папоротника»): a long name takes 2 lines, always reserved */
+.ctab:is(.ctab--land, .ctab--wide, .ctab--short) .ctab-insp--find .ctab-insp__name {
+  height: calc(var(--px-fs-head) * 2.4);
   white-space: normal;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -998,24 +1166,77 @@
 .ctab-mile.is-ready .ctab-mile__art .gx-icon {
   color: #804400;
 }
+/* Taken: only the art and the frame go dim (a sunken frame, a faded art) — the title, the gifts and
+   «Получено» stay readable. */
 .ctab-mile.is-done {
-  opacity: 0.62;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
 }
-.ctab--one .ctab-mile,
-.ctab--tall .ctab-mile {
+.ctab-mile.is-done .ctab-mile__art {
+  opacity: 0.5;
+  filter: grayscale(0.7);
+}
+/* 33 rows: the ones off screen skip layout and paint (the tab opens in one commit, R55). */
+.ctab-mile {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(40 * var(--u));
+}
+/* Phone / tablet portrait: «icon | title + gifts + bar | claim» (the condition is the icon's tip),
+   the claim beside the title only so the gifts and the bar keep the full width: ≤ 96 px a row,
+   6+ rows on a 390×844 phone (it was 3 rows, 117–184 px, with a full-width button). */
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile {
   grid-template:
-    'art info' auto
-    'bar bar' auto
-    'end end' auto
-    / auto minmax(0, 1fr);
+    'art name end' auto
+    'art gifts gifts' auto
+    'art bar bar' auto
+    / auto minmax(0, 1fr) auto;
+  padding: var(--u) calc(3 * var(--u));
+  gap: var(--u) calc(3 * var(--u));
 }
-.ctab--one .ctab-mile__end:empty,
-.ctab--tall .ctab-mile__end:empty {
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__info {
+  display: contents;
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__name {
+  grid-area: name;
+  min-width: 0;
+}
+/* the small claim button and its «Получено» swap: the check keeps the button's height */
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__taken {
+  min-height: calc(15 * var(--u));
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-gifts {
+  grid-area: gifts;
+}
+.ctab-miles.ctab--short .ctab-head__hint {
   display: none;
 }
-.ctab--one .ctab-mile__end > *,
-.ctab--tall .ctab-mile__end > * {
+/* Short phone: beside «Abholen» the title had 93 px («Zehntause…» ran under it) — a ready row puts
+   the claim in the full bar's place (the bar says nothing new there), the title keeps the width. */
+.ctab-miles.ctab--short .ctab-mile:has(.ctab-mile__swap) {
+  grid-template:
+    'art name' auto
+    'art gifts' auto
+    'art end' auto
+    / auto minmax(0, 1fr);
+}
+.ctab-miles.ctab--short .ctab-mile:has(.ctab-mile__swap) .ctab-mile__bar {
+  display: none;
+}
+.ctab-miles.ctab--short .ctab-mile__swap,
+.ctab-miles.ctab--short .ctab-mile__swap > .px-btn {
   width: 100%;
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art {
+  --slot: calc(22 * var(--u));
+  align-self: center;
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art .gx-icon {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__end {
+  align-self: center;
 }
 
 /* ==== Навыки =================================================================================== */
@@ -1053,7 +1274,8 @@
 .ctab-points__n {
   min-width: 2ch;
   text-align: center;
-  font-size: var(--px-fs-hero);
+  /* 23 px on a phone: the kit's digits at a whole size, not the 30-px hero */
+  font-size: calc(var(--px-fs) * 1.15);
   line-height: 1.1;
   color: var(--px-dim);
 }
@@ -1090,7 +1312,8 @@
   justify-content: space-evenly;
   align-content: flex-start;
   gap: calc(4 * var(--u)) calc(2 * var(--u));
-  padding: calc(2 * var(--u));
+  /* 3u on top: the selection corners stick out of the slot and the scroller clips them */
+  padding: calc(3 * var(--u)) calc(2 * var(--u)) calc(2 * var(--u));
 }
 .ctab-node {
   flex: 0 0 auto;
@@ -1113,20 +1336,6 @@
   text-align: center;
   white-space: nowrap;
   background: rgb(255 246 224 / 0.82);
-}
-.ctab-pips {
-  display: flex;
-  gap: var(--u);
-}
-.ctab-pips > i {
-  width: calc(4 * var(--u));
-  height: calc(4 * var(--u));
-  background: #c9a56d;
-  border: var(--u) solid var(--px-ink);
-}
-.ctab-pips > i.is-on {
-  background: #ffd25e;
-  box-shadow: inset var(--u) var(--u) 0 #fff3c4;
 }
 /* Reset is secondary and free: a small ↶ button at the plate's right end (critic5 P0 — in the
    action row it fell out of the 844×390 window). Armed (first tap) it turns red. */
@@ -1181,37 +1390,49 @@
   height: var(--ln-sm);
   -webkit-line-clamp: 1;
 }
-/* French «+8 % de vitesse de pioche» does not fit one line beside «Suivant» — the effect and the
-   now / next values keep two lines each, for every skill (the panel never changes height).
-   Tablet portrait is too short for that, and its full-width panel fits one line. */
-.ctab:not(.ctab--tall) .ctab-insp--perk :is(.ctab-insp__sub, .ctab-insp__v) {
+/* French «+8 % de vitesse de pioche · par niveau» takes two lines: the effect keeps two lines
+   for every skill (the panel never changes height). Tablet portrait / short phone: one line. */
+.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__sub {
+  height: calc(var(--ln-sm) * 2);
   white-space: normal;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__sub {
-  height: calc(var(--ln-sm) * 2);
+/* «Сейчас +6% → +12%»: the bare values in one line (the noun is the effect above). */
+.ctab-insp__step {
+  height: calc(var(--px-fs) * 1.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 var(--px-fs) / 1.3 var(--px-font);
+  color: var(--px-green);
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__rows {
-  align-items: start;
+/* The skill's own picture, 2× its node icon's art pixels, on a cream tile. */
+.ctab-perk-art {
+  width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
+  background: #fff6e0;
+  box-shadow: 0 0 0 var(--u) var(--px-ink);
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__v {
-  height: calc(var(--px-fs) * 1.3 * 2);
+.ctab-perk-art > .gx-icon {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
 }
-.ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__k {
-  padding-top: calc((var(--px-fs) - var(--px-fs-sm)) * 0.65);
+.ctab--tall .ctab-perk-art {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
 }
-/* The note line must show (the reset's «tap again» lives there): phone landscape's panel had no
-   height left for it — the per-level effect goes (the now / next values say it) and the rows sit
-   1u apart (the panel is 223 px inside, the rows need 229 with 2u). A short phone drops the
-   per-level effect too and gives the note a second line (German / French prompts). */
-.ctab.ctab--land .ctab-insp--perk .ctab-insp__sub,
+.ctab--tall .ctab-perk-art > .gx-icon {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+}
 .ctab.ctab--short .ctab-insp--perk .ctab-insp__sub {
-  display: none;
-}
-.ctab--land .ctab-insp--perk {
-  gap: var(--u);
+  height: calc(var(--ln-sm) * 2);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .ctab--short .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
@@ -1224,6 +1445,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ctab-pop,
+  .ctab-sock.is-shake,
   .ctab-sock .px-slot.is-target {
     animation: none;
   }
