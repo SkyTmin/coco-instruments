@@ -1,0 +1,2217 @@
+/* Шахта «Каторги» в пиксельном наборе (UI v2) — PrisonPage.tsx.
+   Размеры — в пикселях арта: calc(N * var(--u)); текст — только --px-fs*;
+   рамки — материалы набора (kit.gen.css). Клетку поля (--cell) ставит JS
+   (useFieldCell): самая крупная, при которой поле влезает в своё место.
+   Правило владельца: ничего не прыгает — у всего, что меняется, своё место
+   фиксированного размера, а плашки висят поверх поля. */
+
+.mn {
+  /* До первого замера — разумная клетка (замер приходит до отрисовки). */
+  --cell: 40px;
+  /* Ширина рамы поля: 7 клеток + рама дерева (по 8 пикселей арта). */
+  --fw: calc(var(--cell) * 7 + 16 * var(--u));
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  padding: calc(var(--safe-top) + var(--content-top) + 3 * var(--u)) calc(3 * var(--u))
+    calc(var(--safe-bottom) + 3 * var(--u));
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.mn :is(button) {
+  -webkit-tap-highlight-color: transparent;
+}
+/* Фон — светлый песчаник набора (тёмную палитру владелец отверг): плитка камня под
+   светлой вуалью, чтобы не спорить с полем. Класс .pxt-stone даёт --tile. */
+.mn > .prison-scene {
+  background:
+    linear-gradient(#f8ecd266, #f8ecd266),
+    var(--tile) 0 0 / calc(32 * var(--u)) calc(32 * var(--u)),
+    #c4a985;
+  image-rendering: pixelated;
+}
+/* Невидимая зона нажатия вокруг мелких кнопок (::after занят кольцом фокуса). */
+.mn-hud .px-btn--icon::before,
+.mn-parcel::before {
+  content: '';
+  position: absolute;
+  inset: calc(-3 * var(--u));
+}
+.mn-hud .px-btn--icon::before {
+  /* Вверх-вниз 4u (шапка 18u на низком телефоне — 36 px, зона 48): ≥ 44 (R43). */
+  inset: calc(-4 * var(--u)) calc(-3 * var(--u));
+}
+.mn-parcel::before {
+  /* От рамки (1u) — ещё 3u вбок и 4u вверх-вниз: 46 × 50. */
+  inset: calc(-5 * var(--u)) calc(-4 * var(--u));
+}
+/* Подсказки клавиш — только клавиатуре и геймпаду (мышь видит всплывашку). */
+html[data-input='mouse'] .mn .px-keyhint,
+html[data-input='touch'] .mn .px-keyhint {
+  display: none;
+}
+
+/* ---- Высокий экран: стопкой, всё по ширине рамы поля --------------------------------- */
+.mn--tall > :not(.prison-scene, .mn-field) {
+  flex: none;
+  width: min(100%, max(var(--fw), calc(190 * var(--u))));
+}
+.mn--tall {
+  padding-left: calc(1 * var(--u));
+  padding-right: calc(1 * var(--u));
+}
+/* Низкий телефон (360×740): зазоры 1u — полю нужна каждая точка (клетка ≥ 40 px). */
+/* Док стоя (значок над подписью, 26u) отнял 8 px — их возвращают шапка, расходники,
+   рюкзак и зазор дока по 2 px (клетка 360×740 снова 40). */
+@media (orientation: portrait) and (max-height: 760px) {
+  .mn--tall {
+    gap: var(--u);
+  }
+  .mn--tall .mn-dock {
+    row-gap: var(--u);
+  }
+  .mn--tall .mn-hud > * {
+    height: calc(18 * var(--u));
+    min-height: 0;
+  }
+  .mn--tall .mn-bag {
+    height: calc(22 * var(--u));
+  }
+  .mn--tall .mn-items {
+    --slot: calc(22 * var(--u));
+  }
+}
+/* 320×568 (и любой телефон ниже 640 px): док 24u и задание 24u — ещё 12 px полю.
+   Значок дока 12u + подпись 17 px + рамка влезают; столбец награды задания — тоже. */
+@media (orientation: portrait) and (max-height: 640px) {
+  html[data-ff^='phone'] .mn--tall .mn-dock .mn-dock__btn {
+    height: calc(24 * var(--u));
+    padding-bottom: var(--u);
+  }
+  html[data-ff^='phone'] .mn--tall .mn-dock .mn-dock__btn:is(:active, .is-down) {
+    padding: var(--u) var(--u) 0;
+  }
+  .mn--tall .mn-quest {
+    height: calc(24 * var(--u));
+  }
+}
+/* 320 px: названию ступени серии («Легенда забоя», 127 px) не хватало 23 px рядом с
+   колонкой темпа — полоса шире (до 2u от края экрана), колонка кирки 22u («⛏50»),
+   зазоры 3u, но до темпа 4u. */
+@media (max-width: 340px) {
+  html[data-ff^='phone'] .mn .mn-frame > .mn-strip {
+    --sw: max(calc(100% - 20 * var(--u)), calc(100vw - 2 * var(--u)));
+    grid-template-columns: calc(22 * var(--u)) minmax(0, 1fr) max-content;
+    gap: calc(3 * var(--u));
+    padding: 0 calc(2 * var(--u));
+  }
+  /* Деньги 1,25 : 1 токены (не 1,4): «999Mn» в токенах влезает кеглем ≥ 16 px. */
+  .mn--tall .mn-hud:not(:has(.mn-hud__forest)) {
+    grid-template-columns: calc(19 * var(--u)) minmax(0, 1.25fr) minmax(0, 1fr) calc(19 * var(--u));
+  }
+  /* «1/5» в строке условий ранга упиралась в рамку на 2 px. */
+  .mn--tall .mn-rank {
+    padding-inline: calc(2 * var(--u));
+  }
+  /* До полосы серии — по-прежнему 4u (R51). */
+  html[data-ff^='phone'] .mn-frame > .mn-strip > .mn-strip__pace {
+    margin-left: var(--u);
+  }
+}
+/* 320 px: у задания одна фишка награды (первая) — заголовку остаётся ≥ 150 px (критик r3:
+   «+100 ✦ +2 слезы» брали ~110 px и резали «Дорасти питомца до 3…»). Весь список — в
+   подсказке и aria-label кнопки задания. */
+@media (max-width: 340px) {
+  .mn--tall .mn-quest .mn-reward > span ~ span {
+    display: none;
+  }
+}
+/* До 380 px кнопке продажи — две трети строки: de «Verkaufen 9.665 ●» (161 px) в кнопке 133 px
+   на 320 выталкивал монету за край экрана, на 375 — на 1 px за рамку (M5, `sellfit`).
+   Заголовку и полосе хватает остатка. */
+@media (max-width: 380px) {
+  .mn--tall .mn-bag {
+    grid-template-columns: calc(14 * var(--u)) minmax(0, 1fr) minmax(0, 2fr);
+    gap: calc(2 * var(--u));
+  }
+}
+/* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
+.mn--tall :is(.mn-stat--tokens, .mn-stat--keys) {
+  --fs-n: var(--px-fs);
+}
+.mn--tall > .mn-field {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  /* Сверху на кромке рамы — строка-запал, снизу — отряд, баффы, посылки. */
+  padding: calc(10 * var(--u)) 0 calc(12 * var(--u));
+}
+
+/* ---- Широкий экран: сводка слева, поле в центре, док справа -------------------------- */
+.mn--wide {
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+  gap: calc(4 * var(--u));
+  padding-left: calc(env(safe-area-inset-left, 0px) + 3 * var(--u));
+  padding-right: calc(env(safe-area-inset-right, 0px) + 3 * var(--u));
+}
+.mn--wide > .mn-field {
+  flex: none;
+  padding: 0 0 calc(6 * var(--u));
+}
+.mn-side {
+  /* +4u к ширине — на поля под кольцо фокуса (см. padding ниже). */
+  flex: 0 1 calc(132 * var(--u));
+  min-width: calc(88 * var(--u));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  /* Страница не прокручивается; если колонке на низком экране не хватит
+     высоты, прокрутится только она. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* Кольцо фокуса набора выступает на 3u: запас внутри колонки, чтобы оно не
+     обрезалось и не давало прокрутку; отрицательное поле возвращает геометрию. */
+  padding: calc(3 * var(--u));
+  margin: calc(-2 * var(--u));
+}
+.mn-side::-webkit-scrollbar {
+  display: none;
+}
+/* Колонка всё равно длиннее окна (полоса скрыта): у нижней кромки — ступенчатая тень в 2u,
+   признак продолжения (критик r4, NN/g). Ставит `useSideFit`; на проверенных окнах её нет. */
+.mn-side[data-more]::after {
+  content: '';
+  position: sticky;
+  bottom: calc(-3 * var(--u));
+  flex: none;
+  height: calc(3 * var(--u));
+  margin-top: calc(-5 * var(--u));
+  background:
+    linear-gradient(rgb(46 30 18 / 0.55), rgb(46 30 18 / 0.55)) bottom / 100% var(--u) no-repeat,
+    linear-gradient(rgb(46 30 18 / 0.28), rgb(46 30 18 / 0.28)) bottom calc(1 * var(--u)) left 0 /
+      100% var(--u) no-repeat;
+  pointer-events: none;
+}
+/* Правая колонка: рюкзак сверху, док заполняет остаток — по кнопке в ряд, ряды растут
+   до 32u (критик: без пустых полос, ≤ 15 % пустоты в колонке). */
+.mn-side--r > .mn-dock {
+  flex: 1 1 0;
+  /* Без этого колонка-флекс не даёт сетке сжаться ниже рядов по 36u (min-height: auto) —
+     на 1366×657 правая колонка перебирала 60 px. Ряды ужимаются до 21u. */
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(calc(21 * var(--u)), calc(36 * var(--u)));
+}
+/* Телефон лёжа: колонка низкая — по две кнопки в ряд, три ряда. */
+html[data-ff^='phone'] .mn-side--r > .mn-dock {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Вне телефона кнопки дока высокие: значок вдвое (24u — ровно 2 точки на пиксель). */
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__btn {
+  --dock-ico: calc(24 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__ico {
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-pic {
+  --pic-w: 24;
+  --pic-h: 24;
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__mask {
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-side--r .mn-dock__btn {
+  gap: calc(3 * var(--u));
+  padding-left: calc(4 * var(--u));
+}
+/* На компьютере колонка 118–126u: четыре крупные ячейки в ряд (на планшете 85u — три обычные). */
+/* На компьютере все расходники — одним рядом (критик r2: лупа одна во втором ряду):
+   ячейка — до 28u, но не шире пятой (шестой, если есть крепь) доли колонки, целыми u. */
+html[data-ff='desktop'] .mn--wide .mn-items {
+  container-type: inline-size;
+}
+html[data-ff='desktop'] .mn--wide .mn-items__row {
+  --slot: min(calc(28 * var(--u)), round(down, calc((100cqi - 8 * var(--u)) / 5), var(--u)));
+}
+html[data-ff='desktop'] .mn--wide .mn-items[data-n='6'] .mn-items__row {
+  --slot: min(calc(28 * var(--u)), round(down, calc((100cqi - 10 * var(--u)) / 6), var(--u)));
+}
+.mn-side--r .mn-dock__btn {
+  height: auto;
+  min-height: 0;
+}
+/* Вне телефона в боковых колонках текст на ступень крупнее (как «крупный» в настройках):
+   размеры набора пересчитаны от копий с :root (--gx-fs*, см. gx-px.css). */
+html:not([data-ff^='phone']) .mn--wide .mn-side {
+  --px-fs: calc(var(--gx-fs) * 1.15);
+  --px-fs-sm: calc(var(--gx-fs-sm) * 1.15);
+  --px-fs-tiny: calc(var(--gx-fs-tiny) * 1.15);
+  --px-fs-head: calc(var(--gx-fs-head) * 1.15);
+  --px-fs-big: calc(var(--gx-fs-big) * 1.15);
+  --px-fs-hero: calc(var(--gx-fs-hero) * 1.15);
+}
+.mn-side__h {
+  margin: 0 0 calc(2 * var(--u));
+  font-size: var(--px-fs);
+}
+/* С заданием проводника заголовка «Расходники» нет — на любом широком экране (телефон лёжа,
+   планшет, компьютер: критик r4 — на 1280×720 рюкзак уходил под край). */
+.mn-side--l:has(.mn-quest) .mn-side__h {
+  display: none;
+}
+/* Широкий экран: задание одной высоты на всех шагах — название всегда занимает две строки,
+   конец — 15u, полосы нет (тот же счёт «N/M» стоит в карточке). Иначе карточка менялась
+   96 → 135 px от шага к шагу (1280×720 de), а рюкзак под ней прыгал и мог переезжать в
+   правую колонку на одних шагах и не на других; на 667×375 полоса добавляла 12 px. */
+.mn.mn--wide .mn-quest {
+  grid-template-rows: calc(2.2 * var(--px-fs-sm)) calc(15 * var(--u));
+  /* 2u, а не 3u: 1280×650 с заданием — левая колонка без рюкзака перебирала 9 px. */
+  padding-top: calc(2 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+.mn--wide .mn-quest .px-bar {
+  display: none;
+}
+.mn.mn--wide .mn-quest > :last-child {
+  height: 100%;
+}
+/* …и ячейки 22u (44 px): полоса серии выросла на 3u (темп внутри рамки) — ряд расходников
+   на 844×390 выходил за низ экрана на 1 px. */
+html[data-ff^='phone'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items:not([data-n='6']) {
+  --slot: calc(22 * var(--u));
+}
+html[data-ff^='phone'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items__row {
+  height: calc(22 * var(--u));
+}
+/* Планшет лёжа с заданием: расходники — одним рядом (tl de: рюкзак с «Продать» уходил под
+   нижний край колонки на 88 px). */
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items {
+  container-type: inline-size;
+}
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items__row {
+  --slot: min(calc(23 * var(--u)), round(down, calc((100cqi - 8 * var(--u)) / 5), var(--u)));
+  /* Зазор — целыми px: ячейки стоят на целых точках (space-between давал x = 70,625). */
+  justify-content: center;
+  gap: round(down, calc((100cqi - 5 * var(--slot)) / 4), 1px);
+}
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items[data-n='6'] .mn-items__row {
+  --slot: min(calc(23 * var(--u)), round(down, calc((100cqi - 10 * var(--u)) / 6), var(--u)));
+  gap: round(down, calc((100cqi - 6 * var(--slot)) / 5), 1px);
+}
+/* В сжатой ячейке цифра — мелким кеглем набора: 22 px закрывали пол-ячейки. */
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-item .px-slot__n {
+  font-size: var(--px-fs-tiny);
+}
+.mn-panel {
+  flex: none;
+}
+
+/* ---- Поле -------------------------------------------------------------------------------- */
+.mn-field {
+  position: relative;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+}
+.mn-frame {
+  /* Дерево набора: рама 8 пикселей арта, сетка садится ровно в её проём. */
+  --pad: 7;
+  position: relative;
+  flex: none;
+  line-height: 0;
+}
+/* Кураж, энергетик, золотая жила, спецзона — рама светится (прозрачность
+   слоя ступенями, без смены размеров). */
+.mn-frame::after {
+  content: '';
+  position: absolute;
+  inset: calc(-2 * var(--u));
+  z-index: 0;
+  border: calc(2 * var(--u)) solid transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+.mn-frame.is-energy::after {
+  border-color: var(--px-blue);
+  animation: mn-glow 0.9s steps(3, jump-none) infinite alternate;
+}
+.mn-frame.is-frenzy::after,
+.mn-frame.is-gold::after {
+  border-color: var(--px-gold);
+  animation: mn-glow 0.5s steps(3, jump-none) infinite alternate;
+}
+.mn-frame.is-zone::after {
+  border-color: var(--px-violet);
+  opacity: 0.8;
+}
+@keyframes mn-glow {
+  to {
+    opacity: 0.95;
+  }
+}
+
+/* Строка-запал. Высокий экран — на верхней кромке рамы (над деревом, не над
+   клетками); широкий — панель слева. Колонки фиксированы: длинное название
+   ступени или темп не сдвигают полосы. */
+/* Третья колонка — по самой длинной строке темпа языка (max-content невидимой копии):
+   полоса серии отдаёт ей место, текст на полосу не залезает (критик r2, R51). */
+.mn-strip {
+  display: grid;
+  grid-template-columns: calc(30 * var(--u)) minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  box-sizing: border-box;
+  height: calc(20 * var(--u));
+  padding: 0 calc(3 * var(--u));
+  /* Тонкая рамка набора (2u нарисовано со всех сторон), а не ячейка slot-r0 (8/6/6/8 px):
+     буквы и огонёк лежали на её внутренней линии (критик r3, R60). */
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  line-height: 1.1;
+  color: var(--px-text);
+}
+/* Полоса на верхней кромке рамы. Рама узкая, когда поле упирается в высоту (360×740:
+   263 px) — тогда полоса шире рамы, до 150u, но не шире экрана; по центру, на целом px.
+   Телефон: во всю ширину экрана — названию серии («Легенда забоя») нужно место рядом
+   с колонкой темпа. */
+.mn-frame > .mn-strip {
+  --sw: max(calc(100% - 20 * var(--u)), min(calc(100vw - 8 * var(--u)), calc(150 * var(--u))));
+  position: absolute;
+  z-index: 9;
+  left: calc((100% - var(--sw)) / 2);
+  left: round(down, calc((100% - var(--sw)) / 2), 1px);
+  width: var(--sw);
+  top: calc(-10 * var(--u));
+}
+html[data-ff^='phone'] .mn-frame > .mn-strip {
+  --sw: max(calc(100% - 20 * var(--u)), calc(100vw - 8 * var(--u)));
+}
+/* Внутри рамки полосы (20u − 2 · 2u = 32 px) — две строки по 7u: название (кегль 17 px,
+   буквы целиком в 7u, выносные — на 1 px выше) и огонёк 7 × 7 с полосой и «+N%»; 14u по
+   центру — по 1u до рамки. Огонёк — `m-flame7` (верх маски 9 × 9). То же у кирки и темпа. */
+.mn-frame > .mn-strip .mn-strip__streak {
+  display: grid;
+  grid-template-rows: calc(7 * var(--u)) calc(7 * var(--u));
+  align-content: center;
+  gap: 0;
+}
+.mn-frame > .mn-strip .mn-strip__pick {
+  gap: 0;
+}
+.mn-frame > .mn-strip .mn-strip__name {
+  line-height: 1;
+}
+.mn-strip__barrow > .pxi-m-flame7 {
+  --i-h: 7;
+  -webkit-mask-size: calc(9 * var(--u)) calc(9 * var(--u));
+  mask-size: calc(9 * var(--u)) calc(9 * var(--u));
+  -webkit-mask-position: 0 0;
+  mask-position: 0 0;
+}
+/* Темп: две строки по 7u (монета 8u выходит из своей строки на 1 px вверх и вниз). */
+.mn-frame > .mn-strip .mn-strip__live > span:not(.mn-strip__row) {
+  height: calc(7 * var(--u));
+}
+.mn-panel > .mn-strip {
+  height: calc(24 * var(--u));
+  grid-template-columns: calc(30 * var(--u)) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+}
+.mn-panel > .mn-strip .mn-strip__pace {
+  grid-column: 1 / -1;
+  justify-items: start;
+}
+/* Телефон лёжа: три строки по 7u — название, огонёк с полосой, темп (8u — под монету);
+   полоса 27u, всё внутри тонкой рамки (2u) и по 1u до неё. При 24u темп («5 подряд»,
+   «999 бл · …») уходил под полосу на 19 px — на заголовок «Расходники». */
+html[data-ff^='phone'] .mn-panel > .mn-strip {
+  height: calc(27 * var(--u));
+  grid-template-rows: calc(14 * var(--u)) calc(8 * var(--u));
+  align-content: center;
+  row-gap: 0;
+}
+html[data-ff^='phone'] .mn-panel > .mn-strip .mn-strip__streak {
+  display: grid;
+  grid-template-rows: calc(7 * var(--u)) calc(7 * var(--u));
+  gap: 0;
+}
+html[data-ff^='phone'] .mn-panel > .mn-strip .mn-strip__pick {
+  gap: 0;
+}
+html[data-ff^='phone'] .mn-panel > .mn-strip .mn-strip__name {
+  line-height: 1;
+}
+.mn-panel > .mn-strip .mn-strip__ghost {
+  display: none;
+}
+/* Планшет и компьютер: название ступени — своей строкой во всю ширину панели, ниже
+   кирка | полоса серии, ниже темп (tl: de «Stollenlegende» 195 px резалось в 130). */
+html:not([data-ff^='phone']) .mn-panel > .mn-strip {
+  height: auto;
+  grid-template-areas: 'name name' 'pick bar' 'pace pace';
+  /* Строка темпа — постоянной высоты: пока не копаешь, она пустая, но место держит. */
+  grid-template-rows: auto auto var(--px-fs-sm);
+  row-gap: calc(2 * var(--u));
+  padding-block: calc(2 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__streak {
+  display: contents;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip .mn-strip__name {
+  grid-area: name;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pick {
+  grid-area: pick;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip .mn-strip__barrow {
+  grid-area: bar;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
+  grid-area: pace;
+}
+.mn-panel > .mn-strip .mn-strip__live {
+  flex-direction: row;
+  gap: calc(4 * var(--u));
+}
+.mn-strip__pick,
+.mn-strip__streak {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.mn-strip__lv {
+  display: flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+  font: 400 var(--px-fs) / 1 var(--px-head);
+  color: var(--px-blue);
+}
+.mn-strip__name {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  font-size: var(--px-fs-sm);
+  white-space: nowrap;
+}
+.mn-strip__name > b {
+  overflow: hidden;
+  color: var(--px-muted);
+}
+/* Ступень серии — под названием, справа от полосы: название получает всю ширину. */
+.mn-strip__barrow {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.mn-strip__barrow > .px-bar {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.mn-strip__barrow > em {
+  flex: none;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  font-style: normal;
+  color: var(--px-gold);
+}
+.mn-strip__barrow > .px-i {
+  flex: none;
+  color: var(--px-muted);
+}
+.mn-strip[class*='is-t'] .mn-strip__name > b,
+.mn-strip[class*='is-t'] .mn-strip__barrow > .px-i {
+  color: var(--px-gold);
+}
+.mn-strip.is-t0 .px-bar,
+.mn-strip.is-t1 .px-bar {
+  --c: var(--px-red);
+}
+.mn-strip.is-t4 .mn-strip__name > b {
+  color: var(--px-text);
+}
+.mn-strip .mn-strip__pick .px-bar {
+  --c: var(--px-blue);
+}
+/* Простой: запал гаснет — полоса мигает, пока не поздно. */
+.mn-strip.is-cooling .mn-strip__streak .px-bar {
+  animation: mn-blink 0.7s steps(2, jump-none) infinite;
+}
+@keyframes mn-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+.mn-strip__pace {
+  display: grid;
+  justify-items: end;
+  align-items: center;
+  font-size: var(--px-fs-sm);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.mn-strip__pace > * {
+  grid-area: 1 / 1;
+}
+.mn-strip__ghost,
+.mn-strip__live {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+/* Живой текст ширину колонке не задаёт (contain): её задаёт копия, он лишь заполняет. */
+.mn-strip__live {
+  contain: inline-size;
+  justify-self: stretch;
+}
+/* Копия даёт колонке ширину, но не высоту и не видна. */
+.mn-strip__ghost {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+.mn-strip__ghost > span,
+.mn-strip__live > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+}
+/* «12,3к подряд» без темпа — в ширину темпа, переносом на две строки (de «am Stück»). */
+.mn-strip__live > .mn-strip__row {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  text-align: right;
+}
+
+/* Нижняя кромка рамы: баффы слева, отряд посередине, посылки справа. */
+.mn-buffs {
+  position: absolute;
+  z-index: 9;
+  left: calc(5 * var(--u));
+  bottom: calc(-6 * var(--u));
+  max-width: 38%;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: calc(2 * var(--u));
+  pointer-events: none;
+  line-height: 1;
+}
+.mn-buffs > * {
+  pointer-events: none;
+}
+.mn-buffs > button {
+  pointer-events: auto;
+}
+.mn-buff {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+  height: calc(12 * var(--u));
+  padding: 0 calc(3 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
+  image-rendering: pixelated;
+  box-sizing: border-box;
+  font-size: var(--px-fs-sm);
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.mn-buff--frenzy {
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  color: var(--px-ink);
+}
+.mn-buff--energy {
+  color: var(--px-text);
+}
+.mn-zone-exit {
+  flex: none;
+}
+
+.mn-parcels {
+  position: absolute;
+  z-index: 9;
+  right: calc(5 * var(--u));
+  bottom: calc(-8 * var(--u));
+  display: flex;
+  /* 6u между посылками: зона нажатия каждой (+3u вбок, +5u вверх-вниз) — 46 × 44+ и не
+     заходит на соседку (критик r2: 34 px, зона 39–43). */
+  gap: calc(6 * var(--u));
+}
+/* Узкая рама: посылки — столбиком справа от рамы, снизу вверх; зона нажатия — вбок. */
+.mn-field.is-slim .mn-parcels {
+  right: auto;
+  left: calc(100% + 2 * var(--u));
+  bottom: 0;
+  flex-direction: column-reverse;
+}
+.mn-field.is-slim .mn-parcel::before {
+  inset: calc(-4 * var(--u));
+}
+/* Низкий телефон стоя (320×568, `has-items` от окна ≤ 640 px): расходники — столбиком
+   слева от рамы, зеркально посылкам, от низа полосы серии (+1u). Ряд под полем (44 + 2 px)
+   отдан полю: клетка с заданием 16 → 21, без него 21 → 26. Поля слота по 23u с обеих сторон —
+   под столбик (21u + 2u) и посылки (17u + 2u): рама остаётся по центру, а `useFieldCell`
+   вычитает эти поля из ширины. Ячейка 21u, шаг 1u: 5 · 42 + 4 · 2 = 218 px от низа полосы
+   до низа слота (224 px при клетке 21); зона нажатия добирает 44 по 1 px в зазоры. */
+.mn--tall > .mn-field.has-items {
+  padding-inline: calc(23 * var(--u));
+}
+.mn .mn-frame > .mn-items {
+  --slot: calc(21 * var(--u));
+  position: absolute;
+  z-index: 9;
+  right: calc(100% + 2 * var(--u));
+  top: calc(11 * var(--u));
+  line-height: normal;
+}
+.mn .mn-frame > .mn-items > .mn-items__row {
+  flex-direction: column;
+  gap: var(--u);
+}
+.mn .mn-frame > .mn-items .mn-item::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1px - var(--u)) calc(-2 * var(--u));
+}
+/* Шестой расходник (крепь): столбик в две ячейки (3 ряда, 2 · 21u + 1u + 2u), справа — только
+   посылки (17u + 2u); рама смещается вправо, но клетка не меньше 21. */
+.mn--tall > .mn-field.has-items:has(.mn-items[data-n='6']) {
+  padding-left: calc(45 * var(--u));
+  padding-right: calc(19 * var(--u));
+}
+.mn .mn-frame > .mn-items[data-n='6'] > .mn-items__row {
+  display: grid;
+  grid-template-columns: repeat(2, var(--slot));
+}
+/* Телефон лёжа до 400 px (667×375, 844×390; критик r4): тот же столбик у левой кромки рамы,
+   от её верха; поле слота — только слева (рама между колонками не обязана стоять по центру
+   экрана, а 2 · 23u отняли бы у клетки ещё 7 px). Шесть расходников — одним столбиком:
+   6 · 21u + 5u = 262 px ≤ высоты рамы при клетке от 26. */
+.mn--wide > .mn-field.has-items {
+  padding-left: calc(23 * var(--u));
+}
+.mn--wide .mn-frame > .mn-items,
+.mn--wide .mn-frame > .mn-items[data-n] {
+  --slot: calc(21 * var(--u));
+  top: 0;
+}
+.mn.mn--wide .mn-frame > .mn-items > .mn-items__row,
+.mn.mn--wide .mn-frame > .mn-items[data-n] > .mn-items__row {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  gap: var(--u);
+}
+.mn-parcel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(17 * var(--u));
+  height: calc(17 * var(--u));
+  margin: 0;
+  padding: 0;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
+  image-rendering: pixelated;
+  background: none;
+  cursor: pointer;
+}
+.mn-parcel > img {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-parcel > .px-bar {
+  position: absolute;
+  left: calc(2 * var(--u));
+  right: calc(2 * var(--u));
+  bottom: calc(1 * var(--u));
+}
+.mn-parcel.is-ready {
+  border-image-source: var(--pxk-slot-r4);
+  animation: mn-bob 1.2s steps(2, jump-none) infinite;
+}
+@keyframes mn-bob {
+  50% {
+    translate: 0 calc(-1 * var(--u));
+  }
+}
+
+/* Отряд: на нижней кромке рамы посередине — питомцы крупнее текста рядом. */
+.mn .ppets {
+  bottom: calc(-12 * var(--u));
+  gap: calc(2 * var(--u));
+  line-height: 1;
+}
+.mn--wide .ppets {
+  bottom: calc(-6 * var(--u));
+}
+/* Низкий телефон: отряд на 1u ниже — центры нижнего ряда клеток (21 px) свободны с запасом
+   3,5 px, а не 1,5; низ отряда всё ещё внутри слота поля (R63). */
+.mn--tall .mn-field.has-items .ppets {
+  bottom: calc(-13 * var(--u));
+}
+/* Телефон лёжа до 400 px: отряд (44 px) опущен от клетки — верх спрайта на 2 px ниже центров
+   нижнего ряда (row9b: на 667×375 и 844×390 три питомца закрывали 5 и 3 центра), низ — на
+   экране (667×375: 357 из 375, 844×390: 385 из 390). */
+.mn.mn--short .ppets {
+  bottom: calc(var(--cell) / 2 - 18 * var(--u));
+}
+.mn .ppets__say {
+  padding: calc(1 * var(--u)) calc(3 * var(--u));
+  border-radius: 0;
+  background: var(--px-ink);
+  font: 500 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-gold);
+}
+
+/* Плашки поверх поля — в шрифте и материалах набора. */
+.mn .pmine__toast,
+.mn .pmine__arm,
+.mn .pfindcard,
+.mn .pcrewnote,
+.mn .pshift {
+  border-radius: 0;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  font-family: var(--px-font);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--px-text);
+}
+.mn .pmine__toast {
+  padding: calc(5 * var(--u)) calc(6 * var(--u));
+  font-size: var(--px-fs);
+}
+.mn .pmine__arm {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  top: calc(2 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+  font-size: var(--px-fs);
+  color: var(--px-gold);
+}
+.mn .pfindcard,
+.mn .pcrewnote {
+  left: calc(2 * var(--u));
+  right: calc(2 * var(--u));
+  top: calc(2 * var(--u));
+  gap: calc(4 * var(--u));
+  padding: calc(5 * var(--u)) calc(6 * var(--u));
+}
+.mn .pfindcard img {
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+}
+.mn .pfindcard i,
+.mn .pfindcard em,
+.mn .pcrewnote i,
+.mn .pshift i,
+.mn .pshift em {
+  font-size: var(--px-fs-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 1;
+}
+.mn .pfindcard i,
+.mn .pshift i {
+  color: var(--px-gold);
+}
+.mn .pfindcard em,
+.mn .pshift em {
+  color: var(--px-green);
+}
+.mn .pcrewnote i {
+  color: var(--px-muted);
+}
+.mn .pfindcard b,
+.mn .pcrewnote b,
+.mn .pshift b {
+  font: 400 var(--px-fs) / 1.15 var(--px-head);
+  color: var(--px-text);
+}
+.mn .pcrewnote__x {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  border-radius: 0;
+  font: 400 var(--px-fs-big) / 1 var(--px-head);
+  color: var(--px-text);
+}
+.mn .pshift {
+  left: calc(2 * var(--u));
+  right: calc(2 * var(--u));
+  bottom: calc(2 * var(--u));
+  gap: calc(1 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u));
+}
+.mn .psense b {
+  font-family: var(--px-head);
+  font-weight: 700;
+}
+
+/* ---- Шапка: деньги, токены, ключи (+ этаж на широком), назад и настройки ------------ */
+/* Стоя: назад · деньги · токены · ⚙ — ключей нет (их число на «Сундуках» в доке), место
+   отдано деньгам и токенам: кегль постоянный, не ниже 16 px (критик r2, R50). */
+.mn-hud {
+  display: grid;
+  grid-template-columns: calc(19 * var(--u)) minmax(0, 1.4fr) minmax(0, 1fr) calc(19 * var(--u));
+  grid-template-areas: 'back money tokens gear';
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.mn-hud:has(.mn-hud__forest) {
+  grid-template-columns:
+    calc(19 * var(--u)) minmax(0, 1.4fr) minmax(0, 1fr) calc(19 * var(--u))
+    calc(19 * var(--u));
+  grid-template-areas: 'back money tokens forest gear';
+}
+/* Широкий: назад · этаж · настройки, ниже деньги во всю ширину, ниже токены
+   и ключи. Колонка бывает узкой (планшет лёжа) — тогда токены и ключи сами
+   переносятся в две строки, а не обрезаются. */
+.mn--wide .mn-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(3 * var(--u)) calc(2 * var(--u));
+}
+.mn--wide .mn-hud > * {
+  flex: none;
+}
+.mn--wide .mn-hud__back {
+  order: 1;
+  width: calc(19 * var(--u));
+}
+/* Этаж — квадратная фишка (критик r2: пустая плашка шириной в колонку), ⚙ — к краю. */
+.mn--wide .mn-floor {
+  order: 2;
+  width: calc(19 * var(--u));
+  height: calc(19 * var(--u));
+  padding: 0;
+}
+.mn--wide .mn-hud__forest {
+  order: 3;
+}
+.mn--wide .mn-hud__gear {
+  order: 4;
+  width: calc(19 * var(--u));
+  margin-left: auto;
+}
+.mn--wide .mn-stat--coins {
+  order: 5;
+  flex: 1 1 100%;
+}
+.mn--wide .mn-stat--tokens {
+  order: 6;
+  flex: 1 1 calc(42 * var(--u));
+}
+.mn--wide .mn-stat--keys {
+  order: 7;
+  flex: 1 1 calc(30 * var(--u));
+}
+.mn--wide .mn-stat--coins {
+  --fs-n: var(--px-fs-hero);
+}
+/* Узкая колонка (667×375): ключи «999» рядом с токенами «99,9Mn» не помещались и при 16 px —
+   токены на всю строку, ключи — бейджем на «Сундуках» (`data-tight` ставит `useSideFit`). */
+.mn-side--l[data-tight] .mn-stat--keys {
+  display: none;
+}
+.mn-hud__back {
+  grid-area: back;
+}
+.mn-hud__gear {
+  grid-area: gear;
+}
+.mn-hud__forest {
+  grid-area: forest;
+}
+.mn-hud__forest.is-locked {
+  filter: grayscale(1) brightness(0.8);
+}
+.mn-hud .px-btn--icon > .px-i {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+.mn-stat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  height: calc(19 * var(--u));
+  margin: 0;
+  padding: 0 calc(2 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-text);
+  font: inherit;
+  /* Кегль числа — от ширины фишки (cqi) и запаса на самое длинное число (--res знаков),
+     а не от числа: один размер на формат и язык (R45, R50). Рамка фокуса набора
+     снаружи — overflow тут нельзя. */
+  position: relative;
+  container-type: inline-size;
+  --ico: calc(12 * var(--u));
+  --fs-n: var(--px-fs-big);
+  --res: 6;
+}
+.mn-stat--coins {
+  grid-area: money;
+  /* «1,2 млрд», «999,9 млн» — самое длинное в шапке (R34). */
+  --res: 8;
+}
+.mn-stat--tokens {
+  grid-area: tokens;
+  /* «99,9Mn» (tr) шире шести цифр: при 6,5 на 320 px текст 64,1 px в коробке 61,3 (M5). */
+  --res: 7;
+}
+.mn-stat--keys {
+  grid-area: keys;
+}
+.mn-stat--btn {
+  cursor: pointer;
+}
+/* Зона нажатия фишек — 44+ по высоте, только вверх-вниз: вбок соседей не перекрывает (R43). */
+.mn-stat--btn::before {
+  content: '';
+  position: absolute;
+  inset: calc(-4 * var(--u)) 0;
+}
+.mn-floor::before {
+  content: none;
+}
+/* Широкий экран: фишка этажа 19u в строке «назад · этаж · ⚙» — зона нажатия вверх-вниз на
+   3u и вправо на 4u (там пусто до ⚙), влево — нет: там зона «назад» (pl: 38×38 → 44×46). */
+.mn--wide .mn-floor::before {
+  content: '';
+  inset: calc(-3 * var(--u)) calc(-4 * var(--u)) calc(-3 * var(--u)) 0;
+}
+.mn-stat > :not(.mn-stat__n) {
+  flex: none;
+}
+.mn-stat--btn:active > :not(.px-keyhint),
+.mn-stat--btn.is-down > :not(.px-keyhint),
+.mn-rank:active > :not(.px-keyhint, .mn-rank__ready),
+.mn-rank.is-down > :not(.px-keyhint, .mn-rank__ready),
+.mn-quest:active > *,
+.mn-quest.is-down > *,
+.mn-parcel:active > img,
+.mn-parcel.is-down > img,
+.mn-bag:active > :not(.px-keyhint, .mn-bag__sell),
+.mn-bag.is-down > :not(.px-keyhint, .mn-bag__sell) {
+  translate: 0 var(--u);
+}
+.mn-stat__n {
+  min-width: 0;
+  overflow: hidden;
+  /* Цифры — текстовым шрифтом набора: заголовочный вдвое шире. Кегль — свой у фишки
+     (--fs-n), но не больше, чем помещается самое длинное число (--res знаков по ~0,55 em),
+     и не меньше 16 px: длиннее — короче запись (chipMoney, chipCount), а не мельче. */
+  font: 700
+    max(16px, min(var(--fs-n), calc((100cqi - var(--ico) - 2 * var(--u)) / (var(--res) * 0.55)))) /
+    1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--px-text);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+  white-space: nowrap;
+}
+.mn-stat--coins .mn-stat__n {
+  color: var(--px-gold);
+}
+.mn-coin,
+.mn-pic {
+  display: inline-block;
+  flex: none;
+  width: calc(var(--pic-w) * var(--u));
+  height: calc(var(--pic-h) * var(--u));
+  background: var(--pic) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+.mn-coin {
+  --pic: var(--pximg-m-coin);
+  --pic-w: var(--pximg-m-coin-w);
+  --pic-h: var(--pximg-m-coin-h);
+}
+.mn-coin--s {
+  --pic: var(--pximg-m-coin-s);
+  --pic-w: var(--pximg-m-coin-s-w);
+  --pic-h: var(--pximg-m-coin-s-h);
+}
+.mn-pic {
+  --pic-w: 12;
+  --pic-h: 12;
+}
+.mn-pic--books {
+  --pic: var(--pximg-m-dock-books);
+}
+.mn-pic--bag {
+  --pic: var(--pximg-m-dock-bag);
+}
+.mn-pic--camp {
+  --pic: var(--pximg-m-dock-camp);
+}
+.mn-pic--work {
+  --pic: var(--pximg-m-dock-work);
+  --pic-w: 10;
+  --pic-h: 10;
+}
+.mn-pic--inv {
+  --pic: var(--pximg-m-dock-inv);
+}
+.mn-floor {
+  position: relative;
+  grid-area: floor;
+  gap: calc(1 * var(--u));
+}
+.mn-floor__ore {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  image-rendering: pixelated;
+}
+/* Буква этажа — значок набора в углу руды (критик: руда главная, буква — подпись). */
+.mn-floor__badge {
+  position: absolute;
+  z-index: 3;
+  right: calc(-2 * var(--u));
+  bottom: calc(-3 * var(--u));
+  line-height: 0;
+  pointer-events: none;
+}
+/* Нейтральная плашка (светлая лунка в рамке): красный на экране шахты — только «!». */
+.mn-floor__badge .px-badge {
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
+  font-size: var(--px-fs-sm);
+  color: var(--px-text);
+  text-shadow: none;
+}
+.mn-floor > .px-keyhint,
+.mn-rank > .px-keyhint,
+.mn-bag > .px-keyhint,
+.mn-dock__btn > .px-keyhint,
+.mn-item > .px-slot__art > .px-keyhint {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+}
+.mn-floor > .px-keyhint {
+  left: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
+}
+
+/* ---- Ранг: буква, полоса с ценой, условия, следующая буква ---------------------------- */
+.mn-rankrow {
+  display: grid;
+  grid-template-columns: calc(26 * var(--u)) minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+}
+.mn-rankrow > .mn-floor {
+  grid-area: auto;
+  height: auto;
+}
+.mn-rank {
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(16 * var(--u)) minmax(0, 1fr) calc(16 * var(--u));
+  align-items: center;
+  gap: calc(3 * var(--u));
+  box-sizing: border-box;
+  height: calc(26 * var(--u));
+  margin: 0;
+  padding: calc(1 * var(--u)) calc(4 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Ранг готов — мигающая рамка выбора отдельным элементом: ::after занят кольцом
+   фокуса набора. Мигает до 0,45, а не гаснет. */
+.mn-rank__ready {
+  position: absolute;
+  inset: calc(-2 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-select);
+  border-image-slice: var(--pxk-select-s);
+  border-image-width: var(--pxk-select-w);
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: mn-ready 1s steps(2, jump-none) infinite;
+}
+@keyframes mn-ready {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
+}
+.mn-hex {
+  display: grid;
+  place-items: center;
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  image-rendering: pixelated;
+  font: 400 var(--px-fs-big) / 1 var(--px-head);
+  color: var(--px-ink);
+}
+.mn-hex--next {
+  border-image-source: var(--pxk-slot-r0);
+  border-image-slice: var(--pxk-slot-r0-s);
+  border-image-width: var(--pxk-slot-r0-w);
+  color: var(--px-text);
+}
+.mn-rank__mid {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.mn-rank__cost {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+}
+.mn-rank__cost.is-ok {
+  color: var(--px-gold);
+}
+/* Условия ранга одной строкой постоянной высоты: пропали (ранг готов) — место
+   осталось, полоса не прыгает. */
+.mn-rank__needs {
+  display: block;
+  height: calc(10 * var(--u));
+  overflow: hidden;
+}
+/* Широкий: полоса с буквами — первой строкой, условия — второй во всю ширину
+   (в узкой колонке планшета «520/1 000» и «1/5» не помещались рядом с буквами). */
+.mn--wide .mn-rank {
+  grid-template-rows: auto auto;
+  row-gap: calc(2 * var(--u));
+  height: auto;
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+.mn--wide .mn-rank__mid {
+  display: contents;
+}
+.mn--wide .mn-rank__needs {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  overflow: visible;
+}
+.mn-rank__go {
+  display: none;
+}
+.mn--wide .mn-rank.is-ready .mn-rank__go {
+  display: block;
+  font: 700 var(--px-fs-sm) / calc(10 * var(--u)) var(--px-font);
+  color: var(--px-gold);
+  text-align: center;
+  white-space: nowrap;
+}
+.mn--wide .mn-rank.is-ready .mn-rank__bar > .px-bar__label {
+  display: none;
+}
+.mn-rank .pquota {
+  display: flex;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+  margin: 0;
+}
+.mn-rank .pquota__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+  height: calc(10 * var(--u));
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-ink);
+  white-space: nowrap;
+}
+.mn-rank .pquota__chip.is-done {
+  color: var(--px-ink);
+  opacity: 0.6;
+}
+.mn-rank .pquota__chip.is-pick {
+  color: var(--px-ink);
+}
+/* `> img` — текстура блоков этажа; картинку кирки (`PickIcon`, img внутри полосы `.pxs`) не
+   трогаем: ей 8u из `size`. */
+.mn-rank .pquota__chip > img {
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-rank .pquota__chip .gx-icon {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+.mn-rank > .px-keyhint {
+  right: calc(-1 * var(--u));
+  top: calc(-4 * var(--u));
+}
+/* Условия ранга одной строкой «⛏12 · 4 299/4 300 · 9/10» занимали 237–240 px (телефон) и
+   ~320 (u = 3), а места было 172 (320 px), 219 (375), 228 (390), 225 (tl): overflow резал
+   цифры, на tl они вылезали за рамку колонки. Блоки этажа (`RankBlocks`) — отдельной фишкой.
+   Стоя (телефон, планшет): в тех же 22u две строки — полоса денег и блоки (их докупают за деньги), под
+   ними кирка и выработка. Высота постоянная, полоса всегда сверху. */
+.mn--tall .mn-rank__mid {
+  flex-flow: row wrap;
+  align-content: flex-start;
+  align-items: center;
+  gap: var(--u) calc(2 * var(--u));
+  height: calc(22 * var(--u));
+}
+.mn--tall .mn-rank__mid > .mn-rank__bar {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.mn--tall .mn-rank__mid > .mn-rank__needs {
+  flex: 0 0 100%;
+}
+/* 320 px: «⛏12» + «4 299/4 300» — до 170 px, буквы ближе к середине (2u): строка 176. */
+@media (max-width: 340px) {
+  html[data-ff^='phone'] .mn--tall .mn-rank {
+    column-gap: calc(2 * var(--u));
+  }
+}
+/* Широкий: буква · полоса · блоки · буква, под ними кирка и выработка (pl, компьютер —
+   высота та же). В узкой рамке (tl 256 px, телефон боком 667 px) на блоки нет места —
+   три строки постоянной высоты: выработка, под ней кирка и блоки по сторонам от середины.
+   Порог — ширина обёртки `.mn-rankwrap` (контейнер `mnrank`), а не содержимое. */
+.mn-rankwrap {
+  display: grid;
+  container: mnrank / inline-size;
+}
+.mn--wide .mn-rank {
+  grid-template-columns:
+    calc(16 * var(--u)) minmax(0, 1fr) auto
+    calc(16 * var(--u));
+}
+.mn--wide .mn-rank > .mn-hex {
+  grid-area: 1 / 1;
+}
+.mn--wide .mn-rank > .mn-hex--next {
+  grid-area: 1 / 4;
+}
+.mn--wide .mn-rank__mid > .mn-rank__bar {
+  grid-area: 1 / 2;
+}
+.mn--wide .mn-rank__mid > .pquota__chip.is-blocks {
+  grid-area: 1 / 3;
+}
+@container mnrank (max-width: 299px) {
+  html:not([data-ff^='phone']) .mn--wide .mn-rank {
+    grid-template-columns:
+      calc(16 * var(--u)) minmax(0, 1fr) minmax(0, 1fr)
+      calc(16 * var(--u));
+    grid-template-rows: auto calc(10 * var(--u)) calc(10 * var(--u));
+    row-gap: var(--u);
+  }
+}
+@container mnrank (max-width: 224px) {
+  html[data-ff^='phone'] .mn--wide .mn-rank {
+    grid-template-columns:
+      calc(16 * var(--u)) minmax(0, 1fr) minmax(0, 1fr)
+      calc(16 * var(--u));
+    grid-template-rows: auto calc(10 * var(--u)) calc(10 * var(--u));
+    row-gap: var(--u);
+  }
+}
+@container mnrank (max-width: 299px) {
+  html:not([data-ff^='phone']) .mn--wide .mn-rank__mid > .mn-rank__bar {
+    grid-area: 1 / 2 / 2 / 4;
+  }
+  html:not([data-ff^='phone']) .mn--wide .mn-rank__needs {
+    display: contents;
+  }
+  html:not([data-ff^='phone']) .mn--wide .mn-rank .pquota {
+    display: contents;
+  }
+  html:not([data-ff^='phone']) .mn--wide .mn-rank .pquota__chip.is-work {
+    grid-area: 2 / 1 / 3 / -1;
+    justify-self: center;
+  }
+  html:not([data-ff^='phone']) .mn--wide .mn-rank .pquota__chip.is-pick {
+    grid-area: 3 / 1 / 4 / 3;
+    justify-self: end;
+  }
+  html:not([data-ff^='phone']) .mn--wide .mn-rank__mid > .pquota__chip.is-blocks {
+    grid-area: 3 / 3 / 4 / -1;
+    justify-self: start;
+  }
+  html:not([data-ff^='phone']) .mn--wide .mn-rank:not(:has(.is-pick)) .pquota__chip.is-blocks,
+  html:not([data-ff^='phone']) .mn--wide .mn-rank:not(:has(.is-blocks)) .pquota__chip.is-pick {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+  html:not([data-ff^='phone']) .mn--wide .mn-rank .mn-rank__go {
+    grid-area: 2 / 1 / 4 / -1;
+    align-self: center;
+  }
+}
+@container mnrank (max-width: 224px) {
+  html[data-ff^='phone'] .mn--wide .mn-rank__mid > .mn-rank__bar {
+    grid-area: 1 / 2 / 2 / 4;
+  }
+  html[data-ff^='phone'] .mn--wide .mn-rank__needs {
+    display: contents;
+  }
+  html[data-ff^='phone'] .mn--wide .mn-rank .pquota {
+    display: contents;
+  }
+  html[data-ff^='phone'] .mn--wide .mn-rank .pquota__chip.is-work {
+    grid-area: 2 / 1 / 3 / -1;
+    justify-self: center;
+  }
+  html[data-ff^='phone'] .mn--wide .mn-rank .pquota__chip.is-pick {
+    grid-area: 3 / 1 / 4 / 3;
+    justify-self: end;
+  }
+  html[data-ff^='phone'] .mn--wide .mn-rank__mid > .pquota__chip.is-blocks {
+    grid-area: 3 / 3 / 4 / -1;
+    justify-self: start;
+  }
+  html[data-ff^='phone'] .mn--wide .mn-rank:not(:has(.is-pick)) .pquota__chip.is-blocks,
+  html[data-ff^='phone'] .mn--wide .mn-rank:not(:has(.is-blocks)) .pquota__chip.is-pick {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+  html[data-ff^='phone'] .mn--wide .mn-rank .mn-rank__go {
+    grid-area: 2 / 1 / 4 / -1;
+    align-self: center;
+  }
+}
+
+/* ---- Задание проводника --------------------------------------------------------------- */
+/* Стоя высота постоянная — 26u (критик r2, R49: окошко 44–79 px двигало поле до 31 px):
+   номер · название до двух строк (+ полоса) · награда и счёт; готово — тот же блок справа
+   становится золотой кнопкой «Забрать», место под неё есть всегда. */
+.mn-quest {
+  display: grid;
+  grid-template-columns: calc(16 * var(--u)) minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  box-sizing: border-box;
+  height: calc(26 * var(--u));
+  margin: 0;
+  padding: 0 calc(2 * var(--u)) 0 calc(4 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mn-quest__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.mn-quest__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--px-fs-sm);
+  line-height: 1.1;
+}
+/* Награда и счёт — столбиком в рамке кнопки; пока не готово, рамки не видно. */
+.mn-quest__end {
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  white-space: nowrap;
+}
+.mn-quest:not(.is-ready) .mn-quest__end {
+  border-image-source: none;
+  text-shadow: none;
+}
+.mn-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  color: var(--px-green);
+}
+.mn-quest.is-ready .mn-reward {
+  color: inherit;
+}
+.mn-reward > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(1 * var(--u));
+}
+.mn-reward :is(img, canvas, svg, i) {
+  flex: none;
+}
+.mn-quest__n {
+  display: grid;
+  justify-items: center;
+  color: var(--px-gold);
+}
+.mn-quest.is-ready .mn-quest__n {
+  color: inherit;
+}
+.mn-quest__n > * {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+}
+.mn-quest__n > .is-off {
+  visibility: hidden;
+}
+/* В боковой колонке — номер, название, ниже награда и счёт в строку. */
+.mn--wide .mn-quest {
+  grid-template-columns: calc(16 * var(--u)) minmax(0, 1fr);
+  row-gap: calc(1 * var(--u));
+  height: auto;
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+}
+.mn--wide .mn-quest > :first-child {
+  grid-row: span 2;
+}
+.mn--wide .mn-quest > :last-child {
+  grid-column: 2;
+  justify-self: start;
+  flex-direction: row;
+  gap: calc(4 * var(--u));
+}
+.mn-quest.is-ready {
+  border-image-source: var(--pxk-frame-parch);
+  border-image-slice: var(--pxk-frame-parch-s);
+  border-image-width: var(--pxk-frame-parch-w);
+  color: var(--px-ink);
+}
+
+/* ---- Расходники ----------------------------------------------------------------------- */
+.mn-items {
+  --slot: calc(23 * var(--u));
+}
+.mn-items__row {
+  display: flex;
+  justify-content: center;
+  gap: calc(4 * var(--u));
+}
+/* Слева под заданием: сколько влезает в ряд (5 на телефоне лёжа). */
+.mn--wide .mn-items__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--slot));
+  justify-content: space-between;
+  gap: calc(2 * var(--u));
+}
+/* Телефон лёжа, шестой расходник (крепь): ряд остаётся одним — ячейки 20u, иначе второй
+   ряд сдвигает колонку и она начинает прокручиваться. */
+html[data-ff^='phone'] .mn--wide .mn-items[data-n='6'] {
+  --slot: calc(20 * var(--u));
+}
+html[data-ff^='phone'] .mn--wide .mn-items[data-n='6'] .mn-items__row {
+  gap: var(--u);
+}
+html[data-ff^='phone'] .mn--wide .mn-items__row {
+  height: calc(23 * var(--u));
+  align-items: center;
+}
+.mn-item {
+  flex: none;
+}
+.mn-item .px-slot__n {
+  font-size: var(--px-fs-sm);
+}
+/* Значок — от ячейки, целыми u, на 1u внутри окна рисунка (критик r3: на tl с заданием
+   ячейка 15u, окно 13u, а значок 16u — виден был только центр, 81 % по стороне). */
+.mn-item {
+  --ic: min(var(--ic-max), round(down, calc(var(--slot) - 4 * var(--u)), var(--u)));
+  --ic-max: calc(13 * var(--u));
+}
+html:not([data-ff^='phone']) .mn--wide .mn-item {
+  --ic-max: calc(16 * var(--u));
+}
+.mn-item > .px-slot__art > .gx-icon {
+  width: var(--ic);
+  height: var(--ic);
+}
+.mn-item.is-buy .gx-icon {
+  opacity: 0.45;
+}
+.mn-item__plus {
+  position: absolute;
+  right: calc(2 * var(--u));
+  bottom: calc(2 * var(--u));
+  color: var(--px-gold);
+}
+.mn-item > .px-slot__art > .px-keyhint {
+  left: calc(-1 * var(--u));
+  top: calc(-2 * var(--u));
+}
+
+/* ---- Рюкзак: значок, полоса заполнения, кнопка «Продать» ----------------------------- */
+.mn-bag {
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(14 * var(--u)) minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: calc(3 * var(--u));
+  box-sizing: border-box;
+  height: calc(23 * var(--u));
+  margin: 0;
+  padding: calc(2 * var(--u)) calc(4 * var(--u)) calc(2 * var(--u)) calc(5 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-obsidian);
+  border-image-slice: var(--pxk-frame-obsidian-s);
+  border-image-width: var(--pxk-frame-obsidian-w);
+  image-rendering: pixelated;
+  background: none;
+  color: var(--px-text);
+  font: inherit;
+  cursor: pointer;
+}
+.mn-bag__ico {
+  position: relative;
+  /* Значок подпрыгивает (`hop`) над своей полосой и кольцом фокуса рюкзака (z 3): нарисованные
+     после него, они уходили в свой слой на каждый блок (`layers-mn.mjs`). */
+  z-index: 4;
+  justify-self: center;
+  line-height: 0;
+}
+.mn-bag__badge {
+  position: absolute;
+  z-index: 3;
+  top: calc(-4 * var(--u));
+  right: calc(-5 * var(--u));
+  line-height: 1;
+  pointer-events: none;
+}
+.mn-bag__mid {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+}
+.mn-bag__title {
+  font-size: var(--px-fs-sm);
+  line-height: 1;
+  color: var(--px-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mn-bag.is-full .mn-bag__bar {
+  --c: var(--px-red);
+}
+.mn-bag.is-full .mn-bag__title {
+  color: var(--px-red);
+}
+.mn-bag__sell {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.1;
+  font-size: var(--px-fs-sm);
+  pointer-events: none;
+}
+.mn-bag.is-down .mn-bag__sell,
+.mn-bag:active .mn-bag__sell {
+  padding-top: calc(3 * var(--u));
+  padding-bottom: calc(2 * var(--u));
+}
+.mn-bag > .px-keyhint {
+  right: calc(-1 * var(--u));
+  top: calc(-4 * var(--u));
+}
+/* В боковой колонке: значок и заполненность сверху, кнопка продажи — под ними
+   во всю ширину, чтобы подпись не обрезалась. */
+.mn--wide .mn-bag {
+  grid-template-columns: calc(14 * var(--u)) minmax(0, 1fr);
+  grid-template-rows: auto calc(15 * var(--u));
+  row-gap: calc(2 * var(--u));
+  height: auto;
+  padding-top: calc(4 * var(--u));
+  padding-bottom: calc(4 * var(--u));
+}
+.mn--wide .mn-bag__sell {
+  grid-column: 1 / -1;
+}
+
+/* ---- Док ------------------------------------------------------------------------------ */
+/* Кнопки лёжа: значок слева, подпись справа (до двух строк) — на телефоне
+   шесть стоячих кнопок в ряд не вмещают читаемые подписи. Стоя — 3 × 2,
+   в боковой колонке — 2 × 3. */
+.mn-dock {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(3 * var(--u));
+  /* Без рамы-панели: у каждой кнопки своя рама, а высота нужна полю. */
+  padding: 0;
+  border: 0;
+  border-image: none;
+}
+/* В боковой колонке — по две кнопки в ряд, а в узкой колонке (планшет лёжа)
+   по одной: подпись важнее, слово не рвётся посередине. */
+.mn-dock__btn {
+  justify-content: flex-start;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+  /* 21u: на планшете это 63 px; телефону — 24u (48 px, палец), см. ниже. */
+  height: calc(21 * var(--u));
+  align-items: center;
+  padding-left: calc(2 * var(--u));
+  padding-right: 0;
+  white-space: normal;
+}
+/* Телефон стоя: значок НАД подписью, подпись одним кеглем 17 px в одну строку, без
+   переносов и подгонки по длине (критик r2, R48: 17 / 15,4 / 13,7 px и «Demir-hane»). */
+/* Телефон лёжа — так же (tr «Demir-hane» рвался на две строки кеглем 15 px в плитке 123 × 72). */
+html[data-ff^='phone'] .mn-dock__btn {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  padding: 0 var(--u) calc(3 * var(--u));
+}
+html[data-ff^='phone'] .mn--tall .mn-dock__btn {
+  height: calc(26 * var(--u));
+}
+html[data-ff^='phone'] .mn-dock__btn:is(:active, .is-down) {
+  padding: calc(2 * var(--u)) var(--u) var(--u);
+}
+html[data-ff^='phone'] .mn-dock__label {
+  font-size: var(--px-fs-sm);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  -webkit-hyphens: none;
+  hyphens: none;
+}
+.mn-dock__btn:active,
+.mn-dock__btn.is-down {
+  padding-left: calc(2 * var(--u));
+  padding-right: 0;
+}
+.mn-dock__ico {
+  display: grid;
+  place-items: center;
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  flex: none;
+  line-height: 0;
+}
+.mn-dock__ico > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+.mn-dock__mask {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  color: var(--px-text);
+}
+.mn-dock__btn {
+  container-type: inline-size;
+}
+.mn-dock__label {
+  min-width: 0;
+  /* Не больше, чем влезает самое длинное слово (--lw ставит DockLabel): 100cqi — ширина
+     содержимого кнопки за вычетом значка и зазора. */
+  font-size: min(
+    var(--dock-fs, var(--px-fs-sm)),
+    calc((100cqi - var(--dock-ico, calc(12 * var(--u))) - 2 * var(--u)) / (var(--lw, 8) * 0.64))
+  );
+  line-height: 1.05;
+  text-align: left;
+  /* Длинное слово (de, tr) переносится по слогам, а не режется. */
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+.mn-dock__badge {
+  position: absolute;
+  z-index: 4;
+  top: calc(-5 * var(--u));
+  right: 0;
+  pointer-events: none;
+}
+.mn-dock__btn > .px-keyhint {
+  right: calc(1 * var(--u));
+  bottom: calc(2 * var(--u));
+}
+
+/* ---- Телефон лёжа до 400 px (`mn--short`: 667×375, 844×390) — критик r4 ---------------- */
+/* Колонки плотнее: зазоры 1u, ряды шапки через 1u, рюкзак на 4 px короче — с заданием левая
+   колонка на 667×375 перебирала 12 px и после переезда расходников к раме, а без задания
+   рюкзак не входил в неё на 6 px (колонка пустела на четверть). Монеты в шапке — не кнопка:
+   зоны нажатия «назад» и ⚙ (−4u по вертикали) могут заходить на них. */
+.mn--short .mn-side {
+  gap: var(--u);
+}
+.mn.mn--short .mn-hud {
+  row-gap: var(--u);
+}
+/* Рамка ранга в колонке 165 px: поля 2u и зазоры 2u (как на 320 px) — tr «1.100 ●» в полосе
+   между буквами вылезал на 1,4 px (`needs2`). */
+.mn.mn--short .mn-rank {
+  column-gap: calc(2 * var(--u));
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+/* Задание в колонке 177 px: награда и «Забрать» — во всю ширину карточки под номером и
+   названием (рядом с шестиугольником «Забрать» вылезал за колонку на 18 px). */
+.mn.mn--short .mn-quest > :first-child {
+  grid-row: auto;
+}
+.mn.mn--short .mn-quest > :last-child {
+  grid-column: 1 / -1;
+  gap: calc(2 * var(--u));
+}
+.mn.mn--short .mn-bag {
+  row-gap: var(--u);
+  padding: calc(3 * var(--u)) calc(2 * var(--u)) calc(2 * var(--u));
+}
+/* Колонка 177 px (рама с расходниками шире): «Продать» добирает ширину полями — de
+   «Verkaufen 821» вылезал за кнопку на 1 px. */
+.mn.mn--short .mn-bag__sell {
+  gap: calc(2 * var(--u));
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+/* Док — одной колонкой из шести строк, значок слева от подписи (как на планшете): в плитке
+   2 × 3 шириной 85 px «Инвентарь» (95 px) и tr «Demirhane» вылезали за рамку. Строки — от
+   21u (42 px), зона нажатия добирает 44 по 1 px в зазоры. */
+html[data-ff^='phone'] .mn--short .mn-side--r > .mn-dock {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--u);
+}
+html[data-ff^='phone'] .mn--short .mn-dock__btn {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: calc(3 * var(--u));
+  padding: 0 0 calc(3 * var(--u)) calc(4 * var(--u));
+}
+html[data-ff^='phone'] .mn--short .mn-dock__btn:is(:active, .is-down) {
+  padding: calc(2 * var(--u)) 0 var(--u) calc(4 * var(--u));
+}
+html[data-ff^='phone'] .mn--short .mn-dock__label {
+  text-align: left;
+}
+.mn--short .mn-dock__btn::before {
+  content: '';
+  position: absolute;
+  inset: -1px 0;
+}
+
+/* Лагерь, кузница или инвентарь закрывают поле — шахта стоит: её CSS-анимации (отряд,
+   посылки, рамка, ранг) на паузе, кадр не пересчитывается под окном (N2: ≈ 50 мс стиля и
+   отрисовки за 4 с при 4×). Окно живёт внутри .mn — пауза только для частей экрана. */
+.mn.is-under
+  :is(.mn-field, .mn-hud, .mn-rankrow, .mn-side, .mn-items, .mn-bag, .mn-dock, .mn-quest)
+  :is(*, ::before, ::after),
+.mn.is-under
+  :is(.mn-field, .mn-hud, .mn-rankrow, .mn-side, .mn-items, .mn-bag, .mn-dock, .mn-quest),
+.mn.is-under
+  :is(.mn-field, .mn-hud, .mn-rankrow, .mn-side, .mn-items, .mn-bag, .mn-dock, .mn-quest)::after {
+  animation-play-state: paused !important;
+}
+
+/* Постоянные слои под копку (как `.pmx-*` в defe0ee: «нижняя панель мигает при копке»). Кирка,
+   крошка и надписи поля — анимированные слои; всё, что рисуется после них и может их перекрыть,
+   браузер выносил в свой слой и убирал обратно на каждом блоке. Ряды — свои слои, шапка и ранг —
+   свои контексты наложения: их z 1–3 (подпись полосы ранга, бейдж этажа, кольца фокуса) иначе
+   рисовались после поля. Замер `{SCR}/ui7M/layers-mn.mjs` pp, 5 с копания: вне поля 0 новых
+   слоёв (было: бейдж «Сундуков» 6, полоса рюкзака 6, строка запала 6, подпись ранга 8). */
+.mn-items,
+.mn-dock,
+.mn-bag,
+.mn-quest,
+.mn-strip {
+  will-change: transform;
+}
+.mn-hud,
+.mn-rankrow,
+.mn-rank {
+  isolation: isolate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-frame::after,
+  .mn-parcel.is-ready,
+  .mn-rank__ready,
+  .mn-strip.is-cooling .mn-strip__streak .px-bar {
+    animation: none;
+  }
+}
+
+/* Вне телефона места хватает — подписи на ступень крупнее. */
+html:not([data-ff^='phone']) .mn .mn-dock__label {
+  --dock-fs: var(--px-fs);
+}
+html:not([data-ff^='phone']) .mn :is(.mn-bag__title, .mn-strip__name),
+html:not([data-ff^='phone']) .mn .mn-bag .px-bar__label,
+html:not([data-ff^='phone']) .mn .mn-bag__sell {
+  font-size: var(--px-fs);
+}
+/* Планшет лёжа: колонка 85u — de «Verkaufen 9.665 ●» кеглем 22,5 px (245 px) вылезал из кнопки
+   223 px на 11 px с каждой стороны (M5, `sellfit`); подпись кнопки — кеглем подписей. */
+html[data-ff='tablet'] .mn.mn--wide .mn-bag__sell {
+  font-size: var(--px-fs-sm);
+}
+
+/* ---- Сцена нового ранга (prank): анимации прежние (theme.css), рамка, лента,
+   кнопка и шрифты — набора. ------------------------------------------------------------ */
+.mn .prank {
+  padding: calc(6 * var(--u));
+}
+.mn .prank__card {
+  gap: calc(4 * var(--u));
+  width: min(100%, calc(170 * var(--u)));
+  padding: calc(10 * var(--u)) calc(8 * var(--u)) calc(8 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-radius: 0;
+  border-image-source: var(--pxk-frame-wood);
+  border-image-slice: var(--pxk-frame-wood-s);
+  border-image-width: var(--pxk-frame-wood-w);
+  image-rendering: pixelated;
+  background: none;
+  box-shadow: none;
+  color: var(--px-text);
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+}
+/* «Новый горизонт · Серебряный» длиннее карточки: лента переносится в две
+   строки, а не раздвигает карточку за край экрана. */
+.mn .prank__label {
+  box-sizing: border-box;
+  max-width: 100%;
+  height: auto;
+  min-height: calc(12 * var(--u));
+  margin-top: calc(-17 * var(--u));
+  padding-top: calc(2 * var(--u));
+  padding-bottom: calc(3 * var(--u));
+  font-size: var(--px-fs);
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: none;
+  white-space: normal;
+}
+.mn .prank__letter {
+  display: grid;
+  place-items: center;
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+  image-rendering: pixelated;
+  font: 400 calc(var(--px-fs-hero) * 2.6) / 1 var(--px-head);
+  color: var(--px-gold);
+  text-shadow: 0 var(--u) 0 var(--px-ink);
+}
+.mn .prank__mine {
+  gap: calc(6 * var(--u));
+  font: 700 var(--px-fs) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+}
+.mn .prank__mine > span {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.mn .prank__mine img {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+  border-radius: 0;
+  image-rendering: pixelated;
+}
+.mn .prank__key {
+  gap: calc(2 * var(--u));
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-gold);
+}
+.mn .prank__lvl {
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-green);
+}
+.mn .prank__cta {
+  margin-top: calc(2 * var(--u));
+  min-width: calc(80 * var(--u));
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+/* ==== Окна шахты: этажи, ранг, престиж, сброс. Рамка и лента — GxModal на наборе
+   (окна живут в портале, поэтому классы без .mn). ==================================== */
+/* Окно — содержимое набора (`.px` внутри тела окна): тело не масштабируется ×2 на 1080p,
+   прокручивается сам лист; поля −3u/3u — место кольцу фокуса у краёв прокрутки. */
+.mn-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: calc(-3 * var(--u));
+  padding: calc(3 * var(--u));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+/* Окно с содержимым набора рамка C делает 420u (под колонки Питомника); листу шахты —
+   обычные 200u, как прежде. */
+.gx-win .gx-win__box:has(.gx-win__body > .mn-sheet) {
+  --gx-mw: 200;
+}
+.mn-sheet b {
+  font-weight: 700;
+}
+.mn-sheet .px-btn[disabled] {
+  cursor: default;
+}
+/* Строка-карточка: углублённая лунка набора. */
+.mn-mines__row,
+.mn-norm__row,
+.mn-pres__row {
+  display: grid;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  box-sizing: border-box;
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  border: var(--u) solid transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  color: var(--px-text);
+}
+
+/* Этажи */
+.mn-mines__item {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+}
+.mn-mines__band {
+  margin: calc(2 * var(--u)) 0 0;
+  font-size: var(--px-fs-sm);
+}
+.mn-mines__row {
+  grid-template-columns: calc(16 * var(--u)) calc(14 * var(--u)) minmax(0, 1fr) auto;
+  min-height: calc(22 * var(--u));
+}
+.mn-mines__row.is-here {
+  border-image-source: var(--pxk-badge-gold);
+  border-image-slice: var(--pxk-badge-s);
+  border-image-width: var(--pxk-badge-w);
+}
+.mn-mines__row.is-locked > :not(.mn-hex) {
+  opacity: 0.55;
+}
+.mn-mines__ore {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-mines__info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1 * var(--u));
+  min-width: 0;
+  line-height: 1.15;
+}
+.mn-mines__info > b {
+  font-size: var(--px-fs);
+}
+.mn-mines__hard {
+  font-style: normal;
+  font-size: var(--px-fs-sm);
+  font-weight: 500;
+  color: var(--px-muted);
+}
+.mn-mines__hard.is-no {
+  color: var(--px-red);
+}
+/* Твёрдость породы — пиксельный кристалл 7×7 (`m-hard`), а не «⛏» системным шрифтом. */
+.mn-pic--hard {
+  --pic: var(--pximg-m-hard);
+  --pic-w: 7;
+  --pic-h: 7;
+  margin-right: var(--u);
+  vertical-align: -0.05em;
+}
+.mn .pfloat--hard::before {
+  content: '';
+  display: inline-block;
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+  margin-right: var(--u);
+  vertical-align: -0.1em;
+  background: var(--pximg-m-hard) 0 0 / 100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+.mn-mines__price {
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+.mn-mines__lock {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  color: var(--px-muted);
+}
+
+/* Ранг: условия полосами */
+.mn-norm__row {
+  grid-template-columns: calc(18 * var(--u)) minmax(0, 1fr);
+}
+.mn-norm__ico {
+  display: grid;
+  place-items: center;
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+}
+.mn-norm__ico > img {
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  image-rendering: pixelated;
+}
+.mn-norm__info {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  line-height: 1.15;
+}
+.mn-norm__info > b {
+  font-size: var(--px-fs);
+}
+.mn-norm__info .px-bar__label {
+  font-size: var(--px-fs-sm);
+}
+.mn-norm__sub {
+  font-style: normal;
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+.mn-norm__go {
+  align-self: flex-start;
+}
+.mn-norm__actions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  margin-top: calc(2 * var(--u));
+}
+
+/* Престиж */
+.mn-pres__swap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(4 * var(--u));
+}
+.mn-pres__swap > .px-i {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  color: var(--px-text);
+}
+.mn-pres__row {
+  grid-template-columns: calc(12 * var(--u)) minmax(0, 1fr) auto;
+  font-size: var(--px-fs);
+}
+.mn-pres__row > b {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mn-pres__keep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  font-size: var(--px-fs-sm);
+  color: var(--px-muted);
+}
+
+/* Сброс прогресса (вкладка «Прогресс» настроек игры) */
+.mn-wipe {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  margin-bottom: calc(4 * var(--u));
+}
+.mn-wipe > .px-btn {
+  white-space: normal;
+}
+.mn-wipe > p {
+  margin: 0 0 calc(3 * var(--u));
+  font-size: var(--px-fs-sm);
+  line-height: 1.25;
+  color: var(--px-muted);
+}

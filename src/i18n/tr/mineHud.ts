@@ -4,6 +4,7 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}B',
   m: '{n}Mn',
+  g: '{n} Mr',
   sec: '{n} sn',
   perMin: '/dk',
   reward: {
@@ -84,6 +85,7 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestij — bas!',
     rankGo: 'Yeni rütbe — bas!',
     pickLevel: 'Kazma seviyesi',
+    streak: 'Seri',
     paceBlocks: '{n} bl',
     inARow: 'üst üste {n}',
     zoneExit: 'Çık',
@@ -114,11 +116,11 @@ export const mineHud: Translation<typeof ru> = {
   },
   dock: {
     camp: 'Kamp',
-    forge: 'Demirhane',
+    // \u00ad — мягкий перенос: в узкой кнопке дока слово делится по слогу.
+    forge: 'Demir\u00adhane',
     books: 'Kitaplar',
     chests: 'Sandıklar',
-    pets: 'Hayvanlar',
-    more: 'Diğer',
+    pets: 'Hay\u00advan\u00adlar',
     nursery: 'Kuluçka',
   },
   floors: {
@@ -128,7 +130,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'İn',
   },
   norm: {
-    pick: 'Kazma ⛏{power} · {name}',
+    pick: 'Kazma: güç {power} · {name}',
     toForge: 'Demirhaneye',
     work: 'Çalışma — kırılacak blok',
     pity: {

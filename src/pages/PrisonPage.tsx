@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
-import { GxBar, GxHud, GxIcon, GxModal, KIcon } from '@/components/gx';
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
+import { GxIcon, GxModal } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
 import { ChestIcon } from '@/components/ChestTab';
 import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/MineField';
@@ -10,7 +19,6 @@ import { FOREST_UNLOCK_RANK } from '@/lib/forest';
 import { CREW_ON, FOREST_ON } from '@/lib/features';
 import { MoneyCounter } from '@/components/MoneyCounter';
 import type { MoneyHandle } from '@/components/MoneyCounter';
-import { CoinIcon } from '@/components/slot-art';
 import {
   ItemIcon,
   KeyIcon,
@@ -18,6 +26,7 @@ import {
   PickIcon,
   PrisonCamp,
   rewardLabel,
+  RuneIcon,
   TokenIcon,
 } from '@/components/PrisonCamp';
 import type { CampTab } from '@/components/PrisonCamp';
@@ -28,7 +37,7 @@ import { Inventory } from '@/components/Inventory';
 import { EventAnnounce, EventPill, endText, prizeSay, useYardEvent } from '@/components/YardBits';
 import { BatLayer, MagpieLayer, TreasurePanel } from '@/components/Critters';
 import { MinePets } from '@/components/MinePets';
-import { PetArt } from '@/components/PetArt';
+import { EggArt, PetArt } from '@/components/PetArt';
 import { petLook, TRICK_RUSH, TRICK_RUSH_MS, TRICK_SENSE_MS } from '@/lib/pets';
 import type { BatHandle, MagpieHandle } from '@/components/Critters';
 import { BAT_GAP_MS, BAT_RARE, batRoll } from '@/lib/critters';
@@ -115,7 +124,7 @@ import {
 } from '@/lib/prison-art';
 import { plainPlan, runRollup } from '@/lib/rollup';
 import { rarityOf } from '@/lib/rarity';
-import { flashFrame, squashPop, stopShake } from '@/lib/juice';
+import { flashFrame, stopShake } from '@/lib/juice';
 import { burstConfetti } from '@/lib/confetti';
 import { rainCoins } from '@/lib/coins';
 import { useExit } from '@/lib/use-exit';
@@ -135,6 +144,7 @@ import {
   t,
   upper,
   useT,
+  getLang,
 } from '@/i18n';
 import type { Key } from '@/i18n';
 import { bookName, findName, guideHint, guideTitle, nameIn } from '@/i18n/data-mine';
@@ -168,6 +178,10 @@ import {
 } from '@/lib/haptics';
 import { useAction, useHotkeys } from '@/input/hooks';
 import { inTopLayer } from '@/input/focus-nav';
+import type { Action } from '@/input/actions';
+import { useFormFactor } from '@/game-shell';
+import { Badge, Bar, KeyHint, Slot, usePress } from '@/ui-px';
+import './mine.css';
 
 const fmt = (n: number) => fmtNum(n);
 /** Коротко для узкой ячейки табло: 12 345 → «12,3к». */
@@ -176,14 +190,71 @@ const shortCount = (n: number) =>
     ? fmt(n)
     : n < 1e6
       ? t('mineHud.k', { n: Math.floor(n / 100) / 10 })
-      : t('mineHud.m', { n: Math.floor(n / 1e5) / 10 });
+      : n < 1e9
+        ? t('mineHud.m', { n: Math.floor(n / 1e5) / 10 })
+        : t('mineHud.g', { n: n < 1e10 ? Math.floor(n / 1e8) / 10 : Math.floor(n / 1e9) });
 
 /**
- * Монеты в шапке шахты: до ста тысяч — целиком, дальше «123,4к» и «12,3м»,
- * как токены рядом. Шапка — одна строка на всё (v2.67.2): «999 999», как и
- * «12,3 млн», на экране 375 px в неё уже не влезают.
+ * Монеты в шапке шахты: до ста тысяч — целиком, дальше «123,4к», «12,3м» и «1,2 млрд».
+ * Кегль фишки постоянный (критик r2, R50): длинное число короче, а не мельче — место
+ * рассчитано на самое длинное, «1,2 млрд».
  */
 const chipMoney = (n: number) => (n >= 1e5 ? shortCount(n) : fmtNum(n));
+
+/** Токены и ключи в фишке: не длиннее пяти знаков и суффикса («98,7к», «987к», «12м»).
+ *  От миллиарда — что короче: «999м+» или «1 Mr» («1 млрд» не влезал на 320 px и на tl). */
+const chipCount = (n: number) =>
+  n < 1e4
+    ? fmt(n)
+    : n < 1e5
+      ? t('mineHud.k', { n: Math.floor(n / 100) / 10 })
+      : n < 1e6
+        ? t('mineHud.k', { n: Math.floor(n / 1e3) })
+        : n < 1e8
+          ? t('mineHud.m', { n: Math.floor(n / 1e5) / 10 })
+          : n < 1e9
+            ? t('mineHud.m', { n: Math.floor(n / 1e6) })
+            : [`${t('mineHud.m', { n: 999 })}+`, shortCount(n)].reduce((x, y) =>
+                y.length < x.length ? y : x,
+              );
+
+/** Темп на полосе запала: не длиннее «99,9к» — колонка полосы рассчитана на это (R51). */
+const paceCount = (n: number) =>
+  n < 999.5
+    ? fmt(Math.round(n))
+    : n < 1e5
+      ? t('mineHud.k', { n: Math.floor(n / 100) / 10 })
+      : n < 1e6
+        ? t('mineHud.k', { n: Math.floor(n / 1e3) })
+        : t('mineHud.m', { n: Math.floor(n / 1e5) / 10 });
+
+/**
+ * Блок шахты, который перерисовывается, только когда меняется что-то из `deps` (примитивы).
+ * Удар по породе перерисовывает страницу 5–10 раз в секунду, а шапка, расходники, рюкзак и
+ * док при этом почти всегда те же (критик, волна 2: при 4× замедлении 35 % кадров > 20 мс).
+ * Обработчики внутри — стабильные (сеттеры состояния) или через `live` страницы.
+ */
+const Keep = memo(
+  function Keep({ render }: { deps: readonly unknown[]; render: () => ReactNode }) {
+    return <>{render()}</>;
+  },
+  (a, b) => a.deps.length === b.deps.length && a.deps.every((x, i) => Object.is(x, b.deps[i])),
+);
+
+/** Размер пикселя арта для `hop` — страница пишет его из оболочки. */
+let hopU = 2;
+/**
+ * «Пришло»: значки внутри `el` (с `data-hop`, иначе первый ребёнок) подпрыгивают на
+ * 1–2 пикселя арта ступенями. Панели набора не масштабируются — рамка и текст на месте
+ * (критик, волна 2: squashPop растягивал рюкзак на 23 px вбок).
+ */
+function hop(el: Element | null | undefined) {
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const marked = el.matches('[data-hop]') ? [el] : [...el.querySelectorAll('[data-hop]')];
+  const list = marked.length ? marked : el.firstElementChild ? [el.firstElementChild] : [];
+  const y = (n: number) => ({ translate: `0 ${-n * hopU}px`, easing: 'steps(1, jump-end)' });
+  for (const n of list) n.animate([y(1), y(2), y(2), y(1), y(0)], { duration: 160 });
+}
 
 /** Минуты и секунды: 7:05. */
 const clockMs = (ms: number) => {
@@ -253,28 +324,98 @@ const SCREENS: Record<Screen, { only: CampTab[]; title: Key }> = {
 };
 
 /** Условия ранга фишками: кирка, выработка (блоков сломано) и блоки этажа. */
-function RankChips({ need, floor }: { need: RankNeeds; floor: number }) {
+/**
+ * Подпись кнопки дока. Самое длинное слово (`--lw`) влезает по ширине кеглем, а не рвётся
+ * посередине («Инвентар-ь» на 390 px); мягкие переносы (tr) делят слово на части.
+ */
+function DockLabel({ text }: { text: string }) {
+  const lw = Math.max(...text.split(/[\s\u00ad-]+/).map((w) => w.length));
+  return (
+    <span className="mn-dock__label" style={{ '--lw': lw } as CSSProperties}>
+      {text}
+    </span>
+  );
+}
+
+/** Награда проводника фишкой: значок и число на каждую часть, без слов (фраза — в подсказке). */
+function RewardChip({ r, size }: { r: GuideReward; size: number }) {
+  return (
+    <span className="mn-reward">
+      {r.coins ? (
+        <span>
+          <i className="mn-coin mn-coin--s" aria-hidden="true" />+{fmtNum(Math.round(r.coins))}
+        </span>
+      ) : null}
+      {r.tokens ? (
+        <span>
+          <TokenIcon size={size} />+{fmtNum(Math.round(r.tokens))}
+        </span>
+      ) : null}
+      {r.keys ? (
+        <span>
+          <KeyIcon size={size} />+{r.keys}
+        </span>
+      ) : null}
+      {r.item ? (
+        <span>
+          <ItemIcon id={r.item[0]} size={size} />+{r.item[1]}
+        </span>
+      ) : null}
+      {r.rune ? (
+        <span>
+          <RuneIcon kind="dmg" tier={r.rune} size={size} />
+          {RUNE_ROMAN[r.rune - 1]}
+        </span>
+      ) : null}
+      {r.egg ? (
+        <span>
+          <EggArt egg={r.egg} size={size} still />
+          +1
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function RankChips({ need, needPick, u }: { need: RankNeeds; needPick: number; u: number }) {
   const workOk = need.work >= need.workNeed;
-  const blocksOk = need.blocks >= need.blocksNeed;
+  // Кирка, которую просит ранг, — пиксельной картинкой (та же, что в листе ранга) и сила
+  // рядом. Было «⛏12» системным символом: в Rubik его нет, Chromium брал запасной шрифт с
+  // тонкими сглаженными линиями, iOS — цветной эмодзи (критик r4). Наковальня (розовая
+  // #ffb4a0 на пергаменте) ушла ещё в круге 4.
+  const pickTip = need.pickOk
+    ? ''
+    : t('mineHud.norm.pick', {
+        power: need.power,
+        name: needPick >= 0 ? nameIn(pickName(needPick)) : '',
+      });
   return (
     <span className="pquota">
       {!need.pickOk && (
-        <span className="pquota__chip is-pick">
-          <GxIcon name="anvil" size={12} />⛏{need.power}
+        <span className="pquota__chip is-pick" role="img" data-tip={pickTip} aria-label={pickTip}>
+          <PickIcon pick={needPick} size={8 * u} />
+          <span aria-hidden="true">{need.power}</span>
         </span>
       )}
       {need.workNeed > 0 && (
-        <span className={`pquota__chip${workOk ? ' is-done' : ''}`}>
-          <GxIcon name="pick" size={12} />
+        <span className={`pquota__chip is-work${workOk ? ' is-done' : ''}`}>
+          <i className="mn-pic mn-pic--work" aria-hidden="true" />
           {workOk ? '✓' : `${fmtShort(need.work)}/${fmtShort(need.workNeed)}`}
         </span>
       )}
-      {need.blocksNeed > 0 && (
-        <span className={`pquota__chip${blocksOk ? ' is-done' : ''}`}>
-          <img src={blockTexture(floor)} alt={blockName(floor)} />
-          {blocksOk ? '✓' : `${need.blocks}/${need.blocksNeed}`}
-        </span>
-      )}
+    </span>
+  );
+}
+
+/** Блоки этажа — отдельной фишкой: на телефоне стоя и на широком она стоит рядом с полосой
+ *  денег (их докупают за деньги), в узкой широкой рамке — строкой ниже, рядом с киркой. */
+function RankBlocks({ need, floor }: { need: RankNeeds; floor: number }) {
+  if (need.blocksNeed <= 0) return null;
+  const blocksOk = need.blocks >= need.blocksNeed;
+  return (
+    <span className={`pquota__chip is-blocks${blocksOk ? ' is-done' : ''}`}>
+      <img src={blockTexture(floor)} alt={blockName(floor)} />
+      {blocksOk ? '✓' : `${need.blocks}/${need.blocksNeed}`}
     </span>
   );
 }
@@ -322,9 +463,25 @@ export function PrisonPage() {
   const [invOpen, setInvOpen] = useState(false);
   /** Нижняя панель — область горячих клавиш лагеря. */
   const dockRef = useRef<HTMLElement>(null);
+  /** Окно открывается: поле, отряд и посылки замирают сразу, на нажатии, а не когда
+   *  переход смонтирует окно (критик r2: анимации шахты жили, пока строился питомник). */
+  const freeze = () => rootRef.current?.classList.add('is-under');
   const openScreen = (key: Screen, tab?: CampTab) => {
     tapLight();
-    setScreen({ key, tab: tab ?? SCREENS[key].only[0] });
+    freeze();
+    // Окно монтируется переходом: нажатие и «прыжок» значка успевают в кадр, длинная
+    // сборка вкладки не держит поток одним куском (критик, волна 2: до 370 мс при 4×).
+    startTransition(() => setScreen({ key, tab: tab ?? SCREENS[key].only[0] }));
+  };
+  const openForge = () => {
+    tapLight();
+    freeze();
+    startTransition(() => setForgeOpen(true));
+  };
+  const openInv = () => {
+    tapLight();
+    freeze();
+    startTransition(() => setInvOpen(true));
   };
   const [rankScene, setRankScene] = useState<PrisonRankUp | null>(null);
   const [sceneShown, sceneLeaving] = useExit(rankScene, 260);
@@ -364,9 +521,8 @@ export function PrisonPage() {
 
   const field = useRef<MineFieldHandle>(null);
   const bagRef = useRef<HTMLButtonElement>(null);
-  // Пружинит значок рюкзака, а не вся плашка: широкая плашка, качаясь на каждый блок,
-  // дёргала весь низ экрана (владелец: «ничего не прыгает»).
-  const bagIco = () => bagRef.current?.querySelector('.pmx-bag__ico') ?? null;
+  // Пружинит значок рюкзака, а не вся плашка (`hop` берёт `[data-hop]` внутри): широкая
+  // плашка, качаясь на каждый блок, дёргала весь низ экрана (владелец: «ничего не прыгает»).
   const tokenRef = useRef<HTMLButtonElement>(null);
   // Живность (v2.64): мышь, сорока и когда последний раз была мышь. Первая —
   // не раньше чем через полминуты после входа в шахту.
@@ -539,7 +695,7 @@ export function PrisonPage() {
 
   /** Добыча летит дугой из клетки в рюкзак. */
   const flyLoot = (c: number, rock: number) =>
-    field.current?.fly(c, rockTexture(rock), bagRef.current, () => squashPop(bagIco(), 0.5));
+    field.current?.fly(c, rockTexture(rock), bagRef.current, () => hop(bagRef.current));
 
   const scheduleReset = () => {
     if (resetTimer.current) return;
@@ -601,7 +757,7 @@ export function PrisonPage() {
     floatText(c, `${upper(streakName(ti))}!`, 'pfloat--streak');
     tierBreak(Math.min(3, ti));
     tapMedium();
-    squashPop(stripRef.current, 0.35 + 0.1 * ti);
+    hop(stripRef.current);
     if (ti >= 3) field.current?.trauma(0.2);
     if (first)
       say(t('mineHud.say.streakFirst', { name: streakName(ti), pct: Math.round(tier.loot * 100) }));
@@ -645,7 +801,7 @@ export function PrisonPage() {
     field.current?.chips(c, ['#4fd04a', '#a6ec3a', '#f2e64a', '#ffffff'], 18, 1.4);
     // Слеза долетела до сундуков — только отскок кнопки, без звука: сцена
     // и так громкая, а ключ падает раз в несколько минут.
-    const played = playTotem(chestRef.current, () => squashPop(chestRef.current, 0.6));
+    const played = playTotem(chestRef.current, () => hop(chestRef.current));
     if (!played) {
       floatText(
         c,
@@ -692,7 +848,7 @@ export function PrisonPage() {
       floatText(c, t('mineHud.float.parcel'), 'pfloat--parcel', 200);
       softChime(1);
       tapMedium();
-      squashPop(parcelsRef.current, 0.5);
+      hop(parcelsRef.current);
     }
     if (res.parcelTokens) floatText(c, `+${res.parcelTokens} ✦`, 'pfloat--token', 260);
     if (res.parcelsReady) {
@@ -703,12 +859,12 @@ export function PrisonPage() {
     if (res.petUp) {
       say(t('mineHud.say.petLevel', { name: petName(res.petUp.id), n: res.petUp.level }));
       softChime(2);
-      squashPop(petRef.current, 0.6);
+      hop(petRef.current);
     }
     if (res.eggsReady) {
       say(t('mineHud.say.eggWarm'));
       softChime(5);
-      squashPop(petRef.current, 0.6);
+      hop(petRef.current);
     }
     if (res.normDone) {
       tierBreak(2);
@@ -721,7 +877,7 @@ export function PrisonPage() {
       bagFullSound();
       notifyWarning();
       say(t('mineHud.say.bagFull'));
-      squashPop(bagIco(), 0.8);
+      hop(bagRef.current);
     }
     if (res.sold) {
       // Вагонетка сама отвезла рюкзак.
@@ -731,7 +887,7 @@ export function PrisonPage() {
       floatText(c, `+${fmtShort(res.sold)}`, 'pfloat--coin');
     }
     // Вагонетка (или спецзона) отложила руду для кирки — кузница кивнула.
-    if (res.boxed > 0) squashPop(forgeRef.current, 0.45);
+    if (res.boxed > 0) hop(forgeRef.current);
     const dug = useFinanceStore.getState().prison.mine.dug;
     if (minedShare(dug) >= MINE_RESET_AT) scheduleReset();
   };
@@ -834,8 +990,7 @@ export function PrisonPage() {
     const f = field.current;
     if (t.role === 'loot' && t.ore) {
       const c = nearPets();
-      if (c >= 0)
-        f?.fly(c, rockTexture(t.ore.rock), bagRef.current, () => squashPop(bagIco(), 0.5));
+      if (c >= 0) f?.fly(c, rockTexture(t.ore.rock), bagRef.current, () => hop(bagRef.current));
     } else if (t.role === 'sell' && t.coins) {
       coinDing();
     } else if (t.role === 'dmg') {
@@ -891,7 +1046,7 @@ export function PrisonPage() {
     if (v.coins) floatText(c, `+${fmtShort(v.coins)}`, 'pfloat--coin');
     if (v.tokens) {
       floatText(c, `+${v.tokens} ✦`, 'pfloat--token');
-      squashPop(tokenRef.current, 0.3);
+      hop(tokenRef.current);
     }
     if (v.keys) totemKey(c, v.keys);
   };
@@ -909,11 +1064,11 @@ export function PrisonPage() {
     }
     if (r.kind === 'tokens') {
       coinDing();
-      squashPop(tokenRef.current, 0.6);
+      hop(tokenRef.current);
       say(t('mineHud.say.tokens', { n: Math.round(r.amount) }));
     } else if (r.kind === 'keys') {
       keyFound();
-      squashPop(chestRef.current, 0.6);
+      hop(chestRef.current);
       say(r.amount > 1 ? t('mineHud.say.chestKeys', { n: r.amount }) : t('mineHud.say.chestKey'));
     } else if (r.kind === 'rune') {
       tierBreak(2);
@@ -936,9 +1091,10 @@ export function PrisonPage() {
     say(t('mineHud.say.riskLost', { sum: fmtShort(stake) }));
   };
 
-  /** Звон о руду твёрже кирки: подсказка, какая кирка её берёт. */
+  /** Звон о руду твёрже кирки: подсказка, какая кирка её берёт. Значок твёрдости (`m-hard`)
+   *  ставит CSS (`.mn .pfloat--hard::before`) — надпись пишется через textContent. */
   const onHardOre = (c: number, power: number) => {
-    floatText(c, `⛏${power}`, 'pfloat--hard');
+    floatText(c, String(power), 'pfloat--hard');
     const now = Date.now();
     if (now - hardSayAt.current < 6000) return;
     hardSayAt.current = now;
@@ -1352,7 +1508,7 @@ export function PrisonPage() {
     const value = got.coins;
     if (got.boxed > 0) {
       // Руда для следующей кирки не продана — легла в ящик кузнеца.
-      squashPop(forgeRef.current, 0.7);
+      hop(forgeRef.current);
       say(t('mineHud.say.boxed', { n: fmt(got.boxed) }));
     }
     if (!value) {
@@ -1367,7 +1523,7 @@ export function PrisonPage() {
     rollBalance(from, from + value);
     coinDing();
     notifySuccess();
-    squashPop(bagIco(), 0.8);
+    hop(bagRef.current);
     const cost = rankCost(Math.min(rank, LAST_RANK - 1), prestige);
     if (value >= cost * 0.3) {
       rainCoins(Math.min(30, 8 + Math.round((value / cost) * 20)));
@@ -1378,7 +1534,7 @@ export function PrisonPage() {
   const rankUp = () => {
     primeAudio();
     if (rank >= LAST_RANK) {
-      setSheet('prestige');
+      startTransition(() => setSheet('prestige'));
       return;
     }
     const st = useFinanceStore.getState();
@@ -1386,7 +1542,7 @@ export function PrisonPage() {
     // Не готово — лист условий: что сделано, чего не хватает, что можно докупить.
     if (!nd.pickOk || nd.work < nd.workNeed || nd.buyout > 0 || st.slotsBalance < nd.coins) {
       tapLight();
-      setSheet('norm');
+      startTransition(() => setSheet('norm'));
       return;
     }
     takeRank(false);
@@ -1404,7 +1560,8 @@ export function PrisonPage() {
     // Ранг — редкое событие: ему фраза положена (по бюджету мелодий).
     tierBreak(4);
     notifySuccess();
-    burstConfetti(80);
+    // Телефону — вдвое меньше конфетти (критик r2: 95 узлов, кадр до 283 мс при 4×).
+    burstConfetti(shell.ff.startsWith('phone') ? 40 : 80);
     field.current?.trauma(0.35);
     setRankScene(res);
   };
@@ -1502,6 +1659,9 @@ export function PrisonPage() {
   // ---- Разметка ----------------------------------------------------------
 
   const m = modsOf(prison);
+  // Свежие обработчики для блоков под Keep (их разметка не перерисовывается на каждом ударе).
+  const live = useRef({ sell, applyItem });
+  live.current = { sell, applyItem };
   const cap = bagCapacity(bagLevel);
   const count = bagCount(bag);
   // Цена на кнопке — без руды для следующей кирки: её кузнец отложит в ящик.
@@ -1546,8 +1706,28 @@ export function PrisonPage() {
   const guideOk = guideReady(prison);
   const [guideV, guideGoal] = guide ? guide.progress(prison) : [0, 0];
   const crewNow = crewYield(prison, nowTick);
-  const campBadge =
-    perkPointsFree(prison) > 0 || (CREW_ON && crewNow.minutes >= 60) || milesReady(prison) > 0;
+  /** Вкладка лагеря, где «!» на кнопке снимается (критик r2: «!» открывал «Руны»). */
+  const campTab: CampTab | null =
+    milesReady(prison) > 0
+      ? 'miles'
+      : perkPointsFree(prison) > 0
+        ? 'perks'
+        : CREW_ON && crewNow.minutes >= 60
+          ? 'crew'
+          : null;
+  const campBadge = campTab !== null;
+  const openCamp = () => {
+    const p = useFinanceStore.getState().prison;
+    const tab: CampTab | undefined =
+      milesReady(p) > 0
+        ? 'miles'
+        : perkPointsFree(p) > 0
+          ? 'perks'
+          : CREW_ON && crewYield(p, Date.now()).minutes >= 60
+            ? 'crew'
+            : undefined;
+    openScreen('more', tab);
+  };
   const forgeReady = forgeReadyNow(prison, balance);
   // «!» на книгах: есть что вписать или склеить на наковальне.
   const enchReady = booksReady(prison);
@@ -1610,27 +1790,68 @@ export function PrisonPage() {
     return cells;
   };
 
-  // Компьютер: горячие клавиши лагеря (слой действий src/input) — I рюкзак,
-  // P питомцы, F кузница, B книги, C сундуки, M этажи; работают, пока шахта
-  // на верхнем слое (под окном молчат). Tab/Shift+Tab (LB/RB) листают
-  // вкладки открытого экрана лагеря. Подсказки — по наведению мыши.
+  // Расходники в ряду: крепь — только когда её есть из чего сбить.
+  const shownItems = ITEMS.filter(
+    (it) => it.id !== 'prop' || prison.items.prop > 0 || (FOREST_ON && millLevel > 0),
+  );
+
+  // Раскладка (UI v2): высокий экран — стопкой, широкий — три колонки.
+  const shell = useFormFactor();
+  // Нажатие видно на pointerdown (набор): для кнопок шахты вне набора.
+  const press = usePress();
+  useEffect(() => {
+    hopU = shell.scale;
+  }, [shell.scale]);
+  const wide = shell.w > shell.h;
+  /** Широкий экран не телефона: колонки высокие — крупнее значки и расходники, рюкзак
+   *  переезжает влево, док занимает правую колонку целиком (критик: без пустых полос). */
+  const roomy = wide && !shell.ff.startsWith('phone');
+  /** Низкий телефон стоя (320×568, ≤ 640 px — тот же порог, что в mine.css): расходники —
+   *  столбиком слева от рамы, их ряд (44 + 2 px) отдан полю (критик r3: клетка с заданием
+   *  16 → 21). От окна, а не от клетки — иначе раскладка качалась бы между двумя видами.
+   *  Телефон лёжа до 400 px (667×375, 844×390) — так же, у левой кромки рамы: в узкой левой
+   *  колонке пять ячеек вставали в два ряда и уходили под низ экрана (критик r4). */
+  const itemsCol = shell.ff.startsWith('phone') && shell.h <= (wide ? 400 : 640);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const cell = useFieldCell(rootRef, slotRef, frameRef, wide, shell.scale);
+  const leftRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+  /** Рюкзак — наверху правой колонки: левая на этом окне не помещается (см. `useSideFit`). */
+  const bagRight = useSideFit(leftRef, rightRef, wide);
+  // Отряд на кромке рамы растёт вместе с клеткой; на телефоне — прежние 44.
+  const petSize = Math.max(44, Math.min(112, Math.round(cell * 0.9)));
+  const dockIco = (roomy ? 24 : 12) * shell.scale;
+
+  // Горячие клавиши шахты (слой действий src/input): I инвентарь, P питомцы,
+  // F кузница, B книги, C сундуки, M этажи, L лагерь, E продать рюкзак,
+  // R ранг, 1–6 расходники; работают, пока шахта на верхнем слое (под окном
+  // молчат). Tab/Shift+Tab (LB/RB) листают вкладки открытого экрана лагеря.
+  const itemKey = (i: number) => () => {
+    const it = shownItems[i];
+    if (it) applyItem(it.id);
+  };
   useHotkeys(
     {
-      inventory: () => {
-        tapLight();
-        setInvOpen(true);
-      },
+      inventory: openInv,
       pets: () => openScreen('pets'),
-      forge: () => {
-        tapLight();
-        setForgeOpen(true);
-      },
+      forge: openForge,
       books: () => openScreen('enchant'),
       chests: () => openScreen('cases'),
       mines: () => {
         tapLight();
-        setSheet('mines');
+        startTransition(() => setSheet('mines'));
       },
+      camp: () => openCamp(),
+      sell: () => sell(),
+      rank: () => rankUp(),
+      item1: itemKey(0),
+      item2: itemKey(1),
+      item3: itemKey(2),
+      item4: itemKey(3),
+      item5: itemKey(4),
+      item6: itemKey(5),
     },
     { scope: dockRef },
   );
@@ -1651,7 +1872,7 @@ export function PrisonPage() {
   if (!hydrated) {
     return (
       <div className="gx pmx">
-        <div className="prison-scene" aria-hidden="true" />
+        <div className="prison-scene pxt-stone" aria-hidden="true" />
       </div>
     );
   }
@@ -1665,7 +1886,7 @@ export function PrisonPage() {
 
   const openSheet = (which: 'mines' | 'settings') => {
     tapLight();
-    setSheet(which);
+    startTransition(() => setSheet(which));
   };
   const goForest = () => {
     if (rank < FOREST_UNLOCK_RANK && !prestige) {
@@ -1686,554 +1907,831 @@ export function PrisonPage() {
         need.pickOk ? 1 : 0.95,
       );
 
-  return (
-    <div className="gx pmx pmx--mine">
-      <div className="prison-scene" aria-hidden="true" />
-      <div className={`prison${guide ? ' has-guide' : ''}`}>
-        {/* Одна строка сверху (v2.67.2): лента с названием этажа и отдельный
-            ряд фишек съедали 78 px высоты, а поле шахты ограничено именно
-            высотой — на телефоне оно сжималось до 32 px клетки. Этаж теперь
-            фишкой с его рудой: тап — окно этажей. */}
-        <div className="pmx-top pmx-bar">
+  // ---- Экран шахты (UI v2, пиксельный набор) ------------------------------
+  // Поле — герой: клетку меряет JS (useFieldCell) по месту, которое осталось
+  // после шапки и дока. Высокий экран — всё стопкой, док внизу под пальцем;
+  // широкий — поле в центре, слева сводка (деньги, ранг, серия), справа док,
+  // расходники и рюкзак. Всё, что меняется (числа, значки, плашки), стоит в
+  // своих местах фиксированного размера или висит поверх поля — ничего не
+  // сдвигается.
+  const u = shell.scale;
+  const rankOk = atTop ? progress >= 1 : rankReady;
+
+  const floorName = prison.zone.on
+    ? t('mineHud.hud.floorZone')
+    : t('mineHud.hud.floor', { rank: rankLetter(mine.id), rock: rockName(mine.id) });
+  const floorBtn = (
+    <button
+      key="floor"
+      type="button"
+      className="mn-stat mn-stat--btn mn-floor px-f"
+      {...press}
+      data-tip={floorName}
+      data-tip-key="mines"
+      aria-label={floorName}
+      onClick={() => openSheet('mines')}
+    >
+      <img className="mn-floor__ore" src={rockTexture(mine.id)} alt="" />
+      {/* Буква — только когда этаж не тот, что у ранга (критик r2: «J J» рядом); плашка
+          нейтральная: красный на этом экране — только «!». */}
+      {(prison.zone.on || mine.id !== rank) && (
+        <span className="mn-floor__badge">
+          <Badge>
+            {prison.zone.on ? <GxIcon name="stairs" size={6 * u} /> : rankLetter(mine.id)}
+          </Badge>
+        </span>
+      )}
+      <KeyHint action="mines" />
+    </button>
+  );
+
+  const hud = (
+    <Keep
+      key="hud"
+      deps={[
+        getLang(),
+        shownBalance,
+        prison.tokens,
+        prison.keys,
+        rank,
+        wide,
+        u,
+        mine.id,
+        prison.zone.on,
+        rank < FOREST_UNLOCK_RANK && !prestige,
+      ]}
+      render={() => {
+        // Порядок в DOM = порядок Tab (критик r2, WCAG 2.4.3): на широком этаж и ⚙ стоят
+        // в первой строке — они и в DOM раньше денег; места задают `order`/`grid-area`.
+        const forestBtn = FOREST_ON && (
           <button
+            key="forest"
             type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
-            aria-label={t('common.back')}
-            onClick={() => {
-              tapLight();
-              nav(-1);
-            }}
+            className={`px-btn px-btn--iron px-btn--icon px-f mn-hud__forest${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
+            {...press}
+            aria-label={t('mineHud.hud.forest')}
+            data-tip={t('mineHud.hud.forest')}
+            onClick={goForest}
           >
-            <KIcon name="arrowLeft" />
+            <GxIcon name="forest" size={9 * u} />
           </button>
-          <span className="gx-chip pmx-chip--coins">
-            <CoinIcon size={18} />
-            <MoneyCounter ref={moneyRef} value={shownBalance} format={chipMoney} />
-          </span>
+        );
+        const gearBtn = (
           <button
+            key="gear"
             type="button"
-            ref={tokenRef}
-            className="gx-chip pmx-chip--btn"
-            aria-label={t('mineHud.hud.tokens')}
-            onClick={() => openScreen('enchant')}
-          >
-            <TokenIcon size={17} /> {shortCount(prison.tokens)}
-          </button>
-          <span className="pmx-chips__gap" />
-          <button
-            type="button"
-            className="gx-chip pmx-chip--btn pmx-floor"
-            data-tip={t('input.action.mines')}
-            data-tip-key="mines"
-            aria-label={
-              prison.zone.on
-                ? t('mineHud.hud.floorZone')
-                : t('mineHud.hud.floor', { rank: rankLetter(mine.id), rock: rockName(mine.id) })
-            }
-            onClick={() => openSheet('mines')}
-          >
-            <img className="pmx-floor__ore" src={rockTexture(mine.id)} alt="" />
-            {prison.zone.on ? <GxIcon name="stairs" size={16} /> : rankLetter(mine.id)}
-          </button>
-          {FOREST_ON && (
-            <button
-              type="button"
-              className={`gx-round gx-round--dark pmx-top__btn${rank < FOREST_UNLOCK_RANK && !prestige ? ' is-locked' : ''}`}
-              aria-label={t('mineHud.hud.forest')}
-              onClick={goForest}
-            >
-              <GxIcon name="forest" />
-            </button>
-          )}
-          {/* Инвентарь — в той же строке, где была кнопка леса: высота над
-              полем не меняется (см. «Шахта v2.67.2», --below). */}
-          <button
-            type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
-            aria-label={t('mineHud.hud.inventory')}
-            data-tip={t('input.action.inventory')}
-            data-tip-key="inventory"
-            onClick={() => {
-              tapLight();
-              setInvOpen(true);
-            }}
-          >
-            <GxIcon name="backpack" />
-          </button>
-          <button
-            type="button"
-            className="gx-round gx-round--dark pmx-top__btn"
+            className="px-btn px-btn--iron px-btn--icon px-f mn-hud__gear"
+            {...press}
             aria-label={t('common.settings')}
+            data-tip={t('common.settings')}
+            data-mine-settings=""
             onClick={() => openSheet('settings')}
           >
-            <KIcon name="gear" />
+            <i className="px-i pxi-gear" aria-hidden="true" />
           </button>
-        </div>
-
-        <button
-          type="button"
-          className={`gx-panel gx-panel--wood pmx-rank${(atTop ? progress >= 1 : rankReady) ? ' is-ready' : ''}`}
-          onClick={rankUp}
-          aria-label={
-            atTop
-              ? t('mineHud.hud.prestige', { n: prestige + 1 })
-              : t('mineHud.hud.rank', { rank: rankLetter(rank + 1) })
-          }
-        >
-          <span className="gx-hex pmx-rank__hex">{rankLetter(rank)}</span>
-          <span className="pmx-rank__mid">
-            <GxBar
-              value={rankFill}
-              tone="gold"
-              label={
-                (atTop ? progress >= 1 : rankReady) ? (
-                  atTop ? (
-                    t('mineHud.hud.prestigeGo')
-                  ) : (
-                    t('mineHud.hud.rankGo')
-                  )
-                ) : (
-                  <span className={`pmx-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
-                    {fmtShort(cost)} <CoinIcon size={12} />
-                  </span>
-                )
-              }
-            />
-            {!atTop && !rankReady && <RankChips need={need} floor={rank} />}
-          </span>
-          <span className="gx-hex gx-hex--dark pmx-rank__hex">
-            {atTop ? <GxIcon name="stairs" size={16} /> : rankLetter(rank + 1)}
-          </span>
-        </button>
-
-        <div
-          className={`pmine-frame${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
-        >
-          {/* Полоса запала сидит на верхней кромке рамы: отдельной строкой
-              она отнимала бы у поля высоту. */}
-          <div
-            className={`pstrip${sTier >= 0 ? ` is-t${sTier}` : ''}${cooling ? ' is-cooling' : ''}`}
-            ref={stripRef}
-          >
-            <span className="pstrip__pick" title={t('mineHud.hud.pickLevel')}>
-              <b>
-                <PickIcon pick={pick} size={13} />
-                {pickLv.level}
-              </b>
-              <span className="pstrip__xp">
-                <i
-                  style={{ transform: `scaleX(${pickLv.need ? pickLv.into / pickLv.need : 1})` }}
-                />
-              </span>
-            </span>
-            <span className="pstrip__streak">
-              <span className="pstrip__name">
-                <GxIcon name="flame" size={13} />
-                {sTier >= 0 && streakName(sTier)}
-                {sTier >= 0 && <em>+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
-              </span>
-              <span className="pstrip__bar">
-                <i style={{ transform: `scaleX(${Math.max(0, Math.min(1, sFill))})` }} />
-              </span>
-            </span>
-            <span className="pstrip__pace">
-              {pace ? (
-                <>
-                  {t('mineHud.hud.paceBlocks', { n: shortCount(pace.blocks) })} ·{' '}
-                  {fmtShort(pace.coins)}
-                  <CoinIcon size={10} />
-                  <small>{t('mineHud.perMin')}</small>
-                </>
-              ) : (
-                streak > 0 && <small>{t('mineHud.hud.inARow', { n: fmt(streak) })}</small>
-              )}
-            </span>
-          </div>
-          {prison.zone.on && (
+        );
+        return (
+          <div className="mn-hud">
             <button
               type="button"
-              className="pzone-exit"
+              className="px-btn px-btn--iron px-btn--icon px-f mn-hud__back"
+              {...press}
+              aria-label={t('common.back')}
               onClick={() => {
                 tapLight();
-                prisonZoneExit();
-                say(t('mineHud.say.zoneExit'));
+                nav(-1);
               }}
             >
-              {t('mineHud.hud.zoneExit')}
+              <i className="px-i pxi-left" aria-hidden="true" />
             </button>
+            {wide && [floorBtn, forestBtn, gearBtn]}
+            <span className="mn-stat mn-stat--coins" title={t('mineHud.norm.coins')}>
+              <i className="mn-coin" aria-hidden="true" />
+              <MoneyCounter
+                ref={moneyRef}
+                value={shownBalance}
+                format={chipMoney}
+                className="px-num mn-stat__n"
+              />
+            </span>
+            <button
+              type="button"
+              ref={tokenRef}
+              className="mn-stat mn-stat--btn mn-stat--tokens px-f"
+              {...press}
+              aria-label={t('mineHud.hud.tokens')}
+              data-tip={t('mineHud.hud.tokens')}
+              onClick={() => openScreen('enchant')}
+            >
+              <TokenIcon size={12 * u} />
+              <b className="px-num mn-stat__n">{chipCount(prison.tokens)}</b>
+            </button>
+            {/* Стоя ключей в шапке нет: их число — на «Сундуках» в доке, а место
+                отдано деньгам и токенам (критик r2: кегль не ниже 16 px). В узкой
+                колонке лёжа (667×375) ключи прячет `data-tight` из `useSideFit`. */}
+            {wide && (
+              <button
+                type="button"
+                className="mn-stat mn-stat--btn mn-stat--keys px-f"
+                {...press}
+                aria-label={t('mineHud.pres.keys')}
+                data-tip={t('mineHud.pres.keys')}
+                onClick={() => openScreen('cases')}
+              >
+                <KeyIcon size={12 * u} />
+                <b className="px-num mn-stat__n">{chipCount(prison.keys)}</b>
+              </button>
+            )}
+            {!wide && [forestBtn, gearBtn]}
+          </div>
+        );
+      }}
+    />
+  );
+
+  const rankBox = (
+    <button
+      key="rank"
+      type="button"
+      className={`mn-rank px-f${rankOk ? ' is-ready' : ''}`}
+      {...press}
+      onClick={rankUp}
+      data-tip={t('input.action.rank')}
+      data-tip-key="rank"
+      aria-label={
+        atTop
+          ? t('mineHud.hud.prestige', { n: prestige + 1 })
+          : t('mineHud.hud.rank', { rank: rankLetter(rank + 1) })
+      }
+    >
+      <span className="mn-hex px-num">{rankLetter(rank)}</span>
+      <span className="mn-rank__mid">
+        <Bar
+          value={rankFill}
+          height={11}
+          className="mn-rank__bar"
+          label={
+            rankOk ? (
+              atTop ? (
+                t('mineHud.hud.prestigeGo')
+              ) : (
+                t('mineHud.hud.rankGo')
+              )
+            ) : (
+              <span className={`mn-rank__cost${progress >= 1 ? ' is-ok' : ''}`}>
+                {shortCount(cost)} <i className="mn-coin mn-coin--s" aria-hidden="true" />
+              </span>
+            )
+          }
+        />
+        {!atTop && !rankReady && <RankBlocks need={need} floor={rank} />}
+        <span className="mn-rank__needs">
+          {!atTop && !rankReady && <RankChips need={need} needPick={needPick} u={u} />}
+          {/* Широкий: «Новый ранг — жми!» строкой во всю ширину — в полосе между буквами
+              она ломалась на три строки. */}
+          {rankOk && (
+            <b className="mn-rank__go" aria-hidden="true">
+              {atTop ? t('mineHud.hud.prestigeGo') : t('mineHud.hud.rankGo')}
+            </b>
           )}
-          {(anyBuff || rush || yardEv || prison.zone.on) && (
-            <div className="pbuffs">
-              {prison.zone.on && (
-                <span className="pbuff pbuff--zone">
-                  <GxIcon name="hourglass" size={12} /> {clockMs(zoneLeft(prison.zone, Date.now()))}
-                  {ZONE_MS + prison.zone.bonus < ZONE_MAX_MS &&
-                    t('mineHud.hud.zoneMore', { n: ZONE_QUOTA - (prison.zone.have % ZONE_QUOTA) })}
-                </span>
-              )}
-              {yardEv && <EventPill ev={yardEv} now={yardNow} />}
-              {rush && (
-                <span className="pbuff pbuff--frenzy">
-                  <GxIcon name="paw" size={12} /> {t('mineHud.hud.rush')}
-                </span>
-              )}
-              {buffs.frenzy > 0 && (
-                <span className="pbuff pbuff--frenzy">
-                  <GxIcon name="sparkles" size={12} /> {sec(buffs.frenzy)}
-                </span>
-              )}
-              {buffs.energy > 0 && (
-                <span className="pbuff pbuff--energy">
-                  <ItemIcon id="energy" size={12} /> {sec(buffs.energy)}
-                </span>
-              )}
-              {buffs.lens > 0 && (
-                <span className="pbuff pbuff--lens">
-                  <ItemIcon id="lens" size={12} /> {sec(buffs.lens)}
-                </span>
-              )}
-              {buffs.prop > 0 && (
-                <span className="pbuff pbuff--prop">
-                  <ItemIcon id="prop" size={12} /> {sec(buffs.prop)}
-                </span>
-              )}
-            </div>
+        </span>
+      </span>
+      <span className="mn-hex mn-hex--next px-num">
+        {atTop ? <GxIcon name="stairs" size={8 * u} /> : rankLetter(rank + 1)}
+      </span>
+      {rankOk && <i className="mn-rank__ready" aria-hidden="true" />}
+      <KeyHint action="rank" />
+    </button>
+  );
+
+  // Строка-запал: уровень кирки, серия, темп. На высоком экране — на верхней
+  // кромке рамы (поле не теряет высоты), на широком — панелью слева.
+  const streakBox = (
+    <div
+      key="strip"
+      ref={stripRef}
+      className={`mn-strip${sTier >= 0 ? ` is-t${sTier}` : ''}${cooling ? ' is-cooling' : ''}`}
+    >
+      <span className="mn-strip__pick" data-tip={t('mineHud.hud.pickLevel')}>
+        <span className="mn-strip__lv">
+          <PickIcon pick={pick} size={8 * u} />
+          <b className="px-num">{pickLv.level}</b>
+        </span>
+        <Bar value={pickLv.need ? pickLv.into / pickLv.need : 1} tone="blue" height={4} />
+      </span>
+      <span className="mn-strip__streak">
+        <span className="mn-strip__name">
+          <b>{sTier >= 0 ? streakName(sTier) : t('mineHud.hud.streak')}</b>
+        </span>
+        {/* Огонёк и ступень — в строке полосы, а не у названия: «Легенда забоя» на 360 px
+            иначе обрезалась (критик r2). */}
+        <span className="mn-strip__barrow">
+          <i
+            className={`px-i ${roomy ? 'pxi-m-flame' : 'pxi-m-flame7'}`}
+            data-hop=""
+            aria-hidden="true"
+          />
+          <Bar value={Math.max(0, Math.min(1, streak > 0 ? sFill : 0))} height={4} />
+          {sTier >= 0 && <em className="px-num">+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
+        </span>
+      </span>
+      {/* Колонка темпа шириной по самой длинной строке языка (невидимая копия в той же
+          клетке): живые числа её не раздвигают и на полосу серии не залезают (R51). */}
+      <span className="mn-strip__pace">
+        <span className="mn-strip__ghost" aria-hidden="true">
+          <span>{t('mineHud.hud.paceBlocks', { n: fmt(999) })}</span>
+          <span>
+            {paceCount(99_999)}
+            <i className="mn-coin mn-coin--s" />
+            {t('mineHud.perMin')}
+          </span>
+        </span>
+        <span className="mn-strip__live">
+          {pace ? (
+            <>
+              <span>{t('mineHud.hud.paceBlocks', { n: paceCount(pace.blocks) })}</span>
+              <span>
+                {paceCount(pace.coins)}
+                <i className="mn-coin mn-coin--s" aria-hidden="true" />
+                {t('mineHud.perMin')}
+              </span>
+            </>
+          ) : (
+            streak > 0 && (
+              <span className="mn-strip__row">
+                {t('mineHud.hud.inARow', { n: paceCount(streak) })}
+              </span>
+            )
           )}
-          {prison.parcels.length > 0 && (
-            <div className="pparcels" ref={parcelsRef}>
-              {prison.parcels.map((x, i) => {
-                const tier = CASE_TIERS.find((t) => t.id === x.tier)!;
-                const ready = x.left <= 0;
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`pparcel${ready ? ' is-ready' : ''}`}
-                    style={{ '--tier': tier.color } as CSSProperties}
-                    aria-label={t(ready ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
-                      tier: nameIn(chestName(tier.id)),
-                    })}
-                    onClick={() => openParcel(i)}
-                  >
-                    <img src={parcelTexture(tier.color)} alt="" />
-                    {!ready && (
-                      <span className="pparcel__bar">
-                        <i style={{ transform: `scaleX(${1 - x.left / PARCEL_NEED[x.tier]})` }} />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <MinePets onTrick={onPetTrick} />
-          <MineField
-            ref={field}
-            gridKey={mineKey}
-            cells={renderCells}
-            pick={<PickIcon pick={pick} size={38} />}
-            rate={() => liveRate(useFinanceStore.getState().prison)}
-            onHit={dig.strike}
-            onTap={onFieldTap}
-            className={arming ? 'is-arming' : undefined}
-            under={
-              <>
-                {yardEv?.id === 'meteor' && (
-                  <div
-                    className="ymeteor"
-                    ref={meteorRef}
-                    key={yardEv.from}
-                    style={{
-                      left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                      top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                      width: `${100 / MINE_COLS}%`,
-                      height: `${100 / MINE_ROWS}%`,
-                    }}
-                  >
-                    <i className="ymeteor__glow" />
-                    <img src={meteorTexture()} alt={t('mineHud.hud.meteor')} />
-                    <span className="ymeteor__pips">
-                      {Array.from({ length: METEOR_HITS }, (_, k) => (
-                        <i key={k} className={k < meteorN ? 'is-on' : undefined} />
-                      ))}
-                    </span>
-                  </div>
-                )}
-                {yardEv?.id === 'kuiva' && (
-                  <div
-                    className="ykuiva"
-                    ref={bossRef}
-                    key={yardEv.from}
-                    style={{
-                      left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                      top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                      width: `${(3 / MINE_COLS) * 100}%`,
-                      height: `${(3 / MINE_ROWS) * 100}%`,
-                    }}
-                  >
-                    <img src={kuivaTexture()} alt={t('mineHud.hud.kuiva')} />
-                    <span className="ykuiva__hp">
-                      <i style={{ transform: `scaleX(${bossFill})` }} />
-                    </span>
-                  </div>
-                )}
-              </>
-            }
-          >
-            <BatLayer ref={batRef} host={fieldEl} onCatch={onBatCatch} />
-            {sense && (
-              <span
-                key={sense.key}
-                className="psense"
-                style={{
-                  left: `${((sense.cell % MINE_COLS) / MINE_COLS) * 100}%`,
-                  top: `${(Math.floor(sense.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
-                  width: `${100 / MINE_COLS}%`,
-                  height: `${100 / MINE_ROWS}%`,
+        </span>
+      </span>
+    </div>
+  );
+
+  // Задание проводника, пока они не пройдены. Высота постоянная (критик r2, R49: поле
+  // не прыгает от шага к шагу): название — до двух строк, справа — награда фишкой и счёт;
+  // готово — тот же блок становится золотой кнопкой «Забрать». Фраза целиком — в подсказке,
+  // по тапу — совет.
+  const questTip = guide ? `${guideTitle(guide.id)} · ${rewardText(guide.reward)}` : '';
+  const questBox = guide ? (
+    <button
+      key="quest"
+      type="button"
+      className={`mn-quest px-f${guideOk ? ' is-ready' : ''}`}
+      {...press}
+      data-tip={questTip}
+      aria-label={guideOk ? `${t('mineHud.card.collect')}: ${questTip}` : questTip}
+      onClick={() => {
+        if (guideOk) {
+          claimGuide();
+          return;
+        }
+        tapLight();
+        say(guideHint(guide.id));
+      }}
+    >
+      <span className="mn-hex mn-hex--next px-num">{prison.guide + 1}</span>
+      <span className="mn-quest__body">
+        <b className="mn-quest__title">{guideTitle(guide.id)}</b>
+        {!guideOk && guideGoal > 1 && <Bar value={guideV / guideGoal} tone="green" height={3} />}
+      </span>
+      <span className={`px-btn px-btn--sm mn-quest__end${guideOk ? ' px-btn--gold' : ''}`}>
+        <RewardChip r={guide.reward} size={8 * u} />
+        <span className="mn-quest__n">
+          <span className={guideOk ? undefined : 'is-off'}>{t('mineHud.card.collect')}</span>
+          <span className={guideOk ? 'is-off' : 'px-num'}>
+            {guideGoal > 1 ? (
+              `${fmt(Math.min(guideV, guideGoal))}/${fmt(guideGoal)}`
+            ) : (
+              <i className="px-i pxi-info" aria-hidden="true" />
+            )}
+          </span>
+        </span>
+      </span>
+    </button>
+  ) : null;
+
+  // Расходники: цифры 1–6 на клавиатуре — по порядку на экране.
+  const itemsRow = (
+    <Keep
+      key="items"
+      deps={[
+        getLang(),
+        arming,
+        roomy,
+        wide && !itemsCol,
+        u,
+        ...shownItems.map((it) => `${it.id}:${prison.items[it.id]}`),
+      ]}
+      render={() => (
+        <div
+          className="mn-items"
+          role="group"
+          aria-label={t('inv.section.items')}
+          data-n={shownItems.length}
+        >
+          {wide && !itemsCol && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
+          <div className="mn-items__row">
+            {shownItems.map((it, i) => {
+              const n = prison.items[it.id];
+              return (
+                <Slot
+                  key={it.id}
+                  className={`mn-item${n ? '' : ' is-buy'}`}
+                  empty={!n}
+                  selected={arming === it.id}
+                  count={n || undefined}
+                  aria-label={`${itemName(it.id)}: ${n}`}
+                  data-tip={itemName(it.id)}
+                  data-tip-key={`item${i + 1}`}
+                  onClick={() => live.current.applyItem(it.id)}
+                >
+                  <ItemIcon id={it.id} />
+                  {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
+                  <KeyHint action={`item${i + 1}` as Action} />
+                </Slot>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    />
+  );
+
+  // Узкая рама (320×568, 360×740 с заданием): отряд по центру нижней кромки накрывал
+  // посылки — они уходят столбиком вправо, за раму (место там есть: поле упёрлось в высоту).
+  const slim = !wide && cell > 0 && 7 * cell < 124 * u;
+  const fieldBox = (
+    <div
+      key="field"
+      className={`mn-field${slim ? ' is-slim' : ''}${itemsCol ? ' has-items' : ''}`}
+      ref={slotRef}
+    >
+      <div
+        ref={frameRef}
+        className={`mn-frame px-panel px-panel--wood pxk-frame-wood${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
+      >
+        {!wide && streakBox}
+        {(anyBuff || rush || yardEv || prison.zone.on) && (
+          <div className="mn-buffs">
+            {prison.zone.on && (
+              <button
+                type="button"
+                className="px-btn px-btn--sm px-btn--iron px-f mn-zone-exit"
+                onClick={() => {
+                  tapLight();
+                  prisonZoneExit();
+                  say(t('mineHud.say.zoneExit'));
                 }}
               >
-                <b>{sense.below ? `↓${sense.below}` : '★'}</b>
-              </span>
-            )}
-            {yardEv?.id === 'magpie' && (
-              <MagpieLayer
-                key={yardEv.from}
-                ref={magRef}
-                ev={yardEv}
-                host={fieldEl}
-                canDrop={(c) => !yardShut(useFinanceStore.getState().prison).has(c)}
-                onPick={pickShiny}
-              />
-            )}
-            <TreasurePanel onGot={onTreasureGot} onLost={onRiskLost} />
-            {arming && (
-              <div className="pmine__arm">
-                <ItemIcon id={arming} size={18} /> {t('mineHud.hud.arm')}
-              </div>
-            )}
-            {toast && (
-              <div className="pmine__toast" key={toast.id}>
-                {toast.text}
-              </div>
-            )}
-            {cardShown && (
-              <div className={`pfindcard${cardLeaving ? ' is-out' : ''}`}>
-                <img src={findTexture(cardShown.id)} alt="" />
-                <span>
-                  <i>
-                    {cardShown.fresh
-                      ? t('mineHud.card.findNew')
-                      : t('mineHud.card.findDup', { n: cardShown.n })}
-                  </i>
-                  <b>{findName(cardShown.id)}</b>
-                  <em>
-                    {cardShown.fresh
-                      ? t('mineHud.card.findNewBonus')
-                      : t('mineHud.card.findDupBonus')}
-                  </em>
-                </span>
-              </div>
-            )}
-            {crewNote && crewNow.blocks > 0 && (
-              <div className="pcrewnote">
-                <span>
-                  <b>{t('mineHud.card.crewDug', { n: Math.round(crewNow.blocks) })}</b>
-                  <i>
-                    {t('mineHud.card.crewLine', {
-                      coins: fmtShort(crewNow.coins),
-                      tokens: fmt(crewNow.tokens),
-                    })}
-                    {crewNow.capped ? t('mineHud.card.crewCapped') : ''}
-                  </i>
-                </span>
-                <button type="button" className="btn btn--sm pmines__go" onClick={collectCrew}>
-                  {t('mineHud.card.collect')}
-                </button>
-                <button
-                  type="button"
-                  className="pcrewnote__x"
-                  aria-label={t('mineHud.card.later')}
-                  onClick={() => setCrewNote(false)}
-                >
-                  ×
-                </button>
-              </div>
-            )}
-          </MineField>
-        </div>
-
-        <div className="pmx-items">
-          {ITEMS.filter(
-            (it) => it.id !== 'prop' || prison.items.prop > 0 || (FOREST_ON && millLevel > 0),
-          ).map((it) => {
-            const n = prison.items[it.id];
-            return (
-              <button
-                key={it.id}
-                type="button"
-                className={`gx-round pmx-item${n ? '' : ' is-empty'}${arming === it.id ? ' is-armed' : ''}`}
-                aria-label={`${itemName(it.id)}: ${n}`}
-                onClick={() => applyItem(it.id)}
-              >
-                <ItemIcon id={it.id} />
-                <i className={`pmx-item__n${n ? '' : ' is-buy'}`}>{n || '+'}</i>
+                {t('mineHud.hud.zoneExit')}
               </button>
-            );
-          })}
-        </div>
-
-        <div className="pmx-foot">
-          <button
-            type="button"
-            ref={bagRef}
-            className={`gx-panel gx-panel--wood pmx-bag${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
-            onClick={sell}
-          >
-            <GxIcon name="backpack" className="pmx-bag__ico" />
-            <span className="pmx-bag__body">
-              <GxBar
-                value={count / cap}
-                tone={full ? 'red' : 'green'}
-                label={
-                  full
-                    ? t('mineHud.bag.full', { count: String(count), cap: String(cap) })
-                    : `${count} / ${cap}`
-                }
-              />
-              <span className={`gx-btn gx-btn--sm${count ? ' gx-btn--red' : ''} pmx-bag__sell`}>
-                {count && value ? (
-                  <>
-                    {t('mineHud.bag.sell', { sum: fmtShort(value) })} <CoinIcon size={13} />
-                  </>
-                ) : count ? (
-                  <>
-                    <GxIcon name="anvil" size={14} /> {t('mineHud.bag.toBox')}
-                  </>
-                ) : (
-                  t('mineHud.bag.empty')
-                )}
+            )}
+            {prison.zone.on && (
+              <span className="mn-buff mn-buff--zone">
+                <GxIcon name="hourglass" size={6 * u} />{' '}
+                {clockMs(zoneLeft(prison.zone, Date.now()))}
+                {ZONE_MS + prison.zone.bonus < ZONE_MAX_MS &&
+                  t('mineHud.hud.zoneMore', { n: ZONE_QUOTA - (prison.zone.have % ZONE_QUOTA) })}
               </span>
-            </span>
-          </button>
-        </div>
-
-        {/* Нижняя панель (v2.67) вместо листа «Лагерь» с десятью вкладками:
-            пять крупных кнопок, как в мобильных играх. Каждая открывает свой
-            экран. Кузница показывает кирку в руке — в цвете её редкости. */}
-        <nav
-          ref={dockRef}
-          className="gx-panel gx-panel--wood pmx-dock"
-          aria-label={t('mineHud.dock.camp')}
+            )}
+            {yardEv && <EventPill ev={yardEv} now={yardNow} />}
+            {rush && (
+              <span className="mn-buff mn-buff--frenzy">
+                <GxIcon name="paw" size={6 * u} /> {t('mineHud.hud.rush')}
+              </span>
+            )}
+            {buffs.frenzy > 0 && (
+              <span className="mn-buff mn-buff--frenzy">
+                <GxIcon name="sparkles" size={6 * u} /> {sec(buffs.frenzy)}
+              </span>
+            )}
+            {buffs.energy > 0 && (
+              <span className="mn-buff mn-buff--energy">
+                <ItemIcon id="energy" size={6 * u} /> {sec(buffs.energy)}
+              </span>
+            )}
+            {buffs.lens > 0 && (
+              <span className="mn-buff mn-buff--lens">
+                <ItemIcon id="lens" size={6 * u} /> {sec(buffs.lens)}
+              </span>
+            )}
+            {buffs.prop > 0 && (
+              <span className="mn-buff mn-buff--prop">
+                <ItemIcon id="prop" size={6 * u} /> {sec(buffs.prop)}
+              </span>
+            )}
+          </div>
+        )}
+        {prison.parcels.length > 0 && (
+          <div className="mn-parcels" ref={parcelsRef}>
+            {prison.parcels.map((x, i) => {
+              const tier = CASE_TIERS.find((t) => t.id === x.tier)!;
+              const ready = x.left <= 0;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className={`mn-parcel px-f${ready ? ' is-ready' : ''}`}
+                  {...press}
+                  style={{ '--tier': tier.color } as CSSProperties}
+                  aria-label={t(ready ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
+                    tier: nameIn(chestName(tier.id)),
+                  })}
+                  data-tip={t(ready ? 'mineHud.hud.parcelReady' : 'mineHud.hud.parcel', {
+                    tier: nameIn(chestName(tier.id)),
+                  })}
+                  onClick={() => openParcel(i)}
+                >
+                  <img src={parcelTexture(tier.color)} alt="" data-hop="" />
+                  {!ready && (
+                    <Bar value={1 - x.left / PARCEL_NEED[x.tier]} tone="green" height={3} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {itemsCol && itemsRow}
+        <MinePets onTrick={onPetTrick} size={petSize} />
+        <MineField
+          ref={field}
+          gridKey={mineKey}
+          cells={renderCells}
+          pick={<PickIcon pick={pick} size={Math.round(cell * 0.76) || 38} />}
+          rate={() => liveRate(useFinanceStore.getState().prison)}
+          onHit={dig.strike}
+          onTap={onFieldTap}
+          className={arming ? 'is-arming' : undefined}
+          under={
+            <>
+              {yardEv?.id === 'meteor' && (
+                <div
+                  className="ymeteor"
+                  ref={meteorRef}
+                  key={yardEv.from}
+                  style={{
+                    left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                    top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                    width: `${100 / MINE_COLS}%`,
+                    height: `${100 / MINE_ROWS}%`,
+                  }}
+                >
+                  <i className="ymeteor__glow" />
+                  <img src={meteorTexture()} alt={t('mineHud.hud.meteor')} />
+                  <span className="ymeteor__pips">
+                    {Array.from({ length: METEOR_HITS }, (_, k) => (
+                      <i key={k} className={k < meteorN ? 'is-on' : undefined} />
+                    ))}
+                  </span>
+                </div>
+              )}
+              {yardEv?.id === 'kuiva' && (
+                <div
+                  className="ykuiva"
+                  ref={bossRef}
+                  key={yardEv.from}
+                  style={{
+                    left: `${((yardEv.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                    top: `${(Math.floor(yardEv.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                    width: `${(3 / MINE_COLS) * 100}%`,
+                    height: `${(3 / MINE_ROWS) * 100}%`,
+                  }}
+                >
+                  <img src={kuivaTexture()} alt={t('mineHud.hud.kuiva')} />
+                  <span className="ykuiva__hp">
+                    <i style={{ transform: `scaleX(${bossFill})` }} />
+                  </span>
+                </div>
+              )}
+            </>
+          }
         >
+          <BatLayer ref={batRef} host={fieldEl} onCatch={onBatCatch} />
+          {sense && (
+            <span
+              key={sense.key}
+              className="psense"
+              style={{
+                left: `${((sense.cell % MINE_COLS) / MINE_COLS) * 100}%`,
+                top: `${(Math.floor(sense.cell / MINE_COLS) / MINE_ROWS) * 100}%`,
+                width: `${100 / MINE_COLS}%`,
+                height: `${100 / MINE_ROWS}%`,
+              }}
+            >
+              <b>{sense.below ? `↓${sense.below}` : '★'}</b>
+            </span>
+          )}
+          {yardEv?.id === 'magpie' && (
+            <MagpieLayer
+              key={yardEv.from}
+              ref={magRef}
+              ev={yardEv}
+              host={fieldEl}
+              canDrop={(c) => !yardShut(useFinanceStore.getState().prison).has(c)}
+              onPick={pickShiny}
+            />
+          )}
+          <TreasurePanel onGot={onTreasureGot} onLost={onRiskLost} />
+          {arming && (
+            <div className="pmine__arm">
+              <ItemIcon id={arming} size={18} /> {t('mineHud.hud.arm')}
+            </div>
+          )}
+          {toast && (
+            <div className="pmine__toast" key={toast.id}>
+              {toast.text}
+            </div>
+          )}
+          {cardShown && (
+            <div className={`pfindcard${cardLeaving ? ' is-out' : ''}`}>
+              <img src={findTexture(cardShown.id)} alt="" />
+              <span>
+                <i>
+                  {cardShown.fresh
+                    ? t('mineHud.card.findNew')
+                    : t('mineHud.card.findDup', { n: cardShown.n })}
+                </i>
+                <b>{findName(cardShown.id)}</b>
+                <em>
+                  {cardShown.fresh
+                    ? t('mineHud.card.findNewBonus')
+                    : t('mineHud.card.findDupBonus')}
+                </em>
+              </span>
+            </div>
+          )}
+          {crewNote && crewNow.blocks > 0 && (
+            <div className="pcrewnote">
+              <span>
+                <b>{t('mineHud.card.crewDug', { n: Math.round(crewNow.blocks) })}</b>
+                <i>
+                  {t('mineHud.card.crewLine', {
+                    coins: fmtShort(crewNow.coins),
+                    tokens: fmt(crewNow.tokens),
+                  })}
+                  {crewNow.capped ? t('mineHud.card.crewCapped') : ''}
+                </i>
+              </span>
+              <button type="button" className="btn btn--sm pmines__go" onClick={collectCrew}>
+                {t('mineHud.card.collect')}
+              </button>
+              <button
+                type="button"
+                className="pcrewnote__x"
+                aria-label={t('mineHud.card.later')}
+                onClick={() => setCrewNote(false)}
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </MineField>
+      </div>
+    </div>
+  );
+
+  const bagBox = (
+    <Keep
+      key="bag"
+      deps={[getLang(), full, !!cart, count, cap, value, u]}
+      render={() => (
+        <button
+          type="button"
+          ref={bagRef}
+          className={`mn-bag px-f${full ? ' is-full' : ''}${cart ? ' has-cart' : ''}`}
+          {...press}
+          onClick={() => live.current.sell()}
+          aria-label={t('input.action.sell')}
+          data-tip={t('input.action.sell')}
+          data-tip-key="sell"
+        >
+          <span className="mn-bag__ico">
+            <i className="mn-pic mn-pic--bag" data-hop="" aria-hidden="true" />
+            {full && (
+              <span className="mn-bag__badge">
+                <Badge>!</Badge>
+              </span>
+            )}
+          </span>
+          <span className="mn-bag__mid">
+            <span className="mn-bag__title">{t('inv.lim.bag')}</span>
+            <Bar
+              value={count / cap}
+              tone={full ? 'gold' : 'green'}
+              height={11}
+              className="mn-bag__bar"
+              label={<span>{`${count} / ${cap}`}</span>}
+            />
+          </span>
+          <span
+            className={`px-btn px-btn--sm ${count && value ? 'px-btn--gold' : 'px-btn--iron'} mn-bag__sell`}
+          >
+            {count && value ? (
+              <>
+                {/* Сумма — как в фишках шапки (≤ 5 знаков: «9 665», «244к»): «Продать 244,1 тыс.»
+                    вылезал за кнопку на tl, de «Verkaufen 244.091» — на всех телефонах. */}
+                <span>{t('mineHud.bag.sell', { sum: chipCount(value) })}</span>
+                <i className="mn-coin mn-coin--s" aria-hidden="true" />
+              </>
+            ) : count ? (
+              <>
+                <GxIcon name="anvil" size={7 * u} /> <span>{t('mineHud.bag.toBox')}</span>
+              </>
+            ) : (
+              <span>{t('mineHud.bag.empty')}</span>
+            )}
+          </span>
+          <KeyHint action="sell" />
+        </button>
+      )}
+    />
+  );
+
+  // Док (v2.67 → UI v2): шесть крупных кнопок под большим пальцем. Каждая
+  // открывает свой экран; горячие клавиши — на кнопках (клавиатура, геймпад).
+  const nestReady = prison.nest.some((x) => x.left <= 0);
+  const pet0 = prison.squad[0];
+  const dock = (
+    <Keep
+      key="dock"
+      deps={[
+        getLang(),
+        forgeReady,
+        enchReady,
+        prison.keys,
+        pet0,
+        petLook(prison.pets[pet0]),
+        nestReady,
+        campBadge,
+        dockIco,
+        pick,
+      ]}
+      render={() => (
+        <nav ref={dockRef} className="mn-dock px-dark" aria-label={t('mineHud.dock.camp')}>
           <button
             type="button"
             ref={forgeRef}
-            className={`pmx-dock__btn${forgeReady ? ' is-ready' : ''}`}
+            className={`px-btn px-btn--iron px-f mn-dock__btn${forgeReady ? ' is-ready' : ''}`}
+            {...press}
             data-tip={t('input.action.forge')}
             data-tip-key="forge"
-            onClick={() => {
-              tapLight();
-              setForgeOpen(true);
-            }}
+            onClick={openForge}
           >
-            <PickIcon pick={pick} size={24} />
-            <b>{t('mineHud.dock.forge')}</b>
-            {forgeReady && <i className="gx-badge gx-badge--gold">!</i>}
+            <span className="mn-dock__ico" data-hop="">
+              <PickIcon pick={pick} size={dockIco} />
+            </span>
+            <DockLabel text={t('mineHud.dock.forge')} />
+            {forgeReady && (
+              <span className="mn-dock__badge">
+                <Badge gold>!</Badge>
+              </span>
+            )}
+            <KeyHint action="forge" />
           </button>
           <button
             type="button"
-            className="pmx-dock__btn"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
             data-tip={t('input.action.books')}
             data-tip-key="books"
             onClick={() => openScreen('enchant')}
           >
-            <GxIcon name="book" />
-            <b>{t('mineHud.dock.books')}</b>
-            {enchReady && <i className="gx-badge">!</i>}
+            <span className="mn-dock__ico">
+              <i className="mn-pic mn-pic--books" aria-hidden="true" />
+            </span>
+            <DockLabel text={t('mineHud.dock.books')} />
+            {enchReady && (
+              <span className="mn-dock__badge">
+                <Badge>!</Badge>
+              </span>
+            )}
+            <KeyHint action="books" />
           </button>
           <button
             type="button"
             ref={chestRef}
-            className="pmx-dock__btn"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
             data-tip={t('input.action.chests')}
             data-tip-key="chests"
             onClick={() => openScreen('cases')}
           >
-            <ChestIcon size={30} />
-            <b>{t('mineHud.dock.chests')}</b>
+            <span className="mn-dock__ico" data-hop="">
+              <ChestIcon size={dockIco} />
+            </span>
+            <DockLabel text={t('mineHud.dock.chests')} />
             {prison.keys > 0 && (
-              <i className="gx-badge gx-badge--gold pmx-dock__keys">
-                <GxHud name="key" />
-                {prison.keys}
-              </i>
+              <span className="mn-dock__badge">
+                <Badge gold>{shortCount(prison.keys)}</Badge>
+              </span>
             )}
+            <KeyHint action="chests" />
           </button>
           <button
             type="button"
-            className="pmx-dock__btn"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
             data-tip={t('input.action.pets')}
             data-tip-key="pets"
             onClick={() => openScreen('pets')}
           >
-            <span className="pmx-dock__pets" ref={petRef}>
+            <span className="mn-dock__ico" ref={petRef}>
               {prison.squad[0] ? (
                 <PetArt
                   id={prison.squad[0]}
-                  size={30}
+                  size={dockIco}
                   v={petLook(prison.pets[prison.squad[0]])}
                   still
                 />
               ) : (
-                <GxIcon name="paw" />
+                <i className="px-i pxi-paw mn-dock__mask" aria-hidden="true" />
               )}
             </span>
-            <b>{t('mineHud.dock.pets')}</b>
-            {prison.nest.some((x) => x.left <= 0) && <i className="gx-badge">!</i>}
-          </button>
-          <button type="button" className="pmx-dock__btn" onClick={() => openScreen('more')}>
-            <GxIcon name="campfire" />
-            <b>{t('mineHud.dock.more')}</b>
-            {campBadge && <i className="gx-badge">!</i>}
-          </button>
-        </nav>
-
-        {/* Задание, пока они не пройдены, стоит на месте строки с ценами
-            пород: высота под полем на счету, а цены есть и в окне шахт.
-            Подсказка к заданию — по тапу, а не строкой под ним. */}
-        {guide ? (
-          <button
-            type="button"
-            className={`gx-panel pmx-quest${guideOk ? ' is-ready' : ''}`}
-            onClick={() => {
-              if (guideOk) {
-                claimGuide();
-                return;
-              }
-              tapLight();
-              say(guideHint(guide.id));
-            }}
-          >
-            <span className="gx-hex gx-hex--dark pmx-quest__n">{prison.guide + 1}</span>
-            <span className="pmx-quest__body">
-              <b>{guideTitle(guide.id)}</b>
-              {guideOk ? (
-                <em>{rewardText(guide.reward)}</em>
-              ) : guideGoal > 1 ? (
-                <GxBar thin tone="green" value={guideV / guideGoal} className="pmx-quest__bar" />
-              ) : (
-                <em>{rewardText(guide.reward)}</em>
-              )}
-            </span>
-            {guideOk ? (
-              <span className="gx-btn gx-btn--red gx-btn--sm">{t('mineHud.card.collect')}</span>
-            ) : (
-              <span className="pmx-quest__n2">
-                {guideGoal > 1 ? `${fmt(guideV)}/${fmt(guideGoal)}` : <KIcon name="question" />}
+            <DockLabel text={t('mineHud.dock.pets')} />
+            {nestReady && (
+              <span className="mn-dock__badge">
+                <Badge>!</Badge>
               </span>
             )}
+            <KeyHint action="pets" />
           </button>
-        ) : null}
-      </div>
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
+            data-tip={t('input.action.inventory')}
+            data-tip-key="inventory"
+            onClick={openInv}
+          >
+            <span className="mn-dock__ico">
+              <i className="mn-pic mn-pic--inv" aria-hidden="true" />
+            </span>
+            <DockLabel text={t('input.action.inventory')} />
+            <KeyHint action="inventory" />
+          </button>
+          <button
+            type="button"
+            className="px-btn px-btn--iron px-f mn-dock__btn"
+            {...press}
+            data-tip={t('input.action.camp')}
+            data-tip-key="camp"
+            onClick={openCamp}
+          >
+            <span className="mn-dock__ico">
+              <i className="mn-pic mn-pic--camp" aria-hidden="true" />
+            </span>
+            <DockLabel text={t('mineHud.dock.camp')} />
+            {campBadge && (
+              <span className="mn-dock__badge">
+                <Badge>!</Badge>
+              </span>
+            )}
+            <KeyHint action="camp" />
+          </button>
+        </nav>
+      )}
+    />
+  );
+
+  const layout = wide
+    ? [
+        <div key="l" ref={leftRef} className="mn-side mn-side--l">
+          {hud}
+          {/* Обёртка — контейнер `mnrank`: по её ширине рамка ранга выбирает раскладку условий. */}
+          <div className="mn-rankwrap">{rankBox}</div>
+          <div className="mn-panel">{streakBox}</div>
+          {questBox}
+          {!itemsCol && itemsRow}
+          {!bagRight && bagBox}
+        </div>,
+        fieldBox,
+        <div key="r" ref={rightRef} className="mn-side mn-side--r">
+          {bagRight && bagBox}
+          {dock}
+        </div>,
+      ]
+    : [
+        hud,
+        <div key="rankrow" className="mn-rankrow">
+          {floorBtn}
+          {rankBox}
+        </div>,
+        questBox,
+        fieldBox,
+        !itemsCol && itemsRow,
+        bagBox,
+        dock,
+      ];
+
+  return (
+    <div
+      ref={rootRef}
+      className={`gx px mn ${wide ? 'mn--wide' : 'mn--tall'}${wide && itemsCol ? ' mn--short' : ''}${screen || forgeOpen || invOpen ? ' is-under' : ''}`}
+      style={cell ? ({ '--cell': `${cell}px` } as CSSProperties) : undefined}
+    >
+      <div className="prison-scene pxt-stone" aria-hidden="true" />
+      {layout}
 
       {/* The books open as a full-screen window, like the forge and the backpack (UI wave 2). */}
       {screen?.key === 'enchant' && <BooksTab onClose={() => setScreen(null)} />}
@@ -2255,62 +2753,63 @@ export function PrisonPage() {
       )}
 
       {sheet === 'mines' && (
-        <GxModal
-          title={t('mineHud.floors.title')}
-          onClose={() => setSheet(null)}
-          className="pmx-mines"
-        >
-          {Array.from({ length: Math.min(LAST_RANK, rank + 1) + 1 }, (_, id) => {
-            const locked = id > rank;
-            const here = id === mine.id && !prison.zone.on;
-            const band = HORIZONS.find((h) => h.from === id);
-            return (
-              <div key={id} className="pmx-mines__item">
-                {band && (
-                  <div className="pmx-mines__band">{horizonName(HORIZONS.indexOf(band))}</div>
-                )}
-                <div
-                  className={`pmx-mines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
-                >
-                  <span className={`gx-hex${locked ? '' : ' gx-hex--dark'}`}>{rankLetter(id)}</span>
-                  <img className="pmx-mines__ore" src={blockTexture(id)} alt="" />
-                  <span className="pmx-mines__info">
-                    <b>
-                      {rockName(id)}
-                      <em className={`pmx-mines__hard${canMine(pick, id) ? '' : ' is-no'}`}>
-                        ⛏{rockHardness(id)}
-                      </em>
-                    </b>
-                    <span className="pmx-mines__price">
-                      {t('mineHud.floors.price', {
-                        ore: String(ROCKS[id].value),
-                        block: fmtShort(ROCKS[id].block),
-                      })}
-                    </span>
-                  </span>
-                  {locked ? (
-                    <span className="pmx-mines__lock">
-                      <KIcon name="locked" size={18} />
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`gx-btn gx-btn--sm${here ? '' : ' gx-btn--red'}`}
-                      onClick={() => goMine(id)}
-                    >
-                      {here ? (
-                        <>
-                          <GxIcon name="cycle" size={14} /> {t('mineHud.floors.again')}
-                        </>
-                      ) : (
-                        t('mineHud.floors.down')
-                      )}
-                    </button>
+        <GxModal title={t('mineHud.floors.title')} onClose={() => setSheet(null)}>
+          <div className="px mn-sheet mn-mines">
+            {Array.from({ length: Math.min(LAST_RANK, rank + 1) + 1 }, (_, id) => {
+              const locked = id > rank;
+              const here = id === mine.id && !prison.zone.on;
+              const band = HORIZONS.find((h) => h.from === id);
+              return (
+                <div key={id} className="mn-mines__item">
+                  {band && (
+                    <h3 className="px-h px-h--sub mn-mines__band">
+                      {horizonName(HORIZONS.indexOf(band))}
+                    </h3>
                   )}
+                  <div
+                    className={`mn-mines__row${here ? ' is-here' : ''}${locked ? ' is-locked' : ''}`}
+                  >
+                    <span className={`mn-hex${locked ? ' mn-hex--next' : ''}`}>
+                      {rankLetter(id)}
+                    </span>
+                    <img className="mn-mines__ore" src={blockTexture(id)} alt="" />
+                    <span className="mn-mines__info">
+                      <b>
+                        {rockName(id)}{' '}
+                        <em className={`mn-mines__hard${canMine(pick, id) ? '' : ' is-no'}`}>
+                          <i className="mn-pic mn-pic--hard" aria-hidden="true" />
+                          {rockHardness(id)}
+                        </em>
+                      </b>
+                      <span className="mn-mines__price">
+                        {t('mineHud.floors.price', {
+                          ore: String(ROCKS[id].value),
+                          block: fmtShort(ROCKS[id].block),
+                        })}
+                      </span>
+                    </span>
+                    {locked ? (
+                      <i className="px-i pxi-lock mn-mines__lock" aria-hidden="true" />
+                    ) : (
+                      <button
+                        type="button"
+                        className={`px-btn px-btn--sm ${here ? 'px-btn--iron' : 'px-btn--gold'} px-f`}
+                        onClick={() => goMine(id)}
+                      >
+                        {here ? (
+                          <>
+                            <GxIcon name="cycle" size={7 * u} /> {t('mineHud.floors.again')}
+                          </>
+                        ) : (
+                          t('mineHud.floors.down')
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </GxModal>
       )}
 
@@ -2323,10 +2822,10 @@ export function PrisonPage() {
           }}
           progress={
             <>
-              <div className="pmx-wipe">
+              <div className="mn-wipe">
                 <button
                   type="button"
-                  className={`gx-btn gx-btn--block${wipe === 'prison' ? ' gx-btn--red' : ''}`}
+                  className={`px-btn px-btn--wide ${wipe === 'prison' ? 'px-btn--red' : 'px-btn--iron'} px-f`}
                   onClick={() => doWipe('prison')}
                 >
                   {wipe === 'prison'
@@ -2336,7 +2835,7 @@ export function PrisonPage() {
                 <p>{t('settings.progress.wipePrisonNote')}</p>
                 <button
                   type="button"
-                  className={`gx-btn gx-btn--block${wipe === 'all' ? ' gx-btn--red' : ''}`}
+                  className={`px-btn px-btn--wide ${wipe === 'all' ? 'px-btn--red' : 'px-btn--iron'} px-f`}
                   onClick={() => doWipe('all')}
                 >
                   {wipe === 'all'
@@ -2357,122 +2856,144 @@ export function PrisonPage() {
         <GxModal
           title={t('mineHud.hud.rank', { rank: rankLetter(rank + 1) })}
           onClose={() => setSheet(null)}
-          className="pmx-norm"
         >
-          {needPick > 0 && (
-            <div className={`pmx-norm__row${pickOk ? ' is-done' : ''}`}>
-              <PickIcon pick={needPick} size={40} />
-              <span className="pmx-norm__info">
-                <b>
-                  {t('mineHud.norm.pick', { power: need.power, name: nameIn(pickName(needPick)) })}
-                </b>
-                {pickOk ? (
-                  <GxBar tone="green" value={1} label={<KIcon name="checkmark" size={12} />} />
-                ) : (
-                  <button
-                    type="button"
-                    className="gx-btn gx-btn--sm gx-btn--red pmx-norm__go"
-                    onClick={() => {
-                      tapLight();
-                      setSheet(null);
-                      setForgeOpen(true);
-                    }}
-                  >
-                    <GxIcon name="anvil" size={16} /> {t('mineHud.norm.toForge')}
-                  </button>
-                )}
-              </span>
-            </div>
-          )}
-          {need.workNeed > 0 && (
-            <div className={`pmx-norm__row${workOk ? ' is-done' : ''}`}>
-              <PickIcon pick={pick} size={40} />
-              <span className="pmx-norm__info">
-                <b>{t('mineHud.norm.work')}</b>
-                <GxBar
-                  tone={workOk ? 'green' : 'gold'}
-                  value={need.work / need.workNeed}
-                  label={
-                    workOk ? (
-                      <KIcon name="checkmark" size={12} />
-                    ) : (
-                      `${fmt(need.work)} / ${fmt(need.workNeed)}`
-                    )
-                  }
-                />
-              </span>
-            </div>
-          )}
-          {need.blocksNeed > 0 && (
-            <div className={`pmx-norm__row${need.blocks >= need.blocksNeed ? ' is-done' : ''}`}>
-              <img src={blockTexture(rank)} alt="" />
-              <span className="pmx-norm__info">
-                <b>
-                  {blockName(rank)} · {fmtShort(blockValue(rank))}
-                </b>
-                <GxBar
-                  tone={need.blocks >= need.blocksNeed ? 'green' : 'gold'}
-                  value={need.blocks / need.blocksNeed}
-                  label={
-                    need.blocks >= need.blocksNeed ? (
-                      <KIcon name="checkmark" size={12} />
-                    ) : (
-                      `${need.blocks} / ${need.blocksNeed}`
-                    )
-                  }
-                />
-                {need.blocks < need.blocksNeed && mine.id === rank && (
-                  <i className="pmx-norm__sub">
-                    {t('mineHud.norm.pity', { n: Math.round(pityLeft) })}
-                  </i>
-                )}
-              </span>
-            </div>
-          )}
-          <div className={`pmx-norm__row${balance >= cost ? ' is-done' : ''}`}>
-            <CoinIcon size={32} />
-            <span className="pmx-norm__info">
-              <b>{t('mineHud.norm.coins')}</b>
-              <GxBar
-                tone={balance >= cost ? 'green' : 'gold'}
-                value={progress}
-                label={
-                  balance >= cost ? (
-                    <KIcon name="checkmark" size={12} />
+          <div className="px mn-sheet mn-norm">
+            {needPick > 0 && (
+              <div className={`mn-norm__row${pickOk ? ' is-done' : ''}`}>
+                <span className="mn-norm__ico">
+                  <PickIcon pick={needPick} size={16 * u} />
+                </span>
+                <span className="mn-norm__info">
+                  <b>
+                    {t('mineHud.norm.pick', {
+                      power: need.power,
+                      name: nameIn(pickName(needPick)),
+                    })}
+                  </b>
+                  {pickOk ? (
+                    <Bar
+                      tone="green"
+                      value={1}
+                      height={10}
+                      label={<i className="px-i pxi-check" aria-hidden="true" />}
+                    />
                   ) : (
-                    `${fmtShort(balance)} / ${fmtShort(cost)}`
-                  )
-                }
-              />
-            </span>
-          </div>
-          <div className="pmx-norm__actions">
-            <button
-              type="button"
-              className="gx-btn gx-btn--red gx-btn--block gx-btn--big"
-              disabled={!qDone || balance < cost}
-              onClick={() => takeRank(false)}
-            >
-              {t('mineHud.norm.take', { rank: rankLetter(rank + 1) })}
-            </button>
-            {workOk && buyout > 0 && (
+                    <button
+                      type="button"
+                      className="px-btn px-btn--sm px-btn--gold px-f mn-norm__go"
+                      onClick={() => {
+                        tapLight();
+                        setSheet(null);
+                        setForgeOpen(true);
+                      }}
+                    >
+                      <GxIcon name="anvil" size={7 * u} /> {t('mineHud.norm.toForge')}
+                    </button>
+                  )}
+                </span>
+              </div>
+            )}
+            {need.workNeed > 0 && (
+              <div className={`mn-norm__row${workOk ? ' is-done' : ''}`}>
+                <span className="mn-norm__ico">
+                  <PickIcon pick={pick} size={16 * u} />
+                </span>
+                <span className="mn-norm__info">
+                  <b>{t('mineHud.norm.work')}</b>
+                  <Bar
+                    tone={workOk ? 'green' : 'gold'}
+                    value={need.work / need.workNeed}
+                    height={10}
+                    label={
+                      workOk ? (
+                        <i className="px-i pxi-check" aria-hidden="true" />
+                      ) : (
+                        `${fmt(need.work)} / ${fmt(need.workNeed)}`
+                      )
+                    }
+                  />
+                </span>
+              </div>
+            )}
+            {need.blocksNeed > 0 && (
+              <div className={`mn-norm__row${need.blocks >= need.blocksNeed ? ' is-done' : ''}`}>
+                <span className="mn-norm__ico">
+                  <img src={blockTexture(rank)} alt="" />
+                </span>
+                <span className="mn-norm__info">
+                  <b>
+                    {blockName(rank)} · {fmtShort(blockValue(rank))}
+                  </b>
+                  <Bar
+                    tone={need.blocks >= need.blocksNeed ? 'green' : 'gold'}
+                    value={need.blocks / need.blocksNeed}
+                    height={10}
+                    label={
+                      need.blocks >= need.blocksNeed ? (
+                        <i className="px-i pxi-check" aria-hidden="true" />
+                      ) : (
+                        `${need.blocks} / ${need.blocksNeed}`
+                      )
+                    }
+                  />
+                  {need.blocks < need.blocksNeed && mine.id === rank && (
+                    <i className="mn-norm__sub">
+                      {t('mineHud.norm.pity', { n: Math.round(pityLeft) })}
+                    </i>
+                  )}
+                </span>
+              </div>
+            )}
+            <div className={`mn-norm__row${balance >= cost ? ' is-done' : ''}`}>
+              <span className="mn-norm__ico">
+                <i className="mn-coin" aria-hidden="true" />
+              </span>
+              <span className="mn-norm__info">
+                <b>{t('mineHud.norm.coins')}</b>
+                <Bar
+                  tone={balance >= cost ? 'green' : 'gold'}
+                  value={progress}
+                  height={10}
+                  label={
+                    balance >= cost ? (
+                      <i className="px-i pxi-check" aria-hidden="true" />
+                    ) : (
+                      `${fmtShort(balance)} / ${fmtShort(cost)}`
+                    )
+                  }
+                />
+              </span>
+            </div>
+            <div className="mn-norm__actions">
               <button
                 type="button"
-                className="gx-btn gx-btn--block"
-                disabled={balance < cost + buyout}
-                onClick={() => takeRank(true)}
+                className="px-btn px-btn--gold px-btn--wide px-f"
+                disabled={!qDone || balance < cost}
+                aria-disabled={!qDone || balance < cost || undefined}
+                onClick={() => takeRank(false)}
               >
-                {t(
-                  need.blocksNeed - need.blocks > 1
-                    ? 'mineHud.norm.buyBlocks'
-                    : 'mineHud.norm.buyBlock',
-                  {
-                    sum: fmtShort(buyout),
-                  },
-                )}{' '}
-                <CoinIcon size={13} />
+                {t('mineHud.norm.take', { rank: rankLetter(rank + 1) })}
               </button>
-            )}
+              {workOk && buyout > 0 && (
+                <button
+                  type="button"
+                  className="px-btn px-btn--iron px-btn--wide px-f"
+                  disabled={balance < cost + buyout}
+                  aria-disabled={balance < cost + buyout || undefined}
+                  onClick={() => takeRank(true)}
+                >
+                  {t(
+                    need.blocksNeed - need.blocks > 1
+                      ? 'mineHud.norm.buyBlocks'
+                      : 'mineHud.norm.buyBlock',
+                    {
+                      sum: fmtShort(buyout),
+                    },
+                  )}{' '}
+                  <i className="mn-coin mn-coin--s" aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
         </GxModal>
       )}
@@ -2483,49 +3004,52 @@ export function PrisonPage() {
         <GxModal
           title={t('mineHud.hud.prestige', { n: prestige + 1 })}
           onClose={() => setSheet(null)}
-          className="pmx-pres"
         >
-          <div className="pmx-pres__swap">
-            <span className="gx-hex">Z</span>
-            <KIcon name="arrowRight" size={20} />
-            <span className="gx-hex gx-hex--dark">
-              {rankLetter(Math.min(LAST_RANK - 1, prison.perks.blat))}
-            </span>
+          <div className="px mn-sheet mn-pres">
+            <div className="mn-pres__swap">
+              <span className="mn-hex">Z</span>
+              <i className="px-i pxi-right" aria-hidden="true" />
+              <span className="mn-hex mn-hex--next">
+                {rankLetter(Math.min(LAST_RANK - 1, prison.perks.blat))}
+              </span>
+            </div>
+            <div className="mn-pres__row">
+              <GxIcon name="coins-pile" size={11 * u} />
+              <span>{t('mineHud.pres.sell')}</span>
+              <b>
+                ×{sellMult(prestige).toFixed(2)} → ×{sellMult(prestige + 1).toFixed(2)}
+              </b>
+            </div>
+            <div className="mn-pres__row">
+              <GxIcon name="upgrade" size={11 * u} />
+              <span>{t('mineHud.pres.points')}</span>
+              <b>+2</b>
+            </div>
+            <div className="mn-pres__row">
+              <KeyIcon size={11 * u} />
+              <span>{t('mineHud.pres.keys')}</span>
+              <b>+5</b>
+            </div>
+            <div className="mn-pres__keep">
+              <span>{t('mineHud.pres.keep')}</span>
+              <GxIcon name="pick" size={9 * u} />
+              <GxIcon name="magic" size={9 * u} />
+              <TokenIcon size={8 * u} />
+              <GxIcon name="backpack" size={9 * u} />
+              <GxIcon name="miner" size={9 * u} />
+              <GxIcon name="trophy" size={9 * u} />
+            </div>
+            <button
+              type="button"
+              className="px-btn px-btn--gold px-btn--wide px-f"
+              disabled={balance < prestigeCost(prestige)}
+              aria-disabled={balance < prestigeCost(prestige) || undefined}
+              onClick={prestigeNow}
+            >
+              {t('mineHud.pres.go', { sum: fmtShort(prestigeCost(prestige)) })}{' '}
+              <i className="mn-coin mn-coin--s" aria-hidden="true" />
+            </button>
           </div>
-          <div className="gx-row">
-            <GxIcon name="coins-pile" />
-            <span>{t('mineHud.pres.sell')}</span>
-            <b>
-              ×{sellMult(prestige).toFixed(2)} → ×{sellMult(prestige + 1).toFixed(2)}
-            </b>
-          </div>
-          <div className="gx-row">
-            <GxIcon name="upgrade" />
-            <span>{t('mineHud.pres.points')}</span>
-            <b>+2</b>
-          </div>
-          <div className="gx-row">
-            <KeyIcon size={26} />
-            <span>{t('mineHud.pres.keys')}</span>
-            <b>+5</b>
-          </div>
-          <div className="pmx-pres__keep">
-            <span>{t('mineHud.pres.keep')}</span>
-            <GxIcon name="pick" size={20} />
-            <GxIcon name="magic" size={20} />
-            <TokenIcon size={18} />
-            <GxIcon name="backpack" size={20} />
-            <GxIcon name="miner" size={20} />
-            <GxIcon name="trophy" size={20} />
-          </div>
-          <button
-            type="button"
-            className="gx-btn gx-btn--red gx-btn--block gx-btn--big"
-            disabled={balance < prestigeCost(prestige)}
-            onClick={prestigeNow}
-          >
-            {t('mineHud.pres.go', { sum: fmtShort(prestigeCost(prestige)) })} <CoinIcon size={14} />
-          </button>
         </GxModal>
       )}
 
@@ -2538,25 +3062,38 @@ export function PrisonPage() {
           }}
         >
           <div className="prank__card">
-            <span className="prank__label">
+            <span className="prank__label px-ribbon">
               {horizonOf(sceneShown.rank).from === sceneShown.rank
-                ? t('mineHud.scene.horizon', {
-                    name: horizonName(HORIZONS.indexOf(horizonOf(sceneShown.rank))),
-                  })
+                ? horizonName(HORIZONS.indexOf(horizonOf(sceneShown.rank)))
                 : t('mineHud.scene.rank')}
             </span>
             <b className="prank__letter">{rankLetter(sceneShown.rank)}</b>
-            <span className="prank__mine">
-              <img src={blockTexture(sceneShown.rank)} alt="" />
-              {t('mineHud.scene.mine', {
+            {/* Этаж, цена руды, цена блока — строкой значков; фраза целиком — для чтеца. */}
+            <span
+              className="prank__mine"
+              role="img"
+              aria-label={t('mineHud.scene.mine', {
                 rank: rankLetter(sceneShown.rank),
                 rock: nameIn(rockName(sceneShown.rank)),
                 ore: String(ROCKS[sceneShown.rank].value),
                 block: fmtShort(ROCKS[sceneShown.rank].block),
               })}
+            >
+              <span>
+                <img src={rockTexture(sceneShown.rank)} alt="" />
+                {rankLetter(sceneShown.rank)}
+              </span>
+              <span>
+                <i className="mn-coin" aria-hidden="true" />
+                {fmt(ROCKS[sceneShown.rank].value)}
+              </span>
+              <span>
+                <img src={blockTexture(sceneShown.rank)} alt="" />
+                {fmtShort(ROCKS[sceneShown.rank].block)}
+              </span>
             </span>
             <span className="prank__key">
-              <KeyIcon size={13} /> {t('mineHud.scene.key')}
+              <KeyIcon size={10 * u} /> {t('mineHud.scene.key')}
             </span>
             {FOREST_ON && sceneShown.rank === FOREST_UNLOCK_RANK && (
               <span className="prank__lvl">{t('mineHud.scene.forest')}</span>
@@ -2566,20 +3103,6 @@ export function PrisonPage() {
                 {t('mineHud.scene.buyout', { n: Math.round(sceneShown.buyout) })}
               </span>
             )}
-            {sceneShown.rank < LAST_RANK && (
-              <span className="prank__norm">
-                {t('mineHud.scene.next', { rank: rankLetter(sceneShown.rank + 1) })}
-                <RankChips
-                  need={rankNeeds({
-                    rank: sceneShown.rank,
-                    norm: {},
-                    oreBlocks: 0,
-                    pickMax: prison.pickMax,
-                  })}
-                  floor={sceneShown.rank}
-                />
-              </span>
-            )}
             {sceneShown.levelUps.length > 0 && (
               <span className="prank__lvl">
                 {t('mineHud.scene.level', {
@@ -2587,13 +3110,135 @@ export function PrisonPage() {
                 })}
               </span>
             )}
-            <span className="prank__cta">{t('mineHud.scene.toMine')}</span>
+            <span className="prank__cta px-btn px-btn--gold px-f">{t('mineHud.scene.toMine')}</span>
           </div>
         </div>
       )}
       <EventAnnounce ev={yardSplash} onDone={closeSplash} />
     </div>
   );
+}
+
+/** Широкий экран: меньше этого (в пикселях арта) боковой колонке не дать. */
+const SIDE_MIN_U = 84;
+/** Зазор между колонками, в пикселях арта (как `gap` у `.mn--wide`). */
+const SIDE_GAP_U = 4;
+
+/**
+ * Клетка поля в целых пикселях: самая крупная, при которой 7×9 клеток с
+ * рамой влезают в место под поле. Высокий экран — место = ячейка `.mn-field`
+ * (растягивается между шапкой и доком), широкий — высота ячейки и ширина
+ * экрана минус две боковые колонки. Рама меряется с поля: ширина рамы минус
+ * ширина сетки, поэтому толщина рамы в CSS может меняться.
+ */
+function useFieldCell(
+  root: RefObject<HTMLDivElement>,
+  slot: RefObject<HTMLDivElement>,
+  frame: RefObject<HTMLDivElement>,
+  wide: boolean,
+  scale: number,
+): number {
+  const [cell, setCell] = useState(0);
+  useLayoutEffect(() => {
+    const r = root.current;
+    const s = slot.current;
+    const f = frame.current;
+    if (!r || !s || !f) return undefined;
+    const measure = () => {
+      const grid = f.querySelector<HTMLElement>('.pmine');
+      if (!grid || !grid.offsetWidth) return;
+      const cw = f.offsetWidth - grid.offsetWidth;
+      const ch = f.offsetHeight - grid.offsetHeight;
+      const ss = getComputedStyle(s);
+      const H = s.clientHeight - parseFloat(ss.paddingTop) - parseFloat(ss.paddingBottom);
+      let W = s.clientWidth - parseFloat(ss.paddingLeft) - parseFloat(ss.paddingRight);
+      if (wide) {
+        const rs = getComputedStyle(r);
+        const inner = r.clientWidth - parseFloat(rs.paddingLeft) - parseFloat(rs.paddingRight);
+        // Поля слота — столбик расходников у рамы на низком телефоне лёжа (`has-items`).
+        W =
+          inner -
+          2 * (SIDE_MIN_U + SIDE_GAP_U) * scale -
+          parseFloat(ss.paddingLeft) -
+          parseFloat(ss.paddingRight);
+      }
+      const c = Math.floor(Math.min((W - cw) / 7, (H - ch) / 9));
+      // Нижний предел 12, а не 20: на 320×568 рама с клеткой 20 налезала на расходники
+      // на 20 px — поле всегда влезает в своё место.
+      setCell(Math.max(12, Math.min(160, c)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(r);
+    ro.observe(s);
+    return () => ro.disconnect();
+  }, [root, slot, frame, wide, scale]);
+  return cell;
+}
+
+/**
+ * Широкий экран: помещается ли левая колонка. Рюкзак стоит внизу левой колонки, пока она
+ * влезает в окно; не влезает — рюкзак переезжает наверх правой, над доком (критик r4: на
+ * 1280×720 с заданием «Продать» был под краем на 66 px, в окне браузера ноутбука 1280×650 —
+ * и без задания; телефон лёжа почти всегда здесь). Колонка меряется ВМЕСТЕ с рюкзаком, где
+ * бы он сейчас ни стоял, поэтому переезд не качается туда-обратно. Колонка, которая всё равно
+ * длиннее окна (полоса прокрутки скрыта), получает `data-more` — ступенчатая тень у нижней
+ * кромки: молча не обрезаем.
+ */
+function useSideFit(
+  left: RefObject<HTMLDivElement>,
+  right: RefObject<HTMLDivElement>,
+  wide: boolean,
+): boolean {
+  const [moved, setMoved] = useState(false);
+  useLayoutEffect(() => {
+    const L = left.current;
+    const R = right.current;
+    if (!wide || !L || !R) {
+      setMoved(false);
+      return undefined;
+    }
+    const measure = () => {
+      const bag = L.querySelector(':scope > .mn-bag') ?? R.querySelector(':scope > .mn-bag');
+      const cs = getComputedStyle(L);
+      const gap = parseFloat(cs.rowGap) || 0;
+      let need = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      let n = 0;
+      for (const el of [...L.children, ...(bag && !L.contains(bag) ? [bag] : [])]) {
+        const h = el.getBoundingClientRect().height;
+        if (!h) continue;
+        need += h;
+        n += 1;
+      }
+      need += gap * Math.max(0, n - 1);
+      setMoved(need > L.clientHeight + 0.5);
+      // Токены «99,9Mn» и ключи «999» одной строкой при 16 px: обвязка двух фишек 2 × 20u,
+      // зазор 2u и ~5,75 em цифр. Не влезают (667×375: колонка 165 px) — ключи в шапке
+      // прячутся, их число и так на «Сундуках» в доке (M5).
+      const u = parseFloat(cs.getPropertyValue('--u')) || 1;
+      const inner = L.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      L.toggleAttribute('data-tight', inner < 42 * u + 5.75 * 16);
+      for (const c of [L, R]) c.toggleAttribute('data-more', c.scrollHeight > c.clientHeight + 1);
+    };
+    const ro = new ResizeObserver(measure);
+    const watch = () => {
+      ro.disconnect();
+      for (const c of [L, R]) {
+        ro.observe(c);
+        for (const el of c.children) ro.observe(el);
+      }
+      measure();
+    };
+    const mo = new MutationObserver(watch);
+    mo.observe(L, { childList: true });
+    mo.observe(R, { childList: true });
+    watch();
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [left, right, wide]);
+  return moved;
 }
 
 /** Перерисовка раз в секунду, пока `on` — для таймеров баффов. */

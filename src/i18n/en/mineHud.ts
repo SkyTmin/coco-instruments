@@ -4,6 +4,7 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}K',
   m: '{n}M',
+  g: '{n}B',
   sec: '{n}s',
   perMin: '/min',
   reward: {
@@ -84,6 +85,7 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestige — tap!',
     rankGo: 'New rank — tap!',
     pickLevel: 'Pickaxe level',
+    streak: 'Streak',
     paceBlocks: '{n} bl',
     inARow: '{n} in a row',
     zoneExit: 'Leave',
@@ -118,7 +120,6 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Books',
     chests: 'Chests',
     pets: 'Pets',
-    more: 'More',
     nursery: 'Nursery',
   },
   floors: {
@@ -128,7 +129,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Go down',
   },
   norm: {
-    pick: 'Pickaxe ⛏{power} · {name}',
+    pick: 'Pickaxe: power {power} · {name}',
     toForge: 'To the forge',
     work: 'Work — blocks to break',
     pity: {

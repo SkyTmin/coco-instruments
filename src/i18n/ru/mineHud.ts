@@ -11,6 +11,7 @@ export const mineHud = {
   /** Short counts in the narrow chips: «12,3к», «1,2м». */
   k: '{n}к',
   m: '{n}м',
+  g: '{n} млрд',
   sec: '{n} с',
   perMin: '/мин',
   /** Guide reward line, joined with « · ». */
@@ -100,6 +101,7 @@ export const mineHud = {
     prestigeGo: 'Престиж — жми!',
     rankGo: 'Новый ранг — жми!',
     pickLevel: 'Уровень кирки',
+    streak: 'Серия',
     paceBlocks: '{n} бл',
     inARow: '{n} подряд',
     zoneExit: 'Выйти',
@@ -140,7 +142,6 @@ export const mineHud = {
     books: 'Книги',
     chests: 'Сундуки',
     pets: 'Питомцы',
-    more: 'Ещё',
     nursery: 'Питомник',
   },
   /** Floors sheet. */
@@ -152,7 +153,7 @@ export const mineHud = {
   },
   /** Rank sheet. */
   norm: {
-    pick: 'Кирка ⛏{power} · {name}',
+    pick: 'Кирка: сила {power} · {name}',
     toForge: 'В кузницу',
     work: 'Выработка — сломать блоков',
     pity: ru3(
