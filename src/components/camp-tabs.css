@@ -783,11 +783,11 @@
 }
 /* Bonus of the worn runes: a FIXED 2×2 grid — four sockets give at most four kinds, so the box
    never scrolls (critic5 P0: a third bonus hid in a 55-px scroller). Chip = [stat picture 24]
-   +7,5% продажа; the full «к продаже» is its tip. Narrow columns drop the word, not the number. */
+   +7,5% продажа; the full «к продаже» is its tip. When any word would be cut, all words go
+   (`.is-tight`, measured in RunesTab) — the number and the picture stay. */
 .ctab-bonus {
   flex: none;
   --row-st: max(calc(var(--px-fs-sm) * 1.5), calc(var(--st, 24px) + 4px));
-  container: ctab-bonus / inline-size;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: var(--row-st);
@@ -807,10 +807,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-@container ctab-bonus (max-width: 17em) {
-  .ctab-bonus__w {
-    display: none;
-  }
+.ctab-bonus.is-tight .ctab-bonus__w {
+  display: none;
 }
 /* A baked 12 × 12 stat picture (paint.ts: N2's six + T2's «proc») at `--st`. */
 .ctab-st {
@@ -1150,6 +1148,35 @@
 .ctab-perks.ctab--short .ctab-points > .ctab-points__reset {
   margin-left: auto;
 }
+/* …and the tree has room for one row of nodes: a sideways strip, the third node cut at the edge
+   (wrapped, the second row hid entirely below the fold and the tree read as two skills). */
+.ctab-perks.ctab--short .ctab-tree > .ctab-scroll {
+  overflow: auto hidden;
+  /* the cut node is the cue; a scrollbar would take the pips' 11 px */
+  scrollbar-width: none;
+}
+.ctab-perks.ctab--short .ctab-nodes {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  width: max-content;
+}
+.ctab-tree {
+  position: relative;
+}
+.ctab-tree > .ctab-tree__more {
+  position: absolute;
+  z-index: 1;
+  right: calc(2 * var(--u));
+  /* on the slots row (tree pad 7u + nodes 2u + half a 24u slot), not over the names */
+  top: calc(14 * var(--u));
+  display: grid;
+  place-items: center;
+  width: calc(11 * var(--u));
+  height: calc(14 * var(--u));
+  color: var(--px-gold);
+  background: var(--px-ink);
+  pointer-events: none;
+}
 .ctab--tall .ctab-insp--perk .ctab-insp__line {
   height: var(--ln-sm);
   -webkit-line-clamp: 1;
@@ -1177,9 +1204,10 @@
 }
 /* The note line must show (the reset's «tap again» lives there): phone landscape's panel had no
    height left for it — the per-level effect goes (the now / next values say it) and the rows sit
-   1u apart (the panel is 223 px inside, the rows need 229 with 2u); a short phone
-   gives the tree 21 px for its second line (German / French prompts). */
-.ctab.ctab--land .ctab-insp--perk .ctab-insp__sub {
+   1u apart (the panel is 223 px inside, the rows need 229 with 2u). A short phone drops the
+   per-level effect too and gives the note a second line (German / French prompts). */
+.ctab.ctab--land .ctab-insp--perk .ctab-insp__sub,
+.ctab.ctab--short .ctab-insp--perk .ctab-insp__sub {
   display: none;
 }
 .ctab--land .ctab-insp--perk {

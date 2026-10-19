@@ -7,7 +7,7 @@
 // `wide` tablet landscape / desktop (two columns), `tall` tablet portrait. Nothing jumps:
 // inspect panels and rows have fixed heights, selection only moves a ring.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
@@ -286,6 +286,27 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const [sel, setSel] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const bonusBox = useRef<HTMLDivElement>(null);
+  // Bonus words go all together when one of them would be cut: a lone «прода…» reads worse than
+  // the stat picture alone (its full text is the chip's tip). Values and the language change the
+  // words — checked after every render; the box's width — by a ResizeObserver.
+  const fitBonus = useCallback(() => {
+    const el = bonusBox.current;
+    if (!el) return;
+    el.classList.remove('is-tight');
+    const cut = [...el.querySelectorAll<HTMLElement>('.ctab-bonus__w')].some(
+      (w) => w.scrollWidth > w.clientWidth + 1,
+    );
+    el.classList.toggle('is-tight', cut);
+  }, []);
+  useLayoutEffect(fitBonus);
+  useEffect(() => {
+    const el = bonusBox.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(fitBonus);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitBonus]);
   const open = socketsOpen(p, axeLevel);
   const rune = p.runes.find((r) => r.id === sel) ?? null;
   const worn = rune ? p.sockets.includes(rune.id) : false;
@@ -451,7 +472,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
           })}
         </div>
       </Panel>
-      <div className="ctab-bonus" style={{ '--st': stPx } as CSSProperties}>
+      <div ref={bonusBox} className="ctab-bonus" style={{ '--st': stPx } as CSSProperties}>
         {bonus.length ? (
           bonus.map((k) => (
             <span
@@ -919,6 +940,25 @@ export function PerksTab() {
   const [armed, setArmed] = useState(false);
   const guard = useArmGuard();
   const root = useRef<HTMLDivElement>(null);
+  // Short phone: the nodes are one sideways strip; a › at its right end while more skills lie
+  // beyond (a strip that ends on a whole node gave no hint of the other three).
+  const strip = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const fitStrip = useCallback(() => {
+    const el = strip.current;
+    setMore(!!el && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+  useEffect(() => {
+    const el = strip.current;
+    if (!short || !el) {
+      setMore(false);
+      return undefined;
+    }
+    fitStrip();
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fitStrip);
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [short, fitStrip]);
   const k = list.find((x) => x.id === sel) ?? list[0];
   const lv = p.perks[k.id];
   const max = lv >= k.max;
@@ -1027,7 +1067,12 @@ export function PerksTab() {
         }
       />
       <Panel material="stone" stage className="ctab-tree">
-        <div className="ctab-scroll">
+        {more && (
+          <span className="ctab-tree__more" aria-hidden="true">
+            <Icon name="right" />
+          </span>
+        )}
+        <div ref={strip} className="ctab-scroll" onScroll={short ? fitStrip : undefined}>
           <div className="ctab-nodes" style={slotVar(nodeSlot)}>
             {list.map((x) => {
               const l = p.perks[x.id];
