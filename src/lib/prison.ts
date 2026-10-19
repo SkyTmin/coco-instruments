@@ -3524,7 +3524,7 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'sell',
     title: 'Продай добычу',
-    hint: 'Кнопка с рюкзаком под полем',
+    hint: 'Кнопка «{sell}» у рюкзака',
     progress: (p) => upTo(p.sells, 1),
     reward: { coins: 60 },
   },
@@ -3538,7 +3538,7 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'case',
     title: 'Открой сундук',
-    hint: 'Кнопка «Сундуки» внизу. Ключ дали за ранг',
+    hint: 'Кнопка «{chests}». Ключ дали за ранг',
     progress: (p) => upTo(p.cases, 1),
     reward: { tokens: 25 },
   },
@@ -3552,21 +3552,21 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'enchant',
     title: 'Впиши первую книгу',
-    hint: 'Кнопка «Книги» внизу: книгу продаёт Чародей за токены',
+    hint: 'Кнопка «{books}»: книгу продаёт Чародей за токены',
     progress: (p) => upTo(enchSum(p), 1),
     reward: { tokens: 30 },
   },
   {
     id: 'streak',
     title: `Набери серию до «${STREAK_TIERS[1].name}»`,
-    hint: `${STREAK_TIERS[1].at} блоков без перерыва — полоска над полем`,
+    hint: `${STREAK_TIERS[1].at} блоков без перерыва — полоса «{streak}»`,
     progress: (p) => upTo(p.bestStreak, 2),
     reward: { item: ['bomb3', 1] },
   },
   {
     id: 'bomb',
     title: 'Взорви бомбу',
-    hint: 'Кнопка с бомбой под полем, потом тап по клетке',
+    hint: 'Тапни по бомбе, потом по клетке поля',
     progress: (p) => upTo(p.bombs, 1),
     reward: { tokens: 40 },
   },
@@ -3587,7 +3587,7 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'bag',
     title: 'Прокачай рюкзак',
-    hint: 'В кузнице, под киркой',
+    hint: 'В кузнице, строка «{bag}»',
     progress: (p) => upTo(p.bagLevel, 1),
     reward: { item: ['lens', 1] },
   },
@@ -3603,14 +3603,16 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'parcel',
     title: 'Вскрой посылку',
-    hint: 'Посылки падают с блоков и зреют под полем, пока копаешь',
+    hint: 'Посылки падают с блоков и зреют у поля, пока копаешь',
     progress: (p) => upTo(p.parcelsOpened, 1),
     reward: { rune: 2 },
   },
   {
     id: 'rune',
     title: 'Вставь руну в оберег',
-    hint: '«Ещё» → Руны. Первое гнездо открывается на 5 уровне кирки',
+    // {camp}, {runes} (и {chests}, {books}, {sell}, {streak}, {bag} в других шагах) — подписи
+    // кнопок так, как их видно на экране; место («под полем») не называем (`guideHint`).
+    hint: '«{camp}» → {runes}. Первое гнездо открывается на 5 уровне кирки',
     progress: (p) => upTo(p.sockets.filter(Boolean).length, 1),
     reward: { egg: 'moss' },
   },

@@ -362,3 +362,237 @@ paths:
   вагонетки: тап опрокидывает, доля денег падает в счётчик; в конце —
   находки разведки. Бригада нарисована рабочими у штольни (у каждого своя
   рубаха); кончилась смена — сидят и ждут.
+
+## Mine screen UI v2 (wave 2 — M, 13.10.2026) — `PrisonPage.tsx`, `pages/mine.css`
+
+The mine screen is on the pixel kit (`@/ui-px`); all its CSS is in `pages/mine.css` (`.mn-*`).
+Field drawing, mining, timings, critters and their animations are untouched.
+
+- **Root `.gx.px.mn`**, fixed to the viewport, the page never scrolls. `mn--tall` when w ≤ h,
+  `mn--wide` otherwise (from `useFormFactor`, not media queries).
+- **Field is the hero.** `useFieldCell` (bottom of `PrisonPage.tsx`) measures the frame chrome and
+  the free slot and sets inline `--cell` (20…160 px); wide reserves 2 × (84 + 4) u for the side
+  columns. Cell per format (was → now): 390×844 50 → 50, 844×390 32 + page scroll → 37, 820×1180
+  60 → 67, 1180×820 52 → 81, 1440×900 60 → 90, 1920×1080 60 → 107, 360×740 → 40 (round 2:
+  taller rank row and phone dock cost tp 72 → 67).
+- **Tall order:** HUD (back · money · tokens → books · keys → chests · ⚙) → rank row (floor chip +
+  rank bar) → quest (guide only) → field (streak strip on the top edge, buffs bottom-left, parcels
+  bottom-right, pets bottom-centre) → items → backpack → dock 3 × 2.
+- **Wide (critic round 2):** left column = HUD (back · floor · ⚙ / money / tokens + keys), rank
+  (bar row + needs row), streak panel, quest, items («Расходники» heading; hidden on phone
+  landscape while the quest shows). Tablet/desktop (`roomy`): the backpack joins the left
+  column and the dock fills the right one — one button per row, rows `minmax(21u, 36u)`, icons
+  24u (painted 12×12 at ×2), side text ×1.15 (`--px-fs*` re-derived from C's `:root` copies
+  `--gx-fs*`), desktop items 28u slots (4 per row) unless the quest shows. Phone landscape:
+  right column = backpack + dock 2 × 3. Columns: basis 132u, min 88u, gap 2u. Measured empty
+  height per column ≤ 15 % (pl 11 %, tl 10 %, d1 15 %, d2 6 %).
+- **Dock** — six iron buttons, icon + label: forge, books, chests, pets, inventory
+  (`input.action.inventory`), camp (`mineHud.dock.camp`). Books / inventory / camp icons are
+  painted kit pieces `m-dock-books|bag|camp` (`paint.ts`, `// wave 2 — M`, char maps). Labels
+  never break mid-word. Phone tall (M3): the tile is a COLUMN (icon over label), 26u high,
+  label fixed `--px-fs-sm` (17 px), `nowrap; hyphens: none` — no `--lw` size formula (it gave
+  13.7–17 px per label). Elsewhere `DockLabel`'s `--lw` formula still sizes the side-column
+  labels; tr labels keep soft hyphens.
+- **Hotkeys** (`useHotkeys`, scope = dock): F B C P I M L, E sell, R rank, 1–6 items; pad VIEW /
+  X / Y. `KeyHint` is hidden by CSS for `data-input` touch / mouse.
+- **Nothing jumps:** fixed heights for stats, rank box, needs row, streak strip, backpack, dock;
+  tabular numbers; buffs / parcels / pets / toasts are absolute over the frame edges. Checked
+  with a rect diff over money 0 → 1e9, tokens, keys, bag empty/full, items 0/333, parcels,
+  buffs, rank ready, no pets — 6 formats, nothing moved.
+- **Pitfalls:** the kit focus ring (`.px-f::after`, inset −3u) made the side columns scroll by 1u
+  and got clipped — `.mn-side` has padding 3u and margin −2u. Stand scripts must import the
+  store by the exact module URL from `performance.getEntriesByType('resource')` (after HMR the
+  app uses `?t=…`; a bare `/src/store.ts` is a second store) and raise the resource-timing
+  buffer first. Old mine `.pmx-*` CSS (35 classes) was pruned from `game-ui.css`; shared `.pmx`
+  / `.pstrip` / `.pmx .prison` stay for Forest and Fishing.
+- **Background:** light sandstone (`.prison-scene.pxt-stone` + a cream veil): dark pixels
+  (L < 0.02) 6.9–10.8 % of the screen (was 21–46 %). Owner rejected the dark palette.
+- **HUD numbers (M3): one size per chip, compact notation instead of a smaller font.**
+  `lenVar` is gone. `.mn-stat` keeps a reserved width `--res` (coins 8, others 6 chars) and
+  `.mn-stat__n` = `max(16px, min(--fs-n, (100cqi − icon − 2u) / (--res · 0.55)))` → coins 26,
+  tokens/tear 20 on phones for 0…1e10. Formatters in `PrisonPage.tsx`: `chipMoney` (full below
+  1e5, then `shortCount`), `chipCount` (≤ 4 visible chars: 9 999 / 98,7к / 987к / 1,2м / 999м /
+  1 млрд), `paceCount`; `mineHud.g` = billions in 7 languages («1 млрд», «1 Mrd.», «1 Mr»).
+  Tall layouts show no keys chip (tear count is on the chests tile badge); wide keeps it.
+  Coin = painted `m-coin` (12×12) /
+  `m-coin-s` (8×8) via `.mn-coin`; token/tear 12u. Floor chip: ore 16u + letter as a kit
+  `Badge`, tip = the floor's name. Rank cost uses `shortCount` (until Q's `fmtCompact`).
+- **Press:** N2's `usePress()` (`.is-down` on pointerdown) on every non-kit pressable (stats,
+  rank, quest, parcels, bag, raw `.px-btn`s); content moves 1u down, never a filter.
+  **No `squashPop`** on kit panels: `hop(el)` moves only `[data-hop]` icons by −1/−2 art px in
+  `steps` (160 ms), skipped on reduced motion.
+- **Rank ready** = child `<i class="mn-rank__ready">` (select frame, blink 1 ↔ 0.45, steps(2)) —
+  `::after` belongs to the focus ring.
+- **Re-renders:** `Keep` (memo with a `deps` array of primitives) wraps HUD, items, bag and
+  dock; handlers that read state go through `live.current`. Digging re-renders 23 components
+  per commit instead of 83 (`{SCR}/fibers.mjs`). Window openers use `startTransition`.
+- **Under a camp / forge / inventory window** the root gets `is-under`: CSS animations of the
+  screen parts (pets, parcels, frame, rank blink) are paused — the window lives INSIDE `.mn`,
+  so the pause is scoped to `.mn-field, .mn-hud, .mn-side, …`, not `.mn *`. Style + pre-paint
+  under the pets camp at 4×: 78 → 4 ms per 4 s. Left under the camp: PrisonCamp/Nursery
+  re-render once a second (≈ 170 ms React per 4 s at 4×) — not the mine's code.
+- **Short phones (portrait, ≤ 760 px high):** stack gap 1u, dock row gap 1u, HUD 18u, backpack
+  22u, item slots 22u → 360×740 cell 40 (39 without the HUD/bag/slot trims).
+- Sheets (floors, rank, prestige, settings) are `GxModal` with kit rows (`.mn-sheet`, portal ⇒
+  unscoped classes); the rank-up scene (`prank`) keeps its animations, the look is kit (wood
+  frame, one-line ribbon = horizon name, 40u gold badge letter, icon row `[ore] K · [coin] 14 ·
+  [block] 1 000` with the sentence as `aria-label`, key line, gold button).
+- **Sheet content is a `.px` root** (`<div className="px mn-sheet …">` inside the body): C's
+  chrome then treats it as kit content — no ×2 body zoom at scale ≥ 4 (icons sized in px from
+  `shell.scale` doubled to 88 px over the text at 1920×1080) and the kit well; the div scrolls
+  itself (the kit body is `overflow: hidden`). Kit content also gets C's 420u width — the mine
+  sheets put it back to 200u (`.gx-win .gx-win__box:has(.gx-win__body > .mn-sheet)`).
+- **Round 3 (M3, critic r2 fixes).**
+  - Quest (`.mn-quest`, tall): FIXED 26u box above the field — hex 16u | title clamped to 2
+    lines | end column `max-content` (one `RewardChip` + the count/«Забрать» stacked in one grid
+    cell, the unused one `visibility: hidden`). The full sentence is `data-tip` + aria-label.
+    Field rect and `--cell` are identical over guide 0…14, ready / not ready, ru/de/tr, 390×844 and
+    360×740 (`{SCR}/ui4M/m3.mjs … quest` → `uniqueFrames 1`). Wide: auto height, 2 rows.
+  - Pace (`.mn-strip__pace`): its own `max-content` column whose width is set by an invisible
+    ghost copy of the LONGEST strings («999 бл», «99,9к/мин») in the same grid cell; the live
+    text has `contain: inline-size`, so live numbers never widen it. «N подряд» is not in the
+    ghost (de «99,9k am Stück» made the column huge) — it wraps inside the live box.
+  - Streak strip on phones spans the screen (`--sw: max(100% − 20u, 100vw − 8u)`); the tier
+    `+N%` sits right of the streak bar (`.mn-strip__barrow`), not after the name — «Легенда
+    забоя» needs the width.
+  - Rank: the floor-letter badge on the floor chip shows only when the floor ≠ the rank (or in
+    the zone), neutral tone (slot frame), never red. Wide + ready: «Новый ранг — жми!» moves to
+    the needs row (`.mn-rank__go`) — in the bar between the hexes it wrapped into 3 lines. The
+    «blocks mined» chip uses the painted 10×10 `m-dock-work` pick (fits the 10u needs row); rank,
+    prestige sheets and the shift card use `.mn-coin`, no vector `CoinIcon`.
+  - Dock inventory icon = painted `m-dock-inv` (open crate + gem + potion + coin), not the
+    backpack briefcase. Camp «!» opens the tab that holds it (`openCamp`: miles → perks → crew).
+  - Windows: openers call `freeze()` (adds `is-under` synchronously) then `startTransition`.
+    ForgeScreen / BooksTab / Inventory / PrisonCamp are static imports — there is no chunk to
+    prefetch.
+  - Hit areas ≥ 44: parcels `::before` inset −5u −4u (47×51), tokens chip `::before` −4u
+    vertical only (R43), back/gear 45–47. Confetti on rank-up: 40 on phones, 80 elsewhere.
+  - Desktop items: `.mn-items` is a size container, slots `min(28u, (100cqi − 8u) / 5)` → 5 per
+    row (critic: 4 + 1 wrap).
+  - **Stand pitfall:** a Vite started with `watch.ignored: ['**/.claude/**']` ignores EVERY file
+    of a worktree under `.claude/worktrees/` — the page silently keeps old CSS/TSX. Ignore by a
+    function relative to the root (`{SCR}/ui4M/vite.mjs`) and check the served file with curl.
+- **Round 3′ (M3′, 19.10, verified with `{SCR}/ui5M/m3.mjs <fmts> quest,nums,dock,pace,hit,fit`).**
+  Items 1–4 hold on p320 (320×568@2), pp, p430, 360×740 in ru/de/tr: quest `uniqueFrames 1`; pace
+  inside its column, 8 px (4u) to the bar; one digit size per chip (coins 26 / p320 21.1, tokens
+  20 / p320 17.2), ≥ 16 px; dock labels 17 px, one line. `fit` = no page scroll, no element out of
+  the viewport, no clipped text Range (vertical tolerance 0.3 em — line-height 1 boxes are not
+  clips; sprite strips `.pet`/`pxs__img` are false positives).
+  - 320×568: the field was height-bound at the old min cell 20 and its frame overlapped the
+    items row by 20 px. Now `useFieldCell` min 12; `max-height: 640px` → dock tiles 24u, quest
+    24u. Cell p320 21 (16 with the quest). `max-width: 340px` → strip `--sw` 100vw − 2u, pick
+    column 22u («⛏50»), gaps 3u + pace `margin-left: 1u` (4u to the bar), HUD 1.25fr : 1fr,
+    rank `padding-inline: 2u` («1/5» touched the frame). Pitfall: these media blocks sit ABOVE
+    the base rules — raise specificity (`.mn .mn-frame > .mn-strip`, `.mn-dock .mn-dock__btn`).
+  - Slim frame (`7·cell < 124u`, not wide — p320, 360×740 with the quest): `.mn-field.is-slim`
+    puts the parcels in a column right of the frame (the centred squad covered them; hit 34 → 47).
+  - Phone landscape dock: the column tile (icon over a fixed 17-px label) applies to every phone
+    (`html[data-ff^='phone'] .mn-dock__btn`), height 26u only on tall — tr «Demir-hane» wrapped
+    at 15.1 px in the 123 × 72 tile.
+  - Tablet/desktop strip panel: rows `'name name' 'pick bar' 'pace pace'` (`.mn-strip__streak`
+    `display: contents`), pace row fixed `var(--px-fs-sm)` — tl de «Stollenlegende» (195 px) was
+    clipped to 130. Tablet + quest: no «Расходники» heading, items one row (cqi slots) — the bag
+    and «Продать» were 88 px below the tl column.
+  - `chipCount` from 1e9: the shorter of «999м+» and `shortCount` (tr «1 Mr»); tokens `--res 6.5`.
+  - Item 5 (probe `{SCR}/ui5M/i5.mjs`): floor letter only on another floor, `slot-r0` ink badge;
+    wide floor chip 19u square; `m-dock-inv` ≠ bag; camp «!» opens miles/perks/crew; wide HUD
+    focus order back → floor → ⚙ → tokens → keys = visual. Hit ≥ 44 everywhere (back/⚙ 45 on
+    36-px HUDs via `::before` −4u vertical).
+  - NOT met: windows at 4× (dev, `motion.mjs pp win`, THR=4): forge 298, books 294, chests 228,
+    pets 312, inventory 263, camp 236, floors 182, rank 191, settings 177 ms (targets 250 / 100).
+    Every opener re-renders the whole `PrisonPage` (sheet state lives there) — next step: a
+    sheet host with its own state. Digging at 4× (`motion.mjs pp dig`): 55/296 = 19 % frames
+    > 20 ms (r2 24 %), p95 67, 12 long tasks, worst 150; 1×: 6/415. HUD/strip rects unchanged
+    while digging (pp, tl). The rest is the field engine (`MineField`/`useMineDig`).
+- **Round 4 (M4, critic r3 findings 1, 2, 3, 5 + pl floor chip; scripts `{SCR}/ui6M/`).**
+  - Item icon from the slot (R62): `.mn-item --ic = min(--ic-max, round(down, --slot − 4u, u))`,
+    max 13u (16u on tablet/desktop wide); `ItemIcon` has no size prop. tl + quest 48 in a 39-px
+    window → 33 (11u); tablet quest row is centred with cqi gaps. Check `items2.mjs` (icon ⊆
+    `.px-slot__art`, width % u, every format × quest on/off).
+  - Hint names (R64): `guideHint(id)` passes `{camp}` = `mineHud.dock.camp` and `{runes}` =
+    `camp.tab.runes` into `guide.*.hint`; the parcel hint says «у поля» (they ripen beside the
+    frame). `mineHud.dock.more` is gone. `f3check.mjs` compares every quoted name with the
+    visible dock / tab labels in 7 languages.
+  - 320-px cell (R63): `itemsCol` = phone, not wide, `shell.h ≤ 640` → the items leave the row
+    and become a 21u column left of the frame inside `.mn-field.has-items` (field padding-inline
+    23u; 6 items = two columns, 45u / 19u). Pets sit 13u lower so no sprite covers a bottom-row
+    cell centre (`row9.mjs`). Quest at ≤ 340 px shows one reward. Cell p320 16 → 21 (quest),
+    21 → 26 (none); pp 43/49, p430 52/56 unchanged.
+  - Streak strip (finding 5): the strip frame is `frame-well` (2u painted, was `slot-r0` 4/3);
+    streak rows 7u/7u grid, flame `m-flame7` (7×7 drawn in a 9×9 mask, `mask-size 9u`), name
+    line-height 1. Ink test (`ink.mjs` + `inkdiff.py`: screenshot with/without content, every
+    changed device pixel inside strip − painted frame) is 0 px outside on every format. A Range
+    test can't pass: two text rows (Rubik 17 px content box 20.1 px each) never fit in 32 px.
+  - Phone landscape: strip 27u (rows 14u / 8u) — the pace line hung 3 px below; quest items 22u
+    (the 27u strip pushed them 1 px off-screen); floor chip hit 39 → 44×46 via `::before`
+    extended to the right only (left would eat the back button).
+  - Rank conditions (M4b): the one-line row «⛏12 · 4 299/4 300 · 9/10» needed 237–240 px (u 2)
+    / ~320 (u 3) and was cut by `overflow: hidden` (p320 172, 375×600 219, pp 228) or spilled out
+    of the tl column. The blocks chip is its own `RankBlocks` beside the coin bar; the pick chip
+    lost its anvil (pink `#ffb4a0` on parchment, ~20–30 px). Tall (phone + tablet): two rows in
+    the same 22u — bar + blocks / pick + work (p320 rank gap 2u: row 170 of 176). Wide: grid
+    hex · bar · blocks · hex over pick + work (pl, desktop: height unchanged); a narrow frame
+    (`.mn-rankwrap` = container `mnrank`, ≤ 299 px at u 3, ≤ 224 at u 2: tl, 667×375) uses three
+    fixed rows — work / pick | blocks around the centre (tl rank 108 → 138 px). Check
+    `{SCR}/ui6M/needs2.mjs <fmts> <langs>`: every chip Range ⊆ its row on all 25 ranks × worst /
+    empty / done, bar label ⊆ bar, row positions constant.
+  - Guide hints name labels, not places (M4b): `guideHint` also fills `{chests}` `{books}`
+    (dock), `{sell}` (the bag button word, `mineHud.bag.sell` without the sum), `{streak}` (idle
+    strip), `{bag}` (forge row, `forge.bag` without the number); the bomb hint is «Тапни по
+    бомбе, потом по клетке поля». `{SCR}/ui6M/f3check2.mjs <langs> <fmt>`: rendered hints, no
+    place word per language, every quoted name visible on screen.
+  - Not fixed (outside M4): finding 4 (sheet host) is the lead's; 667×375 and 1280×720 /
+    1366×768 with the quest overflow the left column (pre-existing, `{SCR}/ui6M/side.mjs`);
+    keys chip at 99,9 млн overflows on tl/d1/pl tr (unrealistic count).
+- **Round 5 (M5, critic r4 findings 1–3; scripts `{SCR}/ui7M/`: `deskfit.mjs`, `m3.mjs`,
+  `row9b.mjs`, `needs2.mjs`, `sellfit.mjs`, `coins.mjs`, `f3shot.mjs`).**
+  - Bag column (`useSideFit`, bottom of `PrisonPage.tsx`, every wide layout): the bag sits at the
+    bottom of the left column while the column fits, else at the top of the right one over the
+    dock. The hook sums the left column's children + the bag WHEREVER it stands (no flip-flop),
+    ResizeObserver on both columns' children + MutationObserver for moves. A column that still
+    overflows gets `data-more` → a 2u stepped shade at its bottom edge (sticky `::after`); none of
+    the measured windows shows it. Right dock `min-height: 0` (the flex item's auto minimum kept
+    the rows at 36u: 1366×657 right column overflowed 60 px).
+  - Wide quest = one height on every step: title row 2.2 × `--px-fs-sm` (always two lines), end
+    row 15u, padding 2u, no progress bar (the «N/M» count is in the card). It changed 96 → 135 px
+    between steps (1280×720 de) and would move the bag on some steps only. No «Расходники»
+    heading on any wide layout while the quest shows.
+  - Phone landscape ≤ 400 px high (`mn--short`: 667×375, 844×390): `itemsCol` → the items are a
+    21u column at the frame's LEFT edge (field `padding-left` 23u only; `useFieldCell` subtracts
+    the slot padding on wide too), six items one column; dock one column of 6 rows (icon left,
+    17-px label, rows ≥ 21u, `::before` ±1 px → hit 44); side gaps 1u, HUD row gap 1u, bag
+    padding 3u/2u, sell padding 2u; quest end row spans the card under the hex (ready «Забрать»
+    was 18 px out of the 177-px column); squad `bottom: cell/2 − 18u` (3 pets covered 5 / 3
+    bottom-row centres). Cell 667×375 35 → 32, 844×390 37 → 37. Without the quest the bag fits
+    the left column there too (dock rows 58 / 61 px), with it the bag is on the right (43 / 46).
+  - Sell sum = `chipCount` (≤ 5 chars, «244к», «10,5м»), not `fmtShort` («244,1 тыс.» was 31 px
+    out of the tl button, de «Verkaufen 244.091» out on every phone).
+  - Rank pick chip = `PickIcon pick={needPick}` 8u + the power (tip / aria `mineHud.norm.pick`);
+    floors sheet and the «too hard» pop-up use the painted 7×7 `m-hard` crystal (`paint.ts`
+    `HARD_ART`, `.mn-pic--hard`, `.mn .pfloat--hard::before`; the pop-up text is just the
+    number). `.mn-rank` has no «⛏»; `mineHud.norm.pick` is «Кирка: сила {power} · {name}» in 7
+    languages (glossary «Сила»; the rank sheet row wraps to 2 lines at 320 ru/de like its
+    neighbours). Still «⛏»: `MineField`'s `pcell__hard`, toasts `mineHud.*.hardHave/Need/None`.
+  - Rank box on `mn--short`: padding and column gap 2u (de/tr «1.100 ●» bar label was 1.4 px out
+    in the 165-px column, `needs2`).
+  - HUD chips hold 0…999 999 999 (`coins.mjs`, ru/de/tr): money `chipMoney` fits everywhere
+    (p320 19.7 px, phones 26, pl 28, tl/d1 36); tokens `--res` 6.5 → 7 (tr «99,9Mn» was 2.7 px out
+    at 320 → 16 px). Left column narrower than 42u + 5.75 × 16 px (667×375) → `useSideFit` sets
+    `data-tight`, the keys chip hides (tokens + keys «999» did not fit one row even at 16 px) —
+    keys stay as the gold badge on «Сундуки». The critic's «1 instead of 1,2м» was the old
+    `.pmx-chip--coins` HUD (build 78071db); the v2 `.mn-stat--coins` shows «1,2м». Still open:
+    the wide keys chip holds ~3–4 chars (tl «9.999» 2.8 px out, tr «99,9Mn» 8–13 px out).
+  - «Продать N ●» label inside its button (`sellfit.mjs`): tall ≤ 380 px the bag grid is
+    14u | 1fr | 2fr with gap 2u (p320 de «Verkaufen 9.665» 161 px in a 133-px button pushed the
+    coin off screen → button 172); tablet landscape sell label `--px-fs-sm` (tl de 245 px in 223
+    → 213).
+  - Dig layers (lead's defe0ee for the old `.pmx-*` HUD, redone for v2): `.mn-items, .mn-dock,
+    .mn-bag, .mn-quest, .mn-strip` `will-change: transform`; `.mn-hud, .mn-rankrow, .mn-rank`
+    `isolation: isolate` (their z 1–3 — rank bar label, floor badge, focus rings — painted after
+    the field's animations and were re-layered on every hit); bag icon z 4 (above its bar and the
+    bag's ring). `{SCR}/ui7M/layers-mn.mjs` (copy of `flick/layers.mjs`, `BASE=…5566`): 5 s of
+    digging at pp/pl/p320/tl — 0 new layers outside the field (was dock badge 6, bag bar 6,
+    streak strip 6, rank label 8, a 388×582 squash layer). Cost: at 320 a HUD chip's ring loses
+    16–74 px of its bottom edge under the rank box (`ringcmp.mjs` + `ringdiff.py`).
+  - Dock at 844×390 (critic17 measured the old HUD, 51a9c8e): dock 8–382 / 97–382 with the
+    quest, «Лагерь» hit inside, column 386/386, page 0 (`dockvis.mjs`).

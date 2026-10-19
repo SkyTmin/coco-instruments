@@ -4,6 +4,7 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}k',
   m: '{n}M',
+  g: '{n} MM',
   sec: '{n} s',
   perMin: '/min',
   reward: {
@@ -96,6 +97,7 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestigio — ¡toca!',
     rankGo: 'Nuevo rango — ¡toca!',
     pickLevel: 'Nivel del pico',
+    streak: 'Racha',
     paceBlocks: '{n} bl',
     inARow: '{n} seguidos',
     zoneExit: 'Salir',
@@ -134,7 +136,6 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Libros',
     chests: 'Cofres',
     pets: 'Mascotas',
-    more: 'Más',
     nursery: 'Criadero',
   },
   floors: {
@@ -144,7 +145,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Bajar',
   },
   norm: {
-    pick: 'Pico ⛏{power} · {name}',
+    pick: 'Pico: fuerza {power} · {name}',
     toForge: 'A la forja',
     work: 'Trabajo — bloques que romper',
     pity: {

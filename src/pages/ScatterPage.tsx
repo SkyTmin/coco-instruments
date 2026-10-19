@@ -2175,12 +2175,16 @@ export function ScatterPage() {
                       <span className="paytable__syms">
                         <Sym id={p.id} skin={skin} size={26} />
                       </span>
-                      <span className="paytable__mult px-num">×{p.tiers[2]}</span>
+                      {/* Крупное число — выплата за 12 и больше: у него своё условие, как у
+                          мелких ступеней, а дроби — по языку («×0,64», не «×0.64»; critic15 #4). */}
+                      <span className="paytable__mult px-num">
+                        <b className="paytable__n">12+</b>×{fmtDec(p.tiers[2], 3)}
+                      </span>
                       {/* Two halves: on a 320-px phone they stack (critic12 #3: «10–11 ×» lost
                           its number). */}
                       <span className="paytable__pair px-num">
-                        <span>8–9 ×{p.tiers[0]}</span>
-                        <span>10–11 ×{p.tiers[1]}</span>
+                        <span>8–9 ×{fmtDec(p.tiers[0], 3)}</span>
+                        <span>10–11 ×{fmtDec(p.tiers[1], 3)}</span>
                       </span>
                     </div>
                   ))}

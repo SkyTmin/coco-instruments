@@ -31,7 +31,24 @@ export const GAME_ACTIONS = [
 ] as const;
 
 /** Горячие клавиши лагеря (только там, где такой экран есть). */
-export const HOTKEY_ACTIONS = ['inventory', 'pets', 'forge', 'books', 'chests', 'mines'] as const;
+export const HOTKEY_ACTIONS = [
+  'inventory',
+  'pets',
+  'forge',
+  'books',
+  'chests',
+  'mines',
+  // wave 2 — M: шахта (лагерь «Ещё», продать рюкзак, ранг, расходники 1–6)
+  'camp',
+  'sell',
+  'rank',
+  'item1',
+  'item2',
+  'item3',
+  'item4',
+  'item5',
+  'item6',
+] as const;
 
 export type UiAction = (typeof UI_ACTIONS)[number];
 export type GameAction = (typeof GAME_ACTIONS)[number];
@@ -110,6 +127,15 @@ export const DEFAULT_BINDINGS: Bindings = {
     books: ['KeyB'],
     chests: ['KeyC'],
     mines: ['KeyM'],
+    camp: ['KeyL'],
+    sell: ['KeyE'],
+    rank: ['KeyR'],
+    item1: ['Digit1', 'Numpad1'],
+    item2: ['Digit2', 'Numpad2'],
+    item3: ['Digit3', 'Numpad3'],
+    item4: ['Digit4', 'Numpad4'],
+    item5: ['Digit5', 'Numpad5'],
+    item6: ['Digit6', 'Numpad6'],
   },
   pad: {
     confirm: [PAD.A],
@@ -137,6 +163,15 @@ export const DEFAULT_BINDINGS: Bindings = {
     books: [],
     chests: [],
     mines: [],
+    camp: [],
+    sell: [PAD.X],
+    rank: [PAD.Y],
+    item1: [],
+    item2: [],
+    item3: [],
+    item4: [],
+    item5: [],
+    item6: [],
   },
 };
 
