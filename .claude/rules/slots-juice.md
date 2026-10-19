@@ -540,3 +540,54 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
 - Probes: `scratchpad/ui6K/m/` (`ante.mjs`, `coins.mjs`, `clip.mjs` — skips `display: contents`
   wrappers, `hallrow3.mjs`, `sheetclip.mjs`, `gaps.mjs`, `skinshift.mjs`, `cab.mjs`, `jump.mjs`,
   `stath.mjs`, `prof.mjs` (CPU profile + `FN=` callers), `prodsk.mjs`, `prodtrace.mjs`).
+
+### Critic round 4 (K4, 19.10.2026)
+
+- **Skins sheet scrolls (R67):** `.gx-win__body:has(.px)` is `overflow: hidden`, so `.skn` itself
+  is the scroller (`flex 1 1 auto`, `min-height: 0`, `overflow-y: auto`, `overscroll-behavior:
+  contain`, 3u padding); cards in `.skn__grid` (the `skng` container moved there), both notes
+  inside `.skn` after the grid. Checked with REAL CDP touch swipes and the wheel, not `scrollTop`:
+  the last card («Купальская ночь») and the credit line come fully into view on p320 / pp / p430 /
+  pl / tp / tl / d1 (max scroll 645 / 371 / 261 / 293 / 448 / 173 / 93 px), page scroll stays 0,
+  a swipe that starts on a card scrolls and does not pick it.
+- **Ante price is one everywhere (R69):** the bet sheet's big number, the «Играть по N» CTA and its
+  off state, the auto-lowering of the bet and the broke checks all use `scatterStake(bet, ante)`.
+  Auto-lowering picks the largest `BETS` entry whose stake fits, else steps down by `BET_STEP`
+  (it used to `clampBet` the balance — rounding UP, so 8–9 coins asked for a bet of 10).
+  **The minimum is the code's, not a guess:** `MIN_BET` 5 → the cheapest Ante spin is
+  `round(5 × 1.25)` = 6. `anteBroke` («Не хватает на Ante — выключите его»,
+  `slots.cascade.anteBroke`, 7 languages) shows only when the balance is below 6 with Ante on and
+  no free spins: 12 → bet 5 / spin 6, 8 → bet 5 / spin 6, 5 → «Нет монет» + the anteBroke line +
+  shake, 3 → the old broke line (Ante off would not help either). The two-line status is
+  `.status--long` (`sm`, 1.1) — at `fs` it was 45 px in a 44-px plate. Sheet caption
+  «Ante ×1,25» (`.cas-betpick__sub`) when on. Checked: 35/35 bets × formats, well = sheet = CTA =
+  charge.
+- **Slots strip does not jump from numbers (R68):** phone portrait (tall): two equal halves
+  'lvl lvl' / 'jp best' / 'hist hist'; the spin counter is hidden on PHONES only (still in the
+  hall and session cards; tablet portrait keeps its one-per-line 'sp' row — a first version hid it
+  there too). With three content-sized columns the best win's caption went 1 ↔ 2 lines and the
+  cabinet moved up to 9 px; reserving the widest values left the best win 46–77 px. The value line
+  box is constant: `.cas-info .cas-stat__v { height: calc(var(--cas-vfs) * 1.1) }` (`--cas-vfs` =
+  the format's value size), so a fit step changes the glyphs, not the strip. `useFitText` refits
+  only when the text's SHAPE changes (digits → 0) or the width moves ≥ 0.5 px: a rolling count of
+  the same length measures nothing (strip measures per spin 2 → 0). Sweep 0 → 9 600 → 99 999 →
+  987 654 → 123 456 789: phones 9/12 MOVES → 12/12 SAME both games; pl / tp / tl / d1 16/16 SAME;
+  strip 130 px (ru p360 148: «Лучший выигрыш» wraps, constant), p320 60.
+- **Cascade paytable:** the main tier reads «12+ ×0,22» (`.paytable__n` muted `sm` prefix,
+  `.paytable__mult` `nowrap`), the pair «8–9 ×0,035 · 10–11 ×0,08»; every multiplier is
+  `fmtDec(x, 3)` — no decimal dots left in ru / de / fr / es / it / tr. Row 44 px.
+- **Hall on short phones (`max-height: 680px`):** the spins fact (`.hall-fact--sp`) is hidden on
+  both cards — 2 facts, no bare caption, card rects equal at 7 000 vs 1 234 567 tokens in
+  7 languages (p320 / p640). pp keeps 4 facts.
+- **Skins sheet first frame (next pass 6), production build at 4× CPU, pp, medians:** reference =
+  the settings sheet. Slots 95 → 105 ms (1.11×, target ≤ 1.2× met), Cascade 85 → 119 ms (1.40×,
+  not met). Trace (Cascade): one Layout 46–67 ms at ~+180 ms (29 of 301 objects dirty, not a
+  whole-page relayout), SVG symbol documents ~12 ms each. Tried and reverted, no gain:
+  `content-visibility: auto` on the art below the 6th card (Chrome's proximity margin renders a
+  short list anyway — nothing was skipped on pp; with it 1.14× / 1.58×), and `filter: none` on
+  the art images. Next step if wanted: cheaper art for off-screen cards (static PNG thumbnails
+  instead of three filtered SVGs).
+- Probes: `scratchpad/ui7K/m/` (`skreach.mjs` real swipes / wheel, `ante4.mjs` `MODE=bets|scen`,
+  `infojump2.mjs` record sweep, `fitcount.mjs`, `stripshot.mjs`, `paydots.mjs`, `hallsp.mjs`,
+  `spvis.mjs` facts per format, `cvshift.mjs`, `prodtime.mjs` / `prodtrace2.mjs` on the
+  `vite preview` build at :5557 — config `ui7K/vite.prod.mts`).
