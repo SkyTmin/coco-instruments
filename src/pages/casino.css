@@ -295,17 +295,15 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   width: 0.9em;
   height: 0.9em;
 }
-/* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): one step smaller,
-   then the coin goes — the 777 / ★ picture and the caption still say what it is. */
+/* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): both steps are the
+   small size; the coin stays at every step — a sum without its coin reads as points (critic12
+   #2), so the strip's grid gives the records the room instead. */
 html .cas .cas-info .cas-stat .cas-stat__v:is([data-fit='1'], [data-fit='2']) {
   font-size: var(--px-fs-sm);
 }
 /* One digit size across the strip: when one record steps down, all of them do. */
 html .cas .cas-info:has(.cas-stat__v:is([data-fit='1'], [data-fit='2'])) .cas-stat .cas-stat__v {
   font-size: var(--px-fs-sm);
-}
-html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
-  display: none;
 }
 .cas-stat--gold .cas-stat__v {
   color: var(--px-gold);
@@ -766,12 +764,21 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   .cas[data-lay='tall'] > .cas-info {
     padding: calc(3 * var(--u)) calc(5 * var(--u));
     row-gap: var(--u);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
-      'lvl lvl lvl'
-      'jp sp best';
+      'lvl lvl'
+      'jp best';
   }
+  /* The spins counter goes too (lead + critic12): without its caption «▶ 312» said nothing, and
+     its room is what keeps the records' coins. */
   .cas[data-lay='tall'] > .cas-info > .cas-hist,
+  .cas[data-lay='tall'] > .cas-info > .cas-stat--sp,
   .cas[data-lay='tall'] > .cas-info .cas-stat__k {
+    display: none;
+  }
+  /* The free-spin count is on the spin plate's corner: its reserved box here left Cascade's level
+     bar 28 px beside the buy plate. */
+  .cas[data-lay='tall'] > .cas-info .cas-lvl__free {
     display: none;
   }
   .cas[data-lay='tall'] > .cas-info .cas-stat {
@@ -779,12 +786,13 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   }
   /* Cascade: the buy plate stands beside both lines instead of making the second one 46 px. */
   .cas--scatter[data-lay='tall'] > .cas-info {
-    /* Half the strip at most: fr «Acheter le bonus» takes two lines instead of squeezing the
-       best spin to 27 px. */
-    grid-template-columns: minmax(0, 1fr) auto fit-content(50%);
+    /* With the spins counter gone the best win needs ≤ 40 % (ru «★ 988 тыс. 🪙» 120 of 288 px):
+       the plate may take 60 %, so fr «Acheter le bonus» stays one line (two cost the board
+       17 px). */
+    grid-template-columns: minmax(0, 1fr) fit-content(60%);
     grid-template-areas:
-      'lvl lvl buy'
-      'best sp buy';
+      'lvl buy'
+      'best buy';
   }
   .cas[data-lay='tall'] > .cas-deck {
     padding: calc(4 * var(--u)) calc(6 * var(--u));
@@ -1373,10 +1381,6 @@ html .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
 html .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   font-size: var(--px-fs-sm);
 }
-/* Last step: the coin goes (the star and the label already say «best win»), the digits stay. */
-html .hall .hall-card__facts .cas-stat__v[data-fit='2'] > svg {
-  display: none;
-}
 html .hall .hall-card__facts .cas-stat__ico .px-i {
   --i-w: 9;
   --i-h: 9;
@@ -1460,6 +1464,10 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   white-space: nowrap;
 }
 .hall-row__fact > b {
+  /* As wide as the widest compact form in any language (ru «100 тыс.» = 6.35 ch): the name's box
+     is the same for 7 000 and 1 234 567 tokens, nothing in the row moves (critic12 #2). */
+  min-width: 6.4ch;
+  text-align: right;
   font: 700 var(--px-fs) / 1 var(--px-font);
   color: var(--px-text);
 }
@@ -1570,6 +1578,20 @@ html[data-ff='phone-landscape'] .hall-card__t {
   html[data-ff='phone-portrait'] .hall-card__t.is-long {
     font-size: var(--px-fs);
   }
+  /* «Каторга» in 20 px was 78 px in a 72-px column: with ≥ 99 999 tokens it broke mid-word
+     («Каторг / а») and the row grew 48 → 52 px (critic12 #2). The small size fits it whole. */
+  html[data-ff='phone-portrait'] .hall-row {
+    column-gap: calc(3 * var(--u));
+  }
+}
+/* …and up to 380 px the small size for the name and the tokens: two lines of it (en «Hard Labor»
+   at 360) still fit the 48-px row; in 20 px they made it 52. */
+@media (max-width: 380px) {
+  html[data-ff='phone-portrait'] .hall-row__t,
+  html[data-ff='phone-portrait'] .hall-row__fact > b {
+    font-size: var(--px-fs-sm);
+    overflow-wrap: normal;
+  }
 }
 /* Tablet / desktop: the cards are big — so is everything on them. */
 html[data-ff='tablet'] .hall-card__t,
@@ -1590,6 +1612,22 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
 }
 html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v[data-fit='2'],
 html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
+  font-size: var(--px-fs);
+}
+/* One digit size per card: when the best win steps down, the spins beside it step down with it
+   (tp: «988 тыс.» 22.5 px stood beside «312» in 29, critic12). */
+html .hall .hall-card__facts:has([data-fit='1']) .cas-stat__v {
+  font-size: var(--px-fs-sm);
+}
+html .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v {
+  font-size: var(--px-fs-sm);
+}
+html[data-ff='tablet'] .hall .hall-card__facts:has([data-fit='1']) .cas-stat__v,
+html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='1']) .cas-stat__v {
+  font-size: var(--px-fs-head);
+}
+html[data-ff='tablet'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v,
+html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v {
   font-size: var(--px-fs);
 }
 
