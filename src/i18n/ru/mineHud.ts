@@ -161,7 +161,7 @@ export const mineHud = {
   },
   /** Rank sheet. */
   norm: {
-    pick: 'Кирка ⛏{power} · {name}',
+    pick: 'Кирка: сила {power} · {name}',
     toForge: 'В кузницу',
     work: 'Выработка — сломать блоков',
     pity: ru3(

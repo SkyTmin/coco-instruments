@@ -152,7 +152,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Scendi',
   },
   norm: {
-    pick: 'Piccone ⛏{power} · {name}',
+    pick: 'Piccone: forza {power} · {name}',
     toForge: 'Alla fucina',
     work: 'Lavoro — blocchi da rompere',
     pity: {

@@ -133,7 +133,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'İn',
   },
   norm: {
-    pick: 'Kazma ⛏{power} · {name}',
+    pick: 'Kazma: güç {power} · {name}',
     toForge: 'Demirhaneye',
     work: 'Çalışma — kırılacak blok',
     pity: {

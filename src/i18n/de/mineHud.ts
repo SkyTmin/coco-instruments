@@ -135,7 +135,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Runter',
   },
   norm: {
-    pick: 'Spitzhacke ⛏{power} · {name}',
+    pick: 'Spitzhacke: Kraft {power} · {name}',
     toForge: 'Zur Schmiede',
     work: 'Arbeit — Blöcke abbauen',
     pity: {
