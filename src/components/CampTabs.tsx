@@ -695,8 +695,8 @@ export const FindsTab = memo(function FindsTab() {
   const p = useFinanceStore((s) => s.prison);
   const found = findsFound(p.finds);
   // Phone portrait and tablet landscape / desktop: a 4×3 case, all 12 without scrolling — the
-  // slots as big as a quarter of the width lets (≈ 80 px with 64-px art on a phone, ≈ 120 on a
-  // tablet); the other layouts keep their auto-fill columns.
+  // slots as big as a quarter of the width and a third of the height let (≈ 80 px with 64-px art
+  // on a phone, ≈ 120 on a tablet, 52 at 320×568); the other layouts keep auto-fill columns.
   const four = lay === 'one' || lay === 'wide';
   const box = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState(0);
@@ -706,8 +706,15 @@ export const FindsTab = memo(function FindsTab() {
     if (!four || !el || !grid) return undefined;
     const measure = () => {
       const cs = getComputedStyle(grid);
-      const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-      setCell((el.clientWidth - pad - 3 * parseFloat(cs.columnGap)) / 4);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const rows = Math.ceil(FINDS.length / 4);
+      setCell(
+        Math.min(
+          (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4,
+          (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows,
+        ),
+      );
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -726,8 +733,9 @@ export const FindsTab = memo(function FindsTab() {
     four && cell > 0
       ? Math.min(slotFor(px, scale, padU), Math.floor(cell / scale))
       : slotFor(px, scale, padU);
-  // the selected find big: ≥ 96 px on a phone with room and on a tablet
-  const bigPx = fit(16, lay === 'wide' ? 40 : roomy ? 48 : 30, scale, dpr);
+  // the selected find big: ≥ 96 px on a phone with room and on a tablet; 48 on a short phone
+  // (with 64, es «Moneda antigua» was cut at 320)
+  const bigPx = fit(16, lay === 'wide' ? 40 : roomy ? 48 : short ? 24 : 30, scale, dpr);
   const pick = (id: string) => {
     if (id === sel) return;
     selectionChanged();

@@ -124,7 +124,7 @@ html[data-ff='tablet']
   gap: var(--u);
   height: calc(var(--px-fs-sm) * 1.5);
   padding: 0 calc(2 * var(--u));
-  font: 600 var(--px-fs-sm) / 1 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-text);
   background: var(--chip);
   white-space: nowrap;
@@ -179,7 +179,7 @@ html[data-ff='tablet']
   justify-content: center;
   gap: calc(3 * var(--u));
   text-align: center;
-  font: 600 var(--px-fs) / 1.25 var(--px-font);
+  font: 500 var(--px-fs) / 1.25 var(--px-font);
   color: var(--px-muted);
 }
 .ctab-insp__empty > .px-i {
@@ -205,8 +205,7 @@ html[data-ff='tablet']
 }
 .ctab-insp__name,
 .ctab-insp__gives,
-.ctab-insp__sub,
-.ctab-insp__v {
+.ctab-insp__sub {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -264,22 +263,6 @@ html[data-ff='tablet']
   /* equal shares: a longer label (В оберег / Снять, +5 / +250) never moves its neighbours */
   flex: 1 1 0;
   min-width: 0;
-}
-.ctab-insp__rows {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: var(--u) calc(4 * var(--u));
-}
-.ctab-insp__k {
-  font: 600 var(--px-fs-sm) / 1.3 var(--px-font);
-  color: var(--px-muted);
-}
-.ctab-insp__v {
-  font: 700 var(--px-fs) / 1.3 var(--px-font);
-}
-.ctab-insp__v.is-next {
-  color: var(--px-green);
 }
 .ctab-insp__max {
   display: inline-flex;
@@ -364,7 +347,7 @@ html[data-ff='tablet']
   min-width: 0;
 }
 .ctab-pack__label {
-  font: 600 var(--px-fs-sm) / 1.2 var(--px-font);
+  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
   color: var(--px-muted);
 }
 .ctab-pack__row {
@@ -1028,6 +1011,62 @@ html[data-ff='tablet']
   color: var(--px-text);
   font-weight: 500;
   height: calc(var(--px-fs) * 2.5);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* Phone portrait: the name over the whole panel, the art (96 px; 48 on a short phone) beside the
+   text — beside a 96-px art «Отпечаток папоротника», fr «Empreinte de fougère» were cut. The
+   text takes three lines where the big art gives the room. */
+.ctab--one .ctab-insp--find .ctab-insp__top {
+  display: grid;
+  grid-template:
+    'name name' auto
+    'art gives' minmax(0, 1fr)
+    'art sub' auto
+    / auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--u) calc(4 * var(--u));
+}
+.ctab--one .ctab-insp--find .ctab-insp__head {
+  display: contents;
+}
+.ctab--one .ctab-insp--find .ctab-insp__art {
+  grid-area: art;
+  align-self: center;
+}
+.ctab--one .ctab-insp--find .ctab-insp__name {
+  grid-area: name;
+}
+.ctab--one .ctab-insp--find .ctab-insp__gives {
+  grid-area: gives;
+}
+.ctab--one .ctab-insp--find .ctab-insp__sub {
+  grid-area: sub;
+}
+/* Short phone: the two-line name costs a line — the count line goes (the slot's corner says ×N)
+   and the panel's frame margin is 3u: the case keeps its three rows at 320×568. */
+.ctab-finds.ctab--short .ctab-insp {
+  --pad: 3;
+}
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__sub {
+  display: none;
+}
+/* three small lines fit beside the 48-px art («Раковина, закрученная спиралью» needs three) */
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__gives {
+  font-size: var(--px-fs-sm);
+  height: calc(var(--px-fs-sm) * 3.75);
+  -webkit-line-clamp: 3;
+}
+.ctab--one:not(.ctab--short) .ctab-insp--find .ctab-insp__gives {
+  height: calc(var(--px-fs) * 3.75);
+  -webkit-line-clamp: 3;
+}
+/* the showcase column (phone landscape, tablet landscape, desktop) and the short phone (248 px
+   for «Отпечаток папоротника»): a long name takes 2 lines, always reserved */
+.ctab:is(.ctab--land, .ctab--wide, .ctab--short) .ctab-insp--find .ctab-insp__name {
+  height: calc(var(--px-fs-head) * 2.4);
   white-space: normal;
   display: -webkit-box;
   -webkit-box-orient: vertical;
