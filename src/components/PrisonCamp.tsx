@@ -321,6 +321,12 @@ export function PrisonCamp({
   // tablet portrait's top strip too: five icon + word tabs cut «Колл…», «Дост…» in 754 px
   const compact =
     ff === 'phone-portrait' || ff === 'phone-landscape' || (ff === 'tablet' && !landscape);
+  // N4 (19.10): the Nursery is a full dark window like the forge, not a tab inside the wood sheet;
+  // in a camp with other tabs its «back» returns to the first of them.
+  if (tab === 'pets')
+    return (
+      <PetsTab onClose={multi ? () => onTab(tabs.find((x) => x !== 'pets') ?? tabs[0]) : onClose} />
+    );
   return (
     <GxSheet
       className={`gx-camp${multi ? ' is-tabs' : ' is-single'}${compact ? ' is-compact' : ''}`}
@@ -352,7 +358,6 @@ export function PrisonCamp({
         {tab === 'bench' && <BenchTab onGain={onGain} />}
         {tab === 'enchant' && <BooksTab />}
         {tab === 'runes' && <RunesTab axeLevel={axeLevelOf(f.logs).level} />}
-        {tab === 'pets' && <PetsTab />}
         {tab === 'miles' && <MilesTab onGain={onGain} />}
         {tab === 'shop' && <ShopTab />}
         {tab === 'cases' && <ChestTab onGain={onGain} />}

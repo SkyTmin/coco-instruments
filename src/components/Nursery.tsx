@@ -1,24 +1,10 @@
-// Nursery — the pets view of «Питомник», the first screen on the pixel kit (`@/ui-px`, style
-// guide `.claude/rules/ui-px.md`). Rules are untouched (`lib/pets.ts`, store actions): this is
-// only how the same squad, collection, merge and skin choice look and are reached.
-//
-// One component, four arrangements by the shell's format (`useFormFactor`). The stage (room +
-// framed animation buttons + the name plate) always takes about half the screen, and every box
-// has a fixed size whatever pet is chosen — nothing jumps when the selection changes:
-// - `one` (phone portrait): stage on top, the squad (three big slots + the 3×2 bonus grid), the
-//   action bar `[▦ 18/18] [take/leave] [i]`; the collection opens in a drawer over the side.
-// - `land` (phone landscape): stage | side (plate, squad with the bonus grid beside the slots,
-//   actions); the collection is the same drawer.
-// - `tall` (tablet portrait): stage on top, side below with the full collection grid.
-// - `wide` (tablet landscape, desktop): stage | side with the full collection grid.
-// Details (stats table, merge, skins) open in a sheet on every format.
-// Keyboard/gamepad: arrows move between slots (the shell's spatial focus), a focused slot is
-// the selected pet, `inspect` (X / pad Y) takes it along or leaves it home.
-//
-// Wave 3 — N2 (critic, 13.10): bonuses are baked 12 × 12 stat pictures (`--pximg-st-*`) at
-// 24 CSS px (36 at ui-scale ≥ 4) with whole percents; the squad sum is a fixed grid of all six
-// stats; at most three chips per pet; the stage swaps to another pet only once its strip is
-// decoded; cells and squad slots are memoised.
+// Nursery — the «Отряд» and «Коллекция» tabs of the pets screen (`PetsTab`), N4 (19.10): the
+// handoff LAYOUT on the dark kit (`@/ui-px/dark`), the forge's sibling. Squad: three compact
+// places on top, then the selected pet on an octagon stage with its name ribbon, four facts as
+// square tiles (power · bonus · level · copies) and the action bar. Collection: a grid of cards
+// with a filter and a sort. LOOKING at a pet (`sel`) and TAKING it (`squad`) are different
+// actions: a card only selects; «Взять с собой» takes; a full squad asks whom to leave home.
+// Rules — `lib/pets.ts`; store actions — prisonSquadSet, prisonPetPat, prisonPetMerge, prisonPetSkin.
 
 import {
   memo,
@@ -30,14 +16,15 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useFinanceStore } from '@/store';
 import { fmtNum, useT } from '@/i18n';
-import { useFormFactor } from '@/game-shell';
 import { focusEl, getInputDevice, useAction } from '@/input';
 import { registerEscape } from '@/lib/escape-stack';
 import { PetArt, petArtSrc } from '@/components/PetArt';
 import type { PetAnim } from '@/components/PetArt';
+import { fromKeys, useBox } from '@/components/armory';
+import type { ArmLayout } from '@/components/armory';
 import { RARITIES } from '@/lib/rarity';
 import { pxFit } from '@/lib/pet-pixel-fit';
 import { PET_PX } from '@/lib/pet-pixel-sprites';
@@ -65,55 +52,46 @@ import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { petMerge, petPat, primeAudio } from '@/lib/sound';
 import { notifySuccess, selectionChanged, tapLight } from '@/lib/haptics';
-import { Badge, Bar, Button, Grid, Heading, Icon, Modal, Panel, Slot, usePress } from '@/ui-px';
+import { Icon } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
+import { PxdButton, PxdPedestal, PxdPips, PxdRibbon, PxdSheet } from '@/ui-px/dark';
 import './nursery.css';
 
-/** Showcase buttons: loops switch the base animation, one-shots play once and return. */
+export type NurTab = 'squad' | 'coll' | 'eggs';
+
+/** Showcase moves: loops switch the base animation, one-shots play once and return. */
 const ANIMS: { id: PetAnim; icon: PxIconName; loop: boolean }[] = [
-  { id: 'idle', icon: 'pause', loop: true },
+  { id: 'idle', icon: 'paw', loop: true },
   { id: 'walk', icon: 'paws', loop: true },
   { id: 'happy', icon: 'heart', loop: false },
   { id: 'work', icon: 'star', loop: false },
   { id: 'attack', icon: 'claw', loop: false },
-  { id: 'sleep', icon: 'moon', loop: true },
+  { id: 'sleep', icon: 'zzz', loop: true },
 ];
-/** The fixed order of the six stats (squad grid, ties between equal chips). */
 const STATS: PetStat[] = ['loot', 'sell', 'dmg', 'token', 'luck', 'rate'];
-/** Chips on the plate: the biggest bonuses first, the rest behind «+N» (opens the details). */
-const MAX_CHIPS = 3;
 type Sort = 'rarity' | 'level' | 'power';
 type Filter = 'all' | 'owned' | 'missing';
 const SORTS: Sort[] = ['rarity', 'level', 'power'];
 const FILTERS: Filter[] = ['all', 'owned', 'missing'];
-type Layout = 'one' | 'land' | 'tall' | 'wide';
 type SquadView = (PetId | null)[];
 
-/** Percent with one decimal (details table, tips): the locale formats the number. */
+/** Bonus share → percent with ONE decimal — the one formatter of the screen (the old chips
+ *  rounded to whole percent: «+1%» on the card against «+0,7%» in the details). */
 const pctV = (x: number) => Math.round(x * 1000) / 10;
-/** Whole percent for the first glance (plate chips, squad grid); never «+0%» for a real bonus. */
-const pctI = (x: number) => Math.max(x > 0 ? 1 : 0, Math.round(x * 100));
 const rc = (r: number) => ({ '--rc': RARITIES[r]?.color }) as CSSProperties;
 const dprNow = () => (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+/** A 48-art-px thumbnail at the biggest whole screen-dot scale not above `want` css px. */
+const thumbPx = (want: number, dpr: number) =>
+  (Math.max(1, Math.floor((want * dpr) / 48)) * 48) / dpr;
 
-/** Stat picture size: 24 CSS px (36 at ui-scale ≥ 4), rounded to whole screen dots per art
- *  pixel — the 12 × 12 art stays crisp at any DPR. */
-function useStatPx(): string {
-  const { scale } = useFormFactor();
-  const dpr = dprNow();
-  const k = Math.max(1, Math.round(((scale >= 4 ? 36 : 24) * dpr) / 12));
-  return `${(k * 12) / dpr}px`;
-}
-
-/** A baked 12 × 12 stat picture (`paint.ts`, wave 3 — N2) at `--st`. */
+/** A baked 12 × 12 stat picture (`paint.ts` `STAT_ART`) at 12 art px of the UI. */
 function StatIcon({ stat, dim }: { stat: PetStat | 'power'; dim?: boolean }) {
-  return <i className={`nur-st nur-st--${stat}${dim ? ' is-dim' : ''}`} aria-hidden="true" />;
+  return <i className={`nrs-st nrs-st--${stat}${dim ? ' is-dim' : ''}`} aria-hidden="true" />;
 }
 
 // ---- Decode before swap ------------------------------------------------------------------------
-// Switching pets used to show the OLD strip squeezed into the new frame box until the new one
-// loaded (+186 → +600 ms at 4×, critic). The stage now keeps the old pet until the new strip is
-// decoded; the squad and the neighbours in the collection are decoded ahead of time.
+// The stage keeps the pet it shows until the picked one's strip is decoded (N3: no wrong-pet
+// frames); the squad and the collection neighbours are decoded ahead of time.
 const decoded = new Map<string, HTMLImageElement>();
 const decoding = new Map<string, Promise<void>>();
 function decodeArt(src: string): Promise<void> {
@@ -128,7 +106,6 @@ function decodeArt(src: string): Promise<void> {
       .catch(() => undefined)
       .then(() => {
         decoding.delete(src);
-        // keep a handful referenced, so the decoded bitmaps stay in the memory cache
         decoded.set(src, im);
         if (decoded.size > 30) decoded.delete(decoded.keys().next().value as string);
       });
@@ -137,34 +114,8 @@ function decodeArt(src: string): Promise<void> {
   return job;
 }
 
-/** Size of an element's box, kept in state: the stage sizes the pet from it. */
-function useBox(ref: RefObject<HTMLElement | null>) {
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const put = (w: number, h: number) =>
-      setBox((b) =>
-        b.w === Math.floor(w) && b.h === Math.floor(h) ? b : { w: Math.floor(w), h: Math.floor(h) },
-      );
-    put(el.clientWidth, el.clientHeight);
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([e]) => put(e.contentRect.width, e.contentRect.height));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref]);
-  return box;
-}
-
-/** Pedestal pixel in CSS px, from the ROOM and not from the pet: every pet stands on the same
- *  pedestal, so switching pets never moves it (owner: «чтобы картинка не дёргалась»). Whole
- *  screen dots, never under the UI pixel. The pedestal is 56 × 18 of its pixels. */
-const pedFor = (w: number, h: number, dpr: number, u: number) =>
-  Math.max(u, Math.floor(((Math.min(w, h * 1.25) * 0.8) / 56) * dpr) / dpr);
-
-/** The biggest pet frame that fits `w` × `h` with its feet `lift` px above the room's floor, at
- *  a whole number of screen dots per art pixel (what `pxFit` will draw — it may round up by 15%,
- *  so the check is on its result). */
+/** The biggest pet frame that fits `w` × `h` with its feet `lift` px above the bottom, at a whole
+ *  number of screen dots per art pixel (what `pxFit` draws — it may round up by 15 %). */
 function fitPet(id: PetId, w: number, h: number, dpr: number, lift: number): number {
   const px = PET_PX[id];
   const ok = (s: number) => s <= w && s + lift <= h;
@@ -187,60 +138,152 @@ function fitPet(id: PetId, w: number, h: number, dpr: number, lift: number): num
   return pxFit(best, px, dpr).s === best ? best : arg;
 }
 
-/** The squad as the slots show it: a pet left home keeps its slot empty (no shifting), the next
- *  one taken fills the first empty slot. The store keeps the plain list (`view` without holes, in
- *  the same order), so nothing in the save changes; a change from elsewhere resets the view. */
+/** The squad as the places show it: a pet left home keeps its place empty, the next one taken
+ *  fills the chosen / first empty place. The store keeps the plain list (`prisonSquadSet`). */
 const padSquad = (squad: PetId[], n: number): SquadView =>
   Array.from({ length: n }, (_, i) => squad[i] ?? null);
 const sameList = (a: readonly (PetId | null)[], b: readonly PetId[]) =>
   a.length === b.length && a.every((x, i) => x === b[i]);
 
-/** Memoised: the camp re-renders every second (`useNow` in `PrisonCamp`) — the Nursery only
- *  when the store or its own state changes (`say` from `PetsTab` is stable). */
-export const Nursery = memo(function Nursery({ say }: { say: (text: string) => void }) {
+// ---- Fitting a line to the kit's type steps (as the forge: nothing shrinks freely) ------------
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+/** Width of one line of `text` in the CSS `font` (0 without canvas). */
+function textW(text: string, font: string): number {
+  if (measureCtx === undefined) measureCtx = document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return 0;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+/** The px size of a dark-kit type var (`--pd-fs-sm` …) inside `el`. */
+function fsOf(el: HTMLElement, v: string): number {
+  const probe = document.createElement('i');
+  probe.style.cssText = `position:absolute;visibility:hidden;font-size:var(${v})`;
+  el.appendChild(probe);
+  const px = parseFloat(getComputedStyle(probe).fontSize) || 0;
+  probe.remove();
+  return px;
+}
+const STEPS = ['--pd-fs-xl', '--pd-fs-lg', '--pd-fs', '--pd-fs-sm'] as const;
+
+// Latin vowels of the 7 languages + Cyrillic а е ё и о у ы э ю я (escaped: the i18n guard)
+const VOWEL =
+  /[aeiouyäöüéèêëàâîïôûùíóúı\u0430\u0435\u0451\u0438\u043e\u0443\u044b\u044d\u044e\u044f]/i;
+/** Soft hyphens at syllable breaks of a long word (as the forge's tiles): a card name breaks
+ *  «медве-жатник» in a 90-px cell, never «медвежатни-к» or out of the cell. */
+function syl(text: string): string {
+  const isV = (ch: string | undefined) => !!ch && VOWEL.test(ch);
+  // a hyphen or a space is a break already: the parts of «Крот-забойщик» stay whole unless long
+  const parts = text.split(/(\s+|-)/);
+  const min = parts.length > 1 ? 9 : 7;
+  return parts
+    .map((w) => {
+      if (w.length < min) return w;
+      let out = '';
+      for (let i = 0; i < w.length; i++) {
+        let j = i;
+        while (j > 0 && !isV(w[j - 1])) j--;
+        let k = i;
+        while (k < w.length && !isV(w[k])) k++;
+        const n = k - j;
+        const ok =
+          !isV(w[i]) &&
+          !/[\u044c\u044a\u0439\u042c\u042a\u0419-]/.test(w[i]) &&
+          j > 0 &&
+          k < w.length &&
+          i >= 2 &&
+          w.length - i >= 3 &&
+          i === (n === 1 ? j : n === 2 ? j + 1 : k - 1);
+        out += (ok ? '­' : '') + w[i];
+      }
+      return out;
+    })
+    .join('');
+}
+
+/** A card name's box: inner width and the two fonts it may use (measured once per layout). */
+type NameFit = { room: number; sm: string; xs: string };
+/** Lines `text` takes in `room` px with breaks only at spaces and after hyphens (∞ if a part
+ *  alone is wider than the room). */
+function lineCount(text: string, font: string, room: number): number {
+  const toks = text.match(/[^\s-]+-?|-|\s+/g) ?? [text];
+  const gap = textW(' ', font);
+  let n = 1;
+  let line = 0;
+  let space = false;
+  for (const tk of toks) {
+    if (/^\s+$/.test(tk)) {
+      space = true;
+      continue;
+    }
+    const w = textW(tk, font);
+    if (w > room) return Infinity;
+    if (line === 0) line = w;
+    else if (line + (space ? gap : 0) + w <= room) line += (space ? gap : 0) + w;
+    else {
+      n++;
+      line = w;
+    }
+    space = false;
+  }
+  return n;
+}
+/** A card name that fits two lines: whole words at the label size, else whole words one step
+ *  smaller, else syllable breaks at the smaller size. → [text, small]. */
+function fitName(name: string, fit: NameFit | null): [string, boolean] {
+  if (!fit || fit.room <= 0) return [syl(name), false];
+  if (lineCount(name, fit.sm, fit.room) <= 2) return [name, false];
+  if (lineCount(name, fit.xs, fit.room) <= 2) return [name, true];
+  return [syl(name), true];
+}
+
+/** Memoised: the camp re-renders every second; `say`, `onSel`, `onTab` from `PetsTab` are stable. */
+export const Nursery = memo(function Nursery({
+  tab,
+  sel,
+  onSel,
+  onTab,
+  say,
+  layout,
+  u,
+}: {
+  tab: 'squad' | 'coll';
+  sel: PetId;
+  onSel: (id: PetId) => void;
+  onTab: (tab: NurTab) => void;
+  say: (text: string) => void;
+  layout: ArmLayout;
+  u: number;
+}) {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
   const setSquad = useFinanceStore((s) => s.prisonSquadSet);
   const pat = useFinanceStore((s) => s.prisonPetPat);
-  const { ff, landscape, scale } = useFormFactor();
-  const stPx = useStatPx();
-  const layout: Layout =
-    ff === 'phone-portrait'
-      ? 'one'
-      : ff === 'phone-landscape'
-        ? 'land'
-        : ff === 'tablet' && !landscape
-          ? 'tall'
-          : 'wide';
-  // Phones: the collection opens in a drawer from the action bar; tablets and desktops show the grid.
-  const drawerMode = layout === 'one' || layout === 'land';
-  // Phone landscape and wide screens: the name plate tops the side column, so the room keeps
-  // the whole stage height (the pet there is limited by the height).
-  const plateSide = layout === 'land' || layout === 'wide';
+  const merge = useFinanceStore((s) => s.prisonPetMerge);
+  const one = layout === 'one';
+  // Phone portrait shows the card on the squad tab only; wider formats beside both lists.
+  const card = !one || tab === 'squad';
   const root = useRef<HTMLDivElement>(null);
+  const dpr = dprNow();
 
   const owned = PETS.filter((d) => p.pets[d.id]).length;
-  const [sel, setSel] = useState<PetId>(
-    () => p.squad[0] ?? PETS.find((d) => p.pets[d.id])?.id ?? PETS[0].id,
-  );
   const [base, setBase] = useState<PetAnim>('idle');
   const [show, setShow] = useState<{ anim: PetAnim; k: number } | null>(null);
   const [joy, setJoy] = useState(0);
   const [xpPop, setXpPop] = useState(0);
   const [sort, setSort] = useState<Sort>('rarity');
   const [filter, setFilter] = useState<Filter>('all');
-  const [pick, setPick] = useState<number | null>(null);
+  /** «Choose for this place» mode, set by an empty place: the collection shows owned pets, a
+   *  card selects, «Взять с собой» puts the pet into THIS place. */
+  const [pickSlot, setPickSlot] = useState<number | null>(null);
   const [info, setInfo] = useState(false);
-  const [drawer, setDrawer] = useState(false);
+  const [replace, setReplace] = useState(false);
   const [animsOpen, setAnimsOpen] = useState(false);
   const animsRef = useRef<HTMLDivElement>(null);
-  const morePress = usePress<HTMLButtonElement>();
 
   const rec = p.pets[sel];
   const slots = Math.min(3, squadSlots(p.rank, p.prestige));
   const here = p.squad.includes(sel);
 
-  // The slots' own order (item 14 of the critic): holes stay where a pet left.
   const [view, setView] = useState<SquadView>(() => padSquad(p.squad, slots));
   let squadView = view;
   if (view.length !== slots || !sameList(view.filter(Boolean), p.squad)) {
@@ -255,15 +298,44 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const select = (id: PetId) => {
     if (id === sel) return;
     selectionChanged();
-    setSel(id);
+    onSel(id);
     setBase('idle');
     setShow(null);
   };
-  // Stable for the memoised cells: they get the id back.
   const selectRef = useRef(select);
   selectRef.current = select;
-  const onPick = useCallback((id: PetId) => selectRef.current(id), []);
+  // Stable for the memoised cards. Phone portrait: a card opens the squad tab with the pet's
+  // details (the handoff's flow); wider formats show the details beside the grid.
+  const oneRef = useRef(one);
+  oneRef.current = one;
+  // Pick mode (an empty place was tapped): the chosen owned pet goes straight into that place.
+  const pickCard = (id: PetId) => {
+    if (pickSlot == null || pickSlot >= slots || squadView[pickSlot]) return;
+    if (!p.pets[id] || squadView.includes(id)) return;
+    primeAudio();
+    take(id, pickSlot);
+    setFilter('all');
+  };
+  const pickRef = useRef(pickCard);
+  pickRef.current = pickCard;
+  const onCard = useCallback(
+    (id: PetId) => {
+      pickRef.current(id);
+      selectRef.current(id);
+      if (oneRef.current) onTab('squad');
+    },
+    [onTab],
+  );
+  const onSlot = useCallback((id: PetId) => selectRef.current(id), []);
 
+  const take = (id: PetId, slot: number) => {
+    const next = [...squadView];
+    next[slot] = id;
+    commitSquad(next);
+    setPickSlot(null);
+    petPat();
+    setJoy((j) => j + 1);
+  };
   const toggleSquad = () => {
     if (!rec) {
       say(t('nursery.hatchFirst'));
@@ -275,21 +347,15 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       commitSquad(squadView.map((x) => (x === sel ? null : x)));
       return;
     }
-    // The first empty slot; squad full — the newcomer takes the last place (as the old card did).
-    const next = [...squadView];
-    const free = next.indexOf(null);
-    next[free >= 0 ? free : next.length - 1] = sel;
-    commitSquad(next);
-    petPat();
-    setJoy((j) => j + 1);
+    const free =
+      pickSlot != null && pickSlot < slots && !squadView[pickSlot]
+        ? pickSlot
+        : squadView.indexOf(null);
+    if (free >= 0) take(sel, free);
+    // A full squad: an explicit choice of who goes home (nothing is replaced silently).
+    else setReplace(true);
   };
-  useAction(
-    ['inspect'],
-    () => {
-      toggleSquad();
-    },
-    { scope: root },
-  );
+  useAction(['inspect'], () => toggleSquad(), { scope: root });
 
   const list = useMemo(() => {
     const ids = PETS.filter((d) =>
@@ -313,26 +379,22 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       squadBonus[k as PetStat] = (squadBonus[k as PetStat] ?? 0) + (v ?? 0);
   }
 
-  // The stage measures its room and takes the biggest crisp pet that fits; the pedestal and the
-  // room depend on the layout only, so another pet never moves anything around it.
-  const u = scale || 2;
-  const dpr = dprNow();
-  const roomRef = useRef<HTMLSpanElement>(null);
-  const room = useBox(roomRef);
-  const ped = pedFor(room.w, room.h, dpr, u);
-  const lift = 4 * ped;
+  // ---- Stage: the room is measured; the pedestal and the pet size follow the room only, so
+  // another pet never moves anything (owner: «чтобы картинка не дёргалась»).
+  const stageRef = useRef<HTMLDivElement>(null);
+  const stage = useBox(stageRef, card);
+  const pb = 17 * u; // pedestal bottom: over the ribbon that covers the stage's lower 15u
+  const pw = Math.max(
+    15,
+    Math.round((Math.min(stage.w * 0.8, (stage.h - pb) * 0.8) * 0.75) / u) | 1,
+  );
+  const ph = Math.max(7, Math.round(pw / 6) | 1);
+  const lift = pb + Math.round(ph / 2) * u;
   const artFor = (id: PetId) => {
     const r = p.pets[id];
-    const s = room.w && room.h ? fitPet(id, room.w, room.h, dpr, lift) : 0;
+    const s = stage.w && stage.h ? fitPet(id, stage.w - 2 * u, stage.h, dpr, lift) : 0;
     return { size: s, src: s ? petArtSrc(id, s, r ? petLook(r) : 0, !r) : '' };
   };
-  // Decode before swap: the stage (art + plate) keeps the pet it shows until the picked one's
-  // strip is decoded. Already decoded (preloaded neighbours) → the same render.
-  // Cold switch (a slow link: the strip isn't decoded 100 ms after the pick): the plate switches
-  // and the pet's 1-KB thumbnail stands on the pedestal until the strip is ready — the right pet
-  // at once instead of the old one for half a second (critic round 2, P1-5).
-  // The pick paints first (selection ring, action bar), the stage and the plate follow as a
-  // deferred render: on the production build at 4× a switch was one ~150-ms task (P2-8).
   const stageSel = useDeferredValue(sel);
   const want = artFor(stageSel);
   const shownRef = useRef<PetId>(stageSel);
@@ -352,7 +414,6 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       window.clearTimeout(late);
     };
   }, [ready, want.src, stageSel]);
-  // A pet is fetched from the press on its slot, not from the click 100–300 ms later.
   const artRef = useRef(artFor);
   artRef.current = artFor;
   const warm = useCallback((id: PetId) => {
@@ -363,10 +424,8 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
     const id = (e.target as Element).closest?.('[data-pet]')?.getAttribute('data-pet');
     if (id && isPetId(id) && id !== sel) warm(id);
   };
-  // Preload the squad and ±3 neighbours of the selection in the collection order, one by one
-  // and after the switch itself has painted.
   useEffect(() => {
-    if (!room.w || !room.h) return undefined;
+    if (!stage.w || !stage.h) return undefined;
     const i = list.findIndex((d) => d.id === sel);
     const ids = new Set<PetId>(p.squad);
     for (let k = -3; k <= 3; k++) if (list[i + k]) ids.add(list[i + k].id);
@@ -383,46 +442,51 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sel, list, p.squad, room.w, room.h]);
+  }, [sel, list, p.squad, stage.w, stage.h]);
 
   const sdef = petOf(stageId);
   const srec = p.pets[stageId];
   const slv = petLevelOf(srec?.xp ?? 0);
+  const sHere = p.squad.includes(stageId);
   const size = stageId === stageSel ? want.size : artFor(stageId).size;
-  // the thumbnail (48 art px) at the biggest whole upscale inside the strip's frame, feet down
   const phBox = PET_PX[stageId]?.box ?? 48;
   const phS = (Math.max(1, Math.floor((size * dpr) / phBox)) * phBox) / dpr;
-  // Slot art: the drawer/grid cell is 26 art px, the squad cells bigger (nursery.css `--slot`).
-  const thumb = 20 * u;
-  const big = (layout === 'land' ? 20 : layout === 'one' ? 22 : 26) * u;
-
+  const snap = (v: number) => Math.round(v * dpr) / dpr;
   const name = t(`pets.${stageId}.name`);
+  // The ribbon: the biggest kit step at which the whole name fits its straight part.
+  const [fonts, setFonts] = useState(0);
+  useEffect(() => {
+    let live = true;
+    document.fonts?.ready.then(() => live && setFonts((x) => x + 1)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const h = stageRef.current?.parentElement?.querySelector<HTMLElement>('.nrs-name > h2');
+    if (!h || !stage.w) return;
+    const cs = getComputedStyle(h);
+    const room = stage.w - 30 * u;
+    const steps = STEPS.map((v) => fsOf(h, v));
+    const s =
+      steps.find((px) => textW(name, `${cs.fontWeight} ${px}px ${cs.fontFamily}`) <= room) ??
+      steps[3];
+    h.style.fontSize = `${s}px`;
+  }, [name, stage.w, u, fonts]);
 
-  const pet = (
+  const petEl = (
     <span
       key={stageId}
-      className="nur-pet"
-      style={
-        {
-          '--ped': `${ped}px`,
-          '--lift': `${lift}px`,
-          // whole screen dots, so the art never lands between pixels
-          '--x': `${Math.round(((room.w - size) / 2) * dpr) / dpr}px`,
-          '--pedx': `${Math.round(((room.w - 56 * ped) / 2) * dpr) / dpr}px`,
-        } as CSSProperties
-      }
+      className="nrs-pet"
+      style={{ left: snap((stage.w - size) / 2), bottom: snap(lift), width: size, height: size }}
     >
       {size > 0 && thumbOnly ? (
         <img
-          className="nur-ph"
+          className="nrs-ph"
           src={petArtSrc(stageId, size, petLook(srec), true)}
           alt=""
           draggable={false}
-          style={{
-            width: phS,
-            height: phS,
-            left: `calc(var(--x) + ${Math.round(((size - phS) / 2) * dpr) / dpr}px)`,
-          }}
+          style={{ width: phS, height: phS, left: snap((size - phS) / 2) }}
         />
       ) : (
         size > 0 && (
@@ -452,22 +516,21 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
     </span>
   );
 
-  // Six framed buttons, always all six (a pet not hatched yet: greyed, a tap says why) — the row
-  // never changes. The word is the tip / aria label. Tablets and desktops: a column beside the
-  // room (the room is limited by its height there). Phones: one ▶ toggle in the room's corner
-  // opens them as a 3 × 2 menu (pitch ≥ 44 px) — the column cost the portrait pet its width.
+  // Six moves (all six always; a pet not hatched yet: greyed, a tap says why) in a 3 × 2 menu
+  // over the stage, opened from the action bar's ▶.
   const animBtns = ANIMS.map((a) => {
     const word = t(`nursery.anim.${a.id}`);
+    const on = !!srec && a.loop && base === a.id && !show;
     return (
-      <Button
+      <PxdButton
         key={a.id}
-        size={drawerMode ? 'md' : 'sm'}
-        icon={a.icon}
-        label={word}
-        className="nur-anim"
+        frame={on ? 'sel' : 'panel'}
+        className="nrs-anim"
         off={!srec}
-        on={srec && a.loop ? base === a.id && !show : undefined}
-        data-autofocus={drawerMode && a.loop && base === a.id && !show ? '' : undefined}
+        aria-label={word}
+        aria-pressed={a.loop ? on : undefined}
+        data-tip={word}
+        data-autofocus={on ? '' : undefined}
         onClick={() => {
           tapLight();
           setAnimsOpen(false);
@@ -480,414 +543,16 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
             setShow(null);
           } else setShow((s) => ({ anim: a.id, k: (s?.k ?? 0) + 1 }));
         }}
-      />
+      >
+        <Icon name={a.icon} />
+        <span>{word}</span>
+      </PxdButton>
     );
   });
-  const anims = drawerMode ? (
-    <>
-      <Button
-        size="sm"
-        icon="play"
-        label={t('nursery.anims')}
-        className="nur-anim-tog"
-        on={animsOpen}
-        aria-expanded={animsOpen}
-        onClick={() => {
-          tapLight();
-          setAnimsOpen((o) => !o);
-        }}
-      />
-      {animsOpen && (
-        <div
-          ref={animsRef}
-          className="nur-anims nur-anims--pop"
-          role="toolbar"
-          aria-label={t('nursery.anims')}
-          data-ui-layer=""
-        >
-          {animBtns}
-        </div>
-      )}
-    </>
-  ) : (
-    <div className="nur-anims" role="toolbar">
-      {animBtns}
-    </div>
-  );
-
-  // Role chips: picture + whole percent, biggest first; the sentence with one decimal is the tip.
-  // At most three, the rest behind «+N» (opens the details) — one row, the plate never grows.
-  const sb = srec ? petBonus(stageId, srec) : {};
-  const ranked = [...sdef.stats].sort(
-    (a, b) => (sb[b] ?? 0) - (sb[a] ?? 0) || STATS.indexOf(a) - STATS.indexOf(b),
-  );
-  const shown = ranked.slice(0, MAX_CHIPS);
-  // «+N» is not a kit button: its press shows on pointerdown by the shared `usePress` handlers.
-  // A narrow plate shows two chips + «+N+1» (nursery.css picks the variant by the row's width).
-  const moreBtn = (n: number, cls: string) => (
-    <button
-      type="button"
-      {...morePress}
-      className={`nur-chip nur-chip--more${cls} px-f`}
-      aria-label={t('nursery.details')}
-      data-tip={t('nursery.details')}
-      onClick={() => {
-        tapLight();
-        setInfo(true);
-      }}
-    >
-      +{n}
-    </button>
-  );
-  const roles = srec ? (
-    <>
-      {shown.map((s, i) => {
-        const full = t(`nursery.role.${s}.text`, { v: pctV(sb[s] ?? 0) });
-        return (
-          <span
-            key={s}
-            className={`nur-chip${i === 2 ? ' nur-chip--3' : ''}`}
-            data-tip={full}
-            aria-label={full}
-          >
-            <StatIcon stat={s} />
-            <b className="px-num">{t('nursery.bonus', { v: pctI(sb[s] ?? 0) })}</b>
-          </span>
-        );
-      })}
-      {shown.length < ranked.length && moreBtn(ranked.length - shown.length, '')}
-      {shown.length === MAX_CHIPS && moreBtn(ranked.length - 2, ' nur-chip--more2')}
-    </>
-  ) : (
-    <span className="nur-chip nur-chip--note">{t('nursery.notYet')}</span>
-  );
-
-  // The plate under the pet: name (one line, sized to fit) + power, rarity pill + gold + level,
-  // the chips and the level bar. Fixed rows — switching pets never changes its height.
-  const xpV = srec ? (slv.need ? slv.into / slv.need : 1) : 0;
-  const xpText = !srec
-    ? ''
-    : !slv.need
-      ? t('nursery.lvMax')
-      : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`;
-  const plate = (
-    <div
-      className="px-dark nur-plate"
-      style={{ ...rc(sdef.rarity), '--len': Math.max(8, name.length) } as CSSProperties}
-    >
-      <div className="nur-plate__top">
-        <span className="nur-plate__nm">
-          <h3 className="nur-plate__name">{name}</h3>
-        </span>
-        <span
-          className={`nur-pow${srec ? '' : ' is-none'}`}
-          data-tip={t('nursery.power')}
-          aria-label={srec ? `${t('nursery.power')} ${fmtNum(petScore(stageId, srec) * 10)}` : ''}
-        >
-          <StatIcon stat="power" />
-          <b className="px-num">{srec ? fmtNum(petScore(stageId, srec) * 10) : ''}</b>
-        </span>
-      </div>
-      <div className="nur-plate__row">
-        <span className="nur-rar">
-          {t(`nursery.rarity.r${sdef.rarity}` as 'nursery.rarity.r0')}
-        </span>
-        {!!srec?.v && (
-          <span
-            className="nur-gold"
-            role="img"
-            aria-label={t('nursery.gold')}
-            data-tip={t('nursery.gold')}
-          >
-            <Badge gold>
-              <Icon name="star" />
-              <span className="nur-gold__w">{t('nursery.gold')}</span>
-            </Badge>
-          </span>
-        )}
-        {srec && (
-          // at the cap only the level: «25 ур. · Предел» didn't fit a 360-px plate beside a
-          // mythic pill; the full bar and its tip say «Предел»
-          <span className="nur-lv px-num">
-            {slv.need
-              ? t('nursery.lvPct', { n: slv.level, p: Math.floor(xpV * 100) })
-              : t('common.level', { n: slv.level })}
-          </span>
-        )}
-      </div>
-      <div
-        className={`nur-plate__roles${shown.some((s) => pctI(sb[s] ?? 0) >= 100) ? ' is-big' : ''}`}
-      >
-        {roles}
-      </div>
-      {/* a slim bar on every format (round 4: the level row says «25 ур. · 41 %», and the
-          labelled bar cost the wide collection its second row); «into / need» is its tip and
-          the details sheet's bar */}
-      <span className="nur-xp" data-tip={xpText || undefined} aria-label={xpText || undefined}>
-        <Bar value={xpV} height={4} />
-      </span>
-    </div>
-  );
-
-  const xp = xpPop > 0 && (
-    <b key={xpPop} className="nur-stage__xp">
-      {t('nursery.patXp', { n: PAT_XP })}
-    </b>
-  );
-
-  // The soft aura and rotating rays of legendary/mythic pets are hidden on the stage (no vector
-  // glow next to pixel art); rarity shows on the plate's pill and name.
-  const showcase = (
-    <section className={`nur-show nur-show--r${sdef.rarity}`} style={rc(sdef.rarity)}>
-      <Panel material="stone" stage className="nur-stage">
-        <span ref={roomRef} className="nur-room">
-          {pet}
-        </span>
-        {anims}
-        {!plateSide && plate}
-        {xp}
-      </Panel>
-    </section>
-  );
-
-  // Squad: three BIG cells, then all six stats in a fixed grid (a stat the squad lacks keeps its
-  // box: a dim picture and «—»). On phone landscape the grid stands beside the cells.
-  const squad = (
-    <section className="nur-squad" aria-label={t('nursery.squad')}>
-      <div className="nur-squad__head">
-        <span className="nur-squad__t" data-tip={plateSide ? t('nursery.squadHint') : undefined}>
-          <Heading className="nur-squad__title">{t('nursery.squad')}</Heading>
-        </span>
-        {!plateSide && <span className="nur-squad__hint">{t('nursery.squadHint')}</span>}
-      </div>
-      <div className="nur-squad__row">
-        {[0, 1, 2].map((i) => {
-          if (i >= slots) {
-            // What opens it is written in the cell; a tap says it too.
-            const why =
-              i === 1
-                ? t('nursery.lockRank', { rank: rankLetter(SQUAD_RANK2) })
-                : t('nursery.lockPrestige');
-            return (
-              <Slot
-                key={i}
-                empty
-                className="nur-squad__lock"
-                aria-disabled
-                aria-label={why}
-                tip={why}
-                onClick={() => {
-                  tapLight();
-                  say(why);
-                }}
-              >
-                <Icon name="lock" />
-                <span className="nur-squad__why">{why}</span>
-              </Slot>
-            );
-          }
-          const id = squadView[i];
-          const r = id ? p.pets[id] : undefined;
-          if (!id || !r)
-            return (
-              <Slot
-                key={i}
-                empty
-                className="nur-squad__add"
-                aria-label={t('nursery.pick')}
-                tip={t('nursery.pick')}
-                onClick={() => {
-                  tapLight();
-                  if (!owned) say(t('nursery.hatchFirst'));
-                  else setPick(i);
-                }}
-              >
-                <Icon name="plus" />
-              </Slot>
-            );
-          return (
-            <SquadSlot key={i} id={id} rec={r} selected={sel === id} size={big} onPick={onPick} />
-          );
-        })}
-      </div>
-      <div className="nur-squad__sum">
-        {STATS.map((k) => {
-          const v = squadBonus[k] ?? 0;
-          const full = v ? t(`nursery.role.${k}.text`, { v: pctV(v) }) : t(`nursery.stat.${k}`);
-          return (
-            <span
-              key={k}
-              className={`nur-sum${v ? '' : ' is-none'}`}
-              data-tip={full}
-              aria-label={v ? full : `${t(`nursery.stat.${k}`)} —`}
-            >
-              <StatIcon stat={k} dim={!v} />
-              <b className="px-num">{v ? t('nursery.bonus', { v: pctI(v) }) : '—'}</b>
-            </span>
-          );
-        })}
-      </div>
-    </section>
-  );
-
-  const cells = list.map((d) => (
-    <NurCell
-      key={d.id}
-      id={d.id}
-      rec={p.pets[d.id]}
-      selected={sel === d.id}
-      along={p.squad.includes(d.id)}
-      size={thumb}
-      onPick={onPick}
-    />
-  ));
-
-  const collHead = (
-    <div className="nur-coll__head">
-      <Heading>
-        {t('nursery.collection')}{' '}
-        <span className="nur-coll__count px-num">
-          {owned}/{PETS.length}
-        </span>
-      </Heading>
-      {zoo > 0 && (
-        <span
-          className="nur-chip nur-chip--sm"
-          data-tip={t('nursery.zoo', { v: pctV(zoo) })}
-          aria-label={t('nursery.zoo', { v: pctV(zoo) })}
-        >
-          <StatIcon stat="sell" />
-          <b className="px-num">{t('nursery.bonus', { v: pctI(zoo) })}</b>
-        </span>
-      )}
-      {/* Tablets / desktop: the inline head on one row — icons only, the value in the tip and the
-          label (critic round 3, item 3: the head's second row cost a row of cells); a filter
-          other than «all» shows as a pressed toggle. The drawer keeps the words. */}
-      <span className="nur-tools">
-        <Button
-          size="sm"
-          icon="sort"
-          label={drawerMode ? undefined : `${t('nursery.sortLabel')}: ${t(`nursery.sort.${sort}`)}`}
-          aria-label={drawerMode ? t('nursery.sortLabel') : undefined}
-          onClick={() => {
-            tapLight();
-            setSort((s) => SORTS[(SORTS.indexOf(s) + 1) % SORTS.length]);
-          }}
-        >
-          {drawerMode ? t(`nursery.sort.${sort}`) : null}
-        </Button>
-        <Button
-          size="sm"
-          icon="filter"
-          on={!drawerMode && filter !== 'all'}
-          label={
-            drawerMode ? undefined : `${t('nursery.filterLabel')}: ${t(`nursery.filter.${filter}`)}`
-          }
-          aria-label={drawerMode ? t('nursery.filterLabel') : undefined}
-          onClick={() => {
-            tapLight();
-            setFilter((f) => FILTERS[(FILTERS.indexOf(f) + 1) % FILTERS.length]);
-          }}
-        >
-          {drawerMode ? t(`nursery.filter.${filter}`) : null}
-        </Button>
-      </span>
-    </div>
-  );
-
-  // Phones: the grid button sits in the action bar and opens the drawer.
-  const openBtn = (
-    <Button
-      className="nur-strip__open"
-      icon="grid"
-      aria-label={t('nursery.collection')}
-      data-tip={t('nursery.collection')}
-      aria-expanded={drawer}
-      onClick={() => {
-        tapLight();
-        setDrawer(true);
-      }}
-    >
-      <span className="px-num">
-        {owned}/{PETS.length}
-      </span>
-    </Button>
-  );
-  const collection = drawerMode ? null : (
-    <section className="nur-coll">
-      {collHead}
-      <Grid className="nur-grid">{cells}</Grid>
-    </section>
-  );
-
-  // The drawer covers the side area only (squad, actions): the stage stays in view and shows
-  // each pet as it is picked. Esc / Back / pad B closes it (escape stack).
-  const drawerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!drawer) return;
-    const host = root.current;
-    const off = registerEscape(() => setDrawer(false));
-    const dev = getInputDevice();
-    if (dev === 'keyboard' || dev === 'gamepad') {
-      const el = drawerRef.current?.querySelector<HTMLElement>('[data-autofocus]');
-      if (el) focusEl(el);
-    }
-    return () => {
-      off();
-      const d = getInputDevice();
-      const open = host?.querySelector<HTMLElement>('.nur-strip__open');
-      if ((d === 'keyboard' || d === 'gamepad') && open) focusEl(open);
-    };
-  }, [drawer]);
-  // Phone portrait: the drawer reaches up to the room's bottom edge (over the plate), so the
-  // pet stays in view and all 18 cells fit (critic round 3, item 3: 5 → 18 on 390 × 844).
-  useLayoutEffect(() => {
-    const d = drawerRef.current;
-    const r = roomRef.current;
-    const show = r?.closest('.nur-show');
-    if (!drawer || layout !== 'one' || !d || !r || !show) return;
-    const top = r.getBoundingClientRect().bottom - show.getBoundingClientRect().top;
-    d.style.setProperty('--nur-dtop', `${Math.round(top * dpr) / dpr}px`);
-  }, [drawer, layout, room.w, room.h, dpr]);
-  // The drawer's first visible row is fetched one by one once it has painted: those are the
-  // pets the next tap picks.
-  useEffect(() => {
-    if (!drawer) return undefined;
-    let live = true;
-    const timer = window.setTimeout(async () => {
-      const box = drawerRef.current?.querySelector('.nur-grid');
-      if (!box) return;
-      const top = box.getBoundingClientRect().top;
-      const cells = [...box.querySelectorAll<HTMLElement>('[data-pet]')].filter(
-        (c) => c.getBoundingClientRect().top >= top - 1,
-      );
-      const row = cells.length ? cells[0].getBoundingClientRect().top : 0;
-      for (const c of cells) {
-        if (!live || c.getBoundingClientRect().top > row + 1) return;
-        const id = c.dataset.pet;
-        if (!id || !isPetId(id)) continue;
-        const a = artRef.current(id);
-        if (a.src) await decodeArt(a.src);
-      }
-    }, 150);
-    return () => {
-      live = false;
-      window.clearTimeout(timer);
-    };
-  }, [drawer]);
-  useEffect(() => {
-    if (!drawerMode) {
-      setDrawer(false);
-      setAnimsOpen(false);
-    }
-  }, [drawerMode]);
-
-  // The phone anims menu: Esc / Back / pad B and a tap outside close it; keyboard and pad focus
-  // go into it (the current loop) and back to the toggle.
   useEffect(() => {
     if (!animsOpen) return undefined;
     const host = root.current;
-    const tog = () => host?.querySelector<HTMLElement>('.nur-anim-tog') ?? null;
+    const tog = () => host?.querySelector<HTMLElement>('.nrs-bar__anims') ?? null;
     const off = registerEscape(() => setAnimsOpen(false));
     const dev = getInputDevice();
     if (dev === 'keyboard' || dev === 'gamepad') {
@@ -911,115 +576,531 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       if ((d === 'keyboard' || d === 'gamepad') && el) focusEl(el);
     };
   }, [animsOpen]);
+  useEffect(() => {
+    if (!card) setAnimsOpen(false);
+  }, [card]);
 
-  const acts = (
-    <div className="nur-acts">
-      {drawerMode && openBtn}
-      <Button
-        kind={here ? 'secondary' : 'primary'}
-        wide
-        off={!rec}
-        hint="inspect"
-        onClick={toggleSquad}
-      >
-        {here ? t('nursery.leave') : t('nursery.take')}
-      </Button>
-      <span className="nur-acts__info">
-        <Button
-          icon="info"
-          label={t('nursery.details')}
-          onClick={() => {
-            tapLight();
-            setInfo(true);
-          }}
-        />
-        {canMerge(rec) && (
-          <span className="px-slot__dot">
-            <Badge>!</Badge>
-          </span>
+  // ---- The card: stage (pet, pedestal, rarity / power / «в отряде» marks), name ribbon --------
+  const showEl = card && (
+    <section className="nrs-show" style={rc(sdef.rarity)}>
+      <div ref={stageRef} className="nrs-stage pxd-f pxd-f--oct">
+        <i className="nrs-glow" />
+        {size > 0 && (
+          <PxdPedestal
+            w={pw}
+            className="nrs-ped"
+            style={{ left: Math.round((stage.w - pw * u) / 2 / u) * u, bottom: pb }}
+          />
         )}
-      </span>
+        {petEl}
+        <span className="nrs-marks">
+          <span className="nrs-marks__l">
+            <span className="nrs-rar pxd-chip">
+              <i className="nrs-dot" aria-hidden="true" />
+              {t(`nursery.rarity.r${sdef.rarity}` as 'nursery.rarity.r0')}
+              {!!srec?.v && (
+                <span className="nrs-gold" role="img" aria-label={t('nursery.gold')}>
+                  <Icon name="star" />
+                </span>
+              )}
+            </span>
+            <span
+              className={`nrs-pow pxd-chip${srec ? '' : ' is-hidden'}`}
+              data-tip={t('nursery.powerTip')}
+              aria-label={`${t('nursery.power')} ${srec ? fmtNum(petScore(stageId, srec) * 10) : ''}`}
+            >
+              <StatIcon stat="power" />
+              <b className="px-num">{srec ? fmtNum(petScore(stageId, srec) * 10) : '0'}</b>
+            </span>
+          </span>
+          {sHere && (
+            <span className="nrs-along pxd-chip">
+              <Icon name="check" />
+              {t('nursery.along')}
+            </span>
+          )}
+        </span>
+        {xpPop > 0 && (
+          <b key={xpPop} className="nrs-xp">
+            {t('nursery.patXp', { n: PAT_XP })}
+          </b>
+        )}
+        {animsOpen && (
+          <div
+            ref={animsRef}
+            className="nrs-anims pxd-f pxd-f--panel"
+            role="toolbar"
+            aria-label={t('nursery.anims')}
+            data-ui-layer=""
+          >
+            {animBtns}
+          </div>
+        )}
+      </div>
+      <PxdRibbon
+        className="nrs-name"
+        style={{ '--nlen': Math.max(8, name.length) } as CSSProperties}
+      >
+        {name}
+      </PxdRibbon>
+    </section>
+  );
+
+  // ---- Four square facts: power · bonus · level · copies to gold ------------------------------
+  const sb = srec ? petBonus(stageId, srec) : {};
+  const roles = [...sdef.stats].sort(
+    (a, b) => (sb[b] ?? 0) - (sb[a] ?? 0) || STATS.indexOf(a) - STATS.indexOf(b),
+  );
+  const roleTip = roles
+    .map((s) =>
+      srec ? t(`nursery.role.${s}.text`, { v: pctV(sb[s] ?? 0) }) : t(`nursery.stat.${s}`),
+    )
+    .join(' · ');
+  const need = srec && srec.v < MERGE_NEED.length ? MERGE_NEED[srec.v] : 0;
+  const mergeOk = canMerge(srec);
+  const xpText = !srec
+    ? '—'
+    : !slv.need
+      ? t('nursery.lvMax')
+      : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`;
+  const openInfo = () => {
+    tapLight();
+    setInfo(true);
+  };
+  const doMerge = () => {
+    primeAudio();
+    if (merge(stageId)) {
+      petMerge();
+      notifySuccess();
+      flashFrame('big');
+      burstConfetti(60, ['#ffd24a', '#fff3b0', '#ffffff']);
+      setJoy((j) => j + 1);
+    }
+  };
+  const statsEl = card && (
+    <div className="nrs-stats">
+      <PxdButton
+        className="nrs-stat is-bonus"
+        data-tip={roleTip}
+        aria-label={`${roleTip}. ${t('nursery.details')}`}
+        onClick={openInfo}
+      >
+        <span className="nrs-roles">
+          {roles.slice(0, roles.length > 2 ? 1 : 2).map((s) => (
+            <span key={s} className="nrs-role">
+              <StatIcon stat={s} dim={!srec} />
+              <b className="px-num">{srec ? t('nursery.bonus', { v: pctV(sb[s] ?? 0) }) : '—'}</b>
+            </span>
+          ))}
+          {roles.length > 2 && <b className="nrs-more">+{roles.length - 1}</b>}
+        </span>
+        <span className="nrs-stat__l">
+          {roles.length === 1 ? t(`nursery.stat.${roles[0]}`) : t('nursery.bonusL')}
+        </span>
+      </PxdButton>
+      <div
+        className="nrs-stat pxd-f pxd-f--panel is-level"
+        aria-label={`${t('common.level', { n: slv.level })} · ${xpText}`}
+      >
+        <b className="nrs-stat__n">{srec ? t('common.level', { n: slv.level }) : '—'}</b>
+        <PxdPips n={10} on={srec ? (slv.need ? Math.floor((10 * slv.into) / slv.need) : 10) : 0} />
+        <span className="nrs-stat__l px-num">{xpText}</span>
+      </div>
+      <PxdButton
+        frame={mergeOk ? 'act' : 'panel'}
+        className={`nrs-stat is-copies${mergeOk ? ' is-merge' : ''}`}
+        aria-label={
+          mergeOk
+            ? t('nursery.makeGold')
+            : srec?.v
+              ? t('nursery.gold')
+              : `${t('nursery.copies')} ${srec ? Math.min(srec.dup, need) : 0} / ${need || MERGE_NEED[0]}`
+        }
+        onClick={() => {
+          if (mergeOk) doMerge();
+          else openInfo();
+        }}
+      >
+        {srec?.v ? (
+          <>
+            <span className="nrs-stat__star">
+              <Icon name="star" />
+            </span>
+            <span className="nrs-stat__l">{t('nursery.gold')}</span>
+          </>
+        ) : (
+          <>
+            <b className="nrs-stat__n px-num">
+              {srec ? Math.min(srec.dup, need) : 0} / {need || MERGE_NEED[0]}
+            </b>
+            <PxdPips
+              n={need || MERGE_NEED[0]}
+              on={srec ? Math.min(srec.dup, need) : 0}
+              ok={mergeOk}
+            />
+            <span className="nrs-stat__l">
+              {mergeOk ? t('nursery.makeGold') : t('nursery.toGold')}
+            </span>
+          </>
+        )}
+      </PxdButton>
     </div>
   );
 
-  return (
-    <div
-      ref={root}
-      className={`px nur nur--${layout}`}
-      style={{ '--st': stPx } as CSSProperties}
-      onPointerDownCapture={warmFrom}
-    >
-      {showcase}
-      <div className="nur-side">
-        {plateSide && plate}
-        {layout === 'wide' ? (
-          // the plate on top and the action bar at the bottom stay put; the squad and the
-          // collection scroll between them as one list (a grid-only scroll was 0.2–1 row high)
-          <div className="nur-side__mid">
-            {squad}
-            {collection}
-          </div>
-        ) : (
-          <>
-            {squad}
-            {collection}
-          </>
-        )}
-        {acts}
+  // ---- Action bar: moves · take / leave · details ----------------------------------------------
+  const barEl = card && (
+    <div className="nrs-bar">
+      <PxdButton
+        className="nrs-bar__sq nrs-bar__anims"
+        aria-label={t('nursery.anims')}
+        data-tip={t('nursery.anims')}
+        aria-expanded={animsOpen}
+        frame={animsOpen ? 'sel' : 'panel'}
+        onClick={() => {
+          tapLight();
+          setAnimsOpen((o) => !o);
+        }}
+      >
+        <Icon name="play" />
+      </PxdButton>
+      <PxdButton
+        frame="act"
+        off={!rec}
+        hint="inspect"
+        className={`nrs-cta${here ? ' is-leave' : ''}`}
+        onClick={toggleSquad}
+      >
+        <span>{here ? t('nursery.leave') : t('nursery.take')}</span>
+      </PxdButton>
+      <PxdButton
+        className="nrs-bar__sq"
+        aria-label={t('nursery.details')}
+        data-tip={t('nursery.details')}
+        onClick={openInfo}
+      >
+        <Icon name="info" />
+        {mergeOk && <em className="nrs-badge">!</em>}
+      </PxdButton>
+    </div>
+  );
+
+  // ---- What the whole squad gives: all six stats in a fixed grid (a missing one keeps its cell) --
+  const sumEl = (
+    <div className="nrs-sum" role="group" aria-label={t('nursery.squadHint')}>
+      {STATS.map((k) => {
+        const v = squadBonus[k] ?? 0;
+        const full = v ? t(`nursery.role.${k}.text`, { v: pctV(v) }) : t(`nursery.stat.${k}`);
+        return (
+          <span
+            key={k}
+            className={`nrs-sum__c pxd-f pxd-f--well${v ? '' : ' is-none'}`}
+            data-tip={full}
+            aria-label={v ? full : `${t(`nursery.stat.${k}`)} —`}
+          >
+            <StatIcon stat={k} dim={!v} />
+            <b className="px-num">{v ? t('nursery.bonus', { v: pctV(v) }) : '—'}</b>
+          </span>
+        );
+      })}
+    </div>
+  );
+
+  // ---- Squad places --------------------------------------------------------------------------
+  // a wide screen stacks the three places in the list column: the art follows the measured place
+  const slotsRef = useRef<HTMLDivElement>(null);
+  const sq = useBox(slotsRef, tab === 'squad');
+  const stacked = layout === 'three' && sq.h > sq.w * 1.5;
+  const big = stacked
+    ? thumbPx(Math.max(34 * u, Math.min(sq.w, (sq.h - 8 * u) / 3) * 0.8), dpr)
+    : thumbPx(one ? 26 * u : 34 * u, dpr);
+  const squadEl = (
+    <section className="nrs-squad" aria-label={t('nursery.squad')}>
+      <div className="nrs-h">
+        <h2>{t('nursery.squadHint')}</h2>
+        <span className="px-num">{t('eggs.someOf', { a: p.squad.length, b: slots })}</span>
       </div>
-      {drawer && drawerMode && (
-        <div
-          ref={drawerRef}
-          className="px-panel px-panel--obsidian pxk-frame-obsidian nur-drawer"
-          data-ui-layer=""
-          role="dialog"
-          aria-label={t('nursery.collection')}
-        >
-          {collHead}
-          <Button
-            kind="danger"
-            size="sm"
-            icon="down"
-            label={t('common.close')}
-            className="nur-drawer__close"
+      <div ref={slotsRef} className="nrs-slots">
+        {[0, 1, 2].map((i) => {
+          if (i >= slots) {
+            const why =
+              i === 1
+                ? t('nursery.lockRank', { rank: rankLetter(SQUAD_RANK2) })
+                : t('nursery.lockPrestige');
+            const tip =
+              i === 1
+                ? t('nursery.lockRankTip', { rank: rankLetter(SQUAD_RANK2) })
+                : t('nursery.lockPrestigeTip');
+            return (
+              <PxdButton
+                key={i}
+                frame="well"
+                className="nrs-slot is-lock"
+                off
+                aria-label={tip}
+                data-tip={tip}
+                onClick={() => {
+                  tapLight();
+                  say(tip);
+                }}
+              >
+                <Icon name="lock" />
+                <span>{why}</span>
+              </PxdButton>
+            );
+          }
+          const id = squadView[i];
+          const r = id ? p.pets[id] : undefined;
+          if (!id || !r)
+            return (
+              <PxdButton
+                key={i}
+                frame={pickSlot === i ? 'sel' : 'well'}
+                className="nrs-slot is-add"
+                aria-label={t('nursery.pick')}
+                data-tip={t('nursery.pick')}
+                onClick={() => {
+                  tapLight();
+                  if (!owned) {
+                    say(t('nursery.hatchFirst'));
+                    return;
+                  }
+                  setPickSlot(i);
+                  setFilter('owned');
+                  onTab('coll');
+                }}
+              >
+                <Icon name="plus" />
+              </PxdButton>
+            );
+          return (
+            <SquadSlot key={i} id={id} rec={r} selected={sel === id} size={big} onPick={onSlot} />
+          );
+        })}
+      </div>
+      {layout === 'two' && sumEl}
+    </section>
+  );
+
+  // Fit the grid: the name box (→ `fitName` on every card) and the rarity words — one size for
+  // all cards, then a smaller one, then the dot alone (the word stays in the aria-label).
+  const [nameFit, setNameFit] = useState<NameFit | null>(null);
+  const gridKey = list.map((d) => d.id).join();
+  useLayoutEffect(() => {
+    const grid = root.current?.querySelector<HTMLElement>('.nrs-grid');
+    if (!grid) return;
+    const fit = () => {
+      const nm = grid.querySelector<HTMLElement>('.nrs-card__nm');
+      if (nm) {
+        const cs = getComputedStyle(nm);
+        const f = (v: string) => `${cs.fontWeight} ${fsOf(nm, v)}px ${cs.fontFamily}`;
+        const next = { room: nm.clientWidth, sm: f('--pd-fs-sm'), xs: f('--pd-fs-xs') };
+        setNameFit((o) =>
+          o && o.room === next.room && o.sm === next.sm && o.xs === next.xs ? o : next,
+        );
+      }
+      const rars = [...grid.querySelectorAll<HTMLElement>('.nrs-card__rar')];
+      const over = () => rars.some((r) => r.scrollWidth > r.clientWidth + 0.5);
+      grid.classList.remove('is-rar-sm', 'is-rar-dot');
+      if (over()) grid.classList.add('is-rar-sm');
+      if (over()) grid.classList.add('is-rar-dot');
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [tab, layout, fonts, gridKey, t]);
+  // a name that needs three lines even with syllable breaks («Panzerknacker-Waschbär» at 320 px):
+  // every card's name box takes three small lines, so the rows stay equal
+  useLayoutEffect(() => {
+    const grid = root.current?.querySelector<HTMLElement>('.nrs-grid');
+    if (!grid) return;
+    grid.classList.remove('is-3l');
+    const over = [...grid.querySelectorAll<HTMLElement>('.nrs-card__nm')].some(
+      (n) => n.scrollHeight > n.clientHeight + 1,
+    );
+    grid.classList.toggle('is-3l', over);
+  }, [nameFit, tab, layout, gridKey, t]);
+
+  // ---- Collection ------------------------------------------------------------------------------
+  const cardArt = thumbPx(one ? 28 * u : 24 * u, dpr);
+  const zooText = `${t('nursery.zooL')}: ${t('nursery.zoo', { v: pctV(zoo) })}`;
+  const collEl = (
+    <section className="nrs-coll" aria-label={t('nursery.collection')}>
+      <div className="nrs-coll__head">
+        <div className="nrs-h">
+          <h2>
+            {t('nursery.collection')}{' '}
+            <span className="px-num">{t('eggs.someOf', { a: owned, b: PETS.length })}</span>
+          </h2>
+        </div>
+        {pickSlot != null ? (
+          <div className="nrs-pickbar" role="status">
+            <span>{t('nursery.pickHint')}</span>
+            <PxdButton
+              className="nrs-pickbar__x"
+              aria-label={t('common.cancel')}
+              onClick={() => {
+                tapLight();
+                setPickSlot(null);
+                setFilter('all');
+              }}
+            >
+              <Icon name="x" />
+            </PxdButton>
+          </div>
+        ) : null}
+        <div className="nrs-tools">
+          <PxdButton
+            className="nrs-tool"
+            aria-label={`${t('nursery.filterLabel')}: ${t(`nursery.filter.${filter}`)}`}
             onClick={() => {
               tapLight();
-              setDrawer(false);
+              setFilter((f) => FILTERS[(FILTERS.indexOf(f) + 1) % FILTERS.length]);
             }}
+          >
+            <Icon name="filter" />
+            <span className="nrs-tool__k">{t('nursery.filterLabel')}</span>
+            <b>{t(`nursery.filter.${filter}`)}</b>
+          </PxdButton>
+          <PxdButton
+            className="nrs-tool"
+            aria-label={`${t('nursery.sortLabel')}: ${t(`nursery.sort.${sort}`)}`}
+            onClick={() => {
+              tapLight();
+              setSort((s) => SORTS[(SORTS.indexOf(s) + 1) % SORTS.length]);
+            }}
+          >
+            <Icon name="sort" />
+            <span className="nrs-tool__k">{t('nursery.sortLabel')}</span>
+            <b>{t(`nursery.sort.${sort}`)}</b>
+          </PxdButton>
+          {/* the collection bonus: a tile like its neighbours, the sentence on tap (touch has no tips) */}
+          <PxdButton
+            frame="well"
+            className={`nrs-tool nrs-zoo${zoo > 0 ? '' : ' is-none'}`}
+            data-tip={zooText}
+            aria-label={zooText}
+            onClick={() => {
+              tapLight();
+              say(zooText);
+            }}
+          >
+            <StatIcon stat="sell" />
+            <b className="px-num">{t('nursery.bonus', { v: pctV(zoo) })}</b>
+          </PxdButton>
+        </div>
+      </div>
+      <div className="nrs-grid">
+        {list.map((d) => (
+          <NurCard
+            key={d.id}
+            id={d.id}
+            rec={p.pets[d.id]}
+            selected={sel === d.id}
+            along={p.squad.includes(d.id)}
+            size={cardArt}
+            fit={nameFit}
+            onPick={onCard}
           />
-          <Grid className="nur-grid">{cells}</Grid>
+        ))}
+      </div>
+    </section>
+  );
+
+  // Fit: the filter / sort keys and the level tile's «into / need» go when they don't fit.
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const tools = el.querySelector<HTMLElement>('.nrs-tools');
+    if (tools) {
+      // key words go, then the icons, then the value takes the small size
+      tools.classList.remove('is-tight', 'is-tight2', 'is-tight3');
+      const over = () => [...tools.children].some((b) => b.scrollWidth > b.clientWidth + 0.5);
+      for (const c of ['is-tight', 'is-tight2', 'is-tight3']) if (over()) tools.classList.add(c);
+    }
+    const lv = el.querySelector<HTMLElement>('.nrs-stat.is-level');
+    const lvL = lv?.querySelector<HTMLElement>('.nrs-stat__l');
+    if (lv && lvL) {
+      lv.classList.remove('is-tight');
+      lv.classList.toggle(
+        'is-tight',
+        lvL.scrollWidth > lvL.clientWidth + 0.5 ||
+          lvL.scrollHeight > lvL.clientHeight + 1.5 ||
+          lv.scrollWidth > lv.clientWidth + 0.5,
+      );
+    }
+  }, [tab, filter, sort, xpText, stage.w, fonts, layout, t, pickSlot, zoo]);
+
+  return (
+    <div ref={root} className="nrs-nur" onPointerDownCapture={warmFrom}>
+      {tab === 'squad' ? squadEl : collEl}
+      {card && (
+        <div className="nrs-main">
+          {showEl}
+          {statsEl}
+        </div>
+      )}
+      {card && (
+        <div className="nrs-side">
+          {layout === 'three' && sumEl}
+          {barEl}
         </div>
       )}
       {info && (
-        <Modal title={t(`pets.${sel}.name`)} sheet onClose={() => setInfo(false)}>
-          <PetInfo id={sel} xp onJoy={() => setJoy((j) => j + 1)} />
-        </Modal>
+        <PxdSheet
+          title={t(`pets.${sel}.name`)}
+          sub={t(`nursery.rarity.r${petOf(sel).rarity}` as 'nursery.rarity.r0')}
+          closeLabel={t('common.close')}
+          width={200}
+          className="nrs-sheet"
+          onClose={() => setInfo(false)}
+        >
+          <PetInfo id={sel} onJoy={() => setJoy((j) => j + 1)} />
+        </PxdSheet>
       )}
-      {pick !== null && (
-        <SquadPick
-          thumb={thumb}
-          onPicked={(id) => {
-            const next = [...squadView];
-            next[pick] = id;
-            commitSquad(next);
-            setSel(id);
-            setJoy((j) => j + 1);
-          }}
-          onClose={() => setPick(null)}
-        />
+      {replace && (
+        <PxdSheet
+          title={t('nursery.replaceTitle')}
+          sub={t('nursery.replaceHint', { name: t(`pets.${sel}.name`) })}
+          closeLabel={t('common.close')}
+          width={200}
+          className="nrs-sheet"
+          onClose={() => setReplace(false)}
+        >
+          <div className="nrs-rep">
+            {squadView.map((id, i) =>
+              id ? (
+                <PxdButton
+                  key={id}
+                  className="nrs-rep__b"
+                  data-autofocus={i === squadView.length - 1 ? '' : undefined}
+                  style={rc(petOf(id).rarity)}
+                  onClick={() => {
+                    setReplace(false);
+                    take(sel, i);
+                  }}
+                >
+                  <PetArt id={id} size={thumbPx(24 * u, dpr)} v={petLook(p.pets[id])} still />
+                  <b>{t(`pets.${id}.name`)}</b>
+                  <small>{t('nursery.leave')}</small>
+                </PxdButton>
+              ) : null,
+            )}
+          </div>
+        </PxdSheet>
       )}
     </div>
   );
 });
 
-/** A collection cell — memoised: a switch re-renders the two cells whose selection changed, not
- *  all eighteen (the worst frame of a switch was 220–292 ms at 4×). The tip is built on demand. */
-const NurCell = memo(function NurCell({
+/** A collection card — memoised: a switch re-renders the two cards whose selection changed. */
+const NurCard = memo(function NurCard({
   id,
   rec,
   selected,
   along,
   size,
+  fit,
   onPick,
 }: {
   id: PetId;
@@ -1027,32 +1108,57 @@ const NurCell = memo(function NurCell({
   selected: boolean;
   along: boolean;
   size: number;
+  fit: NameFit | null;
   onPick: (id: PetId) => void;
 }) {
   const t = useT();
   const d = petOf(id);
+  const nm = rec ? t(`pets.${id}.name`) : t('nursery.unknown');
+  const [nmText, nmSmall] = useMemo(() => fitName(nm, fit), [nm, fit]);
+  const rar = t(`nursery.rarity.r${d.rarity}` as 'nursery.rarity.r0');
   return (
-    <Slot
-      rarity={d.rarity}
-      locked={!rec}
-      selected={selected}
-      count={rec ? petLevelOf(rec.xp).level : undefined}
-      corner={rec?.v ? '★' : undefined}
-      dot={canMerge(rec) ? '!' : undefined}
-      data-autofocus={selected ? '' : undefined}
+    <PxdButton
+      frame={selected ? 'sel' : 'panel'}
+      className={`nrs-card${rec ? '' : ' is-missing'}`}
+      style={rc(d.rarity)}
       data-pet={id}
-      aria-label={rec ? t(`pets.${id}.name`) : t('nursery.unknown')}
-      tip={() => <SlotTip id={id} rec={rec} />}
-      onClick={() => onPick(id)}
-      onFocus={() => onPick(id)}
+      data-autofocus={selected ? '' : undefined}
+      aria-label={`${nm}, ${rar}${rec ? `, ${t('common.level', { n: petLevelOf(rec.xp).level })}` : ''}${along ? `, ${t('nursery.along')}` : ''}`}
+      aria-pressed={selected}
+      onClick={(e) => {
+        // a second tap on the selected card does nothing on touch; keys always act
+        if (selected && !fromKeys(e)) return;
+        onPick(id);
+      }}
     >
-      <PetArt id={id} size={size} v={petLook(rec)} ghost={!rec} still />
-      {along && <Icon name="paw" className="nur-along" />}
-    </Slot>
+      <span className="nrs-card__art">
+        <PetArt id={id} size={size} v={petLook(rec)} ghost={!rec} still />
+        {!rec && <Icon name="lock" className="nrs-card__lock" />}
+      </span>
+      <b className={`nrs-card__nm${nmSmall ? ' is-small' : ''}`}>{nmText}</b>
+      <span className="nrs-card__rar">
+        <i className="nrs-dot" aria-hidden="true" />
+        <span>{rar}</span>
+      </span>
+      <span className="nrs-card__lv px-num">
+        {rec ? t('common.level', { n: petLevelOf(rec.xp).level }) : ' '}
+      </span>
+      {along && (
+        <em className="nrs-card__tick" aria-hidden="true">
+          <Icon name="check" />
+        </em>
+      )}
+      {!!rec?.v && (
+        <em className="nrs-card__gold" aria-hidden="true">
+          <Icon name="star" />
+        </em>
+      )}
+      {canMerge(rec) && <em className="nrs-badge">!</em>}
+    </PxdButton>
   );
 });
 
-/** A filled squad slot (memoised like the cells). */
+/** A filled squad place (memoised like the cards). */
 const SquadSlot = memo(function SquadSlot({
   id,
   rec,
@@ -1068,66 +1174,30 @@ const SquadSlot = memo(function SquadSlot({
 }) {
   const t = useT();
   return (
-    <Slot
-      rarity={petOf(id).rarity}
-      selected={selected}
-      count={petLevelOf(rec.xp).level}
-      corner={rec.v ? '★' : undefined}
-      dot={canMerge(rec) ? '!' : undefined}
-      aria-label={t(`pets.${id}.name`)}
+    <PxdButton
+      frame={selected ? 'sel' : 'panel'}
+      className="nrs-slot is-pet"
+      style={rc(petOf(id).rarity)}
       data-pet={id}
-      tip={() => <SlotTip id={id} rec={rec} />}
+      aria-label={`${t(`pets.${id}.name`)}, ${t('common.level', { n: petLevelOf(rec.xp).level })}`}
+      aria-pressed={selected}
       onClick={() => onPick(id)}
-      onFocus={() => onPick(id)}
     >
       <PetArt id={id} size={size} v={petLook(rec)} still />
-    </Slot>
+      <b className="nrs-slot__lv px-num">{petLevelOf(rec.xp).level}</b>
+      {!!rec.v && (
+        <em className="nrs-card__gold" aria-hidden="true">
+          <Icon name="star" />
+        </em>
+      )}
+    </PxdButton>
   );
 });
 
-/** Hover / long-press card of a collection slot: name in the rarity colour, level and perks. */
-function SlotTip({ id, rec }: { id: PetId; rec: PetRec | undefined }) {
+/** Details: lore, the stats table, experience, copies to gold + merge, skin, the eggs it hatches
+ *  from. One line per stat: picture, noun, value with one decimal; the sentence is its tip. */
+function PetInfo({ id, onJoy }: { id: PetId; onJoy: () => void }) {
   const t = useT();
-  const def = petOf(id);
-  if (!rec)
-    return (
-      <span className="nur-tip" style={rc(def.rarity)}>
-        <b>{t('nursery.unknown')}</b>
-        <i>{t(`nursery.rarity.r${def.rarity}` as 'nursery.rarity.r0')}</i>
-      </span>
-    );
-  const b = petBonus(id, rec);
-  return (
-    <span className="nur-tip" style={rc(def.rarity)}>
-      <b>{t(`pets.${id}.name`)}</b>
-      <i>
-        {t(`nursery.rarity.r${def.rarity}` as 'nursery.rarity.r0')} ·{' '}
-        {t('common.level', { n: petLevelOf(rec.xp).level })}
-      </i>
-      {def.stats.map((s) => (
-        <span key={s}>{t(`nursery.role.${s}.text`, { v: pctV(b[s] ?? 0) })}</span>
-      ))}
-    </span>
-  );
-}
-
-/** Details: lore, the stats table, experience, copies to gold + merge, skin, eggs it hatches
- *  from. `head` — the name block on top (the details column); `xp` — its own experience bar (the
- *  phone sheet). The stats are a table — picture, noun, value with one decimal — one line each;
- *  the full sentence is the row's tip. */
-function PetInfo({
-  id,
-  head,
-  xp,
-  onJoy,
-}: {
-  id: PetId;
-  head?: ReactNode;
-  xp?: boolean;
-  onJoy: () => void;
-}) {
-  const t = useT();
-  const stPx = useStatPx();
   const p = useFinanceStore((s) => s.prison);
   const merge = useFinanceStore((s) => s.prisonPetMerge);
   const setSkin = useFinanceStore((s) => s.prisonPetSkin);
@@ -1135,56 +1205,56 @@ function PetInfo({
   const rec = p.pets[id];
   const lv = petLevelOf(rec?.xp ?? 0);
   const b = rec ? petBonus(id, rec) : {};
-  // Which eggs it hatches from: those with a chance for its rarity.
   const from = EGGS.filter((e) => eggChances(e.id)[def.rarity] > 0);
-  // The species is picked evenly inside the rolled rarity (`rollEgg`), so one pet's chance is
-  // the rarity's share divided by how many pets share it.
+  // The species is picked evenly inside the rolled rarity (`rollEgg`).
   const kin = PETS.filter((d) => d.rarity === def.rarity).length || 1;
-  const lvText = t('common.level', { n: lv.level });
   let rows: ReactNode;
   if (!rec)
     rows = (
-      <div className="nur-info__from">
-        <span>{t('nursery.from')}</span>
+      <div className="nrs-info__grp">
+        <h3>{t('nursery.from')}</h3>
         {from.map((e) => (
-          <span key={e.id} className="nur-egg">
+          <div key={e.id} className="nrs-info__row">
             <Icon name="egg" />
             <span>{t(`nursery.egg.${e.id}`)}</span>
-            <b>
+            <b className="px-num">
               {t('nursery.eggPct', {
                 v: Math.round((eggChances(e.id)[def.rarity] / kin) * 1000) / 10,
               })}
             </b>
-          </span>
+          </div>
         ))}
       </div>
     );
   else
     rows = (
       <>
-        {xp && (
-          <Bar
-            value={lv.need ? lv.into / lv.need : 1}
-            label={
-              lv.need
-                ? `${lvText} · ${fmtNum(lv.into)} / ${fmtNum(lv.need)}`
-                : `${lvText} · ${t('nursery.lvMax')}`
-            }
-          />
-        )}
+        <div className="nrs-info__grp">
+          <div className="nrs-info__row">
+            <span>{t('common.level', { n: lv.level })}</span>
+            <b className="px-num">
+              {lv.need ? `${fmtNum(lv.into)} / ${fmtNum(lv.need)}` : t('nursery.lvMax')}
+            </b>
+          </div>
+          <PxdPips n={10} on={lv.need ? Math.floor((10 * lv.into) / lv.need) : 10} />
+        </div>
         {rec.v < MERGE_NEED.length && (
-          <div className="nur-info__merge">
-            <span>
-              {t('nursery.copies')}{' '}
-              <b>
-                {Math.min(rec.dup, MERGE_NEED[rec.v])}/{MERGE_NEED[rec.v]}
+          <div className="nrs-info__grp">
+            <div className="nrs-info__row">
+              <span>{t('nursery.copies')}</span>
+              <b className="px-num">
+                {Math.min(rec.dup, MERGE_NEED[rec.v])} / {MERGE_NEED[rec.v]}
               </b>
-            </span>
-            <Bar tone="blue" value={rec.dup / MERGE_NEED[rec.v]} />
+            </div>
+            <PxdPips
+              n={MERGE_NEED[rec.v]}
+              on={Math.min(rec.dup, MERGE_NEED[rec.v])}
+              ok={canMerge(rec)}
+            />
             {canMerge(rec) && (
-              <Button
-                kind="primary"
-                wide
+              <PxdButton
+                frame="act"
+                className="nrs-info__act"
                 onClick={() => {
                   primeAudio();
                   if (merge(id)) {
@@ -1198,106 +1268,58 @@ function PetInfo({
               >
                 <Icon name="star" />
                 {t('nursery.makeGold')}
-              </Button>
+              </PxdButton>
             )}
           </div>
         )}
         {rec.v >= 1 && (
-          <div className="nur-info__skin" role="radiogroup" aria-label={t('nursery.skin')}>
-            <span>{t('nursery.skin')}</span>
-            {[0, 1].map((s) => {
-              const on = petLook(rec) === s;
-              return (
-                <Button
-                  key={s}
-                  size="sm"
-                  kind={s ? 'primary' : 'secondary'}
-                  on={on}
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => {
-                    if (on) return;
-                    selectionChanged();
-                    if (setSkin(id, s)) onJoy();
-                  }}
-                >
-                  {s ? t('nursery.skinGold') : t('nursery.skinNormal')}
-                </Button>
-              );
-            })}
+          <div
+            className="nrs-info__grp nrs-info__skin"
+            role="radiogroup"
+            aria-label={t('nursery.skin')}
+          >
+            <h3>{t('nursery.skin')}</h3>
+            <div>
+              {[0, 1].map((s) => {
+                const on = petLook(rec) === s;
+                return (
+                  <PxdButton
+                    key={s}
+                    frame={on ? 'sel' : 'panel'}
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => {
+                      if (on) return;
+                      selectionChanged();
+                      if (setSkin(id, s)) onJoy();
+                    }}
+                  >
+                    {s ? <Icon name="star" /> : null}
+                    {s ? t('nursery.skinGold') : t('nursery.skinNormal')}
+                  </PxdButton>
+                );
+              })}
+            </div>
           </div>
         )}
       </>
     );
   return (
-    <div className="nur-info__body" style={{ ...rc(def.rarity), '--st': stPx } as CSSProperties}>
-      {head && <div className="nur-info__grp">{head}</div>}
-      <div className="nur-info__grp">
-        <p className="nur-info__lore">{t(`pets.${id}.lore`)}</p>
-        <div className="nur-info__roles">
-          {def.stats.map((s) => {
-            const full = rec ? t(`nursery.role.${s}.text`, { v: pctV(b[s] ?? 0) }) : undefined;
-            return (
-              <div key={s} className="nur-role" data-tip={full} aria-label={full}>
-                <StatIcon stat={s} dim={!rec} />
-                <span className="nur-role__k">{t(`nursery.stat.${s}`)}</span>
-                <b className="px-num">{rec ? t('nursery.bonus', { v: pctV(b[s] ?? 0) }) : '—'}</b>
-              </div>
-            );
-          })}
-        </div>
+    <div className="nrs-info" style={rc(def.rarity)}>
+      <p className="nrs-info__lore">{t(`pets.${id}.lore`)}</p>
+      <div className="nrs-info__grp">
+        {def.stats.map((s) => {
+          const full = rec ? t(`nursery.role.${s}.text`, { v: pctV(b[s] ?? 0) }) : undefined;
+          return (
+            <div key={s} className="nrs-info__row" data-tip={full} aria-label={full}>
+              <StatIcon stat={s} dim={!rec} />
+              <span>{t(`nursery.stat.${s}`)}</span>
+              <b className="px-num">{rec ? t('nursery.bonus', { v: pctV(b[s] ?? 0) }) : '—'}</b>
+            </div>
+          );
+        })}
       </div>
-      <div className="nur-info__grp">{rows}</div>
+      {rows}
     </div>
-  );
-}
-
-/** Who goes to an empty squad place: owned pets not along yet, strongest first. */
-function SquadPick({
-  thumb,
-  onPicked,
-  onClose,
-}: {
-  thumb: number;
-  onPicked: (id: PetId) => void;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const p = useFinanceStore((s) => s.prison);
-  const list = (Object.keys(p.pets) as PetId[])
-    .filter((id) => !p.squad.includes(id))
-    .sort((a, b) => petScore(b, p.pets[b]!) - petScore(a, p.pets[a]!));
-  return (
-    <Modal title={t('nursery.pick')} sheet onClose={onClose} width={160}>
-      {list.length ? (
-        <Grid className="nur-pick">
-          {list.map((id, i) => {
-            const r = p.pets[id]!;
-            return (
-              <Slot
-                key={id}
-                rarity={petOf(id).rarity}
-                count={petLevelOf(r.xp).level}
-                corner={r.v ? '★' : undefined}
-                aria-label={t(`pets.${id}.name`)}
-                data-autofocus={i === 0 ? '' : undefined}
-                tip={() => <SlotTip id={id} rec={r} />}
-                onClick={() => {
-                  primeAudio();
-                  selectionChanged();
-                  onPicked(id);
-                  petPat();
-                  onClose();
-                }}
-              >
-                <PetArt id={id} size={thumb} v={petLook(r)} still />
-              </Slot>
-            );
-          })}
-        </Grid>
-      ) : (
-        <p className="nur-empty">{t('nursery.allWithYou')}</p>
-      )}
-    </Modal>
   );
 }

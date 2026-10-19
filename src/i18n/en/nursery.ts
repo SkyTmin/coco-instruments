@@ -71,4 +71,16 @@ export const nursery: Translation<typeof ru> = {
     rate: 'Hit rate',
   },
   egg: { moss: 'Mossy', stone: 'Stone', crystal: 'Crystal', dragon: 'Dragon' },
+  // N4 (19.10): the handoff layout
+  purpose: 'Your companions in the mine',
+  along: 'In the squad',
+  lockRankTip: 'The second place opens at rank {rank}',
+  lockPrestigeTip: 'The third place opens after a prestige',
+  replaceTitle: 'Who stays home?',
+  replaceHint: '{name} takes their place',
+  pickHint: 'Pick who joins the squad',
+  zooL: 'Collection bonus',
+  powerTip: 'Power: how much the pet gives in the mine',
+  bonusL: 'Bonuses',
+  toGold: 'to gold',
 };

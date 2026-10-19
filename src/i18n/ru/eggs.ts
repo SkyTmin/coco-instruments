@@ -65,4 +65,10 @@ export const eggs = {
   spent: 'Потрачено:',
   pityFired: 'Сработала гарантия: двадцать пятое яйцо',
   mergeHint: 'Есть кого слить в золотого — «!» в коллекции',
+  // N4 (19.10): the egg shop on the dark kit
+  shop: 'Лавка яиц',
+  avail: 'Можно купить',
+  more: 'ещё {v}',
+  free: 'Бесплатно',
+  noRoom: 'Нет места',
 } as const;

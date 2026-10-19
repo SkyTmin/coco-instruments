@@ -71,4 +71,16 @@ export const nursery: Translation<typeof ru> = {
     rate: 'Cadence',
   },
   egg: { moss: 'Mousse', stone: 'Pierre', crystal: 'Cristal', dragon: 'Dragon' },
+  // N4 (19.10): the handoff layout
+  purpose: 'Tes compagnons dans la mine',
+  along: 'Dans la bande',
+  lockRankTip: 'La deuxième place s’ouvre au rang {rank}',
+  lockPrestigeTip: 'La troisième place s’ouvre après un prestige',
+  replaceTitle: 'Qui reste à la maison ?',
+  replaceHint: '{name} prend sa place',
+  pickHint: 'Choisis qui rejoint la bande',
+  zooL: 'Bonus de collection',
+  powerTip: 'Puissance : ce que l’animal apporte à la mine',
+  bonusL: 'Bonus',
+  toGold: 'pour l’or',
 };

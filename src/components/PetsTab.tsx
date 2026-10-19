@@ -1,6 +1,8 @@
-// Питомник (v2.72): отряд, гнёзда, яйца, коллекция, карточка питомца и
-// сцена вылупления. Правила — lib/pets.ts, стор — prisonHatch, prisonHatchAll,
-// prisonEggBuy, prisonSquadSet, prisonPetMerge, prisonPetPat.
+// Питомник: окно на тёмном наборе (`@/ui-px/dark`), раскладка из handoff N4 (19.10) — брат кузницы.
+// Шапка (назад · «Питомник» + зачем · кошелёк), вкладки «Отряд» / «Коллекция» / «Яйца»; отряд и
+// коллекция — `Nursery.tsx`, яйца (гнёзда, очередь, «вылупить все», лавка) — здесь, как и сцены
+// вылупления. Правила — lib/pets.ts, стор — prisonHatch, prisonHatchAll, prisonEggBuy,
+// prisonEggPlace, prisonEggPull, prisonHatchNow.
 //
 // Исход вылупления решает стор в обработчике тапа (как у сундука: StrictMode
 // в разработке гоняет эффекты дважды), сцена его только показывает. Трещины
@@ -8,22 +10,26 @@
 // заранее, и в эту секунду смотрят не отрываясь.
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { GxBar, GxModal, KIcon } from '@/components/gx';
+import { GxIcon } from '@/components/gx';
+import type { GxIconName } from '@/components/gx';
 import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
 import { Nursery } from '@/components/Nursery';
-import { Tabs } from '@/ui-px';
-import { useFormFactor } from '@/game-shell';
+import type { NurTab } from '@/components/Nursery';
+import { useArmGuard, useArmLayout, useBox, useFullWin } from '@/components/armory';
+import { Icon } from '@/ui-px';
+import { PxdButton, PxdPips, PxdSheet, usePxd } from '@/ui-px/dark';
+import { useAction } from '@/input';
 import { fmtNum, fmtShort, petName, t as tl, useT } from '@/i18n';
 import { eggName } from '@/i18n/data-books';
 import { PxStrip, preloadPx } from '@/components/PxStrip';
 import { CoinIcon } from '@/components/slot-art';
-import { TokenIcon } from '@/components/PrisonCamp';
+import { TokenIcon } from '@/components/camp-art';
 import { useFinanceStore } from '@/store';
 import type { HatchResult } from '@/store';
-import { rarityOf } from '@/lib/rarity';
+import { RARITIES, rarityOf } from '@/lib/rarity';
 import { rankLetter } from '@/lib/prison';
 import {
   canMerge,
@@ -38,6 +44,7 @@ import {
   MERGE_NEED,
   NEST_SLOTS,
   PET_TREAT_XP,
+  PETS,
   petBonus,
   petLook,
 } from '@/lib/pets';
@@ -45,12 +52,27 @@ import type { EggId, PetId, PetStat } from '@/lib/pets';
 import { burstConfetti } from '@/lib/confetti';
 import { flashFrame } from '@/lib/juice';
 import { registerEscape } from '@/lib/escape-stack';
-import { eggCrack, eggHatch, eggWobble, primeAudio, uiBuy, uiError } from '@/lib/sound';
+import {
+  eggCrack,
+  eggHatch,
+  eggWobble,
+  primeAudio,
+  uiBuy,
+  uiClose,
+  uiError,
+  uiOpen,
+} from '@/lib/sound';
 import { notifySuccess, notifyWarning, selectionChanged, tapLight, tapMedium } from '@/lib/haptics';
+import '@/components/armory.css';
 
 const fmt = (n: number) => fmtNum(n);
 /** Bonus share → percent with one decimal, as the Nursery shows it. */
 const pctV = (x: number) => Math.round(x * 1000) / 10;
+const dprNow = () => (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+/** An egg picture at a whole number of screen dots per art pixel of the 36-px egg strip. */
+const eggPx = (want: number, dpr = dprNow()) =>
+  (Math.max(1, Math.floor((want * dpr) / 36)) * 36) / dpr;
+const rc = (r: number) => ({ '--rc': RARITIES[r]?.color }) as CSSProperties;
 
 const reduceMotion = () =>
   typeof window !== 'undefined' &&
@@ -67,90 +89,104 @@ export function petLine(id: PetId, rec: { xp: number; v: number }): string {
     .join(' · ');
 }
 
-/** Полоска шансов яйца: доли редкостей их цветами. */
+/** Шансы яйца словами: «Редкий 60% · Эпический 30% · …» (подсказка и aria). */
+function oddsText(egg: EggId): string {
+  return eggChances(egg)
+    .map((c, r) =>
+      c > 0
+        ? `${tl(`nursery.rarity.r${r}` as 'nursery.rarity.r0')} ${tl('nursery.eggPct', { v: pctV(c) })}`
+        : '',
+    )
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Полоска шансов яйца: доли редкостей их цветами, по пикселю рисунка в высоту. */
 function OddsBar({ egg }: { egg: EggId }) {
   const ch = eggChances(egg);
   return (
-    <span className="ppn__odds" aria-hidden="true">
+    <span className="nrs-odds" aria-hidden="true">
       {ch.map((c, r) =>
         c > 0 ? (
-          <i
-            key={r}
-            style={{ flexGrow: Math.max(c, 0.04), background: rarityOf(r).color }}
-            title={`${tl(`nursery.rarity.r${r}` as 'nursery.rarity.r0')} ${tl('nursery.eggPct', { v: pctV(c) })}`}
-          />
+          <i key={r} style={{ flexGrow: Math.max(c, 0.06), background: rarityOf(r).color }} />
         ) : null,
       )}
     </span>
   );
 }
 
-/** Memoised (no props): the camp re-renders every second (`useNow` in `PrisonCamp`); the tab
- *  follows the store and its own state only. */
-export const PetsTab = memo(function PetsTab() {
+/**
+ * The pets screen: a full window on the dark kit (as the forge). `onClose` may change identity on
+ * every render of the camp — it is kept in a ref, the window itself is memoised.
+ */
+export function PetsTab({ onClose }: { onClose?: () => void }) {
+  const ref = useRef(onClose);
+  ref.current = onClose;
+  const close = useCallback(() => ref.current?.(), []);
+  return <PetsWin onClose={close} />;
+}
+
+const TABS: NurTab[] = ['squad', 'coll', 'eggs'];
+
+const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const hatch = useFinanceStore((s) => s.prisonHatch);
   const buyEgg = useFinanceStore((s) => s.prisonEggBuy);
+  const place = useFinanceStore((s) => s.prisonEggPlace);
+  const hatchAll = useFinanceStore((s) => s.prisonHatchAll);
   const t = useT();
-  // Phone landscape: the «Питомцы / Яйца» tabs are a rail on the left (icons; the word is the
-  // tip and the aria name) — the full-width row cost the stage 44 px of a 390-px screen.
-  const rail = useFormFactor().ff === 'phone-landscape';
-  // A tab word that doesn't fit beside its icon («Yumurtalar» on a 360-px phone) drops the icons
-  // of the row instead of an ellipsis (kit rule: never cut a primary label). Measured, so it
-  // follows the language, the text size and the width.
-  const ppnRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const row = ppnRef.current?.querySelector<HTMLElement>('.ppn__tabs');
-    if (!row || rail) return undefined;
-    // Fractional widths: «Yumurtalar» at 360 px is 113.16 px of text in a 113.00-px box, and
-    // scrollWidth / clientWidth are both the integer 113 (critic R36).
-    const check = () => {
-      row.classList.remove('is-tight');
-      const range = document.createRange();
-      const cut = [...row.querySelectorAll<HTMLElement>('.px-tab__label')].some((l) => {
-        range.selectNodeContents(l);
-        return range.getBoundingClientRect().width > l.getBoundingClientRect().width + 0.01;
-      });
-      row.classList.toggle('is-tight', cut);
-    };
-    check();
-    let live = true;
-    void document.fonts?.ready.then(() => live && check());
-    if (typeof ResizeObserver === 'undefined')
-      return () => {
-        live = false;
-      };
-    let w = row.clientWidth;
-    const ro = new ResizeObserver(() => {
-      if (row.clientWidth !== w) {
-        w = row.clientWidth;
-        check();
-      }
-    });
-    ro.observe(row);
+  const { layout, u } = useArmLayout();
+  const root = useRef<HTMLDivElement>(null);
+  usePxd();
+  useFullWin();
+  useEffect(() => {
+    uiOpen();
+    const off = registerEscape(() => onClose());
     return () => {
-      live = false;
-      ro.disconnect();
+      off();
+      uiClose();
     };
-  }, [rail, t]);
-  /** Pets (the pixel Nursery) or eggs; a ready nest opens straight on the eggs. */
-  const [view, setView] = useState<'pets' | 'eggs'>(() =>
-    p.nest.some((n) => n.left <= 0) ? 'eggs' : 'pets',
+  }, [onClose]);
+
+  /** A ready nest opens straight on the eggs. */
+  const [tab, setTab] = useState<NurTab>(() =>
+    p.nest.some((n) => n.left <= 0) ? 'eggs' : 'squad',
   );
+  const [sel, setSel] = useState<PetId>(
+    () => p.squad[0] ?? PETS.find((d) => p.pets[d.id])?.id ?? PETS[0].id,
+  );
+  // Stable for the memoised Nursery.
+  const onTab = useCallback((v: NurTab) => setTab(v), []);
+  const pickTab = (v: NurTab) => {
+    if (v === tab) return;
+    selectionChanged();
+    setTab(v);
+  };
+  useAction(
+    ['tabPrev', 'tabNext'],
+    (e) => {
+      const d = e.action === 'tabNext' ? 1 : TABS.length - 1;
+      selectionChanged();
+      setTab((x) => TABS[(TABS.indexOf(x) + d) % TABS.length]);
+    },
+    { scope: root },
+  );
+
   const [nestAt, setNestAt] = useState<number | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
   const armT = useRef<ReturnType<typeof setTimeout>>();
-  /** Дорогая покупка — в два касания: первое взводит, второе платит. */
+  const guard = useArmGuard();
+  /** Дорогая покупка — в два касания: первое взводит, второе платит (второе быстрее 400 мс —
+   *  половина двойного тапа, его не считаем). */
   const arm = (key: string) => {
-    if (armed === key) return true;
+    if (armed === key) return !guard.tooSoon();
     setArmed(key);
+    guard.mark();
     clearTimeout(armT.current);
     armT.current = setTimeout(() => setArmed(null), 4000);
     return false;
   };
-  const place = useFinanceStore((s) => s.prisonEggPlace);
-  const hatchAll = useFinanceStore((s) => s.prisonHatchAll);
   const [scene, setScene] = useState<{ res: HatchResult; key: number } | null>(null);
   const [batch, setBatch] = useState<{
     list: HatchResult[];
@@ -158,11 +194,11 @@ export const PetsTab = memo(function PetsTab() {
     tokens: number;
     key: number;
   } | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<{ id: number; text: string } | null>(null);
   const noteT = useRef<ReturnType<typeof setTimeout>>();
-  // Stable: the memoised Nursery takes it and must not re-render on the camp's 1-s clock.
-  const say = useCallback((t: string) => {
-    setNote(t);
+  // Stable: the memoised Nursery takes it.
+  const say = useCallback((text: string) => {
+    setNote((n) => ({ id: (n?.id ?? 0) + 1, text }));
     clearTimeout(noteT.current);
     noteT.current = setTimeout(() => setNote(null), 2200);
   }, []);
@@ -174,6 +210,7 @@ export const PetsTab = memo(function PetsTab() {
     [],
   );
   const eggsAll = p.nest.length + eggCount(p.eggs);
+  const anyReady = p.nest.some((n) => n.left <= 0);
   const plan = hatchAllPlan(p.nest, p.eggs, p.eggHeat, balance, p.tokens);
   // Не хватает ни на одно — кнопка серая, но цена всего видна.
   const price = plan.picks.length
@@ -212,8 +249,10 @@ export const PetsTab = memo(function PetsTab() {
       return;
     }
     if ((plan.coins || plan.tokens) && !arm('all')) {
-      tapLight();
-      say(t('eggs.armAll'));
+      if (armed !== 'all') {
+        tapLight();
+        say(t('eggs.armAll'));
+      }
       return;
     }
     setArmed(null);
@@ -225,222 +264,423 @@ export const PetsTab = memo(function PetsTab() {
     else setBatch({ list, coins: plan.coins, tokens: plan.tokens, key: Date.now() });
   };
 
-  return (
-    <div ref={ppnRef} className={`ppn is-${view}${rail ? ' ppn--rail' : ''}`}>
-      <Tabs
-        className="ppn__tabs"
-        vertical={rail}
-        items={[
-          {
-            id: 'pets',
-            label: t('nursery.tabPets'),
-            icon: 'paw',
-            name: rail ? t('nursery.tabPets') : undefined,
-          },
-          {
-            id: 'eggs',
-            label: t('nursery.tabEggs'),
-            icon: 'egg',
-            name: rail ? t('nursery.tabEggs') : undefined,
-            badge: p.nest.some((n) => n.left <= 0) ? '!' : eggsAll || null,
-          },
-        ]}
-        value={view}
-        onChange={(v) => {
-          selectionChanged();
-          setView(v);
-        }}
-      />
-      {view === 'pets' && <Nursery say={say} />}
+  const nestRow = useRef<HTMLDivElement>(null);
+  const nb = useBox(nestRow, tab === 'eggs');
+  // the egg fills the nest's art box (measured in the fit pass: a two-line «blocks left» on a
+  // narrow nest takes some of it); before the first measure — an estimate from the row
+  const [nestArt, setNestArt] = useState({ w: 0, h: 0 });
+  const nestEgg = eggPx(
+    Math.max(
+      18 * u,
+      nestArt.h > 0
+        ? Math.min(nestArt.w - 2 * u, nestArt.h - 2 * u, 64 * u)
+        : Math.min((nb.w - 4 * u) / 2 - 10 * u, nb.h - 40 * u, 64 * u),
+    ),
+  );
+  const shopRow = useRef<HTMLDivElement>(null);
+  const sb = useBox(shopRow, tab === 'eggs');
+  // the egg follows the tile: a low tile (short phones) takes the small egg, else the text loses
+  // room; a tall wide-screen tile stacks art / name / price / status and grows the egg
+  const tileH = (sb.h - 3 * u) / 2;
+  const tileW = (sb.w - 3 * u) / 2;
+  const shopTall = layout === 'three' && tileH >= 56 * u;
+  const shopEgg = eggPx(
+    layout === 'one'
+      ? (tileH >= 40 * u && tileW >= 80 * u ? 20 : 16) * u
+      : layout === 'two'
+        ? 28 * u
+        : shopTall
+          ? Math.min(tileH - 34 * u, tileW * 0.5, 56 * u)
+          : (tileH >= 40 * u ? 24 : 16) * u,
+  );
+  // ---- Fit pass: the purpose line on its own row, tab icons / tab size, the queue label -------
+  const [fitTick, setFitTick] = useState(0);
+  useEffect(() => {
+    const el = root.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    let raf = 0;
+    const bump = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setFitTick((x) => x + 1));
+    };
+    const ro = new ResizeObserver(bump);
+    ro.observe(el);
+    document.fonts?.ready.then(bump).catch(() => {});
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const top = el.querySelector<HTMLElement>('.nrs-top');
+    const sub = top?.querySelector<HTMLElement>('.nrs-ttl p');
+    if (top && sub) {
+      top.classList.remove('is-subrow');
+      if (layout === 'one')
+        top.classList.toggle('is-subrow', sub.scrollWidth > sub.clientWidth + 0.5);
+    }
+    // the tabs drop their icons, then take the label size, when the words don't fit the row
+    const tabsEl = el.querySelector<HTMLElement>('.nrs-tabs');
+    if (tabsEl) {
+      tabsEl.classList.remove('is-tight', 'is-tight2');
+      const over = () =>
+        [...tabsEl.querySelectorAll<HTMLElement>('.nrs-tab')].some(
+          (b) => b.scrollWidth > b.clientWidth + 0.5,
+        );
+      if (over()) tabsEl.classList.add('is-tight');
+      if (over()) tabsEl.classList.add('is-tight2');
+    }
+    const q = el.querySelector<HTMLElement>('.nrs-queue');
+    if (q) {
+      q.classList.remove('is-tight');
+      q.classList.toggle('is-tight', q.scrollWidth > q.clientWidth + 0.5);
+    }
+    // nests and shop tiles: their words one size smaller (the shop's status under the art)
+    const cut = (sel: string) =>
+      [...el.querySelectorAll<HTMLElement>(sel)].some((x) => x.scrollWidth > x.clientWidth + 0.5);
+    const row = el.querySelector<HTMLElement>('.nrs-nests__row');
+    if (row) {
+      row.classList.remove('is-tight', 'is-tight2');
+      if (cut('.nrs-nest__nm, .nrs-nest__left')) row.classList.add('is-tight');
+      if (cut('.nrs-nest__nm, .nrs-nest__left')) row.classList.add('is-tight2');
+      const art = row.querySelector<HTMLElement>('.nrs-nest:not(.is-empty) .nrs-nest__art');
+      const w = art?.clientWidth ?? 0;
+      const h = art?.clientHeight ?? 0;
+      setNestArt((o) => (o.w === w && o.h === h ? o : { w, h }));
+    }
+    const shop = el.querySelector<HTMLElement>('.nrs-shop');
+    if (shop) {
+      shop.classList.remove('is-tight');
+      shop.classList.toggle('is-tight', cut('.nrs-buy__nm, .nrs-buy__st'));
+    }
+  }, [fitTick, layout, tab, t, p.eggs, p.nest, armed, balance, p.tokens, u, shopEgg, nb.w, nb.h]);
 
-      <h4 className="ppn__h">{t('eggs.nests')}</h4>
-      <div className="ppn__nests">
-        {Array.from({ length: NEST_SLOTS }, (_, i) => {
-          const n = p.nest[i];
-          if (!n)
-            return (
-              <button
-                key={i}
-                type="button"
-                className="ppn__nest is-empty"
+  const tabBtn = (id: NurTab, icon: GxIconName, label: string, badge?: ReactNode) => (
+    <PxdButton
+      frame={tab === id ? 'sel' : 'panel'}
+      className={`nrs-tab${tab === id ? ' is-on' : ''}`}
+      role="tab"
+      aria-selected={tab === id}
+      onClick={() => pickTab(id)}
+    >
+      <GxIcon name={icon} />
+      <span className="nrs-tab__l">{label}</span>
+      {badge != null && badge !== 0 && <em className="nrs-badge">{badge}</em>}
+    </PxdButton>
+  );
+  const tabs = (
+    <nav className="nrs-tabs" role="tablist">
+      {tabBtn('squad', 'miner', t('nursery.squad'))}
+      {tabBtn('coll', 'paw', t('nursery.collection'))}
+      {tabBtn('eggs', 'egg', t('nursery.tabEggs'), anyReady ? '!' : eggsAll || null)}
+    </nav>
+  );
+
+  // ---- Eggs: nests · queue · hatch all · shop ---------------------------------------------------
+  // the egg takes what the nest tile leaves after its name, pips and blocks line (measured row)
+  const chipEgg = eggPx(12 * u);
+  const heatPips = (id: EggId) => {
+    const h = p.eggHeat[id] ?? 0;
+    if (h <= 0) return null;
+    return <PxdPips n={4} on={Math.max(1, Math.min(4, Math.floor((4 * h) / eggOf(id).need)))} />;
+  };
+  const queue = EGG_IDS.filter((id) => p.eggs[id] > 0);
+  const eggsEl = tab === 'eggs' && (
+    <div className="nrs-eggs">
+      <div className="nrs-eggs__home">
+        <section className="nrs-nests" aria-label={t('eggs.nests')}>
+          <div className="nrs-h">
+            <h2>{t('eggs.nests')}</h2>
+            <span className="px-num">{t('eggs.someOf', { a: p.nest.length, b: NEST_SLOTS })}</span>
+          </div>
+          <div ref={nestRow} className="nrs-nests__row">
+            {Array.from({ length: NEST_SLOTS }, (_, i) => {
+              const n = p.nest[i];
+              if (!n)
+                return (
+                  <PxdButton
+                    key={i}
+                    frame="well"
+                    className="nrs-nest is-empty"
+                    onClick={() => {
+                      tapLight();
+                      if (eggCount(p.eggs) > 0) setNestAt(i);
+                      else say(t('eggs.basketEmpty'));
+                    }}
+                  >
+                    <span className="nrs-nest__art">
+                      <Icon name={eggCount(p.eggs) > 0 ? 'plus' : 'egg'} />
+                    </span>
+                    <span className="nrs-nest__nm">
+                      {eggCount(p.eggs) > 0 ? t('eggs.putEgg') : t('eggs.empty')}
+                    </span>
+                  </PxdButton>
+                );
+              const need = eggOf(n.egg).need;
+              const ready = n.left <= 0;
+              return (
+                <PxdButton
+                  key={i}
+                  frame={ready ? 'act' : 'panel'}
+                  className={`nrs-nest${ready ? ' is-ready' : ''}`}
+                  style={rc(EGG_RARITY[n.egg])}
+                  aria-label={`${eggName(n.egg)}: ${ready ? t('eggs.hatch') : t('books.blocksLeft', { n: Math.round(n.left) })}`}
+                  onClick={() => {
+                    if (ready) doHatch(i);
+                    else {
+                      tapLight();
+                      setNestAt(i);
+                    }
+                  }}
+                >
+                  <span className="nrs-nest__art">
+                    <EggArt egg={n.egg} size={nestEgg} phase={i * 0.37} />
+                  </span>
+                  <b className="nrs-nest__nm">{t(`nursery.egg.${n.egg}`)}</b>
+                  {ready ? (
+                    <span className="nrs-nest__go">{t('eggs.hatch')}</span>
+                  ) : (
+                    <>
+                      <PxdPips n={10} on={Math.floor(10 * (1 - n.left / need))} />
+                      <span className="nrs-nest__left px-num">
+                        {t('books.blocksLeft', { n: Math.round(n.left) })}
+                      </span>
+                    </>
+                  )}
+                </PxdButton>
+              );
+            })}
+          </div>
+        </section>
+        <section className="nrs-queue" aria-label={t('eggs.waiting')}>
+          <span className="nrs-queue__l">{t('eggs.waiting')}</span>
+          {queue.length ? (
+            queue.map((id) => (
+              <PxdButton
+                key={id}
+                className="nrs-qchip"
+                style={rc(EGG_RARITY[id])}
+                aria-label={`${eggName(id)} ×${p.eggs[id]}`}
                 onClick={() => {
-                  tapLight();
-                  if (eggCount(p.eggs) > 0) setNestAt(i);
-                  else say(t('eggs.basketEmpty'));
+                  primeAudio();
+                  if (p.nest.length < NEST_SLOTS && place(id)) {
+                    selectionChanged();
+                    say(t('eggs.toNest', { name: eggName(id) }));
+                  } else {
+                    tapLight();
+                    say(t('eggs.nestsBusy'));
+                  }
                 }}
               >
-                <i className="ppn__straw" aria-hidden="true" />
-                <em>{eggCount(p.eggs) > 0 ? t('eggs.putEgg') : t('eggs.empty')}</em>
-              </button>
-            );
-          const need = eggOf(n.egg).need;
-          const ready = n.left <= 0;
-          return (
-            <button
-              key={i}
-              type="button"
-              className={`ppn__nest${ready ? ' is-ready' : ''}`}
-              style={rarityVars(EGG_RARITY[n.egg])}
-              onClick={() => {
-                if (ready) doHatch(i);
-                else {
-                  tapLight();
-                  setNestAt(i);
-                }
-              }}
-            >
-              <i className="ppn__straw" aria-hidden="true" />
-              <span className="ppn__egg">
-                <EggArt egg={n.egg} size={72} />
-              </span>
-              {ready ? (
-                <b className="ppn__go">{t('eggs.hatch')}</b>
-              ) : (
-                <GxBar tone="green" value={1 - n.left / need} label={fmt(n.left)} />
-              )}
-            </button>
-          );
-        })}
+                <EggArt egg={id} size={chipEgg} still />
+                <span className="nrs-qchip__t">
+                  <b className="px-num">×{p.eggs[id]}</b>
+                  {heatPips(id)}
+                </span>
+              </PxdButton>
+            ))
+          ) : (
+            <span className="nrs-queue__none">{t('eggs.basketEmpty')}</span>
+          )}
+        </section>
+        {eggsAll >= 2 && (
+          <PxdButton
+            frame="act"
+            off={!plan.picks.length}
+            className={`nrs-all${armed === 'all' ? ' is-armed' : ''}`}
+            onClick={doHatchAll}
+          >
+            <GxIcon name="egg" />
+            <span className="nrs-all__t">
+              {/* the count goes to the price line: the button stays short (≤ 5:1) */}
+              <b>
+                {t(armed === 'all' ? 'eggs.sureAll' : 'eggs.hatchAll', { count: '' })
+                  .replace(/\s+/g, ' ')
+                  .trim()}
+              </b>
+              <small className="px-num">
+                <span>
+                  {plan.picks.length && plan.picks.length < eggsAll
+                    ? t('eggs.someOf', { a: plan.picks.length, b: eggsAll })
+                    : `×${eggsAll}`}
+                </span>
+                {price.coins > 0 && (
+                  <span>
+                    <CoinIcon size={7 * u} /> {fmtShort(price.coins)}
+                  </span>
+                )}
+                {price.tokens > 0 && (
+                  <span>
+                    <TokenIcon size={7 * u} /> {fmt(price.tokens)}
+                  </span>
+                )}
+                {!price.coins && !price.tokens && <span>{t('eggs.free')}</span>}
+              </small>
+            </span>
+          </PxdButton>
+        )}
       </div>
-      {eggCount(p.eggs) > 0 && (
-        <div className="ppn__basket">
-          <span>{t('eggs.waiting')}</span>
-          {EGG_IDS.filter((id) => p.eggs[id] > 0).map((id) => (
-            <button
-              key={id}
-              type="button"
-              className="ppn__chip"
-              onClick={() => {
-                primeAudio();
-                if (p.nest.length < NEST_SLOTS && place(id)) {
-                  selectionChanged();
-                  say(t('eggs.toNest', { name: eggName(id) }));
-                } else {
-                  tapLight();
-                  say(t('eggs.nestsBusy'));
-                }
-              }}
-            >
-              <EggArt egg={id} size={26} />×{p.eggs[id]}
-              {p.eggHeat[id] > 0 && <HeatBar egg={id} heat={p.eggHeat[id]} />}
-            </button>
-          ))}
+      <section className="nrs-shop" aria-label={t('eggs.shop')}>
+        <div className="nrs-h">
+          <h2>{t('eggs.shop')}</h2>
+        </div>
+        <div ref={shopRow} className="nrs-shop__grid">
+          {EGGS.map((e) => {
+            const tok = e.tokens ?? 0;
+            const sold = e.price > 0 || tok > 0;
+            const locked = sold && !tok && p.rank < e.from;
+            const room = p.nest.length < NEST_SLOTS || eggCount(p.eggs) < EGG_BASKET;
+            const rich = tok ? p.tokens >= tok : balance >= e.price;
+            const can = sold && !locked && room && rich;
+            const short = tok ? tok - p.tokens : e.price - balance;
+            const odds = oddsText(e.id);
+            return (
+              <PxdButton
+                key={e.id}
+                frame={armed === e.id ? 'sel' : 'panel'}
+                off={!can}
+                className={`nrs-buy${can ? ' is-can' : ''}${armed === e.id ? ' is-armed' : ''}${shopTall ? ' is-tall' : ''}`}
+                style={rc(EGG_RARITY[e.id])}
+                data-tip={odds}
+                aria-label={`${eggName(e.id)}, ${tok ? fmt(tok) : fmtShort(e.price)}. ${odds}`}
+                onClick={() => {
+                  primeAudio();
+                  if (locked) {
+                    uiError();
+                    notifyWarning();
+                    say(t('eggs.fromRank', { r: rankLetter(e.from) }));
+                    return;
+                  }
+                  if (!room) {
+                    uiError();
+                    say(t('eggs.basketFullHatch'));
+                    return;
+                  }
+                  if (!rich) {
+                    uiError();
+                    notifyWarning();
+                    say(
+                      t('eggs.miss', {
+                        what: tok
+                          ? t('eggs.missTokens', { n: Math.round(tok - p.tokens) })
+                          : t('eggs.missCoins', { v: fmtShort(e.price - balance) }),
+                      }),
+                    );
+                    return;
+                  }
+                  if (tok && !arm(e.id)) {
+                    if (armed !== e.id) {
+                      tapLight();
+                      say(t('eggs.buyArm', { name: eggName(e.id), n: tok }));
+                    }
+                    return;
+                  }
+                  setArmed(null);
+                  if (buyEgg(e.id)) {
+                    uiBuy();
+                    tapMedium();
+                    say(
+                      t(p.nest.length < NEST_SLOTS ? 'eggs.toNest' : 'eggs.toBasket', {
+                        name: eggName(e.id),
+                      }),
+                    );
+                  }
+                }}
+              >
+                <span className="nrs-buy__art">
+                  <EggArt egg={e.id} size={shopEgg} still />
+                  <OddsBar egg={e.id} />
+                </span>
+                <b className="nrs-buy__nm">{t(`nursery.egg.${e.id}`)}</b>
+                <span className="nrs-buy__price px-num">
+                  {tok ? <TokenIcon size={7 * u} /> : <CoinIcon size={7 * u} />}
+                  {tok ? fmt(tok) : fmtShort(e.price)}
+                </span>
+                <span
+                  className={`nrs-buy__st${can ? ' is-ok' : ''}${sold && !locked && room && !rich ? ' is-more' : ''}`}
+                >
+                  {locked ? (
+                    <>
+                      <Icon name="lock" />
+                      {t('eggs.rank', { r: rankLetter(e.from) })}
+                    </>
+                  ) : !room ? (
+                    t('eggs.noRoom')
+                  ) : !rich ? (
+                    <>
+                      {t('eggs.more', { v: tok ? fmt(Math.round(short)) : fmtShort(short) })}
+                      {tok ? <TokenIcon size={6 * u} /> : <CoinIcon size={6 * u} />}
+                    </>
+                  ) : armed === e.id ? (
+                    t('eggs.sure')
+                  ) : (
+                    t('eggs.avail')
+                  )}
+                </span>
+              </PxdButton>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+
+  return createPortal(
+    <div
+      ref={root}
+      className={`px pxd arm is-window nrs nrs--${layout} is-${tab}`}
+      role="dialog"
+      aria-label={t('mineHud.dock.nursery')}
+    >
+      <header className="nrs-top">
+        <PxdButton
+          className="nrs-back"
+          aria-label={t('common.back')}
+          onClick={() => {
+            tapLight();
+            onClose();
+          }}
+        >
+          <Icon name="left" />
+        </PxdButton>
+        <div className="nrs-ttl">
+          <h1>{t('mineHud.dock.nursery')}</h1>
+          <p>{t('nursery.purpose')}</p>
+        </div>
+        {layout === 'three' && tabs}
+        <span className="nrs-purse" aria-label={`${fmtShort(balance)} · ${fmt(p.tokens)}`}>
+          <span>
+            <CoinIcon size={7 * u} />
+            <b className="px-num">{fmtShort(balance)}</b>
+          </span>
+          <span>
+            <TokenIcon size={7 * u} />
+            <b className="px-num">{fmt(p.tokens)}</b>
+          </span>
+        </span>
+      </header>
+      {layout !== 'three' && tabs}
+      {tab === 'eggs' ? (
+        eggsEl
+      ) : (
+        <Nursery tab={tab} sel={sel} onSel={setSel} onTab={onTab} say={say} layout={layout} u={u} />
+      )}
+      {note && (
+        <div className="arm-note nrs-note pxd-f pxd-f--panel" key={note.id} role="status">
+          {note.text}
         </div>
       )}
-      {eggsAll >= 2 && (
-        <button
-          type="button"
-          className={`gx-btn gx-btn--red ppn__all${armed === 'all' ? ' is-armed' : ''}`}
-          aria-disabled={!plan.picks.length}
-          onClick={doHatchAll}
-        >
-          <span>
-            {t(armed === 'all' ? 'eggs.sureAll' : 'eggs.hatchAll', {
-              count:
-                plan.picks.length && plan.picks.length < eggsAll
-                  ? t('eggs.someOf', { a: plan.picks.length, b: eggsAll })
-                  : `(${eggsAll})`,
-            })}
-          </span>
-          {price.coins > 0 && (
-            <span className="ppn__price">
-              <CoinIcon size={14} /> {fmtShort(price.coins)}
-            </span>
-          )}
-          {price.tokens > 0 && (
-            <span className="ppn__price">
-              <TokenIcon size={14} /> {fmt(price.tokens)}
-            </span>
-          )}
-        </button>
-      )}
-
-      <h4 className="ppn__h">{t('nursery.tabEggs')}</h4>
-      <div className="ppn__shop">
-        {EGGS.map((e) => {
-          const tok = e.tokens ?? 0;
-          const sold = e.price > 0 || tok > 0;
-          const locked = sold && !tok && p.rank < e.from;
-          const room = p.nest.length < NEST_SLOTS || eggCount(p.eggs) < EGG_BASKET;
-          const rich = tok ? p.tokens >= tok : balance >= e.price;
-          const can = sold && !locked && room && rich;
-          return (
-            <button
-              key={e.id}
-              type="button"
-              className={`ppn__buy${locked ? ' is-locked' : ''}${tok ? ' is-rare' : ''}${armed === e.id ? ' is-armed' : ''}`}
-              style={rarityVars(EGG_RARITY[e.id])}
-              aria-disabled={!can}
-              onClick={() => {
-                primeAudio();
-                if (locked) {
-                  uiError();
-                  notifyWarning();
-                  say(t('eggs.fromRank', { r: rankLetter(e.from) }));
-                  return;
-                }
-                if (!room) {
-                  uiError();
-                  say(t('eggs.basketFullHatch'));
-                  return;
-                }
-                if (!rich) {
-                  uiError();
-                  notifyWarning();
-                  say(
-                    t('eggs.miss', {
-                      what: tok
-                        ? t('eggs.missTokens', { n: Math.round(tok - p.tokens) })
-                        : t('eggs.missCoins', { v: fmtShort(e.price - balance) }),
-                    }),
-                  );
-                  return;
-                }
-                if (tok && !arm(e.id)) {
-                  tapLight();
-                  say(t('eggs.buyArm', { name: eggName(e.id), n: tok }));
-                  return;
-                }
-                setArmed(null);
-                if (buyEgg(e.id)) {
-                  uiBuy();
-                  tapMedium();
-                  say(
-                    t(p.nest.length < NEST_SLOTS ? 'eggs.toNest' : 'eggs.toBasket', {
-                      name: eggName(e.id),
-                    }),
-                  );
-                }
-              }}
-            >
-              <EggArt egg={e.id} size={58} />
-              <b>{t(`nursery.egg.${e.id}`)}</b>
-              <OddsBar egg={e.id} />
-              {locked ? (
-                <i>
-                  <KIcon name="locked" /> {t('eggs.rank', { r: rankLetter(e.from) })}
-                </i>
-              ) : (
-                <span className="ppn__price">
-                  {tok ? <TokenIcon size={14} /> : <CoinIcon size={14} />}{' '}
-                  {fmtShort(tok || e.price)}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {note && <div className="ppn__note">{note}</div>}
       {nestAt !== null && (
         <NestSheet
           i={nestAt}
+          u={u}
           onClose={() => setNestAt(null)}
           onHatch={(i) => {
             setNestAt(null);
             doHatch(i);
           }}
-          say={say}
         />
       )}
       {scene &&
@@ -468,34 +708,26 @@ export const PetsTab = memo(function PetsTab() {
           />,
           document.body,
         )}
-    </div>
+    </div>,
+    document.body,
   );
 });
 
-/** Сбережённый прогрев вида — тонкая полоска под яйцом в корзине. */
-function HeatBar({ egg, heat }: { egg: EggId; heat: number }) {
-  return (
-    <i className="ppn__heat" aria-hidden="true">
-      <i style={{ width: `${Math.min(100, (100 * heat) / eggOf(egg).need)}%` }} />
-    </i>
-  );
-}
-
 /**
- * Гнездо (v2.76): что в нём греется, вынуть в корзину, положить другое
- * взамен, драконье — вылупить сразу за токены. Прогрев вынутого не сгорает —
- * он остаётся за видом яйца (`pullEgg`).
+ * Гнездо (v2.76): что в нём греется, вынуть в корзину, положить другое взамен, вылупить сразу за
+ * цену яйца. Прогрев вынутого не сгорает — он остаётся за видом яйца (`pullEgg`). Сообщения — своей
+ * строкой в окне: тост окна лежит под его вуалью.
  */
 function NestSheet({
   i,
+  u,
   onClose,
   onHatch,
-  say,
 }: {
   i: number;
+  u: number;
   onClose: () => void;
   onHatch: (i: number) => void;
-  say: (t: string) => void;
 }) {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
@@ -504,6 +736,8 @@ function NestSheet({
   const now = useFinanceStore((s) => s.prisonHatchNow);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const [armed, setArmed] = useState(false);
+  const [msg, setMsg] = useState('');
+  const guard = useArmGuard();
   const n = p.nest[i];
   // Цена «вылупить сразу» — цена яйца: монеты или токены (драконье).
   const cost = n ? hatchNowCost(n.egg) : { coins: 0, tokens: 0 };
@@ -513,34 +747,45 @@ function NestSheet({
   const full = eggCount(p.eggs) >= EGG_BASKET;
   useEffect(() => {
     if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 4000);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(tm);
   }, [armed]);
+  const need = n ? eggOf(n.egg).need : 1;
   return (
-    <GxModal title={n ? eggName(n.egg) : t('eggs.nest')} onClose={onClose}>
-      <div className="ppn-nest">
+    <PxdSheet
+      title={n ? eggName(n.egg) : t('eggs.nest')}
+      sub={
+        n
+          ? n.left > 0
+            ? t('books.blocksLeft', { n: Math.round(n.left) })
+            : t('eggs.ready')
+          : undefined
+      }
+      closeLabel={t('common.close')}
+      onClose={onClose}
+      width={200}
+      className="nrs-sheet"
+    >
+      <div className="nrs-ns">
         {n && (
-          <div className="ppn-nest__now" style={rarityVars(EGG_RARITY[n.egg])}>
-            <EggArt egg={n.egg} size={88} />
-            <GxBar
-              tone="green"
-              value={1 - n.left / eggOf(n.egg).need}
-              label={
-                n.left > 0 ? t('books.blocksLeft', { n: Math.round(n.left) }) : t('eggs.ready')
-              }
-            />
-            <div className="ppn-nest__acts">
+          <div className="nrs-ns__now" style={rc(EGG_RARITY[n.egg])}>
+            <span className="nrs-ns__art">
+              <EggArt egg={n.egg} size={eggPx(36 * u)} />
+            </span>
+            <PxdPips n={10} on={n.left > 0 ? Math.floor(10 * (1 - n.left / need)) : 10} />
+            <div className="nrs-ns__acts">
               {price > 0 && n.left > 0 && (
-                <button
-                  type="button"
-                  className={`btn btn--primary btn--sm${armed ? ' is-armed' : ''}`}
-                  aria-disabled={short > 0}
+                <PxdButton
+                  frame="act"
+                  off={short > 0}
+                  className={`nrs-ns__now-b${armed ? ' is-armed' : ''}`}
+                  data-autofocus=""
                   onClick={() => {
                     primeAudio();
                     if (short > 0) {
                       uiError();
                       notifyWarning();
-                      say(
+                      setMsg(
                         t('eggs.miss', {
                           what: cost.coins
                             ? t('eggs.missCoins', { v: fmtShort(short) })
@@ -551,26 +796,28 @@ function NestSheet({
                     }
                     if (!armed) {
                       tapLight();
+                      guard.mark();
                       setArmed(true);
                       return;
                     }
+                    if (guard.tooSoon()) return;
                     if (now(i)) onHatch(i);
                   }}
                 >
-                  {armed ? t('eggs.sure') : t('eggs.hatchNow')}{' '}
-                  {cost.coins ? fmtShort(price) : fmt(price)}{' '}
-                  {cost.coins ? <CoinIcon size={13} /> : <TokenIcon size={13} />}
-                </button>
+                  <span>{armed ? t('eggs.sure') : t('eggs.hatchNow')}</span>
+                  <small className="px-num">
+                    {cost.coins ? fmtShort(price) : fmt(price)}
+                    {cost.coins ? <CoinIcon size={7 * u} /> : <TokenIcon size={7 * u} />}
+                  </small>
+                </PxdButton>
               )}
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                aria-disabled={full}
+              <PxdButton
+                off={full}
                 onClick={() => {
                   primeAudio();
                   if (!pull(i)) {
                     uiError();
-                    say(t('eggs.basketFull'));
+                    setMsg(t('eggs.basketFull'));
                     return;
                   }
                   selectionChanged();
@@ -578,20 +825,21 @@ function NestSheet({
                 }}
               >
                 {t('eggs.toBasketBtn')}
-              </button>
+              </PxdButton>
             </div>
           </div>
         )}
         {basket.length > 0 ? (
           <>
-            <h5 className="ppn-nest__h">{t(n ? 'eggs.putInstead' : 'eggs.putInNest')}</h5>
-            <div className="ppn-nest__basket">
+            <h3 className="nrs-ns__h">{t(n ? 'eggs.putInstead' : 'eggs.putInNest')}</h3>
+            <div className="nrs-ns__basket">
               {basket.map((id) => (
-                <button
+                <PxdButton
                   key={id}
-                  type="button"
-                  className="ppn-nest__egg"
-                  style={rarityVars(EGG_RARITY[id])}
+                  className="nrs-ns__egg"
+                  style={rc(EGG_RARITY[id])}
+                  aria-label={`${eggName(id)} ×${p.eggs[id]}`}
+                  data-autofocus={!n ? '' : undefined}
                   onClick={() => {
                     primeAudio();
                     if (!place(id, n ? i : undefined)) return;
@@ -599,18 +847,29 @@ function NestSheet({
                     onClose();
                   }}
                 >
-                  <EggArt egg={id} size={52} />
-                  <b>×{p.eggs[id]}</b>
-                  {p.eggHeat[id] > 0 && <HeatBar egg={id} heat={p.eggHeat[id]} />}
-                </button>
+                  <EggArt egg={id} size={eggPx(20 * u)} still />
+                  <b className="px-num">×{p.eggs[id]}</b>
+                  {p.eggHeat[id] > 0 && (
+                    <PxdPips
+                      n={4}
+                      on={Math.max(
+                        1,
+                        Math.min(4, Math.floor((4 * p.eggHeat[id]) / eggOf(id).need)),
+                      )}
+                    />
+                  )}
+                </PxdButton>
               ))}
             </div>
           </>
         ) : (
-          !n && <p className="ppn-sheet__from">{t('eggs.basketEmpty')}</p>
+          !n && <p className="nrs-ns__none">{t('eggs.basketEmpty')}</p>
         )}
+        <p className="nrs-ns__msg" role="status">
+          {msg}
+        </p>
       </div>
-    </GxModal>
+    </PxdSheet>
   );
 }
 

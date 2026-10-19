@@ -57,4 +57,10 @@ export const eggs: Translation<typeof ru> = {
   spent: 'Ausgegeben:',
   pityFired: 'Garantie gegriffen: das 25. Ei',
   mergeHint: 'Ein Tier kann golden werden — „!“ in der Sammlung',
+  // N4 (19.10): the egg shop on the dark kit
+  shop: 'Eierladen',
+  avail: 'Zu haben',
+  more: 'noch {v}',
+  free: 'Gratis',
+  noRoom: 'Kein Platz',
 };

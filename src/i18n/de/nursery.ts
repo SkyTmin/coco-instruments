@@ -71,4 +71,16 @@ export const nursery: Translation<typeof ru> = {
     rate: 'Tempo',
   },
   egg: { moss: 'Moos', stone: 'Stein', crystal: 'Kristall', dragon: 'Drache' },
+  // N4 (19.10): the handoff layout
+  purpose: 'Deine Begleiter in der Mine',
+  along: 'Im Rudel',
+  lockRankTip: 'Der zweite Platz öffnet ab Rang {rank}',
+  lockPrestigeTip: 'Der dritte Platz öffnet nach einem Prestige',
+  replaceTitle: 'Wer bleibt daheim?',
+  replaceHint: '{name} nimmt den Platz ein',
+  pickHint: 'Wähle, wer ins Rudel kommt',
+  zooL: 'Sammlungsbonus',
+  powerTip: 'Stärke: was das Tier in der Mine bringt',
+  bonusL: 'Boni',
+  toGold: 'bis Gold',
 };

@@ -57,4 +57,10 @@ export const eggs: Translation<typeof ru> = {
   spent: 'Harcanan:',
   pityFired: 'Garanti devreye girdi: 25. yumurta',
   mergeHint: 'Altına çevrilecek hayvan var — koleksiyonda «!»',
+  // N4 (19.10): the egg shop on the dark kit
+  shop: 'Yumurta dükkânı',
+  avail: 'Satışta',
+  more: '{v} daha',
+  free: 'Ücretsiz',
+  noRoom: 'Yer yok',
 };

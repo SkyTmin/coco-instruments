@@ -71,4 +71,16 @@ export const nursery: Translation<typeof ru> = {
     rate: 'Tempo',
   },
   egg: { moss: 'Yosun', stone: 'Taş', crystal: 'Kristal', dragon: 'Ejderha' },
+  // N4 (19.10): the handoff layout
+  purpose: 'Madendeki yol arkadaşların',
+  along: 'Takımda',
+  lockRankTip: 'İkinci yer {rank} rütbesinde açılır',
+  lockPrestigeTip: 'Üçüncü yer prestijden sonra açılır',
+  replaceTitle: 'Kim evde kalsın?',
+  replaceHint: 'Yerine {name} geçecek',
+  pickHint: 'Takıma kimi alacağını seç',
+  zooL: 'Koleksiyon bonusu',
+  powerTip: 'Güç: hayvanın madende kattığı',
+  bonusL: 'Bonuslar',
+  toGold: 'altına',
 };

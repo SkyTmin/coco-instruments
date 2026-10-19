@@ -71,4 +71,16 @@ export const nursery: Translation<typeof ru> = {
     rate: 'Ritmo',
   },
   egg: { moss: 'Musgo', stone: 'Piedra', crystal: 'Cristal', dragon: 'Dragón' },
+  // N4 (19.10): the handoff layout
+  purpose: 'Tus compañeros en la mina',
+  along: 'En la banda',
+  lockRankTip: 'El segundo puesto se abre en el rango {rank}',
+  lockPrestigeTip: 'El tercer puesto se abre tras un prestigio',
+  replaceTitle: '¿Quién se queda en casa?',
+  replaceHint: '{name} ocupará su puesto',
+  pickHint: 'Elige quién se une a la banda',
+  zooL: 'Bono de colección',
+  powerTip: 'Poder: lo que la mascota aporta en la mina',
+  bonusL: 'Bonos',
+  toGold: 'para oro',
 };

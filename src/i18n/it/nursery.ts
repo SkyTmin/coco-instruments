@@ -71,4 +71,16 @@ export const nursery: Translation<typeof ru> = {
     rate: 'Ritmo',
   },
   egg: { moss: 'Muschio', stone: 'Pietra', crystal: 'Cristallo', dragon: 'Drago' },
+  // N4 (19.10): the handoff layout
+  purpose: 'I tuoi compagni in miniera',
+  along: 'Nella banda',
+  lockRankTip: 'Il secondo posto si apre al grado {rank}',
+  lockPrestigeTip: 'Il terzo posto si apre dopo un prestigio',
+  replaceTitle: 'Chi resta a casa?',
+  replaceHint: '{name} prenderà il suo posto',
+  pickHint: 'Scegli chi entra nella banda',
+  zooL: 'Bonus collezione',
+  powerTip: 'Potenza: quanto rende l’animale in miniera',
+  bonusL: 'Bonus',
+  toGold: 'per l’oro',
 };
