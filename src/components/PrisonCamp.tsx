@@ -312,19 +312,8 @@ export function PrisonCamp({
   const { ff, landscape } = useFormFactor();
   const p = useFinanceStore((s) => s.prison);
   const f = useFinanceStore((s) => s.forest);
-  const now = useNow(1000);
   const tabs = only?.length ? only : PLACE_TABS[place];
   const tab = tabs.includes(asked) ? asked : tabs[0];
-  const crew = crewYield(p, now);
-  const miles = milesReady(p);
-  const badge: Partial<Record<CampTab, ReactNode>> = {
-    bench: benchReady(f, p, now) ? '•' : null,
-    cases: p.keys > 0 ? p.keys : null,
-    crew: crew.blocks > 0 && crew.minutes >= 10 ? '•' : null,
-    perks: perkPointsFree(p) > 0 ? perkPointsFree(p) : null,
-    miles: miles > 0 ? miles : null,
-    runes: runesIdle(p, axeLevelOf(f.logs).level) ? '•' : null,
-  };
   // Wave 2 — C: the kit tab bar. Phones: icons only (the word is the tip / aria-label) and the
   // window's ribbon names the open tab; landscape/tablet/desktop: a rail of icon + word on the
   // left and the camp's own title on the ribbon. Tab / Shift+Tab, LB / RB switch tabs.
@@ -332,13 +321,6 @@ export function PrisonCamp({
   // tablet portrait's top strip too: five icon + word tabs cut «Колл…», «Дост…» in 754 px
   const compact =
     ff === 'phone-portrait' || ff === 'phone-landscape' || (ff === 'tablet' && !landscape);
-  const items: TabItem<CampTab>[] = tabs.map((id) => ({
-    id,
-    label: t(`camp.tab.${id}`),
-    name: t(`camp.tab.${id}`),
-    art: <GxIcon name={TAB_ICONS[id]} />,
-    badge: badge[id] ?? undefined,
-  }));
   return (
     <GxSheet
       className={`gx-camp${multi ? ' is-tabs' : ' is-single'}${compact ? ' is-compact' : ''}`}
@@ -346,18 +328,12 @@ export function PrisonCamp({
       onClose={onClose}
       tabs={
         multi && (
-          <Tabs
-            items={items}
-            value={tab}
+          <CampTabBar
+            tabs={tabs}
+            tab={tab}
             // tablet portrait: a top strip too — the rail took 79u of a 265u-wide window
             vertical={ff !== 'phone-portrait' && !(ff === 'tablet' && !landscape)}
-            main
-            className="gx-camp__tabs"
-            onChange={(id) => {
-              selectionChanged();
-              uiTab();
-              onTab(id);
-            }}
+            onTab={onTab}
           />
         )
       }
@@ -371,20 +347,73 @@ export function PrisonCamp({
         {tab === 'axes' && <AxesTab onSpend={onSpend} />}
         {tab === 'axench' && <AxeEnchSection f={f} p={p} />}
         {tab === 'mill' && (
-          <MillTab now={now} onGain={onGain} onSpend={onSpend} onBench={() => onTab('bench')} />
+          <MillTab onGain={onGain} onSpend={onSpend} onBench={() => onTab('bench')} />
         )}
-        {tab === 'bench' && <BenchTab now={now} onGain={onGain} />}
+        {tab === 'bench' && <BenchTab onGain={onGain} />}
         {tab === 'enchant' && <BooksTab />}
         {tab === 'runes' && <RunesTab axeLevel={axeLevelOf(f.logs).level} />}
         {tab === 'pets' && <PetsTab />}
         {tab === 'miles' && <MilesTab onGain={onGain} />}
         {tab === 'shop' && <ShopTab />}
         {tab === 'cases' && <ChestTab onGain={onGain} />}
-        {tab === 'crew' && <CrewTab now={now} onGain={onGain} onSpend={onSpend} />}
+        {tab === 'crew' && <CrewTab onGain={onGain} onSpend={onSpend} />}
         {tab === 'finds' && <FindsTab />}
         {tab === 'perks' && <PerksTab />}
       </div>
     </GxSheet>
+  );
+}
+
+/**
+ * The camp's tab bar with its badges. The bench and crew badges follow the clock, so this bar —
+ * not the whole camp sheet — ticks every second; the tabs that show time (mill, bench, crew) run
+ * their own `useNow` (R55: the shell re-rendered every open tab each second).
+ */
+function CampTabBar({
+  tabs,
+  tab,
+  vertical,
+  onTab,
+}: {
+  tabs: CampTab[];
+  tab: CampTab;
+  vertical: boolean;
+  onTab: (t: CampTab) => void;
+}) {
+  const t = useT();
+  const p = useFinanceStore((s) => s.prison);
+  const f = useFinanceStore((s) => s.forest);
+  const now = useNow(1000);
+  const crew = crewYield(p, now);
+  const miles = milesReady(p);
+  const badge: Partial<Record<CampTab, ReactNode>> = {
+    bench: benchReady(f, p, now) ? '•' : null,
+    cases: p.keys > 0 ? p.keys : null,
+    crew: crew.blocks > 0 && crew.minutes >= 10 ? '•' : null,
+    perks: perkPointsFree(p) > 0 ? perkPointsFree(p) : null,
+    miles: miles > 0 ? miles : null,
+    runes: runesIdle(p, axeLevelOf(f.logs).level) ? '•' : null,
+  };
+  const items: TabItem<CampTab>[] = tabs.map((id) => ({
+    id,
+    label: t(`camp.tab.${id}`),
+    name: t(`camp.tab.${id}`),
+    art: <GxIcon name={TAB_ICONS[id]} />,
+    badge: badge[id] ?? undefined,
+  }));
+  return (
+    <Tabs
+      items={items}
+      value={tab}
+      vertical={vertical}
+      main
+      className="gx-camp__tabs"
+      onChange={(id) => {
+        selectionChanged();
+        uiTab();
+        onTab(id);
+      }}
+    />
   );
 }
 
@@ -493,15 +522,14 @@ const bulkLabel = (b: { label: string }) => (b.label === 'max' ? t('camp.bulkMax
 // ---- Бригада -------------------------------------------------------------------
 
 function CrewTab({
-  now,
   onGain,
   onSpend,
 }: {
-  now: number;
   onGain: (from: number, to: number) => void;
   onSpend: () => void;
 }) {
   const t = useT();
+  const now = useNow(1000);
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const prisonCrewUp = useFinanceStore((s) => s.prisonCrewUp);
@@ -1232,8 +1260,9 @@ type Craft = { kind: 'prop' } | { kind: 'handle' } | { kind: 'order'; i: number 
  * гвоздём, вещь проявляется. Под каждой вещью написано, куда она уйдёт:
  * владелец не понимал, что делается из досок и что с этим потом.
  */
-function BenchTab({ now, onGain }: { now: number; onGain: (from: number, to: number) => void }) {
+function BenchTab({ onGain }: { onGain: (from: number, to: number) => void }) {
   const t = useT();
+  const now = useNow(1000);
   const f = useFinanceStore((s) => s.forest);
   const p = useFinanceStore((s) => s.prison);
   const forestCraftProp = useFinanceStore((s) => s.forestCraftProp);
@@ -1742,17 +1771,16 @@ function MillScene({
 }
 
 function MillTab({
-  now,
   onGain,
   onSpend,
   onBench,
 }: {
-  now: number;
   onGain: (from: number, to: number) => void;
   onSpend: () => void;
   onBench: () => void;
 }) {
   const t = useT();
+  const now = useNow(1000);
   const f = useFinanceStore((s) => s.forest);
   const p = useFinanceStore((s) => s.prison);
   const balance = useFinanceStore((s) => s.slotsBalance);
