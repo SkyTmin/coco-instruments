@@ -302,7 +302,11 @@ export interface DeckProps {
   balance: ReactNode;
   balanceNum: number;
   bet: number;
-  /** Shown as the stake on the spin plate (Cascade: bet × ante). */
+  /**
+   * What the bet well shows when a spin costs more than the bet (Cascade with Ante: the store's
+   * `scatterStake`, 10 → 13). −/+ still walk the bets; the well shows the price of one spin.
+   */
+  betShown?: number;
   freeSpins: number;
   spinning: boolean;
   setBet: (b: number) => void;
@@ -460,7 +464,7 @@ export function CasDeck(p: DeckProps) {
                 p.onCustomBet();
               }}
             >
-              {fmtNum(p.bet)}
+              {fmtNum(p.betShown ?? p.bet)}
               <CoinIcon size={18} />
             </button>
             <Button

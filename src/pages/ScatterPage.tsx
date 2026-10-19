@@ -4,7 +4,7 @@ import { AnimatedNumber } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
-import { Bar, Button } from '@/ui-px';
+import { Bar, Button, Icon } from '@/ui-px';
 import {
   CasAutoPicker,
   CasBetPicker,
@@ -34,7 +34,7 @@ import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
 import { CashDesk } from '@/components/CashDesk';
 import { SkinSheet } from '@/components/SkinSheet';
-import { useFinanceStore } from '@/store';
+import { scatterStake, useFinanceStore } from '@/store';
 import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
 import type { ScatterSpinOutcome } from '@/store';
@@ -689,8 +689,10 @@ export function ScatterPage() {
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
   const inBonus = !!fs && fs.left > 0;
-  // Ante дороже на четверть; в бонусе вращения бесплатные.
-  const stake = inBonus || freeSpins > 0 ? 0 : Math.round(bet * (ante ? ANTE_COST : 1));
+  // Ante дороже на четверть; в бонусе вращения бесплатные. Цена — та же функция, что
+  // списывает стор: окно ставки показывает ровно её (critic12 #1: «10🪙», а списывалось 13).
+  const anteOn = ante && !inBonus;
+  const stake = inBonus || freeSpins > 0 ? 0 : scatterStake(bet, ante);
   const buyCost = Math.round(bet * BUY_BONUS_COST);
   const broke = balance < MIN_BET && freeSpins <= 0 && !inBonus;
   // «Нет монет»: нажатие объясняет, откуда монеты (строка статуса, толчок плашки, вибро).
@@ -1640,7 +1642,8 @@ export function ScatterPage() {
   );
 
   // Ante — тумблер в ряду ставки (44 px); покупка бонуса — в полосе сводки на высоких
-  // раскладках, над деньгами на широких. Цена и смысл Ante — в подсказке и в правилах.
+  // раскладках, над деньгами на широких. Под словом — его цена «×1,25»; включённый — ещё и
+  // галочка в углу (не только цвет, R16/R57). Смысл — в подсказке и в правилах.
   const anteBtn = (
     <Button
       on={ante}
@@ -1656,6 +1659,12 @@ export function ScatterPage() {
       }}
     >
       <b>Ante</b>
+      <i className="px-num">{tr('slots.cascade.anteChip', { n: ANTE_COST })}</i>
+      {anteOn && (
+        <span className="cas-ante__on" aria-hidden="true">
+          <Icon name="check" />
+        </span>
+      )}
     </Button>
   );
   const buyBtn = (
@@ -2062,6 +2071,7 @@ export function ScatterPage() {
           }
           balanceNum={balance}
           bet={bet}
+          betShown={scatterStake(bet, anteOn)}
           freeSpins={freeSpins}
           spinning={spinning}
           setBet={setBet}

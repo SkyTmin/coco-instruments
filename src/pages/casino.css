@@ -654,6 +654,43 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
 .cas-ante.px-btn > b {
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
 }
+/* Ante says its price (critic12 #1 / R57): «Ante» over «×1,25», and the bet well shows what the
+   spin charges. On = gold AND a ✓ badge on the corner, so it reads without colour (R16). */
+.cas-ante.px-btn {
+  position: relative;
+  flex-direction: column;
+  gap: 0;
+  padding-top: var(--u);
+  padding-bottom: calc(2 * var(--u));
+}
+.cas-ante.px-btn.is-on {
+  padding-top: calc(2 * var(--u));
+  padding-bottom: var(--u);
+}
+.cas-ante.px-btn > i.px-num {
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  font-style: normal;
+  white-space: nowrap;
+}
+.cas-ante.px-btn > .cas-ante__on {
+  position: absolute;
+  /* Mostly outside the frame (it sits in the deck's padding / the row gap), so it never covers
+     the «e» of «Ante». */
+  right: calc(-4 * var(--u));
+  top: calc(-5 * var(--u));
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  /* An ink plate with a gold tick: black-on-gold reads in greyscale too. */
+  background: #2a190c;
+  box-shadow: 0 0 0 var(--u) #ffd25e;
+  color: #ffd25e;
+  line-height: 0;
+}
+/* Wide: the buy plate stands 2 u to the right — the badge stops at its edge. */
+.cas[data-lay='wide'] .cas-ante.px-btn > .cas-ante__on {
+  right: calc(-2 * var(--u));
+}
 /* Tall: the plate is the third fact beside the best win and the spins, as wide as its name (fr
    «Acheter le bonus» took two lines in a third of the strip and cost the board 17 px). */
 .cas--scatter[data-lay='tall'] > .cas-info {
