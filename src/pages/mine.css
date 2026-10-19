@@ -1794,6 +1794,13 @@ html[data-ff^='phone'] .mn-dock__label {
 .mn.mn--short .mn-hud {
   row-gap: var(--u);
 }
+/* Рамка ранга в колонке 165 px: поля 2u и зазоры 2u (как на 320 px) — tr «1.100 ●» в полосе
+   между буквами вылезал на 1,4 px (`needs2`). */
+.mn.mn--short .mn-rank {
+  column-gap: calc(2 * var(--u));
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
 /* Задание в колонке 177 px: награда и «Забрать» — во всю ширину карточки под номером и
    названием (рядом с шестиугольником «Забрать» вылезал за колонку на 18 px). */
 .mn.mn--short .mn-quest > :first-child {
