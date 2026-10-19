@@ -2215,6 +2215,9 @@
     system-ui,
     sans-serif;
   font-style: normal;
+  /* Светлая «губа» золотой кнопки (gx-px.css) — под тёмный текст; под светлыми цифрами
+     она читалась второй надписью поверх первой (владелец, 19.10). */
+  text-shadow: none;
 }
 .pmx-item__n.is-buy {
   background: var(--gx-green);
@@ -5928,17 +5931,8 @@
   top: 0;
   height: 100%;
   max-width: none;
-  animation: pet-play var(--pt, 1s) steps(var(--n, 1)) var(--pd, 0s) infinite;
+  /* Кадр ставят общие часы (`lib/frame-clock`) через transform, не CSS steps(). */
   -webkit-user-drag: none;
-}
-.pet__strip.is-once {
-  animation-delay: 0s;
-  animation-iteration-count: 1;
-}
-@keyframes pet-play {
-  to {
-    transform: translateX(-100%);
-  }
 }
 .pet__thumb {
   position: absolute;
@@ -6069,7 +6063,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pet__strip,
   .pet__rays,
   .pet__hearts i {
     animation: none !important;

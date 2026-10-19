@@ -16642,12 +16642,19 @@ input[type='datetime-local'] {
   position: absolute;
   left: 10px;
   bottom: -11px;
-  z-index: 9;
+  /* Над отрядом: если на узком поле места нет и плашка всё же заходит на питомца, читается
+     текст (плашки тапы пропускают, погладить можно). */
+  z-index: 10;
   display: flex;
-  gap: 5px;
+  /* Не дальше отряда посередине кромки (питомец 44 px + 2 px зазора, `--pets` — сколько их):
+     длинная «Золотая жила» уводила ряд под паука (владелец, 19.10). Не влезло — вверх. */
+  flex-wrap: wrap-reverse;
+  gap: 3px 5px;
+  max-width: calc(50% - 12px - var(--pets, 0) * 23px);
   pointer-events: none;
 }
 .pbuff {
+  white-space: nowrap;
   padding: 2px 7px;
   border-radius: 8px;
   font-size: 11px;
@@ -18876,8 +18883,19 @@ input[type='datetime-local'] {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  min-width: 0;
+  max-width: 100%;
   border-color: var(--ev);
   color: var(--ev);
+}
+.pbuff__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Рядом другие баффы — от события остаются знак и таймер. */
+.pbuffs:has(> .pbuff + .pbuff) .pbuff__name {
+  display: none;
 }
 .pbuff--event.is-ending {
   animation: pbuff-end 0.5s ease-in-out infinite alternate;

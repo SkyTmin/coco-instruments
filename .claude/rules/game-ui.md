@@ -345,3 +345,15 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
   - The camp sheet's `b/strong/h3` weight rule hits real headings, so the tabs use spans.
   - After HMR the app imports `/src/store.ts?t=…`. A stand script must import that same URL (take
     it from `performance.getEntriesByType('resource')`), otherwise it writes into a second store.
+
+## Mine HUD over the squad (v2.167, owner 19.10) — `theme.css` `.pbuffs`, `game-ui.css` `.pmx-item__n`
+
+- **Buff row vs pets:** `.pbuffs` (z 10, above the squad) gets `--pets` = squad size from
+  `PrisonPage`; `max-width: calc(50% − 12px − var(--pets)·23px)`, `flex-wrap: wrap-reverse`
+  (extra chips stack upward, not under the pets). The event pill's name (`.pbuff__name`,
+  ellipsis) drops when ≥ 2 chips show (`:has(> .pbuff + .pbuff)`); the clock stays. Measured
+  (`scratchpad/ui12/buffs.mjs`): 430 / 390 one row with a gap; 320 with 3 pets the chips touch
+  the spider by 11 px but sit above it.
+- **Consumable counts:** `.pmx-item__n` has `text-shadow: none` — it inherited the gold
+  button's light lip (`gx-px.css`, `--gx-on-gold-lip`), which under light digits read as a
+  second number on top. Light text inside a `gx-btn` / `gx-round` must reset that shadow.

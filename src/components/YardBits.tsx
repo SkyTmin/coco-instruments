@@ -124,8 +124,10 @@ export function EventPill({ ev, now }: { ev: YardEvent; now: number }) {
         <img className="pbuff__rock" src={rockTexture(ev.rock)} alt="" />
       ) : (
         def.glyph
-      )}{' '}
-      {eventName(ev.id)} · {part}
+      )}
+      {/* Имя уходит, когда рядом есть другие баффы: ряд не должен доходить до питомцев. */}
+      <span className="pbuff__name">{eventName(ev.id)} ·</span>
+      {part}
       {clock(left)}
     </span>
   );

@@ -1,3 +1,16 @@
+## Strip playback on the JS clock (v2.167) — `lib/frame-clock.ts`, `PetArt` (`PetStrip`), `PxStrip`
+
+Owner 19.10 (iPhone, mine): «питомец крутится как карусель туда сюда». Suspected cause: the strip
+was played by CSS `animation: pet-play steps(var(--n))` on a transform; iOS WebKit can't
+accelerate `steps()` transform animations (and only PetArt had `var()` inside `steps()`), so the
+strip slid instead of jumping. Now `PetStrip` sets `translateX(-100·i/n %)` from the shared rAF
+clock (`onTick`, also used by `PxStrip`): loop with a per-pet lead (`phase(id)·6` s), one-shots
+end through `onEnd` (the old timeout fallback stays). `@keyframes pet-play`, `.is-once` and
+`--pd` are gone. The frame index is clamped to ≥ 0: a rAF timestamp can precede the
+`performance.now()` taken in the effect, and frame −1 showed a positive offset for one frame.
+Stand (`scratchpad/ui12/clock.mjs`): idle / pat / trick transforms are whole multiples of 100/n.
+**Not checked on an iPhone** — no WebKit here.
+
 ---
 paths:
   - "src/lib/{pets,pet-sprites}.ts"

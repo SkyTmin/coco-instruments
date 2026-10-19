@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import '@/px-strip.css';
+import { onTick } from '@/lib/frame-clock';
 import { propFit } from '@/lib/props-pixel/fit';
 import { PX_SETS, pxSrc } from '@/lib/props-pixel/manifest';
 import type { PxSetName } from '@/lib/props-pixel/manifest';
@@ -76,23 +77,6 @@ function loadSrc(src: string): Promise<void> {
   });
   loads.set(src, p);
   return p;
-}
-
-// --- Общие часы ---------------------------------------------------------------
-
-type Tick = (now: number) => void;
-const subs = new Set<Tick>();
-let raf = 0;
-function tick(now: number) {
-  for (const f of [...subs]) f(now);
-  raf = subs.size ? requestAnimationFrame(tick) : 0;
-}
-function onTick(f: Tick): () => void {
-  subs.add(f);
-  if (!raf && typeof requestAnimationFrame !== 'undefined') raf = requestAnimationFrame(tick);
-  return () => {
-    subs.delete(f);
-  };
 }
 
 /** Метки по порядку кадров. */
@@ -195,7 +179,8 @@ export function PxStrip({
       let cur = -1;
       show(0);
       return onTick((now) => {
-        const i = Math.floor(((now - t0) / 1000) * st.fps) % n;
+        // Метка кадра rAF бывает раньше `t0` (эффект шёл уже внутри этого кадра) — не уходим в −1.
+        const i = Math.max(0, Math.floor(((now - t0) / 1000) * st.fps)) % n;
         if (i !== cur) show((cur = i));
       });
     }
@@ -226,7 +211,7 @@ export function PxStrip({
     const off = onTick((now) => {
       const el = ((now - t0) / 1000) * st.fps;
       if (el >= n) return finish();
-      const i = Math.floor(el);
+      const i = Math.max(0, Math.floor(el));
       if (i !== cur) {
         show((cur = i));
         fire(i);

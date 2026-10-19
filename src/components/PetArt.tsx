@@ -1,8 +1,9 @@
 // Питомец (v2.73): рисунок тушью по кадрам (`scripts/pets-ink`), шесть
 // анимаций на вид — покой, ходьба, радость, трюк, атака, сон. Каждая —
 // полоса кадров в одном WebP (`public/ui/pets/<id>/<anim>.webp`), кадры
-// переключает CSS `steps()` сдвигом полосы: только transform, без
-// перерисовки (см. «Бюджет кадра» в CLAUDE.md).
+// переключают общие часы (`lib/frame-clock`) сдвигом полосы: только
+// transform, без перерисовки. Не CSS `steps()`: на iOS полоса с ним ехала
+// вбок «каруселью» (v2.167).
 //
 // Покой играет всегда; радость (ласка) и трюк (работа роли) — по событию, один
 // раз, и обратно в покой. Где питомцев много (коллекция, списки), рисуется
@@ -30,6 +31,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { rarityVars } from '@/components/PickArt';
 import { PxStrip } from '@/components/PxStrip';
+import { onTick } from '@/lib/frame-clock';
 import { eggOf, petOf } from '@/lib/pets';
 import type { EggId, PetId } from '@/lib/pets';
 import { PET_PX } from '@/lib/pet-pixel-sprites';
@@ -84,6 +86,60 @@ function phase(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return (h % 1000) / 1000;
+}
+
+/** Полоса кадров: кадр `i` — сдвиг на `i / n` её ширины. Петля идёт со сдвигом `lead` секунд
+ *  (рассинхрон отряда), разовая — с первого кадра и после последнего зовёт `onEnd`. */
+function PetStrip({
+  src,
+  n,
+  fps,
+  lead,
+  once,
+  onEnd,
+}: {
+  src: string;
+  n: number;
+  fps: number;
+  lead: number;
+  once: boolean;
+  onEnd: () => void;
+}) {
+  const ref = useRef<HTMLImageElement>(null);
+  const end = useRef(onEnd);
+  end.current = onEnd;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    let cur = -1;
+    const show = (i: number) => {
+      if (i === cur) return;
+      cur = i;
+      el.style.transform = `translateX(${(-100 * i) / n}%)`;
+    };
+    show(0);
+    if (n < 2 || reduce()) return undefined;
+    const t0 = performance.now() - (once ? 0 : lead * 1000);
+    const off = onTick((now) => {
+      // Метка кадра rAF бывает раньше `t0` (эффект шёл уже внутри этого кадра) — не уходим в −1.
+      const i = Math.max(0, Math.floor(((now - t0) / 1000) * fps));
+      if (!once) return show(i % n);
+      if (i < n) return show(i);
+      off();
+      end.current();
+    });
+    return off;
+  }, [n, fps, lead, once]);
+  return (
+    <img
+      ref={ref}
+      className="pet__strip"
+      src={src}
+      style={{ width: `${n * 100}%` }}
+      alt=""
+      draggable={false}
+    />
+  );
 }
 
 export function PetArt({
@@ -206,8 +262,9 @@ export function PetArt({
   const style = {
     ...rarityVars(def.rarity),
     '--ps': `${size}px`,
-    '--pd': `${-phase(id) * 6}s`,
   } as CSSProperties;
+  /** Рассинхрон петли, секунды: у каждого вида своя фаза, чтобы отряд не дышал хором. */
+  const lead = phase(id) * 6;
 
   return (
     <span
@@ -254,21 +311,14 @@ export function PetArt({
               height: (st.h * fit.s) / pxSet.box,
             }}
           >
-            <img
+            <PetStrip
               key={`${cur}:${once?.k ?? 'loop'}`}
-              className={`pet__strip${once ? ' is-once' : ''}`}
               src={stripSrc(id, cur, large, v)}
-              style={
-                {
-                  width: `${st.n * 100}%`,
-                  '--n': st.n,
-                  '--pt': `${st.n / st.fps}s`,
-                  ...(resume && !once ? { animationDelay: '0s' } : null),
-                } as CSSProperties
-              }
-              alt=""
-              draggable={false}
-              onAnimationEnd={done}
+              n={st.n}
+              fps={st.fps}
+              lead={resume ? 0 : lead}
+              once={!!once}
+              onEnd={done}
             />
           </span>
         </span>
@@ -282,16 +332,14 @@ export function PetArt({
             height: `${st.h * 100}%`,
           }}
         >
-          <img
+          <PetStrip
             key={`${cur}:${once?.k ?? 'loop'}`}
-            className={`pet__strip${once ? ' is-once' : ''}`}
             src={stripSrc(id, cur, large)}
-            style={
-              { width: `${st.n * 100}%`, '--n': st.n, '--pt': `${st.n / st.fps}s` } as CSSProperties
-            }
-            alt=""
-            draggable={false}
-            onAnimationEnd={() => setOnce(null)}
+            n={st.n}
+            fps={st.fps}
+            lead={lead}
+            once={!!once}
+            onEnd={() => setOnce(null)}
           />
         </span>
       )}

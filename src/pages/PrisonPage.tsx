@@ -1888,7 +1888,7 @@ export function PrisonPage() {
             </button>
           )}
           {(anyBuff || rush || yardEv || prison.zone.on) && (
-            <div className="pbuffs">
+            <div className="pbuffs" style={{ '--pets': prison.squad.length } as CSSProperties}>
               {prison.zone.on && (
                 <span className="pbuff pbuff--zone">
                   <GxIcon name="hourglass" size={12} /> {clockMs(zoneLeft(prison.zone, Date.now()))}
