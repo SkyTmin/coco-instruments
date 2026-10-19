@@ -68,6 +68,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'desde el nivel {n}',
     current: 'elegido',
     note: 'La «Reliquia» no se desbloquea por nivel: se gana con un solo giro gordo y se queda para siempre. Símbolos: Twemoji (CC-BY 4.0, Twitter Inc. y colaboradores).',
+    relicLock: 'Reliquia — por un premio ×{x} en un solo giro',
+    credit: 'Símbolos: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Saldo',

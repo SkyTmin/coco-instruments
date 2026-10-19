@@ -65,6 +65,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'seviye {n} ile açılır',
     current: 'seçili',
     note: '“Kalıntı” seviyeyle açılmaz — tek bir büyük spinle kazanılır ve sonsuza dek kalır. Semboller: Twemoji (CC-BY 4.0, Twitter Inc. ve katkıda bulunanlar).',
+    relicLock: 'Kalıntı — tek spinde ×{x} kazançla',
+    credit: 'Semboller: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Bakiye',
@@ -128,7 +130,7 @@ export const slots: Translation<typeof ru> = {
   brokeHint: 'Altın bitti — madende kazan',
   recent: 'Son spinler',
   statSpins: 'spin',
-  statBestWin: 'en iyi kazanç',
+  statBestWin: 'En iyi kazanç',
   pay: {
     more: 'Ayrıntılar',
     cascShort: 'Kazananlar kaybolur, yenileri düşer — çarpan büyür',

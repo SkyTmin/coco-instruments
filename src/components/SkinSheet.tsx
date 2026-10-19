@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { GxSheet } from '@/components/gx';
 import { Bar, Icon } from '@/ui-px';
 import { cachedOwner, getBackupStatus } from '@/lib/backup';
-import { SKINS, symbolSrc } from '@/lib/skins';
+import { RELIC_X, SKINS, symbolSrc } from '@/lib/skins';
 import type { Skin, SkinId } from '@/lib/skins';
 import { SKIN_UNLOCK, isSkinAvailable } from '@/lib/slots-meta';
 import { useFinanceStore } from '@/store';
@@ -95,7 +95,13 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
           ),
         )}
       </div>
-      <p className="skn-note">{t('slots.skin.note')}</p>
+      {/* Одна строка про «Реликвию» и строка авторства вместо абзаца на 23 слова (critic9 #13);
+          полный текст — в подсказке. */}
+      <p className="skn-note" data-tip={t('slots.skin.note')}>
+        <Icon name="lock" />
+        {t('slots.skin.relicLock', { x: RELIC_X })}
+      </p>
+      <p className="skn-note skn-note--credit">{t('slots.skin.credit')}</p>
     </GxSheet>
   );
 }

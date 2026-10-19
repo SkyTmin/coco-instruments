@@ -69,6 +69,8 @@ export const slots = {
     fromLevel: 'с {n} уровня',
     current: 'выбран',
     note: '«Реликвию» не открывает уровень — её зарабатывают одним крупным спином, и она остаётся навсегда. Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).',
+    relicLock: 'Реликвия — за выигрыш ×{x} одним спином',
+    credit: 'Символы — Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Баланс',

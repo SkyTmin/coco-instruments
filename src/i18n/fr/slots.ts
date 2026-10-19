@@ -68,6 +68,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'dès le niveau {n}',
     current: 'choisi',
     note: '« Relique » ne se débloque pas au niveau : on la gagne en un seul gros tour, et elle reste pour toujours. Symboles : Twemoji (CC-BY 4.0, Twitter Inc. et contributeurs).',
+    relicLock: 'Relique — pour un gain ×{x} en un seul tour',
+    credit: 'Symboles : Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Solde',
