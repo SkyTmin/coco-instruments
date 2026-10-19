@@ -936,6 +936,11 @@ html[data-ff='tablet'] .cas-bal__v {
 .cas[data-lay='tall'] .cas-bet__v {
   height: max(var(--gx-hit), calc(24 * var(--u)));
 }
+/* Tablet portrait, Cascade: Ante shares the row — 60-px-wide steps (still 72 tall) leave the
+   caption its word (es «Apuesta» was 79 px in 70). */
+html[data-ff='tablet'] .cas--scatter[data-lay='tall'] .cas-bet__step.px-btn {
+  min-width: calc(20 * var(--u));
+}
 .cas[data-lay='wide'] .cas-bet {
   justify-self: stretch;
 }
