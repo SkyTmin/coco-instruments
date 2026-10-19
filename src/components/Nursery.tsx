@@ -167,7 +167,7 @@ const STEPS = ['--pd-fs-xl', '--pd-fs-lg', '--pd-fs', '--pd-fs-sm'] as const;
 
 // Latin vowels of the 7 languages + Cyrillic а е ё и о у ы э ю я (escaped: the i18n guard)
 const VOWEL =
-  /[aeiouyäöüéèêëàâîïôûùíóúıаеёиоуыэюя]/i;
+  /[aeiouyäöüéèêëàâîïôûùíóúı\u0430\u0435\u0451\u0438\u043e\u0443\u044b\u044d\u044e\u044f]/i;
 /** Soft hyphens at syllable breaks of a long word (as the forge's tiles): a card name breaks
  *  «медве-жатник» in a 90-px cell, never «медвежатни-к» or out of the cell. */
 function syl(text: string): string {
@@ -187,7 +187,7 @@ function syl(text: string): string {
         const n = k - j;
         const ok =
           !isV(w[i]) &&
-          !/[ьъйЬЪЙ-]/.test(w[i]) &&
+          !/[\u044c\u044a\u0439\u042c\u042a\u0419-]/.test(w[i]) &&
           j > 0 &&
           k < w.length &&
           i >= 2 &&
@@ -308,8 +308,19 @@ export const Nursery = memo(function Nursery({
   // details (the handoff's flow); wider formats show the details beside the grid.
   const oneRef = useRef(one);
   oneRef.current = one;
+  // Pick mode (an empty place was tapped): the chosen owned pet goes straight into that place.
+  const pickCard = (id: PetId) => {
+    if (pickSlot == null || pickSlot >= slots || squadView[pickSlot]) return;
+    if (!p.pets[id] || squadView.includes(id)) return;
+    primeAudio();
+    take(id, pickSlot);
+    setFilter('all');
+  };
+  const pickRef = useRef(pickCard);
+  pickRef.current = pickCard;
   const onCard = useCallback(
     (id: PetId) => {
+      pickRef.current(id);
       selectRef.current(id);
       if (oneRef.current) onTab('squad');
     },
@@ -828,7 +839,7 @@ export const Nursery = memo(function Nursery({
                   }
                   setPickSlot(i);
                   setFilter('owned');
-                  if (one) onTab('coll');
+                  onTab('coll');
                 }}
               >
                 <Icon name="plus" />

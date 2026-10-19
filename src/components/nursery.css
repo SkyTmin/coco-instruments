@@ -1278,9 +1278,13 @@
   grid-template-rows: repeat(2, minmax(0, 1fr));
   max-height: calc(115 * var(--u));
 }
+.nrs--one .nrs-shop {
+  container-type: inline-size;
+}
 .nrs--one .nrs-buy {
   height: auto;
-  min-height: calc(34 * var(--u));
+  /* never longer than 5:2 (half the shop's width / 2.5, whole art px) */
+  min-height: max(calc(34 * var(--u)), round(up, (100cqi - 3 * var(--u)) / 5, var(--u)));
 }
 
 /* ---- Phone portrait: tall phones give the places more height ------------------------------ */
@@ -1315,7 +1319,7 @@
     --bh: calc(24 * var(--u));
   }
   .nrs--one .nrs-buy {
-    min-height: calc(30 * var(--u));
+    min-height: max(calc(30 * var(--u)), round(up, (100cqi - 3 * var(--u)) / 5, var(--u)));
   }
   .nrs--one .nrs-stage {
     min-height: calc(50 * var(--u));
@@ -1364,7 +1368,7 @@
   display: grid;
   grid-template:
     'list main side' minmax(0, 1fr)
-    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 7fr);
+    / minmax(0, 9fr) minmax(0, 12fr) minmax(0, 7fr);
 }
 .nrs:is(.nrs--two, .nrs--three) :is(.nrs-squad, .nrs-coll) {
   grid-area: list;
@@ -1437,7 +1441,11 @@
   height: calc(30 * var(--u));
 }
 .nrs--three .nrs-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+/* wide screens: the card art box fits the 24u thumbnail (30u left 6u of air) */
+.nrs:is(.nrs--two, .nrs--three) .nrs-card__art {
+  height: calc(26 * var(--u));
 }
 @media (min-height: 501px) {
   .nrs--three .nrs-squad {
@@ -1510,21 +1518,23 @@
 @media (max-height: 500px) {
   .nrs--three.arm.is-window {
     --g: calc(3 * var(--u));
-    padding-top: calc(var(--safe-top, 0px) + 3 * var(--u));
-    padding-bottom: calc(var(--safe-bottom, 0px) + 3 * var(--u));
+    /* every pixel of height goes to the stage (844×390: pet 224 → 261) */
+    padding-top: calc(var(--safe-top, 0px) + var(--u));
+    padding-bottom: calc(var(--safe-bottom, 0px) + var(--u));
   }
   .nrs--three .nrs-top {
-    height: calc(24 * var(--u));
+    height: calc(22 * var(--u));
   }
   .nrs--three .nrs-back {
     width: calc(20 * var(--u));
     height: calc(20 * var(--u));
   }
-  /* phone landscape: the header's tabs are words only, 24u high (≤ 2.5:1) */
-  .nrs--three .nrs-tab {
-    height: calc(24 * var(--u));
+  /* phone landscape: the header's tabs are small words only, 22u high (≤ 2.5:1; a taller
+     header cost the pet a size step) */
+  .nrs--three .nrs-tabs .nrs-tab {
+    height: calc(22 * var(--u));
     padding: 0 calc(3 * var(--u));
-    font-size: var(--pd-fs-sm);
+    font-size: var(--pd-fs-xs);
   }
   .nrs--three .nrs-tab > .gx-icon {
     display: none;
@@ -1568,7 +1578,7 @@
       'list show stats' auto
       'list show .' minmax(0, 1fr)
       'list show bar' auto
-      / minmax(0, 6fr) minmax(0, 7fr) minmax(0, 8fr);
+      / minmax(0, 6fr) minmax(0, 8fr) minmax(calc(148 * var(--u)), 7fr);
   }
   .nrs--three .nrs-show {
     grid-area: show;
@@ -1581,5 +1591,8 @@
   }
   .nrs--three .nrs-sum {
     display: none;
+  }
+  .nrs--three .nrs-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

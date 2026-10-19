@@ -284,7 +284,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
   const shopTall = layout === 'three' && tileH >= 56 * u;
   const shopEgg = eggPx(
     layout === 'one'
-      ? (tileH >= 40 * u ? 20 : 16) * u
+      ? (tileH >= 40 * u && tileW >= 80 * u ? 20 : 16) * u
       : layout === 'two'
         ? 28 * u
         : shopTall
