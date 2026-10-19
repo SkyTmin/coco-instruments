@@ -178,7 +178,7 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
   phone portrait 171×341, phone landscape 374×152, tablet portrait 163×217 (C's rail takes about
   95u, so the tablet is narrower AND shorter than a phone), tablet landscape and desktop
   283–326×214. `tall` is therefore the compact variant: sockets 2×2 beside the pouch, small
-  rune buttons, the skills reset in the action row.
+  rune buttons (the skills reset sits on the points plate since round 2).
 - **Shop:** rows with the price button on the right (phones, tablet portrait); a 3×2 grid of cards
   on wide. The pack size is a tag on the button's corner, and the price keeps 5ch, so ×1/×5/×10
   never resizes anything. Can't afford: an `off` button plus a floating pop with the shortfall.
@@ -206,6 +206,24 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
     row's button never changes width.
 
   Pad focus moves are the actions `up/down/left/right`, not `move*`.
+- **Round 2, stage A (T2 / T2′, 19.10.2026):**
+  - **Short phone** (`useLay().short` = phone portrait with `h / scale < 350`, i.e. 320×568,
+    iPhone SE in Telegram; body ≈146×213u): Skills take `tall` plus `ctab--short` (plate alone
+    in the head, nodes as a sideways strip with a `›` while more lie beyond, no per-level line);
+    Runes get `ctab--short` on `one`: sockets row (18u) + bonus 2×2 on top, pouch (2 columns) |
+    inspect (name, 2-line effect, 1-line note with `data-tip`, three stacked `sm` buttons) side
+    by side, no socket captions (a locked socket says its level when tapped). Before, the
+    pouch and the skill tree were 0 px tall there.
+  - **Skills reset** = `Button size="sm" icon="undo"` on the points plate, armed by a first tap,
+    fired by a second ≥ `ARM_GUARD_MS` later (`useArmGuard`), disarms after 4 s or on any other
+    action; «tap again» goes to the note line (`ctabs.perks.resetArm`). Phone landscape drops
+    the per-level line and packs the panel at 1u so the note line keeps its 2 lines.
+  - **Runes bonus** = the worn runes only (`bonusOf({ runes, sockets })` — pets show theirs in the
+    Nursery), a fixed 2×2 grid of `[stat art 24] +7,5% продажа` chips (`ctabs.bonus.*`, full
+    `camp.bonus.*` in `data-tip`). If any word would be cut, all words go (`.is-tight`, measured
+    in a layout effect + ResizeObserver): words show at 342 px (pp) and up, not at 253–312.
+  - Checks: `scratchpad/ui5T/stageA.mjs` (buttons vs body, reset arm timing, bonus box),
+    `shots.mjs`, `armshot.mjs`, `strip.mjs`, `geo2.mjs`.
 - **Pitfalls:**
   - The kit `Grid` prop `slot` clashes with the HTML `slot` attribute type: pass
     `style={{ '--slot': … }}` instead.
