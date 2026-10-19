@@ -37,8 +37,17 @@ export const ctabs = {
     next: 'Дальше',
     learn: 'Изучить',
     noPoints: 'Нет свободных очков — их дают престижи',
-    /** Secondary reset button (full wording stays in camp.perks.reset as its tooltip). */
-    reset: 'Сбросить',
-    free: 'бесплатно',
+    /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
+    resetArm: 'Ещё раз — сбросить навыки',
+  },
+  /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
+  bonus: {
+    sell: 'продажа',
+    dmg: 'копка',
+    rate: 'удары',
+    loot: 'добыча',
+    token: 'токены',
+    proc: 'чары',
+    luck: 'ключи',
   },
 } as const;

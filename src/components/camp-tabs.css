@@ -730,18 +730,68 @@
 .ctab-sock__cap.is-on {
   color: var(--px-green);
 }
-/* Bonus of the worn runes: chips in a box of two lines (socketing changes the words, not the box;
-   a rare third line scrolls instead of pushing the pouch). */
+/* Bonus of the worn runes: a FIXED 2×2 grid — four sockets give at most four kinds, so the box
+   never scrolls (critic5 P0: a third bonus hid in a 55-px scroller). Chip = [stat picture 24]
+   +7,5% продажа; the full «к продаже» is its tip. Narrow columns drop the word, not the number. */
 .ctab-bonus {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  --row-st: max(calc(var(--px-fs-sm) * 1.5), calc(var(--st, 24px) + 4px));
+  container: ctab-bonus / inline-size;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: var(--row-st);
   gap: calc(2 * var(--u));
-  height: calc(var(--px-fs-sm) * 3 + 2 * var(--u));
-  overflow-y: auto;
-  scrollbar-width: thin;
+  height: calc(var(--row-st) * 2 + 2 * var(--u));
+  overflow: hidden;
+  font-size: var(--px-fs-sm);
+}
+.ctab-bonus > .ctab-bonus__chip {
+  height: auto;
+  min-width: 0;
+  padding: 0 calc(2 * var(--u)) 0 var(--u);
+  font-weight: 500;
+}
+.ctab-bonus__w {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@container ctab-bonus (max-width: 17em) {
+  .ctab-bonus__w {
+    display: none;
+  }
+}
+/* A baked 12 × 12 stat picture (paint.ts: N2's six + T2's «proc») at `--st`. */
+.ctab-st {
+  display: inline-block;
+  flex: none;
+  width: var(--st, 24px);
+  height: var(--st, 24px);
+  background: no-repeat center / 100% 100%;
+  image-rendering: pixelated;
+}
+.ctab-st--sell {
+  background-image: var(--pximg-st-sell);
+}
+.ctab-st--dmg {
+  background-image: var(--pximg-st-dmg);
+}
+.ctab-st--rate {
+  background-image: var(--pximg-st-rate);
+}
+.ctab-st--loot {
+  background-image: var(--pximg-st-loot);
+}
+.ctab-st--token {
+  background-image: var(--pximg-st-token);
+}
+.ctab-st--proc {
+  background-image: var(--pximg-st-proc);
+}
+.ctab-st--luck {
+  background-image: var(--pximg-st-luck);
 }
 .ctab-bonus__none {
+  grid-column: 1 / -1;
   font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
   color: var(--px-muted);
 }
@@ -1028,33 +1078,14 @@
   background: #ffd25e;
   box-shadow: inset var(--u) var(--u) 0 #fff3c4;
 }
-/* Reset is secondary: a small plain button in the tree's corner, «free» said beside it. */
-.ctab-reset {
+/* Reset is secondary and free: a small ↶ button at the plate's right end (critic5 P0 — in the
+   action row it fell out of the 844×390 window). Armed (first tap) it turns red. */
+.ctab-points > .ctab-points__reset {
   flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(3 * var(--u));
-}
-.ctab-reset__free {
-  padding: 0 calc(2 * var(--u));
-  font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
-  color: var(--px-muted);
-  background: rgb(255 246 224 / 0.82);
+  margin-left: var(--u);
 }
 .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
-}
-.ctab-insp__acts > .ctab-reset__btn {
-  flex: none;
-}
-/* Phone landscape: the panel is narrow — «Learn» takes the row, the reset sits under it. */
-.ctab--land .ctab-insp--perk .ctab-insp__acts {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.ctab--land .ctab-insp--perk .ctab-insp__acts > :first-child {
-  flex: 1 1 100%;
 }
 .ctab--tall .ctab-insp--perk .ctab-insp__line {
   height: var(--ln-sm);

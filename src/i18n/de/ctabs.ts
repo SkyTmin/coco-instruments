@@ -39,8 +39,17 @@ export const ctabs: Translation<typeof ru> = {
     next: 'Danach',
     learn: 'Lernen',
     noPoints: 'Keine freien Punkte – die gibt es fürs Prestige',
-    /** Secondary reset button (full wording stays in camp.perks.reset as its tooltip). */
-    reset: 'Zurücksetzen',
-    free: 'kostenlos',
+    /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
+    resetArm: 'Nochmal tippen zum Zurücksetzen',
+  },
+  /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
+  bonus: {
+    sell: 'Verkauf',
+    dmg: 'Abbau',
+    rate: 'Schläge',
+    loot: 'Beute',
+    token: 'Tokens',
+    proc: 'Zauber',
+    luck: 'Schlüssel',
   },
 };

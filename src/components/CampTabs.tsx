@@ -58,6 +58,7 @@ import {
 import { eggName } from '@/i18n/data-books';
 import { findName, findText, mileText, mileTitle, nameIn } from '@/i18n/data-mine';
 import { EggArt } from '@/components/PetArt';
+import { useArmGuard } from '@/components/armory';
 import {
   ItemIcon,
   KeyIcon,
@@ -389,8 +390,13 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const inspPx = fit(40, lay === 'wide' ? 30 : 24, scale, dpr);
   const actSize = lay === 'tall' || lay === 'land' ? 'sm' : undefined;
 
-  const b = bonusOf(p);
+  // The amulet's own bonus: the worn runes only (the squad's pets show theirs in the Nursery), so
+  // four sockets give at most four kinds and the 2×2 box never scrolls (critic5 P0).
+  const b = bonusOf({ runes: p.runes, sockets: p.sockets });
   const bonus = BONUS_KEYS.filter((k) => b[k] > 0);
+  // Bonus pictures: the kit's 12 × 12 stat art at 24 CSS px (36 at ui-scale ≥ 4), whole device
+  // pixels per art pixel (as the Nursery's `useStatPx`).
+  const stPx = `${(Math.max(1, Math.round(((scale >= 4 ? 36 : 24) * dpr) / 12)) * 12) / dpr}px`;
 
   const amulet = (
     <section className="ctab-amulet">
@@ -442,11 +448,18 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
           })}
         </div>
       </Panel>
-      <div className="ctab-bonus">
+      <div className="ctab-bonus" style={{ '--st': stPx } as CSSProperties}>
         {bonus.length ? (
           bonus.map((k) => (
-            <span key={k} className="ctab-chip">
-              <b className="px-num">{pctText(b[k])}</b> {t(`camp.bonus.${k}`)}
+            <span
+              key={k}
+              className="ctab-chip ctab-bonus__chip"
+              data-tip={`${pctText(b[k])} ${t(`camp.bonus.${k}`)}`}
+              aria-label={`${pctText(b[k])} ${t(`camp.bonus.${k}`)}`}
+            >
+              <i className={`ctab-st ctab-st--${k}`} aria-hidden="true" />
+              <b className="px-num">{pctText(b[k])}</b>
+              <span className="ctab-bonus__w">{t(`ctabs.bonus.${k}`)}</span>
             </span>
           ))
         ) : (
@@ -891,12 +904,22 @@ export function PerksTab() {
   const list = PERKS.filter((k) => CREW_ON || k.id !== 'shift');
   const [sel, setSel] = useState<PerkId>(list[0].id);
   const [note, setNote] = useState<string | null>(null);
+  // The reset is armed by a first tap; a second one ≥ ARM_GUARD_MS later resets (R22).
+  const [armed, setArmed] = useState(false);
+  const guard = useArmGuard();
   const root = useRef<HTMLDivElement>(null);
   const k = list.find((x) => x.id === sel) ?? list[0];
   const lv = p.perks[k.id];
   const max = lv >= k.max;
 
+  useEffect(() => {
+    if (!armed) return undefined;
+    const id = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(id);
+  }, [armed]);
+
   const learn = () => {
+    setArmed(false);
     if (locked) {
       notifyWarning();
       setNote(t('camp.perks.locked'));
@@ -928,31 +951,25 @@ export function PerksTab() {
     if (id === sel) return;
     selectionChanged();
     setNote(null);
+    setArmed(false);
     setSel(id);
+  };
+  const doReset = () => {
+    if (!armed) {
+      tapLight();
+      guard.mark();
+      setArmed(true);
+      return;
+    }
+    if (guard.tooSoon()) return; // a double tap is not a confirmation
+    setArmed(false);
+    prisonPerksReset();
+    tapLight();
+    setNote(null);
   };
 
   const nodeSlot = lay === 'tall' ? 24 : 30;
-  // Tablet portrait and phone landscape are short: the reset rides in the action row (still small
-  // and grey) instead of taking a row under the tree.
-  const resetInActs = lay === 'tall' || lay === 'land';
-  const reset = (
-    <>
-      {!resetInActs && <span className="ctab-reset__free">{t('ctabs.perks.free')}</span>}
-      <Button
-        size="sm"
-        className="ctab-reset__btn"
-        title={t('camp.perks.reset')}
-        aria-label={t('camp.perks.reset')}
-        onClick={() => {
-          prisonPerksReset();
-          tapLight();
-          setNote(null);
-        }}
-      >
-        {t('ctabs.perks.reset')}
-      </Button>
-    </>
-  );
+  const line = armed ? t('ctabs.perks.resetArm') : note;
   const now = perkAt(k.id, lv);
   const next = perkAt(k.id, lv + 1);
 
@@ -984,6 +1001,16 @@ export function PerksTab() {
                   {t('ctabs.perks.prestige', { n: p.prestige })}
                 </span>
               </span>
+              {/* Reset is secondary and free: a small ↶ on the plate, never in the action row
+                  (it fell out of the 844×390 window there — critic5 P0). Two taps. */}
+              <Button
+                size="sm"
+                icon="undo"
+                kind={armed ? 'danger' : 'secondary'}
+                label={t('camp.perks.reset')}
+                className={`ctab-points__reset${armed ? ' is-armed' : ''}`}
+                onClick={doReset}
+              />
             </span>
           )
         }
@@ -1019,7 +1046,6 @@ export function PerksTab() {
             })}
           </div>
         </div>
-        {!locked && !resetInActs && <div className="ctab-reset">{reset}</div>}
       </Panel>
       <Panel material="obsidian" className="ctab-insp ctab-insp--perk" aria-live="polite">
         <div className="ctab-insp__top">
@@ -1043,7 +1069,7 @@ export function PerksTab() {
             {max ? t('camp.maxDone') : (next ?? `${lv + 1}/${k.max}`)}
           </span>
         </div>
-        <div className={`ctab-insp__line${note ? ' is-note' : ''}`}>{note ?? ''}</div>
+        <div className={`ctab-insp__line${line ? ' is-note' : ''}`}>{line ?? ''}</div>
         <div className="ctab-insp__acts">
           {max ? (
             <span className="ctab-insp__max">
@@ -1055,7 +1081,6 @@ export function PerksTab() {
               {t('ctabs.perks.learn')}
             </Button>
           )}
-          {!locked && resetInActs && reset}
         </div>
       </Panel>
     </div>

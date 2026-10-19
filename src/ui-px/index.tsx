@@ -67,7 +67,9 @@ export type PxIconName =
   | 'nomusic'
   | 'question'
   | 'excl'
-  | 'minus';
+  | 'minus'
+  // wave 3 — T2
+  | 'undo';
 
 /** A 9×9 pixel icon (mask), colour = currentColor. */
 export function Icon({ name, className }: { name: PxIconName; className?: string }) {

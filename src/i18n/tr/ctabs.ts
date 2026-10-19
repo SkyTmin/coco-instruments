@@ -39,8 +39,17 @@ export const ctabs: Translation<typeof ru> = {
     next: 'Sonra',
     learn: 'Öğren',
     noPoints: 'Boş puan yok — prestij verir',
-    /** Secondary reset button (full wording stays in camp.perks.reset as its tooltip). */
-    reset: 'Sıfırla',
-    free: 'ücretsiz',
+    /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
+    resetArm: 'Sıfırlamak için tekrar dokun',
+  },
+  /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
+  bonus: {
+    sell: 'satış',
+    dmg: 'kazma',
+    rate: 'vuruş',
+    loot: 'ganimet',
+    token: 'jeton',
+    proc: 'büyü',
+    luck: 'anahtar',
   },
 };
