@@ -264,8 +264,16 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
 
   const nestRow = useRef<HTMLDivElement>(null);
   const nb = useBox(nestRow, tab === 'eggs');
+  // the egg fills the nest's art box (measured in the fit pass: a two-line «blocks left» on a
+  // narrow nest takes some of it); before the first measure — an estimate from the row
+  const [nestArt, setNestArt] = useState({ w: 0, h: 0 });
   const nestEgg = eggPx(
-    Math.max(18 * u, Math.min((nb.w - 4 * u) / 2 - 10 * u, nb.h - 40 * u, 64 * u)),
+    Math.max(
+      18 * u,
+      nestArt.h > 0
+        ? Math.min(nestArt.w - 2 * u, nestArt.h - 2 * u, 64 * u)
+        : Math.min((nb.w - 4 * u) / 2 - 10 * u, nb.h - 40 * u, 64 * u),
+    ),
   );
   const shopRow = useRef<HTMLDivElement>(null);
   const sb = useBox(shopRow, tab === 'eggs');
@@ -332,15 +340,20 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
       [...el.querySelectorAll<HTMLElement>(sel)].some((x) => x.scrollWidth > x.clientWidth + 0.5);
     const row = el.querySelector<HTMLElement>('.nrs-nests__row');
     if (row) {
-      row.classList.remove('is-tight');
-      row.classList.toggle('is-tight', cut('.nrs-nest__nm, .nrs-nest__left'));
+      row.classList.remove('is-tight', 'is-tight2');
+      if (cut('.nrs-nest__nm, .nrs-nest__left')) row.classList.add('is-tight');
+      if (cut('.nrs-nest__nm, .nrs-nest__left')) row.classList.add('is-tight2');
+      const art = row.querySelector<HTMLElement>('.nrs-nest:not(.is-empty) .nrs-nest__art');
+      const w = art?.clientWidth ?? 0;
+      const h = art?.clientHeight ?? 0;
+      setNestArt((o) => (o.w === w && o.h === h ? o : { w, h }));
     }
     const shop = el.querySelector<HTMLElement>('.nrs-shop');
     if (shop) {
       shop.classList.remove('is-tight');
       shop.classList.toggle('is-tight', cut('.nrs-buy__nm, .nrs-buy__st'));
     }
-  }, [fitTick, layout, tab, t, p.eggs, p.nest, armed, balance, p.tokens, u, shopEgg]);
+  }, [fitTick, layout, tab, t, p.eggs, p.nest, armed, balance, p.tokens, u, shopEgg, nb.w, nb.h]);
 
   const tabBtn = (id: NurTab, icon: GxIconName, label: string, badge?: ReactNode) => (
     <PxdButton
@@ -460,8 +473,10 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
                 }}
               >
                 <EggArt egg={id} size={chipEgg} still />
-                <b className="px-num">×{p.eggs[id]}</b>
-                {heatPips(id)}
+                <span className="nrs-qchip__t">
+                  <b className="px-num">×{p.eggs[id]}</b>
+                  {heatPips(id)}
+                </span>
               </PxdButton>
             ))
           ) : (
@@ -477,15 +492,18 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
           >
             <GxIcon name="egg" />
             <span className="nrs-all__t">
+              {/* the count goes to the price line: the button stays short (≤ 5:1) */}
               <b>
-                {t(armed === 'all' ? 'eggs.sureAll' : 'eggs.hatchAll', {
-                  count:
-                    plan.picks.length && plan.picks.length < eggsAll
-                      ? t('eggs.someOf', { a: plan.picks.length, b: eggsAll })
-                      : `(${eggsAll})`,
-                })}
+                {t(armed === 'all' ? 'eggs.sureAll' : 'eggs.hatchAll', { count: '' })
+                  .replace(/\s+/g, ' ')
+                  .trim()}
               </b>
               <small className="px-num">
+                <span>
+                  {plan.picks.length && plan.picks.length < eggsAll
+                    ? t('eggs.someOf', { a: plan.picks.length, b: eggsAll })
+                    : `×${eggsAll}`}
+                </span>
                 {price.coins > 0 && (
                   <span>
                     <CoinIcon size={7 * u} /> {fmtShort(price.coins)}
@@ -578,7 +596,9 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
                   {tok ? <TokenIcon size={7 * u} /> : <CoinIcon size={7 * u} />}
                   {tok ? fmt(tok) : fmtShort(e.price)}
                 </span>
-                <span className={`nrs-buy__st${can ? ' is-ok' : ''}`}>
+                <span
+                  className={`nrs-buy__st${can ? ' is-ok' : ''}${sold && !locked && room && !rich ? ' is-more' : ''}`}
+                >
                   {locked ? (
                     <>
                       <Icon name="lock" />
@@ -629,7 +649,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
         </div>
         {layout === 'three' && tabs}
         <span
-          className="nrs-purse pxd-chip pxd-f pxd-f--well"
+          className="nrs-purse"
           aria-label={`${fmtShort(balance)} · ${fmt(p.tokens)}`}
         >
           <span>

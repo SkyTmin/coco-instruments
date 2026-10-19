@@ -581,7 +581,7 @@ export const Nursery = memo(function Nursery({
         {petEl}
         <span className="nrs-marks">
           <span className="nrs-marks__l">
-            <span className="nrs-rar pxd-chip pxd-f pxd-f--well">
+            <span className="nrs-rar pxd-chip">
               <i className="nrs-dot" aria-hidden="true" />
               {t(`nursery.rarity.r${sdef.rarity}` as 'nursery.rarity.r0')}
               {!!srec?.v && (
@@ -591,7 +591,7 @@ export const Nursery = memo(function Nursery({
               )}
             </span>
             <span
-              className={`nrs-pow pxd-chip pxd-f pxd-f--well${srec ? '' : ' is-hidden'}`}
+              className={`nrs-pow pxd-chip${srec ? '' : ' is-hidden'}`}
               data-tip={t('nursery.powerTip')}
               aria-label={`${t('nursery.power')} ${srec ? fmtNum(petScore(stageId, srec) * 10) : ''}`}
             >
@@ -600,7 +600,7 @@ export const Nursery = memo(function Nursery({
             </span>
           </span>
           {sHere && (
-            <span className="nrs-along pxd-chip pxd-f pxd-f--well">
+            <span className="nrs-along pxd-chip">
               <Icon name="check" />
               {t('nursery.along')}
             </span>
@@ -867,9 +867,21 @@ export const Nursery = memo(function Nursery({
     ro.observe(grid);
     return () => ro.disconnect();
   }, [tab, layout, fonts, gridKey, t]);
+  // a name that needs three lines even with syllable breaks («Panzerknacker-Waschbär» at 320 px):
+  // every card's name box takes three small lines, so the rows stay equal
+  useLayoutEffect(() => {
+    const grid = root.current?.querySelector<HTMLElement>('.nrs-grid');
+    if (!grid) return;
+    grid.classList.remove('is-3l');
+    const over = [...grid.querySelectorAll<HTMLElement>('.nrs-card__nm')].some(
+      (n) => n.scrollHeight > n.clientHeight + 1,
+    );
+    grid.classList.toggle('is-3l', over);
+  }, [nameFit, tab, layout, gridKey, t]);
 
   // ---- Collection ------------------------------------------------------------------------------
   const cardArt = thumbPx(one ? 28 * u : 24 * u, dpr);
+  const zooText = `${t('nursery.zooL')}: ${t('nursery.zoo', { v: pctV(zoo) })}`;
   const collEl = (
     <section className="nrs-coll" aria-label={t('nursery.collection')}>
       <div className="nrs-coll__head">
@@ -878,20 +890,9 @@ export const Nursery = memo(function Nursery({
             {t('nursery.collection')}{' '}
             <span className="px-num">{t('eggs.someOf', { a: owned, b: PETS.length })}</span>
           </h2>
-          {zoo > 0 && (
-            <span
-              className="nrs-zoo"
-              role="img"
-              data-tip={`${t('nursery.zooL')}: ${t('nursery.zoo', { v: pctV(zoo) })}`}
-              aria-label={`${t('nursery.zooL')}: ${t('nursery.zoo', { v: pctV(zoo) })}`}
-            >
-              <StatIcon stat="sell" />
-              <b className="px-num">{t('nursery.bonus', { v: pctV(zoo) })}</b>
-            </span>
-          )}
         </div>
         {pickSlot != null ? (
-          <div className="nrs-pickbar pxd-f pxd-f--well" role="status">
+          <div className="nrs-pickbar" role="status">
             <span>{t('nursery.pickHint')}</span>
             <PxdButton
               className="nrs-pickbar__x"
@@ -931,6 +932,20 @@ export const Nursery = memo(function Nursery({
             <span className="nrs-tool__k">{t('nursery.sortLabel')}</span>
             <b>{t(`nursery.sort.${sort}`)}</b>
           </PxdButton>
+          {/* the collection bonus: a tile like its neighbours, the sentence on tap (touch has no tips) */}
+          <PxdButton
+            frame="well"
+            className={`nrs-tool nrs-zoo${zoo > 0 ? '' : ' is-none'}`}
+            data-tip={zooText}
+            aria-label={zooText}
+            onClick={() => {
+              tapLight();
+              say(zooText);
+            }}
+          >
+            <StatIcon stat="sell" />
+            <b className="px-num">{t('nursery.bonus', { v: pctV(zoo) })}</b>
+          </PxdButton>
         </div>
       </div>
       <div className="nrs-grid">
@@ -956,9 +971,10 @@ export const Nursery = memo(function Nursery({
     if (!el) return;
     const tools = el.querySelector<HTMLElement>('.nrs-tools');
     if (tools) {
-      tools.classList.remove('is-tight');
-      const over = [...tools.children].some((b) => b.scrollWidth > b.clientWidth + 0.5);
-      tools.classList.toggle('is-tight', over);
+      // key words go, then the icons, then the value takes the small size
+      tools.classList.remove('is-tight', 'is-tight2', 'is-tight3');
+      const over = () => [...tools.children].some((b) => b.scrollWidth > b.clientWidth + 0.5);
+      for (const c of ['is-tight', 'is-tight2', 'is-tight3']) if (over()) tools.classList.add(c);
     }
     const lv = el.querySelector<HTMLElement>('.nrs-stat.is-level');
     const lvL = lv?.querySelector<HTMLElement>('.nrs-stat__l');
@@ -971,7 +987,7 @@ export const Nursery = memo(function Nursery({
           lv.scrollWidth > lv.clientWidth + 0.5,
       );
     }
-  }, [tab, filter, sort, xpText, stage.w, fonts, layout, t, pickSlot]);
+  }, [tab, filter, sort, xpText, stage.w, fonts, layout, t, pickSlot, zoo]);
 
   return (
     <div ref={root} className="nrs-nur" onPointerDownCapture={warmFrom}>

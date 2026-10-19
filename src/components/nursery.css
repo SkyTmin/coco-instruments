@@ -116,12 +116,13 @@
   overflow: hidden;
 }
 .nrs-purse {
+  /* plain lines, no frame: a framed two-line purse was a 2.6:1 strip */
+  display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: center;
   gap: 0;
   height: calc(22 * var(--u));
-  padding: 0 calc(3 * var(--u));
   flex: none;
 }
 .nrs-purse > span {
@@ -151,6 +152,17 @@
 }
 .nrs-tab.is-on {
   color: var(--pd-text);
+}
+.nrs--one .nrs-tabs {
+  container-type: inline-size;
+}
+.nrs--one .nrs-tab {
+  height: max(calc(22 * var(--u)), round(up, (100cqi - 6 * var(--u)) / 7.5, var(--u)));
+}
+/* tablet portrait: three tabs of a fixed size in the middle of the row */
+.nrs--two .nrs-tabs {
+  grid-auto-columns: minmax(0, calc(55 * var(--u)));
+  justify-content: center;
 }
 .nrs-tab.is-on .gx-icon {
   color: var(--pd-accent);
@@ -278,7 +290,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(4 * var(--u));
-  height: calc(28 * var(--u));
+  height: calc(26 * var(--u));
   flex: none;
   isolation: isolate;
 }
@@ -345,6 +357,15 @@
 }
 .nrs-sum__c.is-none b {
   color: var(--pd-muted);
+}
+.nrs:is(.nrs--two, .nrs--three) .nrs-sum__c {
+  flex-direction: column;
+  gap: var(--u);
+  height: auto;
+  padding: calc(2 * var(--u)) var(--u);
+}
+.nrs--two .nrs-sum {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 /* ---- Showcase: octagon stage, marks in its corners, ribbon over its bottom edge ------------ */
@@ -423,9 +444,23 @@
   min-width: 0;
 }
 .nrs-marks .pxd-chip {
-  min-height: calc(15 * var(--u));
+  /* unframed marks with a 1-art-px ink outline: framed they were 4:1 strips */
+  min-height: calc(12 * var(--u));
+  padding: 0;
   gap: calc(2 * var(--u));
   font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  text-shadow:
+    var(--u) 0 0 var(--pd-ink),
+    calc(-1 * var(--u)) 0 0 var(--pd-ink),
+    0 var(--u) 0 var(--pd-ink),
+    0 calc(-1 * var(--u)) 0 var(--pd-ink);
+}
+.nrs-rar {
+  color: var(--rc, var(--pd-text));
+}
+.nrs-marks .px-i {
+  filter: drop-shadow(var(--u) 0 0 var(--pd-ink)) drop-shadow(calc(-1 * var(--u)) 0 0 var(--pd-ink))
+    drop-shadow(0 var(--u) 0 var(--pd-ink)) drop-shadow(0 calc(-1 * var(--u)) 0 var(--pd-ink));
 }
 .nrs-marks [data-tip] {
   pointer-events: auto;
@@ -591,13 +626,15 @@
   min-width: 0;
 }
 .nrs-bar {
+  --bh: calc(28 * var(--u));
   display: flex;
+  justify-content: space-between;
   gap: calc(4 * var(--u));
-  height: calc(28 * var(--u));
+  height: var(--bh);
   flex: none;
 }
 .nrs-bar__sq {
-  width: calc(28 * var(--u));
+  width: var(--bh);
   padding: 0;
   flex: none;
 }
@@ -608,6 +645,8 @@
 .nrs-cta {
   flex: 1 1 0;
   min-width: 0;
+  /* the primary action: chunky, at most 5:1 */
+  max-width: calc(5 * var(--bh));
   padding: 0 calc(3 * var(--u));
 }
 .nrs-cta > span {
@@ -631,23 +670,12 @@
   gap: calc(2 * var(--u));
   flex: none;
 }
-.nrs-zoo {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(2 * var(--u));
-  white-space: nowrap;
-}
-.nrs-zoo b {
-  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
-  color: var(--pd-ok);
-}
 .nrs-pickbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: calc(3 * var(--u));
-  min-height: calc(17 * var(--u));
-  padding: 0 var(--u) 0 calc(3 * var(--u));
+  min-height: calc(15 * var(--u));
   font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
   color: var(--pd-accent);
 }
@@ -659,14 +687,24 @@
 }
 .nrs-tools {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(3 * var(--u));
+  container-type: inline-size;
 }
 .nrs-tool {
   min-width: 0;
   height: calc(19 * var(--u));
+  /* a 5:2 tile: the height follows the width, in whole art px */
+  height: max(calc(19 * var(--u)), round(up, (100cqi - 6 * var(--u)) / 7.5, var(--u)));
+  padding: 0 calc(2 * var(--u));
   gap: calc(2 * var(--u));
   white-space: nowrap;
+}
+.nrs-zoo b {
+  color: var(--pd-ok);
+}
+.nrs-zoo.is-none b {
+  color: var(--pd-muted);
 }
 .nrs-tool .px-i {
   color: var(--pd-accent);
@@ -680,6 +718,12 @@
 }
 .nrs-tools.is-tight .nrs-tool__k {
   display: none;
+}
+.nrs-tools.is-tight2 .nrs-tool:not(.nrs-zoo) > .px-i {
+  display: none;
+}
+.nrs-tools.is-tight3 .nrs-tool b {
+  font-size: var(--pd-fs-xs);
 }
 .nrs-grid {
   display: grid;
@@ -738,6 +782,10 @@
 }
 .nrs-card__nm.is-small {
   font-size: var(--pd-fs-xs);
+}
+.nrs-grid.is-3l .nrs-card__nm {
+  -webkit-line-clamp: 3;
+  height: max(calc(var(--pd-fs-sm) * 2.3), calc(var(--pd-fs-xs) * 3.45));
 }
 .nrs-card.is-missing .nrs-card__nm {
   color: var(--pd-muted);
@@ -943,6 +991,11 @@
 .nrs-nests__row.is-tight :is(.nrs-nest__nm, .nrs-nest__left) {
   font-size: var(--pd-fs-xs);
 }
+/* still too long («encore 4 000 blocs»): «blocks left» takes two lines, the egg gives way */
+.nrs-nests__row.is-tight2 .nrs-nest__left {
+  white-space: normal;
+  text-wrap: balance;
+}
 .nrs-nest__go {
   font: 800 var(--pd-fs) / 1.15 var(--px-font);
   white-space: nowrap;
@@ -971,17 +1024,28 @@
 }
 .nrs-qchip {
   height: calc(17 * var(--u));
-  padding: 0 calc(2 * var(--u));
+  padding: 0 calc(3 * var(--u)) 0 calc(2 * var(--u));
   gap: calc(2 * var(--u));
   flex: none;
 }
 .nrs-qchip b {
   font: 700 var(--pd-fs-sm) / 1 var(--px-font);
 }
+/* the count over the heat pips: a square-ish chip */
+.nrs-qchip__t {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--u);
+}
 .nrs-all {
-  justify-content: flex-start;
+  --bh: calc(28 * var(--u));
+  justify-content: center;
+  align-self: center;
   gap: calc(4 * var(--u));
-  height: calc(28 * var(--u));
+  width: 100%;
+  max-width: calc(5 * var(--bh));
+  height: var(--bh);
   padding: 0 calc(4 * var(--u));
   flex: none;
 }
@@ -1084,6 +1148,10 @@
 }
 .nrs-buy__st.is-ok {
   color: var(--pd-ok);
+}
+/* «ещё 4 035» is a number: body colour (≥ 7:1) */
+.nrs-buy__st.is-more {
+  color: var(--pd-text);
 }
 /* a narrow tile: the status takes the whole width under the art, words one size smaller */
 .nrs-shop.is-tight .nrs-buy {
@@ -1220,6 +1288,9 @@
   .nrs--one .nrs-slots {
     height: calc(34 * var(--u));
   }
+  .nrs--one :is(.nrs-bar, .nrs-all) {
+    --bh: calc(30 * var(--u));
+  }
 }
 /* ---- Short phones (360×640, 320×568): every row a step tighter ---------------------------- */
 @media (max-height: 700px) {
@@ -1229,7 +1300,7 @@
     padding-bottom: calc(var(--safe-bottom, 0px) + 4 * var(--u));
   }
   .nrs--one .nrs-tab {
-    height: calc(20 * var(--u));
+    height: max(calc(20 * var(--u)), round(up, (100cqi - 6 * var(--u)) / 7.5, var(--u)));
   }
   .nrs--one .nrs-slots {
     height: calc(24 * var(--u));
@@ -1240,12 +1311,8 @@
   .nrs--one .nrs-stat__n {
     font-size: var(--pd-fs);
   }
-  .nrs--one .nrs-bar,
-  .nrs--one .nrs-all {
-    height: calc(24 * var(--u));
-  }
-  .nrs--one .nrs-bar__sq {
-    width: calc(24 * var(--u));
+  .nrs--one :is(.nrs-bar, .nrs-all) {
+    --bh: calc(24 * var(--u));
   }
   .nrs--one .nrs-buy {
     min-height: calc(30 * var(--u));
@@ -1276,12 +1343,12 @@
 }
 .nrs--two .nrs-stats {
   height: calc(30 * var(--u));
+  /* tiles of a fixed width in the middle (full-width ones were 2.8:1) */
+  grid-template-columns: repeat(3, minmax(0, calc(72 * var(--u))));
+  justify-content: center;
 }
 .nrs--two .nrs-bar {
-  height: calc(24 * var(--u));
-}
-.nrs--two .nrs-bar__sq {
-  width: calc(24 * var(--u));
+  --bh: calc(24 * var(--u));
 }
 /* the collection's head in one row: title · bonus | filter · sort */
 .nrs--two .nrs-coll__head {
@@ -1341,7 +1408,9 @@
   gap: calc(3 * var(--u));
 }
 .nrs--three .nrs-bar__sq {
-  width: auto;
+  justify-self: center;
+  width: 100%;
+  max-width: calc(55 * var(--u));
   height: calc(22 * var(--u));
 }
 .nrs--three .nrs-bar__anims {
@@ -1352,7 +1421,9 @@
 }
 .nrs--three .nrs-cta {
   grid-area: cta;
-  height: calc(28 * var(--u));
+  justify-self: center;
+  width: 100%;
+  height: var(--bh);
 }
 .nrs--three .nrs-cta > span {
   white-space: normal;
@@ -1443,14 +1514,20 @@
     padding-bottom: calc(var(--safe-bottom, 0px) + 3 * var(--u));
   }
   .nrs--three .nrs-top {
-    height: calc(20 * var(--u));
+    height: calc(24 * var(--u));
   }
   .nrs--three .nrs-back {
     width: calc(20 * var(--u));
     height: calc(20 * var(--u));
   }
+  /* phone landscape: the header's tabs are words only, 24u high (≤ 2.5:1) */
   .nrs--three .nrs-tab {
-    height: calc(20 * var(--u));
+    height: calc(24 * var(--u));
+    padding: 0 calc(3 * var(--u));
+    font-size: var(--pd-fs-sm);
+  }
+  .nrs--three .nrs-tab > .gx-icon {
+    display: none;
   }
   .nrs--three .nrs-ttl p {
     display: none;
@@ -1464,10 +1541,11 @@
   .nrs--three .nrs-sum__c {
     height: calc(15 * var(--u));
   }
-  .nrs--three .nrs-cta {
-    height: calc(24 * var(--u));
+  .nrs--three .nrs-bar {
+    --bh: calc(24 * var(--u));
   }
   .nrs--three .nrs-bar__sq {
+    max-width: calc(45 * var(--u));
     height: calc(18 * var(--u));
   }
   .nrs--three .nrs-slots {
