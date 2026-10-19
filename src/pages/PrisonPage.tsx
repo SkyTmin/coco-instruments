@@ -288,8 +288,6 @@ type Sheetname = 'mines' | 'prestige' | 'norm' | 'settings' | null;
 
 /** Сколько секунд простоя до того, как полоска запала начинает мигать. */
 const STREAK_WARN_MS = 1500;
-/** Сводка смены — раз в столько минут копания. */
-const SHIFT_MS = 5 * 60_000;
 
 /** Награда проводника одной строкой. */
 function rewardText(r: GuideReward): string {
@@ -503,13 +501,6 @@ export function PrisonPage() {
     const t = setTimeout(() => setWipe(null), 5000);
     return () => clearTimeout(t);
   }, [wipe]);
-  const [shift, setShift] = useState<{
-    blocks: number;
-    coins: number;
-    tokens: number;
-    keys: number;
-  } | null>(null);
-  const [shiftShown, shiftLeaving] = useExit(shift, 260);
   // Запал живёт в странице: это награда за то, что копаешь СЕЙЧАС.
   const [streak, setStreak] = useState(0);
   const [cooling, setCooling] = useState(false);
@@ -530,6 +521,8 @@ export function PrisonPage() {
 
   const field = useRef<MineFieldHandle>(null);
   const bagRef = useRef<HTMLButtonElement>(null);
+  // Пружинит значок рюкзака, а не вся плашка (`hop` берёт `[data-hop]` внутри): широкая
+  // плашка, качаясь на каждый блок, дёргала весь низ экрана (владелец: «ничего не прыгает»).
   const tokenRef = useRef<HTMLButtonElement>(null);
   // Живность (v2.64): мышь, сорока и когда последний раз была мышь. Первая —
   // не раньше чем через полминуты после входа в шахту.
@@ -589,8 +582,6 @@ export function PrisonPage() {
   const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Темп: что сломано и сколько это стоит за последнюю минуту.
   const paceLog = useRef<{ t: number; blocks: number; coins: number }[]>([]);
-  // Смена: итог каждые пять минут копания.
-  const shiftAcc = useRef({ from: 0, blocks: 0, coins: 0, tokens: 0, keys: 0 });
   // Баланс на табло: во время счёта продажи его ведёт ролл-ап, а не стор.
   const [shownBalance, setShownBalance] = useState(balance);
   useEffect(() => {
@@ -669,11 +660,6 @@ export function PrisonPage() {
     const t = setTimeout(() => setFindCard(null), 2600);
     return () => clearTimeout(t);
   }, [findCard]);
-  useEffect(() => {
-    if (!shift) return undefined;
-    const t = setTimeout(() => setShift(null), 4200);
-    return () => clearTimeout(t);
-  }, [shift]);
 
   // Счёт денег на табло — тот же ролл-ап, что у выигрышей в автоматах.
   const rollBalance = useCallback((from: number, to: number) => {
@@ -790,28 +776,15 @@ export function PrisonPage() {
     armDecay();
   };
 
-  /** Темп и смена: копим, что сломано и сколько стоит. */
-  const logPace = (blocks: number, coins: number, res: PrisonLoot) => {
+  /**
+   * Темп: что сломано и сколько стоит за последнюю минуту. Сводки «Смена · 5 минут»
+   * больше нет: владелец принял её за смены, которых в игре нет.
+   */
+  const logPace = (blocks: number, coins: number) => {
     const now = Date.now();
     const log = paceLog.current;
     log.push({ t: now, blocks, coins });
     while (log.length && now - log[0].t > 60_000) log.shift();
-    const acc = shiftAcc.current;
-    // Больше минуты без блоков — прошлая смена закончилась, начинаем новую.
-    const last = log.length > 1 ? log[log.length - 2].t : 0;
-    if (!acc.from || (last && now - last > 60_000)) {
-      shiftAcc.current = { from: now, blocks: 0, coins: 0, tokens: 0, keys: 0 };
-    }
-    const a = shiftAcc.current;
-    a.blocks += blocks;
-    a.coins += coins;
-    a.tokens += res.tokens + res.pickUps.reduce((x, u) => x + u.tokens, 0);
-    a.keys += res.keys + res.pickUps.reduce((x, u) => x + u.keys, 0);
-    if (now - a.from >= SHIFT_MS && a.blocks >= 50) {
-      setShift({ blocks: a.blocks, coins: a.coins, tokens: a.tokens, keys: a.keys });
-      notifySuccess();
-      shiftAcc.current = { from: now, blocks: 0, coins: 0, tokens: 0, keys: 0 };
-    }
   };
 
   /**
@@ -941,7 +914,7 @@ export function PrisonPage() {
     }
     const gained = bagValue(after.bag, modsOf(after).sell) - valueBefore + res.sold;
     bumpStreak(res.broken, list[0].cell);
-    logPace(res.broken, gained, res);
+    logPace(res.broken, gained);
     const single = kind === 'hit' || kind === 'crit';
     // Перековка: блок засчитан породой выше — золотые искры и её имя.
     if (res.reforged.length) {
@@ -2486,22 +2459,6 @@ export function PrisonPage() {
                     : t('mineHud.card.findDupBonus')}
                 </em>
               </span>
-            </div>
-          )}
-          {shiftShown && (
-            <div className={`pshift${shiftLeaving ? ' is-out' : ''}`}>
-              <i>{t('mineHud.card.shift')}</i>
-              <b>
-                {t('mineHud.card.shiftBlocks', {
-                  n: Math.round(shiftShown.blocks),
-                  coins: fmtShort(shiftShown.coins),
-                })}{' '}
-                <i className="mn-coin mn-coin--s" aria-hidden="true" />
-              </b>
-              <em>
-                +{fmt(shiftShown.tokens)} ✦
-                {shiftShown.keys ? t('mineHud.card.shiftKeys', { n: shiftShown.keys }) : ''}
-              </em>
             </div>
           )}
           {crewNote && crewNow.blocks > 0 && (

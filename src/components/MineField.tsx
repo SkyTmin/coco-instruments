@@ -262,6 +262,22 @@ interface MineFieldProps {
   children?: ReactNode;
 }
 
+/**
+ * Летящая добыча живёт в слое поверх всей страницы, последним в порядке отрисовки.
+ * Внутри поля она пролетала над расходниками, рюкзаком и нижней панелью, и браузер на
+ * каждый блок выносил их в свои слои и убирал обратно — на телефоне вся нижняя зона
+ * мигала, пока копаешь. Над последним слоем выносить нечего.
+ */
+let flyLayer: HTMLDivElement | null = null;
+function flyHost(): HTMLDivElement {
+  if (flyLayer?.isConnected) return flyLayer;
+  flyLayer = document.createElement('div');
+  flyLayer.className = 'ploot-layer';
+  flyLayer.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(flyLayer);
+  return flyLayer;
+}
+
 export const MineField = forwardRef<MineFieldHandle, MineFieldProps>(function MineField(
   { gridKey, cells, pick, rate, onHit, onTap, className, under, children },
   ref,
@@ -572,18 +588,23 @@ export const MineField = forwardRef<MineFieldHandle, MineFieldProps>(function Mi
       );
     },
     fly(c, src, target, onLand) {
-      const layer = layerRef.current;
       const field = fieldRef.current;
-      if (!layer || !field || !target) return;
+      if (!field || !target) return;
+      const layer = flyHost();
       if (reduceMotion() || layer.childElementCount > 14) {
         onLand?.();
         return;
       }
-      const { x, y, size } = center(c);
+      // Клетка — в точках поля, слой — в точках экрана: поле может быть сжато трансформом.
       const fr = field.getBoundingClientRect();
+      const k = field.offsetWidth ? fr.width / field.offsetWidth : 1;
+      const at = center(c);
+      const x = fr.left + (field.clientLeft + at.x) * k;
+      const y = fr.top + (field.clientTop + at.y) * k;
+      const size = at.size * k;
       const br = target.getBoundingClientRect();
-      const tx = br.left + Math.min(26, br.width / 2) - fr.left;
-      const ty = br.top + br.height / 2 - fr.top;
+      const tx = br.left + Math.min(26, br.width / 2);
+      const ty = br.top + br.height / 2;
       const img = document.createElement('img');
       img.className = 'ploot';
       img.src = src;

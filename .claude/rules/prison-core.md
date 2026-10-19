@@ -1,9 +1,9 @@
 ---
 paths:
-  - "src/lib/{prison,prison-art,prison-fx,totem}.ts"
-  - "src/pages/PrisonPage.tsx"
-  - "src/components/PrisonCamp.tsx"
-  - "src/lib/{prison,zone}.test.ts"
+  - 'src/lib/{prison,prison-art,prison-fx,totem}.ts'
+  - 'src/pages/PrisonPage.tsx'
+  - 'src/components/PrisonCamp.tsx'
+  - 'src/lib/{prison,zone}.test.ts'
 ---
 
 <!-- Перенесено из CLAUDE.md дословно (v2.87): грузится, только когда
@@ -65,10 +65,16 @@ paths:
   каторга, но складывать в сидор, а не в рюкзак. Если правите удар —
   правьте хук, иначе шахты разъедутся. Отложенные действия по полю
   (фитиль бомбы, волны) — через `dig.later`: сменилась шахта — не сработают.
+  Loot flight (`fly`) lives in `.ploot-layer` on `<body>` (last in paint order), and the rows
+  under the field (`.pmx-items/-foot/-dock/-quest`) keep `will-change: transform`: otherwise every
+  block made Chrome promote and drop layers for them (5 s of digging — 300 layer-tree changes, the
+  dock and bag re-layered 5–7 times) and on the owner's phone the whole bottom zone flickered.
+  Check: `scratchpad/flick/layers.mjs` (0 new layers for those rows). Bag feedback pops the
+  backpack icon only, never the full-width panel.
 - **Урон по недобитому блоку живёт в странице, а не в сторе.** Удар — это
   5–10 событий в секунду; в стор уходит только сломанный блок
   (`prisonBreak`), и пишется шахта с задержкой 2 с (`makePersister(key,
-  2000)`), при сворачивании — сразу, как всё остальное.
+2000)`), при сворачивании — сразу, как всё остальное.
 - **Удержание бьёт через `hitRef`, а не через `hit` из замыкания.** Таймер
   заводится при касании; после обновления шахты под пальцем старое
   замыкание ломало бы породу прошлого поля.
@@ -181,8 +187,9 @@ paths:
   снимок берётся в момент записи): обычная запись с задержкой 300 мс
   превращалась в запрос на каждый удар — это тот самый кликер, который
   долбит сервер.
-- Подарка «Награды» в шапке шахты с v2.66 нет. Сводка смены — раз в 5 минут копания, темп (блоки и монеты в минуту) —
-  на полосе запала, только пока копаешь.
+- Подарка «Награды» в шапке шахты с v2.66 нет. Темп (блоки и монеты в минуту) — на полосе запала,
+  только пока копаешь. Сводки «Смена · 5 минут» нет с v2.159: владелец спросил «какие смены? мы
+  же выключили их» — карточку читали как смены, которых в игре нет. Не возвращать.
 
 ### Добыча (v2.49.0) — передачки, руны, питомцы, пять чар, вехи
 
