@@ -75,7 +75,7 @@ import './camp-tabs.css';
 type Lay = 'one' | 'land' | 'tall' | 'wide';
 
 function useLay() {
-  const { ff, landscape, scale, dpr } = useFormFactor();
+  const { ff, landscape, scale, dpr, h } = useFormFactor();
   const lay: Lay =
     ff === 'phone-portrait'
       ? 'one'
@@ -84,7 +84,10 @@ function useLay() {
         : ff === 'tablet' && !landscape
           ? 'tall'
           : 'wide';
-  return { lay, scale, dpr };
+  // A short phone (320×568, an iPhone SE in Telegram): the body is ~146×213 art px, about the
+  // tablet-portrait body — the tabs that fill the height take a compact variant there.
+  const short = lay === 'one' && h / scale < 350;
+  return { lay, scale, dpr, short };
 }
 
 /** Keyboard / gamepad: focus is the selection (as in the Nursery grid). */
@@ -275,7 +278,7 @@ const BONUS_KEYS: (keyof Bonus)[] = ['sell', 'dmg', 'rate', 'loot', 'token', 'pr
 
 export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const t = useT();
-  const { lay, scale, dpr } = useLay();
+  const { lay, scale, dpr, short } = useLay();
   const p = useFinanceStore((s) => s.prison);
   const socket = useFinanceStore((s) => s.prisonRuneSocket);
   const fuse = useFinanceStore((s) => s.prisonRuneFuse);
@@ -378,17 +381,17 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
       : t('camp.runes.prestige10');
 
   // Sizes: runes are 40-texel pictures — whole device pixels per texel.
-  const bagPx = fit(40, lay === 'tall' ? 20 : 22, scale, dpr);
+  const bagPx = fit(40, short ? 18 : lay === 'tall' ? 20 : 22, scale, dpr);
   const bagSlot = slotFor(bagPx, scale, 6);
   const sockPx = fit(
     40,
-    lay === 'wide' ? 30 : lay === 'one' ? 26 : lay === 'tall' ? 18 : 22,
+    lay === 'wide' ? 30 : short ? 18 : lay === 'one' ? 26 : lay === 'tall' ? 18 : 22,
     scale,
     dpr,
   );
   const sockSlot = slotFor(sockPx, scale, 6);
   const inspPx = fit(40, lay === 'wide' ? 30 : 24, scale, dpr);
-  const actSize = lay === 'tall' || lay === 'land' ? 'sm' : undefined;
+  const actSize = short || lay === 'tall' || lay === 'land' ? 'sm' : undefined;
 
   // The amulet's own bonus: the worn runes only (the squad's pets show theirs in the Nursery), so
   // four sockets give at most four kinds and the 2×2 box never scrolls (critic5 P0).
@@ -535,7 +538,12 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
             <span className="ctab-insp__sub">{t('ctabs.runes.roll', { n: shown.roll })}</span>
           </span>
         </div>
-        <div className={`ctab-insp__line${note ? ' is-note' : ''}`}>{note ?? fuseLine}</div>
+        <div
+          className={`ctab-insp__line${note ? ' is-note' : ''}`}
+          data-tip={short ? (note ?? fuseLine) || undefined : undefined}
+        >
+          {note ?? fuseLine}
+        </div>
         <div className="ctab-insp__acts">
           <Button
             kind={shownWorn ? 'secondary' : 'primary'}
@@ -571,7 +579,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   );
 
   return (
-    <div ref={root} className={`px ctab ctab-runes ctab--${lay}`}>
+    <div ref={root} className={`px ctab ctab-runes ctab--${lay}${short ? ' ctab--short' : ''}`}>
       {amulet}
       {pouch}
       {insp}
@@ -895,7 +903,10 @@ function perkAt(id: PerkId, n: number): string | null {
 
 export function PerksTab() {
   const t = useT();
-  const { lay } = useLay();
+  // A short phone takes the tablet-portrait skills (one-line values, smaller nodes) — the tree
+  // was squeezed to nothing at 320×568.
+  const { lay: lay0, short } = useLay();
+  const lay: Lay = short ? 'tall' : lay0;
   const p = useFinanceStore((s) => s.prison);
   const prisonPerk = useFinanceStore((s) => s.prisonPerk);
   const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
@@ -974,7 +985,7 @@ export function PerksTab() {
   const next = perkAt(k.id, lv + 1);
 
   return (
-    <div ref={root} className={`px ctab ctab-perks ctab--${lay}`}>
+    <div ref={root} className={`px ctab ctab-perks ctab--${lay}${short ? ' ctab--short' : ''}`}>
       <Head
         title={t('camp.tab.perks')}
         hint={

@@ -591,6 +591,57 @@
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr);
 }
+/* Short phone portrait (320×568): one column of sockets, bonus, pouch and inspect needs ~560 px of
+   a 406-px body. The sockets' row and the bonus 2×2 stay on top; the pouch (two columns) and the
+   inspect panel (name, effect, a one-line note with its tip, three stacked buttons) share the rest
+   side by side. No socket captions: the bonus box sums the worn runes, a locked socket says its
+   level when tapped (a two-line «престиж 10» made the stage state-dependent and 22 px taller). */
+.ctab-runes.ctab--short {
+  grid-template:
+    'stage stage' auto
+    'bonus bonus' auto
+    'pouch insp' minmax(0, 1fr)
+    / min-content minmax(0, 1fr);
+}
+.ctab-runes.ctab--short > .ctab-amulet {
+  display: contents;
+}
+.ctab--short .ctab-amulet > .ctab-head,
+.ctab--short .ctab-sock__cap,
+.ctab--short .ctab-pouch .ctab-sub__hint,
+.ctab-runes.ctab--short :is(.ctab-insp__art, .ctab-insp__sub) {
+  display: none;
+}
+.ctab--short .ctab-amulet > .ctab-stage {
+  grid-area: stage;
+}
+.ctab--short .ctab-amulet > .ctab-bonus {
+  grid-area: bonus;
+}
+.ctab--short .ctab-pouch .ctab-grid {
+  --cols: 2;
+  gap: calc(2 * var(--u));
+  padding: var(--u) 0;
+}
+.ctab-runes.ctab--short .ctab-insp__body {
+  flex: 1 1 auto;
+}
+.ctab-runes.ctab--short .ctab-insp__gives {
+  height: calc(var(--px-fs) * 1.25 * 2);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ctab-runes.ctab--short .ctab-insp__line {
+  height: var(--ln-sm);
+  -webkit-line-clamp: 1;
+}
+.ctab-runes.ctab--short .ctab-insp__acts {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+  margin-top: auto;
+}
 .ctab-runes.ctab--wide {
   grid-template:
     'amulet pouch' minmax(0, 1fr)
@@ -734,6 +785,7 @@
    never scrolls (critic5 P0: a third bonus hid in a 55-px scroller). Chip = [stat picture 24]
    +7,5% продажа; the full «к продаже» is its tip. Narrow columns drop the word, not the number. */
 .ctab-bonus {
+  flex: none;
   --row-st: max(calc(var(--px-fs-sm) * 1.5), calc(var(--st, 24px) + 4px));
   container: ctab-bonus / inline-size;
   display: grid;
@@ -1087,6 +1139,17 @@
 .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
 }
+/* Short phone: the window ribbon already names the tab — the head is the points plate alone,
+   the full width, its ↶ at the right end (title + plate overflowed 272 px in tr). */
+.ctab-perks.ctab--short .ctab-head__txt {
+  display: none;
+}
+.ctab-perks.ctab--short .ctab-points {
+  flex: 1 1 auto;
+}
+.ctab-perks.ctab--short .ctab-points > .ctab-points__reset {
+  margin-left: auto;
+}
 .ctab--tall .ctab-insp--perk .ctab-insp__line {
   height: var(--ln-sm);
   -webkit-line-clamp: 1;
@@ -1111,6 +1174,20 @@
 }
 .ctab:not(.ctab--tall) .ctab-insp--perk .ctab-insp__k {
   padding-top: calc((var(--px-fs) - var(--px-fs-sm)) * 0.65);
+}
+/* The note line must show (the reset's «tap again» lives there): phone landscape's panel had no
+   height left for it — the per-level effect goes (the now / next values say it) and the rows sit
+   1u apart (the panel is 223 px inside, the rows need 229 with 2u); a short phone
+   gives the tree 21 px for its second line (German / French prompts). */
+.ctab.ctab--land .ctab-insp--perk .ctab-insp__sub {
+  display: none;
+}
+.ctab--land .ctab-insp--perk {
+  gap: var(--u);
+}
+.ctab--short .ctab-insp--perk .ctab-insp__line {
+  height: calc(var(--ln-sm) * 2);
+  -webkit-line-clamp: 2;
 }
 .ctab--land .ctab-insp--perk .ctab-insp__acts,
 .ctab--wide .ctab-insp--perk .ctab-insp__acts {
