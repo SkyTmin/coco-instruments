@@ -721,16 +721,29 @@ button.frg-line__k {
   height: 64%;
   color: var(--pd-text);
 }
-/* tall phones: the octagon is the card's whole width (minus its ring), the thing in it 70 % —
-   the card's empty quarter went to the art (critic: 79-px backpack in a 132-px octagon) */
-@media (min-height: 701px) {
-  .frg--one .frg-card__art {
-    width: calc(100cqi - 2 * var(--u));
-  }
-  .frg--one .frg-card__art .gx-icon {
-    width: 70%;
-    height: 70%;
-  }
+/* phones: the art takes what the card's text leaves — the octagon is the card's whole width on a
+   tall phone, a square of the free height on a short one, the thing in it 70 % (critic: a 79-px
+   backpack in a 132-px octagon over a quarter of the screen of empty panel) */
+.frg-card__pic {
+  display: contents;
+}
+.frg--one .frg-card__pic {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  flex: 1 1 0;
+  min-height: calc(30 * var(--u));
+  max-height: calc(100cqi - 2 * var(--u)); /* a tall card spreads the rest over its gaps */
+  container: frg-pic / size;
+}
+/* both cards' octagons the size of the smaller free square (fit pass → --frg-art) */
+.frg--one .frg-card__art {
+  width: min(100cqw - 2 * var(--u), 100cqh, var(--frg-art, 100cqh));
+  min-height: 0;
+}
+.frg--one .frg-card__art .gx-icon {
+  width: 70%;
+  height: 70%;
 }
 .frg-card h3 {
   font: 400 var(--pd-fs-lg) / 1.1 var(--px-head);
@@ -827,7 +840,7 @@ button.frg-line__k {
 }
 .frg-bt i {
   max-width: 100%;
-  padding: 0 var(--u);
+  padding: 0;
   font: 500 var(--pd-fs-sm) / 1.05 var(--px-font);
   color: var(--pd-muted);
   overflow-wrap: anywhere;
@@ -873,22 +886,58 @@ button.frg-line__k {
   width: 100%;
   height: 100%;
 }
+/* the recipe tiles are the box's squares (50 art px); a tile grows taller rather than letting a
+   two-line «have / need» or name out of its frame, the tiles of a row stretch to one height */
 .frg-recipe {
   display: grid;
   gap: calc(5 * var(--u));
   justify-items: center;
+  container: frg-rec / inline-size;
 }
 .frg-recipe__row {
+  --bt: calc(50 * var(--u));
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   gap: calc(3 * var(--u)) calc(2 * var(--u));
 }
 .frg-recipe__add {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: calc(2 * var(--u));
+}
+.frg-recipe .frg-op {
+  align-self: center;
+  flex: none;
+  width: calc(6 * var(--u));
+  text-align: center;
+}
+.frg-recipe .frg-bt {
+  width: var(--bt);
+  height: auto;
+  min-height: var(--bt);
+  padding: var(--u) 0;
+}
+.frg-recipe .frg-bt b {
+  white-space: normal;
+}
+/* a phone narrower than three squares + two signs (320, 360): [pick] + [ore][ore] on one row,
+   [coins] = [result] on the next — the ores share the one sign, the squares shrink to the row */
+@container frg-rec (width < 340px) {
+  .frg-recipe__row {
+    --bt: min(calc(50 * var(--u)), (100cqi - 9 * var(--u)) / 3);
+    gap: calc(3 * var(--u)) var(--u);
+  }
+  .frg-recipe__row:first-child {
+    flex-wrap: nowrap;
+  }
+  .frg-recipe__add {
+    gap: var(--u);
+  }
+  .frg-recipe__add ~ .frg-recipe__add > .frg-op {
+    display: none;
+  }
 }
 .frg-recipe span.frg-bt {
   display: inline-flex;
@@ -899,14 +948,14 @@ button.frg-line__k {
   display: grid;
   place-items: center;
 }
-/* the result: a rarity ring inside the frame (the colour of what comes out) */
+/* the result: the frame itself in the colour of what comes out (a ring over the frame's ring) */
 .frg-bt.is-result {
   position: relative;
 }
 .frg-bt.is-result::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: calc(-2 * var(--u)); /* over the frame's own ring: the frame turns the rarity's colour */
   box-shadow: inset 0 0 0 calc(2 * var(--u)) var(--rc, var(--pd-accent));
   pointer-events: none;
 }
@@ -1025,9 +1074,6 @@ button.frg-line__k {
   .frg--one .frg-go {
     gap: calc(3 * var(--u));
   }
-  .frg--one .frg-card__art {
-    width: min(calc(44 * var(--u)), 100cqi);
-  }
   .frg--one .frg-card__btn,
   .frg--one .frg-card__done {
     height: calc(26 * var(--u));
@@ -1075,6 +1121,16 @@ button.frg-line__k {
   .frg--one .frg-round {
     width: calc(13 * var(--u));
     height: calc(13 * var(--u));
+  }
+  /* the cards say what they are by name and numbers; the line about it doesn't fit 320×568 */
+  .frg--one .frg-card p {
+    display: none;
+  }
+  .frg--one .frg-card {
+    gap: calc(2 * var(--u));
+  }
+  .frg--one .frg-card__pic {
+    min-height: calc(26 * var(--u));
   }
 }
 
@@ -1197,25 +1253,15 @@ button.frg-line__k {
 .frg--three .frg-box {
   justify-content: flex-start;
 }
-/* the narrow side column: recipe as a short row above, the CTA the column's full width under it */
+/* the narrow side column: the recipe square beside the CTA, as on phones (critic: a 7.2:1 strip
+   above the CTA read as a second button) — the square takes the CTA's height */
 .frg--three .frg-bar {
-  flex-direction: column;
   height: auto;
-}
-.frg--three .frg-sq {
-  flex-direction: row;
   gap: calc(3 * var(--u));
-  width: auto;
-  height: calc(16 * var(--u));
-  font-size: var(--pd-fs-sm);
-}
-.frg--three .frg-sq .gx-icon {
-  width: calc(9 * var(--u));
-  height: calc(9 * var(--u));
 }
 .frg--three .frg-go {
-  flex: none;
   height: calc(32 * var(--u));
+  padding: 0 calc(2 * var(--u));
 }
 /* the CTA in the narrow side column: the name may take two lines, the price / reason one */
 .frg--three .frg-go__t b {
@@ -1267,9 +1313,6 @@ button.frg-line__k {
   }
   .frg--three .frg-go {
     height: calc(30 * var(--u));
-  }
-  .frg--three .frg-sq {
-    height: calc(14 * var(--u));
   }
   .frg--three .frg-go > .gx-icon {
     width: calc(10 * var(--u));

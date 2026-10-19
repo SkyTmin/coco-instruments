@@ -128,6 +128,41 @@ function fsOf(el: HTMLElement, v: string): number {
 /** The type steps a fitted line may take, biggest first. */
 const STEPS = ['--pd-fs-xl', '--pd-fs-lg', '--pd-fs', '--pd-fs-sm'] as const;
 
+const VOWEL = /[aeiouyäöüéèêëàâîïôûùíóúıаеёиоуыэюя]/i;
+/**
+ * Soft hyphens at the syllable breaks of a tile label: before a lone consonant between vowels,
+ * inside a two-consonant cluster, before the last of a longer one (never before ь, ъ, й). A long
+ * name breaks «Гранато-вая», «Звёзд-ная» when it doesn't fit its tile, not «Гранатова-я» (the
+ * stand's Chromium has no hyphenation dictionaries; phones may do better by `hyphens: auto`).
+ */
+function syl(text: string): string {
+  const isV = (ch: string | undefined) => !!ch && VOWEL.test(ch);
+  return text
+    .split(' ')
+    .map((w) => {
+      if (w.length < 7) return w;
+      let out = '';
+      for (let i = 0; i < w.length; i++) {
+        let j = i;
+        while (j > 0 && !isV(w[j - 1])) j--;
+        let k = i;
+        while (k < w.length && !isV(w[k])) k++;
+        const n = k - j; // the consonant cluster around w[i], vowels on both sides
+        const ok =
+          !isV(w[i]) &&
+          !/[ьъйЬЪЙ-]/.test(w[i]) &&
+          j > 0 &&
+          k < w.length &&
+          i >= 2 &&
+          w.length - i >= 3 &&
+          i === (n === 1 ? j : n === 2 ? j + 1 : k - 1);
+        out += (ok ? '\u00ad' : '') + w[i];
+      }
+      return out;
+    })
+    .join(' ');
+}
+
 export function ForgeScreen({
   onClose,
   onSpend,
@@ -808,7 +843,7 @@ export function ForgeScreen({
         <b>
           {fmtShort(Math.min(have, o.need))} / {fmtShort(o.need)}
         </b>
-        <i>{rockName(o.rock)}</i>
+        <i>{syl(rockName(o.rock))}</i>
         {ok && <em className="frg-tick">✓</em>}
       </PxdButton>
     );
@@ -822,7 +857,7 @@ export function ForgeScreen({
       <span className={result && !ready ? 'frg-ghost' : undefined}>
         <PickPx pick={i} size={fitPick(24 * u)} />
       </span>
-      <i>{pickName(i)}</i>
+      <i>{syl(pickName(i))}</i>
     </span>
   );
   const plus = <b className="frg-op">+</b>;
@@ -889,8 +924,10 @@ export function ForgeScreen({
     <div className="frg-gear">
       <div className="frg-cards">
         <article className="frg-card pxd-f pxd-f--panel">
-          <span className="frg-card__art pxd-f pxd-f--oct">
-            <GxIcon name="backpack" />
+          <span className="frg-card__pic">
+            <span className="frg-card__art pxd-f pxd-f--oct">
+              <GxIcon name="backpack" />
+            </span>
           </span>
           <h3>{t('forge.bagName')}</h3>
           <p>{t('forge.bagWhat')}</p>
@@ -935,8 +972,10 @@ export function ForgeScreen({
           )}
         </article>
         <article className="frg-card pxd-f pxd-f--panel">
-          <span className="frg-card__art pxd-f pxd-f--oct">
-            <GxIcon name="minecart" />
+          <span className="frg-card__pic">
+            <span className="frg-card__art pxd-f pxd-f--oct">
+              <GxIcon name="minecart" />
+            </span>
           </span>
           <h3>{t('forge.cart')}</h3>
           <p>{t('forge.cartWhat')}</p>
@@ -1060,6 +1099,10 @@ export function ForgeScreen({
       const need = kids.reduce((a, k) => a + k.offsetWidth, 0) + gap * (kids.length - 1);
       tabsEl.classList.toggle('is-tight', need > tabsEl.clientWidth + 0.5);
     }
+    // gear: both cards' octagons the size of the smaller free square
+    const pics = [...el.querySelectorAll<HTMLElement>('.frg-card__pic')];
+    if (layout === 'one' && pics.length)
+      el.style.setProperty('--frg-art', `${Math.min(...pics.map((q) => q.clientHeight))}px`);
     if (tab !== 'picks') return;
     const steps = STEPS.map((v) => fsOf(el, v));
     // the ribbon: the biggest step at which this pick's name fits its straight part
