@@ -339,12 +339,12 @@ html[data-ff^='phone'] .mn-frame > .mn-strip {
   font-style: normal;
   color: var(--px-gold);
 }
-.mn-strip__name > .px-i {
+.mn-strip__barrow > .px-i {
   flex: none;
   color: var(--px-muted);
 }
 .mn-strip[class*='is-t'] .mn-strip__name > b,
-.mn-strip[class*='is-t'] .mn-strip__name > .px-i {
+.mn-strip[class*='is-t'] .mn-strip__barrow > .px-i {
   color: var(--px-gold);
 }
 .mn-strip.is-t0 .px-bar,

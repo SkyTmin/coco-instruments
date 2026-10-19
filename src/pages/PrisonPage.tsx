@@ -2115,12 +2115,12 @@ export function PrisonPage() {
       </span>
       <span className="mn-strip__streak">
         <span className="mn-strip__name">
-          <i className="px-i pxi-m-flame" data-hop="" aria-hidden="true" />
           <b>{sTier >= 0 ? streakName(sTier) : t('mineHud.hud.streak')}</b>
         </span>
-        {/* Ступень — справа от полосы, а не за названием: «Легенда забоя» на 360 px
-            иначе обрезалась до двух букв. */}
+        {/* Огонёк и ступень — в строке полосы, а не у названия: «Легенда забоя» на 360 px
+            иначе обрезалась (критик r2). */}
         <span className="mn-strip__barrow">
+          <i className="px-i pxi-m-flame" data-hop="" aria-hidden="true" />
           <Bar value={Math.max(0, Math.min(1, streak > 0 ? sFill : 0))} height={4} />
           {sTier >= 0 && <em className="px-num">+{Math.round(STREAK_TIERS[sTier].loot * 100)}%</em>}
         </span>
