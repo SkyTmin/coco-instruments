@@ -142,6 +142,9 @@
   --pximg-st-power: url('/ui/kit/st-power.png?v=5b6f3ef5');
   --pximg-st-power-w: 12;
   --pximg-st-power-h: 12;
+  --pximg-st-proc: url('/ui/kit/st-proc.png?v=17d9118c');
+  --pximg-st-proc-w: 12;
+  --pximg-st-proc-h: 12;
   --pximg-hud-coin: url('/ui/kit/hud-coin.png?v=9cb78553');
   --pximg-hud-coin-w: 12;
   --pximg-hud-coin-h: 12;
@@ -827,6 +830,13 @@
 .pxi-minus {
   -webkit-mask-image: url('/ui/kit/i-minus.png?v=832e4510');
   mask-image: url('/ui/kit/i-minus.png?v=832e4510');
+  --i-w: 9;
+  --i-h: 9;
+}
+
+.pxi-undo {
+  -webkit-mask-image: url('/ui/kit/i-undo.png?v=7a2dfbce');
+  mask-image: url('/ui/kit/i-undo.png?v=7a2dfbce');
   --i-w: 9;
   --i-h: 9;
 }

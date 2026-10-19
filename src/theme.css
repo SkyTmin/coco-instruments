@@ -16964,43 +16964,6 @@ input[type='datetime-local'] {
   transform-origin: 0 50%;
   background: linear-gradient(90deg, #b8762e, #ffcf5a);
 }
-.pfinds {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-.pfinds__cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 10px 6px;
-  border-radius: 14px;
-  background: var(--surface-2);
-  text-align: center;
-}
-.pfinds__cell img {
-  width: 44px;
-  height: 44px;
-  image-rendering: pixelated;
-}
-.pfinds__cell b {
-  font-size: 12px;
-  line-height: 1.2;
-}
-.pfinds__cell i {
-  font-style: normal;
-  font-size: 10.5px;
-  line-height: 1.25;
-  color: var(--muted);
-}
-.pfinds__cell.is-found {
-  background: linear-gradient(180deg, #3a2819, #231710);
-  color: #f7e6cc;
-}
-.pfinds__cell.is-found i {
-  color: rgba(247, 230, 204, 0.7);
-}
 
 /* ---- Лента сундука ----------------------------------------------------------- */
 .pcase {
@@ -17665,141 +17628,6 @@ input[type='datetime-local'] {
 .ppet-img {
   image-rendering: pixelated;
 }
-.prunes-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #2c2438, #1a1522);
-  color: #ece4ff;
-}
-.prunes-head b {
-  font-size: 14px;
-}
-.prunes-head span {
-  font-size: 12px;
-  opacity: 0.8;
-}
-.prunes-sockets {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-.prune-socket {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  min-height: 64px;
-  padding: 6px 2px;
-  border-radius: 12px;
-  border: 1.5px dashed color-mix(in srgb, var(--text) 25%, transparent);
-  background: var(--surface-2);
-  color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-}
-.prune-socket i {
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 800;
-}
-.prune-socket.is-full {
-  border-style: solid;
-  color: var(--text);
-}
-.prune-socket.is-locked {
-  opacity: 0.55;
-}
-.prune-socket__lock {
-  font-size: 16px;
-}
-.prune-socket.is-sel,
-.prune-tile.is-sel {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
-}
-.prune-socket.is-target {
-  border-color: var(--accent);
-}
-.prune-card {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: var(--surface-2);
-}
-.prune-card__info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.prune-card__info b {
-  font-size: 15px;
-}
-.prune-card__info i,
-.prune-card__info em {
-  font-style: normal;
-  font-size: 12px;
-  color: var(--muted);
-}
-.prune-card__btns {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 6px;
-}
-.prune-card__btns .btn {
-  flex: 1;
-  justify-content: center;
-}
-.prune-card__hint {
-  grid-column: 1 / -1;
-  font-size: 11.5px;
-  color: var(--muted);
-}
-.prune-note {
-  margin: 0;
-  color: #ffb070;
-}
-.prunes-bag {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
-  gap: 6px;
-}
-.prune-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  padding: 5px 0 3px;
-  border-radius: 10px;
-  border: 1.5px solid transparent;
-  background: var(--surface-2);
-  color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-}
-.prune-tile i {
-  font-style: normal;
-  font-size: 10px;
-  font-weight: 900;
-}
-.prune-tile.is-worn::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #5fbf4a;
-}
 
 /* ---- Лагерь → Питомцы и Вехи ----------------------------------------------- */
 .ppet-ico {
@@ -17823,35 +17651,10 @@ input[type='datetime-local'] {
 .ppet-row.is-ghost .pforge__info b {
   color: var(--muted);
 }
-.ppet-bar {
-  position: relative;
-  display: block;
-  height: 4px;
-  margin: 3px 0 1px;
-  border-radius: 2px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--text) 12%, transparent);
-}
-.ppet-bar i {
-  position: absolute;
-  inset: 0;
-  transform-origin: 0 50%;
-  background: linear-gradient(90deg, #4f9a3a, #9be38a);
-}
 .ppet-lore {
   font-style: italic;
   font-size: 11px;
   color: var(--muted);
-}
-.pmile.is-done {
-  opacity: 0.6;
-}
-.pmile.is-ready {
-  outline: 2px solid #ffd35a;
-  outline-offset: -2px;
-}
-.pmile.is-ready .pforge__glyph {
-  color: #ffd35a;
 }
 
 /* ---- Вскрытие посылки ---------------------------------------------------- */
@@ -18781,83 +18584,6 @@ input[type='datetime-local'] {
 }
 
 /* ---- Оберег с рунами (v2.57) ---------------------------------------------- */
-.pamulet {
-  position: relative;
-  width: min(270px, 82%);
-  aspect-ratio: 220 / 236;
-  margin: 2px auto 0;
-}
-.pamulet__art {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.55));
-}
-.pamulet__slot {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  padding: 0;
-  border-radius: 50%;
-  border: 2px solid #3a220c;
-  background: radial-gradient(circle at 50% 38%, #1a120a, #0a0604 70%);
-  box-shadow:
-    inset 0 3px 6px rgba(0, 0, 0, 0.8),
-    0 0 0 3px #c8903e,
-    0 0 0 4px #3a220c;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.pamulet__slot .prune-ico {
-  image-rendering: pixelated;
-}
-.pamulet__slot i {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 5px);
-  padding: 1px 6px;
-  border-radius: 7px;
-  background: rgba(20, 12, 6, 0.88);
-  color: #ffe0a8;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 900;
-  white-space: nowrap;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-.pamulet__slot.is-locked {
-  cursor: default;
-  opacity: 0.85;
-}
-.pamulet__lock {
-  font-size: 18px;
-  opacity: 0.75;
-}
-.pamulet__slot.is-sel {
-  box-shadow:
-    inset 0 3px 6px rgba(0, 0, 0, 0.8),
-    0 0 0 3px #ffe08a,
-    0 0 0 5px #3a220c,
-    0 0 16px rgba(255, 224, 138, 0.7);
-}
-/* Выбрана руна из мешочка — свободные гнёзда зовут её к себе. */
-.pamulet__slot.is-target {
-  animation: pamulet-call 0.9s ease-in-out infinite alternate;
-}
-@keyframes pamulet-call {
-  to {
-    box-shadow:
-      inset 0 3px 6px rgba(0, 0, 0, 0.8),
-      0 0 0 3px #b8f4e6,
-      0 0 0 5px #3a220c,
-      0 0 18px rgba(184, 244, 230, 0.8);
-  }
-}
 .prune-ico {
   display: block;
   flex: none;
@@ -19712,7 +19438,6 @@ input[type='datetime-local'] {
   .fscene__snow,
   .ftree__aura,
   .msaw.is-busy .msaw__spin,
-  .pamulet__slot.is-target,
   .pcases__tile,
   .pcrew-scene__man,
   .msaw__mover,

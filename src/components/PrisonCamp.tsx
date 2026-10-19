@@ -21,6 +21,7 @@ import { BookArt, BooksTab } from '@/components/BooksTab';
 import { ChestTab } from '@/components/ChestTab';
 import { EggArt, PetArt } from '@/components/PetArt';
 import { PetsTab } from '@/components/PetsTab';
+import { FindsTab, MilesTab, PerksTab, RunesTab, ShopTab } from '@/components/CampTabs';
 import {
   CASE_TIERS,
   CREW_MAX,
@@ -34,37 +35,21 @@ import {
   CREW_SHIFTS,
   crewRate,
   crewYield,
-  bonusOf,
   CASE_TIERS as TIERS_OF,
-  fusePlan,
-  MILES,
-  mileReady,
   milesReady,
-  RUNE_BAG,
   RUNE_ROMAN,
-  RUNE_SHATTER,
   runePower,
-  SOCKET_UNLOCK,
   runesIdle,
-  socketsOpen,
-  FINDS,
-  findsFound,
-  findsMult,
   handleRate,
   HANDLES,
-  ITEMS,
-  itemPrice,
-  PERKS,
   perkPointsFree,
   PICKS,
   rankLetter,
 } from '@/lib/prison';
 import type {
-  Bonus,
   CrewShift,
   CaseTier,
   ItemId,
-  PerkId,
   PetId,
   PrisonState,
   Reward,
@@ -139,9 +124,6 @@ import {
   fmtNum,
   fmtShort,
   itemName,
-  itemText,
-  perkName,
-  perkText,
   petLore,
   petName,
   rich,
@@ -161,7 +143,7 @@ import {
   woodOf,
 } from '@/i18n/data-camp';
 import { eggName } from '@/i18n/data-books';
-import { bookName, findName, findText, mileText, mileTitle, nameIn } from '@/i18n/data-mine';
+import { bookName, findName, nameIn } from '@/i18n/data-mine';
 
 const fmt = (n: number) => fmtNum(n);
 const pct = (x: number) => `${fmtDec(Math.round(x * 1000) / 10, 2)}%`;
@@ -548,78 +530,6 @@ const ITEM_TONE: Record<ItemId, string> = {
 /** Расходник картинкой, а не эмодзи: цвет — свой у каждого. */
 export function ItemIcon({ id, size }: { id: ItemId; size?: number }) {
   return <GxIcon name={ITEM_ICON[id]} size={size} style={{ color: ITEM_TONE[id] }} />;
-}
-
-// ---- Лавка: расходники за токены --------------------------------------------
-
-/** Сколько штук берёт одна кнопка лавки. Выбор помнится до конца сессии. */
-const SHOP_PACKS = [1, 5, 10] as const;
-let shopPack: number = 1;
-
-function ShopTab() {
-  const t = useT();
-  const p = useFinanceStore((s) => s.prison);
-  const prisonBuyItem = useFinanceStore((s) => s.prisonBuyItem);
-  const [pack, setPack] = useState(shopPack);
-  const pick = (n: number) => {
-    shopPack = n;
-    setPack(n);
-    tapLight();
-  };
-  return (
-    <div className="pforge">
-      <div className="pcamp-purse">
-        <TokenIcon size={18} />{' '}
-        {rich('camp.purseTokens', { n: p.tokens, v: <b>{fmt(p.tokens)}</b> })}
-        <div className="pshop-pack" role="group" aria-label={t('camp.shop.pack')}>
-          {SHOP_PACKS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={`pshop-pack__opt${pack === n ? ' is-on' : ''}`}
-              aria-pressed={pack === n}
-              onClick={() => pick(n)}
-            >
-              ×{n}
-            </button>
-          ))}
-        </div>
-      </div>
-      {ITEMS.filter((it) => itemPrice(it.id, p.rank, p.prestige) > 0).map((it) => {
-        const price = itemPrice(it.id, p.rank, p.prestige);
-        return (
-          <Row
-            key={it.id}
-            icon={<ItemIcon id={it.id} size={30} />}
-            title={
-              <>
-                {itemName(it.id)}{' '}
-                {p.items[it.id] > 0 && <span className="pench-lvl">×{p.items[it.id]}</span>}
-              </>
-            }
-            text={itemText(it.id)}
-            action={
-              <Buy
-                token
-                price={price * pack}
-                count={pack}
-                can={p.tokens >= price * pack}
-                onClick={() => {
-                  primeAudio();
-                  if (!prisonBuyItem(it.id, pack)) {
-                    notifyWarning();
-                    return;
-                  }
-                  coinDing();
-                  tapLight();
-                }}
-              />
-            }
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 // ---- Сундуки -----------------------------------------------------------------
@@ -1049,116 +959,6 @@ function CrewUnload({
   );
 }
 
-// ---- Коллекция -----------------------------------------------------------------
-
-function FindsTab() {
-  const t = useT();
-  const p = useFinanceStore((s) => s.prison);
-  const found = findsFound(p.finds);
-  return (
-    <div className="pforge">
-      <div className="pcamp-purse">
-        <b>
-          {found} / {FINDS.length}
-        </b>{' '}
-        {t('camp.finds.purse', { pct: Math.round((findsMult(p.finds) - 1) * 100) })}
-      </div>
-      <div className="pfinds">
-        {FINDS.map((f) => {
-          const n = p.finds[f.id] ?? 0;
-          return (
-            <div key={f.id} className={`pfinds__cell${n ? ' is-found' : ''}`}>
-              <img src={findTexture(f.id, !n)} alt="" />
-              <b>{n ? findName(f.id) : '???'}</b>
-              <i>
-                {n
-                  ? n > 1
-                    ? `×${n} · ${findText(f.id)}`
-                    : findText(f.id)
-                  : t('camp.finds.from', { mine: rankLetter(f.from) })}
-              </i>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ---- Перки ---------------------------------------------------------------------
-
-function PerksTab() {
-  const t = useT();
-  const p = useFinanceStore((s) => s.prison);
-  const prisonPerk = useFinanceStore((s) => s.prisonPerk);
-  const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
-  const free = perkPointsFree(p);
-  if (!p.prestige) {
-    return (
-      <div className="pforge">
-        <div className="pcamp-lock">
-          <GxIcon name="upgrade" size={40} />
-          <b>{t('camp.perks.locked')}</b>
-          <span>{t('camp.perks.lockedRank', { rank: rankLetter(p.rank) })}</span>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="pforge">
-      <div className="pcamp-purse">
-        <b>{free}</b> {t('camp.perks.free', { n: free, prestige: p.prestige })}
-      </div>
-      {PERKS.filter((k) => CREW_ON || k.id !== 'shift').map((k) => (
-        <Row
-          key={k.id}
-          icon={<span className="pforge__glyph">★</span>}
-          title={
-            <>
-              {perkName(k.id)}{' '}
-              <span className="pench-lvl">
-                {p.perks[k.id]}/{k.max}
-              </span>
-            </>
-          }
-          text={perkText(k.id)}
-          action={
-            p.perks[k.id] >= k.max ? (
-              <Done>{t('camp.maxDone')}</Done>
-            ) : (
-              <button
-                type="button"
-                className="btn btn--sm pforge__buy"
-                disabled={free <= 0}
-                onClick={() => {
-                  if (!prisonPerk(k.id as PerkId)) {
-                    notifyWarning();
-                    return;
-                  }
-                  tierBreak(1);
-                  notifySuccess();
-                }}
-              >
-                +1
-              </button>
-            )
-          }
-        />
-      ))}
-      <button
-        type="button"
-        className="btn btn--ghost btn--block"
-        onClick={() => {
-          prisonPerksReset();
-          tapLight();
-        }}
-      >
-        {t('camp.perks.reset')}
-      </button>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Руны. Рунный камень рисует `runeTexture` (пиксели 40×40: высеченный знак,
 // светящаяся смальта по ступени, оковка у старших). Символы футарка шрифтом
@@ -1198,348 +998,6 @@ export function runeLine(r: { kind: RuneKind; tier: number; roll: number }): str
   return `${pctText(runePower(r))} ${runeText(r.kind)}`;
 }
 
-const BONUS_KEYS: (keyof Bonus)[] = ['sell', 'dmg', 'rate', 'loot', 'token', 'proc', 'luck'];
-
-function bonusSummary(b: Bonus): string {
-  const parts = BONUS_KEYS.filter((k) => b[k] > 0).map(
-    (k) => `${pctText(b[k])} ${t(`camp.bonus.${k}`)}`,
-  );
-  return parts.length ? parts.join(' · ') : t('camp.bonus.none');
-}
-
-/**
- * Оберег — то, КУДА ставятся руны. Раньше вкладка писала «Кирка» и ничего
- * не рисовала, хотя руны работают и на топоре. Теперь это бронзовый оберег
- * на шнурке: четыре гнезда крестом, в середине скрещены кирка и топор — он
- * один на шахту и лес. Сами гнёзда — кнопки поверх рисунка.
- */
-function AmuletArt() {
-  const rivets = Array.from({ length: 12 }, (_, i) => {
-    const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
-    return [110 + Math.cos(a) * 88, 118 + Math.sin(a) * 88];
-  });
-  return (
-    <svg className="pamulet__art" viewBox="0 0 220 236" aria-hidden="true">
-      <defs>
-        <radialGradient id="amBronze" cx="38%" cy="32%" r="75%">
-          <stop offset="0" stopColor="#f0c878" />
-          <stop offset="0.45" stopColor="#b8803a" />
-          <stop offset="1" stopColor="#5a3614" />
-        </radialGradient>
-        <radialGradient id="amInner" cx="45%" cy="40%" r="70%">
-          <stop offset="0" stopColor="#5a3e24" />
-          <stop offset="1" stopColor="#2a1a0e" />
-        </radialGradient>
-        <linearGradient id="amCord" x1="0" x2="1">
-          <stop offset="0" stopColor="#3a2412" />
-          <stop offset="0.5" stopColor="#7a5230" />
-          <stop offset="1" stopColor="#3a2412" />
-        </linearGradient>
-      </defs>
-      {/* Шнурок и петля */}
-      <path
-        d="M70 0 C80 22 96 26 104 30 M150 0 C140 22 124 26 116 30"
-        stroke="url(#amCord)"
-        strokeWidth="7"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d="M70 0 C80 22 96 26 104 30 M150 0 C140 22 124 26 116 30"
-        stroke="rgba(255,230,190,.25)"
-        strokeWidth="1.2"
-        strokeDasharray="3 4"
-        fill="none"
-      />
-      <rect
-        x="99"
-        y="24"
-        width="22"
-        height="14"
-        rx="5"
-        fill="url(#amBronze)"
-        stroke="#3a220c"
-        strokeWidth="1.5"
-      />
-      {/* Диск: внешний обод, гравировка, заклёпки */}
-      <circle cx="110" cy="118" r="100" fill="url(#amBronze)" stroke="#3a220c" strokeWidth="2.5" />
-      <circle
-        cx="110"
-        cy="118"
-        r="94"
-        fill="none"
-        stroke="rgba(255,240,200,.55)"
-        strokeWidth="1.2"
-      />
-      <circle
-        cx="110"
-        cy="118"
-        r="80"
-        fill="none"
-        stroke="#5a3614"
-        strokeWidth="5"
-        strokeDasharray="7 5"
-        opacity=".75"
-      />
-      <circle
-        cx="110"
-        cy="118"
-        r="80"
-        fill="none"
-        stroke="rgba(255,236,190,.35)"
-        strokeWidth="1"
-        strokeDasharray="7 5"
-        strokeDashoffset="-1"
-      />
-      {rivets.map(([x, y], i) => (
-        <g key={i}>
-          <circle cx={x} cy={y} r="4" fill="#6a4418" />
-          <circle cx={x - 1} cy={y - 1} r="2.2" fill="#f4d48a" />
-        </g>
-      ))}
-      <circle cx="110" cy="118" r="72" fill="url(#amInner)" stroke="#2a180a" strokeWidth="2" />
-      {/* Резьба: крест, связывающий гнёзда, и ромб */}
-      <path
-        d="M110 58 V178 M50 118 H170"
-        stroke="#1a0e06"
-        strokeWidth="6"
-        strokeLinecap="round"
-        opacity=".6"
-      />
-      <path
-        d="M110 58 V178 M50 118 H170"
-        stroke="rgba(255,210,150,.25)"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-      <path
-        d="M110 76 L152 118 L110 160 L68 118 Z"
-        fill="none"
-        stroke="rgba(255,210,150,.3)"
-        strokeWidth="1.4"
-      />
-      {/* Середина: кирка и топор накрест — оберег на оба инструмента */}
-      <g transform="translate(110 118)">
-        <circle r="17" fill="#3a2614" stroke="#c8903e" strokeWidth="2" />
-        <g stroke="#e8c070" strokeWidth="2.4" strokeLinecap="round" fill="none">
-          <path d="M-8 9 L8 -9" />
-          <path d="M-12 -6 Q-2 -14 9 -10" />
-          <path d="M8 9 L-8 -9" />
-        </g>
-        <path d="M-10 -12 Q-15 -7 -12 -2 L-6 -8 Z" fill="#e8c070" />
-      </g>
-    </svg>
-  );
-}
-
-/** Где на оберег встают гнёзда: верх, лево, право, низ (в долях рисунка). */
-const AMULET_SLOTS: [number, number][] = [
-  [50, 25.4],
-  [23.6, 50],
-  [76.4, 50],
-  [50, 74.6],
-];
-
-function RunesTab({ axeLevel }: { axeLevel: number }) {
-  const t = useT();
-  const p = useFinanceStore((s) => s.prison);
-  const socket = useFinanceStore((s) => s.prisonRuneSocket);
-  const fuse = useFinanceStore((s) => s.prisonRuneFuse);
-  const shatter = useFinanceStore((s) => s.prisonRuneShatter);
-  const [sel, setSel] = useState<number | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const open = socketsOpen(p, axeLevel);
-  const rune = p.runes.find((r) => r.id === sel) ?? null;
-  const worn = rune ? p.sockets.includes(rune.id) : false;
-  const plan = rune ? fusePlan(p.runes, p.sockets, rune.id) : null;
-  const bag = p.runes
-    .slice()
-    .sort((a, b) => b.tier - a.tier || runePower(b) - runePower(a) || a.id - b.id);
-
-  const tapSocket = (i: number) => {
-    if (i >= open) {
-      notifyWarning();
-      return;
-    }
-    selectionChanged();
-    const cur = p.sockets[i];
-    // Выбрана руна из мешочка — ставим её сюда (вместо той, что была).
-    if (rune && !worn) {
-      socket(i, rune.id);
-      tierBreak(0);
-      setNote(null);
-      return;
-    }
-    setSel(cur || null);
-  };
-
-  const wear = () => {
-    if (!rune) return;
-    primeAudio();
-    if (worn) {
-      socket(p.sockets.indexOf(rune.id), 0);
-      tapLight();
-      return;
-    }
-    const empty = p.sockets.findIndex((id, i) => i < open && !id);
-    if (empty < 0) {
-      notifyWarning();
-      setNote(open ? t('camp.runes.full') : t('camp.runes.firstAt', { lv: SOCKET_UNLOCK[0] }));
-      return;
-    }
-    socket(empty, rune.id);
-    tierBreak(0);
-    notifySuccess();
-  };
-
-  const doFuse = () => {
-    if (!rune) return;
-    primeAudio();
-    const made = fuse(rune.id);
-    if (!made) {
-      notifyWarning();
-      return;
-    }
-    tierBreak(Math.min(3, made.tier - 1));
-    notifySuccess();
-    burstConfetti(30 + made.tier * 12, [RUNE_COLORS[made.tier - 1], '#fff']);
-    setSel(made.id);
-  };
-
-  const doShatter = () => {
-    if (!rune || worn) return;
-    primeAudio();
-    const got = shatter(rune.id);
-    if (!got) return;
-    coinDing();
-    tapLight();
-    setSel(null);
-  };
-
-  return (
-    <div className="pforge">
-      <div className="pamulet">
-        <AmuletArt />
-        {AMULET_SLOTS.map(([x, y], i) => {
-          const id = p.sockets[i];
-          const r = id ? p.runes.find((z) => z.id === id) : null;
-          const locked = i >= open;
-          return (
-            <button
-              key={i}
-              type="button"
-              style={{ left: `${x}%`, top: `${y}%` }}
-              className={`pamulet__slot${locked ? ' is-locked' : ''}${r ? ' is-full' : ''}${
-                r && sel === r.id ? ' is-sel' : ''
-              }${rune && !worn && !locked ? ' is-target' : ''}`}
-              aria-label={
-                r
-                  ? `${runeName(r.kind)}, ${runeLine(r)}`
-                  : locked
-                    ? t('camp.runes.slotLocked')
-                    : t('camp.runes.slotEmpty')
-              }
-              onClick={() => tapSocket(i)}
-            >
-              {r ? (
-                <RuneIcon kind={r.kind} tier={r.tier} size={40} />
-              ) : locked ? (
-                <span className="pamulet__lock">🔒</span>
-              ) : null}
-              <i>
-                {r
-                  ? pctText(runePower(r))
-                  : locked
-                    ? i < SOCKET_UNLOCK.length
-                      ? t('common.level', { n: SOCKET_UNLOCK[i] })
-                      : t('camp.runes.prestige10')
-                    : t('camp.runes.empty')}
-              </i>
-            </button>
-          );
-        })}
-      </div>
-      <div className="prunes-head">
-        <b>{t('camp.runes.amulet')}</b>
-        <span>{bonusSummary(bonusOf(p)) || t('camp.runes.amuletEmpty')}</span>
-      </div>
-      {rune ? (
-        <div className="prune-card">
-          <RuneIcon kind={rune.kind} tier={rune.tier} size={80} />
-          <span className="prune-card__info">
-            <b>
-              {runeName(rune.kind)} {RUNE_ROMAN[rune.tier - 1]}
-            </b>
-            <i>{runeLine(rune)}</i>
-            <em>{t('camp.runes.roll', { n: rune.roll })}</em>
-          </span>
-          <span className="prune-card__btns">
-            <button type="button" className="btn btn--sm pforge__buy" onClick={wear}>
-              {worn ? t('camp.runes.takeOut') : t('camp.runes.wear')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--sm pforge__buy"
-              disabled={!plan}
-              onClick={doFuse}
-            >
-              {t('camp.runes.fuse')}
-            </button>
-            <button
-              type="button"
-              className="btn btn--sm btn--ghost pforge__buy"
-              disabled={worn}
-              onClick={doShatter}
-            >
-              +{RUNE_SHATTER[rune.tier - 1]} <TokenIcon size={11} />
-            </button>
-          </span>
-          {!plan && rune.tier < RUNE_ROMAN.length && (
-            <span className="prune-card__hint">
-              {t('camp.runes.fuseNeed', { tier: RUNE_ROMAN[rune.tier - 1] })}
-            </span>
-          )}
-          {plan && (
-            <span className="prune-card__hint">
-              {t('camp.runes.fuseGo')}{' '}
-              {plan.with.map((r) => `${runeName(r.kind)} ${pctText(runePower(r))}`).join(', ')} →{' '}
-              {runeName(rune.kind)} {RUNE_ROMAN[rune.tier]}
-            </span>
-          )}
-        </div>
-      ) : (
-        <p className="pcamp-note" style={{ margin: 0 }}>
-          {p.runes.length
-            ? t('camp.runes.bag', { n: p.runes.length, max: RUNE_BAG })
-            : t('camp.runes.none')}
-        </p>
-      )}
-      {note && <p className="pcamp-note prune-note">{note}</p>}
-      {bag.length > 0 && (
-        <div className="prunes-bag">
-          {bag.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              className={`prune-tile${sel === r.id ? ' is-sel' : ''}${
-                p.sockets.includes(r.id) ? ' is-worn' : ''
-              }`}
-              onClick={() => {
-                selectionChanged();
-                setNote(null);
-                setSel(sel === r.id ? null : r.id);
-              }}
-            >
-              <RuneIcon kind={r.kind} tier={r.tier} size={40} />
-              <i>{RUNE_ROMAN[r.tier - 1]}</i>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ---- Питомцы -------------------------------------------------------------------
 
 /** Питомец значком (списки, награды): портрет вида без движения. */
@@ -1553,88 +1011,6 @@ export function PetIcon({
   ghost?: boolean;
 }) {
   return <PetArt id={id} size={size} ghost={ghost} still />;
-}
-
-// ---- Вехи ------------------------------------------------------------------------
-
-function mileRewardText(m: (typeof MILES)[number]): string {
-  const r = m.reward;
-  const out: string[] = [];
-  if (r.tokens) out.push(`+${fmt(r.tokens)} ✦`);
-  if (r.keys) out.push(t('camp.keysN', { n: r.keys }));
-  if (r.parcel) out.push(t('camp.mile.parcel', { tier: nameIn(chestName(r.parcel)) }));
-  if (r.rune) out.push(t('camp.mile.rune', { tier: RUNE_ROMAN[r.rune - 1] }));
-  if (r.socket) out.push(t('camp.mile.socket'));
-  if (r.egg) out.push(nameIn(eggName(r.egg)));
-  return out.join(' · ');
-}
-
-function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
-  const t = useT();
-  const p = useFinanceStore((s) => s.prison);
-  const claim = useFinanceStore((s) => s.prisonMileClaim);
-  const [reveal, setReveal] = useState<ParcelOpen | null>(null);
-  const take = (id: string) => {
-    primeAudio();
-    const before = useFinanceStore.getState().slotsBalance;
-    const got = claim(id);
-    if (!got) {
-      notifyWarning();
-      return;
-    }
-    const after = useFinanceStore.getState().slotsBalance;
-    if (after > before) onGain(before, after);
-    coinDing();
-    notifySuccess();
-    if (got.mile.reward.keys) keyFound();
-    if (got.parcel) setReveal(got.parcel);
-    else {
-      tierBreak(2);
-      burstConfetti(50, ['#ffe08a', '#b8f4e6', '#fff']);
-    }
-  };
-  return (
-    <div className="pforge">
-      {MILES.map((m) => {
-        const [v, goal] = m.progress(p);
-        const done = p.miles.includes(m.id);
-        const ready = mileReady(p, m);
-        return (
-          <div
-            key={m.id}
-            className={`pforge__row pmile${done ? ' is-done' : ''}${ready ? ' is-ready' : ''}`}
-          >
-            <span className="pforge__ico">
-              <span className="pforge__glyph">{done ? '✓' : ready ? '★' : '☆'}</span>
-            </span>
-            <span className="pforge__info">
-              <b>{mileTitle(m.id)}</b>
-              <i>
-                {mileText(m.id)} · {mileRewardText(m)}
-              </i>
-              {!done && (
-                <span className="ppet-bar">
-                  <i style={{ transform: `scaleX(${goal ? v / goal : 0})` }} />
-                </span>
-              )}
-            </span>
-            {done ? (
-              <Done>{t('camp.mile.taken')}</Done>
-            ) : ready ? (
-              <button type="button" className="btn btn--sm pforge__buy" onClick={() => take(m.id)}>
-                {t('camp.take')}
-              </button>
-            ) : (
-              <Done>
-                {fmtShort(v)}/{fmtShort(goal)}
-              </Done>
-            )}
-          </div>
-        );
-      })}
-      {reveal && <ParcelReveal open={reveal} onClose={() => setReveal(null)} />}
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
