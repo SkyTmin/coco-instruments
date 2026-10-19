@@ -201,7 +201,8 @@ const shortCount = (n: number) =>
  */
 const chipMoney = (n: number) => (n >= 1e5 ? shortCount(n) : fmtNum(n));
 
-/** Токены и ключи в фишке: не длиннее пяти знаков и суффикса («98,7к», «987к», «12м»). */
+/** Токены и ключи в фишке: не длиннее пяти знаков и суффикса («98,7к», «987к», «12м»).
+ *  От миллиарда — что короче: «999м+» или «1 Mr» («1 млрд» не влезал на 320 px и на tl). */
 const chipCount = (n: number) =>
   n < 1e4
     ? fmt(n)
@@ -213,7 +214,9 @@ const chipCount = (n: number) =>
           ? t('mineHud.m', { n: Math.floor(n / 1e5) / 10 })
           : n < 1e9
             ? t('mineHud.m', { n: Math.floor(n / 1e6) })
-            : shortCount(n);
+            : [`${t('mineHud.m', { n: 999 })}+`, shortCount(n)].reduce((x, y) =>
+                y.length < x.length ? y : x,
+              );
 
 /** Темп на полосе запала: не длиннее «99,9к» — колонка полосы рассчитана на это (R51). */
 const paceCount = (n: number) =>
@@ -2201,8 +2204,11 @@ export function PrisonPage() {
     </button>
   ) : null;
 
+  // Узкая рама (320×568, 360×740 с заданием): отряд по центру нижней кромки накрывал
+  // посылки — они уходят столбиком вправо, за раму (место там есть: поле упёрлось в высоту).
+  const slim = !wide && cell > 0 && 7 * cell < 124 * u;
   const fieldBox = (
-    <div key="field" className="mn-field" ref={slotRef}>
+    <div key="field" className={`mn-field${slim ? ' is-slim' : ''}`} ref={slotRef}>
       <div
         ref={frameRef}
         className={`mn-frame px-panel px-panel--wood pxk-frame-wood${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
@@ -3151,7 +3157,9 @@ function useFieldCell(
         W = inner - 2 * (SIDE_MIN_U + SIDE_GAP_U) * scale;
       }
       const c = Math.floor(Math.min((W - cw) / 7, (H - ch) / 9));
-      setCell(Math.max(20, Math.min(160, c)));
+      // Нижний предел 12, а не 20: на 320×568 рама с клеткой 20 налезала на расходники
+      // на 20 px — поле всегда влезает в своё место.
+      setCell(Math.max(12, Math.min(160, c)));
     };
     measure();
     const ro = new ResizeObserver(measure);

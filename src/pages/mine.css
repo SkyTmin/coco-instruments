@@ -43,6 +43,10 @@
   position: absolute;
   inset: calc(-3 * var(--u));
 }
+.mn-hud .px-btn--icon::before {
+  /* Вверх-вниз 4u (шапка 18u на низком телефоне — 36 px, зона 48): ≥ 44 (R43). */
+  inset: calc(-4 * var(--u)) calc(-3 * var(--u));
+}
 .mn-parcel::before {
   /* От рамки (1u) — ещё 3u вбок и 4u вверх-вниз: 46 × 50. */
   inset: calc(-5 * var(--u)) calc(-4 * var(--u));
@@ -81,6 +85,43 @@ html[data-input='touch'] .mn .px-keyhint {
   }
   .mn--tall .mn-items {
     --slot: calc(22 * var(--u));
+  }
+}
+/* 320×568 (и любой телефон ниже 640 px): док 24u и задание 24u — ещё 12 px полю.
+   Значок дока 12u + подпись 17 px + рамка влезают; столбец награды задания — тоже. */
+@media (orientation: portrait) and (max-height: 640px) {
+  html[data-ff^='phone'] .mn--tall .mn-dock .mn-dock__btn {
+    height: calc(24 * var(--u));
+    padding-bottom: var(--u);
+  }
+  html[data-ff^='phone'] .mn--tall .mn-dock .mn-dock__btn:is(:active, .is-down) {
+    padding: var(--u) var(--u) 0;
+  }
+  .mn--tall .mn-quest {
+    height: calc(24 * var(--u));
+  }
+}
+/* 320 px: названию ступени серии («Легенда забоя», 127 px) не хватало 23 px рядом с
+   колонкой темпа — полоса шире (до 2u от края экрана), колонка кирки 22u («⛏50»),
+   зазоры 3u, но до темпа 4u. */
+@media (max-width: 340px) {
+  html[data-ff^='phone'] .mn .mn-frame > .mn-strip {
+    --sw: max(calc(100% - 20 * var(--u)), calc(100vw - 2 * var(--u)));
+    grid-template-columns: calc(22 * var(--u)) minmax(0, 1fr) max-content;
+    gap: calc(3 * var(--u));
+    padding: 0 calc(2 * var(--u));
+  }
+  /* Деньги 1,25 : 1 токены (не 1,4): «999Mn» в токенах влезает кеглем ≥ 16 px. */
+  .mn--tall .mn-hud:not(:has(.mn-hud__forest)) {
+    grid-template-columns: calc(19 * var(--u)) minmax(0, 1.25fr) minmax(0, 1fr) calc(19 * var(--u));
+  }
+  /* «1/5» в строке условий ранга упиралась в рамку на 2 px. */
+  .mn--tall .mn-rank {
+    padding-inline: calc(2 * var(--u));
+  }
+  /* До полосы серии — по-прежнему 4u (R51). */
+  html[data-ff^='phone'] .mn-frame > .mn-strip > .mn-strip__pace {
+    margin-left: var(--u);
   }
 }
 /* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
@@ -195,6 +236,20 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   display: none;
 }
+/* Планшет лёжа с заданием: заголовка тоже нет, расходники — одним рядом (tl de: рюкзак
+   с «Продать» уходил под нижний край колонки на 88 px). */
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-side__h {
+  display: none;
+}
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items {
+  container-type: inline-size;
+}
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items__row {
+  --slot: min(calc(23 * var(--u)), round(down, calc((100cqi - 8 * var(--u)) / 5), var(--u)));
+}
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items[data-n='6'] .mn-items__row {
+  --slot: min(calc(23 * var(--u)), round(down, calc((100cqi - 10 * var(--u)) / 6), var(--u)));
+}
 .mn-panel {
   flex: none;
 }
@@ -291,6 +346,31 @@ html[data-ff^='phone'] .mn-frame > .mn-strip {
 }
 .mn-panel > .mn-strip .mn-strip__ghost {
   display: none;
+}
+/* Планшет и компьютер: название ступени — своей строкой во всю ширину панели, ниже
+   кирка | полоса серии, ниже темп (tl: de «Stollenlegende» 195 px резалось в 130). */
+html:not([data-ff^='phone']) .mn-panel > .mn-strip {
+  height: auto;
+  grid-template-areas: 'name name' 'pick bar' 'pace pace';
+  /* Строка темпа — постоянной высоты: пока не копаешь, она пустая, но место держит. */
+  grid-template-rows: auto auto var(--px-fs-sm);
+  row-gap: calc(2 * var(--u));
+  padding-block: calc(2 * var(--u));
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__streak {
+  display: contents;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip .mn-strip__name {
+  grid-area: name;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pick {
+  grid-area: pick;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip .mn-strip__barrow {
+  grid-area: bar;
+}
+html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
+  grid-area: pace;
 }
 .mn-panel > .mn-strip .mn-strip__live {
   flex-direction: row;
@@ -467,6 +547,16 @@ html[data-ff^='phone'] .mn-frame > .mn-strip {
   /* 6u между посылками: зона нажатия каждой (+3u вбок, +5u вверх-вниз) — 46 × 44+ и не
      заходит на соседку (критик r2: 34 px, зона 39–43). */
   gap: calc(6 * var(--u));
+}
+/* Узкая рама: посылки — столбиком справа от рамы, снизу вверх; зона нажатия — вбок. */
+.mn-field.is-slim .mn-parcels {
+  right: auto;
+  left: calc(100% + 2 * var(--u));
+  bottom: 0;
+  flex-direction: column-reverse;
+}
+.mn-field.is-slim .mn-parcel::before {
+  inset: calc(-4 * var(--u));
 }
 .mn-parcel {
   position: relative;
@@ -726,6 +816,8 @@ html[data-ff^='phone'] .mn-frame > .mn-strip {
 }
 .mn-stat--tokens {
   grid-area: tokens;
+  /* «999Mn» (tr) шире шести цифр. */
+  --res: 6.5;
 }
 .mn-stat--keys {
   grid-area: keys;
@@ -1292,18 +1384,21 @@ html[data-ff^='phone'] .mn--wide .mn-items__row {
 }
 /* Телефон стоя: значок НАД подписью, подпись одним кеглем 17 px в одну строку, без
    переносов и подгонки по длине (критик r2, R48: 17 / 15,4 / 13,7 px и «Demir-hane»). */
-html[data-ff^='phone'] .mn--tall .mn-dock__btn {
+/* Телефон лёжа — так же (tr «Demir-hane» рвался на две строки кеглем 15 px в плитке 123 × 72). */
+html[data-ff^='phone'] .mn-dock__btn {
   flex-direction: column;
   justify-content: center;
   align-items: center;
   gap: 0;
-  height: calc(26 * var(--u));
   padding: 0 var(--u) calc(3 * var(--u));
 }
-html[data-ff^='phone'] .mn--tall .mn-dock__btn:is(:active, .is-down) {
+html[data-ff^='phone'] .mn--tall .mn-dock__btn {
+  height: calc(26 * var(--u));
+}
+html[data-ff^='phone'] .mn-dock__btn:is(:active, .is-down) {
   padding: calc(2 * var(--u)) var(--u) var(--u);
 }
-html[data-ff^='phone'] .mn--tall .mn-dock__label {
+html[data-ff^='phone'] .mn-dock__label {
   font-size: var(--px-fs-sm);
   line-height: 1;
   text-align: center;
