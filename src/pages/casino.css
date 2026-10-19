@@ -288,9 +288,12 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   white-space: nowrap;
   overflow: hidden;
 }
-/* The coin never gives way to the digits (it was squeezed to 0–9 px beside «988 тыс.»). */
+/* The coin never gives way to the digits (it was squeezed to 0–9 px beside «988 тыс.»), and it
+   follows the digits' size (a fixed 16 px stood beside 29-px digits on tablets, critic9 #13). */
 .cas-stat__v > svg {
   flex: none;
+  width: 0.9em;
+  height: 0.9em;
 }
 /* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): one step smaller,
    then the coin goes — the 777 / ★ picture and the caption still say what it is. */
@@ -629,6 +632,12 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* The price's coin is not smaller than its digits (16 px beside 17-px text, critic9 #13). */
+.cas-buy.px-btn > i > svg {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+}
 .cas-ante.px-btn {
   flex: none;
   min-width: var(--gx-hit);
@@ -907,10 +916,12 @@ html[data-ff='tablet'] .cas-777 .sym {
   grid-template-columns: minmax(0, 1fr);
   gap: calc(3 * var(--u));
 }
+/* Three text sizes per screen (R24): caption, body, display — the balance and Spin share the
+   display size with the facts (hero 31.5 px was a fourth on tablets). */
 html[data-ff='desktop'] .cas-bal__v,
 html[data-ff='tablet'] .cas-bal__v {
   height: calc(20 * var(--u));
-  font-size: var(--px-fs-hero);
+  font-size: var(--px-fs-big);
 }
 /* Touch targets: never under 44 px (the shell's --gx-hit). */
 .cas-bet__step.px-btn {
@@ -967,22 +978,24 @@ html[data-ff='tablet'] .cas-spin {
 }
 html[data-ff='desktop'] .cas-spin__t,
 html[data-ff='tablet'] .cas-spin__t {
-  font-size: var(--px-fs-hero);
+  font-size: var(--px-fs-big);
 }
 html[data-ff='phone-landscape'] .cas-spin__t {
   font-size: var(--px-fs);
 }
 
 /* ---- Lever (critic9 #12) ----------------------------------------------------------------------- */
-/* The art is 34 px wide (33–39 after the cabinet's fit): a hit column of 52 px over it, and the
-   knob drops 1 art px on pointerdown — before the finger has moved. */
+/* The art is 34 px wide (22–39 after the cabinet's fit): a hit column over it that is ≥ 48 px on
+   screen at any scale (`--fit` = the cabinet's scale; 52 px of cabinet at ×1), and the knob drops
+   1 art px on pointerdown — before the finger has moved. */
 .slots.cas .lever::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -9px;
-  right: -9px;
+  left: 50%;
+  width: max(52px, 48px / var(--fit, 1));
+  translate: -50% 0;
 }
 .slots.cas .lever.is-down .lever__knob {
   translate: 0 var(--u);
@@ -1161,7 +1174,8 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   align-items: center;
   gap: calc(2 * var(--u));
   min-width: calc(11ch + 26px + 2 * var(--u));
-  font-size: var(--px-fs-hero);
+  /* The display size of the hall (= the card titles): three text sizes per screen (R24). */
+  font-size: var(--px-fs-big);
   line-height: 1.05;
   color: var(--px-text);
   white-space: nowrap;
@@ -1303,12 +1317,13 @@ html .hall .hall-card__facts .cas-stat {
   padding: 0;
   border-image-source: none;
 }
+/* Phones: body size — the art and the title are the big things on a card (three sizes, R24). */
 html .hall .hall-card__facts .cas-stat__v {
-  font-size: var(--px-fs-head);
+  font-size: var(--px-fs);
 }
 /* `useFitText`: a long number steps down instead of losing its tail. */
 html .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
-  font-size: var(--px-fs);
+  font-size: var(--px-fs-sm);
 }
 html .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   font-size: var(--px-fs-sm);
@@ -1384,18 +1399,13 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   background: var(--px-text);
 }
 /* Never clip a name: it wraps to two lines instead (two 20-px lines fit the 48-px row). */
+/* Body size on every format (it was `head` above 400 px — a fourth size on the hall, R24). */
 .hall-row__t {
   min-width: 0;
-  font-size: var(--px-fs-head);
-  line-height: 1.05;
+  font-size: var(--px-fs);
+  line-height: 1;
   overflow-wrap: anywhere;
   text-wrap: balance;
-}
-@media (max-width: 400px) {
-  .hall-row__t {
-    font-size: var(--px-fs);
-    line-height: 1;
-  }
 }
 .hall-row__fact {
   display: inline-flex;
@@ -1519,7 +1529,7 @@ html[data-ff='phone-landscape'] .hall-card__t {
 /* Tablet / desktop: the cards are big — so is everything on them. */
 html[data-ff='tablet'] .hall-card__t,
 html[data-ff='desktop'] .hall-card__t {
-  font-size: var(--px-fs-hero);
+  font-size: var(--px-fs-big);
 }
 html[data-ff='tablet'] .hall-card__t.is-long,
 html[data-ff='desktop'] .hall-card__t.is-long {

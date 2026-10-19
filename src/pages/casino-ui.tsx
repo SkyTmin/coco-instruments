@@ -64,6 +64,8 @@ export function fitStyles(fit: { k: number; w: number; h: number }): {
     wrap: { width: Math.round(fit.w * fit.k), height: Math.round(fit.h * fit.k) },
     item: {
       scale: String(fit.k),
+      // For sizes that must stay whole on screen whatever the scale (the lever's hit column).
+      '--fit': String(fit.k),
       marginLeft: -fit.w / 2,
       marginTop: -fit.h / 2,
     } as CSSProperties,

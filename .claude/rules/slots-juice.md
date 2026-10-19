@@ -442,5 +442,51 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   compare the content range, not sw/cw. After HMR Vite serves `/src/store.ts?t=…`: scripts must
   import the same URL the page did, or they patch a second store. Eruda (dev) sits top-right and
   steals taps / inflates long tasks — abort its requests in the stand.
-- Left: tablet-landscape Slots cabinet is ~11 % of the screen; the lever is a 34-px-wide target;
-  juice tiers (R18) not touched by ruling.
+- Juice tiers (R18) not touched by ruling.
+
+### Critic round 2 (K2 / K2′, 19.10.2026)
+
+- **The page never scrolls on any format** (`.gs__main` sh = ch, `scrollTop` 0 after a swipe, 320 …
+  1440): `html[data-ff] .cas-page .gs__main { overflow: hidden }` beats the shell's landscape
+  `overflow-y: auto`; `.slots.cas::before` (theme glow, 460 px tall) is `content: none`.
+- **Light ground** `.cas-ground` (kit stone tile under a warm veil); the theme's `.slots-scene` is
+  hidden on casino routes. Dark stays on the cabinet and the status plate (an opaque ink base under
+  the skin's translucent plate). Near-black outside them 5–14 % of the screen.
+- **Slots on tablet landscape / desktop:** two columns — stage | (info 2 × 2 on top of the deck);
+  the cabinet is height-bound, 77–79 % of the height (tl 648 × 635, was ~11 % of the screen).
+  Cascade keeps info | stage | deck (its board was height-bound already).
+- **SKIP:** press 1 lands the reels AND sets `hurry` (`SKIP_TEMPO`); press 2 jumps to the final
+  state. `SKIP_START_MS` 250: a press within 250 ms of the spin start is ignored (a 90-ms double
+  tap kept the whole show). `SKIP_GUARD_MS` 350 stays. Rigged Slots ×660: 16.8 s; one press at
+  0.3 s → 7.0 s; two → over 30 ms after the second. Cascade rig 12: 6.7 → 2.8 → 0.66 s.
+- **Spin label size is one per language and width:** `useFitText` runs on the SET of plate labels
+  (spin / skip / free / bonus / broke / stop stacked in one grid cell, only `.is-on` visible).
+- **«Нет монет» explains:** a tap on the off plate → status `slots.status.broke` for 3 s + a
+  1-art-px shake (`is-nope`) + `tapError()`.
+- **Cascade deck:** Ante is a 44-px toggle at the right end of the bet row; «Купить бонус» is the
+  third fact of the info strip (tall) / a row above the money (wide). Deck 178 px, cell 53 × 66 at
+  390. Under 380 px the Cascade bet caption is hidden (the stepper + coin say it; it was «Став…»).
+- **Sheets mount in `CasSheet`** (`openCasSheet(id)`): opening one no longer re-renders the page.
+  The skins sheet renders the first cards, the rest are placeholders of the same grid until the next
+  frame. Stand pitfall: a first CDP touch flips `data-input` and restyles the whole page — warm up
+  with a touch elsewhere before timing a sheet (`WARM=1` in `ui5K/m/sheet2.mjs`).
+- **Short phones (`max-height: 680px`, tall layout; 320 × 568, 360 × 640):** the info strip is
+  level + one row of pictured facts (captions hidden, the recent-spins row hidden), Cascade's buy
+  plate spans both strip rows (`fit-content(50%)`), gaps 2 u, deck padding 4 u / 6 u, thumb rows
+  44 px. The hall hides its note and shows the card facts in one line. `max-width: 340px`: balance
+  `--px-fs`, deck side padding 5 u, a long one-word card name (es «Tragaperras») `--px-fs`. p320
+  Slots cabinet 143 × 118 → 236 × 195, Cascade 149 × 170 → 167 × 192 (still small: the
+  shell's top takes 72 px).
+- **Lever:** `usePress` on it (the knob drops 1 art px on pointerdown); hit column `::after`
+  `max(52px, 48px / var(--fit))` — `--fit` is the cabinet's scale, set by `fitStyles`. 48–128 px on
+  every format, 43 at 320 (the cabinet's own edge clips it; wider would cover the reels).
+- **Type:** three sizes per screen in the frame (caption `sm`, body `fs`, display `big`; the
+  GameTop title is the shell's): hall facts `fs`, wallet and tablet card titles `big`, the
+  «Каторга» row title `fs`, tablet balance / Spin `big` (hero was a fourth size). Coins follow
+  their digits (`0.9em` in facts, `1.1em` in the buy price).
+- **Skins sheet note:** one line «🔒 Реликвия — за выигрыш ×200 одним спином»
+  (`slots.skin.relicLock`) + the Twemoji credit line (`slots.skin.credit`); the old 23-word
+  `slots.skin.note` is the tooltip.
+- Probe scripts of this round: `scratchpad/ui5K/m/` (`rects.mjs` = block rects + clipped text,
+  `stage2.mjs`, `item7.mjs`, `skipprobe.mjs`, `spinlbl.mjs`, `broke.mjs`, `lever.mjs`,
+  `sheet2.mjs`, `fsz.mjs`, `iconsz.mjs`; `lib.mjs` has p320 / p640 / pse / p430).
