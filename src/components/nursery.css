@@ -1,1046 +1,1362 @@
-/* Nursery (components/Nursery.tsx) — the pets view of «Питомник» on the pixel kit, v2.
-   Owner 13.10: one pet BIG, readable type, a light palette, nothing jumps when another pet is
-   picked. Every art size is a whole number of art pixels (var(--u)); kit rules:
-   .claude/rules/ui-px.md. Rows that hold changing text have FIXED heights (the plate, the
-   chip rows) — switching pets must not move a single box. */
+/* Nursery (PetsTab.tsx + Nursery.tsx) on the dark kit (`src/ui-px/dark.*`) — N4, the handoff
+   layout (owner 19.10): header · three tabs («Отряд» / «Коллекция» / «Яйца») · squad places · the
+   selected pet on an octagon stage with its name ribbon · three square facts · the action bar; the
+   collection as a full tab; eggs as nests / queue / hatch-all / a 2 × 2 shop. The forge's sibling:
+   colours only from the `.pxd` tokens, sizes in whole art pixels (`--u`). The hatch scenes (.phs,
+   .phb) keep their styles in game-ui.css. */
 
-.nur {
-  --gap: calc(4 * var(--u));
-  /* chip background: a shade of the surface it sits on */
-  --chip: rgb(90 61 34 / 0.13);
-  /* a row that holds a stat picture: the type's row or the picture + 2 px, whichever is taller
-     (`--st` = 24 CSS px, 36 at ui-scale ≥ 4 — set by Nursery.tsx in whole device px) */
-  --row-st: max(calc(var(--px-fs-sm) * 1.65), calc(var(--st, 24px) + 4px));
-  position: relative;
-  display: grid;
-  gap: var(--gap);
-  min-height: 0;
-  flex: 1 1 auto;
-  color: var(--px-text);
-}
-.nur .px-dark {
-  --chip: rgb(255 244 220 / 0.1);
-}
-/* two weights on the screen: 700 for text and numbers, the headings' own (critic P2) — the camp
-   sheet's `.gx-camp .gx-sheet__body :is(b, …)` (0,2,1) made the numbers 800 */
-.px.nur .px-num {
-  font-weight: 700;
-}
-/* Phone portrait: the stage takes all the height the squad, the strip and the actions leave. */
-.nur--one {
-  --gap: calc(3 * var(--u));
-  grid-template:
-    'show' minmax(0, 1fr)
-    'side' auto
-    / minmax(0, 1fr);
-}
-/* Phone landscape: the stage on the left half, full height. The pet is limited by the height
-   here, so the side column gets half the width: the squad grid stands beside the slots. */
-.nur--land {
-  grid-template: 'show side' minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1fr);
-}
-/* Tablet portrait: the stage on top, squad | collection under it. 33/53 of the height (round 4,
-   was 16/25): on 820 × 1180 the room keeps 372 px (the 336-px pet needs 362) and the collection
-   shows three whole rows again, as in prod. */
-.nur--tall {
-  grid-template:
-    'show' minmax(0, 33fr)
-    'side' minmax(0, 20fr)
-    / minmax(0, 1fr);
-}
-/* Tablet landscape, desktop: the stage is the hero, 55 % of the width. */
-.nur--wide {
-  grid-template: 'show side' minmax(0, 1fr) / minmax(0, 11fr) minmax(0, 9fr);
-}
-
-/* ---- Stage ----------------------------------------------------------------------------------- */
-.nur-show {
-  grid-area: show;
-  min-height: 0;
-  min-width: 0;
-  display: grid;
-}
-/* A lit stage (owner 13.10: «на её фоне не особо всё хорошо видно»): the sandstone wall under a
-   warm veil and a lighter floor — the pet's ink outline reads against it. No light pool: a CSS
-   ellipse is drawn at screen resolution, its curved edges are mixels next to the pixel art
-   (critic round 2, P1-6 / P2-10); a baked pool would go in paint.ts. */
-.nur-stage {
-  --st-veil: rgb(255 244 222 / 0.4);
-  --st-floor: rgb(200 170 125 / 0.6);
-  --st-seam: rgb(110 80 50 / 0.6);
-  background-image:
-    linear-gradient(
-      to bottom,
-      transparent 0 calc(100% - 22 * var(--u)),
-      var(--st-seam) calc(100% - 22 * var(--u)) calc(100% - 21 * var(--u)),
-      var(--st-floor) calc(100% - 21 * var(--u))
-    ),
-    linear-gradient(var(--st-veil), var(--st-veil)), var(--tile);
-  background-size:
-    100% 100%,
-    100% 100%,
-    calc(var(--tile-w) * var(--u)) calc(var(--tile-h) * var(--u));
-  background-repeat: no-repeat, no-repeat, repeat;
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  /* 1 u: the pet grows in whole steps and each room sits just below its next step (critic
-     round 2: a 3-u gap cost the 1080p pet 448 → 336) */
-  gap: var(--u);
-  /* the animation buttons stand in a column on the right: the pet keeps the whole height */
-  grid-template:
-    'room anims' minmax(0, 1fr)
-    'plate plate' auto
-    / minmax(0, 1fr) auto;
-}
-.nur-anims {
-  grid-area: anims;
+/* ---- The window: dark, full screen; a column on phones, a grid elsewhere ------------------- */
+.nrs.arm.is-window {
+  --g: calc(4 * var(--u));
+  --st: calc(12 * var(--u));
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: calc(2 * var(--u));
-}
-/* Round 3 (critic P0-1): the pet as big as each format allows. Phones have no anims column (one
-   ▶ toggle in the room's corner instead); phone landscape and wide screens carry the plate in
-   the side column, so the room is the whole stage. */
-.nur--one .nur-stage {
-  grid-template:
-    'room' minmax(0, 1fr)
-    'plate' auto
-    / minmax(0, 1fr);
-}
-.nur--land .nur-stage {
-  grid-template: 'room' minmax(0, 1fr) / minmax(0, 1fr);
-  /* 5 u, not the frame's 6: the room is 280 high on 844 × 390 and the pet steps 224 → 261
-     (critic round 3, item 4) */
-  padding-block: calc(5 * var(--u));
-}
-.nur--wide .nur-stage {
-  grid-template: 'room anims' minmax(0, 1fr) / minmax(0, 1fr) auto;
-}
-/* The phone toggle stands in the room's top-right corner over the pet; its hit area (≥ 46 × 50
-   at u 2) reaches into the stage's frame. */
-.nur .nur-anim-tog {
-  grid-area: room;
-  justify-self: end;
-  align-self: start;
-  z-index: 3;
-}
-.nur-anim-tog::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: calc(-5 * var(--u)) calc(-4 * var(--u));
-}
-/* …and opens the six as a 3 × 2 menu under it: 19-u buttons, 3-u gaps = a 44-px pitch on a
-   phone (critic P1-4). An ink plate under them, like the name plate. */
-.nur .nur-anims--pop {
-  grid-area: room;
-  justify-self: end;
-  align-self: start;
-  z-index: 4;
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  gap: calc(3 * var(--u));
-  margin-top: calc(17 * var(--u));
-  padding: calc(2 * var(--u));
-  background: #2a190c;
-  border: var(--u) solid var(--px-ink);
-  box-shadow:
-    inset 0 var(--u) 0 #6b4a2c,
-    inset 0 calc(-1 * var(--u)) 0 #1a0f07;
-  animation: nur-drop 80ms steps(2, jump-none);
-}
-@keyframes nur-drop {
-  from {
-    translate: 0 calc(-2 * var(--u));
-  }
-}
-/* the slim level bar of phone portrait: 4 u, no label (numbers = its tip + the details sheet) */
-.nur-xp {
-  display: block;
-}
-/* The measured room: its size comes from the grid only (contain), the pet is sized from it in
-   Nursery.tsx and stands on a pedestal of the room's size (--ped, whole screen dots). */
-.nur-room {
-  grid-area: room;
-  position: relative;
-  min-height: 0;
-  min-width: 0;
-  contain: size;
-}
-.nur-pet {
-  position: absolute;
-  inset: 0;
-  background: var(--pximg-pedestal) no-repeat var(--pedx, 50%) bottom /
-    calc(var(--pximg-pedestal-w) * var(--ped, var(--u)))
-    calc(var(--pximg-pedestal-h) * var(--ped, var(--u)));
-  image-rendering: pixelated;
-}
-/* cold switch: the picked pet's thumbnail until its strip is decoded (`thumbOnly`) */
-.nur-pet > .nur-ph {
-  position: absolute;
-  bottom: var(--lift, 0);
-  image-rendering: pixelated;
-  pointer-events: none;
-  animation: nur-pop 80ms steps(2, jump-none);
-}
-.nur-pet > .pet {
-  position: absolute;
-  left: var(--x, 0);
-  bottom: var(--lift, 0);
-  cursor: pointer;
-  /* a new pet arrives with a 2-step pixel pop: 1 art px down, then home (`translate` only) */
-  animation: nur-pop 80ms steps(2, jump-none);
-}
-@keyframes nur-pop {
-  from {
-    translate: 0 var(--u);
-  }
-  to {
-    translate: 0 0;
-  }
-}
-/* No soft vector glow on the pixel stage (kit: no blur, no soft masks): the aura and the
-   rotating rays are off here. Rarity already shows on the pill, the name and the slot frame. */
-.nur-stage :is(.pet__aura, .pet__rays) {
-  display: none;
-}
-.nur-stage__xp {
-  grid-area: room;
-  align-self: start;
-  justify-self: center;
-  z-index: 3;
-  font: 700 var(--px-fs) / 1 var(--px-font);
-  color: var(--px-gold-hi);
-  text-shadow:
-    var(--u) 0 0 var(--px-ink),
-    0 var(--u) 0 var(--px-ink),
-    calc(-1 * var(--u)) 0 0 var(--px-ink),
-    0 calc(-1 * var(--u)) 0 var(--px-ink);
-  pointer-events: none;
-  animation: nur-rise 1.2s steps(12) forwards;
-}
-@keyframes nur-rise {
-  from {
-    transform: translateY(calc(6 * var(--u)));
-    opacity: 1;
-  }
-  70% {
-    opacity: 1;
-  }
-  to {
-    transform: translateY(calc(-12 * var(--u)));
-    opacity: 0;
-  }
-}
-
-/* ---- Plate: name, rarity, power, roles, level ---------------------------------------------- */
-.nur-plate {
-  grid-area: plate;
-  container: nur-plate / inline-size;
-  display: grid;
-  gap: calc(2 * var(--u));
-  min-width: 0;
-  padding: calc(3 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u));
-  background: #2a190c;
-  border: var(--u) solid var(--px-ink);
-  box-shadow:
-    inset 0 var(--u) 0 #6b4a2c,
-    inset 0 calc(-1 * var(--u)) 0 #1a0f07;
-}
-/* Top row: the name (its own size container) and the power on the right. */
-.nur-plate__top {
-  display: flex;
-  align-items: center;
-  gap: calc(3 * var(--u));
-  /* one line of the hero size, or two lines of the label size (a long name on a narrow plate) */
-  height: max(calc(var(--px-fs-hero) * 1.15), calc(var(--px-fs-sm) * 2.05), var(--row-st));
-  min-width: 0;
-}
-.nur-plate__nm {
-  flex: 1 1 auto;
-  min-width: 0;
-  container: nur-name / inline-size;
-}
-/* `.nur` in front: the camp sheet's `.gx-panel--wood h3` shadow must not win. One line, the
-   size shrinks for long names (container width ÷ length); never below the label size — a name
-   that still doesn't fit wraps to two lines of it («Panzerknacker-Waschbär» at 360). The row
-   height is fixed either way. */
-.nur .nur-plate__name {
-  margin: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  font: 400 var(--px-fs-hero) / 1 var(--px-head);
-  font-size: max(var(--px-fs-sm), min(var(--px-fs-hero), calc(100cqi / (var(--len, 12) * 0.67))));
-  color: var(--rc, var(--px-gold));
-  text-shadow: 0 var(--u) 0 #000;
+  gap: var(--g);
+  padding: calc(var(--safe-top, 0px) + 5 * var(--u)) calc(6 * var(--u))
+    calc(var(--safe-bottom, 0px) + 6 * var(--u));
+  border-width: 0;
+  border-image: none;
+  background: radial-gradient(120% 60% at 50% 22%, var(--pd-bg2), var(--pd-bg) 70%);
+  color: var(--pd-text);
+  font: 500 var(--pd-fs) / 1.2 var(--px-font);
   overflow: hidden;
-  overflow-wrap: break-word;
 }
-.nur-plate__row,
-.nur-plate__roles {
-  display: flex;
-  align-items: center;
-  gap: calc(3 * var(--u));
-  /* text rows: their height follows the type (and the stat picture), not the art scale */
-  height: var(--row-st);
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.nur-plate__roles {
-  gap: calc(2 * var(--u));
-  /* the «+N» hit area reaches above and below the row; the chips never overflow (see below) */
-  overflow: visible;
-  container: nur-roles / inline-size;
-  font-size: var(--px-fs-sm);
-}
-/* Three chips + «+N» need ≈ 17.2 em of the label size (de «+42 %»); a narrower plate (360-px
-   phones, the large text size) shows two chips + «+N+1» — both variants are rendered, CSS picks
-   one. Three-digit values need ≈ 19 em (`is-big`). */
-.nur-chip.nur-chip--more2 {
-  display: none;
-}
-@container nur-roles (max-width: 17.2em) {
-  .nur-chip.nur-chip--3,
-  .nur-chip.nur-chip--more:not(.nur-chip--more2) {
-    display: none;
-  }
-  .nur-chip.nur-chip--more2 {
-    display: inline-flex;
-  }
-}
-@container nur-roles (max-width: 19em) {
-  .is-big > .nur-chip.nur-chip--3,
-  .is-big > .nur-chip.nur-chip--more:not(.nur-chip--more2) {
-    display: none;
-  }
-  .is-big > .nur-chip.nur-chip--more2 {
-    display: inline-flex;
-  }
-}
-.nur-lv {
-  font: 700 var(--px-fs-sm) / 1 var(--px-font);
-  color: var(--px-text);
-}
-/* right-aligned under the power: the ★ badge comes and goes and the rarity pill changes width —
-   the level must not move with them (critic round 3, item 6) */
-.nur-plate__row > .nur-lv {
-  margin-inline-start: auto;
-}
-/* Rarity as a pill: ink on the rarity colour reads on any surface (≥ 4.5:1 for every rarity). */
-.nur-rar {
-  display: inline-flex;
-  align-items: center;
-  height: calc(var(--px-fs-sm) * 1.45);
-  padding: 0 calc(3 * var(--u));
-  font: 700 var(--px-fs-sm) / 1 var(--px-font);
-  color: var(--px-ink);
-  background: var(--rc, #c4c0b8);
-  border: var(--u) solid var(--px-ink);
-  box-shadow: inset 0 var(--u) 0 rgb(255 255 255 / 0.45);
-  text-shadow: none;
-}
-/* Power: its own picture (not the dig bolt), the number in the body size; an unhatched pet keeps
-   the box (picture dimmed, no number) so the name never changes its width. */
-.nur-pow {
+.nrs .gx-icon {
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--u);
-  font: 700 var(--px-fs) / 1 var(--px-font);
-  color: var(--px-gold);
 }
-.nur-pow.is-none > .nur-st {
+.nrs .px-i {
+  flex: none;
+}
+.nrs .is-hidden {
   visibility: hidden;
 }
-/* Gold: a star (as on the collection slots) + the word where the plate is wide. The threshold is
-   in em of the plate's text, so a larger text size drops the word too: the row never overflows
-   (a phone plate fits «Легендарный» + ★ + power at the large size). */
-.nur-gold {
-  display: inline-flex;
+.nrs :is(h1, h2, h3, p),
+.nrs-sheet :is(h1, h2, h3, p) {
+  margin: 0;
+}
+.nrs :is(i, em),
+.nrs-sheet :is(i, em) {
+  font-style: normal;
+}
+.nrs .coin-ico,
+.nrs .tok-ico,
+.nrs-sheet .coin-ico,
+.nrs-sheet .tok-ico {
   flex: none;
 }
-.nur-gold .px-badge {
-  grid-auto-flow: column;
+
+/* ---- Header: back · title + purpose · purse (coins over tokens) ----------------------------- */
+.nrs-top {
+  display: flex;
   align-items: center;
-  gap: var(--u);
+  gap: var(--g);
+  height: calc(22 * var(--u));
+  flex: none;
 }
-@container nur-plate (max-width: 17em) {
-  .nur-gold__w {
-    display: none;
-  }
+/* phone portrait: back | title · purse, the purpose under the title; on its own full row when it
+   doesn't fit beside the purse (fit pass → is-subrow) — never cut */
+.nrs--one .nrs-top {
+  display: grid;
+  grid-template:
+    'back h1 purse' calc(12 * var(--u))
+    'back sub purse' calc(10 * var(--u))
+    / auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--g);
+  row-gap: 0;
+  height: auto;
 }
-/* A baked 12 × 12 stat picture (paint.ts, wave 3 — N2) at `--st`: whole device px per art px. */
-.nur-st {
+.nrs--one .nrs-top.is-subrow {
+  grid-template:
+    'back h1 purse' calc(22 * var(--u))
+    'sub sub sub' auto
+    / auto minmax(0, 1fr) auto;
+}
+.nrs--one .nrs-top.is-subrow .nrs-ttl p {
+  white-space: normal;
+}
+.nrs--one .nrs-back {
+  grid-area: back;
+}
+.nrs--one .nrs-ttl {
+  display: contents;
+}
+.nrs--one .nrs-ttl h1 {
+  grid-area: h1;
+}
+.nrs--one .nrs-ttl p {
+  grid-area: sub;
+  margin-top: 0;
+}
+.nrs--one .nrs-purse {
+  grid-area: purse;
+}
+.nrs-back {
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+  padding: 0;
+  flex: none;
+}
+.nrs-ttl {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.nrs-ttl h1 {
+  font: 400 var(--pd-fs-lg) / 1 var(--px-head);
+  color: var(--pd-text);
+  white-space: nowrap;
+}
+.nrs-ttl p {
+  margin-top: var(--u);
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nrs-purse {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  height: calc(22 * var(--u));
+  padding: 0 calc(3 * var(--u));
+  flex: none;
+}
+.nrs-purse > span {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.nrs-purse b {
+  font: 700 var(--pd-fs-sm) / 1.1 var(--px-font);
+}
+
+/* ---- Tabs: three chunky ones, the row's width shared ---------------------------------------- */
+.nrs-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+  flex: none;
+}
+.nrs-tab {
+  min-width: 0;
+  height: calc(22 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  gap: calc(3 * var(--u));
+  color: var(--pd-muted);
+  white-space: nowrap;
+}
+.nrs-tab.is-on {
+  color: var(--pd-text);
+}
+.nrs-tab.is-on .gx-icon {
+  color: var(--pd-accent);
+}
+/* the words don't fit beside the icons (fit pass): icons go, then the label size */
+.nrs-tabs.is-tight .nrs-tab > .gx-icon {
+  display: none;
+}
+.nrs-tabs.is-tight2 .nrs-tab {
+  font-size: var(--pd-fs-sm);
+}
+.nrs--three .nrs-top .nrs-tabs {
+  flex: none;
+  grid-auto-columns: auto;
+}
+.nrs--three .nrs-tab {
+  padding: 0 calc(4 * var(--u));
+}
+
+/* A count / «!» on a corner: ink on gold, a 1-art-px ink ring. */
+.nrs-badge {
+  position: absolute;
+  top: calc(-3 * var(--u));
+  right: calc(-3 * var(--u));
+  z-index: 3;
+  min-width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  padding: 0 var(--u);
+  box-sizing: border-box;
+  border: var(--u) solid var(--pd-ink);
+  background: var(--pd-accent);
+  color: var(--pd-act-ink);
+  font: 800 var(--pd-fs-xs) / calc(7 * var(--u)) var(--px-font);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Section heading: a short line that says what it is, a count on the right. */
+.nrs-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+  height: calc(11 * var(--u));
+  flex: none;
+}
+.nrs-h h2 {
+  min-width: 0;
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nrs-h h2 .px-num,
+.nrs-h > .px-num {
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  color: var(--pd-text);
+  white-space: nowrap;
+}
+
+/* A baked 12 × 12 stat picture (paint.ts STAT_ART) at 12 art px: crisp at any DPR. */
+.nrs-st {
   display: inline-block;
   flex: none;
-  width: var(--st, 24px);
-  height: var(--st, 24px);
+  width: var(--st);
+  height: var(--st);
   background: no-repeat center / 100% 100%;
   image-rendering: pixelated;
 }
-.nur-st--loot {
+.nrs-st--loot {
   background-image: var(--pximg-st-loot);
 }
-.nur-st--sell {
+.nrs-st--sell {
   background-image: var(--pximg-st-sell);
 }
-.nur-st--dmg {
+.nrs-st--dmg {
   background-image: var(--pximg-st-dmg);
 }
-.nur-st--token {
+.nrs-st--token {
   background-image: var(--pximg-st-token);
 }
-.nur-st--luck {
+.nrs-st--luck {
   background-image: var(--pximg-st-luck);
 }
-.nur-st--rate {
+.nrs-st--rate {
   background-image: var(--pximg-st-rate);
 }
-.nur-st--power {
+.nrs-st--power {
   background-image: var(--pximg-st-power);
 }
-/* a stat the squad lacks: the picture stays (its box too), grey and faint */
-.nur-st.is-dim {
+.nrs-st.is-dim {
   filter: grayscale(1);
   opacity: 0.4;
 }
-/* Chip: the picture is the biggest part, the whole percent beside it. */
-.nur-chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+/* the rarity square: its colour inside an ink ring (rarity is never plain text here) */
+.nrs-dot {
+  display: inline-block;
   flex: none;
-  gap: var(--u);
-  height: calc(var(--st, 24px) + 4px);
-  padding: 0 var(--u);
-  margin: 0;
-  border: 0;
-  font: 700 var(--px-fs-sm) / 1 var(--px-font);
-  color: var(--px-text);
-  background: var(--chip);
-  white-space: nowrap;
-}
-/* «+N»: 36 × 28 visible, the hit area ≥ 48 × 48 (Android 48 dp). The row paints above the bar
-   (z 2), so the bar doesn't cover the area's lower part; to the left the area only reaches into
-   the gap (the chip before it paints over the rest), to the right the row is free. */
-.nur-plate__roles {
-  position: relative;
-  /* above the bar's label too (z 1 in the kit) */
-  z-index: 2;
-}
-.nur-chip--more {
-  justify-content: center;
-  min-width: 36px;
-  cursor: pointer;
-  color: var(--px-gold);
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.nur-chip--more::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: min(-10px, calc((100% - 48px) / 2)) -12px min(-10px, calc((100% - 48px) / 2))
-    calc(-2 * var(--u));
-}
-/* pressed on pointerdown (`usePress`): one step darker, the face 1 u down, no transition */
-.nur-chip--more:is(:active, .is-down) {
-  background: rgb(0 0 0 / 0.35);
-  translate: 0 var(--u);
-}
-.nur-chip--note {
-  background: none;
-  padding: 0;
-  color: var(--px-muted);
+  width: calc(5 * var(--u));
+  height: calc(5 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid var(--pd-ink);
+  background: var(--rc, var(--pd-muted));
 }
 
-/* ---- Squad: three BIG cells, all six summed bonuses in a fixed grid under them -------------- */
-.nur-squad {
+/* ---- Squad / collection / card: one column on phones --------------------------------------- */
+.nrs-nur {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g);
+  flex: 1 1 0;
+  min-height: 0;
+}
+.nrs-squad {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  flex: none;
+  min-width: 0;
+}
+.nrs-slots {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(4 * var(--u));
+  height: calc(28 * var(--u));
+  flex: none;
+  isolation: isolate;
+}
+.nrs-slot {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  overflow: visible;
+}
+.nrs-slot.is-pet .pet {
+  pointer-events: none;
+}
+.nrs-slot__lv {
+  position: absolute;
+  right: calc(3 * var(--u));
+  bottom: calc(2 * var(--u));
+  font: 800 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-text);
+  text-shadow:
+    var(--u) 0 0 var(--pd-ink),
+    calc(-1 * var(--u)) 0 0 var(--pd-ink),
+    0 var(--u) 0 var(--pd-ink),
+    0 calc(-1 * var(--u)) 0 var(--pd-ink);
+}
+.nrs-slot .nrs-card__gold {
+  top: calc(2 * var(--u));
+  left: calc(3 * var(--u));
+}
+.nrs-slot.is-add {
+  color: var(--pd-muted);
+}
+.nrs-slot.is-add .px-i {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+.nrs-slot.is-lock {
+  flex-direction: column;
+  gap: var(--u);
+  color: var(--pd-muted);
+  font: 700 var(--pd-fs-sm) / 1.1 var(--px-font);
+  white-space: nowrap;
+}
+
+/* The six summed squad stats (wide formats): a fixed 3 × 2 grid, a missing stat keeps its cell. */
+.nrs-sum {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+  flex: none;
+}
+.nrs-sum__c {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: calc(2 * var(--u));
   min-width: 0;
-  /* the grid's columns follow this width (em of the label size: 6 cells need ≈ 36 em) */
-  container: nur-squad / inline-size;
-  font-size: var(--px-fs-sm);
-}
-.nur-squad__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 calc(3 * var(--u));
-}
-/* three type sizes on the screen (name, body, label): headings take the body size */
-.nur .nur-squad__title,
-.nur .nur-coll__head .px-h {
-  margin: 0;
-  font-size: var(--px-fs);
-}
-.nur-squad__hint {
-  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
-  color: var(--px-muted);
-}
-.nur-squad__row {
-  --slot: calc(34 * var(--u));
-  display: flex;
-  gap: calc(5 * var(--u));
-  padding: calc(2 * var(--u)) calc(3 * var(--u)) 0;
-}
-:is(.nur--land, .nur--wide) .nur-squad__row {
-  --slot: calc(26 * var(--u));
-  gap: calc(4 * var(--u));
-}
-/* phone portrait: 30 u (60 px) — still 2.5 × the bonus rows, and the room gets 8 px */
-.nur--one .nur-squad__row {
-  --slot: calc(30 * var(--u));
-}
-/* Empty place: a dashed outline and a big plus — «tap to add». */
-.nur-squad__row > .nur-squad__add {
-  --d: var(--px-gold);
-  border-image-source: none;
-  background:
-    repeating-linear-gradient(
-        90deg,
-        var(--d) 0 calc(3 * var(--u)),
-        transparent 0 calc(6 * var(--u))
-      )
-      0 0 / 100% calc(2 * var(--u)) no-repeat,
-    repeating-linear-gradient(
-        90deg,
-        var(--d) 0 calc(3 * var(--u)),
-        transparent 0 calc(6 * var(--u))
-      )
-      0 100% / 100% calc(2 * var(--u)) no-repeat,
-    repeating-linear-gradient(0deg, var(--d) 0 calc(3 * var(--u)), transparent 0 calc(6 * var(--u)))
-      0 0 / calc(2 * var(--u)) 100% no-repeat,
-    repeating-linear-gradient(0deg, var(--d) 0 calc(3 * var(--u)), transparent 0 calc(6 * var(--u)))
-      100% 0 / calc(2 * var(--u)) 100% no-repeat,
-    rgb(255 250 235 / 0.55);
-  color: var(--px-gold);
-}
-.nur-squad__add .px-i {
-  width: calc(18 * var(--u));
-  height: calc(18 * var(--u));
-}
-/* Shut place: a lock and what opens it, in the cell itself. */
-.nur-squad__row > .nur-squad__lock {
-  color: var(--px-muted);
-}
-.nur-squad__lock > .px-slot__art {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--u);
-}
-.nur-squad__why {
-  max-width: 100%;
+  height: calc(17 * var(--u));
   padding: 0 var(--u);
-  font: 700 var(--px-fs-tiny) / 1.1 var(--px-font);
-  text-align: center;
-  overflow-wrap: anywhere;
 }
-/* All six stats in a fixed order (loot sell dmg / token luck rate), 3 columns — 6 only where six
-   cells fit, never 4 or 5; it never scrolls. A stat the squad lacks keeps its cell (dim, «—»). */
-.nur-squad__sum {
-  display: grid;
-  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
-  grid-auto-rows: var(--row-st);
-  gap: calc(2 * var(--u)) calc(3 * var(--u));
-  padding: 0 calc(3 * var(--u));
-}
-@container nur-squad (min-width: 36em) {
-  .nur-squad__sum {
-    --cols: 6;
-  }
-}
-.nur-sum {
-  display: flex;
-  align-items: center;
-  gap: var(--u);
-  min-width: 0;
-  font: 700 var(--px-fs-sm) / 1 var(--px-font);
-  color: var(--px-text);
+.nrs-sum__c b {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
   white-space: nowrap;
 }
-.nur-sum.is-none {
-  color: var(--px-dim);
-}
-.nur-chip--sm {
-  height: calc(var(--st, 24px) + 4px);
+.nrs-sum__c.is-none b {
+  color: var(--pd-muted);
 }
 
-/* ---- Collection: drawer (phones, opened from the action bar), grid (tablets, desktop) -------- */
-.nur-strip__open {
-  flex: none;
-  gap: var(--u);
-  padding-left: calc(3 * var(--u));
-  padding-right: calc(3 * var(--u));
-}
-.nur-strip__open .px-num {
-  font-size: var(--px-fs-sm);
-}
-.nur-coll {
+/* ---- Showcase: octagon stage, marks in its corners, ribbon over its bottom edge ------------ */
+.nrs-main {
   display: flex;
   flex-direction: column;
-  gap: calc(3 * var(--u));
+  gap: var(--g);
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
 }
-.nur-coll__head {
+.nrs-show {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: calc(2 * var(--u)) calc(4 * var(--u));
+  flex: 1 1 0;
+  min-height: 0;
+  container: nrs-show / inline-size;
 }
-.nur-coll__head .px-h {
-  margin: 0;
+.nrs-stage {
+  position: relative;
+  align-self: stretch;
+  flex: 1 1 0;
+  min-height: calc(60 * var(--u));
+  overflow: hidden;
 }
-.nur-coll__count {
-  font-family: var(--px-font);
-  color: var(--px-muted);
+.nrs-glow {
+  position: absolute;
+  inset: calc(9 * var(--u));
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--rc, var(--pd-accent)) 18%, transparent),
+    transparent
+  );
+  pointer-events: none;
 }
-.nur-tools {
+.nrs-ped,
+.nrs-pet {
+  position: absolute;
+}
+.nrs-pet {
+  display: block;
+  animation: nrs-pop 80ms steps(2, jump-none);
+}
+@keyframes nrs-pop {
+  from {
+    translate: 0 var(--u);
+  }
+}
+.nrs-pet .pet__aura,
+.nrs-pet .pet__rays {
+  display: none;
+}
+.nrs-ph {
+  position: absolute;
+  bottom: 0;
+  image-rendering: pixelated;
+}
+.nrs-marks {
+  position: absolute;
+  top: calc(4 * var(--u));
+  left: calc(5 * var(--u));
+  right: calc(5 * var(--u));
+  z-index: 2;
   display: flex;
-  gap: calc(2 * var(--u));
-  margin-left: auto;
-}
-.nur-grid {
-  width: 100%;
-  /* the spare width goes between the columns, not into a strip on the right */
+  align-items: flex-start;
   justify-content: space-between;
-  align-content: start;
+  gap: calc(2 * var(--u));
+  pointer-events: none;
 }
-.nur-coll > .nur-grid,
-.nur-drawer > .nur-grid {
-  flex: 1 1 auto;
+.nrs-marks__l {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+}
+.nrs-marks .pxd-chip {
+  min-height: calc(15 * var(--u));
+  gap: calc(2 * var(--u));
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+}
+.nrs-marks [data-tip] {
+  pointer-events: auto;
+}
+.nrs-gold {
+  display: inline-flex;
+  color: var(--pd-accent);
+}
+.nrs-along {
+  color: var(--pd-ok);
+}
+.nrs-along .px-i {
+  color: var(--pd-ok);
+}
+.nrs-xp {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  z-index: 3;
+  translate: -50% 0;
+  font: 800 var(--pd-fs) / 1 var(--px-font);
+  color: var(--pd-ok);
+  text-shadow:
+    var(--u) 0 0 var(--pd-ink),
+    calc(-1 * var(--u)) 0 0 var(--pd-ink),
+    0 var(--u) 0 var(--pd-ink),
+    0 calc(-1 * var(--u)) 0 var(--pd-ink);
+  pointer-events: none;
+  animation: nrs-xp 900ms steps(9) forwards;
+}
+@keyframes nrs-xp {
+  to {
+    translate: -50% calc(-18 * var(--u));
+    opacity: 0;
+  }
+}
+/* the six moves: a 3 × 2 menu over the stage, opened from the bar's ▶ */
+.nrs-anims {
+  position: absolute;
+  left: calc(5 * var(--u));
+  right: calc(5 * var(--u));
+  bottom: calc(18 * var(--u));
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(2 * var(--u));
+  padding: calc(3 * var(--u));
+}
+.nrs-anim {
+  flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+  height: calc(26 * var(--u));
+  font: 700 var(--pd-fs-sm) / 1.1 var(--px-font);
+  white-space: nowrap;
+}
+.nrs-anim .px-i {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+.nrs-anim > span {
+  max-width: 100%;
+  overflow: hidden;
+}
+.nrs-name {
+  margin-top: calc(-15 * var(--u));
+  z-index: 2;
+  max-width: calc(100% - 4 * var(--u));
+}
+.nrs-name > h2 {
+  font-size: var(--pd-fs-xl);
+}
+
+/* ---- Three square facts: bonus · level · copies to gold ------------------------------------ */
+.nrs-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: calc(3 * var(--u));
+  height: calc(40 * var(--u));
+  flex: none;
+}
+.nrs-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--u);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--u) calc(2 * var(--u));
+  overflow: hidden;
+  text-align: center;
+}
+.nrs-stat__n {
+  display: block;
+  max-width: 100%;
+  font: 800 var(--pd-fs-lg) / 1.1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.nrs-stat__l {
+  max-width: 100%;
+  font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
+  color: var(--pd-muted);
+  overflow-wrap: normal;
+}
+/* «2 634 / 3 758» is a number: body colour, one line; dropped when it doesn't fit (the pips and
+   the aria-label still say it) */
+.nrs-stat.is-level .nrs-stat__l {
+  color: var(--pd-text);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nrs-stat.is-level.is-tight .nrs-stat__l {
+  display: none;
+}
+.nrs-roles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--u);
+}
+.nrs-role {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  font: 800 var(--pd-fs) / 1 var(--px-font);
+  white-space: nowrap;
+}
+.nrs-more {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-accent);
+}
+.nrs-roles:has(.nrs-more) {
+  flex-direction: row;
+  gap: calc(2 * var(--u));
+}
+.nrs-stat__star {
+  display: grid;
+  place-items: center;
+  color: var(--pd-accent);
+}
+.nrs-stat__star .px-i {
+  width: calc(11 * var(--u));
+  height: calc(11 * var(--u));
+}
+.nrs-stat.is-merge .nrs-stat__l {
+  color: var(--pd-act-ink);
+  font-weight: 700;
+}
+
+/* ---- Action bar: moves · take / leave · details ------------------------------------------- */
+.nrs-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g);
+  flex: none;
+  min-width: 0;
+}
+.nrs-bar {
+  display: flex;
+  gap: calc(4 * var(--u));
+  height: calc(28 * var(--u));
+  flex: none;
+}
+.nrs-bar__sq {
+  width: calc(28 * var(--u));
+  padding: 0;
+  flex: none;
+}
+.nrs-bar__sq .px-i {
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+}
+.nrs-cta {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 calc(3 * var(--u));
+}
+.nrs-cta > span {
+  font: 800 var(--pd-fs) / 1.15 var(--px-font);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ---- Collection: head (title · zoo bonus), filter / sort, a 3-column grid that scrolls ------- */
+.nrs-coll {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+.nrs-coll__head {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  flex: none;
+}
+.nrs-zoo {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  white-space: nowrap;
+}
+.nrs-zoo b {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-ok);
+}
+.nrs-pickbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  min-height: calc(17 * var(--u));
+  padding: 0 var(--u) 0 calc(3 * var(--u));
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  color: var(--pd-accent);
+}
+.nrs-pickbar__x {
+  width: calc(15 * var(--u));
+  height: calc(15 * var(--u));
+  padding: 0;
+  flex: none;
+}
+.nrs-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(3 * var(--u));
+}
+.nrs-tool {
+  min-width: 0;
+  height: calc(19 * var(--u));
+  gap: calc(2 * var(--u));
+  white-space: nowrap;
+}
+.nrs-tool .px-i {
+  color: var(--pd-accent);
+}
+.nrs-tool__k {
+  font: 500 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-muted);
+}
+.nrs-tool b {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+}
+.nrs-tools.is-tight .nrs-tool__k {
+  display: none;
+}
+.nrs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: calc(3 * var(--u));
+  flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-/* The drawer lies over the side area only (same grid area, absolutely placed so its content
-   never resizes the row): the stage stays in view and shows each pet as it is picked. */
-.nur .nur-drawer {
-  grid-area: side;
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: calc(2 * var(--u));
-  min-height: 0;
-  min-width: 0;
-  animation: nur-up 120ms steps(3, jump-none);
-}
-/* Phone portrait: from the room's bottom edge (`--nur-dtop`, set by Nursery.tsx) down over the
-   plate and the side column — the pet stays in view, all the cells fit. */
-.nur.nur--one .nur-drawer {
-  grid-area: show-start / 1 / side-end / 2;
-  top: var(--nur-dtop, 0);
-  /* the grid's own 3-u padding is the gap under the head: on a 360-px phone the head takes three
-     lines (ru/de/tr) and these 8 px are the fourth row of cells */
-  gap: 0;
-}
-.nur--one .nur-drawer > .nur-coll__head {
-  row-gap: var(--u);
-}
-/* drawer head: the title on its own line (beside the close button), chip + tools under it */
-.nur-drawer > .nur-coll__head > .px-h {
-  flex-basis: 100%;
-  padding-right: calc(18 * var(--u));
-}
-.nur-drawer__close {
-  position: absolute !important;
-  top: calc(3 * var(--u));
-  right: calc(3 * var(--u));
-}
-/* Small framed buttons keep their 15-u frame; the hit area reaches around it (≥ 48 × 48 px on a
-   phone: Android 48 dp, critic R13). The hit areas lie UNDER the visible frames (z-index −1 in
-   an isolated row): a neighbour's extension never steals a tap on a frame. */
-.nur-drawer__close::before,
-.nur-anim::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  /* from the padding box: the frame's 1-u border is inside these numbers */
-  inset: calc(-5 * var(--u)) calc(-4 * var(--u));
-}
-.nur-anims,
-.nur-acts,
-.nur-plate__roles {
-  isolation: isolate;
-}
-.nur-anim {
-  position: relative;
-}
-@keyframes nur-up {
-  from {
-    transform: translateY(calc(12 * var(--u)));
-  }
-}
-/* Not hatched yet: a grey silhouette in the cells, a dark one on the stage. */
-.nur .pet.is-ghost .pet__thumb {
-  filter: brightness(0) invert(0.32);
-}
-.nur-stage .pet.is-ghost .pet__thumb {
-  filter: brightness(0) opacity(0.7);
-}
-/* along: a paw tag on the bottom-left of the collection slot */
-.nur-along {
-  position: absolute;
-  left: calc(2 * var(--u));
-  bottom: calc(2 * var(--u));
-  z-index: 2;
-  color: var(--px-gold);
-}
-
-/* ---- Side column ---------------------------------------------------------------------------- */
-.nur-side {
-  grid-area: side;
-  min-height: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-}
-.nur--land .nur-side {
-  justify-content: space-between;
-  gap: calc(2 * var(--u));
-}
-/* Phone landscape (critic's sketch) and wide (round 3, item 3 — the collection got its rows
-   back): the squad title over the slots on the left, the six stats beside them (2 × 3, the same
-   order down the columns); the hint is the title's tip. */
-:is(.nur--land, .nur--wide) .nur-squad {
-  grid-template:
-    'head sum' auto
-    'row sum' auto
-    / auto minmax(0, 1fr);
-  gap: var(--u) calc(3 * var(--u));
-  align-items: center;
-}
-:is(.nur--land, .nur--wide) .nur-squad__head {
-  grid-area: head;
-}
-:is(.nur--land, .nur--wide) .nur-squad__row {
-  grid-area: row;
-  padding: var(--u) 0 0 var(--u);
-  gap: calc(3 * var(--u));
-}
-:is(.nur--land, .nur--wide) .nur-squad__sum {
-  grid-area: sum;
-  --cols: 2;
-  grid-template-rows: repeat(3, calc(var(--st, 24px) + 2px));
-  grid-auto-flow: column;
-  gap: var(--u) calc(2 * var(--u));
-  padding: 0;
-}
-.nur--land .nur-plate {
-  padding-top: calc(2 * var(--u));
-  padding-bottom: calc(3 * var(--u));
-  gap: var(--u);
-}
-/* Wide: plate on top, the action bar at the bottom, the squad and the whole collection scroll
-   between them as one list (round 3: with the plate in this column a grid-only scroll showed
-   0.2 row on 1180 × 820). Padding keeps the focus rings and the selected ring inside. */
-.nur-side__mid {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
-  overflow: hidden auto;
-  overscroll-behavior: contain;
+  /* room for the focus rings and corner badges */
   padding: calc(3 * var(--u));
   margin: calc(-3 * var(--u));
 }
-.nur--tall .nur-coll {
-  gap: calc(2 * var(--u));
-}
-.nur-side__mid > .nur-coll {
-  flex: none;
-  gap: calc(2 * var(--u));
-}
-.nur--wide .nur-side__mid {
-  gap: calc(3 * var(--u));
-}
-.nur-side__mid > .nur-coll > .nur-grid {
-  flex: none;
-  overflow: visible;
-  /* the list's own 3-u padding already keeps the rings in (round 4: the collection's rows) */
-  padding-block: 0;
-}
-.nur--tall .nur-side {
-  display: grid;
-  grid-template:
-    'squad coll' auto
-    '. coll' minmax(0, 1fr)
-    'acts coll' auto
-    / minmax(0, 5fr) minmax(0, 6fr);
-  gap: var(--gap) calc(6 * var(--u));
-}
-.nur--tall .nur-side > .nur-squad {
-  grid-area: squad;
-}
-.nur--tall .nur-side > .nur-coll {
-  grid-area: coll;
-}
-.nur--tall .nur-side > .nur-acts {
-  grid-area: acts;
-}
-
-/* ---- Details (sheet): lore, roles, copies to gold, skin, eggs ------------------------------- */
-.nur-info__body {
-  display: grid;
-  gap: calc(4 * var(--u));
-  /* the sheet body's own 2 u is tight against the wood bevel for a line of text */
-  padding-inline: calc(2 * var(--u));
-}
-.nur-info__grp {
-  display: grid;
-  gap: calc(4 * var(--u));
-  align-content: start;
-}
-.nur-info__grp:empty {
-  display: none;
-}
-.nur-info__lore {
-  margin: 0;
-  color: var(--px-muted);
-}
-.nur-info__roles {
-  display: grid;
-  gap: calc(2 * var(--u));
-}
-/* Stats table: picture, noun, a dotted leader, the value right-aligned — one line per stat; the
-   full sentence is the row's tip. */
-.nur-role {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: calc(3 * var(--u));
-  min-height: var(--row-st, 28px);
-  --row-st: max(calc(var(--px-fs-sm) * 1.65), calc(var(--st, 24px) + 4px));
-}
-.nur-role__k {
-  display: flex;
-  align-items: baseline;
-  gap: calc(2 * var(--u));
+.nrs-card {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--u);
   min-width: 0;
-  font-weight: 700;
-  color: var(--px-text);
-  white-space: nowrap;
+  padding: calc(2 * var(--u)) var(--u) calc(3 * var(--u));
 }
-.nur-role__k::after {
-  content: '';
-  flex: 1 1 auto;
-  min-width: calc(4 * var(--u));
-  height: var(--u);
-  background: linear-gradient(to right, var(--px-dim) 0 var(--u), transparent 0) 0 0 /
-    calc(3 * var(--u)) var(--u) repeat-x;
-  opacity: 0.6;
-}
-.nur-role > b {
-  color: var(--px-text);
-  text-align: right;
-}
-.nur-info__merge {
+.nrs-card__art {
+  position: relative;
   display: grid;
-  gap: calc(2 * var(--u));
+  place-items: center;
+  width: 100%;
+  height: calc(30 * var(--u));
 }
-.nur-info__merge b {
-  color: var(--px-blue);
-}
-.nur-info__skin {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: calc(2 * var(--u));
-}
-.nur-info__skin > span {
-  margin-right: auto;
-  color: var(--px-muted);
-}
-.nur-info__from {
-  display: grid;
-  gap: calc(2 * var(--u));
-  color: var(--px-muted);
-}
-.nur-egg {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: calc(2 * var(--u));
-  color: var(--px-text);
-}
-.nur-egg > .px-i {
-  color: var(--px-gold);
-}
-.nur-egg > b {
-  color: var(--px-gold);
-}
-
-/* ---- Action bar (thumb zone on phones) ------------------------------------------------------ */
-.nur-acts {
-  display: flex;
-  gap: calc(3 * var(--u));
-  align-items: stretch;
-  container: nur-acts / inline-size;
-}
-/* a narrow phone: the grid button drops its count (it is the drawer's title) so «take along /
-   leave home» stays on one line */
-@container nur-acts (max-width: 16em) {
-  .nur-strip__open .px-num {
-    display: none;
-  }
-}
-.nur-acts > .px-btn--wide {
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  text-align: center;
-}
-/* The key cap sits on the button's corner, out of the flow: the box is the same with and without
-   key hints (critic round 2, P0-3 — the first key press grew the bar 57 → 77 px on tablets). */
-.nur-acts .px-btn > .px-keyhint {
-  position: absolute;
-  inset-block-start: calc(-3 * var(--u));
-  inset-inline-end: calc(-2 * var(--u));
-  z-index: 2;
+.nrs-card__art .pet {
   pointer-events: none;
 }
-.nur--wide .nur-side > .nur-acts {
-  margin-top: auto;
+.nrs-card.is-missing .nrs-card__art {
+  opacity: 0.85;
 }
-/* the action bar is 40 px high (critic's budget); the hit areas reach 48 (into the gaps) */
-.nur-acts .px-btn::before {
-  content: '';
+.nrs-card__lock {
   position: absolute;
-  z-index: -1;
-  inset: calc(-4px - var(--u)) calc(-5px - var(--u));
+  right: calc(2 * var(--u));
+  bottom: 0;
+  color: var(--pd-muted);
 }
-.nur-acts__info {
-  position: relative;
-  flex: none;
-  display: flex;
-}
-.nur-acts__info > .px-slot__dot {
-  position: absolute;
-  top: calc(-2 * var(--u));
-  right: calc(-2 * var(--u));
-  z-index: 2;
-}
-
-/* ---- Tooltip and picker --------------------------------------------------------------------- */
-.nur-tip {
-  display: grid;
-  gap: var(--u);
-  text-align: left;
-}
-.nur-tip > b {
-  color: var(--px-text);
-}
-.nur-tip > i {
-  font-style: normal;
-  color: var(--px-muted);
-}
-.nur-pick {
+.nrs-card__nm {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   width: 100%;
+  height: 2.3em;
+  overflow: hidden;
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  color: var(--pd-text);
+  text-align: center;
+  hyphens: manual;
+  overflow-wrap: normal;
 }
-.nur-empty {
-  margin: 0;
-  color: var(--px-muted);
+.nrs-card.is-missing .nrs-card__nm {
+  color: var(--pd-muted);
+}
+.nrs-card__rar {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  max-width: 100%;
+  font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nrs-card__lv {
+  position: absolute;
+  right: calc(3 * var(--u));
+  top: calc(3 * var(--u));
+  font: 800 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-text);
+  text-shadow:
+    var(--u) 0 0 var(--pd-ink),
+    calc(-1 * var(--u)) 0 0 var(--pd-ink),
+    0 var(--u) 0 var(--pd-ink),
+    0 calc(-1 * var(--u)) 0 var(--pd-ink);
+}
+.nrs-card__tick,
+.nrs-card__gold {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  box-sizing: border-box;
+  border: var(--u) solid var(--pd-ink);
+  pointer-events: none;
+}
+.nrs-card__tick {
+  top: calc(3 * var(--u));
+  left: calc(3 * var(--u));
+  background: var(--pd-ok);
+  color: var(--pd-ink);
+}
+.nrs-card__gold {
+  top: calc(3 * var(--u));
+  left: calc(13 * var(--u));
+  background: var(--pd-accent);
+  color: var(--pd-ink);
+}
+.nrs-card__tick .px-i,
+.nrs-card__gold .px-i {
+  width: calc(5 * var(--u));
+  height: calc(5 * var(--u));
+}
+.nrs-card:not(:has(.nrs-card__tick)) .nrs-card__gold {
+  left: calc(3 * var(--u));
 }
 
-/* The camp window chrome (frame, ribbon, well body for kit content) lives in gx-px.css (agent C,
-   wave 2) for every camp; here only the pets camp's size and the Nursery's fill of the body.
-   The stage must take about half the screen (owner), so on every format the pets window takes
-   the whole height under the header and is wider than other kit windows. `.ppn` wraps both tabs
-   (pets | eggs), so the window keeps one size when the tab changes. */
-.gx-win .gx-win__box.gx-camp:has(.ppn) {
-  --gx-mw: 480;
-  height: 100%;
+/* ---- Sheets: details, replace, nest ------------------------------------------------------- */
+.nrs-sheet {
+  --st: calc(12 * var(--u));
 }
-.gx-camp:has(.nur) .pcamp-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
+.nrs-rep {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(3 * var(--u));
+}
+.nrs-rep__b {
   flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+  padding: calc(3 * var(--u)) var(--u);
+  text-align: center;
 }
-
-/* PetsTab around the Nursery: tabs on top; the egg blocks hide on the pets tab. */
-.ppn.is-pets {
-  flex: 1 1 auto;
-  min-height: 0;
+.nrs-rep__b b {
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+}
+.nrs-rep__b small {
+  font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
+  color: var(--pd-muted);
+}
+.nrs-info {
   display: flex;
   flex-direction: column;
   gap: calc(4 * var(--u));
 }
-.ppn.is-pets > :not(.ppn__tabs, .nur, .ppn__note) {
-  display: none;
+.nrs-info__lore {
+  font: 500 var(--pd-fs-sm) / 1.3 var(--px-font);
+  color: var(--pd-muted);
 }
-.ppn__tabs {
-  flex: none;
-  margin-bottom: calc(3 * var(--u));
+.nrs-info__grp {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
 }
-.ppn.is-pets > .ppn__tabs {
-  margin-bottom: 0;
+.nrs-info__grp h3 {
+  font: 700 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
 }
-/* The count sits on the tab's corner (like the camp tabs), so «Yumurtalar» keeps its full word
-   on a phone instead of an ellipsis. */
-.ppn__tabs .px-tab > .px-badge {
-  position: absolute;
-  top: calc(-2 * var(--u));
-  right: calc(-2 * var(--u));
-  z-index: 2;
+.nrs-info__row {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-height: calc(14 * var(--u));
+  font: 500 var(--pd-fs) / 1.15 var(--px-font);
 }
-/* A word that doesn't fit beside its icon (PetsTab measures it: Turkish «Yumurtalar» on a
-   360-px phone, any long word at the large text size): the word wins, the row drops its icons. */
-html[data-text='l'][data-ff='phone-portrait'] .ppn__tabs .px-tab > .px-i,
-.ppn__tabs.is-tight > .px-tab > .px-i {
-  display: none;
+.nrs-info__row > span {
+  flex: 1 1 0;
+  min-width: 0;
 }
-
-/* Phone landscape (critic round 2 (d)): «Питомцы / Яйца» as a rail of two icon tabs on the left
-   of both tabs (the word is the tip and the aria name), so the stage gets the 44 px the
-   full-width row took. Absolutely placed: the eggs tab's blocks keep their own flow. */
-.ppn.ppn--rail {
-  padding-left: calc(27 * var(--u));
+.nrs-info__row > b {
+  font-weight: 800;
+  white-space: nowrap;
 }
-.ppn.ppn--rail > .ppn__tabs {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: calc(24 * var(--u));
-  margin: 0;
+.nrs-info__act {
+  height: calc(26 * var(--u));
+}
+.nrs-info__skin > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(3 * var(--u));
 }
-.ppn--rail > .ppn__tabs > .px-tab {
-  justify-content: center;
-  min-height: calc(24 * var(--u));
-  padding: calc(2 * var(--u));
+.nrs-info__skin .pxd-btn {
+  height: calc(20 * var(--u));
+  font-size: var(--pd-fs-sm);
 }
-.ppn--rail > .ppn__tabs .px-tab__label {
+
+/* ---- Eggs: nests (square-ish tiles) · queue · hatch all · the 2 × 2 shop ------------------- */
+.nrs-eggs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g);
+  flex: 1 1 0;
+  min-height: 0;
+}
+.nrs-eggs__home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--g);
+  flex: 1 1 0;
+  min-height: 0;
+}
+.nrs-nests {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  flex: 1 1 0;
+  min-height: 0;
+}
+.nrs-nests__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(4 * var(--u));
+  flex: 1 1 0;
+  min-height: calc(40 * var(--u));
+}
+.nrs-nest {
+  flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+  min-height: 0;
+  padding: calc(2 * var(--u));
+  overflow: hidden;
+  text-align: center;
+}
+.nrs-nest__art {
+  display: grid;
+  place-items: end center;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  color: var(--pd-muted);
+}
+.nrs-nest__art .px-i {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+  align-self: center;
+}
+.nrs-nest__nm {
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  white-space: nowrap;
+}
+.nrs-nest.is-empty .nrs-nest__nm {
+  font-weight: 500;
+  color: var(--pd-muted);
+}
+.nrs-nest__left {
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  color: var(--pd-text);
+  white-space: nowrap;
+}
+.nrs-nest__go {
+  font: 800 var(--pd-fs) / 1.15 var(--px-font);
+  white-space: nowrap;
+}
+.nrs-queue {
+  display: flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  height: calc(17 * var(--u));
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  /* the chips' focus rings */
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+}
+.nrs-queue__l,
+.nrs-queue__none {
+  font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+}
+.nrs-queue.is-tight .nrs-queue__l {
   display: none;
 }
-/* the key cap (Tab / RB) hangs under the rail, out of its box: a key press moves nothing */
-.ppn--rail > .ppn__tabs > .px-keyhint {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  translate: -50% calc(3 * var(--u));
+.nrs-qchip {
+  height: calc(17 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  gap: calc(2 * var(--u));
+  flex: none;
 }
-/* gamepad: LB (before the tabs) stacks under RB */
-.ppn--rail > .ppn__tabs > .px-keyhint:first-child {
-  translate: -50% calc(18 * var(--u));
+.nrs-qchip b {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
 }
-.ppn--rail > .ppn__note {
+.nrs-all {
+  justify-content: flex-start;
+  gap: calc(4 * var(--u));
+  height: calc(28 * var(--u));
+  padding: 0 calc(4 * var(--u));
+  flex: none;
+}
+.nrs-all > .gx-icon {
+  width: calc(11 * var(--u));
+  height: calc(11 * var(--u));
+}
+.nrs-all__t {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.nrs-all__t b {
+  font: 800 var(--pd-fs) / 1.15 var(--px-font);
+  white-space: nowrap;
+}
+.nrs-all__t small {
+  display: flex;
+  gap: calc(4 * var(--u));
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  white-space: nowrap;
+}
+.nrs-all__t small > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+}
+.nrs-shop {
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  flex: none;
+}
+.nrs-shop__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(3 * var(--u));
+}
+.nrs-buy {
+  display: grid;
+  grid-template:
+    'art nm' auto
+    'art price' auto
+    'art st' auto
+    / auto minmax(0, 1fr);
+  align-content: center;
+  justify-items: start;
+  column-gap: calc(3 * var(--u));
+  row-gap: 0;
+  min-width: 0;
+  height: calc(34 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  text-align: left;
+}
+.nrs-buy__art {
+  grid-area: art;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--u);
+}
+.nrs-odds {
+  display: flex;
+  gap: 0;
+  width: calc(16 * var(--u));
+  height: calc(2 * var(--u));
+  outline: var(--u) solid var(--pd-ink);
+}
+.nrs-odds > i {
+  display: block;
+  min-width: var(--u);
+}
+.nrs-buy__nm {
+  grid-area: nm;
+  max-width: 100%;
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nrs-buy__price {
+  grid-area: price;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font: 800 var(--pd-fs-sm) / 1.15 var(--px-font);
+  color: var(--pd-accent);
+  white-space: nowrap;
+}
+.nrs-buy__st {
+  grid-area: st;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  max-width: 100%;
+  font: 500 var(--pd-fs-sm) / 1.15 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.nrs-buy__st.is-ok {
+  color: var(--pd-ok);
+}
+.nrs-buy[aria-disabled] .nrs-buy__price {
+  color: var(--pd-text);
+}
+
+/* Nest sheet */
+.nrs-ns {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+}
+.nrs-ns__now {
+  display: grid;
+  grid-template: 'art pips' auto 'art acts' auto / auto minmax(0, 1fr);
+  align-items: center;
+  gap: calc(3 * var(--u)) calc(5 * var(--u));
+}
+.nrs-ns__art {
+  grid-area: art;
+}
+.nrs-ns__now .pxd-pips {
+  grid-area: pips;
+  justify-self: start;
+}
+.nrs-ns__acts {
+  grid-area: acts;
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+}
+.nrs-ns__acts .pxd-btn {
+  height: calc(24 * var(--u));
+  font-size: var(--pd-fs-sm);
+}
+.nrs-ns__now-b {
+  justify-content: space-between;
+  padding: 0 calc(4 * var(--u));
+}
+.nrs-ns__now-b small {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font: 800 var(--pd-fs-sm) / 1 var(--px-font);
+}
+.nrs-ns__h {
+  font: 700 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+}
+.nrs-ns__basket {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(3 * var(--u));
+}
+.nrs-ns__egg {
+  flex-direction: column;
+  gap: var(--u);
+  width: calc(30 * var(--u));
+  height: calc(34 * var(--u));
+  padding: var(--u);
+}
+.nrs-ns__egg b {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+}
+.nrs-ns__none,
+.nrs-ns__msg {
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+}
+.nrs-ns__msg {
+  min-height: 1.2em;
+  color: var(--pd-accent);
+}
+
+/* ---- Toast inside the dark window ----------------------------------------------------------- */
+.nrs .nrs-note {
+  border-width: calc(2 * var(--u));
+  border-image-source: var(--pxd-fi);
+  border-image-slice: var(--pxd-s) fill;
+  border-image-width: calc(var(--pxd-s) * var(--u));
+  font: 500 var(--pd-fs) / 1.25 var(--px-font);
+  color: var(--pd-text);
+}
+
+/* ---- Hit areas ≥ 48 px on phones: small buttons extend under their neighbours ------------- */
+.nrs-pickbar__x::before,
+.nrs-qchip::before {
+  content: '';
   position: absolute;
-  left: 50%;
-  bottom: calc(4 * var(--u));
-  translate: -50% 0;
+  inset: min(calc(-1 * var(--u)), calc((100% - 48px) / 2)) calc(-1 * var(--u));
+  z-index: -1;
+}
+
+/* ---- Phone portrait: tall phones give the places more height ------------------------------ */
+@media (min-height: 900px) {
+  .nrs--one .nrs-slots {
+    height: calc(34 * var(--u));
+  }
+}
+/* ---- Short phones (360×640, 320×568): every row a step tighter ---------------------------- */
+@media (max-height: 700px) {
+  .nrs--one.arm.is-window {
+    --g: calc(3 * var(--u));
+    padding-top: calc(var(--safe-top, 0px) + 3 * var(--u));
+    padding-bottom: calc(var(--safe-bottom, 0px) + 4 * var(--u));
+  }
+  .nrs--one .nrs-tab {
+    height: calc(20 * var(--u));
+  }
+  .nrs--one .nrs-slots {
+    height: calc(24 * var(--u));
+  }
+  .nrs--one .nrs-stats {
+    height: calc(34 * var(--u));
+  }
+  .nrs--one .nrs-stat__n {
+    font-size: var(--pd-fs);
+  }
+  .nrs--one .nrs-bar,
+  .nrs--one .nrs-all {
+    height: calc(24 * var(--u));
+  }
+  .nrs--one .nrs-bar__sq {
+    width: calc(24 * var(--u));
+  }
+  .nrs--one .nrs-buy {
+    height: calc(30 * var(--u));
+  }
+  .nrs--one .nrs-stage {
+    min-height: calc(50 * var(--u));
+  }
+}
+@media (max-height: 600px) {
+  .nrs--one .nrs-squad .nrs-h,
+  .nrs--one .nrs-shop .nrs-h,
+  .nrs--one .nrs-nests .nrs-h {
+    display: none;
+  }
+  .nrs--one .nrs-slots {
+    height: calc(22 * var(--u));
+  }
+}
+
+/* ---- Tablet portrait: list on top, the card under it, the bar across ---------------------- */
+.nrs--two .nrs-nur {
+  display: grid;
+  grid-template:
+    'list list' minmax(0, 8fr)
+    'main main' minmax(0, 13fr)
+    'side side' auto
+    / minmax(0, 1fr) minmax(0, 1fr);
+}
+.nrs--three .nrs-nur {
+  display: grid;
+  grid-template:
+    'list main side' minmax(0, 1fr)
+    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 7fr);
+}
+.nrs:is(.nrs--two, .nrs--three) :is(.nrs-squad, .nrs-coll) {
+  grid-area: list;
+}
+.nrs:is(.nrs--two, .nrs--three) .nrs-main {
+  grid-area: main;
+}
+.nrs:is(.nrs--two, .nrs--three) .nrs-side {
+  grid-area: side;
+}
+.nrs--two .nrs-squad {
+  justify-content: center;
+}
+.nrs--two .nrs-slots {
+  height: calc(40 * var(--u));
+}
+.nrs--two .nrs-grid {
+  grid-template-columns: repeat(auto-fill, minmax(calc(48 * var(--u)), 1fr));
+}
+/* the side column of a wide screen: the squad's summed bonuses, the bar at the bottom */
+.nrs--three .nrs-side {
+  justify-content: space-between;
+}
+.nrs--three .nrs-sum {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.nrs--three .nrs-bar {
+  display: grid;
+  grid-template: 'a i' auto 'cta cta' auto / minmax(0, 1fr) minmax(0, 1fr);
+  height: auto;
+  gap: calc(3 * var(--u));
+}
+.nrs--three .nrs-bar__sq {
+  width: auto;
+  height: calc(22 * var(--u));
+}
+.nrs--three .nrs-bar__anims {
+  grid-area: a;
+}
+.nrs--three .nrs-bar__sq:not(.nrs-bar__anims) {
+  grid-area: i;
+}
+.nrs--three .nrs-cta {
+  grid-area: cta;
+  height: calc(28 * var(--u));
+}
+.nrs--three .nrs-cta > span {
+  white-space: normal;
+  text-align: center;
+}
+.nrs--three .nrs-squad {
+  justify-content: flex-start;
+}
+.nrs--three .nrs-slots {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  height: calc(30 * var(--u));
+}
+.nrs--three .nrs-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.nrs--three .nrs-stats {
+  height: calc(40 * var(--u));
+}
+
+/* Eggs on wide screens: nests / queue / hatch all | the shop */
+.nrs:is(.nrs--two, .nrs--three) .nrs-eggs {
+  display: grid;
+  grid-template: 'home shop' minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(6 * var(--u));
+}
+.nrs:is(.nrs--two, .nrs--three) .nrs-eggs__home {
+  grid-area: home;
+}
+.nrs:is(.nrs--two, .nrs--three) .nrs-shop {
+  grid-area: shop;
+}
+.nrs:is(.nrs--two, .nrs--three) .nrs-nests__row {
+  flex: 0 1 auto;
+  height: calc(70 * var(--u));
+}
+.nrs:is(.nrs--two, .nrs--three) .nrs-buy {
+  height: calc(46 * var(--u));
+}
+.nrs--two .nrs-eggs {
+  grid-template: 'home' auto 'shop' auto / minmax(0, 1fr);
+  align-content: start;
+}
+.nrs--two .nrs-eggs__home {
+  flex: none;
+}
+.nrs--two .nrs-shop__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.nrs--two .nrs-buy {
+  grid-template: 'art' auto 'nm' auto 'price' auto 'st' auto / minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+  height: calc(60 * var(--u));
+}
+@media (max-height: 500px) {
+  .nrs--three.arm.is-window {
+    --g: calc(3 * var(--u));
+    padding-top: calc(var(--safe-top, 0px) + 3 * var(--u));
+    padding-bottom: calc(var(--safe-bottom, 0px) + 3 * var(--u));
+  }
+  .nrs--three .nrs-top {
+    height: calc(20 * var(--u));
+  }
+  .nrs--three .nrs-back {
+    width: calc(20 * var(--u));
+    height: calc(20 * var(--u));
+  }
+  .nrs--three .nrs-tab {
+    height: calc(20 * var(--u));
+  }
+  .nrs--three .nrs-ttl p {
+    display: none;
+  }
+  .nrs--three .nrs-stats {
+    height: calc(32 * var(--u));
+  }
+  .nrs--three .nrs-stat__n {
+    font-size: var(--pd-fs);
+  }
+  .nrs--three .nrs-sum__c {
+    height: calc(15 * var(--u));
+  }
+  .nrs--three .nrs-cta {
+    height: calc(24 * var(--u));
+  }
+  .nrs--three .nrs-bar__sq {
+    height: calc(18 * var(--u));
+  }
+  .nrs--three .nrs-slots {
+    height: calc(24 * var(--u));
+  }
+  .nrs:is(.nrs--two, .nrs--three) .nrs-nests__row {
+    height: auto;
+    flex: 1 1 0;
+  }
+  .nrs:is(.nrs--two, .nrs--three) .nrs-buy {
+    height: calc(30 * var(--u));
+  }
 }

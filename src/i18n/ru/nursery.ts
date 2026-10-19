@@ -70,4 +70,16 @@ export const nursery = {
     rate: 'Темп',
   },
   egg: { moss: 'Мшистое', stone: 'Каменное', crystal: 'Кристальное', dragon: 'Драконье' },
+  // N4 (19.10): the handoff layout
+  purpose: 'Твои спутники в шахте',
+  along: 'В отряде',
+  lockRankTip: 'Второе место откроется с ранга {rank}',
+  lockPrestigeTip: 'Третье место откроется после престижа',
+  replaceTitle: 'Кого оставить дома?',
+  replaceHint: '{name} займёт его место',
+  pickHint: 'Выбери, кого взять в отряд',
+  zooL: 'Бонус коллекции',
+  powerTip: 'Сила — сколько питомец даёт в шахте',
+  bonusL: 'Бонусы',
+  toGold: 'до золотого',
 } as const;

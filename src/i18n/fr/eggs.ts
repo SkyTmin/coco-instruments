@@ -62,4 +62,9 @@ export const eggs: Translation<typeof ru> = {
   spent: 'Dépensé :',
   pityFired: 'Garantie déclenchée : le 25e œuf',
   mergeHint: 'Un animal peut passer en or — « ! » dans la collection',
+  // N4 (19.10): the egg shop on the dark kit
+  shop: 'Boutique d’œufs',
+  avail: 'En vente',
+  more: 'encore {v}',
+  free: 'Gratuit',
 };
