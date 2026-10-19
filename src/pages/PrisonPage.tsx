@@ -379,28 +379,34 @@ function RewardChip({ r, size }: { r: GuideReward; size: number }) {
   );
 }
 
-function RankChips({ need, floor }: { need: RankNeeds; floor: number }) {
+function RankChips({ need }: { need: RankNeeds }) {
   const workOk = need.work >= need.workNeed;
-  const blocksOk = need.blocks >= need.blocksNeed;
   return (
     <span className="pquota">
       {!need.pickOk && (
-        <span className="pquota__chip is-pick">
-          <GxIcon name="anvil" size={12} />⛏{need.power}
-        </span>
+        // Только «⛏12» — та же запись силы, что в полосе серии. Наковальня была розовой
+        // (#ffb4a0 из game-ui.css) на пергаменте — почти не видна — и съедала 20–30 px строки.
+        <span className="pquota__chip is-pick">⛏{need.power}</span>
       )}
       {need.workNeed > 0 && (
-        <span className={`pquota__chip${workOk ? ' is-done' : ''}`}>
+        <span className={`pquota__chip is-work${workOk ? ' is-done' : ''}`}>
           <i className="mn-pic mn-pic--work" aria-hidden="true" />
           {workOk ? '✓' : `${fmtShort(need.work)}/${fmtShort(need.workNeed)}`}
         </span>
       )}
-      {need.blocksNeed > 0 && (
-        <span className={`pquota__chip${blocksOk ? ' is-done' : ''}`}>
-          <img src={blockTexture(floor)} alt={blockName(floor)} />
-          {blocksOk ? '✓' : `${need.blocks}/${need.blocksNeed}`}
-        </span>
-      )}
+    </span>
+  );
+}
+
+/** Блоки этажа — отдельной фишкой: на телефоне стоя и на широком она стоит рядом с полосой
+ *  денег (их докупают за деньги), в узкой широкой рамке — строкой ниже, рядом с киркой. */
+function RankBlocks({ need, floor }: { need: RankNeeds; floor: number }) {
+  if (need.blocksNeed <= 0) return null;
+  const blocksOk = need.blocks >= need.blocksNeed;
+  return (
+    <span className={`pquota__chip is-blocks${blocksOk ? ' is-done' : ''}`}>
+      <img src={blockTexture(floor)} alt={blockName(floor)} />
+      {blocksOk ? '✓' : `${need.blocks}/${need.blocksNeed}`}
     </span>
   );
 }
@@ -2086,8 +2092,9 @@ export function PrisonPage() {
             )
           }
         />
+        {!atTop && !rankReady && <RankBlocks need={need} floor={rank} />}
         <span className="mn-rank__needs">
-          {!atTop && !rankReady && <RankChips need={need} floor={rank} />}
+          {!atTop && !rankReady && <RankChips need={need} />}
           {/* Широкий: «Новый ранг — жми!» строкой во всю ширину — в полосе между буквами
               она ломалась на три строки. */}
           {rankOk && (
@@ -2712,7 +2719,8 @@ export function PrisonPage() {
     ? [
         <div key="l" className="mn-side mn-side--l">
           {hud}
-          {rankBox}
+          {/* Обёртка — контейнер `mnrank`: по её ширине рамка ранга выбирает раскладку условий. */}
+          <div className="mn-rankwrap">{rankBox}</div>
           <div className="mn-panel">{streakBox}</div>
           {questBox}
           {itemsRow}

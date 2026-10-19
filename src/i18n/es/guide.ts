@@ -6,31 +6,31 @@ export const guide: Translation<typeof ru> = {
     title: 'Rompe 20 bloques',
     hint: 'Toca un bloque o mantén el dedo — el pico golpea solo',
   },
-  sell: { title: 'Vende el botín', hint: 'El botón de la mochila, bajo el campo' },
+  sell: { title: 'Vende el botín', hint: 'El botón «{sell}» junto a la mochila' },
   rankB: { title: 'Consigue el rango B', hint: 'Junta monedas y toca la barra de rango' },
-  case: { title: 'Abre un cofre', hint: 'Botón «Cofres» abajo. El rango te dio una llave' },
+  case: { title: 'Abre un cofre', hint: 'Botón «{chests}». El rango te dio una llave' },
   steel: {
     title: 'Forja el pico de piedra',
     hint: 'En el piso C, en la forja: caliza, arenisca y monedas',
   },
   enchant: {
     title: 'Aplica tu primer libro',
-    hint: 'Botón «Libros» abajo: el Encantador vende libros por fichas',
+    hint: 'Botón «{books}»: el Encantador vende libros por fichas',
   },
   streak: {
     title: 'Lleva la racha a «A tope»',
-    hint: '150 bloques sin parar — la barra sobre el campo',
+    hint: '150 bloques sin parar — la barra «{streak}»',
   },
   bomb: {
     title: 'Haz estallar una bomba',
-    hint: 'El botón de la bomba bajo el campo y luego toca una casilla',
+    hint: 'Toca la bomba y luego una casilla',
   },
   level: { title: 'Sube el pico al nivel 5', hint: 'Cada bloque roto da experiencia al pico' },
   rankE: {
     title: 'Consigue el rango E',
     hint: 'Para el rango hace falta un pico que rompa el mineral del piso siguiente',
   },
-  bag: { title: 'Mejora la mochila', hint: 'En la forja, debajo del pico' },
+  bag: { title: 'Mejora la mochila', hint: 'En la forja, la fila «{bag}»' },
   rankH: {
     title: 'Consigue el rango H',
     hint: 'Desde aquí, tú solo: rangos hasta la Z y luego el prestigio',
