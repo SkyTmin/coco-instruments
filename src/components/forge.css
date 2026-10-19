@@ -307,6 +307,11 @@
 .frg-stat.is-level .frg-stat__ic {
   display: none;
 }
+/* «2 634 / 3 758» is a number: body colour (muted on the panel is 6.3, numbers need ≥ 7) */
+.frg-stat.is-level .frg-stat__l {
+  color: var(--pd-text);
+  font-variant-numeric: tabular-nums;
+}
 .frg-stat.is-level .frg-stat__n {
   margin-top: calc(2 * var(--u));
 }
@@ -545,8 +550,8 @@
     max(
       var(--pd-fs-xs),
       min(var(--pd-fs-lg), calc((100cqi - 24 * var(--u)) / (var(--nlen, 14) * 0.56)))
-    )
-    / 1.15 var(--px-font);
+    ) /
+    1.15 var(--px-font);
   white-space: nowrap;
 }
 .frg-go__t small {
@@ -892,6 +897,8 @@
 @media (max-height: 600px) {
   .frg--one.arm.is-window {
     --g: calc(2 * var(--u));
+    padding-top: calc(var(--safe-top, 0px) + 2 * var(--u));
+    padding-bottom: calc(var(--safe-bottom, 0px) + 3 * var(--u));
   }
   .frg--one .frg-tab {
     height: calc(16 * var(--u));
@@ -942,7 +949,7 @@
     'top top top' auto
     'list main side' minmax(0, 1fr)
     'list main bar' auto
-    / minmax(0, 6fr) minmax(0, 14fr) minmax(0, 8fr);
+    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 7fr);
 }
 .frg:is(.frg--two, .frg--three).is-gear {
   grid-template:
@@ -1043,6 +1050,26 @@
 .frg--three .frg-box {
   justify-content: flex-start;
 }
+/* the narrow side column: recipe as a short row above, the CTA the column's full width under it */
+.frg--three .frg-bar {
+  flex-direction: column;
+  height: auto;
+}
+.frg--three .frg-sq {
+  flex-direction: row;
+  gap: calc(3 * var(--u));
+  width: auto;
+  height: calc(16 * var(--u));
+  font-size: var(--pd-fs-sm);
+}
+.frg--three .frg-sq .gx-icon {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+.frg--three .frg-go {
+  flex: none;
+  height: calc(32 * var(--u));
+}
 /* the CTA in the narrow side column: the name may take two lines, the price / reason one */
 .frg--three .frg-go__t b {
   font-size: var(--pd-fs-sm);
@@ -1091,11 +1118,11 @@
     height: calc(14 * var(--u));
     margin-top: 0;
   }
-  .frg--three .frg-bar {
+  .frg--three .frg-go {
     height: calc(30 * var(--u));
   }
   .frg--three .frg-sq {
-    width: calc(26 * var(--u));
+    height: calc(14 * var(--u));
   }
   .frg--three .frg-go > .gx-icon {
     width: calc(10 * var(--u));

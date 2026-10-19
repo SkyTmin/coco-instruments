@@ -27,7 +27,11 @@ export function svgUrl(w: number, h: number, body: string): string {
 }
 
 /** A pixel picture as rects, one per horizontal run of one colour (short strings). */
-export function pixelRuns(w: number, h: number, at: (x: number, y: number) => string | null): string {
+export function pixelRuns(
+  w: number,
+  h: number,
+  at: (x: number, y: number) => string | null,
+): string {
   let out = '';
   for (let y = 0; y < h; y++) {
     let x = 0;

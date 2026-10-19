@@ -85,7 +85,11 @@ export function installPxdFrames(): void {
     act: chamfer(3, act, 2),
     'act-hover': chamfer(3, { ...act, fill: mix(v.act, v['act-hi'], 0.35) }, 2),
     'act-down': chamfer(3, act, 2, true),
-    off: chamfer(3, { ink: v.ink, hi: v['off-hi'], lo: v['off-lo'], fill: v.off, lip: v['off-lip'] }, 2),
+    off: chamfer(
+      3,
+      { ink: v.ink, hi: v['off-hi'], lo: v['off-lo'], fill: v.off, lip: v['off-lip'] },
+      2,
+    ),
     ribbon: ribbon({
       ink: v.ink,
       face: v.rib,
@@ -316,7 +320,8 @@ export function PxdSheet({
     const off = registerEscape(() => closeRef.current());
     const el = box.current;
     const first =
-      el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>('button');
+      el?.querySelector<HTMLElement>('[data-autofocus]') ??
+      el?.querySelector<HTMLElement>('button');
     first?.focus({ preventScroll: true });
     return () => {
       off();

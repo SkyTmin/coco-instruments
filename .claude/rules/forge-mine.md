@@ -306,3 +306,61 @@ Files: `components/armory.ts` + `armory.css` (shared by `ForgeScreen`, `Inventor
     places (spare ones hidden above the buttons) — fewer places moved the details by 58–87 px.
 - **Not verified**: a real phone / Telegram webview, hyphenation (the stand's Linux Chromium has no
   dictionaries — `hyphens: auto` is for phones), gamepad hardware (actions emitted on the bus).
+
+### F4 — handoff layout (19.10)
+
+Owner 19.10: «кузница слишком светлая», «не сочетается цвета шрифтов», «не нравятся длинные
+прямоугольники» → the ChatGPT handoff LAYOUT in our pixel style on a dark palette. Binding target:
+`{SCR}/shapes/index.html?p=slate` (`&s=gear`). `armory.ts` / `armory.css` are untouched (backpack
+and books did not move); the old `forge.css` is replaced whole.
+
+- **Dark kit** `src/ui-px/dark.{css,tsx}` + pure `dark-art.ts` (test `dark-art.test.ts`: centre =
+  fill, stretched edges uniform, the slices declared in `dark.css` = the pictures). The palette is
+  ONE `.pxd` token block in `dark.css` (А «Ночная шахта» now; Б «Малахит» / В «Аметист» values in
+  the comment above it — switching is one edit). Frames are SVG 9-slices drawn at runtime from the
+  tokens (`usePxd()` → `<style id="pxd-frames">`, `--pxd-f-*`): panel / sel / well / oct (cut 2 / 2 /
+  1 / 6), act (cut 3 + a 2-px slab; pressed = the face 2 px lower by swapping border widths), off,
+  ribbon (3-slice, 21 art px). The LAYOUT border is only the ring (2u), `border-image-width` the
+  whole slice, so content may sit over the corner fill. Pieces: `.pxd-f--*`, `.pxd-btn`,
+  `.pxd-chip`, `PxdButton` (`frame`, `off` = aria-disabled and still explains on tap, `hint`),
+  `PxdRibbon` (`--rc` name with a 1-art-px ink outline), `PxdPips`, `PxdSocket` (`d` 12/14/16/20),
+  `PxdGem`, `PxdPedestal`, `PxdSheet` (portal, escape stack, own `data-ui-layer`, docked on
+  phones). Type `--pd-fs-*` = px × (0.7 + 0.15·ui-scale) × the text setting. Books and Nursery go
+  on it next; the light kit is unchanged.
+- **Colours**: text / muted / accent, ok for statuses, rarity only on the ribbon name. Contrast
+  (`{SCR}/ui8F/contrast2.py`): text on bg / panel / well / off 15.3 / 11.4 / 13.7 / 8.6; muted
+  8.5 / 6.3 / 7.7 / 4.8; accent on panel 8.6; ok 8.2; CTA ink on gold 11.0; ticks 12.3 / 12.9;
+  rarity vs its outline 6.2–14.0 (on the bare ribbon 2.8–6.2 — never drop the outline). Numbers
+  ≥ 7: the level tile's «into / need» is body colour (muted on panel is 6.3).
+- **Phone portrait** (`frg--one`, a flex column): header grid back | title · purse with the purpose
+  line under both (it never gets cut); two tabs (`switchTab`, tabPrev/tabNext); the octagon stage
+  (art `fitPick` = whole device px per art px of the icon strip, `PxdPedestal`), «N / 17» badge,
+  ribbon over the stage's bottom (−15u), a fixed state row («✓ В руке», «Можно выковать», «Закрыта»
+  + rank, or «Взять в руку» for a forged pick — so the CTA always forges); three square stats
+  (power · blocks a minute · level with 10 pips and into/need; other picks show the forge floor;
+  deltas vs the pick in hand); «Берёт» ore chips (gem + name, shrink by `--clen`) and «Чары»
+  sockets by `enchSlots` + names + › (`onBooks`: PrisonPage closes the forge and opens `enchant`)
+  share one key column (subgrid). «Коллекция · N из 17»: four picks (window `win`, stable on row
+  taps, recentred from the sheet / after forging) + «Все» → `PxdSheet` with all 17. Bar: «Рецепт»
+  square (sheet: last pick + ores = coins + next) + CTA «Выковать <name>» (`pickToForge` in
+  `data-mine.ts`: ru accusative, tr «-yı», fr/es/it sentence case) with price / reason on line 2.
+- **Short phones**: `@media (max-height: 700px)` (360×640) and `(max-height: 600px)` (320×568)
+  take art pixels off every row (stats without pictures, 2u gaps, bar 24u). A narrow «Чары» line
+  (`frg-side` < 330 px with ≥ 3 sockets, < 420 px with ≥ 5) hides the names (tooltip + aria keep
+  them). The «Все» cell drops the noun under 66 px (`frg-all` container).
+- **Wide**: tablet portrait `frg--two` = top / main 13fr / lines | full grid 6fr / bar; landscape
+  and desktop `frg--three` = list | main | side 6 / 15 / 7 fr, side = stacked lines + a recipe row +
+  a full-width CTA (the name may wrap). Gear tab: two tall cards (bag: capacity now → next, 13
+  pips, «Улучшить» + price; cart: «Купить» for 5 000 tokens / done) + «Ящик кузнеца» (ore tiles
+  have / need ✓ and why); wide = cards | box, tablet portrait = cards over box.
+- **Measured** (stand, ru, mid save; art px / main column share): 320×568@2 112 / 50 % of the
+  height, 360×640@3 112 / 50 %, 390×844@3 187 / 52 %, 430×932@3 261 / 56 %, 844×390@3 149 / 51 %
+  of the width, 820×1180@2 280 / 54 % of the height, 1440×900 336 / 51 % of the width. No page
+  scroll, no clipped text at 320 in de / tr / fr.
+- **Nothing jumps**: `{SCR}/ui8F/drift.mjs <fmts> <lang>` clicks 9 picks (row + sheet) or 7 (side
+  grid), then gear → picks; 31 / 42 blocks, drift 0 px on p320 p360 pp p430 pl tp tl d1. Pitfalls
+  found: a centred flex child's box follows its content — stretch fixed rows (`align-self:
+  stretch`), give the badge a `ch` min-width; `useBox(ref, on)` needs `on = tab === 'picks'`, else
+  the observer of the unmounted stage reports 0 and the art vanishes after a tab switch; grid
+  tiles `min-height: 0; overflow: hidden`, else a two-line label grows the row by 2 px.
+- **Not verified**: a real phone / Telegram webview, gamepad hardware.
