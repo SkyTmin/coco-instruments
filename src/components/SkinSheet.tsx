@@ -65,7 +65,7 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   }, [skin, level, topX, granted, owner, setPrefs]);
 
   return (
-    <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
+    <GxSheet guard title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
       {/* Лист прокручивает сама сетка: тело листа с набором внутри — `overflow: hidden`
           (gx-px.css), и без своей прокрутки треть скинов и строка лицензии Twemoji были
           недоступны пальцу (critic15 #1). Обе строки внизу — внутри той же прокрутки. */}
