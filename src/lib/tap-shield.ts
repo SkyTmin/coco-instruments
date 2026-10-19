@@ -41,9 +41,19 @@ const EVENTS = [
   'dblclick',
 ] as const;
 
+/** When the input HAPPENED, not when it was dispatched: a sheet's first render can hold the main
+ *  thread 300 ms, and the second tap of a 90-ms double tap then arrives after a dispatch-time
+ *  guard has run out (measured on tp, 2 of 6 runs). An event stamp from another clock (old
+ *  WebKit's epoch ms) or from long ago falls back to now. */
+function stamp(e: Event): number {
+  const n = now();
+  const t = e.timeStamp;
+  return t > 0 && t <= n + 50 && n - t < 5000 ? t : n;
+}
+
 function onEvent(e: Event) {
   const detail = e instanceof UIEvent ? e.detail : 0;
-  if (shieldDecides(e.type, detail, now()) === 'pass') return;
+  if (shieldDecides(e.type, detail, stamp(e)) === 'pass') return;
   e.stopImmediatePropagation();
   // Touch events stay passive (scrolling is untouched); the click they would make is blocked.
   if (e.cancelable && !e.type.startsWith('touch')) e.preventDefault();
