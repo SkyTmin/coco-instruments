@@ -5,7 +5,7 @@ import { AnimatedNumber } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
-import { Bar } from '@/ui-px';
+import { Bar, usePress } from '@/ui-px';
 import {
   CasAutoPicker,
   CasBetPicker,
@@ -479,6 +479,10 @@ export function SlotsPage() {
   const winRef = useRef<HTMLSpanElement>(null);
   /** Шток рычага: его дёргает и кнопка «Крутить», а не только палец. */
   const armRef = useRef<HTMLSpanElement>(null);
+  // Рычаг виден нажатым с первого кадра (critic9 #12): шар садится на арт-пиксель ещё до
+  // того, как палец сдвинулся.
+  const leverRef = useRef<HTMLDivElement>(null);
+  const leverPress = usePress(leverRef);
   const dustRef = useRef<HTMLCanvasElement>(null);
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1419,13 +1423,19 @@ export function SlotsPage() {
 
                 {/* Рычаг */}
                 <div
+                  ref={leverRef}
                   className={`lever${canSpin ? '' : ' is-off'}`}
-                  onPointerDown={leverDown}
+                  onPointerDown={(e) => {
+                    leverPress.onPointerDown(e);
+                    leverDown(e);
+                  }}
+                  onPointerLeave={leverPress.onPointerLeave}
                   onPointerMove={leverMove}
                   onPointerUp={leverUp}
                   onPointerCancel={leverUp}
                   role="button"
                   tabIndex={-1}
+                  aria-disabled={canSpin ? undefined : true}
                   aria-label={tr('slots.a11y.lever')}
                 >
                   <span className="lever__slot" />

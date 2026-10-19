@@ -897,6 +897,21 @@ html[data-ff='phone-landscape'] .cas-spin__t {
   font-size: var(--px-fs);
 }
 
+/* ---- Lever (critic9 #12) ----------------------------------------------------------------------- */
+/* The art is 34 px wide (33–39 after the cabinet's fit): a hit column of 52 px over it, and the
+   knob drops 1 art px on pointerdown — before the finger has moved. */
+.slots.cas .lever::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -9px;
+  right: -9px;
+}
+.slots.cas .lever.is-down .lever__knob {
+  translate: 0 var(--u);
+}
+
 /* ---- Slots on tablet landscape and desktop: the machine is the show -------------------------- */
 /* The info column was 60 % empty parchment beside a cabinet of 11 % of the screen (critic9 #4).
    The facts move into the top of the deck column as a 2 × 2 block, the stage takes the rest and
