@@ -281,6 +281,10 @@ html[data-ff='tablet']
   text-overflow: ellipsis;
   color: var(--px-text);
 }
+.ctab-insp__line.is-fuse.is-tight > span:first-child,
+.ctab-insp__line.is-fuse.is-bare > b {
+  display: none;
+}
 .ctab-insp__line.is-fuse > .px-i {
   flex: none;
   color: var(--px-gold);
@@ -1566,6 +1570,13 @@ html[data-ff='tablet']
   width: calc((var(--tile, 36) - 6) * var(--u));
   height: calc((var(--tile, 36) - 6) * var(--u));
 }
+.ctab-perk-art {
+  position: relative;
+}
+.ctab-insp--perk.is-show .ctab-perk-art__lv,
+.ctab-insp--perk:not(.is-show) .ctab-insp__lv {
+  display: none;
+}
 /* Showcase (phone / tablet portrait, wide side column): the picture centred in the height left
    over, the name, effect, step, note and «Learn» under it. */
 .ctab-insp--perk.is-show .ctab-insp__top {
@@ -1592,6 +1603,9 @@ html[data-ff='tablet']
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+.ctab-insp--perk .ctab-insp__sub.is-tight > .ctab-insp__per {
+  display: none;
 }
 .ctab--short .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);

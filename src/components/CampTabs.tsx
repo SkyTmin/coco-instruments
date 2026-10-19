@@ -397,6 +397,7 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
   // `camp.bonus.*` takes its place; the full one stays the tip.
   const fullRef = useRef<HTMLSpanElement>(null);
   const givesRef = useRef<HTMLSpanElement>(null);
+  const fuseRef = useRef<HTMLDivElement>(null);
   const fitBonus = useCallback(() => {
     const el = bonusBox.current;
     if (el) {
@@ -418,6 +419,18 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
       gives.classList.remove('is-tight');
       gives.classList.toggle('is-tight', gives.scrollWidth > gives.clientWidth + 1);
     }
+    // The fuse plan in pictures: the result's name would be cut (it «Si consumano:» on a phone
+    // landscape) — «Uses up:» goes first, then the name (the result's picture still says it).
+    const fuse = fuseRef.current;
+    if (fuse) {
+      fuse.classList.remove('is-tight', 'is-bare');
+      const name = fuse.querySelector<HTMLElement>(':scope.is-fuse > b');
+      const cut = () => !!name && name.scrollWidth > name.clientWidth + 1;
+      if (cut()) {
+        fuse.classList.add('is-tight');
+        if (cut()) fuse.classList.add('is-bare');
+      }
+    }
   }, []);
   useLayoutEffect(fitBonus);
   useEffect(() => {
@@ -426,6 +439,7 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     const ro = new ResizeObserver(fitBonus);
     ro.observe(el);
     if (fullRef.current) ro.observe(fullRef.current);
+    if (fuseRef.current) ro.observe(fuseRef.current);
     return () => ro.disconnect();
   }, [fitBonus]);
   const open = socketsOpen(p, axeLevel);
@@ -776,6 +790,7 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           </span>
         </div>
         <div
+          ref={fuseRef}
           className={`ctab-insp__line${note ? ' is-note' : fuseArt ? ' is-fuse' : ''}`}
           data-tip={short || (fuseArt && !note) ? (note ?? fuseLine) || undefined : undefined}
           aria-label={fuseArt && !note ? fuseLine : undefined}
@@ -1308,7 +1323,9 @@ export const PerksTab = memo(function PerksTab() {
   const [artRef, artBox] = useShowBox(show);
   const tileU = show
     ? Math.max(36, Math.min(72, Math.floor(Math.min(artBox.h, artBox.w) / scale)))
-    : 36;
+    : short
+      ? 24 // 48 px beside the words: a 320-px panel keeps two lines for the effect and step
+      : 36;
   const p = useFinanceStore((s) => s.prison);
   const prisonPerk = useFinanceStore((s) => s.prisonPerk);
   const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
@@ -1365,6 +1382,24 @@ export const PerksTab = memo(function PerksTab() {
   useLayoutEffect(() => {
     if (short) paginate();
   });
+  // The effect keeps to its lines: when it would run over (ru «после престижа — на ранг выше» at
+  // 320), «· за уровень» goes — the step line under it shows the next level anyway; the whole
+  // sentence is the tip.
+  const subRef = useRef<HTMLSpanElement>(null);
+  const fitSub = useCallback(() => {
+    const el = subRef.current;
+    if (!el) return;
+    el.classList.remove('is-tight');
+    el.classList.toggle('is-tight', el.scrollHeight > el.clientHeight + 1);
+  }, []);
+  useLayoutEffect(fitSub);
+  useEffect(() => {
+    const el = subRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(fitSub);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitSub]);
   useEffect(() => {
     const el = strip.current;
     if (!short || !el) {
@@ -1582,6 +1617,11 @@ export const PerksTab = memo(function PerksTab() {
           <span ref={artRef} className="ctab-insp__art" aria-hidden="true">
             <span className="ctab-perk-art" style={{ '--tile': tileU } as CSSProperties}>
               <GxIcon name={PERK_ICON[k.id]} style={{ color: PERK_TONE[k.id] } as CSSProperties} />
+              {/* row layouts (short phone, phone landscape): the level on the picture's corner, as
+                  on the node — the name keeps the width (en «Connections 0/3» was cut) */}
+              <span className="px-slot__n ctab-perk-art__lv">
+                {lv}/{k.max}
+              </span>
             </span>
           </span>
           <span className="ctab-insp__head">
@@ -1591,8 +1631,13 @@ export const PerksTab = memo(function PerksTab() {
                 {lv}/{k.max}
               </span>
             </span>
-            <span className="ctab-insp__sub">
-              {perkText(k.id)} · {t('ctabs.perks.per')}
+            <span
+              ref={subRef}
+              className="ctab-insp__sub"
+              data-tip={`${perkText(k.id)} · ${t('ctabs.perks.per')}`}
+            >
+              {perkText(k.id)}
+              <span className="ctab-insp__per"> · {t('ctabs.perks.per')}</span>
             </span>
           </span>
         </div>
