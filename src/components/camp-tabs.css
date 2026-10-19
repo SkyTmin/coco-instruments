@@ -969,12 +969,22 @@
     'insp' auto
     / minmax(0, 1fr);
 }
-.ctab-finds.ctab--land,
-.ctab-finds.ctab--wide {
+.ctab-finds.ctab--land {
   grid-template:
     'head head' auto
     'grid insp' minmax(0, 1fr)
     / minmax(0, 11fr) minmax(0, 9fr);
+}
+/* Tablet landscape / desktop: 3 : 2, so four ≈ 120-px slots fit the case's width. */
+.ctab-finds.ctab--wide {
+  grid-template:
+    'head head' auto
+    'grid insp' minmax(0, 1fr)
+    / minmax(0, 3fr) minmax(0, 2fr);
+}
+/* Short phone: a 1u margin around the case — 3 rows of 60-px slots fit 199 px at 320×568. */
+.ctab-finds.ctab--short .ctab-grid {
+  padding: var(--u);
 }
 .ctab-finds > .ctab-head {
   grid-area: head;

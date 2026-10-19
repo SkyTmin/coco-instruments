@@ -112,6 +112,10 @@ function fit(base: number, u: number, scale: number, dpr: number): number {
   const m = Math.max(1, Math.round((u * scale * dpr) / base));
   return (base * m) / dpr;
 }
+/** The biggest whole multiple of the art's pixel grid that is ≤ `max` CSS pixels. */
+function fitDown(base: number, max: number, dpr: number): number {
+  return (base * Math.max(1, Math.floor((max * dpr) / base))) / dpr;
+}
 /** A slot (in art pixels) around art of `px` CSS pixels: the frame and a margin. */
 const slotFor = (px: number, scale: number, pad: number) => Math.ceil(px / scale) + pad;
 const slotVar = (n: number) => ({ '--slot': `calc(${n} * var(--u))` }) as CSSProperties;
@@ -687,23 +691,50 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
 // memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
 export const FindsTab = memo(function FindsTab() {
   const t = useT();
-  const { lay, scale, dpr } = useLay();
+  const { lay, scale, dpr, short } = useLay();
   const p = useFinanceStore((s) => s.prison);
   const found = findsFound(p.finds);
+  // Phone portrait and tablet landscape / desktop: a 4×3 case, all 12 without scrolling — the
+  // slots as big as a quarter of the width lets (≈ 80 px with 64-px art on a phone, ≈ 120 on a
+  // tablet); the other layouts keep their auto-fill columns.
+  const four = lay === 'one' || lay === 'wide';
+  const box = useRef<HTMLDivElement>(null);
+  const [cell, setCell] = useState(0);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const grid = el?.firstElementChild;
+    if (!four || !el || !grid) return undefined;
+    const measure = () => {
+      const cs = getComputedStyle(grid);
+      const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      setCell((el.clientWidth - pad - 3 * parseFloat(cs.columnGap)) / 4);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [four]);
   const [sel, setSel] = useState(() => FINDS.find((f) => p.finds[f.id])?.id ?? FINDS[0].id);
   const f = FINDS.find((x) => x.id === sel) ?? FINDS[0];
   const n = p.finds[f.id] ?? 0;
-  const small = lay !== 'wide';
-  const px = fit(16, small ? 26 : 32, scale, dpr);
-  const slot = slotFor(px, scale, 2);
-  const bigPx = fit(16, small ? 30 : 40, scale, dpr);
+  const roomy = lay === 'one' && !short;
+  // a 6u margin around the art; a narrow phone (360) gives up the margin (down to 3u), not the 64 px
+  const padU = roomy ? 6 : 2;
+  let px = fit(16, lay === 'wide' ? 37 : roomy ? 32 : 26, scale, dpr);
+  if (four && cell > 0) px = Math.min(px, fitDown(16, cell - (roomy ? 3 : padU) * scale, dpr));
+  const slot =
+    four && cell > 0
+      ? Math.min(slotFor(px, scale, padU), Math.floor(cell / scale))
+      : slotFor(px, scale, padU);
+  // the selected find big: ≥ 96 px on a phone with room and on a tablet
+  const bigPx = fit(16, lay === 'wide' ? 40 : roomy ? 48 : 30, scale, dpr);
   const pick = (id: string) => {
     if (id === sel) return;
     selectionChanged();
     setSel(id as typeof sel);
   };
   return (
-    <div className={`px ctab ctab-finds ctab--${lay}`}>
+    <div className={`px ctab ctab-finds ctab--${lay}${short ? ' ctab--short' : ''}`}>
       <Head
         title={t('ctabs.finds.title')}
         hint={t('ctabs.finds.hint', { pct: Math.round((findsMult(p.finds) - 1) * 100) })}
@@ -715,8 +746,11 @@ export const FindsTab = memo(function FindsTab() {
           </span>
         }
       />
-      <div className="ctab-scroll ctab-finds__grid">
-        <Grid className="ctab-grid" style={slotVar(slot)}>
+      <div ref={box} className="ctab-scroll ctab-finds__grid">
+        <Grid
+          className="ctab-grid"
+          style={four ? ({ ...slotVar(slot), '--cols': 4 } as CSSProperties) : slotVar(slot)}
+        >
           {FINDS.map((x) => {
             const c = p.finds[x.id] ?? 0;
             return (
