@@ -37,9 +37,6 @@ describe('mine data areas match src/lib', () => {
   it('Russian text keeps its old shape', () => {
     expect(tIn('ru', 'mineHud.say.parcelLeft', { n: 21 })).toBe('Вскроется через 21 блок');
     expect(tIn('ru', 'mineHud.say.parcelLeft', { n: 3 })).toBe('Вскроется через 3 блока');
-    expect(tIn('ru', 'mineHud.card.shiftKeys', { n: 1 })).toBe(' · +1 ключ');
-    expect(tIn('ru', 'mineHud.card.shiftKeys', { n: 3 })).toBe(' · +3 ключа');
-    expect(tIn('ru', 'mineHud.card.shiftKeys', { n: 5 })).toBe(' · +5 ключей');
     expect(tIn('ru', 'mineHud.card.crewDug', { n: 1 })).toBe('Рабочие накопали 1 блок');
     expect(tIn('ru', 'mineHud.card.crewDug', { n: 22 })).toBe('Рабочие накопали 22 блока');
     expect(tIn('ru', 'forge.listAnd', { a: 'глина, песчаник', b: 'гранит' })).toBe(

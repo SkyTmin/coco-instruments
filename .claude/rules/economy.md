@@ -1,8 +1,8 @@
 ---
 paths:
-  - "src/lib/economy.ts"
-  - "src/lib/prison.ts"
-  - "src/lib/prison.test.ts"
+  - 'src/lib/economy.ts'
+  - 'src/lib/prison.ts'
+  - 'src/lib/prison.test.ts'
 ---
 
 <!-- Перенесено из CLAUDE.md дословно (v2.87): грузится, только когда
@@ -47,7 +47,7 @@ paths:
   рюкзака (`feedForge` стоит в `prisonBreak` до `stash`). Набралось —
   кирка в руке, сцена. Поздние кирки просят и руду старого этажа — старые
   шахты не умирают. Заточка своя у каждой кирки (+0…+10, `sharpCost(pick,
-  level)`), у новой — с нуля. Звёзд кирки — до 10.
+level)`), у новой — с нуля. Звёзд кирки — до 10.
 - ~~Иконки кирок — Kenney Voxel Pack~~ — **заменены в v2.69** 3D-рендером
   (см. «Кирки v2.69»). Ниже — история. Kenney Voxel Pack (CC0) с перекрашенной головкой
   (`scripts/picks-assets.py`, удалён). Головку отделяем от рукояти ПО НАСЫЩЕННОСТИ
@@ -132,3 +132,21 @@ paths:
   закрыть — время зоны под энергетиком идёт вдвое быстрее.
 - Торговец продаёт расходники за монеты пачками с запасом 2 на окно —
   не тронут: запас и так ограничивает.
+
+## Fast start up to F (v2.159, owner 19.10)
+
+Owner: «в начале очень долго качается прогресс, человеку не интересно, до этажа F должно быть
+быстро».
+
+- Targets `TARGET_MIN` A–E = 0.8 / 1.2 / 1.8 / 2.5 / 3.5 min (`EARLY_MIN` in `prison.test.ts`),
+  from F on unchanged. Only the early cells were taken from `TUNE` (a full `TUNE=1 LAG=0.9` run
+  drifted the late game: BPS 6–8.5, Y→Z 1.7 M): `RANK_PRICE` A–E 190/490/1100/2600/3900 →
+  120/240/470/1100/1400, `RANK_WORK` E 510 → 250, Каменная 370 + [130, 63] → 170 + [57, 28],
+  Кованая 1400 + [230, 120] → 680 + [120, 61].
+- Result (ideal player, main seed): ranks A–E 0.9 / 1.3 / 2.6 / 2.6 / 4.3 min, A→F 11.7 min
+  (was 24); circle 4.35 h (seeds 3.3–4.6, mean 4.25; was 4.46).
+- **The shop guard was seed luck.** «энергетик не окупает сам себя» passed on prod only because
+  the main seed's Y was slow (104 tokens/min); seeds 1–2 already earned 159–176 on prod. The new
+  trajectory showed it: P–T energy 150 → 175, U–Z row ×1.33 (energy 260 → 345, charge 325 → 430,
+  lens 130 → 170, bombs 30/80 → 41/104). Energy 360 made it dead goods (1.102 > 1.1) — the two
+  tests pinch at 340–355 on U–Z.
