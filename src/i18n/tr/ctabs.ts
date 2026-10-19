@@ -23,6 +23,8 @@ export const ctabs: Translation<typeof ru> = {
     pouch: 'Kese',
     pouchHint: 'bir rün seç',
     pick: 'Ne verdiğini görmek için bir rün seç',
+    /** No runes at all: where they come from (`PARCEL_TABLE`, `CASE_PRIZE`), in the panel. */
+    whereFrom: 'Rünler kolilerden ve sandıklardan çıkar',
     shatter: 'Jeton için kır',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'güç {n}/100',

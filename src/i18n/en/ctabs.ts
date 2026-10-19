@@ -23,6 +23,8 @@ export const ctabs: Translation<typeof ru> = {
     pouch: 'Pouch',
     pouchHint: 'pick a rune',
     pick: 'Pick a rune to see what it gives',
+    /** No runes at all: where they come from (`PARCEL_TABLE`, `CASE_PRIZE`), in the panel. */
+    whereFrom: 'Runes come from parcels and chests',
     shatter: 'Shatter for tokens',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'power {n}/100',

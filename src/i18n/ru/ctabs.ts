@@ -21,6 +21,8 @@ export const ctabs = {
     pouch: 'Мешочек',
     pouchHint: 'выбери руну',
     pick: 'Выбери руну — тут будет, что она даёт',
+    /** No runes at all: where they come from (`PARCEL_TABLE`, `CASE_PRIZE`), in the panel. */
+    whereFrom: 'Руны выпадают из посылок и сундуков',
     shatter: 'Разбить на токены',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'сила {n}/100',

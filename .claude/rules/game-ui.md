@@ -306,6 +306,39 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
     ms on every control). `allfmt.mjs` flags `TAB-OVF 4` on p320 runes and `OFF-X 3` on
     the short-phone skills: the first is the bottom button's invisible focus ring (`inset −3u`)
     past the tab, the second the strip's other pages — neither scrolls or shows.
+- **Round 4 (T4, 19.10.2026, critic17 `critic-camp-tabs3.md`):**
+  - Measured on the new `.mn` mine screen (v2.162), where `.mn--tall > :not(…)` gave the camp
+    veil a column width (tp window 570 of 820 px, at the left edge; fixed there by excluding
+    `.gx-win` — dropped with that screen in v2.163). Re-run on the old `.pmx` page (camp = the
+    last `.pmx-dock__btn`): the same numbers, tp tab 724 px, pp 342.
+  - **Tablet portrait runes:** the bonus box sits in the right column under the pouch, titled
+    `ctabs.runes.gives` (areas: ahead / stage on the left, pouch / btitle / bonus on the right,
+    insp across; 9fr / 11fr). `tpchips.mjs` + sweep states `three` / `four` (sockets
+    `[108,101,103,105]` + mile p10): every chip owns its `elementFromPoint`, no OCCLUDED.
+  - **Wide (tl 1180×820, d1 1440×900):** finds art `fitDown(16, min(h, w, 288))` — tl / d1 288
+    px, blank 1%; skills = 2-column grid (`align-content: space-evenly`, odd last node spans),
+    the slot measured from the strip (`wideSlot`, 30–45u): tl 132 px, d1 135, empty stone 5%;
+    inspected rune `40 × ceil(1.5 × socket × dpr / 40) / dpr` — tl 160 px vs socket 100, d1
+    120 vs 80.
+  - **Hit areas ≥ 44 px:** one `::before` rule for ↺, «Забрать», rune acts, ×1/×5/×10 and buy —
+    vertical `min(−1u, (100% − 45px) / 2)`, horizontal −1u (↺ alone also horizontal). Stacked
+    buttons need a 5u gap (pitch 46): at pitch 45 Chrome snaps the half-pixel zone edges outward
+    and a ±22 probe lands on the neighbour. `content-visibility: auto` clips a child's hit zone
+    (paint containment; `overflow-clip-margin` stays 0) — ready achievement rows drop it. Strip
+    arrows ±(8 px + 1u). `hit.mjs fmts`: all `[1111]`, no NB.
+  - **Polish:** shatter token 28/3 u on tall / wide (24 px at u 2.57) with −1u block margin;
+    the hammer is back on tall; the purse number keeps `min-width` of the widest value it ever
+    showed (`ch` ref — 10 010 → 9 980: plate 129.6 px, x 236.4 on all 13 frames); skills art on
+    a short phone 36u (72+ px at 320; the panel is a 2-column grid — art beside sub / step);
+    the step drops to bare values «A → B» when the sentence would ellipsize
+    (`.ctab-insp__step.is-tight`); the full effect line on a short phone is one line and
+    hides (`.is-none`) when even the short words overflow. Empty pouch: the hint line goes
+    blank, the panel says `ctabs.runes.whereFrom` («Руны выпадают из посылок и сундуков» —
+    `PARCEL_TABLE`, `CASE_PRIZE`). Amulet bonus words: line-height 1.25 (at the chip's 1 the
+    clip box was 1em and descenders lost 2 px).
+  - Checks (`scratchpad/ui8T`): `sweep.mjs fmts langs [tabs] [three|four]` (tracks
+    `.ctab-scroll`, not the scrolled grid), `hit.mjs`, `geo.mjs`, `tpchips.mjs`, `strip.mjs`,
+    `purse.mjs`, `empty.mjs`, `shot.mjs fmt tab lang name state`.
 - **Pitfalls:**
   - The kit `Grid` prop `slot` clashes with the HTML `slot` attribute type: pass
     `style={{ '--slot': … }}` instead.

@@ -194,6 +194,11 @@ function useCountTo(n: number): number {
 /** Tokens: always in the head's right corner. */
 function Purse({ n }: { n: number }) {
   const v = useCountTo(n);
+  // As wide as the longest value it has shown while the tab is open: a count across a digit
+  // (10 010 → 9 980) never narrows the plate mid-count or after it (critic17 #4 — the final
+  // value's width moved its left edge 14 px when the digit went).
+  const ch = useRef(0);
+  ch.current = Math.max(ch.current, fmtNum(n).length, fmtNum(v).length);
   return (
     <span
       className="px-dark ctab-purse"
@@ -201,8 +206,7 @@ function Purse({ n }: { n: number }) {
       aria-label={t('camp.purseTokens', { n, v: fmtNum(n) })}
     >
       <TokenIcon size={18} />
-      {/* as wide as the final value while it counts: the plate never resizes mid-count */}
-      <span className="px-num" style={{ minWidth: `${fmtNum(n).length}ch` }}>
+      <span className="px-num" style={{ minWidth: `${ch.current}ch` }}>
         {fmtNum(v)}
       </span>
     </span>
@@ -409,8 +413,13 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     }
     const full = fullRef.current;
     if (full) {
-      full.classList.remove('is-tight');
-      full.classList.toggle('is-tight', full.scrollHeight > full.clientHeight + 1);
+      full.classList.remove('is-tight', 'is-none');
+      const over = () => full.scrollHeight > full.clientHeight + 1;
+      // (a short phone gives it one line: when even the short words don't fit, none)
+      if (over()) {
+        full.classList.add('is-tight');
+        if (over()) full.classList.add('is-none');
+      }
     }
     // …and the short word itself: en «+4.6% enchants» is 150 px in the short phone's 134 — the
     // number alone then (the sentence under it names the stat).
@@ -579,7 +588,10 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     dpr,
   );
   const sockSlot = slotFor(sockPx, scale, 6);
-  const inspPx = fit(40, 30, scale, dpr);
+  // Wide: the picked rune at least 1.5× the socket's, in whole texels (160 / 120 px at 1180×820 /
+  // 1440×900 — it was the socket's own 100 / 80, critic17 #2); elsewhere 30u.
+  const inspPx =
+    lay === 'wide' ? (40 * Math.ceil((1.5 * sockPx * dpr) / 40)) / dpr : fit(40, 30, scale, dpr);
   const actSize = short || lay === 'tall' || lay === 'land' ? 'sm' : undefined;
 
   // The amulet's own bonus: the worn runes only (the squad's pets show theirs in the Nursery), so
@@ -667,8 +679,11 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           })}
         </div>
       </Panel>
-      {/* phone landscape: the box sits under the pouch column — it says whose bonus it is */}
-      {lay === 'land' && <span className="ctab-bonus__title">{t('ctabs.runes.gives')}</span>}
+      {/* phone landscape, tablet portrait: the box sits under the pouch column — it says whose
+          bonus it is */}
+      {(lay === 'land' || lay === 'tall') && (
+        <span className="ctab-bonus__title">{t('ctabs.runes.gives')}</span>
+      )}
       <div ref={bonusBox} className="ctab-bonus" style={{ '--st': stPx } as CSSProperties}>
         {bonus.length ? (
           bonus.map((k) => (
@@ -698,7 +713,8 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
         <span className="px-num ctab-sub__count">
           {p.runes.length}/{RUNE_BAG}
         </span>
-        <span className="ctab-sub__hint">{t('ctabs.runes.pouchHint')}</span>
+        {/* (an empty pouch has nothing to pick: the line stays, empty) */}
+        <span className="ctab-sub__hint">{bag.length ? t('ctabs.runes.pouchHint') : ''}</span>
       </div>
       <div className="ctab-scroll">
         {bag.length ? (
@@ -833,7 +849,10 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
       {!rune && (
         <div className="ctab-insp__empty">
           <Icon name="info" />
-          <span>{note ?? (p.runes.length ? t('ctabs.runes.pick') : t('camp.runes.none'))}</span>
+          {/* an empty pouch already says «no runes» — the panel says where they come from */}
+          <span>
+            {note ?? (p.runes.length ? t('ctabs.runes.pick') : t('ctabs.runes.whereFrom'))}
+          </span>
         </div>
       )}
     </Panel>
@@ -862,8 +881,11 @@ export const FindsTab = memo(function FindsTab() {
   const four = lay === 'one' || lay === 'wide';
   // Phone portrait (not short) and tablet portrait: the case is as tall as its rows and the
   // inspect panel below is a showcase — the find as big as the height left over (144–192 px on a
-  // phone; 210–318 px stood empty under the case, critic14 #2 / R66).
-  const show = (lay === 'one' && !short) || lay === 'tall';
+  // phone; 210–318 px stood empty under the case, critic14 #2 / R66). Tablet landscape / desktop:
+  // the side column is a showcase too (a 120-px find over 270 px of blank, critic17 #2) — its
+  // case keeps sizing by width AND height.
+  const show = (lay === 'one' && !short) || lay === 'tall' || lay === 'wide';
+  const byW = show && lay !== 'wide';
   const box = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState(0);
   useLayoutEffect(() => {
@@ -875,19 +897,19 @@ export const FindsTab = memo(function FindsTab() {
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
       const rows = Math.ceil(FINDS.length / 4);
-      const byW = (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4;
-      // a showcase case sizes by its width only (its height follows its rows)
+      const wCell = (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4;
+      // a showcase case under the panel sizes by its width only (its height follows its rows)
       setCell(
-        show
-          ? byW
-          : Math.min(byW, (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows),
+        byW
+          ? wCell
+          : Math.min(wCell, (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows),
       );
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [four, show]);
+  }, [four, byW]);
   const [artRef, artBox] = useShowBox(show);
   const [sel, setSel] = useState(() => FINDS.find((f) => p.finds[f.id])?.id ?? FINDS[0].id);
   const f = FINDS.find((x) => x.id === sel) ?? FINDS[0];
@@ -902,10 +924,10 @@ export const FindsTab = memo(function FindsTab() {
       ? Math.min(slotFor(px, scale, padU), Math.floor(cell / scale))
       : slotFor(px, scale, padU);
   // the selected find big: ≥ 96 px on a phone with room and on a tablet; 48 on a short phone
-  // (with 64, es «Moneda antigua» was cut at 320)
+  // (with 64, es «Moneda antigua» was cut at 320); up to 288 in the wide side column
   const bigPx =
     show && artBox.h > 0
-      ? fitDown(16, Math.min(artBox.h, artBox.w, 192), dpr)
+      ? fitDown(16, Math.min(artBox.h, artBox.w, lay === 'wide' ? 288 : 192), dpr)
       : fit(16, lay === 'wide' ? 40 : roomy ? 48 : short ? 24 : 30, scale, dpr);
   const pick = (id: string) => {
     if (id === sel) return;
@@ -1329,9 +1351,7 @@ export const PerksTab = memo(function PerksTab() {
   const [artRef, artBox] = useShowBox(show);
   const tileU = show
     ? Math.max(36, Math.min(72, Math.floor(Math.min(artBox.h, artBox.w) / scale)))
-    : short
-      ? 24 // 48 px beside the words: a 320-px panel keeps two lines for the effect and step
-      : 36;
+    : 36; // 72 px on a phone: phone landscape beside the words, a short phone under the name
   const p = useFinanceStore((s) => s.prison);
   const prisonPerk = useFinanceStore((s) => s.prisonPerk);
   const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
@@ -1391,12 +1411,22 @@ export const PerksTab = memo(function PerksTab() {
   // The effect keeps to its lines: when it would run over (ru «после престижа — на ранг выше» at
   // 320), «· за уровень» goes — the step line under it shows the next level anyway; the whole
   // sentence is the tip.
+  // The step line likewise: beside a short phone's 72-px picture «Сейчас +6% → +12%» needs 196 px
+  // of 172 — the bare values then (the effect above names them); measured by the text's Range.
   const subRef = useRef<HTMLSpanElement>(null);
+  const stepRef = useRef<HTMLDivElement>(null);
   const fitSub = useCallback(() => {
     const el = subRef.current;
-    if (!el) return;
-    el.classList.remove('is-tight');
-    el.classList.toggle('is-tight', el.scrollHeight > el.clientHeight + 1);
+    if (el) {
+      el.classList.remove('is-tight');
+      el.classList.toggle('is-tight', el.scrollHeight > el.clientHeight + 1);
+    }
+    const st = stepRef.current;
+    const full = st?.firstElementChild;
+    if (st && full) {
+      st.classList.remove('is-tight');
+      st.classList.toggle('is-tight', full.getBoundingClientRect().width > st.clientWidth + 0.2);
+    }
   }, []);
   useLayoutEffect(fitSub);
   useEffect(() => {
@@ -1404,6 +1434,7 @@ export const PerksTab = memo(function PerksTab() {
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(fitSub);
     ro.observe(el);
+    if (stepRef.current) ro.observe(stepRef.current);
     return () => ro.disconnect();
   }, [fitSub]);
   useEffect(() => {
@@ -1430,6 +1461,29 @@ export const PerksTab = memo(function PerksTab() {
     const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     el.scrollBy({ left: dir * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
   };
+  // Tablet landscape / desktop: the nodes in two columns of three rows, as big as the tree's
+  // height lets (30–45u: 90 → 135 px at 1180×820 — two rows of 90-px nodes left half of the stone
+  // empty, critic17 #2). Measured on the scroller, whose size never follows its content.
+  const [wideSlot, setWideSlot] = useState(30);
+  useLayoutEffect(() => {
+    const el = strip.current;
+    if (lay !== 'wide' || !el) return undefined;
+    const measure = () => {
+      const nameH = el.querySelector<HTMLElement>('.ctab-node__name')?.offsetHeight ?? 0;
+      const rows = Math.ceil(list.length / 2);
+      // .ctab-nodes: 3u + 2u padding, a 2u gap slot → name, 4u between rows
+      const byH = ((el.clientHeight - rows * nameH) / scale - 5 - 2 * rows - 4 * (rows - 1)) / rows;
+      // a node is its slot + 10u wide; two columns and the nodes' 2u side padding
+      const byW = (el.clientWidth / scale - 6) / 2 - 10;
+      const s = Math.max(30, Math.min(45, Math.floor(Math.min(byH, byW))));
+      setWideSlot((o) => (o === s ? o : s));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [lay, scale, list.length]);
   const k = list.find((x) => x.id === sel) ?? list[0];
   const lv = p.perks[k.id];
   const max = lv >= k.max;
@@ -1494,24 +1548,31 @@ export const PerksTab = memo(function PerksTab() {
     setNote(null);
   };
 
-  const nodeSlot = lay === 'tall' ? 24 : 30;
+  const nodeSlot = lay === 'tall' ? 24 : lay === 'wide' ? wideSlot : 30;
   const line = armed ? t('ctabs.perks.resetArm') : note;
   const now = perkVal(perkAt(k.id, lv));
   const next = perkVal(perkAt(k.id, lv + 1));
   // One line «Сейчас +6% → +12%» (the rows took 106 px; the effect's noun is the line above).
   // «Blat» has no number: the rank a prestige starts from (the store's `min(LAST_RANK − 1, blat)`).
   const blatAt = (n: number) => rankLetter(Math.min(LAST_RANK - 1, n));
+  const nowV = now ?? `${lv}/${k.max}`;
+  const nextV = next ?? `${lv + 1}/${k.max}`;
+  const bare =
+    k.id === 'blat'
+      ? max
+        ? blatAt(lv)
+        : `${blatAt(lv)} → ${blatAt(lv + 1)}`
+      : max
+        ? nowV
+        : `${lv ? nowV : '—'} → ${nextV}`;
   const step =
     k.id === 'blat'
       ? max
         ? t('ctabs.perks.blatNow', { now: blatAt(lv) })
         : t('ctabs.perks.blatStep', { now: blatAt(lv), next: blatAt(lv + 1) })
       : max
-        ? `${t('ctabs.perks.now')} ${now ?? `${lv}/${k.max}`}`
-        : t('ctabs.perks.step', {
-            now: lv ? (now ?? `${lv}/${k.max}`) : '—',
-            next: next ?? `${lv + 1}/${k.max}`,
-          });
+        ? `${t('ctabs.perks.now')} ${nowV}`
+        : t('ctabs.perks.step', { now: lv ? nowV : '—', next: nextV });
 
   const node = (x: (typeof list)[number]) => {
     const l = p.perks[x.id];
@@ -1647,7 +1708,10 @@ export const PerksTab = memo(function PerksTab() {
             </span>
           </span>
         </div>
-        <div className="px-num ctab-insp__step">{step}</div>
+        <div ref={stepRef} className="px-num ctab-insp__step">
+          <span className="ctab-insp__step-l">{step}</span>
+          <span className="ctab-insp__step-s">{bare}</span>
+        </div>
         <div className={`ctab-insp__line${line ? ' is-note' : ''}`}>{line ?? ''}</div>
         <div className="ctab-insp__acts">
           {max ? (
