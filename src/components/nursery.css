@@ -1190,18 +1190,18 @@
 }
 
 /* ---- Phone portrait eggs: square-ish nests, the shop takes the height that is left ---------- */
-.nrs--one .nrs-eggs__home,
-.nrs--one .nrs-nests {
+.nrs:is(.nrs--one, .nrs--two) .nrs-eggs__home,
+.nrs:is(.nrs--one, .nrs--two) .nrs-nests {
   flex: 0 1 auto;
 }
-.nrs--one .nrs-nests {
+.nrs .nrs-nests {
   container-type: inline-size;
 }
-.nrs--one .nrs-nests__row {
+.nrs:is(.nrs--one, .nrs--two) .nrs-nests__row {
   flex: 0 1 auto;
   height: calc((100cqi - 4 * var(--u)) / 2 * 1.1);
 }
-.nrs--one .nrs-shop {
+.nrs:is(.nrs--one, .nrs--two) .nrs-shop {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -1269,10 +1269,29 @@
 .nrs--two .nrs-nur {
   display: grid;
   grid-template:
-    'list list' minmax(0, 8fr)
-    'main main' minmax(0, 13fr)
+    'list list' minmax(0, 9fr)
+    'main main' minmax(0, 16fr)
     'side side' auto
     / minmax(0, 1fr) minmax(0, 1fr);
+}
+.nrs--two .nrs-stats {
+  height: calc(30 * var(--u));
+}
+.nrs--two .nrs-bar {
+  height: calc(24 * var(--u));
+}
+.nrs--two .nrs-bar__sq {
+  width: calc(24 * var(--u));
+}
+/* the collection's head in one row: title · bonus | filter · sort */
+.nrs--two .nrs-coll__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  column-gap: calc(4 * var(--u));
+}
+.nrs--two .nrs-coll__head > .nrs-pickbar {
+  grid-column: 1 / -1;
 }
 .nrs--three .nrs-nur {
   display: grid;
@@ -1297,6 +1316,16 @@
 }
 .nrs--two .nrs-grid {
   grid-template-columns: repeat(auto-fill, minmax(calc(48 * var(--u)), 1fr));
+}
+/* the list column is narrow: a heading takes two lines instead of an ellipsis */
+.nrs--three .nrs-h {
+  flex-wrap: wrap;
+  row-gap: 0;
+  height: auto;
+  min-height: calc(11 * var(--u));
+}
+.nrs--three .nrs-h h2 {
+  white-space: normal;
 }
 /* the side column of a wide screen: the squad's summed bonuses, the bar at the bottom */
 .nrs--three .nrs-side {
@@ -1339,44 +1368,73 @@
 .nrs--three .nrs-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+@media (min-height: 501px) {
+  .nrs--three .nrs-squad {
+    flex: 1 1 0;
+    min-height: 0;
+    container-type: inline-size;
+  }
+  .nrs--three .nrs-slots {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    flex: 0 1 auto;
+    height: calc(3 * 85cqi + 8 * var(--u));
+    min-height: 0;
+  }
+}
 .nrs--three .nrs-stats {
-  height: calc(40 * var(--u));
+  height: calc(34 * var(--u));
 }
 
-/* Eggs on wide screens: nests / queue / hatch all | the shop */
-.nrs:is(.nrs--two, .nrs--three) .nrs-eggs {
+/* Eggs, tablet portrait: the phone column, the shop four across (art on top) */
+.nrs--two .nrs-shop__grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.nrs--two .nrs-buy,
+.nrs--three .nrs-buy.is-tall {
+  grid-template: 'art' auto 'nm' auto 'price' auto 'st' auto / minmax(0, 1fr);
+  justify-items: center;
+  align-content: center;
+  row-gap: var(--u);
+  text-align: center;
+}
+.nrs--two .nrs-buy {
+  height: calc(56 * var(--u));
+}
+/* Eggs on wide screens: nests / queue / hatch all | the shop; nests square-ish, the shop's
+   tiles take the column's height */
+.nrs--three .nrs-eggs {
   display: grid;
   grid-template: 'home shop' minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1fr);
   gap: calc(6 * var(--u));
 }
-.nrs:is(.nrs--two, .nrs--three) .nrs-eggs__home {
+.nrs--three .nrs-eggs__home {
   grid-area: home;
 }
-.nrs:is(.nrs--two, .nrs--three) .nrs-shop {
+.nrs--three .nrs-shop {
   grid-area: shop;
+  min-height: 0;
 }
-.nrs:is(.nrs--two, .nrs--three) .nrs-nests__row {
+.nrs--three .nrs-nests {
   flex: 0 1 auto;
-  height: calc(70 * var(--u));
 }
-.nrs:is(.nrs--two, .nrs--three) .nrs-buy {
-  height: calc(46 * var(--u));
+.nrs--three .nrs-nests__row {
+  flex: 0 1 auto;
+  height: calc((100cqi - 4 * var(--u)) / 2 * 1.15);
 }
-.nrs--two .nrs-eggs {
-  grid-template: 'home' auto 'shop' auto / minmax(0, 1fr);
-  align-content: start;
+.nrs--three .nrs-shop__grid {
+  flex: 0 1 auto;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  height: calc(100cqi * 1.05);
+  max-height: 100%;
+  min-height: 0;
 }
-.nrs--two .nrs-eggs__home {
-  flex: none;
+.nrs--three .nrs-shop {
+  container-type: inline-size;
 }
-.nrs--two .nrs-shop__grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.nrs--two .nrs-buy {
-  grid-template: 'art' auto 'nm' auto 'price' auto 'st' auto / minmax(0, 1fr);
-  justify-items: center;
-  text-align: center;
-  height: calc(60 * var(--u));
+.nrs--three .nrs-buy {
+  height: auto;
+  min-height: calc(30 * var(--u));
 }
 @media (max-height: 500px) {
   .nrs--three.arm.is-window {
@@ -1415,11 +1473,35 @@
   .nrs--three .nrs-slots {
     height: calc(24 * var(--u));
   }
-  .nrs:is(.nrs--two, .nrs--three) .nrs-nests__row {
+  .nrs--three .nrs-nests__row {
     height: auto;
     flex: 1 1 0;
   }
-  .nrs:is(.nrs--two, .nrs--three) .nrs-buy {
-    height: calc(30 * var(--u));
+  .nrs--three .nrs-nests {
+    flex: 1 1 0;
+  }
+  /* phone landscape: the card's tiles and bar go to the right column, the stage takes the
+     whole middle column (pet 112 → 187 at 844×390 in Telegram) */
+  .nrs--three :is(.nrs-main, .nrs-side) {
+    display: contents;
+  }
+  .nrs--three .nrs-nur {
+    grid-template:
+      'list show stats' auto
+      'list show .' minmax(0, 1fr)
+      'list show bar' auto
+      / minmax(0, 6fr) minmax(0, 7fr) minmax(0, 8fr);
+  }
+  .nrs--three .nrs-show {
+    grid-area: show;
+  }
+  .nrs--three .nrs-stats {
+    grid-area: stats;
+  }
+  .nrs--three .nrs-bar {
+    grid-area: bar;
+  }
+  .nrs--three .nrs-sum {
+    display: none;
   }
 }

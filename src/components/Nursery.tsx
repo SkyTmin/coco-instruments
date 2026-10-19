@@ -774,14 +774,20 @@ export const Nursery = memo(function Nursery({
   );
 
   // ---- Squad places --------------------------------------------------------------------------
-  const big = thumbPx(one ? 26 * u : 34 * u, dpr);
+  // a wide screen stacks the three places in the list column: the art follows the measured place
+  const slotsRef = useRef<HTMLDivElement>(null);
+  const sq = useBox(slotsRef, tab === 'squad');
+  const stacked = layout === 'three' && sq.h > sq.w * 1.5;
+  const big = stacked
+    ? thumbPx(Math.max(34 * u, Math.min(sq.w, (sq.h - 8 * u) / 3) * 0.8), dpr)
+    : thumbPx(one ? 26 * u : 34 * u, dpr);
   const squadEl = (
     <section className="nrs-squad" aria-label={t('nursery.squad')}>
       <div className="nrs-h">
         <h2>{t('nursery.squadHint')}</h2>
         <span className="px-num">{t('eggs.someOf', { a: p.squad.length, b: slots })}</span>
       </div>
-      <div className="nrs-slots">
+      <div ref={slotsRef} className="nrs-slots">
         {[0, 1, 2].map((i) => {
           if (i >= slots) {
             const why = i === 1 ? t('nursery.lockRank', { rank: rankLetter(SQUAD_RANK2) }) : t('nursery.lockPrestige');
@@ -958,7 +964,12 @@ export const Nursery = memo(function Nursery({
     const lvL = lv?.querySelector<HTMLElement>('.nrs-stat__l');
     if (lv && lvL) {
       lv.classList.remove('is-tight');
-      lv.classList.toggle('is-tight', lvL.scrollWidth > lvL.clientWidth + 0.5);
+      lv.classList.toggle(
+        'is-tight',
+        lvL.scrollWidth > lvL.clientWidth + 0.5 ||
+          lvL.scrollHeight > lvL.clientHeight + 1.5 ||
+          lv.scrollWidth > lv.clientWidth + 0.5,
+      );
     }
   }, [tab, filter, sort, xpText, stage.w, fonts, layout, t, pickSlot]);
 

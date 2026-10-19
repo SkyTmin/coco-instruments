@@ -269,8 +269,20 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
   );
   const shopRow = useRef<HTMLDivElement>(null);
   const sb = useBox(shopRow, tab === 'eggs');
-  // phone portrait: a low tile (short phones) takes the small egg, else the text loses room
-  const shopEgg = eggPx(layout === 'one' ? ((sb.h - 3 * u) / 2 >= 40 * u ? 20 : 16) * u : 28 * u);
+  // the egg follows the tile: a low tile (short phones) takes the small egg, else the text loses
+  // room; a tall wide-screen tile stacks art / name / price / status and grows the egg
+  const tileH = (sb.h - 3 * u) / 2;
+  const tileW = (sb.w - 3 * u) / 2;
+  const shopTall = layout === 'three' && tileH >= 56 * u;
+  const shopEgg = eggPx(
+    layout === 'one'
+      ? (tileH >= 40 * u ? 20 : 16) * u
+      : layout === 'two'
+        ? 28 * u
+        : shopTall
+          ? Math.min(tileH - 34 * u, tileW * 0.5, 56 * u)
+          : (tileH >= 40 * u ? 24 : 16) * u,
+  );
   // ---- Fit pass: the purpose line on its own row, tab icons / tab size, the queue label -------
   const [fitTick, setFitTick] = useState(0);
   useEffect(() => {
@@ -509,7 +521,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
                 key={e.id}
                 frame={armed === e.id ? 'sel' : 'panel'}
                 off={!can}
-                className={`nrs-buy${can ? ' is-can' : ''}${armed === e.id ? ' is-armed' : ''}`}
+                className={`nrs-buy${can ? ' is-can' : ''}${armed === e.id ? ' is-armed' : ''}${shopTall ? ' is-tall' : ''}`}
                 style={rc(EGG_RARITY[e.id])}
                 data-tip={odds}
                 aria-label={`${eggName(e.id)}, ${tok ? fmt(tok) : fmtShort(e.price)}. ${odds}`}
