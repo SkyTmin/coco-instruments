@@ -934,6 +934,11 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
 .mn--wide .mn-stat--coins {
   --fs-n: var(--px-fs-hero);
 }
+/* Узкая колонка (667×375): ключи «999» рядом с токенами «99,9Mn» не помещались и при 16 px —
+   токены на всю строку, ключи — бейджем на «Сундуках» (`data-tight` ставит `useSideFit`). */
+.mn-side--l[data-tight] .mn-stat--keys {
+  display: none;
+}
 .mn-hud__back {
   grid-area: back;
 }
@@ -986,8 +991,8 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
 }
 .mn-stat--tokens {
   grid-area: tokens;
-  /* «999Mn» (tr) шире шести цифр. */
-  --res: 6.5;
+  /* «99,9Mn» (tr) шире шести цифр: при 6,5 на 320 px текст 64,1 px в коробке 61,3 (M5). */
+  --res: 7;
 }
 .mn-stat--keys {
   grid-area: keys;

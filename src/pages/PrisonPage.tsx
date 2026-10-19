@@ -2054,7 +2054,8 @@ export function PrisonPage() {
               <b className="px-num mn-stat__n">{chipCount(prison.tokens)}</b>
             </button>
             {/* Стоя ключей в шапке нет: их число — на «Сундуках» в доке, а место
-                отдано деньгам и токенам (критик r2: кегль не ниже 16 px). */}
+                отдано деньгам и токенам (критик r2: кегль не ниже 16 px). В узкой
+                колонке лёжа (667×375) ключи прячет `data-tight` из `useSideFit`. */}
             {wide && (
               <button
                 type="button"
@@ -3254,6 +3255,12 @@ function useSideFit(
       }
       need += gap * Math.max(0, n - 1);
       setMoved(need > L.clientHeight + 0.5);
+      // Токены «99,9Mn» и ключи «999» одной строкой при 16 px: обвязка двух фишек 2 × 20u,
+      // зазор 2u и ~5,75 em цифр. Не влезают (667×375: колонка 165 px) — ключи в шапке
+      // прячутся, их число и так на «Сундуках» в доке (M5).
+      const u = parseFloat(cs.getPropertyValue('--u')) || 1;
+      const inner = L.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      L.toggleAttribute('data-tight', inner < 42 * u + 5.75 * 16);
       for (const c of [L, R]) c.toggleAttribute('data-more', c.scrollHeight > c.clientHeight + 1);
     };
     const ro = new ResizeObserver(measure);
