@@ -4,7 +4,6 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}k',
   m: '{n}M',
-  g: '{n} Mrd.',
   sec: '{n} s',
   perMin: '/min',
   reward: {
@@ -85,7 +84,6 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestige — tippen!',
     rankGo: 'Neuer Rang — tippen!',
     pickLevel: 'Level der Spitzhacke',
-    streak: 'Serie',
     paceBlocks: '{n} Bl.',
     inARow: '{n} am Stück',
     zoneExit: 'Raus',
@@ -114,7 +112,12 @@ export const mineHud: Translation<typeof ru> = {
   bag: {
     full: '{count} / {cap} — voll',
     sell: 'Verkaufen {sum}',
-    toBox: 'In die Kiste',
+    sellBare: 'Verkaufen',
+    /** Ore still to mine for the next pick, under the bag bar: «[pick] ещё [ore] 45 [ore] 25». */
+    pickLeft: 'noch',
+    pickReady: 'Erz bereit',
+    pickTip: '{pick}: noch abzubauen {list}',
+    pickTipReady: '{pick}: Erz bereit — schmiede sie',
     empty: 'Leer',
   },
   dock: {
@@ -123,6 +126,7 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Bücher',
     chests: 'Truhen',
     pets: 'Tiere',
+    more: 'Mehr',
     nursery: 'Zucht',
   },
   floors: {
@@ -132,7 +136,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Runter',
   },
   norm: {
-    pick: 'Spitzhacke: Kraft {power} · {name}',
+    pick: 'Spitzhacke ⛏{power} · {name}',
     toForge: 'Zur Schmiede',
     work: 'Arbeit — Blöcke abbauen',
     pity: {

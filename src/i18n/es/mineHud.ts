@@ -4,7 +4,6 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}k',
   m: '{n}M',
-  g: '{n} MM',
   sec: '{n} s',
   perMin: '/min',
   reward: {
@@ -97,7 +96,6 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestigio — ¡toca!',
     rankGo: 'Nuevo rango — ¡toca!',
     pickLevel: 'Nivel del pico',
-    streak: 'Racha',
     paceBlocks: '{n} bl',
     inARow: '{n} seguidos',
     zoneExit: 'Salir',
@@ -127,7 +125,12 @@ export const mineHud: Translation<typeof ru> = {
   bag: {
     full: '{count} / {cap} — llena',
     sell: 'Vender {sum}',
-    toBox: 'A la caja',
+    sellBare: 'Vender',
+    /** Ore still to mine for the next pick, under the bag bar: «[pick] ещё [ore] 45 [ore] 25». */
+    pickLeft: 'faltan',
+    pickReady: 'mineral listo',
+    pickTip: '{pick}: falta extraer {list}',
+    pickTipReady: '{pick}: mineral listo — fórjalo',
     empty: 'Vacía',
   },
   dock: {
@@ -136,6 +139,7 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Libros',
     chests: 'Cofres',
     pets: 'Mascotas',
+    more: 'Más',
     nursery: 'Criadero',
   },
   floors: {
@@ -145,7 +149,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Bajar',
   },
   norm: {
-    pick: 'Pico: fuerza {power} · {name}',
+    pick: 'Pico ⛏{power} · {name}',
     toForge: 'A la forja',
     work: 'Trabajo — bloques que romper',
     pity: {

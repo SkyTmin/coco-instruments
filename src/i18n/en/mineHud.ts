@@ -4,7 +4,6 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}K',
   m: '{n}M',
-  g: '{n}B',
   sec: '{n}s',
   perMin: '/min',
   reward: {
@@ -85,7 +84,6 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestige — tap!',
     rankGo: 'New rank — tap!',
     pickLevel: 'Pickaxe level',
-    streak: 'Streak',
     paceBlocks: '{n} bl',
     inARow: '{n} in a row',
     zoneExit: 'Leave',
@@ -111,7 +109,12 @@ export const mineHud: Translation<typeof ru> = {
   bag: {
     full: '{count} / {cap} — full',
     sell: 'Sell {sum}',
-    toBox: 'To the box',
+    sellBare: 'Sell',
+    /** Ore still to mine for the next pick, under the bag bar: «[pick] ещё [ore] 45 [ore] 25». */
+    pickLeft: 'need',
+    pickReady: 'ore ready',
+    pickTip: '{pick}: still to mine {list}',
+    pickTipReady: '{pick}: ore ready — forge it',
     empty: 'Empty',
   },
   dock: {
@@ -120,6 +123,7 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Books',
     chests: 'Chests',
     pets: 'Pets',
+    more: 'More',
     nursery: 'Nursery',
   },
   floors: {
@@ -129,7 +133,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Go down',
   },
   norm: {
-    pick: 'Pickaxe: power {power} · {name}',
+    pick: 'Pickaxe ⛏{power} · {name}',
     toForge: 'To the forge',
     work: 'Work — blocks to break',
     pity: {

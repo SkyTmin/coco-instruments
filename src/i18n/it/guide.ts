@@ -6,11 +6,11 @@ export const guide: Translation<typeof ru> = {
     title: 'Rompi 20 blocchi',
     hint: 'Tocca un blocco o tieni premuto — il piccone colpisce da solo',
   },
-  sell: { title: 'Vendi il bottino', hint: 'Il pulsante «{sell}» accanto allo zaino' },
+  sell: { title: 'Vendi il bottino', hint: 'Il pulsante con lo zaino sotto il campo' },
   rankB: { title: 'Prendi il grado B', hint: 'Accumula monete e tocca la barra del grado' },
   case: {
     title: 'Apri un forziere',
-    hint: 'Pulsante «{chests}». Il grado ti ha dato una chiave',
+    hint: 'Pulsante «Forzieri» in basso. Il grado ti ha dato una chiave',
   },
   steel: {
     title: 'Forgia il piccone di pietra',
@@ -18,15 +18,15 @@ export const guide: Translation<typeof ru> = {
   },
   enchant: {
     title: 'Applica il primo libro',
-    hint: 'Pulsante «{books}»: l’Incantatore vende libri per gettoni',
+    hint: 'Pulsante «Libri» in basso: l’Incantatore vende libri per gettoni',
   },
   streak: {
     title: 'Porta la serie a «Gasato»',
-    hint: '150 blocchi senza pause — la barra «{streak}»',
+    hint: '150 blocchi senza pause — la barra sopra il campo',
   },
   bomb: {
     title: 'Fai esplodere una bomba',
-    hint: 'Tocca la bomba, poi una casella',
+    hint: 'Il pulsante della bomba sotto il campo, poi tocca una casella',
   },
   level: {
     title: 'Porta il piccone al livello 5',
@@ -36,18 +36,18 @@ export const guide: Translation<typeof ru> = {
     title: 'Prendi il grado E',
     hint: 'Per il grado serve un piccone che rompa il minerale del piano successivo',
   },
-  bag: { title: 'Potenzia lo zaino', hint: 'Nella fucina, la riga «{bag}»' },
+  bag: { title: 'Potenzia lo zaino', hint: 'Nella fucina, sotto il piccone' },
   rankH: {
     title: 'Prendi il grado H',
     hint: 'Da qui vai da solo: gradi fino alla Z, poi il prestigio',
   },
   parcel: {
     title: 'Apri un pacco',
-    hint: 'I pacchi cadono dai blocchi e maturano accanto al campo mentre scavi',
+    hint: 'I pacchi cadono dai blocchi e maturano sotto il campo mentre scavi',
   },
   rune: {
     title: 'Incastona una runa nell’amuleto',
-    hint: '«{camp}» → {runes}. Il primo slot si apre al livello 5 del piccone',
+    hint: '«Altro» → Rune. Il primo slot si apre al livello 5 del piccone',
   },
   pet: {
     title: 'Porta un animale al livello 3',

@@ -6,11 +6,11 @@ export const guide: Translation<typeof ru> = {
     title: 'Bau 20 Blöcke ab',
     hint: 'Tippe auf einen Block oder halte den Finger drauf — die Spitzhacke schlägt von selbst',
   },
-  sell: { title: 'Verkauf die Beute', hint: 'Knopf „{sell}“ beim Rucksack' },
+  sell: { title: 'Verkauf die Beute', hint: 'Der Rucksack-Knopf unter dem Feld' },
   rankB: { title: 'Hol dir Rang B', hint: 'Spar Münzen und tippe auf die Rangleiste' },
   case: {
     title: 'Öffne eine Truhe',
-    hint: 'Knopf „{chests}“. Den Schlüssel gab’s für den Rang',
+    hint: 'Knopf „Truhen“ unten. Den Schlüssel gab’s für den Rang',
   },
   steel: {
     title: 'Schmiede die Stein-Spitzhacke',
@@ -18,33 +18,33 @@ export const guide: Translation<typeof ru> = {
   },
   enchant: {
     title: 'Wende dein erstes Buch an',
-    hint: 'Knopf „{books}“: Der Verzauberer verkauft Bücher gegen Tokens',
+    hint: 'Knopf „Bücher“ unten: Der Verzauberer verkauft Bücher gegen Tokens',
   },
   streak: {
     title: 'Bring die Serie auf „Feuer frei“',
-    hint: '150 Blöcke ohne Pause — die Leiste „{streak}“',
+    hint: '150 Blöcke ohne Pause — die Leiste über dem Feld',
   },
   bomb: {
     title: 'Zünde eine Bombe',
-    hint: 'Tippe auf die Bombe, dann auf ein Feld',
+    hint: 'Bomben-Knopf unter dem Feld, dann auf ein Feld tippen',
   },
   level: {
-    title: 'Spitzhacke auf Level 5 bringen',
+    title: 'Bring die Spitzhacke auf Level 5',
     hint: 'Jeder abgebaute Block gibt der Spitzhacke EP',
   },
   rankE: {
     title: 'Hol dir Rang E',
     hint: 'Für den Rang brauchst du eine Spitzhacke, die das Erz der nächsten Ebene schafft',
   },
-  bag: { title: 'Rüste den Rucksack auf', hint: 'In der Schmiede, Zeile „{bag}“' },
+  bag: { title: 'Rüste den Rucksack auf', hint: 'In der Schmiede, unter der Spitzhacke' },
   rankH: { title: 'Hol dir Rang H', hint: 'Ab jetzt bist du allein: Ränge bis Z, dann Prestige' },
   parcel: {
     title: 'Öffne ein Paket',
-    hint: 'Pakete fallen aus Blöcken und reifen am Feld, während du gräbst',
+    hint: 'Pakete fallen aus Blöcken und reifen unter dem Feld, während du gräbst',
   },
   rune: {
     title: 'Setz eine Rune ins Amulett',
-    hint: '„{camp}“ → {runes}. Der erste Sockel öffnet sich auf Spitzhacken-Level 5',
+    hint: '„Mehr“ → Runen. Der erste Sockel öffnet sich auf Spitzhacken-Level 5',
   },
   pet: {
     title: 'Bring ein Haustier auf Level 3',
