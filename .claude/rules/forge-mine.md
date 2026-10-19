@@ -423,3 +423,35 @@ and books did not move); the old `forge.css` is replaced whole.
     Coco Title; nothing clips;
   - the ribbon steps per pick (SIZE-JUMP pxd-ribbon) are by design.
 - **Not verified**: a real phone / Telegram webview, hyphenation by phone dictionaries.
+
+### F6 — short / narrow phones with Telegram insets (19.10)
+
+- **Rows by the window's own height.** `.frg--one.arm.is-window` is a size container `frg-win`
+  (fixed, inset 0; Telegram's insets are its padding, so its height = what is left). The old
+  `max-height: 600px` rows moved to `@container frg-win (height < 580px)` (558 px at 320×568,
+  545 at 360×640 with insets); the window's own padding stays in the media query (a container
+  can't query itself). New `(height < 520px)` = 320×568 with insets (477): stage min 40u, tabs
+  17u, subrow header 15u, chips / lines 11u, and the «Чары» line hidden (the dock's «Чары» opens
+  the books) — with it the pick fell to 48 px, without it 72 in all 7 languages. Gear there: no
+  «Уровень N из 13» text (pips stay), box tiles 50×44u, tighter card gaps.
+- **The bug was overflow, not the delta**: the show section was 40–60 px short, the stats covered
+  the state row and the «✓» of «✓ В руке» peeked out beside «90» like a delta; the ribbon ran
+  onto the stats; the gear box covered «Улучшить».
+- **Delta on short phones** (`max-height: 700px`): a ▲ / ▼ mark, 5×3 art px (stepped
+  `clip-path`), in the tile's top-right corner, out of the flow; the value stays in the DOM
+  (font-size 0). Tiles that compare always render the `<em>` (empty when 0, `:empty` hidden on
+  tall phones / wide), so nothing moves. Why not a line of its own: it costs 16 px; side by side
+  a 3-digit speed and «+336» don't fit an 87-px tile. Tall phones keep the inline «90 +5».
+- **«N / 17» on short phones**: top 4u, right 5u, min-width `6ch + 10u` («17 / 17» = 61 px):
+  8.6 px clear of the 72-px art at 320.
+- Fit pass: `.frg-top.is-tight` — the title a kit step smaller (de «Schmiede» was cut by the
+  purse at 320); `.frg-all.is-tight` — the «Все» word at sm. «Все» cell 1.25fr in the 580 rows
+  (es «Todos», tr «Tümü»); fr `allTile` «Toutes» → «Tout» (60 px even at sm).
+- Measured (insets 47 / 46 / 34): 320 pick 72 in all 7 languages; pp / p430 stage, stats, art
+  and badge boxes identical to v2.166 (0 px). Drift 0 px p320 p360 pp p430 (with and without
+  insets), pl tp d1. No page scroll 320×568 … 430×932, picks and gear.
+- **Left as is (pre-existing)**: 844×390 with the 47 / 34 insets (309 px) clips the stats and
+  «Чары» runs into «Берёт» (real landscape insets are left / right); de gear at 390 — the box
+  hint column is too narrow for «Schmiedekiste»; the forge pads only `--safe-top`, not Telegram's
+  content inset (46), so in fullscreen the back button and the purse sit under ✕ / ⋯.
+- **Not verified**: a real phone / Telegram webview.
