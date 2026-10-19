@@ -1088,6 +1088,18 @@ const ICONS: Record<string, string[]> = {
     '.........',
     '.........',
   ],
+  // wave 3 — T2: «undo» ↶ — the skills reset on the points plate (camp tabs).
+  undo: [
+    '..#......',
+    '.##......',
+    '#######..',
+    '.##....##',
+    '..#.....#',
+    '........#',
+    '.......##',
+    '..######.',
+    '.........',
+  ],
   // wave 2 — K: auto-spin (a ring that runs round to its own arrowhead, top right).
   auto: [
     '..####.#.',
@@ -1274,6 +1286,24 @@ const STAT_ART: Record<string, { pal: Record<string, string>; rows: string[] }> 
       '..kk........',
     ],
   },
+};
+// wave 3 — T2: the rune bonus «чары» (proc chance) — a violet four-point spark, same recipe.
+STAT_ART.proc = {
+  pal: { '1': '#4a2390', '2': '#7a46d0', '3': '#a97cf5', '4': '#dcc8ff', w: '#ffffff' },
+  rows: [
+    '.....kk.....',
+    '....k43k....',
+    '....k42k....',
+    '...k4432k...',
+    'kkk443322kkk',
+    'k4w44333221k',
+    'k4443332211k',
+    'kkk433221kkk',
+    '...k3221k...',
+    '....k21k....',
+    '....k21k....',
+    '.....kk.....',
+  ],
 };
 
 function statArt(name: string): Pix {

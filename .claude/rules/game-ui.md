@@ -164,3 +164,69 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   long rail words), gamepad hardware (LB/RB/B checked through `emitAction` only). Stand checks:
   6 formats × ru/de (+tr for the rail), no page scroll, rects equal across all camp tabs,
   NestSheet inside a zoomed camp at 1920×1080.
+
+## Camp tabs on the kit (wave 3 — T, 13.10.2026) — `CampTabs.tsx`, `camp-tabs.css`
+
+Shop, Runes, Finds, Milestones, Skills left `PrisonCamp.tsx` for `components/CampTabs.tsx`
+(PrisonCamp imports them back; CampTabs takes `ItemIcon`, `RuneIcon`, `TokenIcon`, `KeyIcon`,
+`ParcelReveal`, `runeLine`, `RUNE_COLORS` from PrisonCamp — a cycle that is safe because both
+sides use them only while rendering). CSS lives in `camp-tabs.css`, scoped to `.ctab`; the old
+`pshop-pack`, `prune-*`, `prunes-*`, `pamulet*`, `pfinds*`, `pmile`, `ppet-bar` blocks are
+deleted. New strings are in the area `ctabs`. Prices, effects and confirmations are unchanged.
+
+- **Layout = `ctab--one|land|tall|wide`** from `useFormFactor`. Body sizes measured in u:
+  phone portrait 171×341, phone landscape 374×152, tablet portrait 163×217 (C's rail takes about
+  95u, so the tablet is narrower AND shorter than a phone), tablet landscape and desktop
+  283–326×214. `tall` is therefore the compact variant: sockets 2×2 beside the pouch, small
+  rune buttons (the skills reset sits on the points plate since round 2).
+- **Shop:** rows with the price button on the right (phones, tablet portrait); a 3×2 grid of cards
+  on wide. The pack size is a tag on the button's corner, and the price keeps 5ch, so ×1/×5/×10
+  never resizes anything. Can't afford: an `off` button plus a floating pop with the shortfall.
+- **Runes:** sockets as a row, 2×2, or a cross around the pick+axe core (wide). The inspect panel
+  keeps a fixed skeleton; with nothing picked it shows a hidden stand-in rune. Actions: «socket»
+  on its own row, fuse and shatter in two halves (tall uses fixed 5:4:3 shares). A locked socket
+  caption breaks at min-content («престиж / 10»).
+- **Finds:** a grid of Slots (silhouettes when not found), a showcase inspect panel on land/wide.
+  **Milestones:** ready rows on top, done rows dimmed below. The order is frozen while the tab is
+  open: a row you take stays in place, because its button and check share one grid cell.
+- **Skills:** nodes wrap as wide as their names (no ellipsis). Now/next values come from
+  multiplying the first number of the per-level text (`perkAt`; «blat» has no number).
+- **Checks** (`{SCR}` = `scratchpad/ui3T`):
+  - `jump.mjs` compares rects across selections, buys, claims and learns. Result: 0 px in ru/de
+    on all 6 formats.
+  - `clip.mjs` lists ellipsis, clipped text and button-label overflow. Run it for all 7 languages
+    whenever labels change. German «Verschmelzen» did not fit, so the tab has its own short key
+    `ctabs.runes.fuse` («Schmelzen»).
+- **Input:** focus = selection for keyboard and gamepad only (`getInputDevice`); touch toggles.
+  X / pad Y does one thing per tab:
+  - Shop: cycles the pack size.
+  - Runes: sockets the rune or takes it out.
+  - Skills: learns.
+  - Milestones: takes the top ready one. Its KeyHint is in the head, not in a button, so the next
+    row's button never changes width.
+
+  Pad focus moves are the actions `up/down/left/right`, not `move*`.
+- **Round 2, stage A (T2 / T2′, 19.10.2026):**
+  - **Short phone** (`useLay().short` = phone portrait with `h / scale < 350`, i.e. 320×568,
+    iPhone SE in Telegram; body ≈146×213u): Skills take `tall` plus `ctab--short` (plate alone
+    in the head, nodes as a sideways strip with a `›` while more lie beyond, no per-level line);
+    Runes get `ctab--short` on `one`: sockets row (18u) + bonus 2×2 on top, pouch (2 columns) |
+    inspect (name, 2-line effect, 1-line note with `data-tip`, three stacked `sm` buttons) side
+    by side, no socket captions (a locked socket says its level when tapped). Before, the
+    pouch and the skill tree were 0 px tall there.
+  - **Skills reset** = `Button size="sm" icon="undo"` on the points plate, armed by a first tap,
+    fired by a second ≥ `ARM_GUARD_MS` later (`useArmGuard`), disarms after 4 s or on any other
+    action; «tap again» goes to the note line (`ctabs.perks.resetArm`). Phone landscape drops
+    the per-level line and packs the panel at 1u so the note line keeps its 2 lines.
+  - **Runes bonus** = the worn runes only (`bonusOf({ runes, sockets })` — pets show theirs in the
+    Nursery), a fixed 2×2 grid of `[stat art 24] +7,5% продажа` chips (`ctabs.bonus.*`, full
+    `camp.bonus.*` in `data-tip`). If any word would be cut, all words go (`.is-tight`, measured
+    in a layout effect + ResizeObserver): words show at 342 px (pp) and up, not at 253–312.
+  - Checks: `scratchpad/ui5T/stageA.mjs` (buttons vs body, reset arm timing, bonus box),
+    `shots.mjs`, `armshot.mjs`, `strip.mjs`, `geo2.mjs`.
+- **Pitfalls:**
+  - The kit `Grid` prop `slot` clashes with the HTML `slot` attribute type: pass
+    `style={{ '--slot': … }}` instead.
+  - The camp sheet's `b/strong/h3` weight rule hits real headings, so the tabs use spans.
+  - After HMR the app imports `/src/store.ts?t=…`. A stand script must import that same URL (take
+    it from `performance.getEntriesByType('resource')`), otherwise it writes into a second store.
