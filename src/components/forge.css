@@ -483,18 +483,14 @@
   font: 800 var(--pd-fs) / 1.05 var(--px-font);
   color: var(--pd-accent);
 }
-.frg-all {
-  container: frg-all / inline-size;
-}
 .frg-all small {
   font: 600 var(--pd-fs-xs) / 1.1 var(--px-font);
   color: var(--pd-muted);
   white-space: nowrap;
 }
-@container frg-all (max-width: 66px) {
-  .frg-all__w {
-    display: none;
-  }
+/* the noun doesn't fit the cell (measured in ForgeScreen): the number alone */
+.frg-all small.is-short .frg-all__w {
+  display: none;
 }
 
 /* the whole collection (sheet, side list on wide layouts) */

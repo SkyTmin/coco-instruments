@@ -11,7 +11,7 @@
 // Выковка — сцена, как открытие в Genshin: три удара молота, цвет искр на третьем заранее
 // говорит редкость, вспышка, силуэт, и кирка проявляется.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CoinIcon } from '@/components/slot-art';
@@ -597,6 +597,20 @@ export function ForgeScreen({
   const forged = p.pickMax + 1;
   // «17 кирок»: a narrow cell keeps only the number (every language puts it first)
   const [allNum, ...allWord] = t('forge.allPicks', { n: PICKS.length }).split(' ');
+  const allRef = useRef<HTMLElement>(null);
+  const allText = allWord.join(' ');
+  useLayoutEffect(() => {
+    const el = allRef.current;
+    if (!el) return;
+    // measured with the noun shown; the class is ours, React never writes this className
+    const fit = () => {
+      el.classList.remove('is-short');
+      const room = (el.parentElement?.clientWidth ?? 0) - 4 * u;
+      el.classList.toggle('is-short', el.scrollWidth > room);
+    };
+    fit();
+    document.fonts?.ready.then(fit).catch(() => {});
+  }, [row.w, allText, u, painted]);
   const collHead = (
     <div className="frg-coll__h">
       <h3>{t('forge.collection')}</h3>
@@ -617,9 +631,9 @@ export function ForgeScreen({
             }}
           >
             <b>{t('forge.allTile')}</b>
-            <small>
+            <small ref={allRef}>
               {allNum}
-              <span className="frg-all__w"> {allWord.join(' ')}</span>
+              <span className="frg-all__w"> {allText}</span>
             </small>
           </PxdButton>
         </div>
