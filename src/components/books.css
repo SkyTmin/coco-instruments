@@ -308,6 +308,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.bks-pc__name.is-tight {
+  font-size: var(--pd-fs-sm);
+}
+.bks-pc__name.is-tight2 {
+  font-size: var(--pd-fs-xs);
+}
 .bks-pc__lv {
   grid-area: lv;
   font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
@@ -755,6 +761,7 @@
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: calc(2 * var(--u));
   height: calc(22 * var(--u));
 }
@@ -775,7 +782,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--u);
-  font: 700 var(--pd-fs) / 1.05 var(--px-font);
+  font: 700 var(--pd-fs) / 0.95 var(--px-font);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -867,7 +874,7 @@
   min-width: 0;
   justify-content: flex-start;
   gap: calc(3 * var(--u));
-  padding: 0 calc(3 * var(--u));
+  padding: 0 calc(2 * var(--u));
 }
 .bks-go__i {
   flex: none;
@@ -1031,6 +1038,10 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  /* the empty shelf says where books come from itself (and the bar: «К Чародею») */
+  .bks-card.is-empty .bks-card__state {
+    display: none;
+  }
   /* the bar's main button says it already (Вписать · 97 %, «Слабее», «В кирке»): the effect
      takes both lines */
   .bks--one .bks-card:is(.is-slot, .is-book) .bks-card__state {
@@ -1039,6 +1050,34 @@
   .bks-card__txt {
     --nfs: var(--pd-fs);
     grid-template-rows: calc(2 * 1.1 * var(--nfs)) calc(2 * 1.2 * var(--pd-fs-sm));
+  }
+}
+
+/* a card shorter than its text rows (the phone's pick tab with Telegram's rows): the lines under
+   the name go to two, then the name to one line (the fit pass makes a long one a step smaller).
+   The card's height is the tab's, not the selection's — nothing moves between selections. */
+@container bks-card (max-height: 106px) {
+  .bks-card__txt {
+    grid-template-rows: calc(2 * 1.1 * var(--nfs)) calc(2 * 1.2 * var(--pd-fs-sm));
+  }
+}
+@container bks-card (max-height: 86px) {
+  .bks-card__txt {
+    grid-template-rows: calc(1.1 * var(--nfs)) calc(2 * 1.2 * var(--pd-fs-sm));
+  }
+  .bks-card__name {
+    white-space: nowrap;
+  }
+}
+/* the last step: one line each (at this height a card shows either the state or the effect) */
+@container bks-card (max-height: 64px) {
+  .bks-card__txt {
+    grid-template-rows: calc(1.1 * var(--nfs)) calc(1.2 * var(--pd-fs-sm));
+  }
+  .bks-card__fx,
+  .bks-card__state {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
 }
 

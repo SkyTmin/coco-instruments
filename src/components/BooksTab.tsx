@@ -944,7 +944,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         label: t('books.applyBare'),
         sub:
           check === 'lower'
-            ? t('books.weaker')
+            ? t('books.weakerShort')
             : check === 'full'
               ? t('books.applyFull', { v: chance })
               : t('books.pct', { v: chance }),
@@ -1491,6 +1491,14 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       nm.classList.remove('is-tight');
       nm.classList.toggle('is-tight', nm.scrollWidth > nm.clientWidth + 0.5);
     }
+    // the pick's name (Александритовая кирка): one kit step smaller, then one more
+    const pn = el.querySelector<HTMLElement>('.bks-pc__name');
+    if (pn) {
+      pn.classList.remove('is-tight', 'is-tight2');
+      const cut = () => pn.scrollWidth > pn.clientWidth + 0.5;
+      if (cut()) pn.classList.add('is-tight');
+      if (cut()) pn.classList.add('is-tight2');
+    }
     // a line that has a short form (`.bks-fit`): the short one when the long one overflows
     const sel = '.bks-go__t, .bks-sq__t, .bks-offer__st, .bks-offer__lv';
     for (const f of el.querySelectorAll<HTMLElement>(sel)) {
@@ -1505,7 +1513,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       if (f.matches('.bks-go__t') && over()) f.classList.add('is-short2');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs of the measured texts
-  }, [fitTick, layout, tab, sid, bi, tierSel, armed, t, p.tokens, p.books.length, gridTile, offerArt, cardArt, slotTile]);
+  }, [fitTick, layout, tab, sid, bi, tierSel, armed, t, p.tokens, p.books.length, p.pickMax, gridTile, offerArt, cardArt, slotTile]);
 
   const body = (
     <div

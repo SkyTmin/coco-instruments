@@ -147,7 +147,7 @@ export const books: Translation<typeof ru> = {
   toShelfNote: 'Alınan kitap rafa konur',
   freeTitle: 'Boş yuva',
   freeFits: { one: 'Raftaki {n} kitap uyar', other: 'Raftaki {n} kitap uyar' },
-  freeNone: 'Büyücü’den kitap al ve buraya büyüle',
+  freeNone: 'Büyücü’den bir kitap al',
   lockedN: { one: '{n} yuva kilitli', other: '{n} yuva kilitli' },
   toMage: 'Büyücü’ye',
   fitsN: { one: '{n} uygun', other: '{n} uygun' },
