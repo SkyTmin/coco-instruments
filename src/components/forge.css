@@ -1230,6 +1230,29 @@ button.frg-line__k {
   .frg--one .frg-ore {
     height: calc(11 * var(--u));
   }
+  /* gear: the box covered the backpack card's «Улучшить» (13–17 px) — smaller octagon floor,
+     tighter card gaps and hint lines */
+  .frg--one .frg-card {
+    gap: calc(2 * var(--u));
+  }
+  .frg--one .frg-card__pic {
+    min-height: calc(16 * var(--u));
+  }
+  .frg--one .frg-hint {
+    line-height: 1.1;
+  }
+  /* «Уровень 1 из 13» goes, the 13 pips under the numbers say it; ru «Покупка один раз» takes
+     two lines — closer ones, or «Купить» ran 3 px past the card's frame */
+  .frg--one .frg-card__lvt {
+    display: none;
+  }
+  .frg--one .frg-card__lv {
+    line-height: 1.05;
+  }
+  /* the box tiles keep their 50u width («Известняк» in one line), 6u lower */
+  .frg--one .frg-box .frg-bt {
+    height: calc(44 * var(--u));
+  }
 }
 
 /* ---- Tablet portrait: stage on top, lines | collection under it, the bar across ------------- */

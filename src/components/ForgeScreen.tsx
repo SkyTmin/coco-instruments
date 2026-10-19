@@ -973,7 +973,9 @@ export function ForgeScreen({
           </div>
           <div className="frg-card__lv">
             <PxdPips n={BAG_MAX + 1} on={p.bagLevel + 1} />
-            {t('forge.lvlOf', { n: p.bagLevel + 1, max: BAG_MAX + 1 })}
+            <span className="frg-card__lvt">
+              {t('forge.lvlOf', { n: p.bagLevel + 1, max: BAG_MAX + 1 })}
+            </span>
           </div>
           {bagMax ? (
             <span className="frg-card__done pxd-f pxd-f--well">
