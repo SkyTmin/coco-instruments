@@ -40,11 +40,11 @@ export const guide: Translation<typeof ru> = {
   },
   parcel: {
     title: 'Ouvre un colis',
-    hint: 'Les colis tombent des blocs et mûrissent sous le terrain pendant que tu creuses',
+    hint: 'Les colis tombent des blocs et mûrissent près du terrain pendant que tu creuses',
   },
   rune: {
     title: 'Sertis une rune dans l’amulette',
-    hint: '« Plus » → Runes. Le premier emplacement s’ouvre au niveau 5 de la pioche',
+    hint: '« {camp} » → {runes}. Le premier emplacement s’ouvre au niveau 5 de la pioche',
   },
   pet: {
     title: 'Monte un familier au niveau 3',

@@ -123,7 +123,6 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Books',
     chests: 'Chests',
     pets: 'Pets',
-    more: 'More',
     nursery: 'Nursery',
   },
   floors: {

@@ -34,11 +34,11 @@ export const guide: Translation<typeof ru> = {
   rankH: { title: 'H rütbesini al', hint: 'Gerisi sende: Z’ye kadar rütbeler, sonra prestij' },
   parcel: {
     title: 'Bir koli aç',
-    hint: 'Koliler bloklardan düşer, sen kazarken alanın altında olgunlaşır',
+    hint: 'Koliler bloklardan düşer, sen kazarken alanın yanında olgunlaşır',
   },
   rune: {
     title: 'Muskaya bir rün tak',
-    hint: '“Diğer” → Rünler. İlk yuva kazmanın 5. seviyesinde açılır',
+    hint: '“{camp}” → {runes}. İlk yuva kazmanın 5. seviyesinde açılır',
   },
   pet: {
     title: 'Bir hayvanı 3. seviyeye çıkar',

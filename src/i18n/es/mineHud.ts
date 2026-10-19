@@ -143,7 +143,6 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Libros',
     chests: 'Cofres',
     pets: 'Mascotas',
-    more: 'Más',
     nursery: 'Criadero',
   },
   floors: {

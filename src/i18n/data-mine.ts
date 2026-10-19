@@ -15,7 +15,9 @@ export const findText = (id: string) => t(k(`finds.${id}.text`));
 export const mileTitle = (id: string) => t(k(`miles.${id}.title`));
 export const mileText = (id: string) => t(k(`miles.${id}.text`));
 export const guideTitle = (id: string) => t(k(`guide.${id}.title`));
-export const guideHint = (id: string) => t(k(`guide.${id}.hint`));
+/** `{camp}` / `{runes}` in a hint = the dock button and the camp tab as they are labelled (R64). */
+export const guideHint = (id: string) =>
+  t(k(`guide.${id}.hint`), { camp: t('mineHud.dock.camp'), runes: t('camp.tab.runes') });
 
 /** «Эффективность III» — the enchant's name and the book's Roman level (as `bookTitle`). */
 export const bookName = (b: { id: string; lvl: number }) =>

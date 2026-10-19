@@ -34,11 +34,11 @@ export const guide: Translation<typeof ru> = {
   },
   parcel: {
     title: 'Open a parcel',
-    hint: 'Parcels drop from blocks and ripen below the field while you dig',
+    hint: 'Parcels drop from blocks and ripen by the field while you dig',
   },
   rune: {
     title: 'Put a rune in your amulet',
-    hint: '“More” → Runes. The first socket opens at pickaxe level 5',
+    hint: '“{camp}” → {runes}. The first socket opens at pickaxe level 5',
   },
   pet: {
     title: 'Raise a pet to level 3',

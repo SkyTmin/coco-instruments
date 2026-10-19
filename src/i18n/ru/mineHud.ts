@@ -150,7 +150,6 @@ export const mineHud = {
     books: 'Книги',
     chests: 'Сундуки',
     pets: 'Питомцы',
-    more: 'Ещё',
     nursery: 'Питомник',
   },
   /** Floors sheet. */

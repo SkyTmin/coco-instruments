@@ -37,11 +37,11 @@ export const guide: Translation<typeof ru> = {
   },
   parcel: {
     title: 'Abre un paquete',
-    hint: 'Los paquetes caen de los bloques y maduran bajo el campo mientras cavas',
+    hint: 'Los paquetes caen de los bloques y maduran junto al campo mientras cavas',
   },
   rune: {
     title: 'Engarza una runa en el amuleto',
-    hint: '«Más» → Runas. La primera ranura se abre con el pico a nivel 5',
+    hint: '«{camp}» → {runes}. La primera ranura se abre con el pico a nivel 5',
   },
   pet: {
     title: 'Sube una mascota al nivel 3',

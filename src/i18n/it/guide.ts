@@ -43,11 +43,11 @@ export const guide: Translation<typeof ru> = {
   },
   parcel: {
     title: 'Apri un pacco',
-    hint: 'I pacchi cadono dai blocchi e maturano sotto il campo mentre scavi',
+    hint: 'I pacchi cadono dai blocchi e maturano accanto al campo mentre scavi',
   },
   rune: {
     title: 'Incastona una runa nell’amuleto',
-    hint: '«Altro» → Rune. Il primo slot si apre al livello 5 del piccone',
+    hint: '«{camp}» → {runes}. Il primo slot si apre al livello 5 del piccone',
   },
   pet: {
     title: 'Porta un animale al livello 3',

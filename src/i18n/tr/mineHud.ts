@@ -124,7 +124,6 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Kitaplar',
     chests: 'Sandıklar',
     pets: 'Hay\u00advan\u00adlar',
-    more: 'Diğer',
     nursery: 'Kuluçka',
   },
   floors: {

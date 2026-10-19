@@ -40,11 +40,11 @@ export const guide: Translation<typeof ru> = {
   rankH: { title: 'Hol dir Rang H', hint: 'Ab jetzt bist du allein: Ränge bis Z, dann Prestige' },
   parcel: {
     title: 'Öffne ein Paket',
-    hint: 'Pakete fallen aus Blöcken und reifen unter dem Feld, während du gräbst',
+    hint: 'Pakete fallen aus Blöcken und reifen am Feld, während du gräbst',
   },
   rune: {
     title: 'Setz eine Rune ins Amulett',
-    hint: '„Mehr“ → Runen. Der erste Sockel öffnet sich auf Spitzhacken-Level 5',
+    hint: '„{camp}“ → {runes}. Der erste Sockel öffnet sich auf Spitzhacken-Level 5',
   },
   pet: {
     title: 'Bring ein Haustier auf Level 3',

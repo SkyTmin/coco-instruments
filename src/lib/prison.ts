@@ -3603,14 +3603,15 @@ export const GUIDE: GuideStep[] = [
   {
     id: 'parcel',
     title: 'Вскрой посылку',
-    hint: 'Посылки падают с блоков и зреют под полем, пока копаешь',
+    hint: 'Посылки падают с блоков и зреют у поля, пока копаешь',
     progress: (p) => upTo(p.parcelsOpened, 1),
     reward: { rune: 2 },
   },
   {
     id: 'rune',
     title: 'Вставь руну в оберег',
-    hint: '«Ещё» → Руны. Первое гнездо открывается на 5 уровне кирки',
+    // {camp}, {runes} — подписи кнопки дока и вкладки лагеря (подставляет `guideHint`).
+    hint: '«{camp}» → {runes}. Первое гнездо открывается на 5 уровне кирки',
     progress: (p) => upTo(p.sockets.filter(Boolean).length, 1),
     reward: { egg: 'moss' },
   },
