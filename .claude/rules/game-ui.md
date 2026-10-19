@@ -309,7 +309,8 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
 - **Round 4 (T4, 19.10.2026, critic17 `critic-camp-tabs3.md`):**
   - Measured on the new `.mn` mine screen (v2.162), where `.mn--tall > :not(…)` gave the camp
     veil a column width (tp window 570 of 820 px, at the left edge; fixed there by excluding
-    `.gx-win` — dropped with that screen in v2.163). Numbers below: tp tab 724 px, pp 342.
+    `.gx-win` — dropped with that screen in v2.163). Re-run on the old `.pmx` page (camp = the
+    last `.pmx-dock__btn`): the same numbers, tp tab 724 px, pp 342.
   - **Tablet portrait runes:** the bonus box sits in the right column under the pouch, titled
     `ctabs.runes.gives` (areas: ahead / stage on the left, pouch / btitle / bonus on the right,
     insp across; 9fr / 11fr). `tpchips.mjs` + sweep states `three` / `four` (sockets
