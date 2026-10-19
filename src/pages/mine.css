@@ -124,6 +124,14 @@ html[data-input='touch'] .mn .px-keyhint {
     margin-left: var(--u);
   }
 }
+/* 320 px: у задания одна фишка награды (первая) — заголовку остаётся ≥ 150 px (критик r3:
+   «+100 ✦ +2 слезы» брали ~110 px и резали «Дорасти питомца до 3…»). Весь список — в
+   подсказке и aria-label кнопки задания. */
+@media (max-width: 340px) {
+  .mn--tall .mn-quest .mn-reward > span ~ span {
+    display: none;
+  }
+}
 /* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
 .mn--tall :is(.mn-stat--tokens, .mn-stat--keys) {
   --fs-n: var(--px-fs);
@@ -566,6 +574,42 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
 .mn-field.is-slim .mn-parcel::before {
   inset: calc(-4 * var(--u));
 }
+/* Низкий телефон стоя (320×568, `has-items` от окна ≤ 640 px): расходники — столбиком
+   слева от рамы, зеркально посылкам, от низа полосы серии (+1u). Ряд под полем (44 + 2 px)
+   отдан полю: клетка с заданием 16 → 21, без него 21 → 26. Поля слота по 23u с обеих сторон —
+   под столбик (21u + 2u) и посылки (17u + 2u): рама остаётся по центру, а `useFieldCell`
+   вычитает эти поля из ширины. Ячейка 21u, шаг 1u: 5 · 42 + 4 · 2 = 218 px от низа полосы
+   до низа слота (224 px при клетке 21); зона нажатия добирает 44 по 1 px в зазоры. */
+.mn--tall > .mn-field.has-items {
+  padding-inline: calc(23 * var(--u));
+}
+.mn .mn-frame > .mn-items {
+  --slot: calc(21 * var(--u));
+  position: absolute;
+  z-index: 9;
+  right: calc(100% + 2 * var(--u));
+  top: calc(11 * var(--u));
+  line-height: normal;
+}
+.mn .mn-frame > .mn-items > .mn-items__row {
+  flex-direction: column;
+  gap: var(--u);
+}
+.mn .mn-frame > .mn-items .mn-item::before {
+  content: '';
+  position: absolute;
+  inset: calc(-1px - var(--u)) calc(-2 * var(--u));
+}
+/* Шестой расходник (крепь): столбик в две ячейки (3 ряда, 2 · 21u + 1u + 2u), справа — только
+   посылки (17u + 2u); рама смещается вправо, но клетка не меньше 21. */
+.mn--tall > .mn-field.has-items:has(.mn-items[data-n='6']) {
+  padding-left: calc(45 * var(--u));
+  padding-right: calc(19 * var(--u));
+}
+.mn .mn-frame > .mn-items[data-n='6'] > .mn-items__row {
+  display: grid;
+  grid-template-columns: repeat(2, var(--slot));
+}
 .mn-parcel {
   position: relative;
   display: grid;
@@ -611,6 +655,11 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
 }
 .mn--wide .ppets {
   bottom: calc(-6 * var(--u));
+}
+/* Низкий телефон: отряд на 1u ниже — центры нижнего ряда клеток (21 px) свободны с запасом
+   3,5 px, а не 1,5; низ отряда всё ещё внутри слота поля (R63). */
+.mn-field.has-items .ppets {
+  bottom: calc(-13 * var(--u));
 }
 .mn .ppets__say {
   padding: calc(1 * var(--u)) calc(3 * var(--u));

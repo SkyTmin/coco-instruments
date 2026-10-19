@@ -1815,6 +1815,10 @@ export function PrisonPage() {
   /** Широкий экран не телефона: колонки высокие — крупнее значки и расходники, рюкзак
    *  переезжает влево, док занимает правую колонку целиком (критик: без пустых полос). */
   const roomy = wide && !shell.ff.startsWith('phone');
+  /** Низкий телефон стоя (320×568, ≤ 640 px — тот же порог, что в mine.css): расходники —
+   *  столбиком слева от рамы, их ряд (44 + 2 px) отдан полю (критик r3: клетка с заданием
+   *  16 → 21). От окна, а не от клетки — иначе раскладка качалась бы между двумя видами. */
+  const itemsCol = !wide && shell.ff.startsWith('phone') && shell.h <= 640;
   const rootRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -2204,11 +2208,61 @@ export function PrisonPage() {
     </button>
   ) : null;
 
+  // Расходники: цифры 1–6 на клавиатуре — по порядку на экране.
+  const itemsRow = (
+    <Keep
+      key="items"
+      deps={[
+        getLang(),
+        arming,
+        roomy,
+        u,
+        ...shownItems.map((it) => `${it.id}:${prison.items[it.id]}`),
+      ]}
+      render={() => (
+        <div
+          className="mn-items"
+          role="group"
+          aria-label={t('inv.section.items')}
+          data-n={shownItems.length}
+        >
+          {wide && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
+          <div className="mn-items__row">
+            {shownItems.map((it, i) => {
+              const n = prison.items[it.id];
+              return (
+                <Slot
+                  key={it.id}
+                  className={`mn-item${n ? '' : ' is-buy'}`}
+                  empty={!n}
+                  selected={arming === it.id}
+                  count={n || undefined}
+                  aria-label={`${itemName(it.id)}: ${n}`}
+                  data-tip={itemName(it.id)}
+                  data-tip-key={`item${i + 1}`}
+                  onClick={() => live.current.applyItem(it.id)}
+                >
+                  <ItemIcon id={it.id} />
+                  {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
+                  <KeyHint action={`item${i + 1}` as Action} />
+                </Slot>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    />
+  );
+
   // Узкая рама (320×568, 360×740 с заданием): отряд по центру нижней кромки накрывал
   // посылки — они уходят столбиком вправо, за раму (место там есть: поле упёрлось в высоту).
   const slim = !wide && cell > 0 && 7 * cell < 124 * u;
   const fieldBox = (
-    <div key="field" className={`mn-field${slim ? ' is-slim' : ''}`} ref={slotRef}>
+    <div
+      key="field"
+      className={`mn-field${slim ? ' is-slim' : ''}${itemsCol ? ' has-items' : ''}`}
+      ref={slotRef}
+    >
       <div
         ref={frameRef}
         className={`mn-frame px-panel px-panel--wood pxk-frame-wood${buffs.energy ? ' is-energy' : ''}${buffs.frenzy ? ' is-frenzy' : ''}${yardEv?.id === 'gold' ? ' is-gold' : ''}${prison.zone.on ? ' is-zone' : ''}`}
@@ -2294,6 +2348,7 @@ export function PrisonPage() {
             })}
           </div>
         )}
+        {itemsCol && itemsRow}
         <MinePets onTrick={onPetTrick} size={petSize} />
         <MineField
           ref={field}
@@ -2446,52 +2501,6 @@ export function PrisonPage() {
         </MineField>
       </div>
     </div>
-  );
-
-  // Расходники: цифры 1–6 на клавиатуре — по порядку на экране.
-  const itemsRow = (
-    <Keep
-      key="items"
-      deps={[
-        getLang(),
-        arming,
-        roomy,
-        u,
-        ...shownItems.map((it) => `${it.id}:${prison.items[it.id]}`),
-      ]}
-      render={() => (
-        <div
-          className="mn-items"
-          role="group"
-          aria-label={t('inv.section.items')}
-          data-n={shownItems.length}
-        >
-          {wide && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
-          <div className="mn-items__row">
-            {shownItems.map((it, i) => {
-              const n = prison.items[it.id];
-              return (
-                <Slot
-                  key={it.id}
-                  className={`mn-item${n ? '' : ' is-buy'}`}
-                  empty={!n}
-                  selected={arming === it.id}
-                  count={n || undefined}
-                  aria-label={`${itemName(it.id)}: ${n}`}
-                  data-tip={itemName(it.id)}
-                  data-tip-key={`item${i + 1}`}
-                  onClick={() => live.current.applyItem(it.id)}
-                >
-                  <ItemIcon id={it.id} />
-                  {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
-                  <KeyHint action={`item${i + 1}` as Action} />
-                </Slot>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    />
   );
 
   const bagBox = (
@@ -2719,7 +2728,7 @@ export function PrisonPage() {
         </div>,
         questBox,
         fieldBox,
-        itemsRow,
+        !itemsCol && itemsRow,
         bagBox,
         dock,
       ];

@@ -29,7 +29,7 @@ export const guide: Translation<typeof ru> = {
     hint: 'Bomben-Knopf unter dem Feld, dann auf ein Feld tippen',
   },
   level: {
-    title: 'Bring die Spitzhacke auf Level 5',
+    title: 'Spitzhacke auf Level 5 bringen',
     hint: 'Jeder abgebaute Block gibt der Spitzhacke EP',
   },
   rankE: {

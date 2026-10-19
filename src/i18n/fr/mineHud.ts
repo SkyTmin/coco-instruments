@@ -128,7 +128,7 @@ export const mineHud: Translation<typeof ru> = {
     },
     crewLine: '+{coins} pièces · +{tokens} jetons',
     crewCapped: ' · poste terminé',
-    collect: 'Récupérer',
+    collect: 'Prendre',
     later: 'Plus tard',
   },
   bag: {
