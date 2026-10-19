@@ -14,6 +14,7 @@ import type { Action } from '@/input';
 import { registerEscape } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
 import { uiClose, uiOpen } from '@/lib/sound';
+import { shieldOnClose, shieldOnOpen } from '@/lib/tap-shield';
 import { chamfer, gem, mix, pedestal, ribbon, socket } from './dark-art';
 import { usePress } from './index';
 import './dark.css';
@@ -292,6 +293,9 @@ export function PxdButton({
  * A dark window over the screen: docked at the bottom on phones, centred elsewhere. Closes on ✕,
  * a tap outside and Escape / B (escape stack); its own `data-ui-layer`, so keys and the pad stay
  * inside; focus goes to `[data-autofocus]` (or the first button) and back to the opener.
+ * Always tap-shielded (R44 / R72, `lib/tap-shield`, as `GxSheet guard`): 300 ms after it opens
+ * its veil / ✕ / cells ignore taps, 350 ms after it closes the screen under it does — a double tap
+ * on a cell that closes the sheet never reaches the forge button lying under that cell.
  */
 export function PxdSheet({
   title,
@@ -314,6 +318,12 @@ export function PxdSheet({
   closeRef.current = onClose;
   const box = useRef<HTMLDivElement>(null);
   usePxd();
+  // Layout effect: the close shield is up in the commit that removes the sheet, before any later
+  // tap can be dispatched.
+  useLayoutEffect(() => {
+    shieldOnOpen();
+    return shieldOnClose;
+  }, []);
   useEffect(() => {
     const back = document.activeElement as HTMLElement | null;
     uiOpen();
