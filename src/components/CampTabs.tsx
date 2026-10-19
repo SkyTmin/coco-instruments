@@ -33,6 +33,7 @@ import {
   fusePlan,
   ITEMS,
   itemPrice,
+  LAST_RANK,
   MILES,
   mileReady,
   PERKS,
@@ -60,6 +61,7 @@ import {
   perkName,
   perkText,
   runeName,
+  runeText,
   t,
   useT,
 } from '@/i18n';
@@ -330,14 +332,32 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
   // Bonus words go all together when one of them would be cut: a lone «прода…» reads worse than
   // the stat picture alone (its full text is the chip's tip). Values and the language change the
   // words — checked after every render; the box's width — by a ResizeObserver.
+  // The rune's full sentence likewise: when two lines don't hold it (fr «aux chances
+  // d'enchantement de la pioche et de la hache» in a 134-px panel), the bonus box's shorter
+  // `camp.bonus.*` takes its place; the full one stays the tip.
+  const fullRef = useRef<HTMLSpanElement>(null);
+  const givesRef = useRef<HTMLSpanElement>(null);
   const fitBonus = useCallback(() => {
     const el = bonusBox.current;
-    if (!el) return;
-    el.classList.remove('is-tight');
-    const cut = [...el.querySelectorAll<HTMLElement>('.ctab-bonus__w')].some(
-      (w) => w.scrollWidth > w.clientWidth + 1,
-    );
-    el.classList.toggle('is-tight', cut);
+    if (el) {
+      el.classList.remove('is-tight');
+      const cut = [...el.querySelectorAll<HTMLElement>('.ctab-bonus__w')].some(
+        (w) => w.scrollWidth > w.clientWidth + 1,
+      );
+      el.classList.toggle('is-tight', cut);
+    }
+    const full = fullRef.current;
+    if (full) {
+      full.classList.remove('is-tight');
+      full.classList.toggle('is-tight', full.scrollHeight > full.clientHeight + 1);
+    }
+    // …and the short word itself: en «+4.6% enchants» is 150 px in the short phone's 134 — the
+    // number alone then (the sentence under it names the stat).
+    const gives = givesRef.current;
+    if (gives) {
+      gives.classList.remove('is-tight');
+      gives.classList.toggle('is-tight', gives.scrollWidth > gives.clientWidth + 1);
+    }
   }, []);
   useLayoutEffect(fitBonus);
   useEffect(() => {
@@ -345,6 +365,7 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(fitBonus);
     ro.observe(el);
+    if (fullRef.current) ro.observe(fullRef.current);
     return () => ro.disconnect();
   }, [fitBonus]);
   const open = socketsOpen(p, axeLevel);
@@ -531,10 +552,11 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
                     <Icon name="plus" />
                   )}
                 </Slot>
-                {/* A worn rune's % is in the bonus box below — no caption; a locked socket says
-                    its condition on a cream plate (R53: no text straight on the stone). */}
+                {/* A worn rune's % is in the bonus box below and an empty socket has its gold «+»
+                    (the name is its aria-label) — no caption; a locked socket says its condition
+                    on a cream plate (R53: no text straight on the stone, critic14 #4). */}
                 <span className={`ctab-sock__cap${locked ? ' is-lock' : ''}`}>
-                  {r ? '' : locked ? lockText(i) : t('camp.runes.empty')}
+                  {!r && locked ? lockText(i) : ''}
                 </span>
               </div>
             );
@@ -631,8 +653,21 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
             >
               {runeName(shown.kind)} {RUNE_ROMAN[shown.tier - 1]}
             </span>
-            <span className="ctab-insp__gives">{runeLine(shown)}</span>
-            <span className="ctab-insp__sub">{t('ctabs.runes.roll', { n: shown.roll })}</span>
+            {/* The effect in the bonus chips' short word (one line on every format, it was cut
+                at 320–390 px: «+4,6% к шансам чар ки…»), the full sentence in two lines under it;
+                the roll («сила 90/100») is only the tip (critic14 #1). */}
+            <span ref={givesRef} className="ctab-insp__gives">
+              {pctText(runePower(shown))}
+              <span className="ctab-insp__gw"> {t(`ctabs.bonus.${shown.kind}`)}</span>
+            </span>
+            <span
+              ref={fullRef}
+              className="ctab-insp__sub ctab-insp__full"
+              data-tip={`${runeLine(shown)} · ${t('ctabs.runes.roll', { n: shown.roll })}`}
+            >
+              <span className="ctab-insp__full-l">{runeText(shown.kind)}</span>
+              <span className="ctab-insp__full-s">{t(`camp.bonus.${shown.kind}`)}</span>
+            </span>
           </span>
         </div>
         <div
@@ -1147,26 +1182,74 @@ export const PerksTab = memo(function PerksTab() {
   const [armed, setArmed] = useState(false);
   const guard = useArmGuard();
   const root = useRef<HTMLDivElement>(null);
-  // Short phone: the nodes are one sideways strip; a › at its right end while more skills lie
-  // beyond (a strip that ends on a whole node gave no hint of the other three).
+  // Short phone: the nodes are a sideways strip in pages as wide as the strip (whole nodes only —
+  // no name cut by the edge at rest), snapped; ‹ › are real buttons that turn a page (critic14 #5:
+  // a `pointer-events: none` › passed the tap to the node under it and never scrolled).
   const strip = useRef<HTMLDivElement>(null);
   const lastLearn = useRef(0);
-  const [more, setMore] = useState(false);
-  const fitStrip = useCallback(() => {
+  const [pages, setPages] = useState<number[] | null>(null);
+  const [edge, setEdge] = useState({ less: false, more: false });
+  const fitArrows = useCallback(() => {
     const el = strip.current;
-    setMore(!!el && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    if (!el) return;
+    const less = el.scrollLeft > 1;
+    const more = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setEdge((e) => (e.less === less && e.more === more ? e : { less, more }));
   }, []);
+  const paginate = useCallback(() => {
+    const el = strip.current;
+    if (!el) return;
+    const row = el.firstElementChild as HTMLElement | null;
+    const nodes = [...el.querySelectorAll<HTMLElement>('.ctab-node')];
+    const arrow = el.parentElement?.querySelector<HTMLElement>('.ctab-tree__pg');
+    if (!row || !arrow) return;
+    // (a page has the row's 2u gap: the same sum before and after paging — no loop)
+    const gap = parseFloat(getComputedStyle(el.querySelector('.ctab-page') ?? row).columnGap) || 0;
+    // each page leaves an arrow's width (and a gap) free at both ends
+    const avail = el.clientWidth - 2 * (arrow.offsetWidth + gap);
+    const out: number[] = [];
+    let n = 0;
+    let w = 0;
+    for (const nd of nodes) {
+      const nw = nd.offsetWidth;
+      if (n && w + gap + nw > avail) {
+        out.push(n);
+        n = 0;
+        w = 0;
+      }
+      w += (n ? gap : 0) + nw;
+      n++;
+    }
+    if (n) out.push(n);
+    setPages((pg) => (pg && pg.join() === out.join() ? pg : out));
+  }, []);
+  useLayoutEffect(() => {
+    if (short) paginate();
+  });
   useEffect(() => {
     const el = strip.current;
     if (!short || !el) {
-      setMore(false);
+      setEdge({ less: false, more: false });
       return undefined;
     }
-    fitStrip();
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fitStrip);
+    fitArrows();
+    const ro =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            paginate();
+            fitArrows();
+          });
     ro?.observe(el);
     return () => ro?.disconnect();
-  }, [short, fitStrip]);
+  }, [short, fitArrows, paginate, pages]);
+  const turn = (dir: 1 | -1) => {
+    const el = strip.current;
+    if (!el) return;
+    tapLight();
+    const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollBy({ left: dir * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  };
   const k = list.find((x) => x.id === sel) ?? list[0];
   const lv = p.perks[k.id];
   const max = lv >= k.max;
@@ -1236,12 +1319,39 @@ export const PerksTab = memo(function PerksTab() {
   const now = perkVal(perkAt(k.id, lv));
   const next = perkVal(perkAt(k.id, lv + 1));
   // One line «Сейчас +6% → +12%» (the rows took 106 px; the effect's noun is the line above).
-  const step = max
-    ? `${t('ctabs.perks.now')} ${now ?? `${lv}/${k.max}`}`
-    : t('ctabs.perks.step', {
-        now: lv ? (now ?? `${lv}/${k.max}`) : '—',
-        next: next ?? `${lv + 1}/${k.max}`,
-      });
+  // «Blat» has no number: the rank a prestige starts from (the store's `min(LAST_RANK − 1, blat)`).
+  const blatAt = (n: number) => rankLetter(Math.min(LAST_RANK - 1, n));
+  const step =
+    k.id === 'blat'
+      ? max
+        ? t('ctabs.perks.blatNow', { now: blatAt(lv) })
+        : t('ctabs.perks.blatStep', { now: blatAt(lv), next: blatAt(lv + 1) })
+      : max
+        ? `${t('ctabs.perks.now')} ${now ?? `${lv}/${k.max}`}`
+        : t('ctabs.perks.step', {
+            now: lv ? (now ?? `${lv}/${k.max}`) : '—',
+            next: next ?? `${lv + 1}/${k.max}`,
+          });
+
+  const node = (x: (typeof list)[number]) => {
+    const l = p.perks[x.id];
+    return (
+      <div key={x.id} className={`ctab-node${l >= x.max ? ' is-max' : ''}`}>
+        <Slot
+          rarity={l >= x.max ? 4 : l > 0 ? 2 : 0}
+          selected={x.id === sel}
+          locked={locked}
+          count={`${l}/${x.max}`}
+          aria-label={`${perkName(x.id)} ${l}/${x.max}`}
+          onFocus={() => kbd() && pick(x.id)}
+          onClick={() => pick(x.id)}
+        >
+          <GxIcon name={PERK_ICON[x.id]} style={{ color: PERK_TONE[x.id] } as CSSProperties} />
+        </Slot>
+        <span className="ctab-node__name">{perkName(x.id)}</span>
+      </div>
+    );
+  };
 
   return (
     <div ref={root} className={`px ctab ctab-perks ctab--${lay}${short ? ' ctab--short' : ''}`}>
@@ -1286,37 +1396,43 @@ export const PerksTab = memo(function PerksTab() {
         }
       />
       <Panel material="stone" stage className="ctab-tree">
-        {more && (
-          <span className="ctab-tree__more" aria-hidden="true">
-            <Icon name="right" />
-          </span>
-        )}
-        <div ref={strip} className="ctab-scroll" onScroll={short ? fitStrip : undefined}>
-          <div className="ctab-nodes" style={slotVar(nodeSlot)}>
-            {list.map((x) => {
-              const l = p.perks[x.id];
-              return (
-                <div key={x.id} className={`ctab-node${l >= x.max ? ' is-max' : ''}`}>
-                  <Slot
-                    rarity={l >= x.max ? 4 : l > 0 ? 2 : 0}
-                    selected={x.id === sel}
-                    locked={locked}
-                    count={`${l}/${x.max}`}
-                    aria-label={`${perkName(x.id)} ${l}/${x.max}`}
-                    onFocus={() => kbd() && pick(x.id)}
-                    onClick={() => pick(x.id)}
-                  >
-                    <GxIcon
-                      name={PERK_ICON[x.id]}
-                      style={{ color: PERK_TONE[x.id] } as CSSProperties}
-                    />
-                  </Slot>
-                  <span className="ctab-node__name">{perkName(x.id)}</span>
-                </div>
-              );
-            })}
+        <div ref={strip} className="ctab-scroll" onScroll={short ? fitArrows : undefined}>
+          <div
+            className={`ctab-nodes${short && pages ? ' is-paged' : ''}`}
+            style={slotVar(nodeSlot)}
+          >
+            {short && pages
+              ? pages.map((cnt, pi) => {
+                  const from = pages.slice(0, pi).reduce((x, c) => x + c, 0);
+                  return (
+                    <div key={pi} className="ctab-page">
+                      {list.slice(from, from + cnt).map(node)}
+                    </div>
+                  );
+                })
+              : list.map(node)}
           </div>
         </div>
+        {short && (
+          <>
+            <Button
+              size="sm"
+              icon="left"
+              label={t('ctabs.perks.prev')}
+              className={`ctab-tree__pg is-prev${edge.less ? '' : ' is-gone'}`}
+              tabIndex={-1}
+              onClick={() => turn(-1)}
+            />
+            <Button
+              size="sm"
+              icon="right"
+              label={t('ctabs.perks.next')}
+              className={`ctab-tree__pg is-next${edge.more ? '' : ' is-gone'}`}
+              tabIndex={-1}
+              onClick={() => turn(1)}
+            />
+          </>
+        )}
       </Panel>
       <Panel material="obsidian" className="ctab-insp ctab-insp--perk" aria-live="polite">
         <div className="ctab-insp__top">

@@ -27,13 +27,20 @@ export const ctabs: Translation<typeof ru> = {
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'forza {n}/100',
     /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
-    fuseNeedShort: 'Fusione: servono 2 {tier} libere',
+    fuseNeedShort: 'Fusione: altre 2 {tier} libere',
     fuseGoShort: 'Fusione: 2× {tier} → {rune}',
     /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
     shatterArm: 'Ancora: frantuma',
     wornNoShatter: 'Prima toglila dall’amuleto',
     /** Short phone (no socket captions): a locked socket tapped — its condition. */
     lockedShort: 'Incastro: {cond}',
+    /** Phone landscape: the title over the bonus box under the stone. */
+    gives: 'L’amuleto dà',
+    /** A bonus chip at the cap (runes + pets share BONUS_CAP): the reason, in its tip. */
+    capTip: 'Tetto {cap} per rune e animali insieme: le rune danno {raw}, conta {eff}',
+    /** …the sell chip when all sell bonuses together hit SELL_BONUS_CAP. */
+    capSellTip:
+      'Tutti i bonus di vendita insieme arrivano al massimo a +100%: le rune danno {raw}, conta {eff}',
   },
   finds: {
     title: 'Reperti',
@@ -59,6 +66,12 @@ export const ctabs: Translation<typeof ru> = {
     noPoints: 'Nessun punto libero: li dà il prestigio',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
     resetArm: 'Tocca ancora per azzerare',
+    /** Short phone: the ‹ › page buttons of the skills strip (aria-label + mouse tip). */
+    prev: 'Talenti precedenti',
+    next: 'Altri talenti',
+    /** «Blat»: the rank a prestige starts from now → after «Learn» (rank letters). */
+    blatStep: 'Partenza: grado {now} → {next}',
+    blatNow: 'Partenza: grado {now}',
   },
   /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
   bonus: {

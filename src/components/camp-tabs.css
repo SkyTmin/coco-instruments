@@ -239,6 +239,25 @@ html[data-ff='tablet']
   font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
   color: var(--px-muted);
 }
+/* A rune's full effect sentence: two lines under its short word (critic14 #1); when two lines
+   don't hold it, the shorter `camp.bonus.*` (`.is-tight`, measured in RunesTab). */
+.ctab-insp__sub.ctab-insp__full {
+  height: calc(var(--ln-sm) * 2);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ctab-insp__full-s,
+.ctab-insp__full.is-tight > .ctab-insp__full-l {
+  display: none;
+}
+.ctab-insp__full.is-tight > .ctab-insp__full-s {
+  display: inline;
+}
+.ctab-insp__gives.is-tight > .ctab-insp__gw {
+  display: none;
+}
 /* Fuse plan / a note: two lines, always. */
 .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
@@ -614,13 +633,6 @@ html[data-ff='tablet']
 .ctab-runes.ctab--land .ctab-insp__body {
   flex: 1 1 auto;
 }
-.ctab-runes.ctab--land .ctab-insp__gives {
-  height: calc(var(--px-fs) * 1.25 * 2);
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
 .ctab-runes.ctab--land .ctab-insp__line {
   height: calc(var(--ln-sm) * 3);
   -webkit-line-clamp: 3;
@@ -662,7 +674,7 @@ html[data-ff='tablet']
 .ctab--short .ctab-amulet > .ctab-head,
 .ctab--short .ctab-sock__cap,
 .ctab--short .ctab-pouch .ctab-sub__hint,
-.ctab-runes.ctab--short :is(.ctab-insp__art, .ctab-insp__sub) {
+.ctab-runes.ctab--short .ctab-insp__art {
   display: none;
 }
 .ctab--short .ctab-amulet > .ctab-stage {
@@ -679,12 +691,9 @@ html[data-ff='tablet']
 .ctab-runes.ctab--short .ctab-insp__body {
   flex: 1 1 auto;
 }
-.ctab-runes.ctab--short .ctab-insp__gives {
-  height: calc(var(--px-fs) * 1.25 * 2);
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+/* a 4u frame margin: fr «d’enchantement» is 135 px, the 5u panel gave 134 */
+.ctab-runes.ctab--short > .ctab-insp {
+  --pad: 4;
 }
 /* The note names the action and its condition in two lines (short keys `fuse*Short`); the room
    comes from a thinner stage frame, tighter bonus rows and 1u gaps. */
@@ -695,9 +704,11 @@ html[data-ff='tablet']
 .ctab-runes.ctab--short .ctab-insp__body {
   gap: var(--u);
 }
+/* the short word in the small size: «+16,2% продажа» is 152 px at 20 px, the panel 134 */
 .ctab-runes.ctab--short .ctab-insp__gives {
-  line-height: 1.2;
-  height: calc(var(--px-fs) * 1.2 * 2);
+  font-size: var(--px-fs-sm);
+  line-height: 1.25;
+  height: var(--ln-sm);
 }
 .ctab--short .ctab-amulet > .ctab-stage {
   --pad: 4;
@@ -1357,34 +1368,71 @@ html[data-ff='tablet']
 .ctab-perks.ctab--short .ctab-points > .ctab-points__reset {
   margin-left: auto;
 }
-/* …and the tree has room for one row of nodes: a sideways strip, the third node cut at the edge
-   (wrapped, the second row hid entirely below the fold and the tree read as two skills). */
+/* …and the tree has room for one row of nodes: a sideways strip in pages as wide as the strip
+   (whole nodes only, snapped — no name cut by the edge at rest), each page leaving an arrow's
+   width free at both ends for the ‹ › buttons (critic14 #5, R65). Before the first measure the
+   nodes are one plain row. */
 .ctab-perks.ctab--short .ctab-tree > .ctab-scroll {
   overflow: auto hidden;
-  /* the cut node is the cue; a scrollbar would take the pips' 11 px */
+  /* a scrollbar would take the pips' 11 px; the arrows say there is more */
   scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+}
+.ctab-perks.ctab--short .ctab-tree > .ctab-scroll::-webkit-scrollbar {
+  display: none;
 }
 .ctab-perks.ctab--short .ctab-nodes {
   flex-wrap: nowrap;
   justify-content: flex-start;
   width: max-content;
 }
+.ctab-perks.ctab--short .ctab-nodes.is-paged {
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+  column-gap: 0;
+}
+.ctab-page {
+  flex: 0 0 100%;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: flex-start;
+  column-gap: calc(2 * var(--u));
+  /* the arrow (15u) and a gap */
+  padding: 0 calc(17 * var(--u));
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
 .ctab-tree {
   position: relative;
 }
-.ctab-tree > .ctab-tree__more {
+.ctab-tree > .ctab-tree__pg {
   position: absolute;
   z-index: 1;
-  right: calc(2 * var(--u));
-  /* on the slots row (tree pad 7u + nodes 2u + half a 24u slot), not over the names */
-  top: calc(14 * var(--u));
-  display: grid;
-  place-items: center;
-  width: calc(11 * var(--u));
-  height: calc(14 * var(--u));
-  color: var(--px-gold);
-  background: var(--px-ink);
-  pointer-events: none;
+  /* centred on the slots row (stage pad + nodes' 3u top + half a 24u slot) */
+  top: calc(var(--pg-top, 12) * var(--u));
+  width: calc(15 * var(--u));
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+/* 44 px to the thumb around a 30-px button (R65); the strip under it is the page's free end.
+   (`::before`: the kit's focus ring is `::after`; an absolute pseudo is placed from the padding
+   box, so the 1-u border eats 1 u of the inset.) */
+.ctab-tree > .ctab-tree__pg::before {
+  content: '';
+  position: absolute;
+  inset: calc(-7px - var(--u)) calc(-7px - var(--u));
+}
+.ctab-tree > .ctab-tree__pg.is-prev {
+  left: calc(var(--pg-side, 5) * var(--u));
+}
+.ctab-tree > .ctab-tree__pg.is-next {
+  right: calc(var(--pg-side, 5) * var(--u));
+}
+.ctab-tree > .ctab-tree__pg.is-gone {
+  visibility: hidden;
 }
 .ctab--tall .ctab-insp--perk .ctab-insp__line {
   height: var(--ln-sm);
@@ -1398,6 +1446,12 @@ html[data-ff='tablet']
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+/* Phone landscape: «Blat»'s sentence takes three lines in ru/de, tr «Nose» too — the panel has
+   the room under it (81 px stood empty, critic14 #1). */
+.ctab.ctab--land .ctab-insp--perk .ctab-insp__sub {
+  height: calc(var(--ln-sm) * 3);
+  -webkit-line-clamp: 3;
 }
 /* «Сейчас +6% → +12%»: the bare values in one line (the noun is the effect above). */
 .ctab-insp__step {

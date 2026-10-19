@@ -130,7 +130,7 @@ export const camp: Translation<typeof ru> = {
     rate: 'a la cadencia',
     loot: 'al botín',
     token: 'a las fichas',
-    proc: 'a la probabilidad de encantamiento',
+    proc: 'a la probabilidad de encantos',
     luck: 'a llaves y paquetes',
     none: 'nada aún',
   },
