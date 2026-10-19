@@ -497,3 +497,27 @@ Field drawing, mining, timings, critters and their animations are untouched.
     sheet host with its own state. Digging at 4× (`motion.mjs pp dig`): 55/296 = 19 % frames
     > 20 ms (r2 24 %), p95 67, 12 long tasks, worst 150; 1×: 6/415. HUD/strip rects unchanged
     while digging (pp, tl). The rest is the field engine (`MineField`/`useMineDig`).
+- **Round 4 (M4, critic r3 findings 1, 2, 3, 5 + pl floor chip; scripts `{SCR}/ui6M/`).**
+  - Item icon from the slot (R62): `.mn-item --ic = min(--ic-max, round(down, --slot − 4u, u))`,
+    max 13u (16u on tablet/desktop wide); `ItemIcon` has no size prop. tl + quest 48 in a 39-px
+    window → 33 (11u); tablet quest row is centred with cqi gaps. Check `items2.mjs` (icon ⊆
+    `.px-slot__art`, width % u, every format × quest on/off).
+  - Hint names (R64): `guideHint(id)` passes `{camp}` = `mineHud.dock.camp` and `{runes}` =
+    `camp.tab.runes` into `guide.*.hint`; the parcel hint says «у поля» (they ripen beside the
+    frame). `mineHud.dock.more` is gone. `f3check.mjs` compares every quoted name with the
+    visible dock / tab labels in 7 languages.
+  - 320-px cell (R63): `itemsCol` = phone, not wide, `shell.h ≤ 640` → the items leave the row
+    and become a 21u column left of the frame inside `.mn-field.has-items` (field padding-inline
+    23u; 6 items = two columns, 45u / 19u). Pets sit 13u lower so no sprite covers a bottom-row
+    cell centre (`row9.mjs`). Quest at ≤ 340 px shows one reward. Cell p320 16 → 21 (quest),
+    21 → 26 (none); pp 43/49, p430 52/56 unchanged.
+  - Streak strip (finding 5): the strip frame is `frame-well` (2u painted, was `slot-r0` 4/3);
+    streak rows 7u/7u grid, flame `m-flame7` (7×7 drawn in a 9×9 mask, `mask-size 9u`), name
+    line-height 1. Ink test (`ink.mjs` + `inkdiff.py`: screenshot with/without content, every
+    changed device pixel inside strip − painted frame) is 0 px outside on every format. A Range
+    test can't pass: two text rows (Rubik 17 px content box 20.1 px each) never fit in 32 px.
+  - Phone landscape: strip 27u (rows 14u / 8u) — the pace line hung 3 px below; quest items 22u
+    (the 27u strip pushed them 1 px off-screen); floor chip hit 39 → 44×46 via `::before`
+    extended to the right only (left would eat the back button).
+  - Follow-ups (outside M4): bomb hint «под полем» and books/chests «внизу» are wrong where the
+    items/dock sit elsewhere (p320 column, wide); finding 4 (sheet host) is the lead's.
