@@ -1744,6 +1744,48 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
     white-space: normal;
   }
 }
+/* 320–360-px phones (critic12 #3, R58): the text column is 100–140 px. Every name in the small
+   size, wrapping to at most two lines (one-word German names carry a soft hyphen); the state line
+   wraps too. The lock of the relic's quest moves beside its bar, so «×83 / ×200» gets the whole
+   column. All cards stay one height (the grid's 1fr rows): 70 px. */
+@container skn (max-width: 300px) {
+  .skn-card {
+    row-gap: var(--u);
+    column-gap: calc(2 * var(--u));
+  }
+  /* The plate gives 18 px of its frame and gaps (the 40-px symbols stay; their images have their
+     own margin): one-word names of 101–113 px
+     (ru «Купальская», tr «Gündönümü», de «Kürbisnacht», «Mittsommer-») fit whole. */
+  .skn-card .skn-card__art.skin-card {
+    padding: var(--u);
+  }
+  .skn-card__art .skin-card__reels {
+    gap: 0;
+    padding: var(--u) 0;
+  }
+  .skn-card__name,
+  .skn-card__name:is(.is-long, .is-xlong) {
+    font-size: var(--px-fs-sm);
+    line-height: 1.05;
+    white-space: normal;
+    hyphens: manual;
+  }
+  /* `.skn-card` first: the base rules of these come later in the file. */
+  .skn-card .skn-on,
+  .skn-card .skn-lock,
+  .skn-card .skn-badge {
+    white-space: normal;
+  }
+  .skn-card .skn-quest {
+    grid-template-areas: 'x x' 'ico bar';
+  }
+  .skn-card .skn-quest > .px-i {
+    grid-area: ico;
+  }
+  .skn-card .skn-quest > em {
+    grid-area: x;
+  }
+}
 .skn-card__state {
   grid-area: state;
   align-self: start;
@@ -2073,6 +2115,8 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
    paragraphs under «Подробнее». Rarity names are ink pills on the rarity colour (`.nur-rar`). */
 .cas-rules {
   display: grid;
+  /* A nowrap row never widens the sheet: at 320 px one pay row pushed every heading out. */
+  grid-template-columns: minmax(0, 1fr);
   gap: calc(5 * var(--u));
   color: var(--px-text);
   font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
@@ -2106,8 +2150,15 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
   color: var(--px-gold);
 }
 .cas-rules .paytable__pair {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: 0.3em;
   font: 600 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-muted);
+}
+.cas-rules .paytable__pair > span + span::before {
+  content: '· ';
 }
 /* Lines: the picture is the content; the name is the tooltip (it was 10 px under it). */
 .cas-rules .lines-grid {
@@ -2184,6 +2235,33 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
   min-width: 5ch;
   color: var(--px-muted);
   opacity: 1;
+}
+/* 320-px phones (critic12 #3, R58): the pay pair stacks in its plate, the rarity row lets its
+   range wrap beside a fixed odds column, the scatter steps are three equal columns. */
+@media (max-width: 340px) {
+  .cas-rules .paytable__pair {
+    flex-direction: column;
+    align-items: flex-end;
+    row-gap: var(--u);
+  }
+  .cas-rules .paytable__pair > span + span::before {
+    content: none;
+  }
+  .cas-rules .rarity-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .cas-rules .rarity-row__odds {
+    min-width: 0;
+    text-align: right;
+  }
+  .cas-rules .combo-rules__ladder {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .cas-rules .combo-rules__step {
+    min-width: 0;
+  }
 }
 /* «Подробнее»: a 44-px row with a pixel triangle; the long texts open under it. */
 .cas-more > summary {

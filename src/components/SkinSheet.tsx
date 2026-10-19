@@ -136,8 +136,10 @@ function SkinCard({
   // Длина имени — классом, а не замером: 13 замеров ширины давали лишние раскладки при открытии.
   const long = name.length > 20 ? ' is-xlong' : name.length > 14 ? ' is-long' : '';
   const quest = !!sk.earn && !available && !byGrant;
+  const lockedAt = !available && !sk.earn ? SKIN_UNLOCK[sk.id] : undefined;
   const tip = [
     skinText(sk.id, 'hint'),
+    lockedAt !== undefined && t('slots.skin.fromLevel', { n: lockedAt }),
     quest && sk.earn && t('slots.skin.relicWhat', { x: sk.earn.topX }),
     quest && sk.earn && t('slots.skin.yourBest', { x: fmtX(topX), goal: sk.earn.topX }),
     sk.earn &&
@@ -187,15 +189,18 @@ function SkinCard({
           // Прогресс обязателен: условие без «сколько уже» — это не цель, а отказ.
           <span className="skn-quest">
             <Icon name="lock" />
+            {/* Narrow no-break spaces: «×83 / ×200» fits the 100-px column of a 320-px phone. */}
             <em className="px-num">
-              {fmtX(topX)} / ×{fmtNum(sk.earn.topX)}
+              {`${fmtX(topX)}\u202f/\u202f×${fmtNum(sk.earn.topX)}`}
             </em>
             <Bar value={Math.min(1, topX / sk.earn.topX)} />
           </span>
         ) : !available ? (
+          // «🔒 Ур. 12»: the short level form fits every card (fr «dès le niveau 12» was cut by
+          // 32 px at 320, critic12 #3); the full phrase is in the tooltip / aria-label.
           <span className="skn-lock">
             <Icon name="lock" />
-            {t('slots.skin.fromLevel', { n: SKIN_UNLOCK[sk.id] })}
+            {t('slots.hud.lvl', { n: SKIN_UNLOCK[sk.id] })}
           </span>
         ) : (
           active && (

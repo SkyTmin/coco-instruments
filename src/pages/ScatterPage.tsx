@@ -2152,8 +2152,11 @@ export function ScatterPage() {
                         <Sym id={p.id} skin={skin} size={26} />
                       </span>
                       <span className="paytable__mult px-num">×{p.tiers[2]}</span>
+                      {/* Two halves: on a 320-px phone they stack (critic12 #3: «10–11 ×» lost
+                          its number). */}
                       <span className="paytable__pair px-num">
-                        8–9 ×{p.tiers[0]} · 10–11 ×{p.tiers[1]}
+                        <span>8–9 ×{p.tiers[0]}</span>
+                        <span>10–11 ×{p.tiers[1]}</span>
                       </span>
                     </div>
                   ))}
