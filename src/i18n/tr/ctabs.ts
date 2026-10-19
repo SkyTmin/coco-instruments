@@ -34,6 +34,12 @@ export const ctabs: Translation<typeof ru> = {
     wornNoShatter: 'Önce muskadan çıkar',
     /** Short phone (no socket captions): a locked socket tapped — its condition. */
     lockedShort: 'Yuva: {cond}',
+    /** Phone landscape: the title over the bonus box under the stone. */
+    gives: 'Muska verir',
+    /** A bonus chip at the cap (runes + pets share BONUS_CAP): the reason, in its tip. */
+    capTip: 'Rün ve evcil hayvanlar birlikte en fazla {cap}: rünler {raw} verir, {eff} sayılır',
+    /** …the sell chip when all sell bonuses together hit SELL_BONUS_CAP. */
+    capSellTip: 'Tüm satış bonusları birlikte en fazla +%100: rünler {raw} verir, {eff} sayılır',
   },
   finds: {
     title: 'Buluntular',
@@ -59,6 +65,12 @@ export const ctabs: Translation<typeof ru> = {
     noPoints: 'Boş puan yok — prestij verir',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
     resetArm: 'Sıfırlamak için tekrar dokun',
+    /** Short phone: the ‹ › page buttons of the skills strip (aria-label + mouse tip). */
+    prev: 'Önceki yetenekler',
+    next: 'Diğer yetenekler',
+    /** «Blat»: the rank a prestige starts from now → after «Learn» (rank letters). */
+    blatStep: 'Başlangıç: rütbe {now} → {next}',
+    blatNow: 'Başlangıç: rütbe {now}',
   },
   /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
   bonus: {

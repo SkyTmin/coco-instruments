@@ -239,6 +239,25 @@ html[data-ff='tablet']
   font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
   color: var(--px-muted);
 }
+/* A rune's full effect sentence: two lines under its short word (critic14 #1); when two lines
+   don't hold it, the shorter `camp.bonus.*` (`.is-tight`, measured in RunesTab). */
+.ctab-insp__sub.ctab-insp__full {
+  height: calc(var(--ln-sm) * 2);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ctab-insp__full-s,
+.ctab-insp__full.is-tight > .ctab-insp__full-l {
+  display: none;
+}
+.ctab-insp__full.is-tight > .ctab-insp__full-s {
+  display: inline;
+}
+.ctab-insp__gives.is-tight > .ctab-insp__gw {
+  display: none;
+}
 /* Fuse plan / a note: two lines, always. */
 .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
@@ -248,6 +267,27 @@ html[data-ff='tablet']
   -webkit-line-clamp: 2;
   font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
   color: var(--px-muted);
+}
+/* the fuse plan in pictures: one row, the result's name after the arrow */
+.ctab-insp__line.is-fuse {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  gap: var(--u);
+  white-space: nowrap;
+}
+.ctab-insp__line.is-fuse > b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--px-text);
+}
+.ctab-insp__line.is-fuse.is-tight > span:first-child,
+.ctab-insp__line.is-fuse.is-bare > b {
+  display: none;
+}
+.ctab-insp__line.is-fuse > .px-i {
+  flex: none;
+  color: var(--px-gold);
 }
 .ctab-insp__line.is-note {
   color: var(--px-red);
@@ -353,7 +393,8 @@ html[data-ff='tablet']
 .ctab-pack__row {
   display: flex;
   align-items: center;
-  gap: calc(2 * var(--u));
+  /* 4u between ×1 / ×5 / ×10: 4 px was a mis-tap (critic5 «Лавка 3») */
+  gap: calc(4 * var(--u));
 }
 .ctab-pack__opt {
   min-width: calc(24 * var(--u));
@@ -596,8 +637,15 @@ html[data-ff='tablet']
   grid-template:
     'ahead pouch insp' auto
     'stage pouch insp' minmax(0, 1fr)
+    'stage btitle insp' auto
     'stage bonus insp' auto
     / minmax(0, 6fr) minmax(0, 9fr) minmax(0, 11fr);
+}
+/* the box stands under the pouch column: «Оберег даёт» over it (critic14 (a)) */
+.ctab--land .ctab-amulet > .ctab-bonus__title {
+  grid-area: btitle;
+  font: 700 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
 }
 .ctab-runes.ctab--land > .ctab-amulet {
   display: contents;
@@ -613,13 +661,6 @@ html[data-ff='tablet']
 }
 .ctab-runes.ctab--land .ctab-insp__body {
   flex: 1 1 auto;
-}
-.ctab-runes.ctab--land .ctab-insp__gives {
-  height: calc(var(--px-fs) * 1.25 * 2);
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 .ctab-runes.ctab--land .ctab-insp__line {
   height: calc(var(--ln-sm) * 3);
@@ -662,7 +703,7 @@ html[data-ff='tablet']
 .ctab--short .ctab-amulet > .ctab-head,
 .ctab--short .ctab-sock__cap,
 .ctab--short .ctab-pouch .ctab-sub__hint,
-.ctab-runes.ctab--short :is(.ctab-insp__art, .ctab-insp__sub) {
+.ctab-runes.ctab--short .ctab-insp__art {
   display: none;
 }
 .ctab--short .ctab-amulet > .ctab-stage {
@@ -679,12 +720,10 @@ html[data-ff='tablet']
 .ctab-runes.ctab--short .ctab-insp__body {
   flex: 1 1 auto;
 }
-.ctab-runes.ctab--short .ctab-insp__gives {
-  height: calc(var(--px-fs) * 1.25 * 2);
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+/* a 3.5u frame margin: fr «d’enchantement» is 135 px, the 5u panel gave 134; 4u left the stacked
+   name / effect / note / three buttons 0.8 px over the panel at 320×568 (the tab ran 5 px over) */
+.ctab-runes.ctab--short > .ctab-insp {
+  --pad: 3.5;
 }
 /* The note names the action and its condition in two lines (short keys `fuse*Short`); the room
    comes from a thinner stage frame, tighter bonus rows and 1u gaps. */
@@ -695,9 +734,11 @@ html[data-ff='tablet']
 .ctab-runes.ctab--short .ctab-insp__body {
   gap: var(--u);
 }
+/* the short word in the small size: «+16,2% продажа» is 152 px at 20 px, the panel 134 */
 .ctab-runes.ctab--short .ctab-insp__gives {
-  line-height: 1.2;
-  height: calc(var(--px-fs) * 1.2 * 2);
+  font-size: var(--px-fs-sm);
+  line-height: 1.25;
+  height: var(--ln-sm);
 }
 .ctab--short .ctab-amulet > .ctab-stage {
   --pad: 4;
@@ -912,6 +953,12 @@ html[data-ff='tablet']
 .ctab-bonus.is-tight .ctab-bonus__w {
   display: none;
 }
+/* at the cap: the value counted (runes + pets / all sell bonuses together hit the cap), a small
+   red «!» after it; the tip says why */
+.ctab-bonus__chip > .ctab-bonus__cap {
+  flex: none;
+  color: var(--px-red);
+}
 /* A baked 12 × 12 stat picture (paint.ts: N2's six + T2's «proc») at `--st`. */
 .ctab-st {
   display: inline-block;
@@ -983,6 +1030,15 @@ html[data-ff='tablet']
 .ctab-finds.ctab--short .ctab-grid {
   padding: var(--u);
 }
+/* Phone portrait (not short), tablet portrait: the case as tall as its rows, the showcase panel
+   takes the rest (critic14 #2 / R66). */
+.ctab-finds:is(.ctab--one, .ctab--tall):not(.ctab--short) {
+  grid-template:
+    'head' auto
+    'grid' auto
+    'insp' minmax(0, 1fr)
+    / minmax(0, 1fr);
+}
 .ctab-finds > .ctab-head {
   grid-area: head;
 }
@@ -1016,10 +1072,29 @@ html[data-ff='tablet']
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-/* Phone portrait: the name over the whole panel, the art (96 px; 48 on a short phone) beside the
-   text — beside a 96-px art «Отпечаток папоротника», fr «Empreinte de fougère» were cut. The
-   text takes three lines where the big art gives the room. */
-.ctab--one .ctab-insp--find .ctab-insp__top {
+/* Showcase (phone portrait, tablet portrait): the find centred in the height left over, its name,
+   text and count under it. */
+.ctab-insp--find.is-show .ctab-insp__top {
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+}
+.ctab-insp--find.is-show .ctab-insp__art {
+  flex: 1 1 0;
+  min-height: calc(24 * var(--u));
+  overflow: hidden;
+}
+.ctab-insp--find.is-show .ctab-insp__head {
+  flex: none;
+}
+.ctab-insp--find.is-show .ctab-insp__gives {
+  height: calc(var(--px-fs) * 3.75);
+  -webkit-line-clamp: 3;
+}
+/* Short phone: the name over the whole panel, the 48-px art beside the text. */
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__top {
   display: grid;
   grid-template:
     'name name' auto
@@ -1029,20 +1104,20 @@ html[data-ff='tablet']
   align-items: start;
   gap: var(--u) calc(4 * var(--u));
 }
-.ctab--one .ctab-insp--find .ctab-insp__head {
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__head {
   display: contents;
 }
-.ctab--one .ctab-insp--find .ctab-insp__art {
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__art {
   grid-area: art;
   align-self: center;
 }
-.ctab--one .ctab-insp--find .ctab-insp__name {
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__name {
   grid-area: name;
 }
-.ctab--one .ctab-insp--find .ctab-insp__gives {
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__gives {
   grid-area: gives;
 }
-.ctab--one .ctab-insp--find .ctab-insp__sub {
+.ctab-finds.ctab--short .ctab-insp--find .ctab-insp__sub {
   grid-area: sub;
 }
 /* Short phone: the two-line name costs a line — the count line goes (the slot's corner says ×N)
@@ -1057,10 +1132,6 @@ html[data-ff='tablet']
 .ctab-finds.ctab--short .ctab-insp--find .ctab-insp__gives {
   font-size: var(--px-fs-sm);
   height: calc(var(--px-fs-sm) * 3.75);
-  -webkit-line-clamp: 3;
-}
-.ctab--one:not(.ctab--short) .ctab-insp--find .ctab-insp__gives {
-  height: calc(var(--px-fs) * 3.75);
   -webkit-line-clamp: 3;
 }
 /* the showcase column (phone landscape, tablet landscape, desktop) and the short phone (248 px
@@ -1086,7 +1157,9 @@ html[data-ff='tablet']
   align-content: start;
   padding: var(--u);
 }
-.ctab--wide .ctab-miles__list {
+/* Phone landscape, tablet, desktop: two columns of compact rows (critic14 #3: one 744-px row
+   with its text showed 2 of 18 at 844×390, 4 of 18 on a tablet / desktop). */
+.ctab-miles:is(.ctab--land, .ctab--tall, .ctab--wide) .ctab-miles__list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .ctab-mile {
@@ -1120,10 +1193,6 @@ html[data-ff='tablet']
 .ctab .ctab-mile__name {
   font: 400 var(--px-fs) / 1.15 var(--px-head);
   color: var(--px-text);
-}
-.ctab-mile__text {
-  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
-  color: var(--px-muted);
 }
 .ctab-gifts {
   display: flex;
@@ -1182,10 +1251,11 @@ html[data-ff='tablet']
   content-visibility: auto;
   contain-intrinsic-size: auto calc(40 * var(--u));
 }
-/* Phone / tablet portrait: «icon | title + gifts + bar | claim» (the condition is the icon's tip),
-   the claim beside the title only so the gifts and the bar keep the full width: ≤ 96 px a row,
-   6+ rows on a 390×844 phone (it was 3 rows, 117–184 px, with a full-width button). */
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile {
+/* Every format: «icon | title + gifts + bar | claim» (the condition is the icon's tip), the claim
+   beside the title only so the gifts and the bar keep the full width: ≤ 96 px a row, 6+ rows on a
+   390×844 phone (it was 3 rows, 117–184 px, with a full-width button); since critic14 #3 on
+   phone landscape, tablet and desktop too (113–256-px cards with the text showed 2–4 of 18). */
+.ctab-miles .ctab-mile {
   grid-template:
     'art name end' auto
     'art gifts gifts' auto
@@ -1194,19 +1264,47 @@ html[data-ff='tablet']
   padding: var(--u) calc(3 * var(--u));
   gap: var(--u) calc(3 * var(--u));
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__info {
+.ctab-miles .ctab-mile__info {
   display: contents;
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__name {
+.ctab-miles .ctab-mile__name {
   grid-area: name;
   min-width: 0;
 }
 /* the small claim button and its «Получено» swap: the check keeps the button's height */
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__taken {
+.ctab-miles .ctab-mile__taken {
   min-height: calc(15 * var(--u));
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-gifts {
+.ctab-miles .ctab-gifts {
   grid-area: gifts;
+}
+/* Tablet / desktop (ui-scale 3): the kit's 46-px «Take» beside a 26-px title made a ready row
+   122 px. A ready row's bar is full and says nothing new — it goes, and the claim sits beside the
+   chips (which may take two lines there): 94 px; a row in progress 99 (chips 1.3 × the small
+   size), a taken one 85. Five rows a column on 1180×820 — 10 of 18 in sight. */
+.ctab-miles:is(.ctab--tall, .ctab--wide) .ctab-chip {
+  height: calc(var(--px-fs-sm) * 1.3);
+}
+/* chips that would wrap past their lines drop their words (measured in MilesTab) */
+.ctab-gifts.is-tight .ctab-chip__w {
+  display: none;
+}
+/* tablet portrait's columns are 355 px: a smaller picture leaves the title and chips 18 px more */
+.ctab-miles.ctab--tall .ctab-mile__art {
+  --slot: calc(16 * var(--u));
+}
+.ctab-miles.ctab--tall .ctab-mile__art .gx-icon {
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+}
+.ctab-miles:is(.ctab--tall, .ctab--wide) .ctab-mile:has(.ctab-mile__swap) {
+  grid-template:
+    'art name name' auto
+    'art gifts end' auto
+    / auto minmax(0, 1fr) auto;
+}
+.ctab-miles:is(.ctab--tall, .ctab--wide) .ctab-mile:has(.ctab-mile__swap) .ctab-mile__bar {
+  display: none;
 }
 .ctab-miles.ctab--short .ctab-head__hint {
   display: none;
@@ -1227,15 +1325,15 @@ html[data-ff='tablet']
 .ctab-miles.ctab--short .ctab-mile__swap > .px-btn {
   width: 100%;
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art {
+.ctab-miles .ctab-mile__art {
   --slot: calc(22 * var(--u));
   align-self: center;
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art .gx-icon {
+.ctab-miles .ctab-mile__art .gx-icon {
   width: calc(14 * var(--u));
   height: calc(14 * var(--u));
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__end {
+.ctab-miles .ctab-mile__end {
   align-self: center;
 }
 
@@ -1254,9 +1352,17 @@ html[data-ff='tablet']
     'tree insp' minmax(0, 1fr)
     / minmax(0, 11fr) minmax(0, 9fr);
 }
-/* Phone landscape: the tree wide enough for all skills in one row, so it never scrolls. */
-.ctab-perks.ctab--land {
-  grid-template-columns: minmax(0, 13fr) minmax(0, 7fr);
+/* Phone portrait, tablet portrait: the tree as tall as its two rows of nodes, the skill panel
+   takes the rest (165–273 px of empty stone stood under the nodes, critic14 #2 / R66). */
+.ctab-perks:is(.ctab--one, .ctab--tall):not(.ctab--short) {
+  grid-template:
+    'head' auto
+    'tree' auto
+    'insp' minmax(0, 1fr)
+    / minmax(0, 1fr);
+}
+.ctab-perks:is(.ctab--one, .ctab--tall):not(.ctab--short) .ctab-insp--perk .ctab-insp__acts {
+  margin-top: auto;
 }
 .ctab-perks > .ctab-head {
   grid-area: head;
@@ -1357,34 +1463,71 @@ html[data-ff='tablet']
 .ctab-perks.ctab--short .ctab-points > .ctab-points__reset {
   margin-left: auto;
 }
-/* …and the tree has room for one row of nodes: a sideways strip, the third node cut at the edge
-   (wrapped, the second row hid entirely below the fold and the tree read as two skills). */
+/* …and the tree has room for one row of nodes: a sideways strip in pages as wide as the strip
+   (whole nodes only, snapped — no name cut by the edge at rest), each page leaving an arrow's
+   width free at both ends for the ‹ › buttons (critic14 #5, R65). Before the first measure the
+   nodes are one plain row. */
 .ctab-perks.ctab--short .ctab-tree > .ctab-scroll {
   overflow: auto hidden;
-  /* the cut node is the cue; a scrollbar would take the pips' 11 px */
+  /* a scrollbar would take the pips' 11 px; the arrows say there is more */
   scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+}
+.ctab-perks.ctab--short .ctab-tree > .ctab-scroll::-webkit-scrollbar {
+  display: none;
 }
 .ctab-perks.ctab--short .ctab-nodes {
   flex-wrap: nowrap;
   justify-content: flex-start;
   width: max-content;
 }
+.ctab-perks.ctab--short .ctab-nodes.is-paged {
+  width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+  column-gap: 0;
+}
+.ctab-page {
+  flex: 0 0 100%;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: flex-start;
+  column-gap: calc(2 * var(--u));
+  /* the arrow (15u) and a gap */
+  padding: 0 calc(17 * var(--u));
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
 .ctab-tree {
   position: relative;
 }
-.ctab-tree > .ctab-tree__more {
+.ctab-tree > .ctab-tree__pg {
   position: absolute;
   z-index: 1;
-  right: calc(2 * var(--u));
-  /* on the slots row (tree pad 7u + nodes 2u + half a 24u slot), not over the names */
-  top: calc(14 * var(--u));
-  display: grid;
-  place-items: center;
-  width: calc(11 * var(--u));
-  height: calc(14 * var(--u));
-  color: var(--px-gold);
-  background: var(--px-ink);
-  pointer-events: none;
+  /* centred on the slots row (stage pad + nodes' 3u top + half a 24u slot) */
+  top: calc(var(--pg-top, 12) * var(--u));
+  width: calc(15 * var(--u));
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+/* 44 px to the thumb around a 30-px button (R65); the strip under it is the page's free end.
+   (`::before`: the kit's focus ring is `::after`; an absolute pseudo is placed from the padding
+   box, so the 1-u border eats 1 u of the inset.) */
+.ctab-tree > .ctab-tree__pg::before {
+  content: '';
+  position: absolute;
+  inset: calc(-7px - var(--u)) calc(-7px - var(--u));
+}
+.ctab-tree > .ctab-tree__pg.is-prev {
+  left: calc(var(--pg-side, 5) * var(--u));
+}
+.ctab-tree > .ctab-tree__pg.is-next {
+  right: calc(var(--pg-side, 5) * var(--u));
+}
+.ctab-tree > .ctab-tree__pg.is-gone {
+  visibility: hidden;
 }
 .ctab--tall .ctab-insp--perk .ctab-insp__line {
   height: var(--ln-sm);
@@ -1399,6 +1542,12 @@ html[data-ff='tablet']
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+/* Phone landscape: «Blat»'s sentence takes three lines in ru/de, tr «Nose» too — the panel has
+   the room under it (81 px stood empty, critic14 #1). */
+.ctab.ctab--land .ctab-insp--perk .ctab-insp__sub {
+  height: calc(var(--ln-sm) * 3);
+  -webkit-line-clamp: 3;
+}
 /* «Сейчас +6% → +12%»: the bare values in one line (the noun is the effect above). */
 .ctab-insp__step {
   height: calc(var(--px-fs) * 1.3);
@@ -1408,24 +1557,46 @@ html[data-ff='tablet']
   font: 700 var(--px-fs) / 1.3 var(--px-font);
   color: var(--px-green);
 }
-/* The skill's own picture, 2× its node icon's art pixels, on a cream tile. */
+/* The skill's own picture on a cream tile: 36u = 72 px on a phone, 108 on a tablet / desktop —
+   twice the node's (it was 40 px beside a 36-px node, 28 at 320, critic14 #2). */
 .ctab-perk-art {
-  width: calc(20 * var(--u));
-  height: calc(20 * var(--u));
+  display: grid;
+  place-items: center;
+  width: calc(var(--tile, 36) * var(--u));
+  height: calc(var(--tile, 36) * var(--u));
   background: #fff6e0;
   box-shadow: 0 0 0 var(--u) var(--px-ink);
 }
 .ctab-perk-art > .gx-icon {
-  width: calc(16 * var(--u));
-  height: calc(16 * var(--u));
+  width: calc((var(--tile, 36) - 6) * var(--u));
+  height: calc((var(--tile, 36) - 6) * var(--u));
 }
-.ctab--tall .ctab-perk-art {
-  width: calc(14 * var(--u));
-  height: calc(14 * var(--u));
+.ctab-perk-art {
+  position: relative;
 }
-.ctab--tall .ctab-perk-art > .gx-icon {
-  width: calc(12 * var(--u));
-  height: calc(12 * var(--u));
+.ctab-insp--perk.is-show .ctab-perk-art__lv,
+.ctab-insp--perk:not(.is-show) .ctab-insp__lv {
+  display: none;
+}
+/* Showcase (phone / tablet portrait, wide side column): the picture centred in the height left
+   over, the name, effect, step, note and «Learn» under it. */
+.ctab-insp--perk.is-show .ctab-insp__top {
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+}
+.ctab-insp--perk.is-show .ctab-insp__art {
+  flex: 1 1 0;
+  min-height: calc(37 * var(--u));
+  overflow: hidden;
+}
+.ctab-insp--perk.is-show .ctab-insp__head {
+  flex: none;
+}
+.ctab-insp--perk.is-show .ctab-insp__step {
+  text-align: center;
 }
 .ctab.ctab--short .ctab-insp--perk .ctab-insp__sub {
   height: calc(var(--ln-sm) * 2);
@@ -1433,6 +1604,9 @@ html[data-ff='tablet']
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+.ctab-insp--perk .ctab-insp__sub.is-tight > .ctab-insp__per {
+  display: none;
 }
 .ctab--short .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);

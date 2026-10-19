@@ -34,6 +34,12 @@ export const ctabs: Translation<typeof ru> = {
     wornNoShatter: 'Worn — take it out first',
     /** Short phone (no socket captions): a locked socket tapped — its condition. */
     lockedShort: 'Socket: {cond}',
+    /** Phone landscape: the title over the bonus box under the stone. */
+    gives: 'Amulet gives',
+    /** A bonus chip at the cap (runes + pets share BONUS_CAP): the reason, in its tip. */
+    capTip: 'Cap {cap} for runes and pets together: runes give {raw}, {eff} counts',
+    /** …the sell chip when all sell bonuses together hit SELL_BONUS_CAP. */
+    capSellTip: 'All sell bonuses together stop at +100%: runes give {raw}, {eff} counts',
   },
   finds: {
     title: 'Finds',
@@ -59,6 +65,12 @@ export const ctabs: Translation<typeof ru> = {
     noPoints: 'No free points — prestige gives them',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
     resetArm: 'Tap again to reset skills',
+    /** Short phone: the ‹ › page buttons of the skills strip (aria-label + mouse tip). */
+    prev: 'Previous skills',
+    next: 'More skills',
+    /** «Blat»: the rank a prestige starts from now → after «Learn» (rank letters). */
+    blatStep: 'Start: rank {now} → {next}',
+    blatNow: 'Start: rank {now}',
   },
   /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
   bonus: {

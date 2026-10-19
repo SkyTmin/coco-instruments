@@ -26,6 +26,7 @@ import { useFinanceStore } from '@/store';
 import type { ParcelOpen } from '@/store';
 import { CREW_ON } from '@/lib/features';
 import {
+  BONUS_CAP,
   bonusOf,
   FINDS,
   findsFound,
@@ -33,8 +34,11 @@ import {
   fusePlan,
   ITEMS,
   itemPrice,
+  LAST_RANK,
   MILES,
   mileReady,
+  modsOf,
+  NO_BONUS,
   PERKS,
   perkPointsFree,
   rankLetter,
@@ -60,6 +64,7 @@ import {
   perkName,
   perkText,
   runeName,
+  runeText,
   t,
   useT,
 } from '@/i18n';
@@ -120,6 +125,30 @@ function fitDown(base: number, max: number, dpr: number): number {
 const slotFor = (px: number, scale: number, pad: number) => Math.ceil(px / scale) + pad;
 const slotVar = (n: number) => ({ '--slot': `calc(${n} * var(--u))` }) as CSSProperties;
 
+/**
+ * The showcase area of an inspect panel (the height left after the grid / tree, R66): its size in
+ * CSS px, measured (it is `flex: 1 1 0`, so the art inside never feeds back into it).
+ */
+function useShowBox(on: boolean) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!on || !el) return undefined;
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [on]);
+  return [ref, box] as const;
+}
+
 /** Block title: what it is + what to do (owner: every block obvious to a new player). */
 function Head({ title, hint, right }: { title: ReactNode; hint?: ReactNode; right?: ReactNode }) {
   return (
@@ -133,8 +162,38 @@ function Head({ title, hint, right }: { title: ReactNode; hint?: ReactNode; righ
   );
 }
 
+/**
+ * A number that counts to its new value (≈ 400 ms, 12 steps; at once with reduced motion) — a buy
+ * or a shatter is seen, not a jump (critic5 «Лавка 5»).
+ */
+function useCountTo(n: number): number {
+  const [shown, setShown] = useState(n);
+  const from = useRef(n);
+  useEffect(() => {
+    const a = from.current;
+    if (a === n || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      from.current = n;
+      setShown(n);
+      return undefined;
+    }
+    const t0 = performance.now();
+    let id = 0;
+    const tick = (now: number) => {
+      const k = Math.min(1, Math.ceil(((now - t0) / 400) * 12) / 12);
+      const v = Math.round(a + (n - a) * k);
+      from.current = v;
+      setShown(v);
+      if (k < 1) id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [n]);
+  return shown;
+}
+
 /** Tokens: always in the head's right corner. */
 function Purse({ n }: { n: number }) {
+  const v = useCountTo(n);
   return (
     <span
       className="px-dark ctab-purse"
@@ -142,7 +201,10 @@ function Purse({ n }: { n: number }) {
       aria-label={t('camp.purseTokens', { n, v: fmtNum(n) })}
     >
       <TokenIcon size={18} />
-      <span className="px-num">{fmtNum(n)}</span>
+      {/* as wide as the final value while it counts: the plate never resizes mid-count */}
+      <span className="px-num" style={{ minWidth: `${fmtNum(n).length}ch` }}>
+        {fmtNum(v)}
+      </span>
     </span>
   );
 }
@@ -330,14 +392,51 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
   // Bonus words go all together when one of them would be cut: a lone «прода…» reads worse than
   // the stat picture alone (its full text is the chip's tip). Values and the language change the
   // words — checked after every render; the box's width — by a ResizeObserver.
+  // The rune's full sentence likewise: when two lines don't hold it (fr «aux chances
+  // d'enchantement de la pioche et de la hache» in a 134-px panel), the bonus box's shorter
+  // `camp.bonus.*` takes its place; the full one stays the tip.
+  const fullRef = useRef<HTMLSpanElement>(null);
+  const givesRef = useRef<HTMLSpanElement>(null);
+  const fuseRef = useRef<HTMLDivElement>(null);
   const fitBonus = useCallback(() => {
     const el = bonusBox.current;
-    if (!el) return;
-    el.classList.remove('is-tight');
-    const cut = [...el.querySelectorAll<HTMLElement>('.ctab-bonus__w')].some(
-      (w) => w.scrollWidth > w.clientWidth + 1,
-    );
-    el.classList.toggle('is-tight', cut);
+    if (el) {
+      el.classList.remove('is-tight');
+      const cut = [...el.querySelectorAll<HTMLElement>('.ctab-bonus__w')].some(
+        (w) => w.scrollWidth > w.clientWidth + 1,
+      );
+      el.classList.toggle('is-tight', cut);
+    }
+    const full = fullRef.current;
+    if (full) {
+      full.classList.remove('is-tight');
+      full.classList.toggle('is-tight', full.scrollHeight > full.clientHeight + 1);
+    }
+    // …and the short word itself: en «+4.6% enchants» is 150 px in the short phone's 134 — the
+    // number alone then (the sentence under it names the stat).
+    const gives = givesRef.current;
+    if (gives) {
+      gives.classList.remove('is-tight');
+      gives.classList.toggle('is-tight', gives.scrollWidth > gives.clientWidth + 1);
+    }
+    // The fuse plan in pictures: the result's name would be cut (it «Si consumano:» on a phone
+    // landscape) — «Uses up:» goes first, then the name (the result's picture still says it).
+    const fuse = fuseRef.current;
+    if (fuse) {
+      fuse.classList.remove('is-tight', 'is-bare');
+      const name = fuse.querySelector<HTMLElement>(':scope.is-fuse > b');
+      // the text's own box, not scrollWidth: a 1-px overrun («Jera III», 59.3 in 58.1) rounds away
+      const cut = () => {
+        if (!name) return false;
+        const rg = document.createRange();
+        rg.selectNodeContents(name);
+        return rg.getBoundingClientRect().right > name.getBoundingClientRect().right + 0.5;
+      };
+      if (cut()) {
+        fuse.classList.add('is-tight');
+        if (cut()) fuse.classList.add('is-bare');
+      }
+    }
   }, []);
   useLayoutEffect(fitBonus);
   useEffect(() => {
@@ -345,6 +444,8 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(fitBonus);
     ro.observe(el);
+    if (fullRef.current) ro.observe(fullRef.current);
+    if (fuseRef.current) ro.observe(fuseRef.current);
     return () => ro.disconnect();
   }, [fitBonus]);
   const open = socketsOpen(p, axeLevel);
@@ -478,13 +579,37 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     dpr,
   );
   const sockSlot = slotFor(sockPx, scale, 6);
-  const inspPx = fit(40, lay === 'wide' ? 30 : 24, scale, dpr);
+  const inspPx = fit(40, 30, scale, dpr);
   const actSize = short || lay === 'tall' || lay === 'land' ? 'sm' : undefined;
 
   // The amulet's own bonus: the worn runes only (the squad's pets show theirs in the Nursery), so
-  // four sockets give at most four kinds and the 2×2 box never scrolls (critic5 P0).
-  const b = bonusOf({ runes: p.runes, sockets: p.sockets });
-  const bonus = BONUS_KEYS.filter((k) => b[k] > 0);
+  // four sockets give at most four kinds and the 2×2 box never scrolls (critic5 P0). Each chip
+  // says what the runes REALLY add: the mine caps runes + pets together (`BONUS_CAP`) and all sell
+  // bonuses together (`SELL_BONUS_CAP`), so a chip is the full bonus minus the one without the
+  // runes; a chip under its rune sum gets a cap mark and the reason in its tip (critic14 (a)).
+  const raw: Record<string, number> = {};
+  for (const id of p.sockets) {
+    const r = id ? p.runes.find((z) => z.id === id) : null;
+    if (r) raw[r.kind] = (raw[r.kind] ?? 0) + runePower(r);
+  }
+  const bonus = BONUS_KEYS.filter((k) => (raw[k] ?? 0) > 0);
+  const withR = bonusOf(p);
+  const noR = bonusOf({ ...p, sockets: [] });
+  const sellK = modsOf(p).sell / modsOf({ ...p, sockets: [] }).sell;
+  const b = { ...NO_BONUS };
+  for (const k of bonus)
+    b[k] = Math.max(0, k === 'sell' ? (sellK - 1) * (1 + noR.sell) : withR[k] - noR[k]);
+  const capped = (k: keyof Bonus) => b[k] < (raw[k] ?? 0) - 1e-6;
+  const chipTip = (k: keyof Bonus) =>
+    capped(k)
+      ? withR[k] >= BONUS_CAP[k] - 1e-6
+        ? t('ctabs.runes.capTip', {
+            cap: pctText(BONUS_CAP[k]),
+            raw: pctText(raw[k] ?? 0),
+            eff: pctText(b[k]),
+          })
+        : t('ctabs.runes.capSellTip', { raw: pctText(raw[k] ?? 0), eff: pctText(b[k]) })
+      : `${pctText(b[k])} ${t(`camp.bonus.${k}`)}`;
   // Bonus pictures: the kit's 12 × 12 stat art at 24 CSS px (36 at ui-scale ≥ 4), whole device
   // pixels per art pixel (as the Nursery's `useStatPx`).
   const stPx = `${(Math.max(1, Math.round(((scale >= 4 ? 36 : 24) * dpr) / 12)) * 12) / dpr}px`;
@@ -531,27 +656,31 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
                     <Icon name="plus" />
                   )}
                 </Slot>
-                {/* A worn rune's % is in the bonus box below — no caption; a locked socket says
-                    its condition on a cream plate (R53: no text straight on the stone). */}
-                <span className={`ctab-sock__cap${locked ? ' is-lock' : ''}`}>
-                  {r ? '' : locked ? lockText(i) : t('camp.runes.empty')}
+                {/* A worn rune's % is in the bonus box below and an empty socket has its gold «+»
+                    (the name is its aria-label) — no caption; a locked socket says its condition
+                    on a cream plate (R53: no text straight on the stone, critic14 #4). */}
+                <span className={`ctab-sock__cap${!r && locked ? ' is-lock' : ''}`}>
+                  {!r && locked ? lockText(i) : ''}
                 </span>
               </div>
             );
           })}
         </div>
       </Panel>
+      {/* phone landscape: the box sits under the pouch column — it says whose bonus it is */}
+      {lay === 'land' && <span className="ctab-bonus__title">{t('ctabs.runes.gives')}</span>}
       <div ref={bonusBox} className="ctab-bonus" style={{ '--st': stPx } as CSSProperties}>
         {bonus.length ? (
           bonus.map((k) => (
             <span
               key={k}
-              className="ctab-chip ctab-bonus__chip"
-              data-tip={`${pctText(b[k])} ${t(`camp.bonus.${k}`)}`}
-              aria-label={`${pctText(b[k])} ${t(`camp.bonus.${k}`)}`}
+              className={`ctab-chip ctab-bonus__chip${capped(k) ? ' is-cap' : ''}`}
+              data-tip={chipTip(k)}
+              aria-label={chipTip(k)}
             >
               <i className={`ctab-st ctab-st--${k}`} aria-hidden="true" />
               <b className="px-num">{pctText(b[k])}</b>
+              {capped(k) && <Icon name="excl" className="ctab-bonus__cap" />}
               <span className="ctab-bonus__w">{t(`ctabs.bonus.${k}`)}</span>
             </span>
           ))
@@ -613,6 +742,24 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           : ''
     : '';
 
+  // The fuse plan in pictures: «Уйдут: [rune] [rune] → [rune] Гебо II» (the sentence with the
+  // two runes' % is the tip and the aria-label; critic14 «next pass» 6). A short phone keeps words.
+  const fusePx = fit(40, lay === 'tall' ? 8 : 12, scale, dpr);
+  const fuseArt =
+    rune && plan && !short ? (
+      <>
+        <span>{t('camp.runes.fuseGo')}</span>
+        {plan.with.map((r: Rune) => (
+          <RuneIcon key={r.id} kind={r.kind} tier={r.tier} size={fusePx} />
+        ))}
+        <Icon name="right" />
+        <RuneIcon kind={rune.kind} tier={rune.tier + 1} size={fusePx} />
+        <b>
+          {runeName(rune.kind)} {RUNE_ROMAN[rune.tier]}
+        </b>
+      </>
+    ) : null;
+
   // The panel keeps one height: with nothing picked the same rows are laid out invisibly (a
   // stand-in rune) and the prompt lies over them — picking a rune never moves a box.
   const shown: Rune = rune ?? { id: 0, kind: 'sell', tier: 1, roll: 0 };
@@ -631,15 +778,30 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
             >
               {runeName(shown.kind)} {RUNE_ROMAN[shown.tier - 1]}
             </span>
-            <span className="ctab-insp__gives">{runeLine(shown)}</span>
-            <span className="ctab-insp__sub">{t('ctabs.runes.roll', { n: shown.roll })}</span>
+            {/* The effect in the bonus chips' short word (one line on every format, it was cut
+                at 320–390 px: «+4,6% к шансам чар ки…»), the full sentence in two lines under it;
+                the roll («сила 90/100») is only the tip (critic14 #1). */}
+            <span ref={givesRef} className="ctab-insp__gives">
+              {pctText(runePower(shown))}
+              <span className="ctab-insp__gw"> {t(`ctabs.bonus.${shown.kind}`)}</span>
+            </span>
+            <span
+              ref={fullRef}
+              className="ctab-insp__sub ctab-insp__full"
+              data-tip={`${runeLine(shown)} · ${t('ctabs.runes.roll', { n: shown.roll })}`}
+            >
+              <span className="ctab-insp__full-l">{runeText(shown.kind)}</span>
+              <span className="ctab-insp__full-s">{t(`camp.bonus.${shown.kind}`)}</span>
+            </span>
           </span>
         </div>
         <div
-          className={`ctab-insp__line${note ? ' is-note' : ''}`}
-          data-tip={short ? (note ?? fuseLine) || undefined : undefined}
+          ref={fuseRef}
+          className={`ctab-insp__line${note ? ' is-note' : fuseArt ? ' is-fuse' : ''}`}
+          data-tip={short || (fuseArt && !note) ? (note ?? fuseLine) || undefined : undefined}
+          aria-label={fuseArt && !note ? fuseLine : undefined}
         >
-          {note ?? fuseLine}
+          {note ?? fuseArt ?? fuseLine}
         </div>
         <div className="ctab-insp__acts">
           <Button
@@ -664,7 +826,7 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           >
             <GxIcon name="hammer" className="ctab-shatter__ico" />
             <span className="px-num">+{fmtNum(RUNE_SHATTER[shown.tier - 1])}</span>
-            <TokenIcon size={16} />
+            <TokenIcon size={24} />
           </Button>
         </div>
       </div>
@@ -698,6 +860,10 @@ export const FindsTab = memo(function FindsTab() {
   // slots as big as a quarter of the width and a third of the height let (≈ 80 px with 64-px art
   // on a phone, ≈ 120 on a tablet, 52 at 320×568); the other layouts keep auto-fill columns.
   const four = lay === 'one' || lay === 'wide';
+  // Phone portrait (not short) and tablet portrait: the case is as tall as its rows and the
+  // inspect panel below is a showcase — the find as big as the height left over (144–192 px on a
+  // phone; 210–318 px stood empty under the case, critic14 #2 / R66).
+  const show = (lay === 'one' && !short) || lay === 'tall';
   const box = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState(0);
   useLayoutEffect(() => {
@@ -709,18 +875,20 @@ export const FindsTab = memo(function FindsTab() {
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
       const rows = Math.ceil(FINDS.length / 4);
+      const byW = (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4;
+      // a showcase case sizes by its width only (its height follows its rows)
       setCell(
-        Math.min(
-          (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4,
-          (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows,
-        ),
+        show
+          ? byW
+          : Math.min(byW, (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows),
       );
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [four]);
+  }, [four, show]);
+  const [artRef, artBox] = useShowBox(show);
   const [sel, setSel] = useState(() => FINDS.find((f) => p.finds[f.id])?.id ?? FINDS[0].id);
   const f = FINDS.find((x) => x.id === sel) ?? FINDS[0];
   const n = p.finds[f.id] ?? 0;
@@ -735,7 +903,10 @@ export const FindsTab = memo(function FindsTab() {
       : slotFor(px, scale, padU);
   // the selected find big: ≥ 96 px on a phone with room and on a tablet; 48 on a short phone
   // (with 64, es «Moneda antigua» was cut at 320)
-  const bigPx = fit(16, lay === 'wide' ? 40 : roomy ? 48 : short ? 24 : 30, scale, dpr);
+  const bigPx =
+    show && artBox.h > 0
+      ? fitDown(16, Math.min(artBox.h, artBox.w, 192), dpr)
+      : fit(16, lay === 'wide' ? 40 : roomy ? 48 : short ? 24 : 30, scale, dpr);
   const pick = (id: string) => {
     if (id === sel) return;
     selectionChanged();
@@ -783,9 +954,13 @@ export const FindsTab = memo(function FindsTab() {
           })}
         </Grid>
       </div>
-      <Panel material="obsidian" className="ctab-insp ctab-insp--find" aria-live="polite">
+      <Panel
+        material="obsidian"
+        className={`ctab-insp ctab-insp--find${show ? ' is-show' : ''}`}
+        aria-live="polite"
+      >
         <div className="ctab-insp__top">
-          <span className="ctab-insp__art">
+          <span ref={artRef} className="ctab-insp__art">
             <img
               className="ctab-find"
               src={findTexture(f.id, !n)}
@@ -837,15 +1012,7 @@ type Gift = { k: string; tip: string; node: ReactNode };
 /** At most three reward chips, the rest folded into «+N» (its tip lists them). `compact` (phone /
  * tablet portrait): one line of chips — «+N» takes the third place (the second on a short phone);
  * the parcel and the rune chips keep the icon and the tier only, the full words go to the tip. */
-function MileGifts({
-  m,
-  compact,
-  short,
-}: {
-  m: (typeof MILES)[number];
-  compact: boolean;
-  short: boolean;
-}) {
+function MileGifts({ m, short }: { m: (typeof MILES)[number]; short: boolean }) {
   const r = m.reward;
   const all: Gift[] = [];
   if (r.tokens)
@@ -878,7 +1045,7 @@ function MileGifts({
       node: (
         <>
           <GxIcon name="gift" />
-          {compact ? chestName(r.parcel) : tip}
+          <span className="ctab-chip__w">{chestName(r.parcel)}</span>
         </>
       ),
     });
@@ -892,7 +1059,7 @@ function MileGifts({
       node: (
         <>
           <GxIcon name="rune" />
-          {compact ? <b className="px-num">{roman}</b> : tip}
+          <b className="px-num">{roman}</b>
         </>
       ),
     });
@@ -904,7 +1071,7 @@ function MileGifts({
       node: (
         <>
           <Icon name="plus" />
-          {compact ? t('ctabs.miles.socket') : t('camp.mile.socket')}
+          <span className="ctab-chip__w">{t('ctabs.miles.socket')}</span>
         </>
       ),
     });
@@ -915,18 +1082,18 @@ function MileGifts({
       node: (
         <>
           <EggArt egg={r.egg} size={16} />
-          {compact ? t(`nursery.egg.${r.egg}`) : nameIn(eggName(r.egg))}
+          <span className="ctab-chip__w">{t(`nursery.egg.${r.egg}`)}</span>
         </>
       ),
     });
-  const limit = !compact ? 3 : short ? 2 : 3;
-  const keep = !compact ? 3 : 2;
+  const limit = short ? 2 : 3;
+  const keep = 2;
   const shown = all.length > limit ? all.slice(0, keep) : all;
   const rest = all.slice(shown.length);
   return (
     <span className="ctab-gifts">
       {shown.map((g) => (
-        <span key={g.k} className="ctab-chip" data-tip={compact ? g.tip : undefined}>
+        <span key={g.k} className="ctab-chip" data-tip={g.tip}>
           {g.node}
         </span>
       ))}
@@ -950,8 +1117,8 @@ export const MilesTab = memo(function MilesTab({
 }) {
   const t = useT();
   const { lay, short } = useLay();
-  // phone / tablet portrait: one row «icon | title + bar | claim», the condition is the icon's tip
-  const compact = lay === 'one' || lay === 'tall';
+  // Every format: the compact row «icon | title + chips + bar | claim», the condition is the
+  // icon's tip; two columns on phone landscape / wide (2–4 of 18 rows showed there, critic14 #3).
   const p = useFinanceStore((s) => s.prison);
   const claim = useFinanceStore((s) => s.prisonMileClaim);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
@@ -999,6 +1166,28 @@ export const MilesTab = memo(function MilesTab({
     return () => cancelAnimationFrame(id);
   }, []);
   const shownRows = allRows ? order : order.slice(0, MILES_FIRST);
+  // Chips keep to their lines (one; a ready row on a tablet / desktop two, beside «Take»): when
+  // they would wrap further, their words go — the pictures and numbers stay, the words are the
+  // tips (`.is-tight`). Rows off screen skip layout (`content-visibility`), so each chip box is
+  // checked when it gets a size.
+  const list = useRef<HTMLDivElement>(null);
+  const two = lay === 'tall' || lay === 'wide';
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return undefined;
+    const fitGifts = (g: Element) => {
+      g.classList.remove('is-tight');
+      const tops = new Set([...g.children].map((c) => Math.round(c.getBoundingClientRect().top)));
+      const max = two && g.closest('.ctab-mile')?.querySelector('.ctab-mile__swap') ? 2 : 1;
+      g.classList.toggle('is-tight', tops.size > max);
+    };
+    const all = [...el.querySelectorAll('.ctab-gifts')];
+    all.forEach(fitGifts);
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver((es) => es.forEach((e) => fitGifts(e.target)));
+    all.forEach((g) => ro.observe(g));
+    return () => ro.disconnect();
+  });
   const done = rows.filter((r) => r.done).length;
   // X / pad Y: take the top ready one.
   useAction(
@@ -1028,7 +1217,7 @@ export const MilesTab = memo(function MilesTab({
         }
       />
       <div className="ctab-scroll">
-        <div className="ctab-miles__list">
+        <div ref={list} className="ctab-miles__list">
           {shownRows.map(({ m, done: isDone, ready }) => {
             const [v, goal] = m.progress(p);
             return (
@@ -1038,7 +1227,7 @@ export const MilesTab = memo(function MilesTab({
               >
                 <span
                   className={`px-slot px-slot--r${ready ? 4 : 0} ctab-mile__art`}
-                  data-tip={compact ? mileText(m.id) : undefined}
+                  data-tip={mileText(m.id)}
                   aria-hidden="true"
                 >
                   <span className="px-slot__art">
@@ -1047,8 +1236,7 @@ export const MilesTab = memo(function MilesTab({
                 </span>
                 <span className="ctab-mile__info">
                   <span className="ctab-mile__name">{mileTitle(m.id)}</span>
-                  {!compact && <span className="ctab-mile__text">{mileText(m.id)}</span>}
-                  <MileGifts m={m} compact={compact} short={short} />
+                  <MileGifts m={m} short={short} />
                 </span>
                 <span className="ctab-mile__end">
                   {ready || takenNow.current.has(m.id) ? (
@@ -1057,7 +1245,7 @@ export const MilesTab = memo(function MilesTab({
                     <span className="ctab-mile__swap">
                       <Button
                         kind="primary"
-                        size={compact ? 'sm' : undefined}
+                        size="sm"
                         className={isDone ? 'is-gone' : undefined}
                         onClick={() => take(m.id)}
                       >
@@ -1133,8 +1321,17 @@ export const PerksTab = memo(function PerksTab() {
   const t = useT();
   // A short phone takes the tablet-portrait skills (one-line values, smaller nodes) — the tree
   // was squeezed to nothing at 320×568.
-  const { lay: lay0, short } = useLay();
+  const { lay: lay0, short, scale } = useLay();
   const lay: Lay = short ? 'tall' : lay0;
+  // Phone / tablet portrait and the wide side column: the panel is a showcase — the skill's picture
+  // as big as the height left over (36–72u: 72–144 px on a phone), the words under it (critic14 #2).
+  const show = !short && lay !== 'land';
+  const [artRef, artBox] = useShowBox(show);
+  const tileU = show
+    ? Math.max(36, Math.min(72, Math.floor(Math.min(artBox.h, artBox.w) / scale)))
+    : short
+      ? 24 // 48 px beside the words: a 320-px panel keeps two lines for the effect and step
+      : 36;
   const p = useFinanceStore((s) => s.prison);
   const prisonPerk = useFinanceStore((s) => s.prisonPerk);
   const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
@@ -1147,26 +1344,92 @@ export const PerksTab = memo(function PerksTab() {
   const [armed, setArmed] = useState(false);
   const guard = useArmGuard();
   const root = useRef<HTMLDivElement>(null);
-  // Short phone: the nodes are one sideways strip; a › at its right end while more skills lie
-  // beyond (a strip that ends on a whole node gave no hint of the other three).
+  // Short phone: the nodes are a sideways strip in pages as wide as the strip (whole nodes only —
+  // no name cut by the edge at rest), snapped; ‹ › are real buttons that turn a page (critic14 #5:
+  // a `pointer-events: none` › passed the tap to the node under it and never scrolled).
   const strip = useRef<HTMLDivElement>(null);
   const lastLearn = useRef(0);
-  const [more, setMore] = useState(false);
-  const fitStrip = useCallback(() => {
+  const [pages, setPages] = useState<number[] | null>(null);
+  const [edge, setEdge] = useState({ less: false, more: false });
+  const fitArrows = useCallback(() => {
     const el = strip.current;
-    setMore(!!el && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    if (!el) return;
+    const less = el.scrollLeft > 1;
+    const more = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setEdge((e) => (e.less === less && e.more === more ? e : { less, more }));
   }, []);
+  const paginate = useCallback(() => {
+    const el = strip.current;
+    if (!el) return;
+    const row = el.firstElementChild as HTMLElement | null;
+    const nodes = [...el.querySelectorAll<HTMLElement>('.ctab-node')];
+    const arrow = el.parentElement?.querySelector<HTMLElement>('.ctab-tree__pg');
+    if (!row || !arrow) return;
+    // (a page has the row's 2u gap: the same sum before and after paging — no loop)
+    const gap = parseFloat(getComputedStyle(el.querySelector('.ctab-page') ?? row).columnGap) || 0;
+    // each page leaves an arrow's width (and a gap) free at both ends
+    const avail = el.clientWidth - 2 * (arrow.offsetWidth + gap);
+    const out: number[] = [];
+    let n = 0;
+    let w = 0;
+    for (const nd of nodes) {
+      const nw = nd.offsetWidth;
+      if (n && w + gap + nw > avail) {
+        out.push(n);
+        n = 0;
+        w = 0;
+      }
+      w += (n ? gap : 0) + nw;
+      n++;
+    }
+    if (n) out.push(n);
+    setPages((pg) => (pg && pg.join() === out.join() ? pg : out));
+  }, []);
+  useLayoutEffect(() => {
+    if (short) paginate();
+  });
+  // The effect keeps to its lines: when it would run over (ru «после престижа — на ранг выше» at
+  // 320), «· за уровень» goes — the step line under it shows the next level anyway; the whole
+  // sentence is the tip.
+  const subRef = useRef<HTMLSpanElement>(null);
+  const fitSub = useCallback(() => {
+    const el = subRef.current;
+    if (!el) return;
+    el.classList.remove('is-tight');
+    el.classList.toggle('is-tight', el.scrollHeight > el.clientHeight + 1);
+  }, []);
+  useLayoutEffect(fitSub);
+  useEffect(() => {
+    const el = subRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(fitSub);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitSub]);
   useEffect(() => {
     const el = strip.current;
     if (!short || !el) {
-      setMore(false);
+      setEdge({ less: false, more: false });
       return undefined;
     }
-    fitStrip();
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fitStrip);
+    fitArrows();
+    const ro =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            paginate();
+            fitArrows();
+          });
     ro?.observe(el);
     return () => ro?.disconnect();
-  }, [short, fitStrip]);
+  }, [short, fitArrows, paginate, pages]);
+  const turn = (dir: 1 | -1) => {
+    const el = strip.current;
+    if (!el) return;
+    tapLight();
+    const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollBy({ left: dir * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  };
   const k = list.find((x) => x.id === sel) ?? list[0];
   const lv = p.perks[k.id];
   const max = lv >= k.max;
@@ -1236,12 +1499,39 @@ export const PerksTab = memo(function PerksTab() {
   const now = perkVal(perkAt(k.id, lv));
   const next = perkVal(perkAt(k.id, lv + 1));
   // One line «Сейчас +6% → +12%» (the rows took 106 px; the effect's noun is the line above).
-  const step = max
-    ? `${t('ctabs.perks.now')} ${now ?? `${lv}/${k.max}`}`
-    : t('ctabs.perks.step', {
-        now: lv ? (now ?? `${lv}/${k.max}`) : '—',
-        next: next ?? `${lv + 1}/${k.max}`,
-      });
+  // «Blat» has no number: the rank a prestige starts from (the store's `min(LAST_RANK − 1, blat)`).
+  const blatAt = (n: number) => rankLetter(Math.min(LAST_RANK - 1, n));
+  const step =
+    k.id === 'blat'
+      ? max
+        ? t('ctabs.perks.blatNow', { now: blatAt(lv) })
+        : t('ctabs.perks.blatStep', { now: blatAt(lv), next: blatAt(lv + 1) })
+      : max
+        ? `${t('ctabs.perks.now')} ${now ?? `${lv}/${k.max}`}`
+        : t('ctabs.perks.step', {
+            now: lv ? (now ?? `${lv}/${k.max}`) : '—',
+            next: next ?? `${lv + 1}/${k.max}`,
+          });
+
+  const node = (x: (typeof list)[number]) => {
+    const l = p.perks[x.id];
+    return (
+      <div key={x.id} className={`ctab-node${l >= x.max ? ' is-max' : ''}`}>
+        <Slot
+          rarity={l >= x.max ? 4 : l > 0 ? 2 : 0}
+          selected={x.id === sel}
+          locked={locked}
+          count={`${l}/${x.max}`}
+          aria-label={`${perkName(x.id)} ${l}/${x.max}`}
+          onFocus={() => kbd() && pick(x.id)}
+          onClick={() => pick(x.id)}
+        >
+          <GxIcon name={PERK_ICON[x.id]} style={{ color: PERK_TONE[x.id] } as CSSProperties} />
+        </Slot>
+        <span className="ctab-node__name">{perkName(x.id)}</span>
+      </div>
+    );
+  };
 
   return (
     <div ref={root} className={`px ctab ctab-perks ctab--${lay}${short ? ' ctab--short' : ''}`}>
@@ -1286,42 +1576,59 @@ export const PerksTab = memo(function PerksTab() {
         }
       />
       <Panel material="stone" stage className="ctab-tree">
-        {more && (
-          <span className="ctab-tree__more" aria-hidden="true">
-            <Icon name="right" />
-          </span>
-        )}
-        <div ref={strip} className="ctab-scroll" onScroll={short ? fitStrip : undefined}>
-          <div className="ctab-nodes" style={slotVar(nodeSlot)}>
-            {list.map((x) => {
-              const l = p.perks[x.id];
-              return (
-                <div key={x.id} className={`ctab-node${l >= x.max ? ' is-max' : ''}`}>
-                  <Slot
-                    rarity={l >= x.max ? 4 : l > 0 ? 2 : 0}
-                    selected={x.id === sel}
-                    locked={locked}
-                    count={`${l}/${x.max}`}
-                    aria-label={`${perkName(x.id)} ${l}/${x.max}`}
-                    onFocus={() => kbd() && pick(x.id)}
-                    onClick={() => pick(x.id)}
-                  >
-                    <GxIcon
-                      name={PERK_ICON[x.id]}
-                      style={{ color: PERK_TONE[x.id] } as CSSProperties}
-                    />
-                  </Slot>
-                  <span className="ctab-node__name">{perkName(x.id)}</span>
-                </div>
-              );
-            })}
+        <div ref={strip} className="ctab-scroll" onScroll={short ? fitArrows : undefined}>
+          <div
+            className={`ctab-nodes${short && pages ? ' is-paged' : ''}`}
+            style={slotVar(nodeSlot)}
+          >
+            {short && pages
+              ? pages.map((cnt, pi) => {
+                  const from = pages.slice(0, pi).reduce((x, c) => x + c, 0);
+                  return (
+                    <div key={pi} className="ctab-page">
+                      {list.slice(from, from + cnt).map(node)}
+                    </div>
+                  );
+                })
+              : list.map(node)}
           </div>
         </div>
+        {short && (
+          <>
+            <Button
+              size="sm"
+              icon="left"
+              label={t('ctabs.perks.prev')}
+              className={`ctab-tree__pg is-prev${edge.less ? '' : ' is-gone'}`}
+              tabIndex={-1}
+              onClick={() => turn(-1)}
+            />
+            <Button
+              size="sm"
+              icon="right"
+              label={t('ctabs.perks.next')}
+              className={`ctab-tree__pg is-next${edge.more ? '' : ' is-gone'}`}
+              tabIndex={-1}
+              onClick={() => turn(1)}
+            />
+          </>
+        )}
       </Panel>
-      <Panel material="obsidian" className="ctab-insp ctab-insp--perk" aria-live="polite">
+      <Panel
+        material="obsidian"
+        className={`ctab-insp ctab-insp--perk${show ? ' is-show' : ''}`}
+        aria-live="polite"
+      >
         <div className="ctab-insp__top">
-          <span className="ctab-insp__art ctab-perk-art" aria-hidden="true">
-            <GxIcon name={PERK_ICON[k.id]} style={{ color: PERK_TONE[k.id] } as CSSProperties} />
+          <span ref={artRef} className="ctab-insp__art" aria-hidden="true">
+            <span className="ctab-perk-art" style={{ '--tile': tileU } as CSSProperties}>
+              <GxIcon name={PERK_ICON[k.id]} style={{ color: PERK_TONE[k.id] } as CSSProperties} />
+              {/* row layouts (short phone, phone landscape): the level on the picture's corner, as
+                  on the node — the name keeps the width (en «Connections 0/3» was cut) */}
+              <span className="px-slot__n ctab-perk-art__lv">
+                {lv}/{k.max}
+              </span>
+            </span>
           </span>
           <span className="ctab-insp__head">
             <span className="ctab-insp__name is-plain">
@@ -1330,8 +1637,13 @@ export const PerksTab = memo(function PerksTab() {
                 {lv}/{k.max}
               </span>
             </span>
-            <span className="ctab-insp__sub">
-              {perkText(k.id)} · {t('ctabs.perks.per')}
+            <span
+              ref={subRef}
+              className="ctab-insp__sub"
+              data-tip={`${perkText(k.id)} · ${t('ctabs.perks.per')}`}
+            >
+              {perkText(k.id)}
+              <span className="ctab-insp__per"> · {t('ctabs.perks.per')}</span>
             </span>
           </span>
         </div>

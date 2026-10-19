@@ -32,6 +32,12 @@ export const ctabs = {
     wornNoShatter: 'Сначала вынь из оберега',
     /** Short phone (no socket captions): a locked socket tapped — its condition. */
     lockedShort: 'Гнездо: {cond}',
+    /** Phone landscape: the title over the bonus box under the stone. */
+    gives: 'Оберег даёт',
+    /** A bonus chip at the cap (runes + pets share BONUS_CAP): the reason, in its tip. */
+    capTip: 'Потолок {cap} на руны и питомцев вместе: руны дают {raw}, засчитано {eff}',
+    /** …the sell chip when all sell bonuses together hit SELL_BONUS_CAP. */
+    capSellTip: 'Все надбавки к продаже вместе — не больше +100%: руны дают {raw}, засчитано {eff}',
   },
   finds: {
     title: 'Находки',
@@ -57,6 +63,12 @@ export const ctabs = {
     noPoints: 'Нет свободных очков — их дают престижи',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
     resetArm: 'Ещё раз — сбросить навыки',
+    /** Short phone: the ‹ › page buttons of the skills strip (aria-label + mouse tip). */
+    prev: 'Предыдущие навыки',
+    next: 'Ещё навыки',
+    /** «Blat»: the rank a prestige starts from now → after «Learn» (rank letters). */
+    blatStep: 'Старт: ранг {now} → {next}',
+    blatNow: 'Старт: ранг {now}',
   },
   /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
   bonus: {

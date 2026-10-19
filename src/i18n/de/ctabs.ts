@@ -34,6 +34,12 @@ export const ctabs: Translation<typeof ru> = {
     wornNoShatter: 'Erst aus dem Amulett',
     /** Short phone (no socket captions): a locked socket tapped — its condition. */
     lockedShort: 'Sockel: {cond}',
+    /** Phone landscape: the title over the bonus box under the stone. */
+    gives: 'Amulett gibt',
+    /** A bonus chip at the cap (runes + pets share BONUS_CAP): the reason, in its tip. */
+    capTip: 'Obergrenze {cap} für Runen und Tiere zusammen: Runen geben {raw}, es zählt {eff}',
+    /** …the sell chip when all sell bonuses together hit SELL_BONUS_CAP. */
+    capSellTip: 'Alle Verkaufsboni zusammen höchstens +100 %: Runen geben {raw}, es zählt {eff}',
   },
   finds: {
     title: 'Funde',
@@ -59,6 +65,12 @@ export const ctabs: Translation<typeof ru> = {
     noPoints: 'Keine freien Punkte – die gibt es fürs Prestige',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */
     resetArm: 'Nochmal tippen zum Zurücksetzen',
+    /** Short phone: the ‹ › page buttons of the skills strip (aria-label + mouse tip). */
+    prev: 'Vorige Talente',
+    next: 'Weitere Talente',
+    /** «Blat»: the rank a prestige starts from now → after «Learn» (rank letters). */
+    blatStep: 'Start: Rang {now} → {next}',
+    blatNow: 'Start: Rang {now}',
   },
   /** Amulet bonus chips (2×2): one short noun after «+7,5%»; the full camp.bonus.* is the tip. */
   bonus: {
