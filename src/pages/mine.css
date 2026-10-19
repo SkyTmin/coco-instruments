@@ -132,6 +132,15 @@ html[data-input='touch'] .mn .px-keyhint {
     display: none;
   }
 }
+/* До 380 px кнопке продажи — две трети строки: de «Verkaufen 9.665 ●» (161 px) в кнопке 133 px
+   на 320 выталкивал монету за край экрана, на 375 — на 1 px за рамку (M5, `sellfit`).
+   Заголовку и полосе хватает остатка. */
+@media (max-width: 380px) {
+  .mn--tall .mn-bag {
+    grid-template-columns: calc(14 * var(--u)) minmax(0, 1fr) minmax(0, 2fr);
+    gap: calc(2 * var(--u));
+  }
+}
 /* Стоя шапка узкая: токены и ключи — обычным кеглем, деньги — крупным. */
 .mn--tall :is(.mn-stat--tokens, .mn-stat--keys) {
   --fs-n: var(--px-fs);
@@ -1903,6 +1912,11 @@ html:not([data-ff^='phone']) .mn :is(.mn-bag__title, .mn-strip__name),
 html:not([data-ff^='phone']) .mn .mn-bag .px-bar__label,
 html:not([data-ff^='phone']) .mn .mn-bag__sell {
   font-size: var(--px-fs);
+}
+/* Планшет лёжа: колонка 85u — de «Verkaufen 9.665 ●» кеглем 22,5 px (245 px) вылезал из кнопки
+   223 px на 11 px с каждой стороны (M5, `sellfit`); подпись кнопки — кеглем подписей. */
+html[data-ff='tablet'] .mn.mn--wide .mn-bag__sell {
+  font-size: var(--px-fs-sm);
 }
 
 /* ---- Сцена нового ранга (prank): анимации прежние (theme.css), рамка, лента,
