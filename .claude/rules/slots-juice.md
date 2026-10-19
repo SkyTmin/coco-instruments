@@ -465,7 +465,11 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   1-art-px shake (`is-nope`) + `tapError()`.
 - **Cascade deck:** Ante is a 44-px toggle at the right end of the bet row; «Купить бонус» is the
   third fact of the info strip (tall) / a row above the money (wide). Deck 178 px, cell 53 × 66 at
-  390. Under 380 px the Cascade bet caption is hidden (the stepper + coin say it; it was «Став…»).
+  390. Under 380 px the Cascade bet caption is hidden (the stepper + coin say it; it was «Став…»);
+  on tablet portrait its steps are 20 u wide (es «Apuesta» was cut beside Ante).
+- **theme.css dead-CSS removal (K) re-checked:** home, finance, an expense page, notes and the
+  guide at pp + d1 with the old vs current theme.css — pixel-identical except the donut chart and
+  an emoji, which differ between two runs of the same build too.
 - **Sheets mount in `CasSheet`** (`openCasSheet(id)`): opening one no longer re-renders the page.
   The skins sheet renders the first cards, the rest are placeholders of the same grid until the next
   frame. Stand pitfall: a first CDP touch flips `data-input` and restyles the whole page — warm up

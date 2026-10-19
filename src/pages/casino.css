@@ -637,6 +637,9 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   flex: none;
   width: 1.1em;
   height: 1.1em;
+  /* …without making the price line taller (the plate is a fact of the strip: +2 px of it is
+     −1 px of every Cascade cell). */
+  margin-block: -0.05em;
 }
 .cas-ante.px-btn {
   flex: none;
