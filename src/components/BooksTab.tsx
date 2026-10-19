@@ -665,11 +665,14 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const gridTile = gridBox.w ? (gridBox.w - (cols - 1) * gap) / cols : 0;
   const gridArt = artPx(gridTile - 2 * ring);
   const cardArt = artPx(Math.min(cardBox.w, cardBox.h, 112 * u));
-  // an offer: 2 × 2 cells; its art beside the price lines, or over them when the cell is tall
-  const offW = (offersBox.w - gap) / 2 - 8 * u; // the frame ring + 2 art px each side
-  const offH = (offersBox.h - gap) / 2 - 4 * u; // the frame ring
+  // an offer: 2 × 2 cells (a row of four in a wide short box — phone landscape); its art beside
+  // the price lines, or over them when the cell is tall
+  const offRow = offersBox.h > 0 && offersBox.w / offersBox.h > 2.4;
+  const offN = offRow ? 4 : 2;
+  const offW = (offersBox.w - (offN - 1) * gap) / offN - 8 * u; // the frame ring + 2 art px a side
+  const offH = (offRow ? offersBox.h : (offersBox.h - gap) / 2) - 4 * u; // the frame ring
   const lineH = 10 * u; // one text row of the offer (name 1.05, the rest 1.1 × the size)
-  const offStack = offersBox.h > 0 && offH - 4 * lineH >= 40 * u;
+  const offStack = offersBox.h > 0 && (offRow || offH - 4 * lineH >= 40 * u);
   const offerArt = !offersBox.w
     ? 0
     : offStack
@@ -1314,7 +1317,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const offersSec = (
     <div
       ref={offersRef}
-      className={`bks-of${offStack ? ' is-stack' : ''}`}
+      className={`bks-of${offStack ? ' is-stack' : ''}${offRow ? ' is-row' : ''}`}
       role="group"
       aria-label={t('books.mageName')}
     >
@@ -1462,7 +1465,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       const head = sh.querySelector<HTMLElement>('.bks-sh__h');
       const headH = (head?.offsetHeight ?? 0) + (parseFloat(getComputedStyle(sh).rowGap) || 0);
       let room = sh.clientHeight - headH;
-      if (layout === 'one') {
+      if (layout !== 'three') {
         const bodyEl = el.querySelector<HTMLElement>('.bks-body');
         const bar = el.querySelector<HTMLElement>('.bks-bar');
         const bg = bodyEl ? parseFloat(getComputedStyle(bodyEl).rowGap) || 0 : 0;
@@ -1471,6 +1474,16 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       }
       const rows = Math.max(1, Math.floor((room + gap) / (gridTile + gap)));
       grid.style.height = `${rows * gridTile + (rows - 1) * gap}px`;
+    }
+    // the offers' tier names: one too long for its cell (a row of four) — the art and the
+    // price say the tier, the name stays in the aria-label
+    const ofEl = el.querySelector<HTMLElement>('.bks-of');
+    if (ofEl) {
+      ofEl.classList.remove('is-noname');
+      const cut = [...ofEl.querySelectorAll<HTMLElement>('.bks-offer__name')].some(
+        (x) => x.scrollWidth > x.clientWidth + 0.5,
+      );
+      ofEl.classList.toggle('is-noname', cut);
     }
     // the card's name: a word too long for its column takes one size step smaller
     const nm = el.querySelector<HTMLElement>('.bks-card__name');
@@ -1518,10 +1531,10 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
           <h1>{t('mineHud.dock.books')}</h1>
           <p>{t('books.purpose')}</p>
         </div>
-        {layout !== 'one' && tabs}
+        {layout === 'three' && tabs}
         {purse}
       </header>
-      {layout === 'one' && tabs}
+      {layout !== 'three' && tabs}
       <div className="bks-body">
         {tab === 'pick' && pickCard}
         {tab === 'pick' && slotsSec}

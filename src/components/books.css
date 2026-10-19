@@ -286,6 +286,12 @@
     display: none;
   }
 }
+/* the ten pips need the stars row to themselves: narrow cards keep «★ 2/10» */
+@container bks-pc (max-width: 390px) {
+  .bks-pc .pxd-pips {
+    display: none;
+  }
+}
 .bks-pc__ico {
   grid-area: ico;
   display: grid;
@@ -472,6 +478,13 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: calc(3 * var(--u));
+}
+.bks-of.is-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+.bks-of.is-noname .bks-offer__name {
+  display: none;
 }
 /* side by side: name / [book | price, state] / the unknown enchant + level range */
 .pxd-btn.bks-offer {
@@ -1005,6 +1018,19 @@
   .bks--one .bks-mg__txt > .bks-h {
     display: none;
   }
+  /* two lines under the name: a sentence keeps them, the note under it goes */
+  .bks-card:is(.is-lock, .is-tier) .bks-card__fx {
+    display: none;
+  }
+  .bks-card:is(.is-empty, .is-free, .is-lock, .is-tier) .bks-card__state {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .bks-card.is-tier .bks-card__state {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   /* the bar's main button says it already (Вписать · 97 %, «Слабее», «В кирке»): the effect
      takes both lines */
   .bks--one .bks-card:is(.is-slot, .is-book) .bks-card__state {
@@ -1016,53 +1042,61 @@
   }
 }
 
-/* ---- Wide: list | card (tablet portrait, phone and tablet landscape, desktop) --------------- */
-.bks:not(.bks--one) .bks-top .bks-tabs {
+/* ---- Tablet portrait: the phone's column with room — facts, the tier's card on «Чародей» ---- */
+.bks--two .bks-sh {
   flex: none;
 }
-.bks--two .bks-body,
+
+/* ---- Landscape (phone, tablet) and desktop: list | card, tabs in the header ------------------ */
+/* a phone on its side with Telegram's rows (≈ 300 px): the offers take the Enchanter's strip —
+   the card beside says what he would (the enchant is a secret until bought) */
+@container bks (max-height: 330px) {
+  .bks--three .bks-mg {
+    display: none;
+  }
+}
+.bks--three .bks-top .bks-tabs {
+  flex: none;
+}
 .bks--three .bks-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   column-gap: var(--g);
   row-gap: var(--bg);
 }
-.bks--three .bks-body {
-  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
-}
-.bks:not(.bks--one) :is(.bks-pc, .bks-mg) {
+.bks--three :is(.bks-pc, .bks-mg) {
   grid-column: 1;
   grid-row: 1;
 }
-.bks:not(.bks--one) :is(.bks-sl, .bks-of) {
+.bks--three :is(.bks-sl, .bks-of) {
   grid-column: 1;
   grid-row: 2 / 4;
 }
-.bks:not(.bks--one) .bks-sl {
+.bks--three .bks-sl {
   align-self: start;
 }
-.bks:not(.bks--one) .bks-card {
+.bks--three .bks-card {
   grid-column: 2;
   grid-row: 1 / 3;
 }
-.bks:not(.bks--one) .bks-bar {
+.bks--three .bks-bar {
   grid-column: 2;
   grid-row: 3;
 }
 /* the shelf: its own column, the card over the bar */
-.bks:not(.bks--one).is-shelf .bks-body {
+.bks--three.is-shelf .bks-body {
   grid-template-rows: minmax(0, 1fr) auto;
 }
-.bks:not(.bks--one) .bks-sh {
+.bks--three .bks-sh {
   grid-column: 1;
   grid-row: 1 / 3;
   min-height: 0;
 }
-.bks:not(.bks--one).is-shelf .bks-card {
+.bks--three.is-shelf .bks-card {
   grid-row: 1;
 }
-.bks:not(.bks--one).is-shelf .bks-bar {
+.bks--three.is-shelf .bks-bar {
   grid-row: 2;
 }
 
