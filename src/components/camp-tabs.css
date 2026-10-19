@@ -48,20 +48,52 @@ html[data-ff='tablet']
   width: calc(8 * var(--u));
   height: calc(8 * var(--u));
 }
-/* The currency itself (purse, shop prices): 24 px on a phone (u = 2), 28 on tablet / desktop (u = 3). */
-.ctab :is(.ctab-purse, .ctab-good__buy) .ptoken-ico {
+/* The currency itself (purse, shop prices, what a shatter gives): 24 px on a phone (u = 2), 28 on
+   tablet / desktop (u = 3). (The shatter button's token was 8u = 16 px on phones: this rule's
+   8u beat `TokenIcon size={24}`, critic17 #4.) */
+.ctab :is(.ctab-purse, .ctab-good__buy, .ctab-insp__acts) .ptoken-ico {
   width: calc(12 * var(--u));
   height: calc(12 * var(--u));
 }
-.ctab:is(.ctab--tall, .ctab--wide) :is(.ctab-purse, .ctab-good__buy) .ptoken-ico {
+.ctab:is(.ctab--tall, .ctab--wide) :is(.ctab-purse, .ctab-good__buy, .ctab-insp__acts) .ptoken-ico {
   width: calc(var(--u) * 28 / 3);
   height: calc(var(--u) * 28 / 3);
+}
+/* …over the label's line box by 1u each way: the shatter button keeps its neighbours' height */
+.ctab .ctab-insp__acts .ptoken-ico {
+  margin-block: calc(-1 * var(--u));
 }
 .ctab .ptear {
   flex: none;
   width: calc(8 * var(--u));
   height: calc(8 * var(--u));
   image-rendering: pixelated;
+}
+
+/* Hit areas ≥ 44 px (R13) around the small buttons, as the skills strip's ‹ › (critic17 #3): an
+   invisible `::before` (the kit focus ring owns `::after`). An absolute pseudo counts from the
+   padding box: 100% is the button less its 1u border, the zone is 45 px (a tap exactly 22 px off
+   centre lands) or the button itself. Vertical only — neighbours in a row stand 2–4u apart (R43);
+   rows of them keep 5u between (10 px at u = 2: 36-px buttons 46 px apart — Chrome snaps a zone
+   edge at a half pixel outwards, 45 apart still let the lower one take the upper's 22nd px). The skills reset sits alone at the plate's end: both ways. */
+.ctab
+  :is(
+    .ctab-points__reset,
+    .ctab-mile .px-btn,
+    .ctab-insp__acts > .px-btn,
+    .ctab-pack__opt,
+    .ctab-good__buy
+  )::before {
+  content: '';
+  position: absolute;
+  top: min(-1 * var(--u), (100% - 45px) / 2);
+  bottom: min(-1 * var(--u), (100% - 45px) / 2);
+  left: calc(-1 * var(--u));
+  right: calc(-1 * var(--u));
+}
+.ctab .ctab-points > .ctab-points__reset::before {
+  left: min(-1 * var(--u), (100% - 45px) / 2);
+  right: min(-1 * var(--u), (100% - 45px) / 2);
 }
 
 /* ---- Head: title + what to do, a plate on the right ------------------------------------------ */
@@ -605,15 +637,23 @@ html[data-ff='tablet']
     'insp' auto
     / minmax(0, 1fr);
 }
-/* Tablet portrait's body is narrow AND short (163×217u): sockets 2×2 beside the pouch, the bonus
-   chips on a full-width row under both (the amulet section dissolves into the grid). */
+/* Tablet portrait's body is narrow AND short (251×206u): sockets 2×2 beside the pouch, the bonus
+   box under the pouch with «Оберег даёт» over it, as on phone landscape (the amulet section
+   dissolves into the grid). On a full-width row under both the stone stood over its left half
+   and hid one chip of two (critic17 #1). */
 .ctab-runes.ctab--tall {
   grid-template:
     'ahead pouch' auto
     'stage pouch' minmax(0, 1fr)
-    'bonus bonus' auto
+    'stage btitle' auto
+    'stage bonus' auto
     'insp insp' auto
     / minmax(0, 9fr) minmax(0, 11fr);
+}
+.ctab--tall .ctab-amulet > .ctab-bonus__title {
+  grid-area: btitle;
+  font: 700 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
 }
 .ctab-runes.ctab--tall > .ctab-amulet {
   display: contents;
@@ -677,6 +717,11 @@ html[data-ff='tablet']
 .ctab-runes:not(.ctab--tall) .ctab-insp__acts > :first-child {
   grid-column: 1 / -1;
 }
+/* phones: 5u between the rows — two 36-px buttons 6 px apart left no room for two 44-px hit
+   areas (critic17 #3) */
+.ctab-runes:is(.ctab--one, .ctab--land) .ctab-insp__acts {
+  row-gap: calc(5 * var(--u));
+}
 .ctab-runes.ctab--land .ctab-insp__acts {
   margin-top: auto;
 }
@@ -735,6 +780,15 @@ html[data-ff='tablet']
   gap: var(--u);
 }
 /* the short word in the small size: «+16,2% продажа» is 152 px at 20 px, the panel 134 */
+/* the stat's words in one line (the full sentence never fits 134 px; its `camp.bonus.*`, or nothing
+   when that won't fit either — `.is-none`): the three stacked buttons keep 45 px apart */
+.ctab-runes.ctab--short .ctab-insp__full {
+  height: var(--ln-sm);
+  -webkit-line-clamp: 1;
+}
+.ctab-insp__full.is-none {
+  visibility: hidden;
+}
 .ctab-runes.ctab--short .ctab-insp__gives {
   font-size: var(--px-fs-sm);
   line-height: 1.25;
@@ -748,7 +802,8 @@ html[data-ff='tablet']
 }
 .ctab-runes.ctab--short .ctab-insp__acts {
   grid-template-columns: minmax(0, 1fr);
-  gap: calc(2 * var(--u));
+  /* 5u: 36-px buttons 46 px apart, each with its own 44-px hit area */
+  gap: calc(5 * var(--u));
   margin-top: auto;
 }
 .ctab-runes.ctab--wide {
@@ -916,10 +971,8 @@ html[data-ff='tablet']
   width: calc(8 * var(--u));
   height: calc(8 * var(--u));
 }
-/* tablet portrait's one-row 5:4:3 shares: «+600 ✦» alone fits the third */
-.ctab--tall .ctab-insp__acts .ctab-shatter__ico {
-  display: none;
-}
+/* (tablet portrait keeps the hammer: the third of its one-row 5:4:3 shares is 168 px — the verb is
+   the picture, «+25 ✦» alone read as a price, critic17 #4) */
 .ctab-insp__acts > .px-btn.is-armed {
   outline: var(--u) solid var(--px-gold);
   outline-offset: var(--u);
@@ -949,6 +1002,8 @@ html[data-ff='tablet']
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* (the chip's line-height 1 made the clip box 1em: «продажа» lost 2 px of descenders) */
+  line-height: 1.25;
 }
 .ctab-bonus.is-tight .ctab-bonus__w {
   display: none;
@@ -1246,8 +1301,10 @@ html[data-ff='tablet']
   opacity: 0.5;
   filter: grayscale(0.7);
 }
-/* 33 rows: the ones off screen skip layout and paint (the tab opens in one commit, R55). */
-.ctab-mile {
+/* 33 rows: the ones off screen skip layout and paint (the tab opens in one commit, R55). Not a
+   ready row: that is paint containment, and the claim's 44-px hit area would end at the row's 1u
+   padding (ready rows stand on top, in sight on opening anyway). */
+.ctab-mile:not(.is-ready) {
   content-visibility: auto;
   contain-intrinsic-size: auto calc(40 * var(--u));
 }
@@ -1443,6 +1500,19 @@ html[data-ff='tablet']
   white-space: nowrap;
   background: rgb(255 246 224 / 0.82);
 }
+/* Tablet landscape / desktop: two columns of three rows over the whole stone (the slot is measured
+   from the tree's height in PerksTab, 30–45u), the odd last node centred under both. */
+.ctab-perks.ctab--wide .ctab-nodes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: center;
+  align-content: space-evenly;
+  box-sizing: border-box;
+  min-height: 100%;
+}
+.ctab-perks.ctab--wide .ctab-node:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
 /* Reset is secondary and free: a small ↶ button at the plate's right end (critic5 P0 — in the
    action row it fell out of the 844×390 window). Armed (first tap) it turns red. */
 .ctab-points > .ctab-points__reset {
@@ -1512,13 +1582,14 @@ html[data-ff='tablet']
   padding-left: 0;
   padding-right: 0;
 }
-/* 44 px to the thumb around a 30-px button (R65); the strip under it is the page's free end.
+/* 46 px to the thumb around a 30-px button (R65; 44 put a tap exactly 22 px off centre on the edge);
+   the strip under it is the page's free end.
    (`::before`: the kit's focus ring is `::after`; an absolute pseudo is placed from the padding
    box, so the 1-u border eats 1 u of the inset.) */
 .ctab-tree > .ctab-tree__pg::before {
   content: '';
   position: absolute;
-  inset: calc(-7px - var(--u)) calc(-7px - var(--u));
+  inset: calc(-8px - var(--u)) calc(-8px - var(--u));
 }
 .ctab-tree > .ctab-tree__pg.is-prev {
   left: calc(var(--pg-side, 5) * var(--u));
@@ -1598,6 +1669,14 @@ html[data-ff='tablet']
 .ctab-insp--perk.is-show .ctab-insp__step {
   text-align: center;
 }
+/* the bare values when the line won't hold its words (measured in PerksTab) */
+.ctab-insp__step-s,
+.ctab-insp__step.is-tight > .ctab-insp__step-l {
+  display: none;
+}
+.ctab-insp__step.is-tight > .ctab-insp__step-s {
+  display: inline;
+}
 .ctab.ctab--short .ctab-insp--perk .ctab-insp__sub {
   height: calc(var(--ln-sm) * 2);
   white-space: normal;
@@ -1611,6 +1690,46 @@ html[data-ff='tablet']
 .ctab--short .ctab-insp--perk .ctab-insp__line {
   height: calc(var(--ln-sm) * 2);
   -webkit-line-clamp: 2;
+}
+/* Short phone (320×568, 375×600): the name over the whole panel, the 72-px picture (36u, twice the
+   node's) beside the effect and the step line — the picture's column under a 48-px one cost the
+   name its width (it «Ricettatore» 191 px), and 48 px was smaller than the name above it
+   (critic17 #4). The frame margin is 4u: the name row costs 2 px more than the step row saves. */
+.ctab-perks.ctab--short .ctab-insp--perk {
+  --pad: 4;
+  display: grid;
+  grid-template:
+    'name name' auto
+    'art sub' auto
+    'art step' auto
+    'line line' auto
+    'acts acts' auto
+    / auto minmax(0, 1fr);
+  gap: var(--u) calc(4 * var(--u));
+  align-content: start;
+}
+.ctab-perks.ctab--short .ctab-insp--perk :is(.ctab-insp__top, .ctab-insp__head) {
+  display: contents;
+}
+.ctab-perks.ctab--short .ctab-insp--perk .ctab-insp__art {
+  grid-area: art;
+  align-self: center;
+}
+.ctab-perks.ctab--short .ctab-insp--perk .ctab-insp__name {
+  grid-area: name;
+}
+.ctab-perks.ctab--short .ctab-insp--perk .ctab-insp__sub {
+  grid-area: sub;
+}
+.ctab-perks.ctab--short .ctab-insp--perk .ctab-insp__step {
+  grid-area: step;
+}
+.ctab-perks.ctab--short .ctab-insp--perk .ctab-insp__line {
+  grid-area: line;
+}
+.ctab-perks.ctab--short .ctab-insp--perk .ctab-insp__acts {
+  grid-area: acts;
+  margin-top: 0;
 }
 .ctab--land .ctab-insp--perk .ctab-insp__acts,
 .ctab--wide .ctab-insp--perk .ctab-insp__acts {
