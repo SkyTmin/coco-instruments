@@ -188,9 +188,7 @@ const SkinCard = memo(function SkinCard({
           <span className="skn-quest">
             <Icon name="lock" />
             {/* Narrow no-break spaces: «×83 / ×200» fits the 100-px column of a 320-px phone. */}
-            <em className="px-num">
-              {`${fmtX(topX)}\u202f/\u202f×${fmtNum(sk.earn.topX)}`}
-            </em>
+            <em className="px-num">{`${fmtX(topX)}\u202f/\u202f×${fmtNum(sk.earn.topX)}`}</em>
             <Bar value={Math.min(1, topX / sk.earn.topX)} />
           </span>
         ) : !available ? (

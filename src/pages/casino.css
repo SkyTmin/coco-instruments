@@ -1085,29 +1085,55 @@ html[data-ff='phone-landscape'] .cas-spin__t {
   translate: 0 var(--u);
 }
 
-/* ---- Slots on tablet landscape and desktop: the machine is the show -------------------------- */
+/* ---- Tablet landscape and desktop: the machine is the show ------------------------------------ */
 /* The info column was 60 % empty parchment beside a cabinet of 11 % of the screen (critic9 #4).
    The facts move into the top of the deck column as a 2 × 2 block, the stage takes the rest and
-   the cabinet becomes height-bound (≥ 75 % of the height). Cascade keeps its three columns: its
-   board is height-bound already. */
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] {
+   the cabinet becomes height-bound (≥ 75 % of the height). Cascade too since critic12 ruling 3:
+   its left column was 60–64 % empty (418 of 696 px on tl), the board was width-bound on tl. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] {
   --cas-r: calc(140 * var(--u));
   grid-template-columns: minmax(0, 1fr) minmax(0, var(--cas-r));
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas: 'stage info' 'stage deck' 'status deck';
 }
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] > .cas-info {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] > .cas-info {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: auto auto auto;
   grid-template-areas: 'lvl lvl' 'jp best' 'sp hist';
   align-content: start;
   gap: calc(2 * var(--u)) calc(4 * var(--u));
 }
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-lvl {
+/* Cascade: level, then the best spin and the spin count side by side. Out of coins the hint takes
+   the whole row (in a half-width cell de needed 4 lines and pushed the deck down). */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--scatter[data-lay='wide'] > .cas-info {
+  grid-template-rows: auto auto;
+  grid-template-areas: 'lvl lvl' 'best sp';
+}
+html:is([data-ff='tablet'], [data-ff='desktop'])
+  .cas--scatter[data-lay='wide']
+  > .cas-info:has(> .cas-broke) {
+  grid-template-areas: 'lvl lvl' 'best best';
+}
+/* As tall as a fact (9u icon row + 2u + the number), so the deck under it stays put. */
+html:is([data-ff='tablet'], [data-ff='desktop'])
+  .cas--scatter[data-lay='wide']
+  > .cas-info
+  > .cas-broke {
+  display: grid;
+  align-content: center;
+  min-height: calc(11 * var(--u) + var(--px-fs-big) * 1.1);
+}
+html:is([data-ff='tablet'], [data-ff='desktop'])
+  .cas--scatter[data-lay='wide']
+  > .cas-info:has(> .cas-broke)
+  > .cas-stat--sp {
+  display: none;
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-lvl {
   flex-wrap: nowrap;
 }
 /* A fact: icon and caption on one line, the number under them at full width. */
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-stat {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-stat {
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-areas: 'ico k' 'v v';
   column-gap: calc(2 * var(--u));
@@ -1115,46 +1141,44 @@ html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .c
   padding: 0;
   border-image-source: none;
 }
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-stat__k {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-stat__k {
   white-space: normal;
   overflow: visible;
   line-height: 1.05;
 }
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-hist {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-hist {
   height: auto;
   grid-template-rows: auto auto;
   row-gap: var(--u);
   align-self: start;
 }
 /* The deck gives up a little height for the facts (the wood frame keeps its 8-u padding). */
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-bal__v {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-bal__v {
   height: calc(16 * var(--u));
 }
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-deck,
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-deck__money {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-deck,
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-deck__money {
   row-gap: calc(2 * var(--u));
 }
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-mini {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-mini {
   min-height: calc(22 * var(--u));
 }
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-spin {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-spin {
   min-height: calc(28 * var(--u));
 }
 /* One row of whole chips: the ones that do not fit wrap to a hidden second line (no half chip). */
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-hist__row {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-hist__row {
   flex-wrap: wrap;
   height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
   overflow: hidden;
 }
 /* Out of coins: the hint moves to the status line (4 lines in a half-width cell pushed the deck
    38 px down); the facts keep their places. */
-html:is([data-ff='tablet'], [data-ff='desktop'])
-  .cas--slots[data-lay='wide']
-  .cas-hist:has(.cas-broke) {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-hist:has(.cas-broke) {
   display: none;
 }
 /* The quick bets go to one row of six: the deck gives the facts its height. */
-html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] .cas-chips {
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-chips {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
