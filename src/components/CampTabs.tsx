@@ -287,6 +287,23 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const [note, setNote] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const bonusBox = useRef<HTMLDivElement>(null);
+  const wearGuard = useArmGuard();
+  const shGuard = useArmGuard();
+  const [shArm, setShArm] = useState(0);
+  const [shake, setShake] = useState(-1);
+  useEffect(() => {
+    if (shake < 0) return undefined;
+    const id = setTimeout(() => setShake(-1), 320);
+    return () => clearTimeout(id);
+  }, [shake]);
+  useEffect(() => {
+    if (!shArm) return undefined;
+    const id = setTimeout(() => {
+      setShArm(0);
+      setNote(null);
+    }, 4000);
+    return () => clearTimeout(id);
+  }, [shArm]);
   // Bonus words go all together when one of them would be cut: a lone «прода…» reads worse than
   // the stat picture alone (its full text is the chip's tip). Values and the language change the
   // words — checked after every render; the box's width — by a ResizeObserver.
@@ -318,9 +335,16 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const quad = lay === 'land' || lay === 'tall';
 
   const tapSocket = (i: number) => {
+    setShArm(0);
     if (i >= open) {
       notifyWarning();
-      setNote(`${t('camp.runes.slotLocked')} · ${lockText(i)}`);
+      // the reason is the socket's own caption: it shakes (1u) and the note repeats it
+      setShake(i);
+      setNote(
+        short
+          ? t('ctabs.runes.lockedShort', { cond: lockText(i) })
+          : `${t('camp.runes.slotLocked')} · ${lockText(i)}`,
+      );
       return;
     }
     selectionChanged();
@@ -338,6 +362,9 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
 
   const wear = () => {
     if (!rune) return;
+    // a double tap is not «in, then out again» (R22)
+    if (wearGuard.tooSoon()) return;
+    wearGuard.mark();
     primeAudio();
     if (worn) {
       socket(p.sockets.indexOf(rune.id), 0);
@@ -370,7 +397,23 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   };
 
   const doShatter = () => {
-    if (!rune || worn) return;
+    if (!rune) return;
+    if (worn) {
+      notifyWarning();
+      setNote(t('ctabs.runes.wornNoShatter'));
+      return;
+    }
+    // Tier III and up is worth something: the first tap arms, a second ≥ ARM_GUARD_MS later breaks.
+    if (rune.tier >= 3 && shArm !== rune.id) {
+      tapLight();
+      shGuard.mark();
+      setShArm(rune.id);
+      setNote(t('ctabs.runes.shatterArm'));
+      return;
+    }
+    if (rune.tier >= 3 && shGuard.tooSoon()) return;
+    setShArm(0);
+    setNote(null);
     primeAudio();
     const got = shatter(rune.id);
     if (!got) return;
@@ -391,6 +434,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
 
   const pickRune = (id: number, focus = false) => {
     if (focus && id === sel) return;
+    setShArm(0);
     selectionChanged();
     setNote(null);
     setSel(sel === id && !focus && !kbd() ? null : id);
@@ -441,7 +485,10 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
             const r = id ? (p.runes.find((z) => z.id === id) ?? null) : null;
             const locked = i >= open;
             return (
-              <div key={i} className={`ctab-sock ctab-sock--${i}`}>
+              <div
+                key={i}
+                className={`ctab-sock ctab-sock--${i}${shake === i ? ' is-shake' : ''}`}
+              >
                 <Slot
                   rarity={r ? TIER_RAR[r.tier - 1] : 0}
                   selected={!!r && sel === r.id}
@@ -464,8 +511,10 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
                     <Icon name="plus" />
                   )}
                 </Slot>
-                <span className={`ctab-sock__cap${r ? ' is-on' : ''}`}>
-                  {r ? pctText(runePower(r)) : locked ? lockText(i) : t('camp.runes.empty')}
+                {/* A worn rune's % is in the bonus box below — no caption; a locked socket says
+                    its condition on a cream plate (R53: no text straight on the stone). */}
+                <span className={`ctab-sock__cap${locked ? ' is-lock' : ''}`}>
+                  {r ? '' : locked ? lockText(i) : t('camp.runes.empty')}
                 </span>
               </div>
             );
@@ -528,12 +577,19 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   );
 
   const fuseLine = rune
-    ? plan
+    ? plan && short
+      ? t('ctabs.runes.fuseGoShort', {
+          tier: RUNE_ROMAN[rune.tier - 1],
+          rune: `${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`,
+        })
+      : plan
       ? `${t('camp.runes.fuseGo')} ${plan.with
           .map((r: Rune) => `${runeName(r.kind)} ${pctText(runePower(r))}`)
           .join(', ')} → ${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`
       : rune.tier < RUNE_ROMAN.length
-        ? t('camp.runes.fuseNeed', { tier: RUNE_ROMAN[rune.tier - 1] })
+        ? t(short ? 'ctabs.runes.fuseNeedShort' : 'camp.runes.fuseNeed', {
+            tier: RUNE_ROMAN[rune.tier - 1],
+          })
         : ''
     : '';
 
@@ -575,16 +631,18 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
             {shownWorn ? t('camp.runes.takeOut') : t('camp.runes.wear')}
           </Button>
           <Button size={actSize} off={!plan} onClick={plan ? doFuse : () => notifyWarning()}>
-            {t('ctabs.runes.fuse')}
+            {t('camp.runes.fuse')}
           </Button>
           <Button
             kind="danger"
             size={actSize}
             off={shownWorn}
+            className={shArm && shArm === rune?.id ? 'is-armed' : undefined}
             data-tip={t('ctabs.runes.shatter')}
             aria-label={`${t('ctabs.runes.shatter')}: +${RUNE_SHATTER[shown.tier - 1]}`}
-            onClick={shownWorn ? () => notifyWarning() : doShatter}
+            onClick={doShatter}
           >
+            <GxIcon name="hammer" className="ctab-shatter__ico" />
             <span className="px-num">+{fmtNum(RUNE_SHATTER[shown.tier - 1])}</span>
             <TokenIcon size={16} />
           </Button>

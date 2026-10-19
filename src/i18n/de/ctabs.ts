@@ -17,8 +17,14 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Für Tokens zerschlagen',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'Kraft {n}/100',
-    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
-    fuse: 'Schmelzen',
+    /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
+    fuseNeedShort: 'Verschmelzen: noch 2 freie {tier}',
+    fuseGoShort: 'Verschmelzen: 2× {tier} → {rune}',
+    /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
+    shatterArm: 'Nochmal: zerbrechen',
+    wornNoShatter: 'Erst aus dem Amulett',
+    /** Short phone (no socket captions): a locked socket tapped — its condition. */
+    lockedShort: 'Sockel: {cond}',
   },
   finds: {
     title: 'Funde',

@@ -17,8 +17,14 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Briser contre des jetons',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'force {n}/100',
-    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
-    fuse: 'Fusionner',
+    /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
+    fuseNeedShort: 'Fusion : encore 2 {tier} libres',
+    fuseGoShort: 'Fusion : 2× {tier} → {rune}',
+    /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
+    shatterArm: 'Encore : briser',
+    wornNoShatter: 'Portée — retire-la d’abord',
+    /** Short phone (no socket captions): a locked socket tapped — its condition. */
+    lockedShort: 'Emplacement : {cond}',
   },
   finds: {
     title: 'Trouvailles',

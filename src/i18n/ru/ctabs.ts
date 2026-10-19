@@ -15,8 +15,14 @@ export const ctabs = {
     shatter: 'Разбить на токены',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'сила {n}/100',
-    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
-    fuse: 'Сплавить',
+    /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
+    fuseNeedShort: 'Сплав: ещё 2 свободные {tier}',
+    fuseGoShort: 'Сплав: 2× {tier} → {rune}',
+    /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
+    shatterArm: 'Ещё раз — разбить',
+    wornNoShatter: 'Сначала вынь из оберега',
+    /** Short phone (no socket captions): a locked socket tapped — its condition. */
+    lockedShort: 'Гнездо: {cond}',
   },
   finds: {
     title: 'Находки',

@@ -578,7 +578,8 @@
    buttons there (its panel is 150u wide). */
 .ctab-runes:not(.ctab--tall) .ctab-insp__acts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* ⅔ fuse (German «Verschmelzen»), ⅓ shatter ([hammer] +25 ✦) */
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 .ctab-runes:not(.ctab--tall) .ctab-insp__acts > :first-child {
   grid-column: 1 / -1;
@@ -633,9 +634,24 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+/* The note names the action and its condition in two lines (short keys `fuse*Short`); the room
+   comes from a thinner stage frame, tighter bonus rows and 1u gaps. */
 .ctab-runes.ctab--short .ctab-insp__line {
-  height: var(--ln-sm);
-  -webkit-line-clamp: 1;
+  height: calc(var(--ln-sm) * 2);
+  -webkit-line-clamp: 2;
+}
+.ctab-runes.ctab--short .ctab-insp__body {
+  gap: var(--u);
+}
+.ctab-runes.ctab--short .ctab-insp__gives {
+  line-height: 1.2;
+  height: calc(var(--px-fs) * 1.2 * 2);
+}
+.ctab--short .ctab-amulet > .ctab-stage {
+  --pad: 4;
+}
+.ctab--short .ctab-bonus {
+  --row-st: calc(var(--px-fs-sm) * 1.5);
 }
 .ctab-runes.ctab--short .ctab-insp__acts {
   grid-template-columns: minmax(0, 1fr);
@@ -778,8 +794,42 @@
   gap: calc(2 * var(--u));
   padding: var(--u) 0;
 }
-.ctab-sock__cap.is-on {
-  color: var(--px-green);
+.ctab-sock__cap.is-lock {
+  padding: 0 var(--u);
+  color: var(--px-text);
+  background: #fff6e0;
+  box-shadow: 0 0 0 var(--u) var(--px-ink);
+  text-shadow: none;
+}
+/* A locked socket tapped: a 1u shake, the reason is its own caption. */
+.ctab-sock.is-shake {
+  animation: ctab-shake 320ms steps(1, end);
+}
+@keyframes ctab-shake {
+  0%,
+  50% {
+    transform: translateX(calc(-1 * var(--u)));
+  }
+  25%,
+  75% {
+    transform: translateX(var(--u));
+  }
+  100% {
+    transform: none;
+  }
+}
+.ctab-insp__acts .ctab-shatter__ico {
+  flex: none;
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+}
+/* tablet portrait's one-row 5:4:3 shares: «+600 ✦» alone fits the third */
+.ctab--tall .ctab-insp__acts .ctab-shatter__ico {
+  display: none;
+}
+.ctab-insp__acts > .px-btn.is-armed {
+  outline: var(--u) solid var(--px-gold);
+  outline-offset: var(--u);
 }
 /* Bonus of the worn runes: a FIXED 2×2 grid — four sockets give at most four kinds, so the box
    never scrolls (critic5 P0: a third bonus hid in a 55-px scroller). Chip = [stat picture 24]
@@ -1224,6 +1274,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ctab-pop,
+  .ctab-sock.is-shake,
   .ctab-sock .px-slot.is-target {
     animation: none;
   }
