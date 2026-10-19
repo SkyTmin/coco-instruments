@@ -136,6 +136,8 @@ export const books: Translation<typeof ru> = {
   starMax: 'All stars collected',
   // B1 (19.10): the handoff layout — tabs, cards, bar
   tabPick: 'Pickaxe',
+  /** The Enchanter's tab: his name, short where three tabs don't fit 320 px (de, it). */
+  tabMage: 'Enchanter',
   purpose: 'Enchants for your pickaxe',
   emptyTitle: 'Your books will live here',
   emptyText: 'Buy them from the Enchanter or find them in chests and parcels',
@@ -154,7 +156,7 @@ export const books: Translation<typeof ru> = {
   wipeBare: 'Remove',
   glueShort: 'Merge',
   applyBare: 'Enchant',
-  applyFull: 'knocks one out · {v}%',
+  applyFull: 'no room · {v}%',
   shelfFullShort: 'Shelf full',
   lack: '{n} short',
   canBuy: 'Available',

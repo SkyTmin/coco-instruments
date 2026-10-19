@@ -136,6 +136,8 @@ export const books: Translation<typeof ru> = {
   starMax: 'Tüm yıldızlar toplandı',
   // B1 (19.10): the handoff layout — tabs, cards, bar
   tabPick: 'Kazma',
+  /** The Enchanter's tab: his name, short where three tabs don't fit 320 px (de, it). */
+  tabMage: 'Büyücü',
   purpose: 'Kazman için büyüler',
   emptyTitle: 'Kitapların burada olacak',
   emptyText: 'Büyücü’den al ya da sandık ve kolilerde bul',
@@ -154,7 +156,7 @@ export const books: Translation<typeof ru> = {
   wipeBare: 'Çıkar',
   glueShort: 'Birleştir',
   applyBare: 'Büyüle',
-  applyFull: 'birini çıkarır · %{v}',
+  applyFull: 'yer yok · %{v}',
   shelfFullShort: 'Raf dolu',
   lack: '{n} eksik',
   canBuy: 'Alınabilir',

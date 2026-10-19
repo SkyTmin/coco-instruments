@@ -97,7 +97,7 @@
 .bks--one .bks-purse {
   grid-area: purse;
 }
-.bks-back {
+.pxd-btn.bks-back {
   width: calc(22 * var(--u));
   height: calc(22 * var(--u));
   padding: 0;
@@ -143,7 +143,7 @@
   flex: none;
   min-width: 0;
 }
-.bks-tab {
+.pxd-btn.bks-tab {
   flex: none;
   height: calc(23 * var(--u));
   padding: 0 calc(4 * var(--u));
@@ -176,6 +176,13 @@
 .bks-tabs.is-tight2 .bks-tab__n {
   display: none;
 }
+.bks-tabs.is-tight2 {
+  gap: calc(2 * var(--u));
+}
+/* still too wide: one kit step smaller */
+.bks-tabs.is-tight3 .bks-tab {
+  font-size: var(--pd-fs-sm);
+}
 
 /* ---- Body: the tab's list, the card, the bar -------------------------------------------------- */
 .bks-body {
@@ -198,7 +205,8 @@
 }
 
 /* ---- Tiles: an enchant in the pick, a free / locked place, a shelf book (square) ------------ */
-.bks-tile {
+.bks-tile,
+.pxd-btn.bks-tile {
   position: relative;
   flex: none;
   width: var(--tile);
@@ -212,6 +220,9 @@
 }
 .bks-tile:is(.is-off, .is-weak) > .pbook {
   filter: grayscale(0.8) brightness(0.75);
+}
+.bks-tile.is-place {
+  opacity: 0.6;
 }
 .bks-tile.is-lock {
   color: var(--pd-muted);
@@ -258,13 +269,22 @@
 .bks-pc {
   flex: none;
   display: grid;
+  /* the name and the level line take the whole width; the reforge sits beside the stars */
   grid-template:
-    'ico name re' auto
-    'ico lv re' auto
+    'ico name name' auto
+    'ico lv lv' auto
     'ico st re' auto / auto minmax(0, 1fr) auto;
   column-gap: calc(3 * var(--u));
+  row-gap: var(--u);
   align-items: center;
   padding: var(--u);
+  container: bks-pc / inline-size;
+}
+/* a narrow card (320 px): the reforge says its word, the next star is in its aria-label */
+@container bks-pc (max-width: 320px) {
+  .bks-pc__re > small {
+    display: none;
+  }
 }
 .bks-pc__ico {
   grid-area: ico;
@@ -287,9 +307,11 @@
   font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
   color: var(--pd-muted);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+/* «ур. 25 · ещё 1 124 блока»: a narrow card (fr / it at 320) breaks it after the dot */
+.bks-pc__lv > span {
+  display: inline-block;
+  white-space: pre;
 }
 .bks-pc__stars {
   grid-area: st;
@@ -303,11 +325,10 @@
 .bks-pc__stars > .px-i {
   color: var(--pd-accent);
 }
-.bks-pc__re {
+.pxd-btn.bks-pc__re {
   grid-area: re;
-  flex-direction: column;
-  gap: 0;
-  align-self: stretch;
+  height: calc(17 * var(--u));
+  gap: calc(2 * var(--u));
   padding: 0 calc(3 * var(--u));
 }
 .bks-pc__re > b {
@@ -328,7 +349,7 @@
 .bks-slots {
   display: flex;
   justify-content: center;
-  gap: calc(3 * var(--u));
+  gap: calc(2 * var(--u));
   min-height: var(--tile);
 }
 
@@ -348,7 +369,7 @@
   gap: calc(3 * var(--u));
   min-width: 0;
 }
-.bks-sort {
+.pxd-btn.bks-sort {
   flex: none;
   height: calc(15 * var(--u));
   padding: 0 calc(3 * var(--u));
@@ -360,7 +381,8 @@
   color: var(--pd-text);
 }
 .bks-grid {
-  flex: 1 1 0;
+  /* whole rows: the fit pass sets the height */
+  flex: none;
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--tile));
@@ -435,6 +457,10 @@
 .bks-mg__say {
   /* two lines reserved: the next line (a tap on him) never moves the offers */
   height: 2.4em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
   font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
   color: var(--pd-muted);
@@ -448,7 +474,7 @@
   gap: calc(3 * var(--u));
 }
 /* side by side: name / [book | price, state] / the unknown enchant + level range */
-.bks-offer {
+.pxd-btn.bks-offer {
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -461,7 +487,7 @@
   row-gap: 0;
   align-items: center;
   justify-items: start;
-  padding: var(--u) calc(2 * var(--u));
+  padding: 0 calc(2 * var(--u));
   text-align: left;
   container: bks-offer / inline-size;
 }
@@ -480,7 +506,7 @@
 .bks-offer__name {
   grid-area: name;
   justify-self: stretch;
-  font: 400 var(--pd-fs) / 1.15 var(--px-head);
+  font: 400 var(--pd-fs) / 1.05 var(--px-head);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -519,8 +545,11 @@
 }
 .bks-offer__lv {
   grid-area: lv;
+  display: flex;
+  justify-content: inherit;
   justify-self: stretch;
-  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  min-width: 0;
+  font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
   color: var(--pd-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -592,8 +621,10 @@
 }
 /* fixed rows: name 2 lines, then 3 lines for the state + effect — nothing moves between books */
 .bks-card__txt {
+  --nfs: var(--pd-fs-lg);
   display: grid;
-  grid-template-rows: calc(2 * 1.1 * var(--pd-fs-lg)) calc(3 * 1.2 * var(--pd-fs-sm));
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: calc(2 * 1.1 * var(--nfs)) calc(3 * 1.2 * var(--pd-fs-sm));
   row-gap: var(--u);
   align-content: center;
   min-width: 0;
@@ -601,18 +632,23 @@
 .bks-card__name {
   display: flex;
   align-items: flex-end;
-  font: 400 var(--pd-fs-lg) / 1.1 var(--px-head);
+  font: 400 var(--nfs) / 1.1 var(--px-head);
   overflow: hidden;
+}
+/* phones: the body size; a word still too long for the column (fit pass) — one step smaller */
+.bks--one .bks-card__txt {
+  --nfs: var(--pd-fs);
+}
+.bks-card__name.is-tight {
+  font-size: var(--pd-fs-sm);
 }
 .bks-card__state,
 .bks-card__fx {
   font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
 }
 .bks-card__txt > :is(.bks-card__state, .bks-card__fx) {
-  grid-row: 2;
-}
-.bks-card__txt {
-  grid-template-areas: 'name' 'rest';
+  /* one cell: the state from its top, the effect from its bottom */
+  grid-area: 2 / 1;
 }
 .bks-card__state {
   align-self: start;
@@ -707,12 +743,13 @@
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: calc(2 * var(--u));
-  height: calc(21 * var(--u));
+  height: calc(22 * var(--u));
 }
 .bks-facts.is-none {
   visibility: hidden;
 }
-.bks-fact {
+.bks-fact,
+.pxd-btn.bks-fact {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -725,13 +762,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--u);
-  font: 700 var(--pd-fs) / 1.1 var(--px-font);
+  font: 700 var(--pd-fs) / 1.05 var(--px-font);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .bks-fact > i {
   max-width: 100%;
-  font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
+  font: 500 var(--pd-fs-sm) / 1.05 var(--px-font);
   color: var(--pd-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -769,24 +806,18 @@
   gap: calc(3 * var(--u));
   height: calc(26 * var(--u));
 }
-.bks-sq {
+.pxd-btn.bks-sq {
+  /* two lines: [picture +N] over the word */
   flex: none;
-  display: grid;
-  grid-template: 'i s' minmax(0, 1fr) 'b b' minmax(0, 1fr) / auto auto;
-  justify-content: center;
+  flex-wrap: wrap;
   align-content: center;
-  align-items: center;
   column-gap: var(--u);
   row-gap: 0;
   width: calc(34 * var(--u));
-  padding: var(--u) var(--u) 0;
+  padding: 0;
   color: var(--pd-text);
 }
-.bks-sq:not(:has(small)) {
-  grid-template: 'i' minmax(0, 1fr) 'b' minmax(0, 1fr) / auto;
-}
 .bks-sq__i {
-  grid-area: i;
   display: grid;
   place-items: center;
 }
@@ -798,17 +829,17 @@
   display: contents;
 }
 .bks-sq__t > small {
-  grid-area: s;
   font: 700 var(--pd-fs-sm) / 1 var(--px-font);
   font-variant-numeric: tabular-nums;
   color: var(--pd-accent);
   white-space: nowrap;
 }
 .bks-sq__t > b {
-  grid-area: b;
-  justify-self: center;
+  order: 1;
+  flex: 0 0 100%;
   max-width: 100%;
   overflow: hidden;
+  text-align: center;
   font: 700 var(--pd-fs-sm) / 1.1 var(--px-font);
   white-space: nowrap;
 }
@@ -818,10 +849,7 @@
 .bks-sq.is-armed .bks-sq__t.is-short > small {
   display: none;
 }
-.bks-sq:not(.is-armed):has(.bks-sq__t.is-short) {
-  grid-template: 'i s' minmax(0, 1fr) / auto auto;
-}
-.bks-go {
+.pxd-btn.bks-go {
   flex: 1 1 0;
   min-width: 0;
   justify-content: flex-start;
@@ -863,9 +891,12 @@
   font-weight: 500;
   color: var(--pd-muted);
 }
-/* the text doesn't fit (fit pass): the picture goes first */
+/* the text doesn't fit (fit pass): the picture goes first, then the word takes the label size */
 .bks-go:has(> .bks-go__t.is-short) > .bks-go__i {
   display: none;
+}
+.bks-go__t.is-short2 > b {
+  font-size: var(--pd-fs-sm);
 }
 
 /* ---- Toast, «no room» sheet ------------------------------------------------------------------ */
@@ -908,7 +939,7 @@
   color: var(--pd-muted);
   text-align: center;
 }
-.bks-rep__go {
+.pxd-btn.bks-rep__go {
   width: 100%;
   min-height: calc(24 * var(--u));
 }
@@ -919,11 +950,13 @@
 .bks--one.is-pick .bks-facts {
   display: none;
 }
-/* «Полка»: the shelf and the card share the height, the card never taller than it needs */
-.bks--one.is-shelf .bks-card {
-  flex: 4 1 0;
-  min-height: calc(62 * var(--u));
-  max-height: calc(120 * var(--u));
+/* «Полка»: the shelf is whole rows of books (fit pass), the card takes the rest */
+.bks--one .bks-sh {
+  flex: none;
+}
+/* «Полка»: the dust value is the «В пыль» square's number — two facts, wide enough for fr / de */
+.bks--one .bks-fact[data-k='dust'] {
+  display: none;
 }
 /* «Чародей»: the four offers are the card (the bar's «Купить» buys the chosen one) */
 .bks--one.is-mage .bks-card {
@@ -932,7 +965,7 @@
 
 /* ---- Short phones (the window's own height: Telegram insets are out of it) ----------------- */
 @container bks (max-height: 600px) {
-  .bks-tab {
+  .pxd-btn.bks-tab {
     height: calc(21 * var(--u));
   }
   .bks-bar {
@@ -946,7 +979,7 @@
   .bks-body {
     --bg: calc(2 * var(--u));
   }
-  .bks-tab {
+  .pxd-btn.bks-tab {
     height: calc(20 * var(--u));
   }
   .bks-bar {
@@ -968,21 +1001,18 @@
   .bks .bks-mg__pic {
     width: calc(30 * var(--u));
   }
-  .bks-mg__say {
-    height: 1.2em;
+  /* «Чародей» is the tab's own name: his line keeps its two lines */
+  .bks--one .bks-mg__txt > .bks-h {
+    display: none;
+  }
+  /* the bar's main button says it already (Вписать · 97 %, «Слабее», «В кирке»): the effect
+     takes both lines */
+  .bks--one .bks-card:is(.is-slot, .is-book) .bks-card__state {
+    display: none;
   }
   .bks-card__txt {
-    grid-template-rows: calc(2 * 1.1 * var(--pd-fs)) calc(2 * 1.2 * var(--pd-fs-sm));
-  }
-  .bks-card__name {
-    font-size: var(--pd-fs);
-  }
-  .bks-card__fx {
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-  }
-  .bks-facts {
-    height: calc(19 * var(--u));
+    --nfs: var(--pd-fs);
+    grid-template-rows: calc(2 * 1.1 * var(--nfs)) calc(2 * 1.2 * var(--pd-fs-sm));
   }
 }
 
@@ -1012,10 +1042,6 @@
 .bks:not(.bks--one) .bks-sl {
   align-self: start;
 }
-.bks:not(.bks--one) .bks-sh {
-  grid-column: 1;
-  grid-row: 1 / 4;
-}
 .bks:not(.bks--one) .bks-card {
   grid-column: 2;
   grid-row: 1 / 3;
@@ -1023,6 +1049,21 @@
 .bks:not(.bks--one) .bks-bar {
   grid-column: 2;
   grid-row: 3;
+}
+/* the shelf: its own column, the card over the bar */
+.bks:not(.bks--one).is-shelf .bks-body {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.bks:not(.bks--one) .bks-sh {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  min-height: 0;
+}
+.bks:not(.bks--one).is-shelf .bks-card {
+  grid-row: 1;
+}
+.bks:not(.bks--one).is-shelf .bks-bar {
+  grid-row: 2;
 }
 
 /* ---- Motion: dust puff, dust tick, the armed button --------------------------------------- */

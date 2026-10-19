@@ -142,6 +142,8 @@ export const books: Translation<typeof ru> = {
   starMax: 'Toutes les étoiles obtenues',
   // B1 (19.10): the handoff layout — tabs, cards, bar
   tabPick: 'Pioche',
+  /** The Enchanter's tab: his name, short where three tabs don't fit 320 px (de, it). */
+  tabMage: 'Enchanteur',
   purpose: 'Enchantements pour ta pioche',
   emptyTitle: 'Tes livres seront ici',
   emptyText: 'Achète-les à l’Enchanteur ou trouve-les dans les coffres et colis',
@@ -160,7 +162,7 @@ export const books: Translation<typeof ru> = {
   wipeBare: 'Retirer',
   glueShort: 'Fusion',
   applyBare: 'Enchanter',
-  applyFull: 'en éjecte un · {v} %',
+  applyFull: 'plein · {v} %',
   shelfFullShort: 'Étagère pleine',
   lack: 'Il manque {n}',
   canBuy: 'Disponible',

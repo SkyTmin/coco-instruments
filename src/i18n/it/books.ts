@@ -141,6 +141,8 @@ export const books: Translation<typeof ru> = {
   starMax: 'Tutte le stelle raccolte',
   // B1 (19.10): the handoff layout — tabs, cards, bar
   tabPick: 'Piccone',
+  /** The Enchanter's tab: his name, short where three tabs don't fit 320 px (de, it). */
+  tabMage: 'Mago',
   purpose: 'Incantesimi per il tuo piccone',
   emptyTitle: 'Qui ci saranno i tuoi libri',
   emptyText: 'Comprali dall’Incantatore o trovali in forzieri e pacchi',
@@ -159,7 +161,7 @@ export const books: Translation<typeof ru> = {
   wipeBare: 'Rimuovi',
   glueShort: 'Fondi',
   applyBare: 'Incanta',
-  applyFull: 'ne toglie uno · {v}%',
+  applyFull: 'pieno · {v}%',
   shelfFullShort: 'Scaffale pieno',
   lack: 'Mancano {n}',
   canBuy: 'Disponibile',

@@ -136,6 +136,8 @@ export const books: Translation<typeof ru> = {
   starMax: 'Alle Sterne gesammelt',
   // B1 (19.10): the handoff layout — tabs, cards, bar
   tabPick: 'Spitzhacke',
+  /** The Enchanter's tab: his name, short where three tabs don't fit 320 px (de, it). */
+  tabMage: 'Zauberer',
   purpose: 'Zauber für deine Spitzhacke',
   emptyTitle: 'Hier landen deine Bücher',
   emptyText: 'Kauf sie beim Verzauberer oder finde sie in Truhen und Paketen',
@@ -154,7 +156,7 @@ export const books: Translation<typeof ru> = {
   wipeBare: 'Entfernen',
   glueShort: 'Schmelzen',
   applyBare: 'Verzaubern',
-  applyFull: 'ersetzt einen · {v} %',
+  applyFull: 'voll · {v} %',
   shelfFullShort: 'Regal voll',
   lack: 'Es fehlen {n}',
   canBuy: 'Verfügbar',

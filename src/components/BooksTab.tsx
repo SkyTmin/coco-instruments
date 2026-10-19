@@ -654,10 +654,11 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const gridBox = useMeasure(gridRef, `${tab}:${layout}:${p.books.length > 0}`);
   const offersBox = useMeasure(offersRef, `${tab}:${layout}`);
   const gap = 3 * u;
-  const ring = 3 * u; // a tile's frame ring + one art pixel of air
+  const ring = 2 * u; // a tile's frame ring (the book's own box has air around the cover)
   const slotN = slots + (locked > 0 ? 1 : 0);
+  const slotGap = 2 * u;
   const slotTile = slotsBox.w
-    ? Math.min(40 * u, (slotsBox.w - (slotN - 1) * gap) / Math.max(1, slotN))
+    ? Math.min(40 * u, (slotsBox.w - (slotN - 1) * slotGap) / Math.max(1, slotN))
     : 0;
   const slotArt = artPx(slotTile - 2 * ring);
   const cols = gridBox.w ? Math.max(4, Math.floor((gridBox.w + gap) / (28 * u + gap))) : 5;
@@ -665,15 +666,15 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const gridArt = artPx(gridTile - 2 * ring);
   const cardArt = artPx(Math.min(cardBox.w, cardBox.h, 112 * u));
   // an offer: 2 × 2 cells; its art beside the price lines, or over them when the cell is tall
-  const offW = (offersBox.w - gap) / 2 - 6 * u;
-  const offH = (offersBox.h - gap) / 2 - 4 * u;
-  const lineH = 11 * u; // one text row of the offer
+  const offW = (offersBox.w - gap) / 2 - 8 * u; // the frame ring + 2 art px each side
+  const offH = (offersBox.h - gap) / 2 - 4 * u; // the frame ring
+  const lineH = 10 * u; // one text row of the offer (name 1.05, the rest 1.1 × the size)
   const offStack = offersBox.h > 0 && offH - 4 * lineH >= 40 * u;
   const offerArt = !offersBox.w
     ? 0
     : offStack
       ? artPx(Math.min(64 * u, offW, offH - 4 * lineH - 4 * u))
-      : artPx(Math.min(40 * u, offW * 0.45, offH - 2 * lineH));
+      : artPx(Math.min(40 * u, offW * 0.45, offH - 2 * lineH + 2 * u));
   const pickIco = artPx(24 * u);
 
   // ---- The card: what is chosen on this tab ---------------------------------------------------
@@ -695,6 +696,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         key={key}
         frame="well"
         className={`bks-fact is-btn${extra.cls ? ` ${extra.cls}` : ''}`}
+        data-k={key}
         aria-label={extra.aria}
         aria-pressed={extra.on}
         onClick={extra.run}
@@ -703,7 +705,11 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         <i>{label}</i>
       </PxdButton>
     ) : (
-      <span key={key} className={`bks-fact pxd-f pxd-f--well${extra?.cls ? ` ${extra.cls}` : ''}`}>
+      <span
+        key={key}
+        className={`bks-fact pxd-f pxd-f--well${extra?.cls ? ` ${extra.cls}` : ''}`}
+        data-k={key}
+      >
         <b>{num}</b>
         <i>{label}</i>
       </span>
@@ -938,7 +944,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
             ? t('books.weaker')
             : check === 'full'
               ? t('books.applyFull', { v: chance })
-              : t('books.chance', { v: chance }),
+              : t('books.pct', { v: chance }),
         off: check === 'lower',
         run: () => doApply(),
       };
@@ -1071,9 +1077,10 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
           <span className="pxd-rname">{pickFull(p.pickMax)}</span>
         </h3>
         <p className="bks-pc__lv">
-          {t('books.lv', { n: lvl.level })}
-          {' · '}
-          {lvl.need ? t('books.blocksLeft', { n: Math.round(lvl.need - lvl.into) }) : t('books.max')}
+          <span>{t('books.lv', { n: lvl.level })} · </span>
+          <span>
+            {lvl.need ? t('books.blocksLeft', { n: Math.round(lvl.need - lvl.into) }) : t('books.max')}
+          </span>
         </p>
         <p className="bks-pc__stars">
           <Icon name="star" />
@@ -1228,7 +1235,8 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
             <span>{t('books.sources')}</span>
           </p>
         ) : (
-          (painted ? order : []).map((i) => {
+          [
+            ...(painted ? order : []).map((i) => {
             const x = p.books[i];
             const ck = canApply(p.ench, slots, x);
             const mt = anvilMate(p.books, i) >= 0;
@@ -1256,7 +1264,12 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
                   ) : undefined,
               },
             );
-          })
+            }),
+            // the free places of the shelf: it holds SHELF_MAX books
+            ...(painted ? Array.from({ length: SHELF_MAX - p.books.length }, (_, i) => i) : []).map(
+              (i) => <span key={`e${i}`} className="bks-tile is-place pxd-f pxd-f--well" aria-hidden="true" />,
+            ),
+          ]
         )}
       </div>
     </section>
@@ -1344,6 +1357,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
             </span>
             <span className={`bks-offer__st${can ? ' is-ok' : ''}`}>
               {can && <Icon name="check" />}
+              {full && <Icon name="excl" />}
               <span className="bks-fit">{why}</span>
               {!can && !full && (
                 <span className="bks-fit is-s">
@@ -1352,7 +1366,10 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
               )}
             </span>
             <span className="bks-offer__lv">
-              {t('books.unknownShort')} · {ROMAN[x.lvl[0] - 1]}–{ROMAN[x.lvl[1] - 1]}
+              <span className="bks-fit">
+                {t('books.unknownShort')} · {ROMAN[x.lvl[0] - 1]}–{ROMAN[x.lvl[1] - 1]}
+              </span>
+              <span className="bks-fit is-s">{t('books.unknownShort')}</span>
             </span>
           </PxdButton>
         );
@@ -1379,7 +1396,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     <nav className="bks-tabs" role="tablist">
       {tabBtn('pick', 'pick', t('books.tabPick'), `${onPick.length}/${slots}`)}
       {tabBtn('shelf', 'book', t('books.shelf'), `${p.books.length}`)}
-      {tabBtn('mage', 'hood', t('books.mageName'))}
+      {tabBtn('mage', 'hood', t('books.tabMage'))}
     </nav>
   );
   const purse = (
@@ -1425,7 +1442,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     }
     const tabsEl = el.querySelector<HTMLElement>('.bks-tabs');
     if (tabsEl) {
-      tabsEl.classList.remove('is-tight', 'is-tight2');
+      tabsEl.classList.remove('is-tight', 'is-tight2', 'is-tight3');
       const over = () => {
         const kids = [...tabsEl.children] as HTMLElement[];
         const g = parseFloat(getComputedStyle(tabsEl).columnGap) || 0;
@@ -1435,18 +1452,47 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       if (over()) {
         tabsEl.classList.add('is-tight');
         if (over()) tabsEl.classList.add('is-tight2');
+        if (over()) tabsEl.classList.add('is-tight3');
       }
     }
+    // the shelf shows whole rows of books: on phones the card takes what they leave
+    const sh = el.querySelector<HTMLElement>('.bks-sh');
+    const grid = sh?.querySelector<HTMLElement>('.bks-grid');
+    if (sh && grid && gridTile > 0) {
+      const head = sh.querySelector<HTMLElement>('.bks-sh__h');
+      const headH = (head?.offsetHeight ?? 0) + (parseFloat(getComputedStyle(sh).rowGap) || 0);
+      let room = sh.clientHeight - headH;
+      if (layout === 'one') {
+        const bodyEl = el.querySelector<HTMLElement>('.bks-body');
+        const bar = el.querySelector<HTMLElement>('.bks-bar');
+        const bg = bodyEl ? parseFloat(getComputedStyle(bodyEl).rowGap) || 0 : 0;
+        const avail = (bodyEl?.clientHeight ?? 0) - (bar?.offsetHeight ?? 0) - 2 * bg;
+        room = avail - Math.min(120 * u, Math.max(62 * u, avail * 0.42)) - headH;
+      }
+      const rows = Math.max(1, Math.floor((room + gap) / (gridTile + gap)));
+      grid.style.height = `${rows * gridTile + (rows - 1) * gap}px`;
+    }
+    // the card's name: a word too long for its column takes one size step smaller
+    const nm = el.querySelector<HTMLElement>('.bks-card__name');
+    if (nm) {
+      nm.classList.remove('is-tight');
+      nm.classList.toggle('is-tight', nm.scrollWidth > nm.clientWidth + 0.5);
+    }
     // a line that has a short form (`.bks-fit`): the short one when the long one overflows
-    for (const f of el.querySelectorAll<HTMLElement>('.bks-go__t, .bks-sq__t, .bks-offer__st')) {
-      f.classList.remove('is-short');
-      const over = [...f.children].some(
-        (k) => (k as HTMLElement).scrollWidth > (k as HTMLElement).clientWidth + 0.5,
-      );
-      f.classList.toggle('is-short', over);
+    const sel = '.bks-go__t, .bks-sq__t, .bks-offer__st, .bks-offer__lv';
+    for (const f of el.querySelectorAll<HTMLElement>(sel)) {
+      f.classList.remove('is-short', 'is-short2');
+      const over = () =>
+        [...f.children].some(
+          (k) => (k as HTMLElement).scrollWidth > (k as HTMLElement).clientWidth + 0.5,
+        );
+      if (!over()) continue;
+      f.classList.add('is-short');
+      // the main button: no picture first, then its word one kit step smaller
+      if (f.matches('.bks-go__t') && over()) f.classList.add('is-short2');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs of the measured texts
-  }, [fitTick, layout, tab, sid, bi, tierSel, armed, t, p.tokens, p.books.length]);
+  }, [fitTick, layout, tab, sid, bi, tierSel, armed, t, p.tokens, p.books.length, gridTile, offerArt, cardArt, slotTile]);
 
   const body = (
     <div

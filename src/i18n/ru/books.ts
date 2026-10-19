@@ -155,6 +155,8 @@ export const books = {
   starMax: 'Все звёзды собраны',
   // B1 (19.10): the handoff layout — tabs, cards, bar
   tabPick: 'В кирке',
+  /** The Enchanter's tab: his name, short where three tabs don't fit 320 px (de, it). */
+  tabMage: 'Чародей',
   purpose: 'Чары для твоей кирки',
   emptyTitle: 'Здесь будут твои книги',
   emptyText: 'Купи у Чародея или найди в сундуках и посылках',
@@ -173,7 +175,7 @@ export const books = {
   wipeBare: 'Снять',
   glueShort: 'Склеить',
   applyBare: 'Вписать',
-  applyFull: 'выбьет одну · {v}%',
+  applyFull: 'мест нет · {v}%',
   shelfFullShort: 'Полка полна',
   lack: 'Не хватает {n}',
   canBuy: 'Доступно',
