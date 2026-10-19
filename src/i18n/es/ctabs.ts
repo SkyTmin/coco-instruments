@@ -7,6 +7,15 @@ export const ctabs: Translation<typeof ru> = {
     hint: 'Lo que compras baja contigo a la mina',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Faltan {v} ✦',
+    /** Phones: one effect chip per good instead of the sentence (the sentence is its tip). */
+    fx: {
+      bomb3: 'Vuela 3×3',
+      bomb5: 'Vuela 5×5',
+      charge: 'Capa entera',
+      energy: 'Pico ×2 · 1 min',
+      lens: 'Capa de abajo · 90 s',
+      prop: 'Roca superior · 10 min',
+    },
   },
   runes: {
     amulet: 'Amuleto',
@@ -17,8 +26,14 @@ export const ctabs: Translation<typeof ru> = {
     shatter: 'Romper por fichas',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'fuerza {n}/100',
-    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
-    fuse: 'Fusionar',
+    /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
+    fuseNeedShort: 'Fusión: faltan 2 {tier} libres',
+    fuseGoShort: 'Fusión: 2× {tier} → {rune}',
+    /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
+    shatterArm: 'Otra vez: romper',
+    wornNoShatter: 'Primero sácala del amuleto',
+    /** Short phone (no socket captions): a locked socket tapped — its condition. */
+    lockedShort: 'Engaste: {cond}',
   },
   finds: {
     title: 'Hallazgos',
@@ -28,6 +43,8 @@ export const ctabs: Translation<typeof ru> = {
   },
   miles: {
     hint: 'Cúmplelo y reclama el premio',
+    /** Phone reward chip «+ гнездо» (the full «четвёртое гнездо» is its tip). */
+    socket: 'engaste',
   },
   perks: {
     hint: 'El prestigio da puntos: gástalos',
@@ -36,7 +53,8 @@ export const ctabs: Translation<typeof ru> = {
     prestige: 'prestigio {n}',
     per: 'por nivel',
     now: 'Ahora',
-    next: 'Luego',
+    /** One line of the skill panel: the value now → after «Learn». */
+    step: 'Ahora {now} → {next}',
     learn: 'Aprender',
     noPoints: 'No hay puntos libres: los da el prestigio',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */

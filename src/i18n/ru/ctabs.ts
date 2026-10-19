@@ -5,6 +5,15 @@ export const ctabs = {
     hint: 'Купленное — сразу с тобой в шахте',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Не хватает {v} ✦',
+    /** Phones: one effect chip per good instead of the sentence (the sentence is its tip). */
+    fx: {
+      bomb3: 'Взрыв 3×3',
+      bomb5: 'Взрыв 5×5',
+      charge: 'Весь ярус',
+      energy: 'Кирка ×2 · 1 мин',
+      lens: 'Ярус ниже · 90 с',
+      prop: 'Порода выше · 10 мин',
+    },
   },
   runes: {
     amulet: 'Оберег',
@@ -15,8 +24,14 @@ export const ctabs = {
     shatter: 'Разбить на токены',
     /** Short roll line under the rune name in the inspect panel. */
     roll: 'сила {n}/100',
-    /** The fuse button (half a panel wide: German «Verschmelzen» did not fit). */
-    fuse: 'Сплавить',
+    /** Short phone: the fuse condition / plan in two lines of a 134-px panel. */
+    fuseNeedShort: 'Сплав: ещё 2 свободные {tier}',
+    fuseGoShort: 'Сплав: 2× {tier} → {rune}',
+    /** Shatter of a tier III+ rune is armed by a first tap (the button shows what it gives). */
+    shatterArm: 'Ещё раз — разбить',
+    wornNoShatter: 'Сначала вынь из оберега',
+    /** Short phone (no socket captions): a locked socket tapped — its condition. */
+    lockedShort: 'Гнездо: {cond}',
   },
   finds: {
     title: 'Находки',
@@ -26,6 +41,8 @@ export const ctabs = {
   },
   miles: {
     hint: 'Выполни — забери награду',
+    /** Phone reward chip «+ гнездо» (the full «четвёртое гнездо» is its tip). */
+    socket: 'гнездо',
   },
   perks: {
     hint: 'Очки дают престижи — вложи их',
@@ -34,7 +51,8 @@ export const ctabs = {
     prestige: 'престиж {n}',
     per: 'за уровень',
     now: 'Сейчас',
-    next: 'Дальше',
+    /** One line of the skill panel: the value now → after «Learn». */
+    step: 'Сейчас {now} → {next}',
     learn: 'Изучить',
     noPoints: 'Нет свободных очков — их дают престижи',
     /** The reset ↶ on the points plate is armed by a first tap; this says what the second does. */

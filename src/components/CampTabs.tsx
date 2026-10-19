@@ -7,7 +7,15 @@
 // `wide` tablet landscape / desktop (two columns), `tall` tablet portrait. Nothing jumps:
 // inspect panels and rows have fixed heights, selection only moves a ring.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
@@ -67,7 +75,7 @@ import {
   RuneIcon,
   runeLine,
   TokenIcon,
-} from '@/components/PrisonCamp';
+} from '@/components/camp-art';
 import './camp-tabs.css';
 
 // ---- Shared ------------------------------------------------------------------------------------
@@ -103,6 +111,10 @@ const kbd = () => {
 function fit(base: number, u: number, scale: number, dpr: number): number {
   const m = Math.max(1, Math.round((u * scale * dpr) / base));
   return (base * m) / dpr;
+}
+/** The biggest whole multiple of the art's pixel grid that is ≤ `max` CSS pixels. */
+function fitDown(base: number, max: number, dpr: number): number {
+  return (base * Math.max(1, Math.floor((max * dpr) / base))) / dpr;
 }
 /** A slot (in art pixels) around art of `px` CSS pixels: the frame and a margin. */
 const slotFor = (px: number, scale: number, pad: number) => Math.ceil(px / scale) + pad;
@@ -143,9 +155,12 @@ const pctText = (x: number) => `+${fmtDec(Math.round(x * 1000) / 10, 1)}%`;
 const SHOP_PACKS = [1, 5, 10] as const;
 let shopPack: number = 1;
 
-export function ShopTab() {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const ShopTab = memo(function ShopTab() {
   const t = useT();
-  const { lay } = useLay();
+  const { lay, short } = useLay();
+  // phones: an effect chip instead of the sentence (the sentence is its tip)
+  const phone = lay === 'one' || lay === 'land';
   const p = useFinanceStore((s) => s.prison);
   const prisonBuyItem = useFinanceStore((s) => s.prisonBuyItem);
   const [pack, setPack] = useState(shopPack);
@@ -217,7 +232,7 @@ export function ShopTab() {
   );
 
   return (
-    <div ref={root} className={`px ctab ctab-shop ctab--${lay}`}>
+    <div ref={root} className={`px ctab ctab-shop ctab--${lay}${short ? ' ctab--short' : ''}`}>
       <Head
         title={t('ctabs.shop.title')}
         hint={lay === 'land' ? undefined : t('ctabs.shop.hint')}
@@ -236,10 +251,18 @@ export function ShopTab() {
                   <ItemIcon id={it.id} />
                 </span>
                 {have > 0 && <span className="px-slot__n">×{have}</span>}
+                {/* the amount being bought rides on the art, so nothing covers the price's token */}
+                {pack > 1 && <span className="ctab-good__pack">×{pack}</span>}
               </span>
               <span className="ctab-good__info">
                 <span className="ctab-good__name">{itemName(it.id)}</span>
-                <span className="ctab-good__text">{itemText(it.id)}</span>
+                {phone ? (
+                  <span className="ctab-good__fx" data-tip={itemText(it.id)}>
+                    {t(`ctabs.shop.fx.${it.id}`)}
+                  </span>
+                ) : (
+                  <span className="ctab-good__text">{itemText(it.id)}</span>
+                )}
               </span>
               <Button
                 kind="primary"
@@ -248,9 +271,8 @@ export function ShopTab() {
                 aria-label={`${itemName(it.id)} ×${pack} · ${t('camp.purseTokens', { n: cost, v: fmtNum(cost) })}`}
                 onClick={() => buy(it.id, cost)}
               >
-                {pack > 1 && <span className="ctab-good__pack">×{pack}</span>}
                 <span className="px-num">{fmtShort(cost)}</span>
-                <TokenIcon size={16} />
+                <TokenIcon size={24} />
               </Button>
               {pop?.id === it.id && (
                 <span
@@ -267,7 +289,7 @@ export function ShopTab() {
       </div>
     </div>
   );
-}
+});
 
 // ---- Руны -------------------------------------------------------------------------------------
 
@@ -276,7 +298,8 @@ const TIER_RAR = [0, 2, 3, 4, 5];
 
 const BONUS_KEYS: (keyof Bonus)[] = ['sell', 'dmg', 'rate', 'loot', 'token', 'proc', 'luck'];
 
-export function RunesTab({ axeLevel }: { axeLevel: number }) {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number }) {
   const t = useT();
   const { lay, scale, dpr, short } = useLay();
   const p = useFinanceStore((s) => s.prison);
@@ -287,6 +310,23 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const [note, setNote] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const bonusBox = useRef<HTMLDivElement>(null);
+  const wearGuard = useArmGuard();
+  const shGuard = useArmGuard();
+  const [shArm, setShArm] = useState(0);
+  const [shake, setShake] = useState(-1);
+  useEffect(() => {
+    if (shake < 0) return undefined;
+    const id = setTimeout(() => setShake(-1), 320);
+    return () => clearTimeout(id);
+  }, [shake]);
+  useEffect(() => {
+    if (!shArm) return undefined;
+    const id = setTimeout(() => {
+      setShArm(0);
+      setNote(null);
+    }, 4000);
+    return () => clearTimeout(id);
+  }, [shArm]);
   // Bonus words go all together when one of them would be cut: a lone «прода…» reads worse than
   // the stat picture alone (its full text is the chip's tip). Values and the language change the
   // words — checked after every render; the box's width — by a ResizeObserver.
@@ -318,9 +358,16 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   const quad = lay === 'land' || lay === 'tall';
 
   const tapSocket = (i: number) => {
+    setShArm(0);
     if (i >= open) {
       notifyWarning();
-      setNote(`${t('camp.runes.slotLocked')} · ${lockText(i)}`);
+      // the reason is the socket's own caption: it shakes (1u) and the note repeats it
+      setShake(i);
+      setNote(
+        short
+          ? t('ctabs.runes.lockedShort', { cond: lockText(i) })
+          : `${t('camp.runes.slotLocked')} · ${lockText(i)}`,
+      );
       return;
     }
     selectionChanged();
@@ -338,6 +385,9 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
 
   const wear = () => {
     if (!rune) return;
+    // a double tap is not «in, then out again» (R22)
+    if (wearGuard.tooSoon()) return;
+    wearGuard.mark();
     primeAudio();
     if (worn) {
       socket(p.sockets.indexOf(rune.id), 0);
@@ -370,7 +420,23 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   };
 
   const doShatter = () => {
-    if (!rune || worn) return;
+    if (!rune) return;
+    if (worn) {
+      notifyWarning();
+      setNote(t('ctabs.runes.wornNoShatter'));
+      return;
+    }
+    // Tier III and up is worth something: the first tap arms, a second ≥ ARM_GUARD_MS later breaks.
+    if (rune.tier >= 3 && shArm !== rune.id) {
+      tapLight();
+      shGuard.mark();
+      setShArm(rune.id);
+      setNote(t('ctabs.runes.shatterArm'));
+      return;
+    }
+    if (rune.tier >= 3 && shGuard.tooSoon()) return;
+    setShArm(0);
+    setNote(null);
     primeAudio();
     const got = shatter(rune.id);
     if (!got) return;
@@ -391,6 +457,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
 
   const pickRune = (id: number, focus = false) => {
     if (focus && id === sel) return;
+    setShArm(0);
     selectionChanged();
     setNote(null);
     setSel(sel === id && !focus && !kbd() ? null : id);
@@ -441,7 +508,7 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
             const r = id ? (p.runes.find((z) => z.id === id) ?? null) : null;
             const locked = i >= open;
             return (
-              <div key={i} className={`ctab-sock ctab-sock--${i}`}>
+              <div key={i} className={`ctab-sock ctab-sock--${i}${shake === i ? ' is-shake' : ''}`}>
                 <Slot
                   rarity={r ? TIER_RAR[r.tier - 1] : 0}
                   selected={!!r && sel === r.id}
@@ -464,8 +531,10 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
                     <Icon name="plus" />
                   )}
                 </Slot>
-                <span className={`ctab-sock__cap${r ? ' is-on' : ''}`}>
-                  {r ? pctText(runePower(r)) : locked ? lockText(i) : t('camp.runes.empty')}
+                {/* A worn rune's % is in the bonus box below — no caption; a locked socket says
+                    its condition on a cream plate (R53: no text straight on the stone). */}
+                <span className={`ctab-sock__cap${locked ? ' is-lock' : ''}`}>
+                  {r ? '' : locked ? lockText(i) : t('camp.runes.empty')}
                 </span>
               </div>
             );
@@ -528,13 +597,20 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
   );
 
   const fuseLine = rune
-    ? plan
-      ? `${t('camp.runes.fuseGo')} ${plan.with
-          .map((r: Rune) => `${runeName(r.kind)} ${pctText(runePower(r))}`)
-          .join(', ')} → ${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`
-      : rune.tier < RUNE_ROMAN.length
-        ? t('camp.runes.fuseNeed', { tier: RUNE_ROMAN[rune.tier - 1] })
-        : ''
+    ? plan && short
+      ? t('ctabs.runes.fuseGoShort', {
+          tier: RUNE_ROMAN[rune.tier - 1],
+          rune: `${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`,
+        })
+      : plan
+        ? `${t('camp.runes.fuseGo')} ${plan.with
+            .map((r: Rune) => `${runeName(r.kind)} ${pctText(runePower(r))}`)
+            .join(', ')} → ${runeName(rune.kind)} ${RUNE_ROMAN[rune.tier]}`
+        : rune.tier < RUNE_ROMAN.length
+          ? t(short ? 'ctabs.runes.fuseNeedShort' : 'camp.runes.fuseNeed', {
+              tier: RUNE_ROMAN[rune.tier - 1],
+            })
+          : ''
     : '';
 
   // The panel keeps one height: with nothing picked the same rows are laid out invisibly (a
@@ -575,16 +651,18 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
             {shownWorn ? t('camp.runes.takeOut') : t('camp.runes.wear')}
           </Button>
           <Button size={actSize} off={!plan} onClick={plan ? doFuse : () => notifyWarning()}>
-            {t('ctabs.runes.fuse')}
+            {t('camp.runes.fuse')}
           </Button>
           <Button
             kind="danger"
             size={actSize}
             off={shownWorn}
+            className={shArm && shArm === rune?.id ? 'is-armed' : undefined}
             data-tip={t('ctabs.runes.shatter')}
             aria-label={`${t('ctabs.runes.shatter')}: +${RUNE_SHATTER[shown.tier - 1]}`}
-            onClick={shownWorn ? () => notifyWarning() : doShatter}
+            onClick={doShatter}
           >
+            <GxIcon name="hammer" className="ctab-shatter__ico" />
             <span className="px-num">+{fmtNum(RUNE_SHATTER[shown.tier - 1])}</span>
             <TokenIcon size={16} />
           </Button>
@@ -606,29 +684,65 @@ export function RunesTab({ axeLevel }: { axeLevel: number }) {
       {insp}
     </div>
   );
-}
+});
 
 // ---- Коллекция находок -----------------------------------------------------------------------
 
-export function FindsTab() {
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const FindsTab = memo(function FindsTab() {
   const t = useT();
-  const { lay, scale, dpr } = useLay();
+  const { lay, scale, dpr, short } = useLay();
   const p = useFinanceStore((s) => s.prison);
   const found = findsFound(p.finds);
+  // Phone portrait and tablet landscape / desktop: a 4×3 case, all 12 without scrolling — the
+  // slots as big as a quarter of the width and a third of the height let (≈ 80 px with 64-px art
+  // on a phone, ≈ 120 on a tablet, 52 at 320×568); the other layouts keep auto-fill columns.
+  const four = lay === 'one' || lay === 'wide';
+  const box = useRef<HTMLDivElement>(null);
+  const [cell, setCell] = useState(0);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const grid = el?.firstElementChild;
+    if (!four || !el || !grid) return undefined;
+    const measure = () => {
+      const cs = getComputedStyle(grid);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const rows = Math.ceil(FINDS.length / 4);
+      setCell(
+        Math.min(
+          (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4,
+          (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows,
+        ),
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [four]);
   const [sel, setSel] = useState(() => FINDS.find((f) => p.finds[f.id])?.id ?? FINDS[0].id);
   const f = FINDS.find((x) => x.id === sel) ?? FINDS[0];
   const n = p.finds[f.id] ?? 0;
-  const small = lay !== 'wide';
-  const px = fit(16, small ? 26 : 32, scale, dpr);
-  const slot = slotFor(px, scale, 2);
-  const bigPx = fit(16, small ? 30 : 40, scale, dpr);
+  const roomy = lay === 'one' && !short;
+  // a 6u margin around the art; a narrow phone (360) gives up the margin (down to 3u), not the 64 px
+  const padU = roomy ? 6 : 2;
+  let px = fit(16, lay === 'wide' ? 37 : roomy ? 32 : 26, scale, dpr);
+  if (four && cell > 0) px = Math.min(px, fitDown(16, cell - (roomy ? 3 : padU) * scale, dpr));
+  const slot =
+    four && cell > 0
+      ? Math.min(slotFor(px, scale, padU), Math.floor(cell / scale))
+      : slotFor(px, scale, padU);
+  // the selected find big: ≥ 96 px on a phone with room and on a tablet; 48 on a short phone
+  // (with 64, es «Moneda antigua» was cut at 320)
+  const bigPx = fit(16, lay === 'wide' ? 40 : roomy ? 48 : short ? 24 : 30, scale, dpr);
   const pick = (id: string) => {
     if (id === sel) return;
     selectionChanged();
     setSel(id as typeof sel);
   };
   return (
-    <div className={`px ctab ctab-finds ctab--${lay}`}>
+    <div className={`px ctab ctab-finds ctab--${lay}${short ? ' ctab--short' : ''}`}>
       <Head
         title={t('ctabs.finds.title')}
         hint={t('ctabs.finds.hint', { pct: Math.round((findsMult(p.finds) - 1) * 100) })}
@@ -640,8 +754,11 @@ export function FindsTab() {
           </span>
         }
       />
-      <div className="ctab-scroll ctab-finds__grid">
-        <Grid className="ctab-grid" style={slotVar(slot)}>
+      <div ref={box} className="ctab-scroll ctab-finds__grid">
+        <Grid
+          className="ctab-grid"
+          style={four ? ({ ...slotVar(slot), '--cols': 4 } as CSSProperties) : slotVar(slot)}
+        >
           {FINDS.map((x) => {
             const c = p.finds[x.id] ?? 0;
             return (
@@ -690,7 +807,7 @@ export function FindsTab() {
       </Panel>
     </div>
   );
-}
+});
 
 // ---- Достижения -------------------------------------------------------------------------------
 
@@ -715,53 +832,126 @@ const MILE_ICON: Record<string, GxIconName> = {
   parcels: 'gift',
 };
 
-function MileGifts({ m }: { m: (typeof MILES)[number] }) {
+type Gift = { k: string; tip: string; node: ReactNode };
+
+/** At most three reward chips, the rest folded into «+N» (its tip lists them). `compact` (phone /
+ * tablet portrait): one line of chips — «+N» takes the third place (the second on a short phone);
+ * the parcel and the rune chips keep the icon and the tier only, the full words go to the tip. */
+function MileGifts({
+  m,
+  compact,
+  short,
+}: {
+  m: (typeof MILES)[number];
+  compact: boolean;
+  short: boolean;
+}) {
   const r = m.reward;
-  return (
-    <span className="ctab-gifts">
-      {!!r.tokens && (
-        <span className="ctab-chip">
+  const all: Gift[] = [];
+  if (r.tokens)
+    all.push({
+      k: 'tokens',
+      tip: t('camp.purseTokens', { n: r.tokens, v: fmtNum(r.tokens) }),
+      node: (
+        <>
           <TokenIcon size={16} />
           <b className="px-num">+{fmtNum(r.tokens)}</b>
-        </span>
-      )}
-      {!!r.keys && (
-        <span className="ctab-chip">
+        </>
+      ),
+    });
+  if (r.keys)
+    all.push({
+      k: 'keys',
+      tip: t('camp.keysN', { n: r.keys }),
+      node: (
+        <>
           <KeyIcon size={16} />
           <b className="px-num">×{r.keys}</b>
-        </span>
-      )}
-      {r.parcel && (
-        <span className="ctab-chip">
+        </>
+      ),
+    });
+  if (r.parcel) {
+    const tip = t('camp.mile.parcel', { tier: nameIn(chestName(r.parcel)) });
+    all.push({
+      k: 'parcel',
+      tip,
+      node: (
+        <>
           <GxIcon name="gift" />
-          {t('camp.mile.parcel', { tier: nameIn(chestName(r.parcel)) })}
-        </span>
-      )}
-      {!!r.rune && (
-        <span className="ctab-chip">
+          {compact ? chestName(r.parcel) : tip}
+        </>
+      ),
+    });
+  }
+  if (r.rune) {
+    const roman = RUNE_ROMAN[r.rune - 1];
+    const tip = t('camp.mile.rune', { tier: roman });
+    all.push({
+      k: 'rune',
+      tip,
+      node: (
+        <>
           <GxIcon name="rune" />
-          {t('camp.mile.rune', { tier: RUNE_ROMAN[r.rune - 1] })}
-        </span>
-      )}
-      {r.socket && (
-        <span className="ctab-chip">
+          {compact ? <b className="px-num">{roman}</b> : tip}
+        </>
+      ),
+    });
+  }
+  if (r.socket)
+    all.push({
+      k: 'socket',
+      tip: t('camp.mile.socket'),
+      node: (
+        <>
           <Icon name="plus" />
-          {t('camp.mile.socket')}
-        </span>
-      )}
-      {r.egg && (
-        <span className="ctab-chip">
+          {compact ? t('ctabs.miles.socket') : t('camp.mile.socket')}
+        </>
+      ),
+    });
+  if (r.egg)
+    all.push({
+      k: 'egg',
+      tip: nameIn(eggName(r.egg)),
+      node: (
+        <>
           <EggArt egg={r.egg} size={16} />
-          {nameIn(eggName(r.egg))}
+          {compact ? t(`nursery.egg.${r.egg}`) : nameIn(eggName(r.egg))}
+        </>
+      ),
+    });
+  const limit = !compact ? 3 : short ? 2 : 3;
+  const keep = !compact ? 3 : 2;
+  const shown = all.length > limit ? all.slice(0, keep) : all;
+  const rest = all.slice(shown.length);
+  return (
+    <span className="ctab-gifts">
+      {shown.map((g) => (
+        <span key={g.k} className="ctab-chip" data-tip={compact ? g.tip : undefined}>
+          {g.node}
+        </span>
+      ))}
+      {rest.length > 0 && (
+        <span className="ctab-chip" data-tip={rest.map((g) => g.tip).join(' · ')}>
+          <b className="px-num">+{rest.length}</b>
         </span>
       )}
     </span>
   );
 }
 
-export function MilesTab({ onGain }: { onGain: (from: number, to: number) => void }) {
+/** Rows painted on opening: a 430×932 phone shows 7, a tablet / desktop 2 × 4. */
+const MILES_FIRST = 8;
+
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const MilesTab = memo(function MilesTab({
+  onGain,
+}: {
+  onGain: (from: number, to: number) => void;
+}) {
   const t = useT();
-  const { lay } = useLay();
+  const { lay, short } = useLay();
+  // phone / tablet portrait: one row «icon | title + bar | claim», the condition is the icon's tip
+  const compact = lay === 'one' || lay === 'tall';
   const p = useFinanceStore((s) => s.prison);
   const claim = useFinanceStore((s) => s.prisonMileClaim);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
@@ -801,6 +991,14 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
   const byId = new Map(rows.map((r) => [r.m.id, r]));
   const order = frozen.current.flatMap((id) => byId.get(id) ?? []);
   const first = order.find((r) => r.ready)?.m.id;
+  // Opening paints the first rows (more than any screen shows; the ready ones are on top), the
+  // rest follow a frame later in a transition: the open took 264 ms at 4× CPU with all 18 (R55).
+  const [allRows, setAllRows] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => startTransition(() => setAllRows(true)));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const shownRows = allRows ? order : order.slice(0, MILES_FIRST);
   const done = rows.filter((r) => r.done).length;
   // X / pad Y: take the top ready one.
   useAction(
@@ -812,7 +1010,7 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
     { scope: root },
   );
   return (
-    <div ref={root} className={`px ctab ctab-miles ctab--${lay}`}>
+    <div ref={root} className={`px ctab ctab-miles ctab--${lay}${short ? ' ctab--short' : ''}`}>
       <Head
         title={t('camp.tab.miles')}
         hint={t('ctabs.miles.hint')}
@@ -831,7 +1029,7 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
       />
       <div className="ctab-scroll">
         <div className="ctab-miles__list">
-          {order.map(({ m, done: isDone, ready }) => {
+          {shownRows.map(({ m, done: isDone, ready }) => {
             const [v, goal] = m.progress(p);
             return (
               <div
@@ -840,6 +1038,7 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
               >
                 <span
                   className={`px-slot px-slot--r${ready ? 4 : 0} ctab-mile__art`}
+                  data-tip={compact ? mileText(m.id) : undefined}
                   aria-hidden="true"
                 >
                   <span className="px-slot__art">
@@ -848,8 +1047,8 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
                 </span>
                 <span className="ctab-mile__info">
                   <span className="ctab-mile__name">{mileTitle(m.id)}</span>
-                  <span className="ctab-mile__text">{mileText(m.id)}</span>
-                  <MileGifts m={m} />
+                  {!compact && <span className="ctab-mile__text">{mileText(m.id)}</span>}
+                  <MileGifts m={m} compact={compact} short={short} />
                 </span>
                 <span className="ctab-mile__end">
                   {ready || takenNow.current.has(m.id) ? (
@@ -858,6 +1057,7 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
                     <span className="ctab-mile__swap">
                       <Button
                         kind="primary"
+                        size={compact ? 'sm' : undefined}
                         className={isDone ? 'is-gone' : undefined}
                         onClick={() => take(m.id)}
                       >
@@ -895,7 +1095,7 @@ export function MilesTab({ onGain }: { onGain: (from: number, to: number) => voi
       {reveal && <ParcelReveal open={reveal} onClose={() => setReveal(null)} />}
     </div>
   );
-}
+});
 
 // ---- Навыки -----------------------------------------------------------------------------------
 
@@ -922,7 +1122,14 @@ function perkAt(id: PerkId, n: number): string | null {
   return /\d/.test(s) ? s.replace(/\d+/, (d) => fmtNum(Number(d) * n)) : null;
 }
 
-export function PerksTab() {
+/** The bare value of a skill text: «+6%», fr «+8 %», tr «+%6» (the noun stays in the line above). */
+function perkVal(text: string | null): string | null {
+  const m = text?.match(/[+\u2212-]?\s?%?\s?\d[\d\s.,]*(?:\s?%)?/);
+  return m ? m[0].trim() : null;
+}
+
+// memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
+export const PerksTab = memo(function PerksTab() {
   const t = useT();
   // A short phone takes the tablet-portrait skills (one-line values, smaller nodes) — the tree
   // was squeezed to nothing at 320×568.
@@ -943,6 +1150,7 @@ export function PerksTab() {
   // Short phone: the nodes are one sideways strip; a › at its right end while more skills lie
   // beyond (a strip that ends on a whole node gave no hint of the other three).
   const strip = useRef<HTMLDivElement>(null);
+  const lastLearn = useRef(0);
   const [more, setMore] = useState(false);
   const fitStrip = useCallback(() => {
     const el = strip.current;
@@ -970,6 +1178,10 @@ export function PerksTab() {
   }, [armed]);
 
   const learn = () => {
+    // a double tap is one level, not two (300 ms; real fast taps still count)
+    const at = performance.now();
+    if (at - lastLearn.current < 300) return;
+    lastLearn.current = at;
     setArmed(false);
     if (locked) {
       notifyWarning();
@@ -1021,8 +1233,15 @@ export function PerksTab() {
 
   const nodeSlot = lay === 'tall' ? 24 : 30;
   const line = armed ? t('ctabs.perks.resetArm') : note;
-  const now = perkAt(k.id, lv);
-  const next = perkAt(k.id, lv + 1);
+  const now = perkVal(perkAt(k.id, lv));
+  const next = perkVal(perkAt(k.id, lv + 1));
+  // One line «Сейчас +6% → +12%» (the rows took 106 px; the effect's noun is the line above).
+  const step = max
+    ? `${t('ctabs.perks.now')} ${now ?? `${lv}/${k.max}`}`
+    : t('ctabs.perks.step', {
+        now: lv ? (now ?? `${lv}/${k.max}`) : '—',
+        next: next ?? `${lv + 1}/${k.max}`,
+      });
 
   return (
     <div ref={root} className={`px ctab ctab-perks ctab--${lay}${short ? ' ctab--short' : ''}`}>
@@ -1082,6 +1301,7 @@ export function PerksTab() {
                     rarity={l >= x.max ? 4 : l > 0 ? 2 : 0}
                     selected={x.id === sel}
                     locked={locked}
+                    count={`${l}/${x.max}`}
                     aria-label={`${perkName(x.id)} ${l}/${x.max}`}
                     onFocus={() => kbd() && pick(x.id)}
                     onClick={() => pick(x.id)}
@@ -1092,11 +1312,6 @@ export function PerksTab() {
                     />
                   </Slot>
                   <span className="ctab-node__name">{perkName(x.id)}</span>
-                  <span className="ctab-pips" aria-hidden="true">
-                    {Array.from({ length: x.max }, (_, i) => (
-                      <i key={i} className={i < l ? 'is-on' : undefined} />
-                    ))}
-                  </span>
                 </div>
               );
             })}
@@ -1105,6 +1320,9 @@ export function PerksTab() {
       </Panel>
       <Panel material="obsidian" className="ctab-insp ctab-insp--perk" aria-live="polite">
         <div className="ctab-insp__top">
+          <span className="ctab-insp__art ctab-perk-art" aria-hidden="true">
+            <GxIcon name={PERK_ICON[k.id]} style={{ color: PERK_TONE[k.id] } as CSSProperties} />
+          </span>
           <span className="ctab-insp__head">
             <span className="ctab-insp__name is-plain">
               {perkName(k.id)}{' '}
@@ -1117,14 +1335,7 @@ export function PerksTab() {
             </span>
           </span>
         </div>
-        <div className="ctab-insp__rows">
-          <span className="ctab-insp__k">{t('ctabs.perks.now')}</span>
-          <span className="ctab-insp__v">{lv ? (now ?? `${lv}/${k.max}`) : '—'}</span>
-          <span className="ctab-insp__k">{t('ctabs.perks.next')}</span>
-          <span className="ctab-insp__v is-next">
-            {max ? t('camp.maxDone') : (next ?? `${lv + 1}/${k.max}`)}
-          </span>
-        </div>
+        <div className="px-num ctab-insp__step">{step}</div>
         <div className={`ctab-insp__line${line ? ' is-note' : ''}`}>{line ?? ''}</div>
         <div className="ctab-insp__acts">
           {max ? (
@@ -1141,4 +1352,4 @@ export function PerksTab() {
       </Panel>
     </div>
   );
-}
+});
