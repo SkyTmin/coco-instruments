@@ -146,7 +146,9 @@ let shopPack: number = 1;
 // memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
 export const ShopTab = memo(function ShopTab() {
   const t = useT();
-  const { lay } = useLay();
+  const { lay, short } = useLay();
+  // phones: an effect chip instead of the sentence (the sentence is its tip)
+  const phone = lay === 'one' || lay === 'land';
   const p = useFinanceStore((s) => s.prison);
   const prisonBuyItem = useFinanceStore((s) => s.prisonBuyItem);
   const [pack, setPack] = useState(shopPack);
@@ -218,7 +220,7 @@ export const ShopTab = memo(function ShopTab() {
   );
 
   return (
-    <div ref={root} className={`px ctab ctab-shop ctab--${lay}`}>
+    <div ref={root} className={`px ctab ctab-shop ctab--${lay}${short ? ' ctab--short' : ''}`}>
       <Head
         title={t('ctabs.shop.title')}
         hint={lay === 'land' ? undefined : t('ctabs.shop.hint')}
@@ -237,10 +239,18 @@ export const ShopTab = memo(function ShopTab() {
                   <ItemIcon id={it.id} />
                 </span>
                 {have > 0 && <span className="px-slot__n">×{have}</span>}
+                {/* the amount being bought rides on the art, so nothing covers the price's token */}
+                {pack > 1 && <span className="ctab-good__pack">×{pack}</span>}
               </span>
               <span className="ctab-good__info">
                 <span className="ctab-good__name">{itemName(it.id)}</span>
-                <span className="ctab-good__text">{itemText(it.id)}</span>
+                {phone ? (
+                  <span className="ctab-good__fx" data-tip={itemText(it.id)}>
+                    {t(`ctabs.shop.fx.${it.id}`)}
+                  </span>
+                ) : (
+                  <span className="ctab-good__text">{itemText(it.id)}</span>
+                )}
               </span>
               <Button
                 kind="primary"
@@ -249,9 +259,8 @@ export const ShopTab = memo(function ShopTab() {
                 aria-label={`${itemName(it.id)} ×${pack} · ${t('camp.purseTokens', { n: cost, v: fmtNum(cost) })}`}
                 onClick={() => buy(it.id, cost)}
               >
-                {pack > 1 && <span className="ctab-good__pack">×{pack}</span>}
                 <span className="px-num">{fmtShort(cost)}</span>
-                <TokenIcon size={16} />
+                <TokenIcon size={24} />
               </Button>
               {pop?.id === it.id && (
                 <span

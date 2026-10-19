@@ -7,6 +7,15 @@ export const ctabs: Translation<typeof ru> = {
     hint: 'Aldıkların madende hemen yanında',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: '{v} ✦ eksik',
+    /** Phones: one effect chip per good instead of the sentence (the sentence is its tip). */
+    fx: {
+      bomb3: '3×3 patlatır',
+      bomb5: '5×5 patlatır',
+      charge: 'Tüm kat',
+      energy: 'Kazma ×2 · 1 dk',
+      lens: 'Alt kat · 90 sn',
+      prop: 'Üst kaya · 10 dk',
+    },
   },
   runes: {
     amulet: 'Muska',

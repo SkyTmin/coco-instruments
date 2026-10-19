@@ -34,6 +34,15 @@
   width: calc(8 * var(--u));
   height: calc(8 * var(--u));
 }
+/* The currency itself (purse, shop prices): 24 px on a phone (u = 2), 28 on tablet / desktop (u = 3). */
+.ctab :is(.ctab-purse, .ctab-good__buy) .ptoken-ico {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+}
+.ctab:is(.ctab--tall, .ctab--wide) :is(.ctab-purse, .ctab-good__buy) .ptoken-ico {
+  width: calc(var(--u) * 28 / 3);
+  height: calc(var(--u) * 28 / 3);
+}
 .ctab .ptear {
   flex: none;
   width: calc(8 * var(--u));
@@ -352,9 +361,10 @@
 .ctab-pack__opt {
   min-width: calc(24 * var(--u));
 }
-/* Phone portrait: the amount is a bar at the bottom (the thumb zone), big buttons. */
+/* Phone portrait: the amount is a bar at the bottom (the thumb zone), big buttons; 2u under them
+   for the buttons' bottom edge (it stuck 4 px out of the tab). */
 .ctab--one > .ctab-pack {
-  padding: calc(2 * var(--u)) var(--u) 0;
+  padding: calc(2 * var(--u)) var(--u);
 }
 .ctab--one .ctab-pack__opt {
   min-width: calc(30 * var(--u));
@@ -410,13 +420,27 @@
   grid-area: buy;
   min-width: calc(40 * var(--u));
 }
-/* The pack rides as a tag on the button's corner and the price keeps five digits of room:
-   switching ×1 / ×5 / ×10 never resizes the button or the row (checked by script). */
+/* Phones: one effect chip («Взрыв 3×3») instead of the sentence; the sentence is its tip. */
+.ctab-good__fx {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0 calc(2 * var(--u));
+  font: 700 var(--px-fs-sm) / 1.35 var(--px-font);
+  color: var(--px-ink);
+  background: #fff6e0;
+  box-shadow: 0 0 0 var(--u) rgb(42 25 12 / 0.35);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+/* The pack rides as a tag on the art's top-left corner (nothing covers the price's token) and the
+   price keeps five digits of room: switching ×1 / ×5 / ×10 never resizes the button or the row. */
 .ctab-good__pack {
   position: absolute;
   z-index: 1;
-  top: calc(-4 * var(--u));
-  right: calc(-2 * var(--u));
+  top: calc(-3 * var(--u));
+  left: calc(-3 * var(--u));
   padding: 0 calc(2 * var(--u));
   font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
   color: #fff3c4;
@@ -427,6 +451,37 @@
 .ctab-good__buy .px-num {
   min-width: 5ch;
   text-align: center;
+}
+/* Phone portrait: name, chip and price stacked beside the art (in one row with the price the chip
+   had 65–110 px: «Spreng|t» at 320, «Schicht darunter · 9…» at 390). Short phone (320×568,
+   375×600 inside Telegram): no hint line either. */
+.ctab-shop.ctab--short .ctab-head__hint {
+  display: none;
+}
+.ctab-shop.ctab--one .ctab-good {
+  grid-template:
+    'art name' auto
+    'art fx' auto
+    'art buy' auto
+    / auto minmax(0, 1fr);
+  gap: var(--u) calc(3 * var(--u));
+  padding: calc(2 * var(--u)) calc(3 * var(--u));
+}
+.ctab-shop.ctab--one .ctab-good__info {
+  display: contents;
+}
+.ctab-shop.ctab--one .ctab-good__name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctab-shop.ctab--one .ctab-good__fx {
+  grid-area: fx;
+  justify-self: start;
+}
+.ctab-shop.ctab--one .ctab-good__buy {
+  min-width: 0;
 }
 .ctab--land .ctab-goods {
   grid-template-columns: repeat(2, minmax(0, 1fr));

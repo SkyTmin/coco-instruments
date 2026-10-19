@@ -5,6 +5,15 @@ export const ctabs = {
     hint: 'Купленное — сразу с тобой в шахте',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Не хватает {v} ✦',
+    /** Phones: one effect chip per good instead of the sentence (the sentence is its tip). */
+    fx: {
+      bomb3: 'Взрыв 3×3',
+      bomb5: 'Взрыв 5×5',
+      charge: 'Весь ярус',
+      energy: 'Кирка ×2 · 1 мин',
+      lens: 'Ярус ниже · 90 с',
+      prop: 'Порода выше · 10 мин',
+    },
   },
   runes: {
     amulet: 'Оберег',

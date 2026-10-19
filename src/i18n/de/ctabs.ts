@@ -7,6 +7,15 @@ export const ctabs: Translation<typeof ru> = {
     hint: 'Was du kaufst, hast du gleich in der Mine',
     /** Tapped a price you can't pay: how many tokens are missing. */
     short: 'Es fehlen {v} ✦',
+    /** Phones: one effect chip per good instead of the sentence (the sentence is its tip). */
+    fx: {
+      bomb3: 'Sprengt 3×3',
+      bomb5: 'Sprengt 5×5',
+      charge: 'Ganze Schicht',
+      energy: 'Spitzhacke ×2 · 1 Min.',
+      lens: 'Schicht darunter · 90 s',
+      prop: 'Gestein höher · 10 Min.',
+    },
   },
   runes: {
     amulet: 'Amulett',
