@@ -283,6 +283,8 @@ export function Tabs<K extends string>({
   main?: boolean;
 }) {
   const scope = useRef<HTMLDivElement>(null);
+  // The press shows on pointerdown like every kit button (the selection only changes on click).
+  const press = usePress<HTMLButtonElement>();
   // Keyboard: Tab cycles (one hint on the right); gamepad: LB / RB on both sides.
   const pad = useInputDevice() === 'gamepad';
   useAction(
@@ -315,6 +317,7 @@ export function Tabs<K extends string>({
           aria-label={it.name}
           data-tip={it.name}
           className="px-tab px-f"
+          {...press}
           onClick={() => it.id !== value && onChange(it.id)}
         >
           {it.icon ? <Icon name={it.icon} /> : it.art}

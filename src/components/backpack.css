@@ -1,0 +1,248 @@
+/* Backpack and bunk chest (components/Inventory.tsx) on the pixel kit — the screen's own parts.
+   Skeleton (columns, showcase, stats, actions) — armory.css. Kit rules: .claude/rules/ui-px.md. */
+
+/* The grid is this screen's content (critic ruling 1): on a phone it gets 2/5 of the height — the
+   two tab rows and three full rows of cells on open at 390x844 — and the art keeps ≥ 234 px. */
+.ivx.arm--one {
+  grid-template:
+    'top' auto
+    'show' minmax(0, 3fr)
+    'list' minmax(0, 2fr)
+    'acts' auto
+    / minmax(0, 1fr);
+}
+.ivx.arm--two {
+  grid-template:
+    'top top' auto
+    'show show' minmax(0, 11fr)
+    'list side' minmax(0, 9fr)
+    / minmax(0, 11fr) minmax(0, 9fr);
+}
+/* The showcased thing: a square box sized from the stage with the pedestal, the icon standing on
+   it (an ore block hovered 10 px above the pedestal). */
+.ivx-hero {
+  display: grid;
+  place-items: end center;
+}
+.ivx-hero :is(img, canvas, svg) {
+  image-rendering: pixelated;
+}
+.ivx-hero.is-ghost {
+  filter: grayscale(1) brightness(0.55);
+}
+/* Two lines reserved under the name: a long line never pushes the art or the stats. */
+/* Phone portrait has no side column, the plate carries the line: one line of the small size at a
+   fixed height (the whole line is in the cell's tip) — the art needs the height. */
+.arm--one .ivx-sub {
+  height: calc(1.2 * var(--px-fs-sm));
+  min-height: 0;
+  font-size: var(--px-fs-sm);
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+.ivx.arm--one .ivx-list {
+  gap: calc(3 * var(--u));
+}
+/* Two and three columns: the side column says it in full (beside the art on a phone held sideways
+   the plate is 165 px — five lines); the plate keeps the name. */
+:is(.arm--two, .arm--three) .ivx-sub {
+  display: none;
+}
+.ivx-sub {
+  margin: 0;
+  hyphens: auto;
+  max-width: 100%;
+  min-height: calc(2 * 1.2 * var(--px-fs));
+  font: 500 var(--px-fs) / 1.2 var(--px-font);
+  color: var(--px-text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+/* The third cell holds «used/max» — a little wider than the other two. */
+.ivx .arm-stats {
+  grid-template-columns: minmax(0, 4fr) minmax(0, 4fr) minmax(0, 5fr);
+}
+.arm-stat.is-risk > i,
+.ivx-details .is-risk {
+  color: var(--px-red);
+}
+
+/* List column: section tabs stay on top, the grids scroll under them. */
+.ivx-list {
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: calc(4 * var(--u));
+}
+.ivx-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+.ivx-tabs {
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding-top: calc(3 * var(--u));
+}
+.ivx-tabs::-webkit-scrollbar {
+  display: none;
+}
+/* Icon tabs of a finger's size (the kit tab was 36x44 on a phone). */
+.ivx-tabs > .px-tab {
+  flex: none;
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+  padding-inline: calc(2 * var(--u));
+}
+/* Phone portrait: all tabs at once, wrapped into two rows (one scrolling row showed 4 of 9). */
+.arm--one .ivx-tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+/* The section's count: ink on parchment at the tab's corner — the red kit badge read as an alert.
+   Placed against the tab (the kit label clips its overflow, the count would be cut). */
+.ivx-count {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: calc(8 * var(--u));
+  padding: 0 var(--u);
+  font: 700 var(--px-fs-tiny) / 1.15 var(--px-font);
+  text-align: center;
+  color: var(--px-ink);
+  border-width: var(--u);
+  border-style: solid;
+  border-color: transparent;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
+  image-rendering: pixelated;
+  text-shadow: none;
+}
+/* Wide formats: the narrow list column wraps the tabs instead of hiding them off-screen. */
+.arm--two .ivx-tabs,
+.arm--three .ivx-tabs {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+/* …except on a phone held sideways: four rows of tabs would leave no height for the cells — two
+   rows that scroll sideways (one row showed 2 of 9 tabs). */
+html[data-ff='phone-landscape'] .arm .ivx-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, auto);
+  /* max-content: an auto track shrank to the kit label's min-width 0 and cut «Alles» to 32 px. */
+  grid-auto-columns: max-content;
+  justify-content: start;
+  overflow-x: auto;
+}
+.ivx-tab {
+  display: inline-grid;
+  place-items: center;
+}
+/* «Всё»: one grid, each section's row group opens with its marker cell (icon + fill bar). */
+.ivx-all > .ivx-mark {
+  grid-column-start: 1;
+  background: color-mix(in srgb, var(--px-ink) 85%, transparent);
+  color: var(--px-gold);
+}
+.ivx-scroll {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  align-content: start;
+  gap: calc(6 * var(--u));
+  padding: calc(3 * var(--u));
+  margin: calc(-3 * var(--u));
+  scrollbar-width: thin;
+}
+.ivx-sec .px-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+
+/* Section limits under the heading: label + numbers over a bar, side by side. */
+.ivx-sec > .arm-head {
+  display: grid;
+  justify-content: stretch;
+}
+.ivx-lims {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(50 * var(--u)), 1fr));
+  gap: calc(2 * var(--u)) calc(6 * var(--u));
+}
+.ivx-lim {
+  display: grid;
+  gap: var(--u);
+  min-width: 0;
+  font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
+  color: var(--px-text);
+}
+.ivx-lim.is-full b {
+  color: var(--px-gold);
+}
+
+/* Readiness bar inside a cell (egg in a nest, parcel under the field). */
+.ivx-slot-bar {
+  position: absolute;
+  left: calc(3 * var(--u));
+  right: calc(3 * var(--u));
+  bottom: calc(3 * var(--u));
+  z-index: 1;
+}
+
+/* Bunk chest: kit cells of a finger's size, as many in a row as the column holds (nine in a row
+   made them 21–34 px, smaller than the text); the list scrolls. */
+.ivx-chest {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--slot, calc(26 * var(--u))));
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+}
+.ivx-lock {
+  margin-top: calc(2 * var(--u));
+  font-size: var(--px-fs-sm);
+}
+
+/* Details column. */
+.ivx-details p {
+  margin: 0;
+}
+.ivx-where {
+  display: grid;
+  gap: calc(2 * var(--u));
+}
+.ivx-where p,
+.ivx-price {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+}
+.ivx-price {
+  color: var(--px-gold);
+}
+.ivx-price.is-short {
+  color: var(--px-red);
+}
+.ivx-hide {
+  visibility: hidden;
+}
+
+/* View-only (from the dungeon run): the action bar is one hint line of the same height. */
+.ivx-acts.is-hint {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: calc(26 * var(--u));
+  text-align: center;
+}
+.arm-note.is-bad {
+  color: var(--px-red);
+}

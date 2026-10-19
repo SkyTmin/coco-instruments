@@ -346,6 +346,27 @@ html[data-game][data-input] .px-f:focus-visible {
   color: #2a1405;
   text-shadow: 0 var(--u) 0 #e3a25c;
 }
+/* Pressed (`usePress`, on pointerdown, no transition): the tab goes 1 u down; an unselected one
+   also one iron ramp step darker (#404853 → #2a3039) — a veil between its baked face and the
+   label (the face is a border-image fill, so a background can't darken it). No `isolation` on
+   the tab: the focus ring (`.px-f::after`, z 3) must stay above the neighbouring tabs. */
+.px-tab.is-down {
+  translate: 0 var(--u);
+}
+.px-tab.is-down:not([aria-selected='true'])::before {
+  content: '';
+  position: absolute;
+  inset: var(--u);
+  z-index: 0;
+  background: rgb(26 30 37 / 0.57);
+  pointer-events: none;
+}
+.px-tab.is-down:not([aria-selected='true']) > * {
+  z-index: 1;
+}
+.px-tab.is-down:not([aria-selected='true']) > :not(.px-badge) {
+  position: relative;
+}
 .px-tab .ip-prompt {
   font-size: var(--px-fs-tiny);
 }

@@ -1243,6 +1243,46 @@ function statArt(name: string): Pix {
   return p;
 }
 
+// ---- wave 3 — Q: HUD chip pictures (GameTop: coins, tokens, keys, rank) ---------------------------
+// Same size and style as the stat pictures above (12 × 12, 1-art-px ink, light from the upper left),
+// shown at 24 CSS px (36 at ui-scale ≥ 4), twice the cap height of the chip number. Coin, token and
+// pick are the very pixels of `sell`, `token` and `dmg`: one look per thing across the game. The key
+// is upright brass in the kit `key` glyph's shape (the keys chip showed a water drop).
+const HUD_ART: Record<string, { pal: Record<string, string>; rows: string[] }> = {
+  coin: STAT_ART.sell,
+  token: STAT_ART.token,
+  rank: STAT_ART.dmg,
+  key: {
+    pal: { '1': '#7a4e0e', '2': '#b97d1a', '3': '#eab04a', '4': '#ffe39a', w: '#fff8e0' },
+    rows: [
+      '...kkkkkk...',
+      '..k444433k..',
+      '.k4wkkkk32k.',
+      '.k3k....k2k.',
+      '.k3k....k1k.',
+      '.k32kkkk21k.',
+      '..k322211k..',
+      '...kk32kk...',
+      '....k32kkk..',
+      '....k3222k..',
+      '....k32kkk..',
+      '....kkkk....',
+    ],
+  },
+};
+
+function hudArt(name: string): Pix {
+  const { pal, rows } = HUD_ART[name];
+  const p = new Pix(rows[0].length, rows.length);
+  rows.forEach((row, y) =>
+    [...row].forEach((ch, x) => {
+      if (ch === 'k') p.set(x, y, INK);
+      else if (pal[ch]) p.set(x, y, hex(pal[ch]));
+    }),
+  );
+  return p;
+}
+
 // ---- The kit ------------------------------------------------------------------------------------
 
 export const PIECES: Piece[] = [
@@ -1404,6 +1444,10 @@ export const PIECES: Piece[] = [
   // wave 3 — N2: `--pximg-st-<stat>` (loot sell dmg token luck rate power)
   ...Object.keys(STAT_ART).map(
     (n): Piece => ({ name: `st-${n}`, kind: 'img', draw: () => statArt(n) }),
+  ),
+  // wave 3 — Q: `--pximg-hud-<name>` (coin token key rank)
+  ...Object.keys(HUD_ART).map(
+    (n): Piece => ({ name: `hud-${n}`, kind: 'img', draw: () => hudArt(n) }),
   ),
 ];
 

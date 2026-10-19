@@ -20,8 +20,17 @@
 // stats; at most three chips per pet; the stage swaps to another pet only once its strip is
 // decoded; cells and squad slots are memoised.
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject } from 'react';
 import { useFinanceStore } from '@/store';
 import { fmtNum, useT } from '@/i18n';
 import { useFormFactor } from '@/game-shell';
@@ -42,6 +51,7 @@ import {
   PAT_XP,
   petBonus,
   petLevelOf,
+  isPetId,
   petLook,
   petOf,
   PETS,
@@ -204,6 +214,9 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
           : 'wide';
   // Phones: the collection opens in a drawer from the action bar; tablets and desktops show the grid.
   const drawerMode = layout === 'one' || layout === 'land';
+  // Phone landscape and wide screens: the name plate tops the side column, so the room keeps
+  // the whole stage height (the pet there is limited by the height).
+  const plateSide = layout === 'land' || layout === 'wide';
   const root = useRef<HTMLDivElement>(null);
 
   const owned = PETS.filter((d) => p.pets[d.id]).length;
@@ -219,6 +232,8 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const [pick, setPick] = useState<number | null>(null);
   const [info, setInfo] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [animsOpen, setAnimsOpen] = useState(false);
+  const animsRef = useRef<HTMLDivElement>(null);
   const morePress = usePress<HTMLButtonElement>();
 
   const rec = p.pets[sel];
@@ -313,20 +328,41 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   };
   // Decode before swap: the stage (art + plate) keeps the pet it shows until the picked one's
   // strip is decoded. Already decoded (preloaded neighbours) → the same render.
-  const want = artFor(sel);
-  const shownRef = useRef<PetId>(sel);
+  // Cold switch (a slow link: the strip isn't decoded 100 ms after the pick): the plate switches
+  // and the pet's 1-KB thumbnail stands on the pedestal until the strip is ready — the right pet
+  // at once instead of the old one for half a second (critic round 2, P1-5).
+  // The pick paints first (selection ring, action bar), the stage and the plate follow as a
+  // deferred render: on the production build at 4× a switch was one ~150-ms task (P2-8).
+  const stageSel = useDeferredValue(sel);
+  const want = artFor(stageSel);
+  const shownRef = useRef<PetId>(stageSel);
   const [, setDecodedTick] = useState(0);
+  const [cold, setCold] = useState<PetId | null>(null);
   const ready = !want.src || decoded.has(want.src);
-  if (ready) shownRef.current = sel;
+  if (ready || cold === stageSel) shownRef.current = stageSel;
   const stageId = shownRef.current;
+  const thumbOnly = !ready && stageId === stageSel && !!p.pets[stageSel];
   useEffect(() => {
     if (ready) return undefined;
     let live = true;
     void decodeArt(want.src).then(() => live && setDecodedTick((n) => n + 1));
+    const late = window.setTimeout(() => live && setCold(stageSel), 100);
     return () => {
       live = false;
+      window.clearTimeout(late);
     };
-  }, [ready, want.src]);
+  }, [ready, want.src, stageSel]);
+  // A pet is fetched from the press on its slot, not from the click 100–300 ms later.
+  const artRef = useRef(artFor);
+  artRef.current = artFor;
+  const warm = useCallback((id: PetId) => {
+    const a = artRef.current(id);
+    if (a.src) void decodeArt(a.src);
+  }, []);
+  const warmFrom = (e: ReactPointerEvent) => {
+    const id = (e.target as Element).closest?.('[data-pet]')?.getAttribute('data-pet');
+    if (id && isPetId(id) && id !== sel) warm(id);
+  };
   // Preload the squad and ±3 neighbours of the selection in the collection order, one by one
   // and after the switch itself has painted.
   useEffect(() => {
@@ -352,10 +388,13 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const sdef = petOf(stageId);
   const srec = p.pets[stageId];
   const slv = petLevelOf(srec?.xp ?? 0);
-  const size = stageId === sel ? want.size : artFor(stageId).size;
+  const size = stageId === stageSel ? want.size : artFor(stageId).size;
+  // the thumbnail (48 art px) at the biggest whole upscale inside the strip's frame, feet down
+  const phBox = PET_PX[stageId]?.box ?? 48;
+  const phS = (Math.max(1, Math.floor((size * dpr) / phBox)) * phBox) / dpr;
   // Slot art: the drawer/grid cell is 26 art px, the squad cells bigger (nursery.css `--slot`).
   const thumb = 20 * u;
-  const big = (layout === 'land' ? 20 : 26) * u;
+  const big = (layout === 'land' ? 20 : layout === 'one' ? 22 : 26) * u;
 
   const name = t(`pets.${stageId}.name`);
 
@@ -373,60 +412,106 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
         } as CSSProperties
       }
     >
-      {size > 0 && (
-        <PetArt
-          id={stageId}
-          size={size}
-          v={petLook(srec)}
-          ghost={!srec}
-          anim={base}
-          joy={joy}
-          play={show}
-          onClick={
-            srec
-              ? () => {
-                  primeAudio();
-                  petPat();
-                  tapLight();
-                  setJoy((j) => j + 1);
-                  if (canPat(srec, Date.now()) && pat(stageId)) setXpPop((x) => x + 1);
-                }
-              : undefined
-          }
+      {size > 0 && thumbOnly ? (
+        <img
+          className="nur-ph"
+          src={petArtSrc(stageId, size, petLook(srec), true)}
+          alt=""
+          draggable={false}
+          style={{
+            width: phS,
+            height: phS,
+            left: `calc(var(--x) + ${Math.round(((size - phS) / 2) * dpr) / dpr}px)`,
+          }}
         />
+      ) : (
+        size > 0 && (
+          <PetArt
+            id={stageId}
+            size={size}
+            v={petLook(srec)}
+            ghost={!srec}
+            anim={base}
+            joy={joy}
+            play={show}
+            focusable
+            onClick={
+              srec
+                ? () => {
+                    primeAudio();
+                    petPat();
+                    tapLight();
+                    setJoy((j) => j + 1);
+                    if (canPat(srec, Date.now()) && pat(stageId)) setXpPop((x) => x + 1);
+                  }
+                : undefined
+            }
+          />
+        )
       )}
     </span>
   );
 
   // Six framed buttons, always all six (a pet not hatched yet: greyed, a tap says why) — the row
-  // never changes. The word is the tip / aria label.
-  const anims = (
+  // never changes. The word is the tip / aria label. Tablets and desktops: a column beside the
+  // room (the room is limited by its height there). Phones: one ▶ toggle in the room's corner
+  // opens them as a 3 × 2 menu (pitch ≥ 44 px) — the column cost the portrait pet its width.
+  const animBtns = ANIMS.map((a) => {
+    const word = t(`nursery.anim.${a.id}`);
+    return (
+      <Button
+        key={a.id}
+        size={drawerMode ? 'md' : 'sm'}
+        icon={a.icon}
+        label={word}
+        className="nur-anim"
+        off={!srec}
+        on={srec && a.loop ? base === a.id && !show : undefined}
+        data-autofocus={drawerMode && a.loop && base === a.id && !show ? '' : undefined}
+        onClick={() => {
+          tapLight();
+          setAnimsOpen(false);
+          if (!srec) {
+            say(t('nursery.hatchFirst'));
+            return;
+          }
+          if (a.loop) {
+            setBase(a.id);
+            setShow(null);
+          } else setShow((s) => ({ anim: a.id, k: (s?.k ?? 0) + 1 }));
+        }}
+      />
+    );
+  });
+  const anims = drawerMode ? (
+    <>
+      <Button
+        size="sm"
+        icon="play"
+        label={t('nursery.anims')}
+        className="nur-anim-tog"
+        on={animsOpen}
+        aria-expanded={animsOpen}
+        onClick={() => {
+          tapLight();
+          setAnimsOpen((o) => !o);
+        }}
+      />
+      {animsOpen && (
+        <div
+          ref={animsRef}
+          className="nur-anims nur-anims--pop"
+          role="toolbar"
+          aria-label={t('nursery.anims')}
+          data-ui-layer=""
+        >
+          {animBtns}
+        </div>
+      )}
+    </>
+  ) : (
     <div className="nur-anims" role="toolbar">
-      {ANIMS.map((a) => {
-        const word = t(`nursery.anim.${a.id}`);
-        return (
-          <Button
-            key={a.id}
-            size="sm"
-            icon={a.icon}
-            label={word}
-            className="nur-anim"
-            off={!srec}
-            on={srec && a.loop ? base === a.id && !show : undefined}
-            onClick={() => {
-              tapLight();
-              if (!srec) {
-                say(t('nursery.hatchFirst'));
-                return;
-              }
-              if (a.loop) {
-                setBase(a.id);
-                setShow(null);
-              } else setShow((s) => ({ anim: a.id, k: (s?.k ?? 0) + 1 }));
-            }}
-          />
-        );
-      })}
+      {animBtns}
     </div>
   );
 
@@ -479,6 +564,12 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
 
   // The plate under the pet: name (one line, sized to fit) + power, rarity pill + gold + level,
   // the chips and the level bar. Fixed rows — switching pets never changes its height.
+  const xpV = srec ? (slv.need ? slv.into / slv.need : 1) : 0;
+  const xpText = !srec
+    ? ''
+    : !slv.need
+      ? t('nursery.lvMax')
+      : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`;
   const plate = (
     <div
       className="px-dark nur-plate"
@@ -514,19 +605,27 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
             </Badge>
           </span>
         )}
-        {srec && <span className="nur-lv">{t('common.level', { n: slv.level })}</span>}
+        {srec && (
+          // at the cap only the level: «25 ур. · Предел» didn't fit a 360-px plate beside a
+          // mythic pill; the full bar and its tip say «Предел»
+          <span className="nur-lv px-num">
+            {slv.need
+              ? t('nursery.lvPct', { n: slv.level, p: Math.floor(xpV * 100) })
+              : t('common.level', { n: slv.level })}
+          </span>
+        )}
       </div>
       <div
         className={`nur-plate__roles${shown.some((s) => pctI(sb[s] ?? 0) >= 100) ? ' is-big' : ''}`}
       >
         {roles}
       </div>
-      <Bar
-        value={srec ? (slv.need ? slv.into / slv.need : 1) : 0}
-        label={
-          !srec ? '' : !slv.need ? t('nursery.lvMax') : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`
-        }
-      />
+      {/* a slim bar on every format (round 4: the level row says «25 ур. · 41 %», and the
+          labelled bar cost the wide collection its second row); «into / need» is its tip and
+          the details sheet's bar */}
+      <span className="nur-xp" data-tip={xpText || undefined} aria-label={xpText || undefined}>
+        <Bar value={xpV} height={4} />
+      </span>
     </div>
   );
 
@@ -545,7 +644,7 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
           {pet}
         </span>
         {anims}
-        {layout !== 'land' && plate}
+        {!plateSide && plate}
         {xp}
       </Panel>
     </section>
@@ -556,13 +655,10 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   const squad = (
     <section className="nur-squad" aria-label={t('nursery.squad')}>
       <div className="nur-squad__head">
-        <span
-          className="nur-squad__t"
-          data-tip={layout === 'land' ? t('nursery.squadHint') : undefined}
-        >
+        <span className="nur-squad__t" data-tip={plateSide ? t('nursery.squadHint') : undefined}>
           <Heading className="nur-squad__title">{t('nursery.squad')}</Heading>
         </span>
-        {layout !== 'land' && <span className="nur-squad__hint">{t('nursery.squadHint')}</span>}
+        {!plateSide && <span className="nur-squad__hint">{t('nursery.squadHint')}</span>}
       </div>
       <div className="nur-squad__row">
         {[0, 1, 2].map((i) => {
@@ -664,28 +760,36 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
           <b className="px-num">{t('nursery.bonus', { v: pctI(zoo) })}</b>
         </span>
       )}
+      {/* Tablets / desktop: the inline head on one row — icons only, the value in the tip and the
+          label (critic round 3, item 3: the head's second row cost a row of cells); a filter
+          other than «all» shows as a pressed toggle. The drawer keeps the words. */}
       <span className="nur-tools">
         <Button
           size="sm"
           icon="sort"
-          aria-label={t('nursery.sortLabel')}
+          label={drawerMode ? undefined : `${t('nursery.sortLabel')}: ${t(`nursery.sort.${sort}`)}`}
+          aria-label={drawerMode ? t('nursery.sortLabel') : undefined}
           onClick={() => {
             tapLight();
             setSort((s) => SORTS[(SORTS.indexOf(s) + 1) % SORTS.length]);
           }}
         >
-          {t(`nursery.sort.${sort}`)}
+          {drawerMode ? t(`nursery.sort.${sort}`) : null}
         </Button>
         <Button
           size="sm"
           icon="filter"
-          aria-label={t('nursery.filterLabel')}
+          on={!drawerMode && filter !== 'all'}
+          label={
+            drawerMode ? undefined : `${t('nursery.filterLabel')}: ${t(`nursery.filter.${filter}`)}`
+          }
+          aria-label={drawerMode ? t('nursery.filterLabel') : undefined}
           onClick={() => {
             tapLight();
             setFilter((f) => FILTERS[(FILTERS.indexOf(f) + 1) % FILTERS.length]);
           }}
         >
-          {t(`nursery.filter.${filter}`)}
+          {drawerMode ? t(`nursery.filter.${filter}`) : null}
         </Button>
       </span>
     </div>
@@ -735,9 +839,78 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
       if ((d === 'keyboard' || d === 'gamepad') && open) focusEl(open);
     };
   }, [drawer]);
+  // Phone portrait: the drawer reaches up to the room's bottom edge (over the plate), so the
+  // pet stays in view and all 18 cells fit (critic round 3, item 3: 5 → 18 on 390 × 844).
+  useLayoutEffect(() => {
+    const d = drawerRef.current;
+    const r = roomRef.current;
+    const show = r?.closest('.nur-show');
+    if (!drawer || layout !== 'one' || !d || !r || !show) return;
+    const top = r.getBoundingClientRect().bottom - show.getBoundingClientRect().top;
+    d.style.setProperty('--nur-dtop', `${Math.round(top * dpr) / dpr}px`);
+  }, [drawer, layout, room.w, room.h, dpr]);
+  // The drawer's first visible row is fetched one by one once it has painted: those are the
+  // pets the next tap picks.
   useEffect(() => {
-    if (!drawerMode) setDrawer(false);
+    if (!drawer) return undefined;
+    let live = true;
+    const timer = window.setTimeout(async () => {
+      const box = drawerRef.current?.querySelector('.nur-grid');
+      if (!box) return;
+      const top = box.getBoundingClientRect().top;
+      const cells = [...box.querySelectorAll<HTMLElement>('[data-pet]')].filter(
+        (c) => c.getBoundingClientRect().top >= top - 1,
+      );
+      const row = cells.length ? cells[0].getBoundingClientRect().top : 0;
+      for (const c of cells) {
+        if (!live || c.getBoundingClientRect().top > row + 1) return;
+        const id = c.dataset.pet;
+        if (!id || !isPetId(id)) continue;
+        const a = artRef.current(id);
+        if (a.src) await decodeArt(a.src);
+      }
+    }, 150);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [drawer]);
+  useEffect(() => {
+    if (!drawerMode) {
+      setDrawer(false);
+      setAnimsOpen(false);
+    }
   }, [drawerMode]);
+
+  // The phone anims menu: Esc / Back / pad B and a tap outside close it; keyboard and pad focus
+  // go into it (the current loop) and back to the toggle.
+  useEffect(() => {
+    if (!animsOpen) return undefined;
+    const host = root.current;
+    const tog = () => host?.querySelector<HTMLElement>('.nur-anim-tog') ?? null;
+    const off = registerEscape(() => setAnimsOpen(false));
+    const dev = getInputDevice();
+    if (dev === 'keyboard' || dev === 'gamepad') {
+      const box = animsRef.current;
+      const el =
+        box?.querySelector<HTMLElement>('[data-autofocus]') ??
+        box?.querySelector<HTMLElement>('button');
+      if (el) focusEl(el);
+    }
+    const outside = (e: PointerEvent) => {
+      const tg = e.target as Node | null;
+      if (animsRef.current?.contains(tg) || tog()?.contains(tg)) return;
+      setAnimsOpen(false);
+    };
+    document.addEventListener('pointerdown', outside, true);
+    return () => {
+      off();
+      document.removeEventListener('pointerdown', outside, true);
+      const d = getInputDevice();
+      const el = tog();
+      if ((d === 'keyboard' || d === 'gamepad') && el) focusEl(el);
+    };
+  }, [animsOpen]);
 
   const acts = (
     <div className="nur-acts">
@@ -770,12 +943,28 @@ export const Nursery = memo(function Nursery({ say }: { say: (text: string) => v
   );
 
   return (
-    <div ref={root} className={`px nur nur--${layout}`} style={{ '--st': stPx } as CSSProperties}>
+    <div
+      ref={root}
+      className={`px nur nur--${layout}`}
+      style={{ '--st': stPx } as CSSProperties}
+      onPointerDownCapture={warmFrom}
+    >
       {showcase}
       <div className="nur-side">
-        {layout === 'land' && plate}
-        {squad}
-        {collection}
+        {plateSide && plate}
+        {layout === 'wide' ? (
+          // the plate on top and the action bar at the bottom stay put; the squad and the
+          // collection scroll between them as one list (a grid-only scroll was 0.2–1 row high)
+          <div className="nur-side__mid">
+            {squad}
+            {collection}
+          </div>
+        ) : (
+          <>
+            {squad}
+            {collection}
+          </>
+        )}
         {acts}
       </div>
       {drawer && drawerMode && (
