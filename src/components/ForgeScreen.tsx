@@ -12,7 +12,7 @@
 // говорит редкость, вспышка, силуэт, и кирка проявляется.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CoinIcon } from '@/components/slot-art';
 import { OreIcon, TokenIcon } from '@/components/PrisonCamp';
@@ -117,6 +117,21 @@ function textW(text: string, font: string): number {
   return measureCtx.measureText(text).width;
 }
 /** The px size of a dark-kit type var (`--pd-fs-sm` …) inside `el`. */
+/** Lines of `text` wrapped at its spaces in `room` px (a word wider than the room — Infinity). */
+function linesOf(text: string, font: string, room: number): number {
+  const sp = textW(' ', font);
+  let lines = 1;
+  let x = 0;
+  for (const w of text.split(' ')) {
+    const ww = textW(w, font);
+    if (ww > room) return Infinity;
+    if (x > 0 && x + sp + ww > room) {
+      lines++;
+      x = ww;
+    } else x += (x > 0 ? sp : 0) + ww;
+  }
+  return lines;
+}
 function fsOf(el: HTMLElement, v: string): number {
   const probe = document.createElement('i');
   probe.style.cssText = `position:absolute;visibility:hidden;font-size:var(${v})`;
@@ -128,7 +143,9 @@ function fsOf(el: HTMLElement, v: string): number {
 /** The type steps a fitted line may take, biggest first. */
 const STEPS = ['--pd-fs-xl', '--pd-fs-lg', '--pd-fs', '--pd-fs-sm'] as const;
 
-const VOWEL = /[aeiouyäöüéèêëàâîïôûùíóúıаеёиоуыэюя]/i;
+// Latin vowels of the 7 languages + Cyrillic а е ё и о у ы э ю я (escaped: the i18n guard)
+const VOWEL =
+  /[aeiouyäöüéèêëàâîïôûùíóúı\u0430\u0435\u0451\u0438\u043e\u0443\u044b\u044d\u044e\u044f]/i;
 /**
  * Soft hyphens at the syllable breaks of a tile label: before a lone consonant between vowels,
  * inside a two-consonant cluster, before the last of a longer one (never before ь, ъ, й). A long
@@ -150,7 +167,7 @@ function syl(text: string): string {
         const n = k - j; // the consonant cluster around w[i], vowels on both sides
         const ok =
           !isV(w[i]) &&
-          !/[ьъйЬЪЙ-]/.test(w[i]) &&
+          !/[\u044c\u044a\u0439\u042c\u042a\u0419-]/.test(w[i]) &&
           j > 0 &&
           k < w.length &&
           i >= 2 &&
@@ -315,8 +332,14 @@ export function ForgeScreen({
     );
   };
 
+  // a double tap on «Улучшить» bought two levels (stand, 90 ms): a second buy within 400 ms is the
+  // same tap
+  const lastBuy = useRef(0);
   const buy = (what: 'bag' | 'cart') => {
     primeAudio();
+    const now = performance.now();
+    if (now - lastBuy.current < 400) return;
+    lastBuy.current = now;
     if (!prisonBuy(what)) {
       notifyWarning();
       return;
@@ -508,7 +531,8 @@ export function ForgeScreen({
       {label != null && (
         <i className="frg-stat__l">
           {short ? <span className="frg-stat__lw">{label}</span> : label}
-          {short && <span className="frg-stat__ls">{short}</span>}
+          {/* «Blöcke/Min.» may break after its slash (Chromium doesn't break there by itself) */}
+          {short && <span className="frg-stat__ls">{short.replace('/', '/\u200b')}</span>}
         </i>
       )}
     </div>
@@ -542,7 +566,7 @@ export function ForgeScreen({
               {lvl.level}
             </>,
             // thin spaces around the slash: «2 634 / 3 758» fits a 390-px phone's tile
-            lvl.need ? `${fmt(lvl.into)} / ${fmt(lvl.need)}` : t('forge.max'),
+            lvl.need ? `${fmt(lvl.into)}\u2009/\u2009${fmt(lvl.need)}` : t('forge.max'),
             <PxdPips
               n={10}
               on={lvPips}
@@ -1088,7 +1112,8 @@ export function ForgeScreen({
     const sub = top?.querySelector<HTMLElement>('.frg-ttl p');
     if (top && sub) {
       top.classList.remove('is-subrow');
-      if (layout === 'one') top.classList.toggle('is-subrow', sub.scrollWidth > sub.clientWidth + 0.5);
+      if (layout === 'one')
+        top.classList.toggle('is-subrow', sub.scrollWidth > sub.clientWidth + 0.5);
     }
     // the tabs drop their icons when both labels don't fit the row
     const tabsEl = el.querySelector<HTMLElement>('.frg-tabs');
@@ -1104,6 +1129,24 @@ export function ForgeScreen({
     if (layout === 'one' && pics.length)
       el.style.setProperty('--frg-art', `${Math.min(...pics.map((q) => q.clientHeight))}px`);
     if (tab !== 'picks') return;
+    // the side list of a wide screen ends on a clearly cut row, never on a row's edge (R73): one
+    // more column when under 15 % or over 85 % of the cut row shows
+    const lg = el.querySelector<HTMLElement>('.frg-list .frg-grid');
+    if (lg && layout !== 'one') {
+      lg.style.removeProperty('grid-template-columns');
+      const base = getComputedStyle(lg).gridTemplateColumns.split(' ').length;
+      for (let c = base; c <= base + 1; c++) {
+        if (c > base) lg.style.gridTemplateColumns = `repeat(${c}, minmax(0, 1fr))`;
+        if (lg.scrollHeight <= lg.clientHeight + 1) break;
+        // as at open (scrollTop 0): a pick chosen lower down scrolls the list, the columns stay
+        const edge = lg.getBoundingClientRect().bottom - lg.scrollTop;
+        const cut = [...lg.children]
+          .map((k) => k.getBoundingClientRect())
+          .find((q) => q.bottom > edge && q.top < edge + 1);
+        const f = cut ? (edge - cut.top) / cut.height : 0;
+        if (f >= 0.15 && f <= 0.85) break;
+      }
+    }
     const steps = STEPS.map((v) => fsOf(el, v));
     // the ribbon: the biggest step at which this pick's name fits its straight part
     const show = el.querySelector<HTMLElement>('.frg-show');
@@ -1118,34 +1161,47 @@ export function ForgeScreen({
     const full = go?.querySelector<HTMLElement>('.frg-go__full');
     const goT = go?.querySelector<HTMLElement>('.frg-go__t');
     if (go && full && goT) {
+      go.dataset.fit = '0';
       const cs = getComputedStyle(go);
-      const room =
-        go.getBoundingClientRect().right -
-        parseFloat(cs.borderRightWidth) -
-        parseFloat(cs.paddingRight) -
-        goT.getBoundingClientRect().left;
+      const gr = go.getBoundingClientRect();
+      const right = gr.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight);
+      const room = right - goT.getBoundingClientRect().left;
+      // without the hammer (the side column of a wide screen)
+      const roomNo = right - gr.left - parseFloat(cs.borderLeftWidth) - parseFloat(cs.paddingLeft);
       const w = textW(ctaText, font(full, steps[2]));
       const bare = !!go.querySelector('.frg-go__bare');
       // the reason of a grey CTA that doesn't fit one line takes both lines (3): the hammer and
       // the grey say «forge», the ribbon above names the pick
       const why2 = go.querySelector<HTMLElement>('.frg-go__t small');
       const w2 = why2 && !ready ? textW(why2.textContent ?? '', font(why2, steps[3])) : 0;
+      // the side column: the name in two lines of the label size, the reason in one
+      const sm = font(full, steps[3]);
+      const two = (r: number) => linesOf(ctaText, sm, r) <= 2 && w2 <= r;
       go.dataset.fit =
-        layout !== 'one'
+        layout === 'two'
           ? '0'
-          : w2 > room
-            ? '3'
-            : w <= room
+          : layout === 'three'
+            ? two(room)
               ? '0'
-              : (w * steps[3]) / steps[2] <= room || !bare
-                ? '1'
-                : '2';
+              : two(roomNo)
+                ? 'i'
+                : w2 > roomNo
+                  ? 'i3'
+                  : 'i2'
+            : w2 > room
+              ? '3'
+              : w <= room
+                ? '0'
+                : (w * steps[3]) / steps[2] <= room || !bare
+                  ? '1'
+                  : '2';
     }
     // «Чары»: as many names as fit the line's own lines, then «+N»
     const vis = el.querySelector<HTMLElement>('.frg-ench__txt:not(.frg-ench__probe)');
     const probe = el.querySelector<HTMLElement>('.frg-ench__probe');
     if (vis && probe) {
-      probe.style.width = `${vis.clientWidth}px`;
+      // a pixel narrower: the line's width is fractional, clientWidth rounds it (a +1 px overflow)
+      probe.style.width = `${vis.clientWidth - 1}px`;
       const max = vis.clientHeight + 1;
       const variant = (k: number) =>
         onPick.length === 0
@@ -1170,15 +1226,20 @@ export function ForgeScreen({
       if (!lb || !nb || !tl.querySelector('.frg-stat__ls')) continue;
       tl.classList.remove('is-short');
       const lh = parseFloat(getComputedStyle(lb).lineHeight) || lb.offsetHeight;
-      const over = lb.offsetHeight > 2 * lh + 0.5 || lb.offsetHeight + nb.offsetHeight > tl.clientHeight + 0.5;
+      const over =
+        lb.offsetHeight > 2 * lh + 0.5 || lb.offsetHeight + nb.offsetHeight > tl.clientHeight + 0.5;
       tl.classList.toggle('is-short', over);
     }
     // the level tile drops «into / need» (still in the pips' label) when it doesn't fit one line
+    // or the tile's height (phone landscape)
     const lvT = el.querySelector<HTMLElement>('.frg-stat.is-level');
     const lvL = lvT?.querySelector<HTMLElement>('.frg-stat__l');
     if (lvT && lvL) {
       lvT.classList.remove('is-tight');
-      lvT.classList.toggle('is-tight', lvL.scrollWidth > lvL.clientWidth + 0.5);
+      lvT.classList.toggle(
+        'is-tight',
+        lvL.scrollWidth > lvL.clientWidth + 0.5 || lvT.scrollHeight > lvT.clientHeight + 0.5,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs of the measured texts
   }, [fitTick, layout, tab, sel, ctaText, enchText, u, t, lvl.into, lvl.need]);

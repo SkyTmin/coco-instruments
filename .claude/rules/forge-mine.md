@@ -364,3 +364,62 @@ and books did not move); the old `forge.css` is replaced whole.
   the observer of the unmounted stage reports 0 and the art vanishes after a tab switch; grid
   tiles `min-height: 0; overflow: hidden`, else a two-line label grows the row by 2 px.
 - **Not verified**: a real phone / Telegram webview, gamepad hardware.
+
+### F5 — critic round 1 (19.10, `critic-forge.md`)
+
+- **Tap shield inside `PxdSheet`**: `shieldOnOpen()` / `shieldOnClose()` from `lib/tap-shield.ts`
+  in a layout effect (300 ms after open, 350 after close). Every dark sheet gets it — no second
+  mechanism. Double tap 90/200 ms over a sheet: 0 forges, 0 recipe opens. A second
+  «Улучшить» within 400 ms is ignored (a double tap bought two levels).
+- **Type = the main kit's scale**: `--pd-fs-xs/sm/fs/lg/xl` = `--px-fs-tiny/sm/px-fs/head/big`
+  (phones 14/17/20/23/26). xs only for badge glyphs. No free `min()` shrink: the fit pass picks a
+  whole kit step.
+- **Fit pass** (one `useLayoutEffect` in `ForgeScreen`; canvas `textW`, probe `fsOf`; it toggles
+  classes React doesn't own, re-runs on ResizeObserver and `fonts.ready`):
+  - header `is-subrow` (the purpose line on its own row);
+  - tabs `is-tight` (no icons);
+  - ribbon `--frg-nfs`;
+  - CTA `data-fit`:
+    - phones: 0 / 1 sm / 2 bare verb / 3 reason only;
+    - side column: `i` no hammer / `i2` / `i3`;
+  - «Чары» k names + «+N»;
+  - stat `is-short` («Blöcke/Min.» with a ZWSP after the slash);
+  - level `is-tight` (width or height);
+  - gear `--frg-art`;
+  - R73 list columns (+1 column when under 15 % or over 85 % of the cut row shows; measured as at
+    scrollTop 0 — else selecting a low pick re-flowed the grid).
+- **«Берёт»**: the rows of all 17 picks are stacked (`grid-area: 1/1`), only the selected one is
+  visible, so the line keeps the tallest row's height (2 rows where some pick needs them) and
+  nothing jumps. `forge.takesAll` chip for picks with no new ore, and a `forge.takesTip` tip on
+  the key (hover and tap).
+- **Recipe sheet**:
+  - tiles are the box's 50u squares;
+  - the result's frame is painted in the rarity colour (`::after` over the frame ring);
+  - a tile grows taller rather than letting text out;
+  - `syl()` puts soft hyphens at syllable breaks — «Гранато-вая», not «Гранатова-я», because the
+    stand has no hyphenation dictionaries;
+  - `@container frg-rec (width < 340px)` gives two rows on 320/360: `[pick] + [ore][ore]` /
+    `[coins] = [result]`.
+- **Gear cards (phones)**:
+  - `.frg-card__pic` is a size container taking the free height; the octagon is
+    `min(100cqw − 2u, 100cqh, --frg-art)`, i.e. both cards get the smaller square;
+  - pic `max-height` = card width, so tall phones spread the rest over the gaps;
+  - ≤ 600 px high: no description line.
+  - Measured:
+    - pp: art 162, icon 108, max gap 25;
+    - p430: art 182, icon 122, max gap 47;
+    - 320: no overflow in any of the 7 languages.
+- **Short phones**:
+  - `@media (max-height: 700px)` and `(600px)` blocks tighten rows; the stage inset is 2u;
+  - «N / 17» goes into the «Все» tile.
+  - Pick sizes:
+    - 320: ru 112, de/fr/it 96 (the purpose line on its own row);
+    - pp 186.67;
+    - p430 298.67 (was 261: the «Берёт» line is one row there now).
+- Wide: «Рецепт» is a square beside the CTA (it was a 7.2:1 strip).
+- Checks: drift 0 px on all 8 formats.
+- Sweep leftovers:
+  - the h1 range rect is 2 px taller than its 24-px row on short phones: the content area of
+    Coco Title; nothing clips;
+  - the ribbon steps per pick (SIZE-JUMP pxd-ribbon) are by design.
+- **Not verified**: a real phone / Telegram webview, hyphenation by phone dictionaries.

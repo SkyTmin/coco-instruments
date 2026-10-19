@@ -469,8 +469,8 @@ button.frg-line__k {
   align-items: center;
   flex: 1 1 0;
   min-width: 0;
-  height: calc(var(--lines) * 1.15em);
-  font: 500 var(--pd-fs-sm) / 1.15 var(--px-font);
+  height: calc(var(--lines) * 1.2em); /* 1.2: the font's accents (É) stay inside the clip */
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
   color: var(--pd-muted);
   overflow: hidden;
 }
@@ -509,8 +509,9 @@ button.frg-line__k {
 }
 .frg-coll__h {
   display: flex;
+  flex-wrap: wrap; /* a narrow list column puts «10 из 17» under the heading, whole */
   align-items: baseline;
-  gap: calc(4 * var(--u));
+  gap: 0 calc(4 * var(--u));
   margin: var(--u) var(--u) calc(3 * var(--u));
 }
 .frg-coll__h h3 {
@@ -518,6 +519,7 @@ button.frg-line__k {
   color: var(--pd-text);
 }
 .frg-coll__h small {
+  white-space: nowrap;
   font: 600 var(--pd-fs-sm) / 1.1 var(--px-font);
   color: var(--pd-muted);
 }
@@ -646,17 +648,21 @@ button.frg-line__k {
 .frg-go[data-fit='1'] .frg-go__t b {
   font-size: var(--pd-fs-sm);
 }
-.frg-go__bare,
-.frg-go[data-fit='2'] .frg-go__full {
+/* the side column of a wide screen (fit pass): `i…` drops the hammer for the text's room */
+.frg-go[data-fit^='i'] > .gx-icon {
   display: none;
 }
-.frg-go[data-fit='2'] .frg-go__bare {
+.frg-go__bare,
+.frg-go:is([data-fit='2'], [data-fit='i2']) .frg-go__full {
+  display: none;
+}
+.frg-go:is([data-fit='2'], [data-fit='i2']) .frg-go__bare {
   display: block;
 }
-.frg-go[data-fit='3'] .frg-go__t b {
+.frg-go:is([data-fit='3'], [data-fit='i3']) .frg-go__t b {
   display: none;
 }
-.frg-go.pxd-f--off[data-fit='3'] .frg-go__t small {
+.frg-go.pxd-f--off:is([data-fit='3'], [data-fit='i3']) .frg-go__t small {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1126,6 +1132,9 @@ button.frg-line__k {
   .frg--one .frg-card p {
     display: none;
   }
+  .frg--one .frg-stat__l {
+    padding: 0;
+  }
   .frg--one .frg-card {
     gap: calc(2 * var(--u));
   }
@@ -1268,6 +1277,7 @@ button.frg-line__k {
   font-size: var(--pd-fs-sm);
   line-height: 1.1;
   white-space: normal;
+  overflow-wrap: normal;
 }
 .frg--three .frg-go__t small {
   white-space: nowrap;
