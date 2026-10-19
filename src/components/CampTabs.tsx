@@ -122,6 +122,30 @@ function fitDown(base: number, max: number, dpr: number): number {
 const slotFor = (px: number, scale: number, pad: number) => Math.ceil(px / scale) + pad;
 const slotVar = (n: number) => ({ '--slot': `calc(${n} * var(--u))` }) as CSSProperties;
 
+/**
+ * The showcase area of an inspect panel (the height left after the grid / tree, R66): its size in
+ * CSS px, measured (it is `flex: 1 1 0`, so the art inside never feeds back into it).
+ */
+function useShowBox(on: boolean) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!on || !el) return undefined;
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [on]);
+  return [ref, box] as const;
+}
+
 /** Block title: what it is + what to do (owner: every block obvious to a new player). */
 function Head({ title, hint, right }: { title: ReactNode; hint?: ReactNode; right?: ReactNode }) {
   return (
@@ -733,6 +757,10 @@ export const FindsTab = memo(function FindsTab() {
   // slots as big as a quarter of the width and a third of the height let (≈ 80 px with 64-px art
   // on a phone, ≈ 120 on a tablet, 52 at 320×568); the other layouts keep auto-fill columns.
   const four = lay === 'one' || lay === 'wide';
+  // Phone portrait (not short) and tablet portrait: the case is as tall as its rows and the
+  // inspect panel below is a showcase — the find as big as the height left over (144–192 px on a
+  // phone; 210–318 px stood empty under the case, critic14 #2 / R66).
+  const show = (lay === 'one' && !short) || lay === 'tall';
   const box = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState(0);
   useLayoutEffect(() => {
@@ -744,18 +772,20 @@ export const FindsTab = memo(function FindsTab() {
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
       const rows = Math.ceil(FINDS.length / 4);
+      const byW = (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4;
+      // a showcase case sizes by its width only (its height follows its rows)
       setCell(
-        Math.min(
-          (el.clientWidth - padX - 3 * parseFloat(cs.columnGap)) / 4,
-          (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows,
-        ),
+        show
+          ? byW
+          : Math.min(byW, (el.clientHeight - padY - (rows - 1) * parseFloat(cs.rowGap)) / rows),
       );
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [four]);
+  }, [four, show]);
+  const [artRef, artBox] = useShowBox(show);
   const [sel, setSel] = useState(() => FINDS.find((f) => p.finds[f.id])?.id ?? FINDS[0].id);
   const f = FINDS.find((x) => x.id === sel) ?? FINDS[0];
   const n = p.finds[f.id] ?? 0;
@@ -770,7 +800,10 @@ export const FindsTab = memo(function FindsTab() {
       : slotFor(px, scale, padU);
   // the selected find big: ≥ 96 px on a phone with room and on a tablet; 48 on a short phone
   // (with 64, es «Moneda antigua» was cut at 320)
-  const bigPx = fit(16, lay === 'wide' ? 40 : roomy ? 48 : short ? 24 : 30, scale, dpr);
+  const bigPx =
+    show && artBox.h > 0
+      ? fitDown(16, Math.min(artBox.h, artBox.w, 192), dpr)
+      : fit(16, lay === 'wide' ? 40 : roomy ? 48 : short ? 24 : 30, scale, dpr);
   const pick = (id: string) => {
     if (id === sel) return;
     selectionChanged();
@@ -818,9 +851,13 @@ export const FindsTab = memo(function FindsTab() {
           })}
         </Grid>
       </div>
-      <Panel material="obsidian" className="ctab-insp ctab-insp--find" aria-live="polite">
+      <Panel
+        material="obsidian"
+        className={`ctab-insp ctab-insp--find${show ? ' is-show' : ''}`}
+        aria-live="polite"
+      >
         <div className="ctab-insp__top">
-          <span className="ctab-insp__art">
+          <span ref={artRef} className="ctab-insp__art">
             <img
               className="ctab-find"
               src={findTexture(f.id, !n)}
@@ -1168,8 +1205,15 @@ export const PerksTab = memo(function PerksTab() {
   const t = useT();
   // A short phone takes the tablet-portrait skills (one-line values, smaller nodes) — the tree
   // was squeezed to nothing at 320×568.
-  const { lay: lay0, short } = useLay();
+  const { lay: lay0, short, scale } = useLay();
   const lay: Lay = short ? 'tall' : lay0;
+  // Phone / tablet portrait and the wide side column: the panel is a showcase — the skill's picture
+  // as big as the height left over (36–72u: 72–144 px on a phone), the words under it (critic14 #2).
+  const show = !short && lay !== 'land';
+  const [artRef, artBox] = useShowBox(show);
+  const tileU = show
+    ? Math.max(36, Math.min(72, Math.floor(Math.min(artBox.h, artBox.w) / scale)))
+    : 36;
   const p = useFinanceStore((s) => s.prison);
   const prisonPerk = useFinanceStore((s) => s.prisonPerk);
   const prisonPerksReset = useFinanceStore((s) => s.prisonPerksReset);
@@ -1434,10 +1478,16 @@ export const PerksTab = memo(function PerksTab() {
           </>
         )}
       </Panel>
-      <Panel material="obsidian" className="ctab-insp ctab-insp--perk" aria-live="polite">
+      <Panel
+        material="obsidian"
+        className={`ctab-insp ctab-insp--perk${show ? ' is-show' : ''}`}
+        aria-live="polite"
+      >
         <div className="ctab-insp__top">
-          <span className="ctab-insp__art ctab-perk-art" aria-hidden="true">
-            <GxIcon name={PERK_ICON[k.id]} style={{ color: PERK_TONE[k.id] } as CSSProperties} />
+          <span ref={artRef} className="ctab-insp__art" aria-hidden="true">
+            <span className="ctab-perk-art" style={{ '--tile': tileU } as CSSProperties}>
+              <GxIcon name={PERK_ICON[k.id]} style={{ color: PERK_TONE[k.id] } as CSSProperties} />
+            </span>
           </span>
           <span className="ctab-insp__head">
             <span className="ctab-insp__name is-plain">
