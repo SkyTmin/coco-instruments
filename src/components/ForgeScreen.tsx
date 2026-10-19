@@ -40,7 +40,7 @@ import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
 import { nameIn, pickTitle, pickToForge } from '@/i18n/data-mine';
 import { useAction } from '@/input';
-import { Button, Icon } from '@/ui-px';
+import { Button, Icon, useTip } from '@/ui-px';
 import {
   PxdButton,
   PxdGem,
@@ -49,6 +49,7 @@ import {
   PxdRibbon,
   PxdSheet,
   PxdSocket,
+  pxdTokens,
   usePxd,
 } from '@/ui-px/dark';
 import { PX_SETS } from '@/lib/props-pixel/manifest';
@@ -105,6 +106,27 @@ function oreList(rocks: number[]): string {
 }
 
 type Status = 'hand' | 'have' | 'next' | 'locked';
+
+// ---- Fitting text to the kit's type steps (critic round 1: one scale, nothing shrinks freely) --
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+/** Width of one line of `text` in the CSS `font` (the fonts must be loaded; 0 without canvas). */
+function textW(text: string, font: string): number {
+  if (measureCtx === undefined) measureCtx = document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return 0;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+/** The px size of a dark-kit type var (`--pd-fs-sm` …) inside `el`. */
+function fsOf(el: HTMLElement, v: string): number {
+  const probe = document.createElement('i');
+  probe.style.cssText = `position:absolute;visibility:hidden;font-size:var(${v})`;
+  el.appendChild(probe);
+  const px = parseFloat(getComputedStyle(probe).fontSize) || 0;
+  probe.remove();
+  return px;
+}
+/** The type steps a fitted line may take, biggest first. */
+const STEPS = ['--pd-fs-xl', '--pd-fs-lg', '--pd-fs', '--pd-fs-sm'] as const;
 
 export function ForgeScreen({
   onClose,
@@ -343,7 +365,10 @@ export function ForgeScreen({
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const snap = (v: number) => Math.round(v * dpr) / dpr;
   const ov = 13 * u; // the ribbon covers the bottom of the stage
-  const roomH = stage.h - ov - 8 * u;
+  // a short phone (the `max-height: 700px` rows of forge.css) lets the art reach the stage's top
+  // ring: «N / 17» sits right of a centred 96-px pick there
+  const short = layout === 'one' && typeof window !== 'undefined' && window.innerHeight <= 700;
+  const roomH = stage.h - ov - (short ? 2 : 8) * u;
   let art = fitPick(Math.min(stage.w - 18 * u, roomH * 0.94));
   let pedW = Math.max(15, Math.round((art * 0.9) / u) | 1);
   let pedH = Math.max(7, Math.round(pedW / 6) | 1);
@@ -429,6 +454,7 @@ export function ForgeScreen({
     label: ReactNode,
     extra?: ReactNode,
     delta = 0,
+    short?: string,
   ) => (
     <div key={key} className={`frg-stat is-${key} pxd-f pxd-f--panel`}>
       <span className="frg-stat__ic pxd-f pxd-f--well">
@@ -444,7 +470,12 @@ export function ForgeScreen({
         )}
       </b>
       {extra}
-      {label != null && <i className="frg-stat__l">{label}</i>}
+      {label != null && (
+        <i className="frg-stat__l">
+          {short ? <span className="frg-stat__lw">{label}</span> : label}
+          {short && <span className="frg-stat__ls">{short}</span>}
+        </i>
+      )}
     </div>
   );
   const lvPips = lvl.need ? Math.floor((10 * lvl.into) / lvl.need) : 10;
@@ -465,6 +496,7 @@ export function ForgeScreen({
         t('forge.perMinLong'),
         null,
         st === 'hand' ? 0 : selSpeed - speed,
+        t('forge.perMin'),
       )}
       {st === 'hand'
         ? tile(
@@ -474,8 +506,16 @@ export function ForgeScreen({
               <small>{t('forge.lvlShort')}</small>
               {lvl.level}
             </>,
-            lvl.need ? `${fmt(lvl.into)} / ${fmt(lvl.need)}` : t('forge.max'),
-            <PxdPips n={10} on={lvPips} label={t('common.level', { n: lvl.level })} />,
+            // thin spaces around the slash: «2 634 / 3 758» fits a 390-px phone's tile
+            lvl.need ? `${fmt(lvl.into)} / ${fmt(lvl.need)}` : t('forge.max'),
+            <PxdPips
+              n={10}
+              on={lvPips}
+              label={
+                t('common.level', { n: lvl.level }) +
+                (lvl.need ? `: ${fmt(lvl.into)} / ${fmt(lvl.need)}` : '')
+              }
+            />,
           )
         : tile(
             'floor',
@@ -486,35 +526,88 @@ export function ForgeScreen({
     </div>
   );
 
-  // ---- «Берёт»: ore chips of what the selected pick breaks ------------------------------------
-  const opens = opensRocks(sel);
-  const oreLen = opens.reduce((a, r) => a + rockName(r).length, 0);
+  // ---- «Берёт»: ore chips of the NEW ores the selected pick breaks ----------------------------
+  // One chip size for every pick (critic R45); the rows of all 17 picks lie in one grid cell, only
+  // the selected one visible, so the line is as tall as the pick that wraps most — nothing jumps.
+  // A pick with no new ores (the last ones) says «Все руды»; the key explains on tap / hover.
+  const takesKey = useRef<HTMLButtonElement>(null);
+  const takesTip = useTip(takesKey, t('forge.takesTip'));
+  const takesDown = useRef(0);
+  const oreChips = (i: number) => {
+    const rocks = opensRocks(i);
+    if (!rocks.length)
+      return (
+        <span className="frg-ore is-all pxd-chip pxd-f pxd-f--well">
+          {/* a gold gem: the palette's accent */}
+          <PxdGem color={pxdTokens().accent} />
+          {t('forge.takesAll')}
+        </span>
+      );
+    return rocks.map((r) => (
+      <span key={r} className="frg-ore pxd-chip pxd-f pxd-f--well">
+        <PxdGem color={oreGem(r)} />
+        {rockName(r)}
+      </span>
+    ));
+  };
   const takes = (
-    <div
-      className="frg-line frg-takes"
-      style={{ '--clen': oreLen + opens.length * 4 } as CSSProperties}
-    >
-      <i className="frg-line__k">{t('forge.takesShort')}</i>
-      <span className="frg-line__v">
-        {opens.map((r) => (
-          <span key={r} className="frg-ore pxd-chip pxd-f pxd-f--well">
-            <PxdGem color={oreGem(r)} />
-            {rockName(r)}
+    <div className="frg-line frg-takes">
+      <button
+        ref={takesKey}
+        type="button"
+        className="frg-line__k frg-tipk px-f"
+        aria-label={`${t('forge.takesShort')}: ${t('forge.takesTip')}`}
+        onPointerDown={() => {
+          takesDown.current = performance.now();
+        }}
+        onClick={(e) => {
+          // a long press already showed the tooltip — no toast on its release
+          if (e.detail > 0 && performance.now() - takesDown.current > 420) return;
+          tapLight();
+          say(t('forge.takesTip'));
+        }}
+      >
+        {t('forge.takesShort')}
+      </button>
+      <span className="frg-line__v frg-takes__v">
+        {PICKS.map((_, i) => (
+          <span
+            key={i}
+            className={`frg-ores${i === sel ? ' is-on' : ''}`}
+            aria-hidden={i === sel ? undefined : true}
+          >
+            {oreChips(i)}
           </span>
         ))}
       </span>
+      {takesTip}
     </div>
   );
 
   // ---- «Чары»: round sockets + what is in them + › to the books ------------------------------
   const slots = enchSlots(p);
   const onPick = ENCHANTS.filter((e) => p.ench[e.id] > 0).slice(0, Math.max(slots, 1));
+  const enchNames = onPick.map((e) => `${enchantName(e.id)} ${ROMAN[p.ench[e.id] - 1]}`);
   const enchText =
     onPick.length === 0
       ? slots > 1
         ? t('forge.enchEmptyN')
         : t('forge.enchEmpty1')
-      : onPick.map((e) => `${enchantName(e.id)} ${ROMAN[p.ench[e.id] - 1]}`).join(', ');
+      : enchNames.join(', ');
+  // What the line shows: every name when they fit its lines, else the first k + «+N» (measured
+  // in the fit pass below; the enchantments don't depend on the selected pick — nothing jumps).
+  // An empty slot whose hint doesn't fit says «Книги чар» beside the › that opens them.
+  const [enchK, setEnchK] = useState(99);
+  const enchShown =
+    onPick.length === 0
+      ? enchK > 0
+        ? enchText
+        : t('forge.toBooks')
+      : enchK >= enchNames.length
+        ? enchText
+        : enchK > 0
+          ? `${enchNames.slice(0, enchK).join(', ')} +${enchNames.length - enchK}`
+          : '';
   const ench = (
     <div
       className={`frg-line frg-ench${slots > 2 ? ' is-many' : ''}${slots > 4 ? ' is-lots' : ''}`}
@@ -528,7 +621,7 @@ export function ForgeScreen({
             return (
               <PxdSocket
                 key={k}
-                d={slots > 4 ? 12 : slots > 2 ? 14 : 16}
+                d={slots > 4 || short ? 12 : slots > 2 ? 14 : 16}
                 gem={
                   e ? (p.off.includes(e.id) ? ENCH_OFF : (ENCH_GEM[e.id] ?? ENCH_OFF)) : undefined
                 }
@@ -536,7 +629,8 @@ export function ForgeScreen({
             );
           })}
         </span>
-        <small className="frg-ench__txt">{enchText}</small>
+        <small className="frg-ench__txt">{enchShown}</small>
+        <small className="frg-ench__txt frg-ench__probe" aria-hidden="true" />
       </span>
       <PxdButton
         className={`frg-round${onBooks ? '' : ' is-hidden'}`}
@@ -635,6 +729,10 @@ export function ForgeScreen({
               {allNum}
               <span className="frg-all__w"> {allText}</span>
             </small>
+            {/* short phones have no collection heading: «10/17» lives in this tile */}
+            <small className="frg-all__n">
+              {forged}/{PICKS.length}
+            </small>
           </PxdButton>
         </div>
       </section>
@@ -670,7 +768,10 @@ export function ForgeScreen({
       >
         <GxIcon name="hammer" />
         <span className="frg-go__t">
-          <b>{ctaText}</b>
+          {/* the fit pass picks one: the full line at the body size, at the label size, or the
+              bare verb (the ribbon above names the pick) — `data-fit` 0 / 1 / 2 */}
+          <b className="frg-go__full">{ctaText}</b>
+          {check && n >= 0 && <b className="frg-go__bare">{t('forge.cta.go')}</b>}
           <small>
             {ready || (check && !why) ? (
               <>
@@ -706,12 +807,25 @@ export function ForgeScreen({
         <PxdGem color={oreGem(o.rock)} className="frg-bt__gem" />
         <b>
           {fmtShort(Math.min(have, o.need))} / {fmtShort(o.need)}
-          {ok && ' ✓'}
         </b>
         <i>{rockName(o.rock)}</i>
+        {ok && <em className="frg-tick">✓</em>}
       </PxdButton>
     );
   };
+  // A pick in the recipe: the same square as an ore, its name inside (two lines at most).
+  const pickTile = (i: number, result: boolean) => (
+    <span
+      className={`frg-bt pxd-f pxd-f--panel${result ? ' is-result' : ''}`}
+      style={rarityVars(PICKS[i].rarity)}
+    >
+      <span className={result && !ready ? 'frg-ghost' : undefined}>
+        <PickPx pick={i} size={fitPick(24 * u)} />
+      </span>
+      <i>{pickName(i)}</i>
+    </span>
+  );
+  const plus = <b className="frg-op">+</b>;
   const sheetEl =
     sheet === 'all' ? (
       <PxdSheet
@@ -739,28 +853,25 @@ export function ForgeScreen({
         className="frg-sheet"
       >
         <div className="frg-recipe">
+          {/* «+ ore» stays one piece: a narrow sheet wraps it to the next row, never a lone sign */}
           <div className="frg-recipe__row">
-            <span className="frg-bt pxd-f pxd-f--panel" style={rarityVars(PICKS[p.pickMax].rarity)}>
-              <PickPx pick={p.pickMax} size={fitPick(20 * u)} />
-              <i>{pickName(p.pickMax)}</i>
-            </span>
-            <b className="frg-op">+</b>
-            {ores.map(oreTile)}
+            {pickTile(p.pickMax, false)}
+            {ores.map((o) => (
+              <span key={o.rock} className="frg-recipe__add">
+                {plus}
+                {oreTile(o)}
+              </span>
+            ))}
           </div>
           <div className="frg-recipe__row">
             <span
-              className={`frg-coins pxd-chip pxd-f pxd-f--well${balance < coins ? ' is-short' : ''}`}
+              className={`frg-bt frg-coins pxd-f pxd-f--well${balance < coins ? ' is-short' : ''}`}
             >
-              <CoinIcon size={u * 8} />
-              {coins > 0 ? fmt(coins) : t('forge.paidShort')}
+              <CoinIcon size={u * 16} />
+              <b>{coins > 0 ? fmt(coins) : t('forge.paidShort')}</b>
             </span>
             <b className="frg-op">=</b>
-            <span className="frg-bt pxd-f pxd-f--sel" style={rarityVars(next.rarity)}>
-              <span className={ready ? undefined : 'frg-ghost'}>
-                <PickPx pick={n} size={fitPick(20 * u)} />
-              </span>
-              <i>{pickName(n)}</i>
-            </span>
+            {pickTile(n, true)}
           </div>
           <p className="frg-hint">
             <GxIcon name="sparkles" />
@@ -905,6 +1016,129 @@ export function ForgeScreen({
       {tabBtn('gear', 'backpack', t('forge.gear'))}
     </nav>
   );
+
+  // ---- Fit pass: kit type steps chosen by measurement, before paint ---------------------------
+  // Nothing shrinks freely (critic round 1, R45): a line takes one of the four kit sizes, or a
+  // shorter copy. Re-runs when the fonts arrive and when the window resizes.
+  const [fitTick, setFitTick] = useState(0);
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return undefined;
+    let raf = 0;
+    const bump = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setFitTick((x) => x + 1));
+    };
+    const ro = new ResizeObserver(bump);
+    ro.observe(el);
+    document.fonts?.ready.then(bump).catch(() => {});
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const font = (e: Element, px: number) => {
+      const cs = getComputedStyle(e);
+      return `${cs.fontWeight} ${px}px ${cs.fontFamily}`;
+    };
+    // the purpose line beside the back button, or on its own row when it doesn't fit there
+    const top = el.querySelector<HTMLElement>('.frg-top');
+    const sub = top?.querySelector<HTMLElement>('.frg-ttl p');
+    if (top && sub) {
+      top.classList.remove('is-subrow');
+      if (layout === 'one') top.classList.toggle('is-subrow', sub.scrollWidth > sub.clientWidth + 0.5);
+    }
+    // the tabs drop their icons when both labels don't fit the row
+    const tabsEl = el.querySelector<HTMLElement>('.frg-tabs');
+    if (tabsEl && layout === 'one') {
+      tabsEl.classList.remove('is-tight');
+      const kids = [...tabsEl.children] as HTMLElement[];
+      const gap = parseFloat(getComputedStyle(tabsEl).columnGap) || 0;
+      const need = kids.reduce((a, k) => a + k.offsetWidth, 0) + gap * (kids.length - 1);
+      tabsEl.classList.toggle('is-tight', need > tabsEl.clientWidth + 0.5);
+    }
+    if (tab !== 'picks') return;
+    const steps = STEPS.map((v) => fsOf(el, v));
+    // the ribbon: the biggest step at which this pick's name fits its straight part
+    const show = el.querySelector<HTMLElement>('.frg-show');
+    const name = el.querySelector<HTMLElement>('.frg-name > *');
+    if (show && name) {
+      const room = show.clientWidth - 34 * u;
+      const s = steps.find((px) => textW(pickTitle(sel), font(name, px)) <= room) ?? steps[3];
+      el.style.setProperty('--frg-nfs', `${s}px`);
+    }
+    // the CTA: «Выковать <name>» at the body size, at the label size, or the bare verb
+    const go = el.querySelector<HTMLElement>('.frg-go');
+    const full = go?.querySelector<HTMLElement>('.frg-go__full');
+    const goT = go?.querySelector<HTMLElement>('.frg-go__t');
+    if (go && full && goT) {
+      const cs = getComputedStyle(go);
+      const room =
+        go.getBoundingClientRect().right -
+        parseFloat(cs.borderRightWidth) -
+        parseFloat(cs.paddingRight) -
+        goT.getBoundingClientRect().left;
+      const w = textW(ctaText, font(full, steps[2]));
+      const bare = !!go.querySelector('.frg-go__bare');
+      // the reason of a grey CTA that doesn't fit one line takes both lines (3): the hammer and
+      // the grey say «forge», the ribbon above names the pick
+      const why2 = go.querySelector<HTMLElement>('.frg-go__t small');
+      const w2 = why2 && !ready ? textW(why2.textContent ?? '', font(why2, steps[3])) : 0;
+      go.dataset.fit =
+        layout !== 'one'
+          ? '0'
+          : w2 > room
+            ? '3'
+            : w <= room
+              ? '0'
+              : (w * steps[3]) / steps[2] <= room || !bare
+                ? '1'
+                : '2';
+    }
+    // «Чары»: as many names as fit the line's own lines, then «+N»
+    const vis = el.querySelector<HTMLElement>('.frg-ench__txt:not(.frg-ench__probe)');
+    const probe = el.querySelector<HTMLElement>('.frg-ench__probe');
+    if (vis && probe) {
+      probe.style.width = `${vis.clientWidth}px`;
+      const max = vis.clientHeight + 1;
+      const variant = (k: number) =>
+        onPick.length === 0
+          ? k > 0
+            ? enchText
+            : t('forge.toBooks')
+          : k >= enchNames.length
+            ? enchText
+            : `${enchNames.slice(0, k).join(', ')} +${enchNames.length - k}`;
+      let k = Math.max(1, enchNames.length);
+      for (; k > 0; k--) {
+        probe.textContent = variant(k);
+        if (probe.scrollHeight <= max) break;
+      }
+      probe.textContent = '';
+      setEnchK(k);
+    }
+    // a stat label that takes over two lines or doesn't fit its tile → the short form («Blöcke/Min.»)
+    for (const tl of el.querySelectorAll<HTMLElement>('.frg-stat')) {
+      const lb = tl.querySelector<HTMLElement>('.frg-stat__l');
+      const nb = tl.querySelector<HTMLElement>('.frg-stat__n');
+      if (!lb || !nb || !tl.querySelector('.frg-stat__ls')) continue;
+      tl.classList.remove('is-short');
+      const lh = parseFloat(getComputedStyle(lb).lineHeight) || lb.offsetHeight;
+      const over = lb.offsetHeight > 2 * lh + 0.5 || lb.offsetHeight + nb.offsetHeight > tl.clientHeight + 0.5;
+      tl.classList.toggle('is-short', over);
+    }
+    // the level tile drops «into / need» (still in the pips' label) when it doesn't fit one line
+    const lvT = el.querySelector<HTMLElement>('.frg-stat.is-level');
+    const lvL = lvT?.querySelector<HTMLElement>('.frg-stat__l');
+    if (lvT && lvL) {
+      lvT.classList.remove('is-tight');
+      lvT.classList.toggle('is-tight', lvL.scrollWidth > lvL.clientWidth + 0.5);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs of the measured texts
+  }, [fitTick, layout, tab, sel, ctaText, enchText, u, t, lvl.into, lvl.need]);
 
   return createPortal(
     <div

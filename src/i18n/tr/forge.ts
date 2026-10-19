@@ -34,6 +34,10 @@ export const forge: Translation<typeof ru> = {
   noEnch: 'Henüz büyü yok',
   forgedOn: '{rank} katında dövülür',
   takesShort: 'Kırar',
+  /** «Берёт» of a pick that opens no new ore (the last ones). */
+  takesAll: 'Tüm cevherler',
+  /** Tooltip / tap on «Берёт»: the chips are the NEW ores. */
+  takesTip: 'Bu kazmanın yeni cevherleri; daha yumuşakları da kırar',
   enchShort: 'Büyüler',
   picks: 'Kazmalar',
   equip: 'Ele al',

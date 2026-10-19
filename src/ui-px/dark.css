@@ -49,14 +49,15 @@
 /* ==== end of the palette ======================================================================= */
 
 .pxd {
-  /* type: 1 on phones (UI scale 2), +15 % per scale step, times the player's text size */
-  --pd-k: calc((0.7 + 0.15 * var(--ui-scale, 2)) * var(--px-tx, 1));
-  --pd-fs-xs: calc(12px * var(--pd-k));
-  --pd-fs-sm: calc(13px * var(--pd-k));
-  --pd-fs: calc(15px * var(--pd-k));
-  --pd-fs-lg: calc(17px * var(--pd-k));
-  --pd-fs-xl: calc(23px * var(--pd-k));
-  --pd-fs-num: calc(24px * var(--pd-k));
+  /* type = the main kit's scale (critic R74: a second kit takes its sizes from the first, not from
+     a mockup): 17 / 20 / 23 / 26 px on phones, 19 / 22.5 / 26 / 29 on tablets and laptops, times
+     the player's text setting. Four reading sizes; `xs` (14 px) is ONLY for digits in badges. */
+  --pd-fs-xs: var(--px-fs-tiny);
+  --pd-fs-sm: var(--px-fs-sm);
+  --pd-fs: var(--px-fs);
+  --pd-fs-lg: var(--px-fs-head);
+  --pd-fs-xl: var(--px-fs-big);
+  --pd-fs-num: var(--px-fs-big);
   color: var(--pd-text);
 }
 /* the kit's text vars follow the palette inside (kit pieces reused here read right) */

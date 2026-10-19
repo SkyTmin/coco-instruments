@@ -34,6 +34,10 @@ export const forge: Translation<typeof ru> = {
   noEnch: 'Noch keine Verzauberung',
   forgedOn: 'Wird auf Ebene {rank} geschmiedet',
   takesShort: 'Schafft',
+  /** «Берёт» of a pick that opens no new ore (the last ones). */
+  takesAll: 'Alle Erze',
+  /** Tooltip / tap on «Берёт»: the chips are the NEW ores. */
+  takesTip: 'Neue Erze dieser Spitzhacke; alles Weichere baut sie auch ab',
   enchShort: 'Zauber',
   picks: 'Spitzhacken',
   equip: 'In die Hand',

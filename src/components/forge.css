@@ -42,7 +42,8 @@
   height: calc(22 * var(--u));
   flex: none;
 }
-/* phone portrait: back | title · purse, the purpose line under both (full width, never cut) */
+/* phone portrait: back | title · purse, the purpose line under both; when it doesn't fit there
+   (measured: de / fr / it at 320) it takes its own full-width row — never cut */
 .frg--one .frg-top {
   display: grid;
   grid-template: 'back h1 purse' calc(17 * var(--u)) 'back sub sub' auto / auto minmax(0, 1fr) auto;
@@ -50,6 +51,12 @@
   column-gap: var(--g);
   row-gap: 0;
   height: auto;
+}
+.frg--one .frg-top.is-subrow {
+  grid-template: 'back h1 purse' calc(22 * var(--u)) 'sub sub sub' auto / auto minmax(0, 1fr) auto;
+}
+.frg--one .frg-top.is-subrow .frg-ttl p {
+  white-space: normal;
 }
 .frg--one .frg-back {
   grid-area: back;
@@ -78,7 +85,7 @@
   min-width: 0;
 }
 .frg-ttl h1 {
-  font: 400 var(--pd-fs-num) / 1 var(--px-head);
+  font: 400 var(--pd-fs-lg) / 1 var(--px-head);
   color: var(--pd-text);
   white-space: nowrap;
 }
@@ -116,6 +123,10 @@
   gap: calc(4 * var(--u));
   color: var(--pd-muted);
   white-space: nowrap;
+}
+/* both labels don't fit the row (measured: it «Equipaggiamento» at 320): the words stay */
+.frg-tabs.is-tight .frg-tab > .gx-icon {
+  display: none;
 }
 .frg-tab.is-on {
   color: var(--pd-text);
@@ -192,14 +203,18 @@
   max-width: calc(100% - 4 * var(--u));
 }
 .frg-name > h2 {
-  /* the whole name on one line: shrink by its length (`--nlen` from nameFit) */
-  font-size: min(var(--pd-fs-xl), calc((100cqi - 32 * var(--u)) / (var(--nlen, 12) * 0.62)));
+  /* the whole name on one line at one of the kit steps (fit pass → `--frg-nfs`); before the
+     first measure, an estimate by its length (`--nlen` from nameFit) */
+  font-size: var(
+    --frg-nfs,
+    min(var(--pd-fs-xl), calc((100cqi - 34 * var(--u)) / (var(--nlen, 12) * 0.62)))
+  );
 }
 .frg-staterow {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: calc(16 * var(--u));
+  height: calc(14 * var(--u));
   margin-top: calc(2 * var(--u));
   flex: none;
   align-self: stretch;
@@ -225,7 +240,7 @@
   color: var(--pd-accent);
 }
 .frg-equip {
-  height: calc(16 * var(--u));
+  height: calc(14 * var(--u));
   padding: 0 calc(4 * var(--u));
   font-size: var(--pd-fs-sm);
   isolation: isolate;
@@ -283,11 +298,11 @@
 }
 .frg-stat__n small {
   margin-right: var(--u);
-  font: 700 var(--pd-fs-xs) / 1 var(--px-font);
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
   color: var(--pd-muted);
 }
 .frg-stat__n em {
-  font: 700 var(--pd-fs-xs) / 1 var(--px-font);
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
   color: var(--pd-ok);
 }
 .frg-stat__n em.is-down {
@@ -296,10 +311,17 @@
 .frg-stat__l {
   max-width: 100%;
   padding: 0 var(--u);
-  font: 500 var(--pd-fs-xs) / 1.15 var(--px-font);
+  font: 500 var(--pd-fs-sm) / 1.15 var(--px-font);
   color: var(--pd-muted);
   overflow-wrap: normal;
   hyphens: auto;
+}
+.frg-stat__ls,
+.frg-stat.is-short .frg-stat__lw {
+  display: none;
+}
+.frg-stat.is-short .frg-stat__ls {
+  display: inline;
 }
 .frg-stat .pxd-pips {
   margin: var(--u) 0;
@@ -307,13 +329,31 @@
 .frg-stat.is-level .frg-stat__ic {
   display: none;
 }
-/* «2 634 / 3 758» is a number: body colour (muted on the panel is 6.3, numbers need ≥ 7) */
+/* «2 634 / 3 758» is a number: body colour (muted on the panel is 6.3, numbers need ≥ 7); one
+   line — when it doesn't fit the tile (fit pass → is-tight) the pips alone say the progress */
 .frg-stat.is-level .frg-stat__l {
+  padding: 0;
   color: var(--pd-text);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.frg-stat.is-level.is-tight .frg-stat__l {
+  display: none;
 }
 .frg-stat.is-level .frg-stat__n {
   margin-top: calc(2 * var(--u));
+}
+/* phones: no picture in the tile (a delta beside a 3-digit speed needs the width), the label
+   may take two lines */
+.frg--one .frg-stats {
+  height: calc(40 * var(--u));
+}
+.frg--one .frg-stat__ic {
+  display: none;
+}
+.frg--one .frg-stat.is-level .frg-stat__n {
+  margin-top: 0;
 }
 
 /* ---- Lines: «Берёт» ore chips, «Чары» sockets + text + › ------------------------------------ */
@@ -351,7 +391,7 @@
   grid-template-columns: subgrid;
   align-items: center;
   column-gap: calc(4 * var(--u));
-  height: calc(18 * var(--u));
+  min-height: calc(18 * var(--u));
   min-width: 0;
 }
 .frg-takes > .frg-line__v {
@@ -363,35 +403,88 @@
   color: var(--pd-muted);
   white-space: nowrap;
 }
+/* «Берёт» explains itself (tooltip on hover / long press, a toast on tap): a dotted underline
+   says there is more, the hit area is the whole key cell */
+button.frg-line__k {
+  position: relative;
+  align-self: stretch;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: help;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.frg-tipk {
+  text-decoration: underline dotted var(--pd-muted);
+  text-decoration-thickness: var(--u);
+  text-underline-offset: calc(2 * var(--u));
+}
 .frg-line__v {
   display: flex;
   align-items: center;
   gap: calc(3 * var(--u));
   flex: 1 1 0;
   min-width: 0;
-  container: frg-ores / inline-size;
+}
+/* every pick's chips in ONE grid cell, only the selected row visible: the line is as tall as the
+   pick that wraps most (two rows of chips on a narrow phone), whichever pick is shown */
+.frg-takes__v {
+  display: grid;
+  align-items: center;
+}
+.frg-ores {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(2 * var(--u)) calc(3 * var(--u));
+  min-width: 0;
+  visibility: hidden;
+}
+.frg-ores.is-on {
+  visibility: visible;
 }
 .frg-ore {
   height: calc(16 * var(--u));
+  min-height: 0;
   min-width: 0;
-  /* every chip of the pick on one line: the names shrink by their total length (`--clen`) */
-  font-size: min(var(--pd-fs), calc(100cqi / (var(--clen, 16) * 0.6)));
+  padding: 0 calc(2 * var(--u));
+  gap: calc(2 * var(--u));
+  /* one size for every pick, format and language: the label step (critic R45) */
+  font: 600 var(--pd-fs-sm) / 1.1 var(--px-font);
 }
 .frg-socks {
   display: flex;
   gap: calc(2 * var(--u));
   flex: none;
 }
+/* the names / the hint: a fixed box of two lines (one on short phones); the fit pass shows as
+   many names as fit it, then «+N» */
 .frg-ench__txt {
+  --lines: 2;
+  display: flex;
+  align-items: center;
   flex: 1 1 0;
   min-width: 0;
-  font: 500 var(--pd-fs-sm) / 1.25 var(--px-font);
+  height: calc(var(--lines) * 1.15em);
+  font: 500 var(--pd-fs-sm) / 1.15 var(--px-font);
   color: var(--pd-muted);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
   overflow: hidden;
+}
+.frg-ench__v {
+  position: relative;
+}
+.frg-ench__probe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  height: auto;
+  visibility: hidden;
+  pointer-events: none;
 }
 .frg-round {
   width: calc(18 * var(--u));
@@ -484,9 +577,13 @@
   color: var(--pd-accent);
 }
 .frg-all small {
-  font: 600 var(--pd-fs-xs) / 1.1 var(--px-font);
+  font: 600 var(--pd-fs-sm) / 1.1 var(--px-font);
   color: var(--pd-muted);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.frg-all small.frg-all__n {
+  display: none;
 }
 /* the noun doesn't fit the cell (measured in ForgeScreen): the number alone */
 .frg-all small.is-short .frg-all__w {
@@ -510,10 +607,10 @@
 .frg-sq {
   flex-direction: column;
   gap: var(--u);
-  width: calc(32 * var(--u));
+  width: calc(36 * var(--u));
   padding: 0;
   flex: none;
-  font: 600 var(--pd-fs-xs) / 1.1 var(--px-font);
+  font: 600 var(--pd-fs-sm) / 1.1 var(--px-font);
   color: var(--pd-muted);
 }
 .frg-sq .gx-icon {
@@ -541,30 +638,47 @@
   text-align: left;
 }
 .frg-go__t b {
-  /* «Выковать Александритовую»: one line, shrinking by its length (`--nlen`) */
-  font: 800
-    max(
-      var(--pd-fs-xs),
-      min(var(--pd-fs-lg), calc((100cqi - 24 * var(--u)) / (var(--nlen, 14) * 0.56)))
-    ) /
-    1.15 var(--px-font);
+  /* «Выковать Александритовую»: one line at the body size, the label size or the bare verb
+     (fit pass → `data-fit` 0 / 1 / 2) */
+  font: 800 var(--pd-fs) / 1.15 var(--px-font);
   white-space: nowrap;
+}
+.frg-go[data-fit='1'] .frg-go__t b {
+  font-size: var(--pd-fs-sm);
+}
+.frg-go__bare,
+.frg-go[data-fit='2'] .frg-go__full {
+  display: none;
+}
+.frg-go[data-fit='2'] .frg-go__bare {
+  display: block;
+}
+.frg-go[data-fit='3'] .frg-go__t b {
+  display: none;
+}
+.frg-go.pxd-f--off[data-fit='3'] .frg-go__t small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  color: var(--pd-text);
 }
 .frg-go__t small {
   display: flex;
   align-items: center;
   gap: calc(2 * var(--u));
-  font: 800 var(--pd-fs) / 1.2 var(--px-font);
+  font: 800 var(--pd-fs-sm) / 1.2 var(--px-font);
   font-variant-numeric: tabular-nums;
 }
 .frg-go.pxd-f--off .frg-go__t small {
+  display: block;
   font: 600 var(--pd-fs-sm) / 1.2 var(--px-font);
   color: var(--pd-muted);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* ---- Equipment tab: two tall cards and the smith's box ------------------------------------- */
@@ -586,9 +700,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: calc(4 * var(--u));
+  /* the blocks spread with equal gaps over the card's height, the button at the bottom */
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
   min-height: 0;
-  padding: calc(5 * var(--u)) var(--u) var(--u);
+  padding: calc(3 * var(--u)) var(--u) var(--u);
   text-align: center;
   container: frg-card / inline-size;
 }
@@ -604,6 +720,17 @@
   width: 64%;
   height: 64%;
   color: var(--pd-text);
+}
+/* tall phones: the octagon is the card's whole width (minus its ring), the thing in it 70 % —
+   the card's empty quarter went to the art (critic: 79-px backpack in a 132-px octagon) */
+@media (min-height: 701px) {
+  .frg--one .frg-card__art {
+    width: calc(100cqi - 2 * var(--u));
+  }
+  .frg--one .frg-card__art .gx-icon {
+    width: 70%;
+    height: 70%;
+  }
 }
 .frg-card h3 {
   font: 400 var(--pd-fs-lg) / 1.1 var(--px-head);
@@ -627,7 +754,7 @@
   color: var(--pd-ok);
 }
 .frg-card__val small {
-  font: 600 var(--pd-fs-xs) / 1.2 var(--px-font);
+  font: 600 var(--pd-fs-sm) / 1.2 var(--px-font);
   color: var(--pd-muted);
 }
 .frg-card__lv {
@@ -635,7 +762,7 @@
   flex-direction: column;
   align-items: center;
   gap: calc(2 * var(--u));
-  font: 500 var(--pd-fs-xs) / 1.2 var(--px-font);
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
   color: var(--pd-muted);
 }
 .frg-card__lv .pxd-pips {
@@ -645,7 +772,6 @@
 }
 .frg-card__btn,
 .frg-card__done {
-  margin-top: auto;
   width: 100%;
   height: calc(30 * var(--u));
   flex: none;
@@ -676,11 +802,13 @@
   align-items: center;
   gap: calc(4 * var(--u));
 }
+/* a recipe / smith's box square: picture, «have / need» on one line, the name under it (the
+   longest ore, «Известняк», is one line of the label size in 50 art px; a long pick name wraps) */
 .frg-bt {
   flex-direction: column;
   gap: var(--u);
-  width: calc(46 * var(--u));
-  height: calc(46 * var(--u));
+  width: calc(50 * var(--u));
+  height: calc(50 * var(--u));
   padding: 0;
   flex: none;
   text-align: center;
@@ -700,9 +828,20 @@
 .frg-bt i {
   max-width: 100%;
   padding: 0 var(--u);
-  font: 500 var(--pd-fs-xs) / 1.1 var(--px-font);
+  font: 500 var(--pd-fs-sm) / 1.05 var(--px-font);
   color: var(--pd-muted);
   overflow-wrap: anywhere;
+  hyphens: auto;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.frg-bt > .frg-tick {
+  right: calc(-3 * var(--u));
+  top: calc(-3 * var(--u));
+  bottom: auto;
 }
 .frg-hint {
   display: flex;
@@ -744,32 +883,41 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: calc(3 * var(--u));
+  gap: calc(3 * var(--u)) calc(2 * var(--u));
 }
-.frg-recipe .frg-bt {
-  width: min(calc(44 * var(--u)), calc((100% - 24 * var(--u)) / 3));
-  height: auto;
-  aspect-ratio: 1;
-}
-.frg-recipe .frg-bt i {
-  overflow-wrap: normal;
-  hyphens: auto;
+.frg-recipe__add {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
 }
 .frg-recipe span.frg-bt {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
+.frg-recipe span.frg-bt > span {
+  display: grid;
+  place-items: center;
+}
+/* the result: a rarity ring inside the frame (the colour of what comes out) */
+.frg-bt.is-result {
+  position: relative;
+}
+.frg-bt.is-result::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) var(--rc, var(--pd-accent));
+  pointer-events: none;
+}
 .frg-op {
-  font: 400 var(--pd-fs-num) / 1 var(--px-head);
+  font: 400 var(--pd-fs-lg) / 1 var(--px-head);
   color: var(--pd-accent);
 }
-.frg-coins {
-  height: calc(18 * var(--u));
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+.frg-coins b {
+  font-size: var(--pd-fs);
 }
-.frg-coins.is-short {
+.frg-coins.is-short b {
   color: var(--pd-muted);
 }
 
@@ -792,7 +940,9 @@
   color: var(--px-text);
 }
 
-/* ---- Phone portrait, short screens (320×568, 360×640): everything a step tighter ------------ */
+/* ---- Phone portrait, short screens (320×568, 360×640): everything a step tighter ------------
+   The type stays on the kit's steps (≥ 17 px); the room comes from gaps, rows and the stage
+   (pick 112 → 96 px on 320). The collection heading goes: «10/17» moves into the «Все» tile. */
 @media (max-height: 700px) {
   .frg--one.arm.is-window {
     --g: calc(3 * var(--u));
@@ -800,69 +950,67 @@
     padding-bottom: calc(var(--safe-bottom, 0px) + 4 * var(--u));
   }
   .frg--one .frg-top {
-    grid-template-rows: calc(15 * var(--u)) auto;
+    grid-template-rows: calc(12 * var(--u)) auto;
     column-gap: calc(4 * var(--u));
   }
-  .frg--one .frg-back {
-    width: calc(20 * var(--u));
-    height: calc(20 * var(--u));
+  .frg--one .frg-top.is-subrow {
+    grid-template-rows: calc(22 * var(--u)) auto;
   }
   .frg--one .frg-ttl h1 {
-    font-size: var(--pd-fs-lg);
-  }
-  .frg--one .frg-ttl p {
-    font-size: var(--pd-fs-xs);
+    line-height: calc(12 * var(--u));
   }
   .frg--one .frg-purse {
     height: calc(15 * var(--u));
   }
   .frg--one .frg-tab {
-    height: calc(18 * var(--u));
+    height: calc(22 * var(--u));
   }
   .frg--one .frg-staterow {
-    height: calc(14 * var(--u));
+    height: calc(12 * var(--u));
     margin-top: 0;
   }
   .frg--one .frg-equip {
-    height: calc(14 * var(--u));
+    height: calc(12 * var(--u));
   }
-  /* stats: number over a label of up to two lines, no picture */
+  /* stats: number over a label of up to two lines */
   .frg--one .frg-stats {
-    height: calc(32 * var(--u));
+    height: calc(35 * var(--u));
     gap: calc(3 * var(--u));
-  }
-  .frg--one .frg-stat__ic {
-    display: none;
   }
   .frg--one .frg-stat__n {
     margin: 0;
     font-size: var(--pd-fs-lg);
   }
+  .frg--one .frg-stat__l {
+    line-height: 1;
+  }
   .frg--one .frg-stat .pxd-pips {
-    margin: var(--u) 0 0;
+    margin: var(--u) 0;
   }
   .frg--one .frg-side {
     gap: calc(2 * var(--u));
   }
   .frg--one .frg-line {
-    height: calc(15 * var(--u));
+    min-height: calc(14 * var(--u));
   }
   .frg--one .frg-ore {
-    height: calc(14 * var(--u));
+    height: calc(13 * var(--u));
   }
   .frg--one .frg-ench__txt {
-    font-size: var(--pd-fs-xs);
-    line-height: 1.15;
+    --lines: 1;
   }
   .frg--one .frg-round {
     width: calc(15 * var(--u));
     height: calc(15 * var(--u));
   }
   .frg--one .frg-coll__h {
-    margin: 0 var(--u) calc(2 * var(--u));
+    display: none;
   }
-  .frg--one .frg-coll__h h3 {
-    font-size: var(--pd-fs);
+  .frg--one .frg-all small {
+    display: none;
+  }
+  .frg--one .frg-all small.frg-all__n {
+    display: block;
   }
   .frg--one .frg-row {
     gap: calc(3 * var(--u));
@@ -870,15 +1018,12 @@
   .frg--one .frg-bar {
     height: calc(26 * var(--u));
   }
-  .frg--one .frg-sq {
-    width: calc(26 * var(--u));
-  }
   .frg--one .frg-go > .gx-icon {
     width: calc(11 * var(--u));
     height: calc(11 * var(--u));
   }
-  .frg--one .frg-go__t small {
-    font-size: var(--pd-fs-sm);
+  .frg--one .frg-go {
+    gap: calc(3 * var(--u));
   }
   .frg--one .frg-card__art {
     width: min(calc(44 * var(--u)), 100cqi);
@@ -889,41 +1034,47 @@
   }
 }
 
-/* 320×568: two more art pixels off every gap and row, so the showcase keeps half the height */
+/* 320×568: one more art pixel off the gaps and the rows — de / fr / it put the purpose line on
+   its own row here, and the pick still needs its 96 px */
 @media (max-height: 600px) {
   .frg--one.arm.is-window {
     --g: calc(2 * var(--u));
     padding-top: calc(var(--safe-top, 0px) + 2 * var(--u));
     padding-bottom: calc(var(--safe-bottom, 0px) + 3 * var(--u));
   }
-  .frg--one .frg-tab {
-    height: calc(16 * var(--u));
-    isolation: isolate;
-  }
-  .frg--one .frg-tab::before {
-    content: '';
-    position: absolute;
-    inset: calc(-4 * var(--u)) calc(-2 * var(--u));
-    z-index: -1;
-  }
-  .frg--one .frg-stats {
-    height: calc(30 * var(--u));
-  }
-  .frg--one .frg-line {
-    height: calc(13 * var(--u));
-  }
-  .frg--one .frg-coll__h {
-    margin-bottom: var(--u);
-  }
   .frg--one .frg-staterow,
   .frg--one .frg-equip {
-    height: calc(12 * var(--u));
+    height: calc(11 * var(--u));
+  }
+  .frg--one .frg-stats {
+    height: calc(33 * var(--u));
+  }
+  .frg--one .frg-stat__n {
+    line-height: 1;
+  }
+  .frg--one .frg-side {
+    gap: var(--u);
+  }
+  .frg--one .frg-line {
+    min-height: calc(13 * var(--u));
+  }
+  /* the four picks and «Все» a little wider than tall */
+  .frg--one .frg-row {
+    height: calc(26 * var(--u));
+  }
+  .frg--one .frg-row > .frg-cell {
+    aspect-ratio: auto;
+    height: 100%;
   }
   .frg--one .frg-bar {
-    height: calc(24 * var(--u));
+    height: calc(25 * var(--u));
   }
-  .frg--one .frg-sq {
-    width: calc(24 * var(--u));
+  .frg--one .frg-go__t :is(b, small) {
+    line-height: 1.1;
+  }
+  .frg--one .frg-round {
+    width: calc(13 * var(--u));
+    height: calc(13 * var(--u));
   }
 }
 

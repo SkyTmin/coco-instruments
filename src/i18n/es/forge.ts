@@ -34,6 +34,10 @@ export const forge: Translation<typeof ru> = {
   noEnch: 'Aún sin encantamientos',
   forgedOn: 'Se forja en el piso {rank}',
   takesShort: 'Rompe',
+  /** «Берёт» of a pick that opens no new ore (the last ones). */
+  takesAll: 'Todos los minerales',
+  /** Tooltip / tap on «Берёт»: the chips are the NEW ores. */
+  takesTip: 'Minerales nuevos de este pico; también rompe todo lo más blando',
   enchShort: 'Encantos',
   picks: 'Picos',
   equip: 'Tomar en la mano',

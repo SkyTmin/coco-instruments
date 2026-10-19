@@ -34,6 +34,10 @@ export const forge = {
   noEnch: 'Чар пока нет',
   forgedOn: 'Куётся на этаже {rank}',
   takesShort: 'Берёт',
+  /** «Берёт» of a pick that opens no new ore (the last ones). */
+  takesAll: 'Все руды',
+  /** Tooltip / tap on «Берёт»: the chips are the NEW ores. */
+  takesTip: 'Новые руды этой кирки; всё, что мягче, она тоже берёт',
   enchShort: 'Чары',
   picks: 'Кирки',
   equip: 'Взять в руку',
