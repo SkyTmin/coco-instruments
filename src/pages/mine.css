@@ -1620,6 +1620,9 @@ html:not([data-ff^='phone']) .mn--wide .mn-item {
 }
 .mn-bag__ico {
   position: relative;
+  /* Значок подпрыгивает (`hop`) над своей полосой и кольцом фокуса рюкзака (z 3): нарисованные
+     после него, они уходили в свой слой на каждый блок (`layers-mn.mjs`). */
+  z-index: 4;
   justify-self: center;
   line-height: 0;
 }
@@ -1862,6 +1865,25 @@ html[data-ff^='phone'] .mn--short .mn-dock__label {
 .mn.is-under
   :is(.mn-field, .mn-hud, .mn-rankrow, .mn-side, .mn-items, .mn-bag, .mn-dock, .mn-quest)::after {
   animation-play-state: paused !important;
+}
+
+/* Постоянные слои под копку (как `.pmx-*` в defe0ee: «нижняя панель мигает при копке»). Кирка,
+   крошка и надписи поля — анимированные слои; всё, что рисуется после них и может их перекрыть,
+   браузер выносил в свой слой и убирал обратно на каждом блоке. Ряды — свои слои, шапка и ранг —
+   свои контексты наложения: их z 1–3 (подпись полосы ранга, бейдж этажа, кольца фокуса) иначе
+   рисовались после поля. Замер `{SCR}/ui7M/layers-mn.mjs` pp, 5 с копания: вне поля 0 новых
+   слоёв (было: бейдж «Сундуков» 6, полоса рюкзака 6, строка запала 6, подпись ранга 8). */
+.mn-items,
+.mn-dock,
+.mn-bag,
+.mn-quest,
+.mn-strip {
+  will-change: transform;
+}
+.mn-hud,
+.mn-rankrow,
+.mn-rank {
+  isolation: isolate;
 }
 
 @media (prefers-reduced-motion: reduce) {
