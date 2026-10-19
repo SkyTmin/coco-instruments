@@ -591,3 +591,50 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   `infojump2.mjs` record sweep, `fitcount.mjs`, `stripshot.mjs`, `paydots.mjs`, `hallsp.mjs`,
   `spvis.mjs` facts per format, `cvshift.mjs`, `prodtime.mjs` / `prodtrace2.mjs` on the
   `vite preview` build at :5557 — config `ui7K/vite.prod.mts`).
+
+### Critic round 5 (K5, 19.10.2026)
+
+- **Laptop windows (R70):** the wide desk deck had one height for every window (`--u` is 3 for
+  560–999 px), so at 1366 × 657 Spin sat 112 px under the window. Two height steps under
+  `html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide']`, each a fixed layout:
+  `max-height: 800px` — auto | Spin | turbo in one row (Spin `padding-inline: 3u`);
+  `max-height: 740px` — no quick bets (`.cas-chips`), the balance on one line (caption | number,
+  as in the tall deck: Cascade's Ante / buy row needed those 21 px at 650), Slots info
+  'lvl lvl' / 'jp best' (`.cas-stat--sp`, `.cas-hist` hidden, as on phones). The Spin label's
+  fit steps now apply on tablet / desktop: `html[data-ff] .cas-spin__t` beat `[data-fit]`, so in
+  the 192-px plate de «Überspringen» wrapped to 3 lines at 29 px and the plate grew 84 → 115.
+  Spin 1280 × 650: 509–593 (deck to 620), 1366 × 657: 516–600 (627), 1536 × 730: 589–673 (700),
+  1440 × 789: 648–732 (759), both games, ru / de / tr, deck overflow 0, page scroll 0. Extra:
+  1366 × 625 / 1280 × 610 — Slots fits, Cascade 1 / 16 px into the deck's bottom padding (Spin
+  still inside the frame). 1440 × 900, 1920 × 1080, 1920 × 947, tl: rects identical. Nothing jumps
+  across bet +, Ante, the Skip label and after the spin (ru / de / tr); no text cut (STRESS).
+- **Tap shield (R44 / R72):** `lib/tap-shield.ts` — window capture listeners (no overlay, no
+  z-index), installed at import. `GxSheet` / `GxModal` take `guard`: 300 ms after the tap that
+  opened the window (its pointerup stamp; the mount if no tap was that recent) and 350 ms after
+  the close commit, a pointer gesture that STARTS then is swallowed whole (decided at its
+  pointerdown: down … click, even if it ends after the window). Keyboard / pad clicks (`detail`
+  0) pass. Times are the event's `timeStamp` (fallback `now()` for a foreign clock): a sheet's
+  first render held the main thread ~300 ms on tp, and a dispatch-time guard let the second tap of
+  a real 90-ms double tap through. StrictMode's same-tick re-mount keeps only the open guard. Every
+  casino sheet passes `guard` (rules, auto, settings, bet in both pages, `SkinSheet`); other
+  sections don't (opt-in). Checked with real touches 90 / 200 ms apart on pp / p320 / p430 / tp:
+  skin card and «Играть по N» over SPIN → skin / bet set, spins +0 (32/32); skins button double
+  tap → the sheet stays open (16/16); SPIN double tap → 1 spin; single taps 350 ms after opening
+  and 400 ms after closing work (`dbl2.mjs`). Stand pitfall: the critic's `dbl.mjs` awaits each
+  CDP ack, so a busy renderer stretched one «200-ms» gap to 459 ms — `ui8K/m/dbl3.mjs` fires the
+  four touches on a fixed schedule.
+- **Skins «more» cue (R73 / R65):** `.skn` sits in `.skn-box`; while the list is not at its end
+  (`data-more`, toggled on the DOM by scroll + ResizeObserver, no render) the box shows
+  `.skn-edge` (1 art px of ink + two solid shadow bands by `box-shadow`, no gradient) and a real
+  kit `Button` ▼ (`.skn-more`, `icon="down"`, `--gx-hit`: 44 px on phones, 57 at u 3,
+  `tabIndex -1`, `slots.skin.more` «Ещё скины» in 7 languages as aria-label / tip). Bottom-right,
+  clear of a mouse scrollbar (`--skn-sb`): centred in one column it covered the cut card's name.
+  A tap scrolls `clientHeight − 56`. 7 formats × both games (+ de Slots, tr Cascade): ▼ shown at
+  open and hit-testable; tl (12/13 cards, the edge on a row boundary) one tap → «Купальская ночь»
+  and the credit whole, ▼ gone; p320 / pl two taps; the selection never changes; a swipe from a
+  card still scrolls 100–133 px without picking.
+- Stand: the disk had 133 MB free — Chromium renderers crashed on screenshots / CDP input.
+  `TMPDIR=/dev/shm` (Playwright's profile on tmpfs) fixed it; `ui8K/m/run.mjs` runs a probe per
+  format in a fresh browser with retries. Probes in `scratchpad/ui8K/m/`: `lap.mjs` (fit + JSON
+  rects, `FMT`, `CSS` to try rules), `lapjump.mjs`, `spinlbl.mjs`, `clip.mjs`, `dbl3.mjs`,
+  `dbl2.mjs`, `dbgdbl.mjs` (event trace past the shield), `more.mjs`, `skins2.mjs`.

@@ -41,12 +41,9 @@ function bubble(p: PetTrick): string {
 export function MinePets({
   onTrick,
   onPat,
-  size = 44,
 }: {
   onTrick: (t: PetTrick, el: HTMLElement | null) => void;
   onPat?: (id: PetId, xp: boolean) => void;
-  /** Рамка питомца, px (шахта UI v2 растит отряд вместе с клеткой поля). */
-  size?: number;
 }) {
   const squad = useFinanceStore((s) => s.prison.squad);
   const pets = useFinanceStore((s) => s.prison.pets);
@@ -105,9 +102,8 @@ export function MinePets({
           <span key={id} className="ppets__pet" ref={(el) => (els.current[i] = el)}>
             <PetArt
               id={id}
-              size={size}
+              size={44}
               v={petLook(rec)}
-              focusable
               joy={joy[i]}
               trick={tricks[i]}
               onClick={() => {

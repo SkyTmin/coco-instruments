@@ -11,7 +11,6 @@ export const mineHud = {
   /** Short counts in the narrow chips: «12,3к», «1,2м». */
   k: '{n}к',
   m: '{n}м',
-  g: '{n} млрд',
   sec: '{n} с',
   perMin: '/мин',
   /** Guide reward line, joined with « · ». */
@@ -101,7 +100,6 @@ export const mineHud = {
     prestigeGo: 'Престиж — жми!',
     rankGo: 'Новый ранг — жми!',
     pickLevel: 'Уровень кирки',
-    streak: 'Серия',
     paceBlocks: '{n} бл',
     inARow: '{n} подряд',
     zoneExit: 'Выйти',
@@ -133,7 +131,12 @@ export const mineHud = {
   bag: {
     full: '{count} / {cap} — полный',
     sell: 'Продать {sum}',
-    toBox: 'В ящик',
+    sellBare: 'Продать',
+    /** Ore still to mine for the next pick, under the bag bar: «[pick] ещё [ore] 45 [ore] 25». */
+    pickLeft: 'ещё',
+    pickReady: 'руда собрана',
+    pickTip: '{pick}: осталось добыть {list}',
+    pickTipReady: '{pick}: руда собрана — выкуй её в кузнице',
     empty: 'Пусто',
   },
   dock: {
@@ -142,6 +145,7 @@ export const mineHud = {
     books: 'Книги',
     chests: 'Сундуки',
     pets: 'Питомцы',
+    more: 'Ещё',
     nursery: 'Питомник',
   },
   /** Floors sheet. */
@@ -153,7 +157,7 @@ export const mineHud = {
   },
   /** Rank sheet. */
   norm: {
-    pick: 'Кирка: сила {power} · {name}',
+    pick: 'Кирка ⛏{power} · {name}',
     toForge: 'В кузницу',
     work: 'Выработка — сломать блоков',
     pity: ru3(

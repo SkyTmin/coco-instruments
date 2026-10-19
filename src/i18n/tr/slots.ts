@@ -66,6 +66,7 @@ export const slots: Translation<typeof ru> = {
     current: 'seçili',
     note: '“Kalıntı” seviyeyle açılmaz — tek bir büyük spinle kazanılır ve sonsuza dek kalır. Semboller: Twemoji (CC-BY 4.0, Twitter Inc. ve katkıda bulunanlar).',
     relicLock: 'Kalıntı — tek spinde ×{x} kazançla',
+    more: 'Daha fazla görünüm',
     credit: 'Semboller: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {

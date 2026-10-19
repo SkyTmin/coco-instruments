@@ -4,7 +4,6 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}B',
   m: '{n}Mn',
-  g: '{n} Mr',
   sec: '{n} sn',
   perMin: '/dk',
   reward: {
@@ -85,7 +84,6 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestij — bas!',
     rankGo: 'Yeni rütbe — bas!',
     pickLevel: 'Kazma seviyesi',
-    streak: 'Seri',
     paceBlocks: '{n} bl',
     inARow: 'üst üste {n}',
     zoneExit: 'Çık',
@@ -111,16 +109,21 @@ export const mineHud: Translation<typeof ru> = {
   bag: {
     full: '{count} / {cap} — dolu',
     sell: 'Sat {sum}',
-    toBox: 'Sandığa',
+    sellBare: 'Sat',
+    /** Ore still to mine for the next pick, under the bag bar: «[pick] ещё [ore] 45 [ore] 25». */
+    pickLeft: 'kalan',
+    pickReady: 'cevher hazır',
+    pickTip: '{pick}: kazılacak {list}',
+    pickTipReady: '{pick}: cevher hazır — demirhanede döv',
     empty: 'Boş',
   },
   dock: {
     camp: 'Kamp',
-    // \u00ad — мягкий перенос: в узкой кнопке дока слово делится по слогу.
-    forge: 'Demir\u00adhane',
+    forge: 'Demirhane',
     books: 'Kitaplar',
     chests: 'Sandıklar',
-    pets: 'Hay\u00advan\u00adlar',
+    pets: 'Hayvanlar',
+    more: 'Diğer',
     nursery: 'Kuluçka',
   },
   floors: {
@@ -130,7 +133,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'İn',
   },
   norm: {
-    pick: 'Kazma: güç {power} · {name}',
+    pick: 'Kazma ⛏{power} · {name}',
     toForge: 'Demirhaneye',
     work: 'Çalışma — kırılacak blok',
     pity: {

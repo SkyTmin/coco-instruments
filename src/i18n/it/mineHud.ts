@@ -4,7 +4,6 @@ import type { mineHud as ru } from '../ru/mineHud';
 export const mineHud: Translation<typeof ru> = {
   k: '{n}k',
   m: '{n}M',
-  g: '{n} Mld',
   sec: '{n} s',
   perMin: '/min',
   reward: {
@@ -97,7 +96,6 @@ export const mineHud: Translation<typeof ru> = {
     prestigeGo: 'Prestigio — tocca!',
     rankGo: 'Nuovo grado — tocca!',
     pickLevel: 'Livello del piccone',
-    streak: 'Serie',
     paceBlocks: '{n} bl',
     inARow: '{n} di fila',
     zoneExit: 'Esci',
@@ -127,7 +125,12 @@ export const mineHud: Translation<typeof ru> = {
   bag: {
     full: '{count} / {cap} — pieno',
     sell: 'Vendi {sum}',
-    toBox: 'Nella cassa',
+    sellBare: 'Vendi',
+    /** Ore still to mine for the next pick, under the bag bar: «[pick] ещё [ore] 45 [ore] 25». */
+    pickLeft: 'mancano',
+    pickReady: 'minerale pronto',
+    pickTip: '{pick}: ancora da scavare {list}',
+    pickTipReady: '{pick}: minerale pronto — forgialo',
     empty: 'Vuoto',
   },
   dock: {
@@ -136,6 +139,7 @@ export const mineHud: Translation<typeof ru> = {
     books: 'Libri',
     chests: 'Forzieri',
     pets: 'Animali',
+    more: 'Altro',
     nursery: 'Allevamento',
   },
   floors: {
@@ -145,7 +149,7 @@ export const mineHud: Translation<typeof ru> = {
     down: 'Scendi',
   },
   norm: {
-    pick: 'Piccone: forza {power} · {name}',
+    pick: 'Piccone ⛏{power} · {name}',
     toForge: 'Alla fucina',
     work: 'Lavoro — blocchi da rompere',
     pity: {

@@ -157,30 +157,6 @@
   --pximg-hud-key: url('/ui/kit/hud-key.png?v=4e00f54b');
   --pximg-hud-key-w: 12;
   --pximg-hud-key-h: 12;
-  --pximg-m-coin: url('/ui/kit/m-coin.png?v=0ebb5f94');
-  --pximg-m-coin-w: 12;
-  --pximg-m-coin-h: 12;
-  --pximg-m-coin-s: url('/ui/kit/m-coin-s.png?v=572bd325');
-  --pximg-m-coin-s-w: 8;
-  --pximg-m-coin-s-h: 8;
-  --pximg-m-dock-books: url('/ui/kit/m-dock-books.png?v=9ac3234e');
-  --pximg-m-dock-books-w: 12;
-  --pximg-m-dock-books-h: 12;
-  --pximg-m-dock-bag: url('/ui/kit/m-dock-bag.png?v=bbe2aa27');
-  --pximg-m-dock-bag-w: 12;
-  --pximg-m-dock-bag-h: 12;
-  --pximg-m-dock-camp: url('/ui/kit/m-dock-camp.png?v=f4b5c28f');
-  --pximg-m-dock-camp-w: 12;
-  --pximg-m-dock-camp-h: 12;
-  --pximg-m-dock-inv: url('/ui/kit/m-dock-inv.png?v=8f27f18c');
-  --pximg-m-dock-inv-w: 12;
-  --pximg-m-dock-inv-h: 12;
-  --pximg-m-dock-work: url('/ui/kit/m-dock-work.png?v=547d8497');
-  --pximg-m-dock-work-w: 10;
-  --pximg-m-dock-work-h: 10;
-  --pximg-m-hard: url('/ui/kit/m-hard.png?v=cd55b9cc');
-  --pximg-m-hard-w: 7;
-  --pximg-m-hard-h: 7;
 }
 
 .pxk-frame-stone {
@@ -795,34 +771,6 @@
   --i-h: 9;
 }
 
-.pxi-m-book {
-  -webkit-mask-image: url('/ui/kit/i-m-book.png?v=d55e87fd');
-  mask-image: url('/ui/kit/i-m-book.png?v=d55e87fd');
-  --i-w: 9;
-  --i-h: 9;
-}
-
-.pxi-m-bag {
-  -webkit-mask-image: url('/ui/kit/i-m-bag.png?v=5162ae69');
-  mask-image: url('/ui/kit/i-m-bag.png?v=5162ae69');
-  --i-w: 9;
-  --i-h: 9;
-}
-
-.pxi-m-fire {
-  -webkit-mask-image: url('/ui/kit/i-m-fire.png?v=745e9a41');
-  mask-image: url('/ui/kit/i-m-fire.png?v=745e9a41');
-  --i-w: 9;
-  --i-h: 9;
-}
-
-.pxi-m-flame {
-  -webkit-mask-image: url('/ui/kit/i-m-flame.png?v=984a804b');
-  mask-image: url('/ui/kit/i-m-flame.png?v=984a804b');
-  --i-w: 9;
-  --i-h: 9;
-}
-
 .pxi-grid {
   -webkit-mask-image: url('/ui/kit/i-grid.png?v=a3494626');
   mask-image: url('/ui/kit/i-grid.png?v=a3494626');
@@ -910,13 +858,6 @@
 .pxi-skip {
   -webkit-mask-image: url('/ui/kit/i-skip.png?v=fbb41476');
   mask-image: url('/ui/kit/i-skip.png?v=fbb41476');
-  --i-w: 9;
-  --i-h: 9;
-}
-
-.pxi-m-flame7 {
-  -webkit-mask-image: url('/ui/kit/i-m-flame7.png?v=4f527e95');
-  mask-image: url('/ui/kit/i-m-flame7.png?v=4f527e95');
   --i-w: 9;
   --i-h: 9;
 }

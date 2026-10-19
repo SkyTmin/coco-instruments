@@ -15,19 +15,7 @@ export const findText = (id: string) => t(k(`finds.${id}.text`));
 export const mileTitle = (id: string) => t(k(`miles.${id}.title`));
 export const mileText = (id: string) => t(k(`miles.${id}.text`));
 export const guideTitle = (id: string) => t(k(`guide.${id}.title`));
-/** Names in a hint = the labels as the screen shows them (R64), never a place («под полем» is
- *  wrong where the layout moves the thing): dock buttons, the camp tab, the bag's sell button
- *  word, the idle streak strip, the forge's backpack row. */
-export const guideHint = (id: string) =>
-  t(k(`guide.${id}.hint`), {
-    camp: t('mineHud.dock.camp'),
-    runes: t('camp.tab.runes'),
-    chests: t('mineHud.dock.chests'),
-    books: t('mineHud.dock.books'),
-    sell: t('mineHud.bag.sell', { sum: '' }).trim(),
-    streak: t('mineHud.hud.streak'),
-    bag: t('forge.bag', { n: '' }).trim(),
-  });
+export const guideHint = (id: string) => t(k(`guide.${id}.hint`));
 
 /** «Эффективность III» — the enchant's name and the book's Roman level (as `bookTitle`). */
 export const bookName = (b: { id: string; lvl: number }) =>

@@ -942,51 +942,6 @@ const ICONS: Record<string, string[]> = {
     '.#######.',
     '..#####..',
   ],
-  // wave 2 — M: the mine dock and HUD (books, inventory, camp, streak)
-  'm-book': [
-    '.........',
-    '.##...##.',
-    '####.####',
-    '#..#.#..#',
-    '####.####',
-    '#..#.#..#',
-    '####.####',
-    '#########',
-    '.........',
-  ],
-  'm-bag': [
-    '...###...',
-    '..#...#..',
-    '.#######.',
-    '##.....##',
-    '##.###.##',
-    '##.###.##',
-    '##.....##',
-    '#########',
-    '.#######.',
-  ],
-  'm-fire': [
-    '....#....',
-    '...##.#..',
-    '..#####..',
-    '.###.###.',
-    '.##...##.',
-    '..##.##..',
-    '#.......#',
-    '.#######.',
-    '#.......#',
-  ],
-  'm-flame': [
-    '...#.....',
-    '...##....',
-    '..####...',
-    '..#####..',
-    '.###.###.',
-    '.##...##.',
-    '.##...##.',
-    '..##.##..',
-    '...###...',
-  ],
   // wave 2 — N
   grid: [
     '.........',
@@ -1134,20 +1089,6 @@ const ICONS: Record<string, string[]> = {
     '###..###.',
     '##...##..',
     '#....#...',
-    '.........',
-  ],
-  // wave 4 — M4: the streak flame drawn 7 × 7 (top of the 9 × 9 mask, cols 1–7; the strip shows
-  // it in a 9u × 7u box with `mask-size: 9u` — 14 px tall, so the 17-px name and the flame row
-  // both sit inside the 20u strip's thin frame).
-  'm-flame7': [
-    '...#.....',
-    '...##....',
-    '..####...',
-    '.###.##..',
-    '.##...##.',
-    '..##.##..',
-    '...###...',
-    '.........',
     '.........',
   ],
 };
@@ -1374,176 +1315,6 @@ function hudArt(name: string): Pix {
 
 // ---- The kit ------------------------------------------------------------------------------------
 
-// wave 2 — M: painted pieces of the mine screen (the HUD coin, three dock icons). Same style as
-// the painted pick / chest / pet next to them: 1-art-px ink outline, light from the upper left.
-
-/** A round coin: gold ramp lit from the upper left, an engraved inner ring, ink outline. */
-function mineCoin(n: number): Pix {
-  const p = new Pix(n, n);
-  const c = (n - 1) / 2;
-  const G = MAT.gold;
-  const inDisc = (x: number, y: number) => Math.hypot(x - c, y - c) <= c + 0.4;
-  const out = (x: number, y: number) =>
-    [
-      [x - 1, y],
-      [x + 1, y],
-      [x, y - 1],
-      [x, y + 1],
-    ].some(([i, j]) => !inDisc(i, j));
-  for (let y = 0; y < n; y++)
-    for (let x = 0; x < n; x++) {
-      if (!inDisc(x, y)) continue;
-      if (out(x, y)) p.set(x, y, INK);
-      else if (Math.hypot(x - c, y - c) > c - 1.6) p.set(x, y, x + y < 2 * c ? G[4] : G[2]);
-      else p.set(x, y, G[3]);
-    }
-  // The big coin gets a struck slot: shadow on the left, light on the right.
-  if (n >= 10) {
-    const m = Math.floor(c);
-    for (let y = m - 2; y <= m + 3; y++) {
-      p.set(m, y, G[1]);
-      p.set(m + 1, y, G[4]);
-    }
-  }
-  return p;
-}
-
-/** Pixel art from a character map; `pal` maps a character to a colour, '.' is empty. */
-function art(rows: string[], pal: Record<string, RGBA>): Pix {
-  const p = new Pix(rows[0].length, rows.length);
-  rows.forEach((row, y) =>
-    [...row].forEach((ch, x) => {
-      if (ch === '.') return;
-      const col = ch === 'K' ? INK : pal[ch];
-      if (!col) throw new Error(`art: no colour for «${ch}»`);
-      p.set(x, y, col);
-    }),
-  );
-  return p;
-}
-
-// wave 5 — M5: «hardness» 7 × 7 — a grey crystal (the hardest thing a pick meets), lit from the
-// upper left: glint `w`, light facet `l`, ridge `m`, shadow facet `d`. It replaces «⛏N» set in a
-// system glyph (Rubik has no U+26CF: Chromium fell back to a thin smooth font, iOS to an emoji)
-// and is not a pick, so it never reads as the pick-power / blocks-mined icons beside it.
-// prettier-ignore
-const HARD_ART = [
-  '...K...',
-  '..KwK..',
-  '.KwlmK.',
-  'KwllmdK',
-  'KllmddK',
-  '.KlmdK.',
-  '..KKK..',
-];
-const HARD_PAL: Record<string, RGBA> = {
-  w: hex('#f4f8fc'),
-  l: hex('#b6c2cf'),
-  m: hex('#7f8b99'),
-  d: hex('#4e5865'),
-};
-
-const DOCK_PAL: Record<string, RGBA> = {
-  // books: blue cover, red cover, pages
-  A: hex('#9cc8f0'),
-  B: hex('#4a86d0'),
-  C: hex('#2d5aa0'),
-  E: hex('#ff8466'),
-  F: hex('#d2432d'),
-  G: hex('#a0261c'),
-  H: hex('#6a1714'),
-  P: MAT.parch[4],
-  Q: MAT.parch[2],
-  // leather (wood ramp) and gold
-  w: MAT.wood[4],
-  x: MAT.wood[3],
-  y: MAT.wood[2],
-  z: MAT.wood[1],
-  '1': MAT.gold[1],
-  '2': MAT.gold[2],
-  '3': MAT.gold[3],
-  '4': MAT.gold[4],
-  // iron (the work pick's head)
-  i: MAT.iron[2],
-  j: MAT.iron[3],
-  k: MAT.iron[4],
-};
-
-const DOCK_ART: Record<string, string[]> = {
-  books: [
-    '............',
-    '.KKKKKKKKKK.',
-    'KAAAAAAAAABK',
-    'KBB43BBBBBCK',
-    'KPPPPPPPPPQK',
-    'KKKKKKKKKKKK',
-    '.KEEEEEEEEEK',
-    '.KFF43FFFFGK',
-    '.KPPPPPPPPQK',
-    '.KPPPPPPPPQK',
-    '.KKKKKKKKKKK',
-    '............',
-  ],
-  bag: [
-    '....KKKK....',
-    '...KxwwxK...',
-    '...KK..KK...',
-    '.KKKKKKKKKK.',
-    'KwwwwwwwwwxK',
-    'KwxxxxxxxxyK',
-    'KKKKK43KKKKK',
-    'Kwxxx43xxxyK',
-    'Kwxxx21xxxyK',
-    'KwxxxxxxxxyK',
-    'KxyyyyyyyyzK',
-    '.KKKKKKKKKK.',
-  ],
-  camp: [
-    '.....KK.....',
-    '....K44K....',
-    '...K4334K...',
-    '..KF3443FK..',
-    '..KF3333FK..',
-    '.KFFE33EFFK.',
-    '.KGFFFFFFGK.',
-    '..KGGFFGGK..',
-    'KKKKKKKKKKKK',
-    'KwwwxKKxwwwK',
-    'KxxxyKKyxxzK',
-    '.KKKK..KKKK.',
-  ],
-  // Inventory: an open crate with a gem, a potion and a coin on top — «all your stuff»,
-  // not the backpack's briefcase (critic r2: the same icon twice on one screen).
-  inv: [
-    '.KK..KK.....',
-    'KABK.KyK.KK.',
-    'KBCKKEFKK43K',
-    '.KK.KEFKK32K',
-    '....KFGK.KK.',
-    'KKKKKKKKKKKK',
-    'KwwwwwwwwwxK',
-    'KxxxxxxxxxyK',
-    'KzzzzKKzzzzK',
-    'KxxxK43KxxyK',
-    'KyyyyyyyyyzK',
-    '.KKKKKKKKKK.',
-  ],
-  // 10×10 pick for the rank's «blocks mined» chip (the 10-u needs row; critic r2: the vector
-  // pick was unreadable at 20 px). Iron head lit from the upper left, oak handle.
-  work: [
-    '..KKKKKK..',
-    '.KkkkkjjK.',
-    'KkjKwyKjiK',
-    'KK.KwyK.KK',
-    '...KwyK...',
-    '...KwyK...',
-    '...KxyK...',
-    '...KxzK...',
-    '...KxzK...',
-    '...KKKK...',
-  ],
-};
-
 export const PIECES: Piece[] = [
   {
     name: 'frame-stone',
@@ -1708,14 +1479,6 @@ export const PIECES: Piece[] = [
   ...Object.keys(HUD_ART).map(
     (n): Piece => ({ name: `hud-${n}`, kind: 'img', draw: () => hudArt(n) }),
   ),
-  // wave 2 — M
-  { name: 'm-coin', kind: 'img', draw: () => mineCoin(12) },
-  { name: 'm-coin-s', kind: 'img', draw: () => mineCoin(8) },
-  ...Object.entries(DOCK_ART).map(
-    ([n, rows]): Piece => ({ name: `m-dock-${n}`, kind: 'img', draw: () => art(rows, DOCK_PAL) }),
-  ),
-  // wave 5 — M5: hardness of a rock (floors sheet, the «pick too weak» pop-up), not a glyph
-  { name: 'm-hard', kind: 'img', draw: () => art(HARD_ART, HARD_PAL) },
 ];
 
 const same = (a: RGBA, b: RGBA) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];

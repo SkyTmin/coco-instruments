@@ -156,6 +156,10 @@ the old modal / sheet / header / tabs / button / badge / bar / chip blocks.
   star, locked→lock, information→info, pause, gear, audioOn/Off→sound/mute, musicOn/Off→
   music/nomusic, question, exclamation→excl), sized to whole device pixels per art pixel; other
   names keep the Kenney mask.
+- **Double-tap guard (casino K5, R44 / R72):** `GxSheet` / `GxModal` `guard` — 300 ms after the
+  opening tap the window ignores taps, 350 ms after closing the page does (`lib/tap-shield.ts`,
+  window capture listeners, event `timeStamp`; keyboard / pad clicks pass). Opt-in: the casino
+  sheets pass it; a window that closes on a tap over a paid / destructive action should too.
 - **Pitfalls:** `@keyframes gx-pop` (game-ui.css) and `gx-badge` (gx-px.css) are still used by
   old callers — don't delete them with their blocks. Settings' `.gx-modal__box:has(.gset)`
   760-px width is beaten by `.gx-win > .gx-win__box.px-panel`. Stand: the Vite watcher must not

@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import type { CSSProperties, PropsWithChildren, ReactNode } from 'react';
 import { registerEscape } from '@/lib/escape-stack';
 import { tapLight } from '@/lib/haptics';
+import { shieldOnClose, shieldOnOpen } from '@/lib/tap-shield';
 import { uiClose, uiOpen, uiTap } from '@/lib/sound';
 import { fmtCompact, fmtNum, useT } from '@/i18n';
 import { useFormFactor } from '@/game-shell';
@@ -278,7 +279,9 @@ function useWinZoom(): number {
 }
 
 /** Каркас окна и листа: затемнение, деревянная рамка набора, лента, крестик набора, тело с
- *  своей прокруткой. Esc / «Назад» / B закрывают верхнее окно (escape-stack). */
+ *  своей прокруткой. Esc / «Назад» / B закрывают верхнее окно (escape-stack).
+ *  `guard` (R44 / R72, `lib/tap-shield`): 300 ms after opening the window ignores taps (veil, ✕,
+ *  content), 350 ms after closing the page under it does — a double tap does one thing. */
 function GxWindow({
   sheet,
   title,
@@ -288,6 +291,7 @@ function GxWindow({
   tabs,
   boxClass,
   bodyClass,
+  guard,
   children,
 }: PropsWithChildren<{
   sheet?: boolean;
@@ -298,11 +302,20 @@ function GxWindow({
   tabs?: ReactNode;
   boxClass?: string;
   bodyClass?: string;
+  guard?: boolean;
 }>) {
   const t = useT();
   const z = useWinZoom();
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const guardRef = useRef(guard);
+  // Layout effect: the close shield is up in the commit that removes the window, before any
+  // later tap can be dispatched.
+  useLayoutEffect(() => {
+    if (!guardRef.current) return undefined;
+    shieldOnOpen();
+    return shieldOnClose;
+  }, []);
   useEffect(() => {
     uiOpen();
     const off = registerEscape(() => closeRef.current());
@@ -374,15 +387,25 @@ export function GxModal({
   kind = 'paper',
   children,
   className,
+  guard,
 }: PropsWithChildren<{
   title?: ReactNode;
   onClose: () => void;
   kind?: 'paper' | 'wood' | 'iron' | 'iron-dark';
   className?: string;
+  /** Double-tap guard (see `GxWindow`). */
+  guard?: boolean;
 }>) {
   const [frame, body] = MODAL_LOOK[kind];
   return (
-    <GxWindow title={title} onClose={onClose} frame={frame} body={body} bodyClass={className}>
+    <GxWindow
+      title={title}
+      onClose={onClose}
+      frame={frame}
+      body={body}
+      bodyClass={className}
+      guard={guard}
+    >
       {children}
     </GxWindow>
   );
@@ -398,12 +421,15 @@ export function GxSheet({
   tabs,
   children,
   className,
+  guard,
 }: PropsWithChildren<{
   title: ReactNode;
   onClose: () => void;
   /** Вкладки рядом с содержимым — не прокручиваются вместе с ним. */
   tabs?: ReactNode;
   className?: string;
+  /** Double-tap guard (see `GxWindow`): every casino sheet passes it. */
+  guard?: boolean;
 }>) {
   return (
     <GxWindow
@@ -414,6 +440,7 @@ export function GxSheet({
       body="parch"
       tabs={tabs}
       boxClass={className}
+      guard={guard}
     >
       {children}
     </GxWindow>
