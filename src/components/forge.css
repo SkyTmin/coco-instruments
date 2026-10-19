@@ -89,6 +89,9 @@
   color: var(--pd-text);
   white-space: nowrap;
 }
+.frg-top.is-tight .frg-ttl h1 {
+  font-size: var(--pd-fs);
+}
 .frg-ttl p {
   margin-top: var(--u);
   font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
@@ -307,6 +310,9 @@
 }
 .frg-stat__n em.is-down {
   color: var(--pd-muted);
+}
+.frg-stat__n em:empty {
+  display: none;
 }
 .frg-stat__l {
   max-width: 100%;
@@ -586,6 +592,9 @@ button.frg-line__k {
 }
 .frg-all small.frg-all__n {
   display: none;
+}
+.frg-all.is-tight b {
+  font-size: var(--pd-fs-sm);
 }
 /* the noun doesn't fit the cell (measured in ForgeScreen): the number alone */
 .frg-all small.is-short .frg-all__w {
@@ -998,6 +1007,11 @@ button.frg-line__k {
 /* ---- Phone portrait, short screens (320×568, 360×640): everything a step tighter ------------
    The type stays on the kit's steps (≥ 17 px); the room comes from gaps, rows and the stage
    (pick 112 → 96 px on 320). The collection heading goes: «10/17» moves into the «Все» tile. */
+/* The window measures its own content height (Telegram's insets are its padding): the 580 / 520
+   rows below follow what is left, not the viewport (320×568 with insets has 477 px). */
+.frg--one.arm.is-window {
+  container: frg-win / size;
+}
 @media (max-height: 700px) {
   .frg--one.arm.is-window {
     --g: calc(3 * var(--u));
@@ -1039,8 +1053,47 @@ button.frg-line__k {
   .frg--one .frg-stat__l {
     line-height: 1;
   }
+  /* the delta is a ▲ / ▼ mark in the tile's top-right corner: a 3-digit speed and «+336» don't
+     fit side by side in a 87-px tile, and a line of its own costs 16 px the column doesn't have.
+     The number never moves (the mark is out of the flow) and stays ≥ 8 px clear of it; the value
+     is still in the DOM for screen readers. Pixel triangle 5 × 3 art px, stepped clip-path. */
+  .frg--one .frg-stat {
+    position: relative;
+  }
+  .frg--one .frg-stat__n em {
+    position: absolute;
+    top: var(--u);
+    right: var(--u);
+    width: calc(5 * var(--u));
+    height: calc(3 * var(--u));
+    font-size: 0;
+    background: currentColor;
+    clip-path: polygon(
+      calc(2 * var(--u)) 0,
+      calc(3 * var(--u)) 0,
+      calc(3 * var(--u)) var(--u),
+      calc(4 * var(--u)) var(--u),
+      calc(4 * var(--u)) calc(2 * var(--u)),
+      100% calc(2 * var(--u)),
+      100% 100%,
+      0 100%,
+      0 calc(2 * var(--u)),
+      var(--u) calc(2 * var(--u)),
+      var(--u) var(--u),
+      calc(2 * var(--u)) var(--u)
+    );
+  }
+  .frg--one .frg-stat__n em.is-down {
+    transform: scaleY(-1);
+  }
   .frg--one .frg-stat .pxd-pips {
     margin: var(--u) 0;
+  }
+  /* «N / 17» in the octagon's corner, clear of the centred pick (it covered the head at 320) */
+  .frg--one .frg-no {
+    top: calc(4 * var(--u));
+    right: calc(5 * var(--u));
+    min-width: calc(6ch + 10 * var(--u));
   }
   .frg--one .frg-side {
     gap: calc(2 * var(--u));
@@ -1094,6 +1147,9 @@ button.frg-line__k {
     padding-top: calc(var(--safe-top, 0px) + 2 * var(--u));
     padding-bottom: calc(var(--safe-bottom, 0px) + 3 * var(--u));
   }
+}
+/* 558 px at 320×568, 545 at 360×640 with Telegram's insets (the stats ran over the state row) */
+@container frg-win (height < 580px) {
   .frg--one .frg-staterow,
   .frg--one .frg-equip {
     height: calc(11 * var(--u));
@@ -1110,9 +1166,11 @@ button.frg-line__k {
   .frg--one .frg-line {
     min-height: calc(13 * var(--u));
   }
-  /* the four picks and «Все» a little wider than tall */
+  /* the four picks and «Все» a little wider than tall; «Все» a quarter wider than a pick: es
+     «Todos» and tr «Tümü» ran 3–6 px over its frame at 320 (the pick art stays 48) */
   .frg--one .frg-row {
     height: calc(26 * var(--u));
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.25fr);
   }
   .frg--one .frg-row > .frg-cell {
     aspect-ratio: auto;
@@ -1140,6 +1198,60 @@ button.frg-line__k {
   }
   .frg--one .frg-card__pic {
     min-height: calc(26 * var(--u));
+  }
+}
+
+/* 320×568 with Telegram's insets (477 px): the stage ran 40–60 px over the state row and the
+   stats. Every row a little lower, and the «Чары» line goes (the dock's «Чары» opens the books):
+   with it the pick fell to 48 px, without it keeps 72 in all 7 languages. */
+@container frg-win (height < 520px) {
+  .frg--one .frg-ench {
+    display: none;
+  }
+  .frg--one .frg-stage {
+    min-height: calc(40 * var(--u));
+  }
+  .frg--one .frg-tab {
+    height: calc(17 * var(--u));
+  }
+  .frg--one .frg-top.is-subrow {
+    grid-template-rows: calc(15 * var(--u)) auto;
+  }
+  .frg--one .frg-top.is-subrow .frg-back {
+    width: calc(15 * var(--u));
+    height: calc(15 * var(--u));
+  }
+  .frg--one .frg-ttl p {
+    line-height: 1.1;
+  }
+  .frg--one .frg-line {
+    min-height: calc(11 * var(--u));
+  }
+  .frg--one .frg-ore {
+    height: calc(11 * var(--u));
+  }
+  /* gear: the box covered the backpack card's «Улучшить» (13–17 px) — smaller octagon floor,
+     tighter card gaps and hint lines */
+  .frg--one .frg-card {
+    gap: calc(2 * var(--u));
+  }
+  .frg--one .frg-card__pic {
+    min-height: calc(16 * var(--u));
+  }
+  .frg--one .frg-hint {
+    line-height: 1.1;
+  }
+  /* «Уровень 1 из 13» goes, the 13 pips under the numbers say it; ru «Покупка один раз» takes
+     two lines — closer ones, or «Купить» ran 3 px past the card's frame */
+  .frg--one .frg-card__lvt {
+    display: none;
+  }
+  .frg--one .frg-card__lv {
+    line-height: 1.05;
+  }
+  /* the box tiles keep their 50u width («Известняк» in one line), 6u lower */
+  .frg--one .frg-box .frg-bt {
+    height: calc(44 * var(--u));
   }
 }
 

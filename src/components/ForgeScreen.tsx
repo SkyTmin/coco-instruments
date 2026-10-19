@@ -511,7 +511,7 @@ export function ForgeScreen({
     num: ReactNode,
     label: ReactNode,
     extra?: ReactNode,
-    delta = 0,
+    delta?: number,
     short?: string,
   ) => (
     <div key={key} className={`frg-stat is-${key} pxd-f pxd-f--panel`}>
@@ -520,10 +520,11 @@ export function ForgeScreen({
       </span>
       <b className="frg-stat__n">
         {num}
-        {delta !== 0 && (
-          <em className={delta > 0 ? 'is-up' : 'is-down'}>
-            {delta > 0 ? '+' : '−'}
-            {fmt(Math.abs(delta))}
+        {/* a tile that compares always has the delta's place: short phones give it its own line
+            under the number (forge.css), so the number never moves and nothing touches it */}
+        {delta !== undefined && (
+          <em className={delta > 0 ? 'is-up' : delta < 0 ? 'is-down' : undefined}>
+            {delta !== 0 && `${delta > 0 ? '+' : '−'}${fmt(Math.abs(delta))}`}
           </em>
         )}
       </b>
@@ -758,8 +759,14 @@ export function ForgeScreen({
     // measured with the noun shown; the class is ours, React never writes this className
     const fit = () => {
       el.classList.remove('is-short');
-      const room = (el.parentElement?.clientWidth ?? 0) - 4 * u;
+      const cell = el.parentElement;
+      const room = (cell?.clientWidth ?? 0) - 4 * u;
       el.classList.toggle('is-short', el.scrollWidth > room);
+      // the word a kit step smaller when it runs over the frame (fr «Toutes», tr «Tümü» at 320)
+      const word = cell?.querySelector<HTMLElement>('b');
+      cell?.classList.remove('is-tight');
+      if (cell && word)
+        cell.classList.toggle('is-tight', word.scrollWidth > cell.clientWidth - 2 * u);
     };
     fit();
     document.fonts?.ready.then(fit).catch(() => {});
@@ -966,7 +973,9 @@ export function ForgeScreen({
           </div>
           <div className="frg-card__lv">
             <PxdPips n={BAG_MAX + 1} on={p.bagLevel + 1} />
-            {t('forge.lvlOf', { n: p.bagLevel + 1, max: BAG_MAX + 1 })}
+            <span className="frg-card__lvt">
+              {t('forge.lvlOf', { n: p.bagLevel + 1, max: BAG_MAX + 1 })}
+            </span>
           </div>
           {bagMax ? (
             <span className="frg-card__done pxd-f pxd-f--well">
@@ -1114,6 +1123,11 @@ export function ForgeScreen({
       top.classList.remove('is-subrow');
       if (layout === 'one')
         top.classList.toggle('is-subrow', sub.scrollWidth > sub.clientWidth + 0.5);
+      // the title one kit step smaller when the purse leaves it too little (de «Schmiede» at 320)
+      const h1 = top.querySelector<HTMLElement>('.frg-ttl h1');
+      top.classList.remove('is-tight');
+      if (h1 && layout === 'one')
+        top.classList.toggle('is-tight', h1.scrollWidth > h1.clientWidth + 0.5);
     }
     // the tabs drop their icons when both labels don't fit the row
     const tabsEl = el.querySelector<HTMLElement>('.frg-tabs');

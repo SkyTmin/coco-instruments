@@ -55,7 +55,7 @@ export const forge: Translation<typeof ru> = {
   toBooks: 'Livres d’enchantement',
   collection: 'Collection',
   collCount: '{n} sur {all}',
-  allTile: 'Toutes',
+  allTile: 'Tout',
   allPicks: {
     one: '{n} pioche',
     many: '{n} de pioches',
