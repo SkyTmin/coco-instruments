@@ -281,7 +281,7 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
     (`min(-10px, calc((100% - 48px) / 2))`); `.nur-plate__roles` is `z-index: 2`, else the XP
     bar's label (z 1) ate the bottom of the chip.
   - Action bar: `KeyHint` is absolute on the button's top-right corner (`.nur-acts .px-btn >
-    .px-keyhint`) and the wide label is `nowrap` — an inline hint made the bar wrap / grow on the
+.px-keyhint`) and the wide label is `nowrap` — an inline hint made the bar wrap / grow on the
     first key press.
   - Phone landscape: `PetsTab` turns the pets/eggs tabs into a 24-u rail on the left
     (`ppn--rail`, `Tabs vertical`, `name` = aria + tip, labels hidden, key hint absolute under the
@@ -298,8 +298,8 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
     and the drawer's first visible row is decoded one by one 150 ms after it opens. Measured at
     150 ms RTT / 60 KB/s, 4×: the old pet stays ≤ 140 ms after the ring (was 560).
   - The stage follows `useDeferredValue(sel)`: the ring and the action bar paint first, the stage
-    + plate a frame later. Production build at 4×: worst switch frame ~115–290 → ~70–150 ms (the
-    rest is style/layout/paint of the plate, not React).
+    - plate a frame later. Production build at 4×: worst switch frame ~115–290 → ~70–150 ms (the
+      rest is style/layout/paint of the plate, not React).
   - Press after a key press (critic P1-7): `src/input/device.ts` defers BOTH `data-input` and the
     subscriber render to rAF + timeout on pointer events (`setInputDevice(d, pad, true)`); the
     root attribute flip alone restyled the page for ~40 ms at 4× (426 elements, selectors like
@@ -352,8 +352,15 @@ owner. Each agent ships as its own version after the lead reviews its shots (6 f
 Wave rules: new CSS in the screen's own file (like `nursery.css`), `game-ui.css` only loses the
 screen's old blocks; no logic changes in `src/lib`; every new string through `t()` in 7 languages.
 
-**Critic gate (owner 13.10: «агент критик… возвращать правки для других агентов»; role rewritten
-by the owner 19.10 — lead art director and UI/UX reviewer).** The `critic` agent
+**⚠️ Critic gate OFF (owner 19.10, binding): «надо вырубить критика, он очень долго проверяет, я
+сам буду критиком. Как агенты закончат, сразу в прод».** Do not launch `critic` agents. A finished
+implementer's work ships at once: merge → `npm test`, lint, format, build (ship script) → bump →
+prod. The owner reviews on the live bot and sends findings himself. The lead still measures what
+the brief asks (cell size, overflow, no jump) before shipping — that is not a critic pass. The
+text below is history; `.claude/critic/checklist.md` stays as a list of known pitfalls for briefs.
+
+**Critic gate (history; owner 13.10: «агент критик… возвращать правки для других агентов»; role
+rewritten by the owner 19.10 — lead art director and UI/UX reviewer).** The `critic` agent
 (`.claude/agents/critic.md`, saved acceptance criteria `.claude/critic/checklist.md`) reviews the
 live screen before anything ships: phones 320/390/430 px plus the formats the task names. It
 returns a verdict («Готово» / «Нужны доработки» / «Есть блокирующие проблемы») and at most five
