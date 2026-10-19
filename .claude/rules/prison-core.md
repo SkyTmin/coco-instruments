@@ -580,4 +580,19 @@ Field drawing, mining, timings, critters and their animations are untouched.
     at 320 → 16 px). Left column narrower than 42u + 5.75 × 16 px (667×375) → `useSideFit` sets
     `data-tight`, the keys chip hides (tokens + keys «999» did not fit one row even at 16 px) —
     keys stay as the gold badge on «Сундуки». The critic's «1 instead of 1,2м» was the old
-    `.pmx-chip--coins` HUD (build 78071db); the v2 `.mn-stat--coins` shows «1,2м».
+    `.pmx-chip--coins` HUD (build 78071db); the v2 `.mn-stat--coins` shows «1,2м». Still open:
+    the wide keys chip holds ~3–4 chars (tl «9.999» 2.8 px out, tr «99,9Mn» 8–13 px out).
+  - «Продать N ●» label inside its button (`sellfit.mjs`): tall ≤ 380 px the bag grid is
+    14u | 1fr | 2fr with gap 2u (p320 de «Verkaufen 9.665» 161 px in a 133-px button pushed the
+    coin off screen → button 172); tablet landscape sell label `--px-fs-sm` (tl de 245 px in 223
+    → 213).
+  - Dig layers (lead's defe0ee for the old `.pmx-*` HUD, redone for v2): `.mn-items, .mn-dock,
+    .mn-bag, .mn-quest, .mn-strip` `will-change: transform`; `.mn-hud, .mn-rankrow, .mn-rank`
+    `isolation: isolate` (their z 1–3 — rank bar label, floor badge, focus rings — painted after
+    the field's animations and were re-layered on every hit); bag icon z 4 (above its bar and the
+    bag's ring). `{SCR}/ui7M/layers-mn.mjs` (copy of `flick/layers.mjs`, `BASE=…5566`): 5 s of
+    digging at pp/pl/p320/tl — 0 new layers outside the field (was dock badge 6, bag bar 6,
+    streak strip 6, rank label 8, a 388×582 squash layer). Cost: at 320 a HUD chip's ring loses
+    16–74 px of its bottom edge under the rank box (`ringcmp.mjs` + `ringdiff.py`).
+  - Dock at 844×390 (critic17 measured the old HUD, 51a9c8e): dock 8–382 / 97–382 with the
+    quest, «Лагерь» hit inside, column 386/386, page 0 (`dockvis.mjs`).
