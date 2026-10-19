@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
-import { GxIcon, GxModal } from '@/components/gx';
+import { GxHud, GxIcon, GxModal } from '@/components/gx';
 import { CashDesk } from '@/components/CashDesk';
 import { ChestIcon } from '@/components/ChestTab';
 import { crackStage, MineCell, MineField, useMineDig, wall } from '@/components/MineField';
@@ -2615,6 +2615,11 @@ export function PrisonPage() {
             {...press}
             data-tip={t('input.action.chests')}
             data-tip-key="chests"
+            aria-label={
+              prison.keys > 0
+                ? `${t('mineHud.dock.chests')}, ${t('mineHud.pres.keys')}: ${prison.keys}`
+                : undefined
+            }
             onClick={() => openScreen('cases')}
           >
             <span className="mn-dock__ico" data-hop="">
@@ -2623,7 +2628,13 @@ export function PrisonPage() {
             <DockLabel text={t('mineHud.dock.chests')} />
             {prison.keys > 0 && (
               <span className="mn-dock__badge">
-                <Badge gold>{shortCount(prison.keys)}</Badge>
+                {/* Ключ рядом с числом (v2.159): одно число читалось как «что-то три». */}
+                <Badge gold>
+                  <span className="mn-dock__keys">
+                    <GxHud name="key" />
+                    {shortCount(prison.keys)}
+                  </span>
+                </Badge>
               </span>
             )}
             <KeyHint action="chests" />

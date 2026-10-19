@@ -1795,6 +1795,14 @@ html[data-ff^='phone'] .mn-dock__label {
   right: 0;
   pointer-events: none;
 }
+/* Ключ и число — одна неразрывная пара. */
+.mn-dock__keys {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(0.5 * var(--u));
+  white-space: nowrap;
+  --hud: calc(6 * var(--u));
+}
 .mn-dock__btn > .px-keyhint {
   right: calc(1 * var(--u));
   bottom: calc(2 * var(--u));
@@ -1886,7 +1894,8 @@ html[data-ff^='phone'] .mn--short .mn-dock__label {
 .mn-dock,
 .mn-bag,
 .mn-quest,
-.mn-strip {
+.mn-strip,
+.mn-parcels {
   will-change: transform;
 }
 .mn-hud,
