@@ -230,6 +230,11 @@ export function CasTools({ onBack, children }: { onBack: () => void; children: R
  */
 function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boolean) {
   const ref = useRef<T>(null);
+  // What the last fit measured: the text's shape (digits as 0) and the box width. A new number of
+  // the same shape is the same width (digits are tabular), so «312» → «313» or «52 тыс.» →
+  // «53 тыс.» skip the measure — each one forced a layout of the page inside the spin-start task
+  // (37–49 ms at 4× in dev, critic15 #3).
+  const last = useRef({ shape: '', w: -1 });
   // A node `dep` is a new object on every render: as a dependency it re-ran the effect — and a
   // forced layout of the whole page — on every render of the page (opening the skins sheet
   // spent 65 ms of its first frame here at 4×). Text changes come through the observer.
@@ -237,23 +242,33 @@ function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boole
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !on) return;
+    const seen = last.current;
+    const shapeOf = () => (el.textContent ?? '').replace(/\d/g, '0');
     // Fractional widths (R36): `scrollWidth` is an integer, so text 0.4–1 px wider than its box
     // (fr «★ 988 k 🪙» 75.6 in 75) passed and lost its coin's edge.
     const range = document.createRange();
     const over = () => {
       range.selectNodeContents(el);
-      return range.getBoundingClientRect().width > el.getBoundingClientRect().width + 0.25;
+      seen.w = el.getBoundingClientRect().width;
+      return range.getBoundingClientRect().width > seen.w + 0.25;
     };
     const fit = () => {
+      seen.shape = shapeOf();
       el.dataset.fit = '0';
       for (let i = 1; i <= 2 && over(); i++) el.dataset.fit = String(i);
     };
-    fit();
-    const ro = new ResizeObserver(fit);
+    if (shapeOf() !== seen.shape) fit();
+    // Only a real resize refits (the observer's first call reports the size just measured).
+    const ro = new ResizeObserver(([e]) => {
+      if (Math.abs(e.contentRect.width - seen.w) < 0.5) return;
+      fit();
+    });
     ro.observe(el);
     // A rolling number (AnimatedNumber) changes its text without a new `dep` — «18 тыс.» →
     // «988 тыс.» kept the step measured for the short text and lost its tail.
-    const mo = new MutationObserver(fit);
+    const mo = new MutationObserver(() => {
+      if (shapeOf() !== seen.shape) fit();
+    });
     mo.observe(el, { characterData: true, childList: true, subtree: true });
     return () => {
       ro.disconnect();
