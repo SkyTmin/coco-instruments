@@ -563,4 +563,14 @@ Field drawing, mining, timings, critters and their animations are untouched.
   - Rank pick chip = `PickIcon pick={needPick}` 8u + the power (tip / aria `mineHud.norm.pick`);
     floors sheet and the «too hard» pop-up use the painted 7×7 `m-hard` crystal (`paint.ts`
     `HARD_ART`, `.mn-pic--hard`, `.mn .pfloat--hard::before`; the pop-up text is just the
-    number). `.mn-rank` has no «⛏». `MineField`'s own cell label `pcell__hard` still uses «⛏».
+    number). `.mn-rank` has no «⛏»; `mineHud.norm.pick` is «Кирка: сила {power} · {name}» in 7
+    languages (glossary «Сила»; the rank sheet row wraps to 2 lines at 320 ru/de like its
+    neighbours). Still «⛏»: `MineField`'s `pcell__hard`, toasts `mineHud.*.hardHave/Need/None`.
+  - Rank box on `mn--short`: padding and column gap 2u (de/tr «1.100 ●» bar label was 1.4 px out
+    in the 165-px column, `needs2`).
+  - HUD chips hold 0…999 999 999 (`coins.mjs`, ru/de/tr): money `chipMoney` fits everywhere
+    (p320 19.7 px, phones 26, pl 28, tl/d1 36); tokens `--res` 6.5 → 7 (tr «99,9Mn» was 2.7 px out
+    at 320 → 16 px). Left column narrower than 42u + 5.75 × 16 px (667×375) → `useSideFit` sets
+    `data-tight`, the keys chip hides (tokens + keys «999» did not fit one row even at 16 px) —
+    keys stay as the gold badge on «Сундуки». The critic's «1 instead of 1,2м» was the old
+    `.pmx-chip--coins` HUD (build 78071db); the v2 `.mn-stat--coins` shows «1,2м».
