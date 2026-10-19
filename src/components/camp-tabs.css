@@ -268,6 +268,23 @@ html[data-ff='tablet']
   font: 500 var(--px-fs-sm) / 1.25 var(--px-font);
   color: var(--px-muted);
 }
+/* the fuse plan in pictures: one row, the result's name after the arrow */
+.ctab-insp__line.is-fuse {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  gap: var(--u);
+  white-space: nowrap;
+}
+.ctab-insp__line.is-fuse > b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--px-text);
+}
+.ctab-insp__line.is-fuse > .px-i {
+  flex: none;
+  color: var(--px-gold);
+}
 .ctab-insp__line.is-note {
   color: var(--px-red);
   font-weight: 700;
@@ -372,7 +389,8 @@ html[data-ff='tablet']
 .ctab-pack__row {
   display: flex;
   align-items: center;
-  gap: calc(2 * var(--u));
+  /* 4u between ×1 / ×5 / ×10: 4 px was a mis-tap (critic5 «Лавка 3») */
+  gap: calc(4 * var(--u));
 }
 .ctab-pack__opt {
   min-width: calc(24 * var(--u));
@@ -615,8 +633,15 @@ html[data-ff='tablet']
   grid-template:
     'ahead pouch insp' auto
     'stage pouch insp' minmax(0, 1fr)
+    'stage btitle insp' auto
     'stage bonus insp' auto
     / minmax(0, 6fr) minmax(0, 9fr) minmax(0, 11fr);
+}
+/* the box stands under the pouch column: «Оберег даёт» over it (critic14 (a)) */
+.ctab--land .ctab-amulet > .ctab-bonus__title {
+  grid-area: btitle;
+  font: 700 var(--px-fs-sm) / 1.25 var(--px-font);
+  color: var(--px-muted);
 }
 .ctab-runes.ctab--land > .ctab-amulet {
   display: contents;
@@ -923,6 +948,12 @@ html[data-ff='tablet']
 .ctab-bonus.is-tight .ctab-bonus__w {
   display: none;
 }
+/* at the cap: the value counted (runes + pets / all sell bonuses together hit the cap), a small
+   red «!» after it; the tip says why */
+.ctab-bonus__chip > .ctab-bonus__cap {
+  flex: none;
+  color: var(--px-red);
+}
 /* A baked 12 × 12 stat picture (paint.ts: N2's six + T2's «proc») at `--st`. */
 .ctab-st {
   display: inline-block;
@@ -1121,7 +1152,9 @@ html[data-ff='tablet']
   align-content: start;
   padding: var(--u);
 }
-.ctab--wide .ctab-miles__list {
+/* Phone landscape, tablet, desktop: two columns of compact rows (critic14 #3: one 744-px row
+   with its text showed 2 of 18 at 844×390, 4 of 18 on a tablet / desktop). */
+.ctab-miles:is(.ctab--land, .ctab--tall, .ctab--wide) .ctab-miles__list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .ctab-mile {
@@ -1155,10 +1188,6 @@ html[data-ff='tablet']
 .ctab .ctab-mile__name {
   font: 400 var(--px-fs) / 1.15 var(--px-head);
   color: var(--px-text);
-}
-.ctab-mile__text {
-  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
-  color: var(--px-muted);
 }
 .ctab-gifts {
   display: flex;
@@ -1217,10 +1246,11 @@ html[data-ff='tablet']
   content-visibility: auto;
   contain-intrinsic-size: auto calc(40 * var(--u));
 }
-/* Phone / tablet portrait: «icon | title + gifts + bar | claim» (the condition is the icon's tip),
-   the claim beside the title only so the gifts and the bar keep the full width: ≤ 96 px a row,
-   6+ rows on a 390×844 phone (it was 3 rows, 117–184 px, with a full-width button). */
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile {
+/* Every format: «icon | title + gifts + bar | claim» (the condition is the icon's tip), the claim
+   beside the title only so the gifts and the bar keep the full width: ≤ 96 px a row, 6+ rows on a
+   390×844 phone (it was 3 rows, 117–184 px, with a full-width button); since critic14 #3 on
+   phone landscape, tablet and desktop too (113–256-px cards with the text showed 2–4 of 18). */
+.ctab-miles .ctab-mile {
   grid-template:
     'art name end' auto
     'art gifts gifts' auto
@@ -1229,19 +1259,47 @@ html[data-ff='tablet']
   padding: var(--u) calc(3 * var(--u));
   gap: var(--u) calc(3 * var(--u));
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__info {
+.ctab-miles .ctab-mile__info {
   display: contents;
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__name {
+.ctab-miles .ctab-mile__name {
   grid-area: name;
   min-width: 0;
 }
 /* the small claim button and its «Получено» swap: the check keeps the button's height */
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__taken {
+.ctab-miles .ctab-mile__taken {
   min-height: calc(15 * var(--u));
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-gifts {
+.ctab-miles .ctab-gifts {
   grid-area: gifts;
+}
+/* Tablet / desktop (ui-scale 3): the kit's 46-px «Take» beside a 26-px title made a ready row
+   122 px. A ready row's bar is full and says nothing new — it goes, and the claim sits beside the
+   chips (which may take two lines there): 94 px; a row in progress 99 (chips 1.3 × the small
+   size), a taken one 85. Five rows a column on 1180×820 — 10 of 18 in sight. */
+.ctab-miles:is(.ctab--tall, .ctab--wide) .ctab-chip {
+  height: calc(var(--px-fs-sm) * 1.3);
+}
+/* chips that would wrap past their lines drop their words (measured in MilesTab) */
+.ctab-gifts.is-tight .ctab-chip__w {
+  display: none;
+}
+/* tablet portrait's columns are 355 px: a smaller picture leaves the title and chips 18 px more */
+.ctab-miles.ctab--tall .ctab-mile__art {
+  --slot: calc(16 * var(--u));
+}
+.ctab-miles.ctab--tall .ctab-mile__art .gx-icon {
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+}
+.ctab-miles:is(.ctab--tall, .ctab--wide) .ctab-mile:has(.ctab-mile__swap) {
+  grid-template:
+    'art name name' auto
+    'art gifts end' auto
+    / auto minmax(0, 1fr) auto;
+}
+.ctab-miles:is(.ctab--tall, .ctab--wide) .ctab-mile:has(.ctab-mile__swap) .ctab-mile__bar {
+  display: none;
 }
 .ctab-miles.ctab--short .ctab-head__hint {
   display: none;
@@ -1262,15 +1320,15 @@ html[data-ff='tablet']
 .ctab-miles.ctab--short .ctab-mile__swap > .px-btn {
   width: 100%;
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art {
+.ctab-miles .ctab-mile__art {
   --slot: calc(22 * var(--u));
   align-self: center;
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art .gx-icon {
+.ctab-miles .ctab-mile__art .gx-icon {
   width: calc(14 * var(--u));
   height: calc(14 * var(--u));
 }
-.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__end {
+.ctab-miles .ctab-mile__end {
   align-self: center;
 }
 

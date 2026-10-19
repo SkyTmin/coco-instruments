@@ -26,6 +26,7 @@ import { useFinanceStore } from '@/store';
 import type { ParcelOpen } from '@/store';
 import { CREW_ON } from '@/lib/features';
 import {
+  BONUS_CAP,
   bonusOf,
   FINDS,
   findsFound,
@@ -36,6 +37,8 @@ import {
   LAST_RANK,
   MILES,
   mileReady,
+  modsOf,
+  NO_BONUS,
   PERKS,
   perkPointsFree,
   rankLetter,
@@ -159,8 +162,38 @@ function Head({ title, hint, right }: { title: ReactNode; hint?: ReactNode; righ
   );
 }
 
+/**
+ * A number that counts to its new value (≈ 400 ms, 12 steps; at once with reduced motion) — a buy
+ * or a shatter is seen, not a jump (critic5 «Лавка 5»).
+ */
+function useCountTo(n: number): number {
+  const [shown, setShown] = useState(n);
+  const from = useRef(n);
+  useEffect(() => {
+    const a = from.current;
+    if (a === n || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      from.current = n;
+      setShown(n);
+      return undefined;
+    }
+    const t0 = performance.now();
+    let id = 0;
+    const tick = (now: number) => {
+      const k = Math.min(1, Math.ceil(((now - t0) / 400) * 12) / 12);
+      const v = Math.round(a + (n - a) * k);
+      from.current = v;
+      setShown(v);
+      if (k < 1) id = requestAnimationFrame(tick);
+    };
+    id = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(id);
+  }, [n]);
+  return shown;
+}
+
 /** Tokens: always in the head's right corner. */
 function Purse({ n }: { n: number }) {
+  const v = useCountTo(n);
   return (
     <span
       className="px-dark ctab-purse"
@@ -168,7 +201,10 @@ function Purse({ n }: { n: number }) {
       aria-label={t('camp.purseTokens', { n, v: fmtNum(n) })}
     >
       <TokenIcon size={18} />
-      <span className="px-num">{fmtNum(n)}</span>
+      {/* as wide as the final value while it counts: the plate never resizes mid-count */}
+      <span className="px-num" style={{ minWidth: `${fmtNum(n).length}ch` }}>
+        {fmtNum(v)}
+      </span>
     </span>
   );
 }
@@ -523,13 +559,37 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
     dpr,
   );
   const sockSlot = slotFor(sockPx, scale, 6);
-  const inspPx = fit(40, lay === 'wide' ? 30 : 24, scale, dpr);
+  const inspPx = fit(40, 30, scale, dpr);
   const actSize = short || lay === 'tall' || lay === 'land' ? 'sm' : undefined;
 
   // The amulet's own bonus: the worn runes only (the squad's pets show theirs in the Nursery), so
-  // four sockets give at most four kinds and the 2×2 box never scrolls (critic5 P0).
-  const b = bonusOf({ runes: p.runes, sockets: p.sockets });
-  const bonus = BONUS_KEYS.filter((k) => b[k] > 0);
+  // four sockets give at most four kinds and the 2×2 box never scrolls (critic5 P0). Each chip
+  // says what the runes REALLY add: the mine caps runes + pets together (`BONUS_CAP`) and all sell
+  // bonuses together (`SELL_BONUS_CAP`), so a chip is the full bonus minus the one without the
+  // runes; a chip under its rune sum gets a cap mark and the reason in its tip (critic14 (a)).
+  const raw: Record<string, number> = {};
+  for (const id of p.sockets) {
+    const r = id ? p.runes.find((z) => z.id === id) : null;
+    if (r) raw[r.kind] = (raw[r.kind] ?? 0) + runePower(r);
+  }
+  const bonus = BONUS_KEYS.filter((k) => (raw[k] ?? 0) > 0);
+  const withR = bonusOf(p);
+  const noR = bonusOf({ ...p, sockets: [] });
+  const sellK = modsOf(p).sell / modsOf({ ...p, sockets: [] }).sell;
+  const b = { ...NO_BONUS };
+  for (const k of bonus)
+    b[k] = Math.max(0, k === 'sell' ? (sellK - 1) * (1 + noR.sell) : withR[k] - noR[k]);
+  const capped = (k: keyof Bonus) => b[k] < (raw[k] ?? 0) - 1e-6;
+  const chipTip = (k: keyof Bonus) =>
+    capped(k)
+      ? withR[k] >= BONUS_CAP[k] - 1e-6
+        ? t('ctabs.runes.capTip', {
+            cap: pctText(BONUS_CAP[k]),
+            raw: pctText(raw[k] ?? 0),
+            eff: pctText(b[k]),
+          })
+        : t('ctabs.runes.capSellTip', { raw: pctText(raw[k] ?? 0), eff: pctText(b[k]) })
+      : `${pctText(b[k])} ${t(`camp.bonus.${k}`)}`;
   // Bonus pictures: the kit's 12 × 12 stat art at 24 CSS px (36 at ui-scale ≥ 4), whole device
   // pixels per art pixel (as the Nursery's `useStatPx`).
   const stPx = `${(Math.max(1, Math.round(((scale >= 4 ? 36 : 24) * dpr) / 12)) * 12) / dpr}px`;
@@ -587,17 +647,20 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           })}
         </div>
       </Panel>
+      {/* phone landscape: the box sits under the pouch column — it says whose bonus it is */}
+      {lay === 'land' && <span className="ctab-bonus__title">{t('ctabs.runes.gives')}</span>}
       <div ref={bonusBox} className="ctab-bonus" style={{ '--st': stPx } as CSSProperties}>
         {bonus.length ? (
           bonus.map((k) => (
             <span
               key={k}
-              className="ctab-chip ctab-bonus__chip"
-              data-tip={`${pctText(b[k])} ${t(`camp.bonus.${k}`)}`}
-              aria-label={`${pctText(b[k])} ${t(`camp.bonus.${k}`)}`}
+              className={`ctab-chip ctab-bonus__chip${capped(k) ? ' is-cap' : ''}`}
+              data-tip={chipTip(k)}
+              aria-label={chipTip(k)}
             >
               <i className={`ctab-st ctab-st--${k}`} aria-hidden="true" />
               <b className="px-num">{pctText(b[k])}</b>
+              {capped(k) && <Icon name="excl" className="ctab-bonus__cap" />}
               <span className="ctab-bonus__w">{t(`ctabs.bonus.${k}`)}</span>
             </span>
           ))
@@ -659,6 +722,24 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           : ''
     : '';
 
+  // The fuse plan in pictures: «Уйдут: [rune] [rune] → [rune] Гебо II» (the sentence with the
+  // two runes' % is the tip and the aria-label; critic14 «next pass» 6). A short phone keeps words.
+  const fusePx = fit(40, lay === 'tall' ? 8 : 12, scale, dpr);
+  const fuseArt =
+    rune && plan && !short ? (
+      <>
+        <span>{t('camp.runes.fuseGo')}</span>
+        {plan.with.map((r: Rune) => (
+          <RuneIcon key={r.id} kind={r.kind} tier={r.tier} size={fusePx} />
+        ))}
+        <Icon name="right" />
+        <RuneIcon kind={rune.kind} tier={rune.tier + 1} size={fusePx} />
+        <b>
+          {runeName(rune.kind)} {RUNE_ROMAN[rune.tier]}
+        </b>
+      </>
+    ) : null;
+
   // The panel keeps one height: with nothing picked the same rows are laid out invisibly (a
   // stand-in rune) and the prompt lies over them — picking a rune never moves a box.
   const shown: Rune = rune ?? { id: 0, kind: 'sell', tier: 1, roll: 0 };
@@ -695,10 +776,11 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           </span>
         </div>
         <div
-          className={`ctab-insp__line${note ? ' is-note' : ''}`}
-          data-tip={short ? (note ?? fuseLine) || undefined : undefined}
+          className={`ctab-insp__line${note ? ' is-note' : fuseArt ? ' is-fuse' : ''}`}
+          data-tip={short || (fuseArt && !note) ? (note ?? fuseLine) || undefined : undefined}
+          aria-label={fuseArt && !note ? fuseLine : undefined}
         >
-          {note ?? fuseLine}
+          {note ?? fuseArt ?? fuseLine}
         </div>
         <div className="ctab-insp__acts">
           <Button
@@ -723,7 +805,7 @@ export const RunesTab = memo(function RunesTab({ axeLevel }: { axeLevel: number 
           >
             <GxIcon name="hammer" className="ctab-shatter__ico" />
             <span className="px-num">+{fmtNum(RUNE_SHATTER[shown.tier - 1])}</span>
-            <TokenIcon size={16} />
+            <TokenIcon size={24} />
           </Button>
         </div>
       </div>
@@ -909,15 +991,7 @@ type Gift = { k: string; tip: string; node: ReactNode };
 /** At most three reward chips, the rest folded into «+N» (its tip lists them). `compact` (phone /
  * tablet portrait): one line of chips — «+N» takes the third place (the second on a short phone);
  * the parcel and the rune chips keep the icon and the tier only, the full words go to the tip. */
-function MileGifts({
-  m,
-  compact,
-  short,
-}: {
-  m: (typeof MILES)[number];
-  compact: boolean;
-  short: boolean;
-}) {
+function MileGifts({ m, short }: { m: (typeof MILES)[number]; short: boolean }) {
   const r = m.reward;
   const all: Gift[] = [];
   if (r.tokens)
@@ -950,7 +1024,7 @@ function MileGifts({
       node: (
         <>
           <GxIcon name="gift" />
-          {compact ? chestName(r.parcel) : tip}
+          <span className="ctab-chip__w">{chestName(r.parcel)}</span>
         </>
       ),
     });
@@ -964,7 +1038,7 @@ function MileGifts({
       node: (
         <>
           <GxIcon name="rune" />
-          {compact ? <b className="px-num">{roman}</b> : tip}
+          <b className="px-num">{roman}</b>
         </>
       ),
     });
@@ -976,7 +1050,7 @@ function MileGifts({
       node: (
         <>
           <Icon name="plus" />
-          {compact ? t('ctabs.miles.socket') : t('camp.mile.socket')}
+          <span className="ctab-chip__w">{t('ctabs.miles.socket')}</span>
         </>
       ),
     });
@@ -987,18 +1061,18 @@ function MileGifts({
       node: (
         <>
           <EggArt egg={r.egg} size={16} />
-          {compact ? t(`nursery.egg.${r.egg}`) : nameIn(eggName(r.egg))}
+          <span className="ctab-chip__w">{t(`nursery.egg.${r.egg}`)}</span>
         </>
       ),
     });
-  const limit = !compact ? 3 : short ? 2 : 3;
-  const keep = !compact ? 3 : 2;
+  const limit = short ? 2 : 3;
+  const keep = 2;
   const shown = all.length > limit ? all.slice(0, keep) : all;
   const rest = all.slice(shown.length);
   return (
     <span className="ctab-gifts">
       {shown.map((g) => (
-        <span key={g.k} className="ctab-chip" data-tip={compact ? g.tip : undefined}>
+        <span key={g.k} className="ctab-chip" data-tip={g.tip}>
           {g.node}
         </span>
       ))}
@@ -1022,8 +1096,8 @@ export const MilesTab = memo(function MilesTab({
 }) {
   const t = useT();
   const { lay, short } = useLay();
-  // phone / tablet portrait: one row «icon | title + bar | claim», the condition is the icon's tip
-  const compact = lay === 'one' || lay === 'tall';
+  // Every format: the compact row «icon | title + chips + bar | claim», the condition is the
+  // icon's tip; two columns on phone landscape / wide (2–4 of 18 rows showed there, critic14 #3).
   const p = useFinanceStore((s) => s.prison);
   const claim = useFinanceStore((s) => s.prisonMileClaim);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
@@ -1071,6 +1145,28 @@ export const MilesTab = memo(function MilesTab({
     return () => cancelAnimationFrame(id);
   }, []);
   const shownRows = allRows ? order : order.slice(0, MILES_FIRST);
+  // Chips keep to their lines (one; a ready row on a tablet / desktop two, beside «Take»): when
+  // they would wrap further, their words go — the pictures and numbers stay, the words are the
+  // tips (`.is-tight`). Rows off screen skip layout (`content-visibility`), so each chip box is
+  // checked when it gets a size.
+  const list = useRef<HTMLDivElement>(null);
+  const two = lay === 'tall' || lay === 'wide';
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return undefined;
+    const fitGifts = (g: Element) => {
+      g.classList.remove('is-tight');
+      const tops = new Set([...g.children].map((c) => Math.round(c.getBoundingClientRect().top)));
+      const max = two && g.closest('.ctab-mile')?.querySelector('.ctab-mile__swap') ? 2 : 1;
+      g.classList.toggle('is-tight', tops.size > max);
+    };
+    const all = [...el.querySelectorAll('.ctab-gifts')];
+    all.forEach(fitGifts);
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver((es) => es.forEach((e) => fitGifts(e.target)));
+    all.forEach((g) => ro.observe(g));
+    return () => ro.disconnect();
+  });
   const done = rows.filter((r) => r.done).length;
   // X / pad Y: take the top ready one.
   useAction(
@@ -1100,7 +1196,7 @@ export const MilesTab = memo(function MilesTab({
         }
       />
       <div className="ctab-scroll">
-        <div className="ctab-miles__list">
+        <div ref={list} className="ctab-miles__list">
           {shownRows.map(({ m, done: isDone, ready }) => {
             const [v, goal] = m.progress(p);
             return (
@@ -1110,7 +1206,7 @@ export const MilesTab = memo(function MilesTab({
               >
                 <span
                   className={`px-slot px-slot--r${ready ? 4 : 0} ctab-mile__art`}
-                  data-tip={compact ? mileText(m.id) : undefined}
+                  data-tip={mileText(m.id)}
                   aria-hidden="true"
                 >
                   <span className="px-slot__art">
@@ -1119,8 +1215,7 @@ export const MilesTab = memo(function MilesTab({
                 </span>
                 <span className="ctab-mile__info">
                   <span className="ctab-mile__name">{mileTitle(m.id)}</span>
-                  {!compact && <span className="ctab-mile__text">{mileText(m.id)}</span>}
-                  <MileGifts m={m} compact={compact} short={short} />
+                  <MileGifts m={m} short={short} />
                 </span>
                 <span className="ctab-mile__end">
                   {ready || takenNow.current.has(m.id) ? (
@@ -1129,7 +1224,7 @@ export const MilesTab = memo(function MilesTab({
                     <span className="ctab-mile__swap">
                       <Button
                         kind="primary"
-                        size={compact ? 'sm' : undefined}
+                        size="sm"
                         className={isDone ? 'is-gone' : undefined}
                         onClick={() => take(m.id)}
                       >
