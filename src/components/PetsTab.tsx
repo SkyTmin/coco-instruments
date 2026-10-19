@@ -18,7 +18,7 @@ import { RarityName, rarityVars } from '@/components/PickArt';
 import { EggArt, PetArt } from '@/components/PetArt';
 import { Nursery } from '@/components/Nursery';
 import type { NurTab } from '@/components/Nursery';
-import { useArmGuard, useArmLayout, useFullWin } from '@/components/armory';
+import { useArmGuard, useArmLayout, useBox, useFullWin } from '@/components/armory';
 import { Icon } from '@/ui-px';
 import { PxdButton, PxdPips, PxdSheet, usePxd } from '@/ui-px/dark';
 import { useAction } from '@/input';
@@ -262,6 +262,15 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
     else setBatch({ list, coins: plan.coins, tokens: plan.tokens, key: Date.now() });
   };
 
+  const nestRow = useRef<HTMLDivElement>(null);
+  const nb = useBox(nestRow, tab === 'eggs');
+  const nestEgg = eggPx(
+    Math.max(18 * u, Math.min((nb.w - 4 * u) / 2 - 10 * u, nb.h - 40 * u, 64 * u)),
+  );
+  const shopRow = useRef<HTMLDivElement>(null);
+  const sb = useBox(shopRow, tab === 'eggs');
+  // phone portrait: a low tile (short phones) takes the small egg, else the text loses room
+  const shopEgg = eggPx(layout === 'one' ? ((sb.h - 3 * u) / 2 >= 40 * u ? 20 : 16) * u : 28 * u);
   // ---- Fit pass: the purpose line on its own row, tab icons / tab size, the queue label -------
   const [fitTick, setFitTick] = useState(0);
   useEffect(() => {
@@ -306,7 +315,20 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
       q.classList.remove('is-tight');
       q.classList.toggle('is-tight', q.scrollWidth > q.clientWidth + 0.5);
     }
-  }, [fitTick, layout, tab, t, p.eggs, u]);
+    // nests and shop tiles: their words one size smaller (the shop's status under the art)
+    const cut = (sel: string) =>
+      [...el.querySelectorAll<HTMLElement>(sel)].some((x) => x.scrollWidth > x.clientWidth + 0.5);
+    const row = el.querySelector<HTMLElement>('.nrs-nests__row');
+    if (row) {
+      row.classList.remove('is-tight');
+      row.classList.toggle('is-tight', cut('.nrs-nest__nm, .nrs-nest__left'));
+    }
+    const shop = el.querySelector<HTMLElement>('.nrs-shop');
+    if (shop) {
+      shop.classList.remove('is-tight');
+      shop.classList.toggle('is-tight', cut('.nrs-buy__nm, .nrs-buy__st'));
+    }
+  }, [fitTick, layout, tab, t, p.eggs, p.nest, armed, balance, p.tokens, u, shopEgg]);
 
   const tabBtn = (id: NurTab, icon: GxIconName, label: string, badge?: ReactNode) => (
     <PxdButton
@@ -330,8 +352,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
   );
 
   // ---- Eggs: nests · queue · hatch all · shop ---------------------------------------------------
-  const nestEgg = eggPx(layout === 'one' ? 30 * u : 40 * u);
-  const shopEgg = eggPx(layout === 'one' ? 20 * u : 28 * u);
+  // the egg takes what the nest tile leaves after its name, pips and blocks line (measured row)
   const chipEgg = eggPx(12 * u);
   const heatPips = (id: EggId) => {
     const h = p.eggHeat[id] ?? 0;
@@ -347,7 +368,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
             <h2>{t('eggs.nests')}</h2>
             <span className="px-num">{t('eggs.someOf', { a: p.nest.length, b: NEST_SLOTS })}</span>
           </div>
-          <div className="nrs-nests__row">
+          <div ref={nestRow} className="nrs-nests__row">
             {Array.from({ length: NEST_SLOTS }, (_, i) => {
               const n = p.nest[i];
               if (!n)
@@ -473,7 +494,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
         <div className="nrs-h">
           <h2>{t('eggs.shop')}</h2>
         </div>
-        <div className="nrs-shop__grid">
+        <div ref={shopRow} className="nrs-shop__grid">
           {EGGS.map((e) => {
             const tok = e.tokens ?? 0;
             const sold = e.price > 0 || tok > 0;
@@ -552,7 +573,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
                       {t('eggs.rank', { r: rankLetter(e.from) })}
                     </>
                   ) : !room ? (
-                    t('eggs.basketFull')
+                    t('eggs.noRoom')
                   ) : !rich ? (
                     <>
                       {t('eggs.more', { v: tok ? fmt(Math.round(short)) : fmtShort(short) })}

@@ -172,10 +172,12 @@ const VOWEL =
  *  «медве-жатник» in a 90-px cell, never «медвежатни-к» or out of the cell. */
 function syl(text: string): string {
   const isV = (ch: string | undefined) => !!ch && VOWEL.test(ch);
-  return text
-    .split(' ')
+  // a hyphen or a space is a break already: the parts of «Крот-забойщик» stay whole unless long
+  const parts = text.split(/(\s+|-)/);
+  const min = parts.length > 1 ? 9 : 7;
+  return parts
     .map((w) => {
-      if (w.length < 7) return w;
+      if (w.length < min) return w;
       let out = '';
       for (let i = 0; i < w.length; i++) {
         let j = i;
@@ -195,7 +197,43 @@ function syl(text: string): string {
       }
       return out;
     })
-    .join(' ');
+    .join('');
+}
+
+/** A card name's box: inner width and the two fonts it may use (measured once per layout). */
+type NameFit = { room: number; sm: string; xs: string };
+/** Lines `text` takes in `room` px with breaks only at spaces and after hyphens (∞ if a part
+ *  alone is wider than the room). */
+function lineCount(text: string, font: string, room: number): number {
+  const toks = text.match(/[^\s-]+-?|-|\s+/g) ?? [text];
+  const gap = textW(' ', font);
+  let n = 1;
+  let line = 0;
+  let space = false;
+  for (const tk of toks) {
+    if (/^\s+$/.test(tk)) {
+      space = true;
+      continue;
+    }
+    const w = textW(tk, font);
+    if (w > room) return Infinity;
+    if (line === 0) line = w;
+    else if (line + (space ? gap : 0) + w <= room) line += (space ? gap : 0) + w;
+    else {
+      n++;
+      line = w;
+    }
+    space = false;
+  }
+  return n;
+}
+/** A card name that fits two lines: whole words at the label size, else whole words one step
+ *  smaller, else syllable breaks at the smaller size. → [text, small]. */
+function fitName(name: string, fit: NameFit | null): [string, boolean] {
+  if (!fit || fit.room <= 0) return [syl(name), false];
+  if (lineCount(name, fit.sm, fit.room) <= 2) return [name, false];
+  if (lineCount(name, fit.xs, fit.room) <= 2) return [name, true];
+  return [syl(name), true];
 }
 
 /** Memoised: the camp re-renders every second; `say`, `onSel`, `onTab` from `PetsTab` are stable. */
@@ -797,6 +835,33 @@ export const Nursery = memo(function Nursery({
     </section>
   );
 
+  // Fit the grid: the name box (→ `fitName` on every card) and the rarity words — one size for
+  // all cards, then a smaller one, then the dot alone (the word stays in the aria-label).
+  const [nameFit, setNameFit] = useState<NameFit | null>(null);
+  const gridKey = list.map((d) => d.id).join();
+  useLayoutEffect(() => {
+    const grid = root.current?.querySelector<HTMLElement>('.nrs-grid');
+    if (!grid) return;
+    const fit = () => {
+      const nm = grid.querySelector<HTMLElement>('.nrs-card__nm');
+      if (nm) {
+        const cs = getComputedStyle(nm);
+        const f = (v: string) => `${cs.fontWeight} ${fsOf(nm, v)}px ${cs.fontFamily}`;
+        const next = { room: nm.clientWidth, sm: f('--pd-fs-sm'), xs: f('--pd-fs-xs') };
+        setNameFit((o) => (o && o.room === next.room && o.sm === next.sm && o.xs === next.xs ? o : next));
+      }
+      const rars = [...grid.querySelectorAll<HTMLElement>('.nrs-card__rar')];
+      const over = () => rars.some((r) => r.scrollWidth > r.clientWidth + 0.5);
+      grid.classList.remove('is-rar-sm', 'is-rar-dot');
+      if (over()) grid.classList.add('is-rar-sm');
+      if (over()) grid.classList.add('is-rar-dot');
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(grid);
+    return () => ro.disconnect();
+  }, [tab, layout, fonts, gridKey, t]);
+
   // ---- Collection ------------------------------------------------------------------------------
   const cardArt = thumbPx(one ? 28 * u : 24 * u, dpr);
   const collEl = (
@@ -808,9 +873,14 @@ export const Nursery = memo(function Nursery({
             <span className="px-num">{t('eggs.someOf', { a: owned, b: PETS.length })}</span>
           </h2>
           {zoo > 0 && (
-            <span className="nrs-zoo" data-tip={t('nursery.zooL')} aria-label={`${t('nursery.zooL')}: ${t('nursery.zoo', { v: pctV(zoo) })}`}>
+            <span
+              className="nrs-zoo"
+              role="img"
+              data-tip={`${t('nursery.zooL')}: ${t('nursery.zoo', { v: pctV(zoo) })}`}
+              aria-label={`${t('nursery.zooL')}: ${t('nursery.zoo', { v: pctV(zoo) })}`}
+            >
               <StatIcon stat="sell" />
-              <b className="px-num">{t('nursery.zoo', { v: pctV(zoo) })}</b>
+              <b className="px-num">{t('nursery.bonus', { v: pctV(zoo) })}</b>
             </span>
           )}
         </div>
@@ -866,6 +936,7 @@ export const Nursery = memo(function Nursery({
             selected={sel === d.id}
             along={p.squad.includes(d.id)}
             size={cardArt}
+            fit={nameFit}
             onPick={onCard}
           />
         ))}
@@ -960,6 +1031,7 @@ const NurCard = memo(function NurCard({
   selected,
   along,
   size,
+  fit,
   onPick,
 }: {
   id: PetId;
@@ -967,11 +1039,13 @@ const NurCard = memo(function NurCard({
   selected: boolean;
   along: boolean;
   size: number;
+  fit: NameFit | null;
   onPick: (id: PetId) => void;
 }) {
   const t = useT();
   const d = petOf(id);
   const nm = rec ? t(`pets.${id}.name`) : t('nursery.unknown');
+  const [nmText, nmSmall] = useMemo(() => fitName(nm, fit), [nm, fit]);
   const rar = t(`nursery.rarity.r${d.rarity}` as 'nursery.rarity.r0');
   return (
     <PxdButton
@@ -992,10 +1066,10 @@ const NurCard = memo(function NurCard({
         <PetArt id={id} size={size} v={petLook(rec)} ghost={!rec} still />
         {!rec && <Icon name="lock" className="nrs-card__lock" />}
       </span>
-      <b className="nrs-card__nm">{syl(nm)}</b>
+      <b className={`nrs-card__nm${nmSmall ? ' is-small' : ''}`}>{nmText}</b>
       <span className="nrs-card__rar">
         <i className="nrs-dot" aria-hidden="true" />
-        {rar}
+        <span>{rar}</span>
       </span>
       <span className="nrs-card__lv px-num">{rec ? t('common.level', { n: petLevelOf(rec.xp).level }) : ' '}</span>
       {along && (

@@ -67,4 +67,5 @@ export const eggs: Translation<typeof ru> = {
   avail: 'En vente',
   more: 'encore {v}',
   free: 'Gratuit',
+  noRoom: 'Plus de place',
 };

@@ -520,6 +520,10 @@
   overflow: hidden;
   text-align: center;
 }
+.nrs-stat.pxd-btn {
+  /* the kit focus ring is the button's ::after outside its box: a clipping tile would hide it */
+  overflow: visible;
+}
 .nrs-stat__n {
   display: block;
   max-width: 100%;
@@ -682,7 +686,7 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: max-content;
   align-content: start;
-  gap: calc(3 * var(--u));
+  gap: calc(2 * var(--u));
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
@@ -722,7 +726,9 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   width: 100%;
-  height: 2.3em;
+  /* two lines of the label size, whichever size the name took (`fitName`) */
+  height: calc(var(--pd-fs-sm) * 2.3);
+  flex: none;
   overflow: hidden;
   font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
   color: var(--pd-text);
@@ -730,18 +736,27 @@
   hyphens: manual;
   overflow-wrap: normal;
 }
+.nrs-card__nm.is-small {
+  font-size: var(--pd-fs-xs);
+}
 .nrs-card.is-missing .nrs-card__nm {
   color: var(--pd-muted);
 }
 .nrs-card__rar {
   display: inline-flex;
   align-items: center;
-  gap: calc(2 * var(--u));
+  gap: var(--u);
   max-width: 100%;
   font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
   color: var(--pd-muted);
   white-space: nowrap;
   overflow: hidden;
+}
+.nrs-grid.is-rar-sm .nrs-card__rar {
+  font-size: var(--pd-fs-xs);
+}
+.nrs-grid.is-rar-dot .nrs-card__rar > span {
+  display: none;
 }
 .nrs-card__lv {
   position: absolute;
@@ -891,15 +906,15 @@
   min-width: 0;
   min-height: 0;
   padding: calc(2 * var(--u));
-  overflow: hidden;
   text-align: center;
 }
 .nrs-nest__art {
   display: grid;
-  place-items: end center;
+  place-items: center;
   flex: 1 1 0;
   min-height: 0;
   width: 100%;
+  overflow: hidden;
   color: var(--pd-muted);
 }
 .nrs-nest__art .px-i {
@@ -908,6 +923,8 @@
   align-self: center;
 }
 .nrs-nest__nm {
+  max-width: 100%;
+  overflow: hidden;
   font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
   white-space: nowrap;
 }
@@ -916,9 +933,15 @@
   color: var(--pd-muted);
 }
 .nrs-nest__left {
+  max-width: 100%;
+  overflow: hidden;
   font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
   color: var(--pd-text);
   white-space: nowrap;
+}
+/* a narrow nest takes its words one size smaller (measured in PetsTab) */
+.nrs-nests__row.is-tight :is(.nrs-nest__nm, .nrs-nest__left) {
+  font-size: var(--pd-fs-xs);
 }
 .nrs-nest__go {
   font: 800 var(--pd-fs) / 1.15 var(--px-font);
@@ -928,7 +951,8 @@
   display: flex;
   align-items: center;
   gap: calc(3 * var(--u));
-  height: calc(17 * var(--u));
+  /* the chip row (17u) + the ring padding */
+  height: calc(23 * var(--u));
   flex: none;
   min-width: 0;
   overflow: hidden;
@@ -1061,6 +1085,19 @@
 .nrs-buy__st.is-ok {
   color: var(--pd-ok);
 }
+/* a narrow tile: the status takes the whole width under the art, words one size smaller */
+.nrs-shop.is-tight .nrs-buy {
+  column-gap: calc(2 * var(--u));
+  padding: 0 var(--u) 0 calc(2 * var(--u));
+  grid-template:
+    'art nm' auto
+    'art price' auto
+    'st st' auto
+    / auto minmax(0, 1fr);
+}
+.nrs-shop.is-tight .nrs-buy :is(.nrs-buy__nm, .nrs-buy__price, .nrs-buy__st) {
+  font-size: var(--pd-fs-xs);
+}
 .nrs-buy[aria-disabled] .nrs-buy__price {
   color: var(--pd-text);
 }
@@ -1152,6 +1189,32 @@
   z-index: -1;
 }
 
+/* ---- Phone portrait eggs: square-ish nests, the shop takes the height that is left ---------- */
+.nrs--one .nrs-eggs__home,
+.nrs--one .nrs-nests {
+  flex: 0 1 auto;
+}
+.nrs--one .nrs-nests {
+  container-type: inline-size;
+}
+.nrs--one .nrs-nests__row {
+  flex: 0 1 auto;
+  height: calc((100cqi - 4 * var(--u)) / 2 * 1.1);
+}
+.nrs--one .nrs-shop {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.nrs--one .nrs-shop__grid {
+  flex: 1 1 auto;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  max-height: calc(115 * var(--u));
+}
+.nrs--one .nrs-buy {
+  height: auto;
+  min-height: calc(34 * var(--u));
+}
+
 /* ---- Phone portrait: tall phones give the places more height ------------------------------ */
 @media (min-height: 900px) {
   .nrs--one .nrs-slots {
@@ -1185,7 +1248,7 @@
     width: calc(24 * var(--u));
   }
   .nrs--one .nrs-buy {
-    height: calc(30 * var(--u));
+    min-height: calc(30 * var(--u));
   }
   .nrs--one .nrs-stage {
     min-height: calc(50 * var(--u));

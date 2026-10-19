@@ -70,4 +70,5 @@ export const eggs = {
   avail: 'Можно купить',
   more: 'ещё {v}',
   free: 'Бесплатно',
+  noRoom: 'Нет места',
 } as const;
