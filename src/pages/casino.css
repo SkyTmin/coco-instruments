@@ -704,6 +704,82 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   line-height: 1.05;
 }
 
+/* ---- Short phones (320 × 568, 360 × 640, a Telegram webview under its own bar) ------------- */
+/* At 568 px the strip (144) and the deck (178) left the machine 84 px: a 143 × 118 cabinet,
+   Cascade cells 22 × 27. The strip becomes level + one row of pictured facts (their captions go
+   to the tooltip, as when lying — the 777 / ▶ / ★ say what they are), the recent-spins row goes
+   (the status line still reports every spin), the deck loses its padding and the 48-px thumb
+   rows step down to 44 (the shell's hit size). */
+@media (max-height: 680px) {
+  .cas[data-lay='tall'] {
+    --cg: calc(2 * var(--u));
+  }
+  .cas[data-lay='tall'] > .cas-info {
+    padding: calc(3 * var(--u)) calc(5 * var(--u));
+    row-gap: var(--u);
+    grid-template-areas:
+      'lvl lvl lvl'
+      'jp sp best';
+  }
+  .cas[data-lay='tall'] > .cas-info > .cas-hist,
+  .cas[data-lay='tall'] > .cas-info .cas-stat__k {
+    display: none;
+  }
+  .cas[data-lay='tall'] > .cas-info .cas-stat {
+    grid-template-areas: 'ico v';
+  }
+  /* Cascade: the buy plate stands beside both lines instead of making the second one 46 px. */
+  .cas--scatter[data-lay='tall'] > .cas-info {
+    /* Half the strip at most: fr «Acheter le bonus» takes two lines instead of squeezing the
+       best spin to 27 px. */
+    grid-template-columns: minmax(0, 1fr) auto fit-content(50%);
+    grid-template-areas:
+      'lvl lvl buy'
+      'best sp buy';
+  }
+  .cas[data-lay='tall'] > .cas-deck {
+    padding: calc(4 * var(--u)) calc(6 * var(--u));
+  }
+  /* `html`: the 48-px thumb-row rules come later in the file at the same weight. */
+  html .cas[data-lay='tall'] .cas-bet__step.px-btn,
+  html .cas[data-lay='tall'] .cas-ante.px-btn {
+    min-width: var(--gx-hit);
+    min-height: var(--gx-hit);
+  }
+  html .cas[data-lay='tall'] .cas-bet__v {
+    height: var(--gx-hit);
+  }
+  html .cas[data-lay='tall'] .cas-mini,
+  html .cas[data-lay='tall'] .cas-spin {
+    min-height: var(--gx-hit);
+  }
+}
+/* 320-px phones: the balance box one more step smaller and the deck's side padding thinner, so
+   «Баланс» keeps its whole word (it was «Бал…»). */
+@media (max-width: 340px) {
+  .cas[data-lay='tall'] > .cas-deck {
+    padding-left: calc(5 * var(--u));
+    padding-right: calc(5 * var(--u));
+  }
+  .cas[data-lay='tall'] .cas-bal__v {
+    font-size: var(--px-fs);
+  }
+}
+/* Cascade under 380 px: − [bet] + and Ante left the caption 42 px at 360 and 14 px at 320
+   («Став…»). The stepper with its coin says «stake» (its value opens the bet sheet and carries
+   the word as its label), so the caption goes rather than being cut; Ante keeps the right end. */
+@media (max-width: 380px) {
+  .cas--scatter[data-lay='tall'] .cas-bet > .cas-cap {
+    display: none;
+  }
+  .cas--scatter[data-lay='tall'] .cas-bet__row {
+    flex: 1 1 auto;
+  }
+  .cas--scatter[data-lay='tall'] .cas-bet__row > .cas-ante {
+    margin-left: auto;
+  }
+}
+
 /* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
 .cas[data-lay='wide'] {
   grid-template-columns: minmax(0, var(--cas-l)) minmax(0, 1fr) minmax(0, var(--cas-r));
@@ -1412,6 +1488,26 @@ html[data-ff='phone-landscape'] .hall-card__facts .cas-stat__k {
 }
 html[data-ff='phone-landscape'] .hall-card__t {
   font-size: var(--px-fs-head);
+}
+/* Short phones (320 × 568): the facts stood under the cards' edge and the note took 64 px. As
+   when lying: the note gives its lines to the cards, the facts stand in one line with their
+   pictures, the captions go to the tooltip. */
+@media (max-height: 680px) {
+  html[data-ff='phone-portrait'] .hall {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  html[data-ff='phone-portrait'] .hall-note {
+    display: none;
+  }
+  html[data-ff='phone-portrait'] .hall-card {
+    padding: calc(5 * var(--u)) calc(6 * var(--u));
+  }
+  html[data-ff='phone-portrait'] .hall .hall-card__facts .cas-stat {
+    grid-template-areas: 'ico v';
+  }
+  html[data-ff='phone-portrait'] .hall-card__facts .cas-stat__k {
+    display: none;
+  }
 }
 /* Tablet / desktop: the cards are big — so is everything on them. */
 html[data-ff='tablet'] .hall-card__t,
