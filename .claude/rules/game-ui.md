@@ -260,6 +260,48 @@ deleted. New strings are in the area `ctabs`. Prices, effects and confirmations 
     scroll), `milesB.mjs`, `milerow.mjs`, `claim.mjs`, `findsB.mjs`, `findnames.mjs` (every find
     in 7 languages), `packshot.mjs`, `body.mjs`, `switch.mjs`, `perf.mjs`. Formats: p320, s375,
     p360, pp, p430, pl, tp, tl, d1 (`lib.mjs` SIZES).
+- **Round 3 (T3, 19.10.2026, critic14 `critic-camp-tabs2.md`)** — supersedes round 2 where they
+  differ:
+  - **Measure-and-drop everywhere** (layout effect + ResizeObserver toggles `.is-tight`; the
+    whole sentence stays the tip / aria-label). Runes inspect: «+4,6% чары» →
+    the number alone (`.ctab-insp__gw`), the full `runeText` effect (2 lines) → the short
+    `camp.bonus.*`; fuse line: `fuseGo` word, then the result's name (`.is-bare`; measured by
+    a Range on the text — `scrollWidth` rounds a 1-px overrun away). Skills: «· за уровень»
+    (`.ctab-insp__per`). Achievement chips: their words when a chip box would wrap past its
+    lines (1; a ready row on tall / wide 2). Sweep 8 formats × 7 languages: no cut, 0 px drift.
+  - **No text on stone:** empty sockets carry no caption (their name is the aria-label); a
+    locked one with no rune keeps the cream plate (`.is-lock` only when the caption has text).
+  - **Short-phone skills strip** = pages of whole nodes (`paginate()` packs `.ctab-node`
+    widths greedily into `clientWidth − 2 × (arrow + gap)`) with real `Button size="sm"
+    icon="left|right"` arrows (`ctabs.perks.prev/next`, `tabIndex -1`, hidden at the ends,
+    hit area ±(7 px + 1u) via `::before` — the kit focus ring owns `::after`), `scroll-snap`
+    mandatory + `snap-stop: always`; a tap scrolls one page (smooth unless reduced motion).
+    320: 3 pages (de 4), no half node.
+  - **Spare height goes to the picture** (`useShowBox(on)` measures the art box): skills art
+    `--tile` 36–72u (pp 138 px, p430 144, tp 111, tl 144, d1 216; 72 on pl, 48 on a short phone
+    with the level on its corner as on the node), finds art `fitDown(16, min(h, w, 192))` (pp
+    187, p430 192, tp 112). Panels with `.is-show` stack picture / name / text / acts; blank
+    under the panel content: finds pp 210 → 12 px, p430 318 → 12, tp 176 → 21; skills pp 165 →
+    18, p430 273 → 18, tp 149 → 27.
+  - **Achievements** use the compact row on every format; `land` / `tall` / `wide` lay rows in
+    two columns; a ready row on tall / wide puts the claim beside two chip lines (bar hidden).
+    Rows (7 languages): p320 81–104 px (3 visible), pp 68–94 (6), pl 81–94 (4), tp 94–99 (8; fr /
+    tr / it one grid row 125 — a 2-line title beside), tl / d1 87–99 (10; were 103–256, 4); a
+    claim moves no row.
+  - **Amulet bonus = what the runes really add**: `bonusOf(p) − bonusOf(no runes)` per kind,
+    sell as the ratio of `modsOf().sell` with / without runes (the +100% sell cap); a chip below
+    its rune sum gets a red `excl` and the reason (`ctabs.runes.capTip` / `capSellTip`). Phone
+    landscape titles the box `ctabs.runes.gives` («Оберег даёт»).
+  - Minors: Blat step `ctabs.perks.blatStep` «Старт: ранг A → B» (`min(LAST_RANK − 1, lv)`, as
+    store.ts), rune in the panel 30u, fuse plan in pictures (two runes → result, tip = the
+    sentence; short phone keeps words), ×1/×5/×10 gap 4u, purse counts up (400 ms, 12 steps,
+    `min-width` of the final value; reduced motion jumps), shatter token 24 px.
+  - Checks (`scratchpad/ui6T`): `sweep.mjs fmts langs [tabs]`, `strip2.mjs`, `milesw2.mjs`,
+    `capshot.mjs` (runes over the sell cap), `purse.mjs`, `cutprobe.mjs fmt lang text`,
+    `shots.mjs` + `sheet.py`, `blank.mjs`, `press.mjs` (pp at 4× CPU: first changed frame 20–31
+    ms on every control). `allfmt.mjs` flags `TAB-OVF 4` on p320 runes and `OFF-X 3` on
+    the short-phone skills: the first is the bottom button's invisible focus ring (`inset −3u`)
+    past the tab, the second the strip's other pages — neither scrolls or shows.
 - **Pitfalls:**
   - The kit `Grid` prop `slot` clashes with the HTML `slot` attribute type: pass
     `style={{ '--slot': … }}` instead.
