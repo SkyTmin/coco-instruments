@@ -145,7 +145,7 @@ export const books: Translation<typeof ru> = {
   tabMage: 'Mago',
   purpose: 'Incantesimi per il tuo piccone',
   emptyTitle: 'Qui ci saranno i tuoi libri',
-  emptyText: 'Comprali dall’Incantatore o trovali in forzieri e pacchi',
+  emptyText: 'Comprali dall’Incantatore o nei forzieri',
   sources: 'Forzieri · pacchi · blocchi del piano',
   unknown: 'L’incantesimo resta segreto fino all’acquisto',
   unknownShort: 'Incanto: ?',

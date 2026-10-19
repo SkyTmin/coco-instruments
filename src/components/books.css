@@ -81,6 +81,9 @@
 .bks--one .bks-top.is-subrow .bks-ttl p {
   white-space: normal;
 }
+.bks-top.is-nosub .bks-ttl p {
+  display: none;
+}
 .bks--one .bks-back {
   grid-area: back;
 }
@@ -527,7 +530,9 @@
   justify-self: stretch;
   font: 400 var(--pd-fs) / 1.05 var(--px-head);
   white-space: nowrap;
-  overflow: hidden;
+  /* sideways only: accents (É) and descenders stand out of the tight line, not cut */
+  overflow-x: clip;
+  overflow-y: visible;
 }
 .bks-offer__art {
   grid-area: art;
@@ -623,8 +628,13 @@
   place-items: center;
   height: 100%;
   aspect-ratio: 1;
-  max-width: 50cqw;
+  /* the text column keeps «Эффективность» whole at the small step on a 320 phone */
+  max-width: 44cqw;
   min-width: 0;
+}
+/* no book yet: the sentence (where books come from) wants the room more than the place-holder */
+.bks-card.is-empty .bks-card__art {
+  max-width: 34cqw;
 }
 .bks-card__art > * {
   grid-area: 1 / 1;

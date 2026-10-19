@@ -1438,10 +1438,10 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     if (!el) return;
     const top = el.querySelector<HTMLElement>('.bks-top');
     const sub = top?.querySelector<HTMLElement>('.bks-ttl p');
+    const subCut = () => !!sub && sub.scrollWidth > sub.clientWidth + 0.5;
     if (top && sub) {
-      top.classList.remove('is-subrow');
-      if (layout === 'one')
-        top.classList.toggle('is-subrow', sub.scrollWidth > sub.clientWidth + 0.5);
+      top.classList.remove('is-subrow', 'is-nosub');
+      if (layout === 'one') top.classList.toggle('is-subrow', subCut());
     }
     const tabsEl = el.querySelector<HTMLElement>('.bks-tabs');
     if (tabsEl) {
@@ -1452,11 +1452,18 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         const need = kids.reduce((a, k) => a + k.getBoundingClientRect().width, 0);
         return need + g * (kids.length - 1) > tabsEl.clientWidth + 0.5;
       };
+      // in the header (landscape, desktop) the purpose line gets what the tabs leave: they drop
+      // their pictures when that makes it fit; else it goes (the title says what this is)
+      const sideCut = () => layout === 'three' && subCut();
       if (over()) {
         tabsEl.classList.add('is-tight');
         if (over()) tabsEl.classList.add('is-tight2');
         if (over()) tabsEl.classList.add('is-tight3');
+      } else if (sideCut()) {
+        tabsEl.classList.add('is-tight');
+        if (sideCut()) tabsEl.classList.remove('is-tight');
       }
+      if (top && sideCut()) top.classList.add('is-nosub');
     }
     // the shelf shows whole rows of books: on phones the card takes what they leave
     const sh = el.querySelector<HTMLElement>('.bks-sh');

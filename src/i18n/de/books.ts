@@ -140,7 +140,7 @@ export const books: Translation<typeof ru> = {
   tabMage: 'Zauberer',
   purpose: 'Zauber für deine Spitzhacke',
   emptyTitle: 'Hier landen deine Bücher',
-  emptyText: 'Kauf sie beim Verzauberer oder finde sie in Truhen und Paketen',
+  emptyText: 'Beim Verzauberer kaufen oder in Truhen finden',
   sources: 'Truhen · Pakete · Ebenenblöcke',
   unknown: 'Der Zauber darin bleibt bis zum Kauf geheim',
   unknownShort: 'Zauber: ?',

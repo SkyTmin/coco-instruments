@@ -140,7 +140,7 @@ export const books: Translation<typeof ru> = {
   tabMage: 'Enchanter',
   purpose: 'Enchants for your pickaxe',
   emptyTitle: 'Your books will live here',
-  emptyText: 'Buy them from the Enchanter or find them in chests and parcels',
+  emptyText: 'Buy from the Enchanter or find in chests',
   sources: 'Chests · parcels · floor blocks',
   unknown: 'The enchant inside is a secret until you buy',
   unknownShort: 'Enchant: ?',

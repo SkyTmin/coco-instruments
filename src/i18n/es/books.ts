@@ -145,7 +145,7 @@ export const books: Translation<typeof ru> = {
   tabMage: 'Encantador',
   purpose: 'Encantamientos para tu pico',
   emptyTitle: 'Aquí estarán tus libros',
-  emptyText: 'Cómpralos al Encantador o encuéntralos en cofres y paquetes',
+  emptyText: 'Cómpralos al Encantador o búscalos en cofres',
   sources: 'Cofres · paquetes · bloques del piso',
   unknown: 'El encantamiento es secreto hasta la compra',
   unknownShort: 'Encanto: ?',
