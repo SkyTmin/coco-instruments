@@ -1136,6 +1136,20 @@ const ICONS: Record<string, string[]> = {
     '#....#...',
     '.........',
   ],
+  // wave 4 — M4: the streak flame drawn 7 × 7 (top of the 9 × 9 mask, cols 1–7; the strip shows
+  // it in a 9u × 7u box with `mask-size: 9u` — 14 px tall, so the 17-px name and the flame row
+  // both sit inside the 20u strip's thin frame).
+  'm-flame7': [
+    '...#.....',
+    '...##....',
+    '..####...',
+    '.###.##..',
+    '.##...##.',
+    '..##.##..',
+    '...###...',
+    '.........',
+    '.........',
+  ],
 };
 
 function icon(rows: string[]): Pix {

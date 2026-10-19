@@ -244,6 +244,14 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 html[data-ff^='phone'] .mn-side--l:has(.mn-quest) .mn-side__h {
   display: none;
 }
+/* …и ячейки 22u (44 px): полоса серии выросла на 3u (темп внутри рамки) — ряд расходников
+   на 844×390 выходил за низ экрана на 1 px. */
+html[data-ff^='phone'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items:not([data-n='6']) {
+  --slot: calc(22 * var(--u));
+}
+html[data-ff^='phone'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items__row {
+  height: calc(22 * var(--u));
+}
 /* Планшет лёжа с заданием: заголовка тоже нет, расходники — одним рядом (tl de: рюкзак
    с «Продать» уходил под нижний край колонки на 88 px). */
 html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-side__h {
@@ -327,10 +335,12 @@ html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-item .px-slot__n
   box-sizing: border-box;
   height: calc(20 * var(--u));
   padding: 0 calc(3 * var(--u));
+  /* Тонкая рамка набора (2u нарисовано со всех сторон), а не ячейка slot-r0 (8/6/6/8 px):
+     буквы и огонёк лежали на её внутренней линии (критик r3, R60). */
   border: var(--u) solid transparent;
-  border-image-source: var(--pxk-slot-r0);
-  border-image-slice: var(--pxk-slot-r0-s);
-  border-image-width: var(--pxk-slot-r0-w);
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
   image-rendering: pixelated;
   line-height: 1.1;
   color: var(--px-text);
@@ -351,6 +361,32 @@ html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-item .px-slot__n
 html[data-ff^='phone'] .mn-frame > .mn-strip {
   --sw: max(calc(100% - 20 * var(--u)), calc(100vw - 8 * var(--u)));
 }
+/* Внутри рамки полосы (20u − 2 · 2u = 32 px) — две строки по 7u: название (кегль 17 px,
+   буквы целиком в 7u, выносные — на 1 px выше) и огонёк 7 × 7 с полосой и «+N%»; 14u по
+   центру — по 1u до рамки. Огонёк — `m-flame7` (верх маски 9 × 9). То же у кирки и темпа. */
+.mn-frame > .mn-strip .mn-strip__streak {
+  display: grid;
+  grid-template-rows: calc(7 * var(--u)) calc(7 * var(--u));
+  align-content: center;
+  gap: 0;
+}
+.mn-frame > .mn-strip .mn-strip__pick {
+  gap: 0;
+}
+.mn-frame > .mn-strip .mn-strip__name {
+  line-height: 1;
+}
+.mn-strip__barrow > .pxi-m-flame7 {
+  --i-h: 7;
+  -webkit-mask-size: calc(9 * var(--u)) calc(9 * var(--u));
+  mask-size: calc(9 * var(--u)) calc(9 * var(--u));
+  -webkit-mask-position: 0 0;
+  mask-position: 0 0;
+}
+/* Темп: две строки по 7u (монета 8u выходит из своей строки на 1 px вверх и вниз). */
+.mn-frame > .mn-strip .mn-strip__live > span:not(.mn-strip__row) {
+  height: calc(7 * var(--u));
+}
 .mn-panel > .mn-strip {
   height: calc(24 * var(--u));
   grid-template-columns: calc(30 * var(--u)) minmax(0, 1fr);
@@ -359,6 +395,26 @@ html[data-ff^='phone'] .mn-frame > .mn-strip {
 .mn-panel > .mn-strip .mn-strip__pace {
   grid-column: 1 / -1;
   justify-items: start;
+}
+/* Телефон лёжа: три строки по 7u — название, огонёк с полосой, темп (8u — под монету);
+   полоса 27u, всё внутри тонкой рамки (2u) и по 1u до неё. При 24u темп («5 подряд»,
+   «999 бл · …») уходил под полосу на 19 px — на заголовок «Расходники». */
+html[data-ff^='phone'] .mn-panel > .mn-strip {
+  height: calc(27 * var(--u));
+  grid-template-rows: calc(14 * var(--u)) calc(8 * var(--u));
+  align-content: center;
+  row-gap: 0;
+}
+html[data-ff^='phone'] .mn-panel > .mn-strip .mn-strip__streak {
+  display: grid;
+  grid-template-rows: calc(7 * var(--u)) calc(7 * var(--u));
+  gap: 0;
+}
+html[data-ff^='phone'] .mn-panel > .mn-strip .mn-strip__pick {
+  gap: 0;
+}
+html[data-ff^='phone'] .mn-panel > .mn-strip .mn-strip__name {
+  line-height: 1;
 }
 .mn-panel > .mn-strip .mn-strip__ghost {
   display: none;
@@ -890,6 +946,12 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
 }
 .mn-floor::before {
   content: none;
+}
+/* Широкий экран: фишка этажа 19u в строке «назад · этаж · ⚙» — зона нажатия вверх-вниз на
+   3u и вправо на 4u (там пусто до ⚙), влево — нет: там зона «назад» (pl: 38×38 → 44×46). */
+.mn--wide .mn-floor::before {
+  content: '';
+  inset: calc(-3 * var(--u)) calc(-4 * var(--u)) calc(-3 * var(--u)) 0;
 }
 .mn-stat > :not(.mn-stat__n) {
   flex: none;

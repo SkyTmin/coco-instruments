@@ -911,6 +911,13 @@
   --i-h: 9;
 }
 
+.pxi-m-flame7 {
+  -webkit-mask-image: url('/ui/kit/i-m-flame7.png?v=4f527e95');
+  mask-image: url('/ui/kit/i-m-flame7.png?v=4f527e95');
+  --i-w: 9;
+  --i-h: 9;
+}
+
 .pxk-tab-side-on {
   border-image-source: var(--pxk-tab-side-on);
   border-image-slice: var(--pxk-tab-side-on-s);
