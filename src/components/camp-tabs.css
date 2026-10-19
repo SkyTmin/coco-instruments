@@ -1103,24 +1103,77 @@
 .ctab-mile.is-ready .ctab-mile__art .gx-icon {
   color: #804400;
 }
+/* Taken: only the art and the frame go dim (a sunken frame, a faded art) — the title, the gifts and
+   «Получено» stay readable. */
 .ctab-mile.is-done {
-  opacity: 0.62;
+  border-image-source: var(--pxk-frame-well);
+  border-image-slice: var(--pxk-frame-well-s);
+  border-image-width: var(--pxk-frame-well-w);
 }
-.ctab--one .ctab-mile,
-.ctab--tall .ctab-mile {
+.ctab-mile.is-done .ctab-mile__art {
+  opacity: 0.5;
+  filter: grayscale(0.7);
+}
+/* 33 rows: the ones off screen skip layout and paint (the tab opens in one commit, R55). */
+.ctab-mile {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(40 * var(--u));
+}
+/* Phone / tablet portrait: «icon | title + gifts + bar | claim» (the condition is the icon's tip),
+   the claim beside the title only so the gifts and the bar keep the full width: ≤ 96 px a row,
+   6+ rows on a 390×844 phone (it was 3 rows, 117–184 px, with a full-width button). */
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile {
   grid-template:
-    'art info' auto
-    'bar bar' auto
-    'end end' auto
-    / auto minmax(0, 1fr);
+    'art name end' auto
+    'art gifts gifts' auto
+    'art bar bar' auto
+    / auto minmax(0, 1fr) auto;
+  padding: var(--u) calc(3 * var(--u));
+  gap: var(--u) calc(3 * var(--u));
 }
-.ctab--one .ctab-mile__end:empty,
-.ctab--tall .ctab-mile__end:empty {
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__info {
+  display: contents;
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__name {
+  grid-area: name;
+  min-width: 0;
+}
+/* the small claim button and its «Получено» swap: the check keeps the button's height */
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__taken {
+  min-height: calc(15 * var(--u));
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-gifts {
+  grid-area: gifts;
+}
+.ctab-miles.ctab--short .ctab-head__hint {
   display: none;
 }
-.ctab--one .ctab-mile__end > *,
-.ctab--tall .ctab-mile__end > * {
+/* Short phone: beside «Abholen» the title had 93 px («Zehntause…» ran under it) — a ready row puts
+   the claim in the full bar's place (the bar says nothing new there), the title keeps the width. */
+.ctab-miles.ctab--short .ctab-mile:has(.ctab-mile__swap) {
+  grid-template:
+    'art name' auto
+    'art gifts' auto
+    'art end' auto
+    / auto minmax(0, 1fr);
+}
+.ctab-miles.ctab--short .ctab-mile:has(.ctab-mile__swap) .ctab-mile__bar {
+  display: none;
+}
+.ctab-miles.ctab--short .ctab-mile__swap,
+.ctab-miles.ctab--short .ctab-mile__swap > .px-btn {
   width: 100%;
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art {
+  --slot: calc(22 * var(--u));
+  align-self: center;
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__art .gx-icon {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+}
+.ctab:is(.ctab--one, .ctab--tall) .ctab-mile__end {
+  align-self: center;
 }
 
 /* ==== Навыки =================================================================================== */

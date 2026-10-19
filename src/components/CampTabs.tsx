@@ -7,7 +7,15 @@
 // `wide` tablet landscape / desktop (two columns), `tall` tablet portrait. Nothing jumps:
 // inspect panels and rows have fixed heights, selection only moves a ring.
 
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  memo,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { GxIcon } from '@/components/gx';
 import type { GxIconName } from '@/components/gx';
@@ -782,49 +790,115 @@ const MILE_ICON: Record<string, GxIconName> = {
   parcels: 'gift',
 };
 
-function MileGifts({ m }: { m: (typeof MILES)[number] }) {
+type Gift = { k: string; tip: string; node: ReactNode };
+
+/** At most three reward chips, the rest folded into «+N» (its tip lists them). `compact` (phone /
+ * tablet portrait): one line of chips — «+N» takes the third place (the second on a short phone);
+ * the parcel and the rune chips keep the icon and the tier only, the full words go to the tip. */
+function MileGifts({
+  m,
+  compact,
+  short,
+}: {
+  m: (typeof MILES)[number];
+  compact: boolean;
+  short: boolean;
+}) {
   const r = m.reward;
-  return (
-    <span className="ctab-gifts">
-      {!!r.tokens && (
-        <span className="ctab-chip">
+  const all: Gift[] = [];
+  if (r.tokens)
+    all.push({
+      k: 'tokens',
+      tip: t('camp.purseTokens', { n: r.tokens, v: fmtNum(r.tokens) }),
+      node: (
+        <>
           <TokenIcon size={16} />
           <b className="px-num">+{fmtNum(r.tokens)}</b>
-        </span>
-      )}
-      {!!r.keys && (
-        <span className="ctab-chip">
+        </>
+      ),
+    });
+  if (r.keys)
+    all.push({
+      k: 'keys',
+      tip: t('camp.keysN', { n: r.keys }),
+      node: (
+        <>
           <KeyIcon size={16} />
           <b className="px-num">×{r.keys}</b>
-        </span>
-      )}
-      {r.parcel && (
-        <span className="ctab-chip">
+        </>
+      ),
+    });
+  if (r.parcel) {
+    const tip = t('camp.mile.parcel', { tier: nameIn(chestName(r.parcel)) });
+    all.push({
+      k: 'parcel',
+      tip,
+      node: (
+        <>
           <GxIcon name="gift" />
-          {t('camp.mile.parcel', { tier: nameIn(chestName(r.parcel)) })}
-        </span>
-      )}
-      {!!r.rune && (
-        <span className="ctab-chip">
+          {compact ? chestName(r.parcel) : tip}
+        </>
+      ),
+    });
+  }
+  if (r.rune) {
+    const roman = RUNE_ROMAN[r.rune - 1];
+    const tip = t('camp.mile.rune', { tier: roman });
+    all.push({
+      k: 'rune',
+      tip,
+      node: (
+        <>
           <GxIcon name="rune" />
-          {t('camp.mile.rune', { tier: RUNE_ROMAN[r.rune - 1] })}
-        </span>
-      )}
-      {r.socket && (
-        <span className="ctab-chip">
+          {compact ? <b className="px-num">{roman}</b> : tip}
+        </>
+      ),
+    });
+  }
+  if (r.socket)
+    all.push({
+      k: 'socket',
+      tip: t('camp.mile.socket'),
+      node: (
+        <>
           <Icon name="plus" />
-          {t('camp.mile.socket')}
-        </span>
-      )}
-      {r.egg && (
-        <span className="ctab-chip">
+          {compact ? t('ctabs.miles.socket') : t('camp.mile.socket')}
+        </>
+      ),
+    });
+  if (r.egg)
+    all.push({
+      k: 'egg',
+      tip: nameIn(eggName(r.egg)),
+      node: (
+        <>
           <EggArt egg={r.egg} size={16} />
-          {nameIn(eggName(r.egg))}
+          {compact ? t(`nursery.egg.${r.egg}`) : nameIn(eggName(r.egg))}
+        </>
+      ),
+    });
+  const limit = !compact ? 3 : short ? 2 : 3;
+  const keep = !compact ? 3 : 2;
+  const shown = all.length > limit ? all.slice(0, keep) : all;
+  const rest = all.slice(shown.length);
+  return (
+    <span className="ctab-gifts">
+      {shown.map((g) => (
+        <span key={g.k} className="ctab-chip" data-tip={compact ? g.tip : undefined}>
+          {g.node}
+        </span>
+      ))}
+      {rest.length > 0 && (
+        <span className="ctab-chip" data-tip={rest.map((g) => g.tip).join(' · ')}>
+          <b className="px-num">+{rest.length}</b>
         </span>
       )}
     </span>
   );
 }
+
+/** Rows painted on opening: a 430×932 phone shows 7, a tablet / desktop 2 × 4. */
+const MILES_FIRST = 8;
 
 // memo: the camp shell re-renders every second (useNow) — a tab only when its props change (R55).
 export const MilesTab = memo(function MilesTab({
@@ -833,7 +907,9 @@ export const MilesTab = memo(function MilesTab({
   onGain: (from: number, to: number) => void;
 }) {
   const t = useT();
-  const { lay } = useLay();
+  const { lay, short } = useLay();
+  // phone / tablet portrait: one row «icon | title + bar | claim», the condition is the icon's tip
+  const compact = lay === 'one' || lay === 'tall';
   const p = useFinanceStore((s) => s.prison);
   const claim = useFinanceStore((s) => s.prisonMileClaim);
   const [reveal, setReveal] = useState<ParcelOpen | null>(null);
@@ -873,6 +949,14 @@ export const MilesTab = memo(function MilesTab({
   const byId = new Map(rows.map((r) => [r.m.id, r]));
   const order = frozen.current.flatMap((id) => byId.get(id) ?? []);
   const first = order.find((r) => r.ready)?.m.id;
+  // Opening paints the first rows (more than any screen shows; the ready ones are on top), the
+  // rest follow a frame later in a transition: the open took 264 ms at 4× CPU with all 18 (R55).
+  const [allRows, setAllRows] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => startTransition(() => setAllRows(true)));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const shownRows = allRows ? order : order.slice(0, MILES_FIRST);
   const done = rows.filter((r) => r.done).length;
   // X / pad Y: take the top ready one.
   useAction(
@@ -884,7 +968,7 @@ export const MilesTab = memo(function MilesTab({
     { scope: root },
   );
   return (
-    <div ref={root} className={`px ctab ctab-miles ctab--${lay}`}>
+    <div ref={root} className={`px ctab ctab-miles ctab--${lay}${short ? ' ctab--short' : ''}`}>
       <Head
         title={t('camp.tab.miles')}
         hint={t('ctabs.miles.hint')}
@@ -903,7 +987,7 @@ export const MilesTab = memo(function MilesTab({
       />
       <div className="ctab-scroll">
         <div className="ctab-miles__list">
-          {order.map(({ m, done: isDone, ready }) => {
+          {shownRows.map(({ m, done: isDone, ready }) => {
             const [v, goal] = m.progress(p);
             return (
               <div
@@ -912,6 +996,7 @@ export const MilesTab = memo(function MilesTab({
               >
                 <span
                   className={`px-slot px-slot--r${ready ? 4 : 0} ctab-mile__art`}
+                  data-tip={compact ? mileText(m.id) : undefined}
                   aria-hidden="true"
                 >
                   <span className="px-slot__art">
@@ -920,8 +1005,8 @@ export const MilesTab = memo(function MilesTab({
                 </span>
                 <span className="ctab-mile__info">
                   <span className="ctab-mile__name">{mileTitle(m.id)}</span>
-                  <span className="ctab-mile__text">{mileText(m.id)}</span>
-                  <MileGifts m={m} />
+                  {!compact && <span className="ctab-mile__text">{mileText(m.id)}</span>}
+                  <MileGifts m={m} compact={compact} short={short} />
                 </span>
                 <span className="ctab-mile__end">
                   {ready || takenNow.current.has(m.id) ? (
@@ -930,6 +1015,7 @@ export const MilesTab = memo(function MilesTab({
                     <span className="ctab-mile__swap">
                       <Button
                         kind="primary"
+                        size={compact ? 'sm' : undefined}
                         className={isDone ? 'is-gone' : undefined}
                         onClick={() => take(m.id)}
                       >

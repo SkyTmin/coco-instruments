@@ -41,6 +41,8 @@ export const ctabs = {
   },
   miles: {
     hint: 'Выполни — забери награду',
+    /** Phone reward chip «+ гнездо» (the full «четвёртое гнездо» is its tip). */
+    socket: 'гнездо',
   },
   perks: {
     hint: 'Очки дают престижи — вложи их',

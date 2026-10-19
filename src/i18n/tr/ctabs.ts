@@ -43,6 +43,8 @@ export const ctabs: Translation<typeof ru> = {
   },
   miles: {
     hint: 'Tamamla — ödülünü al',
+    /** Phone reward chip «+ гнездо» (the full «четвёртое гнездо» is its tip). */
+    socket: 'yuva',
   },
   perks: {
     hint: 'Puanları prestij verir — harca',
