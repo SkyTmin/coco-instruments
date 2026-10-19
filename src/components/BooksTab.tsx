@@ -30,7 +30,7 @@ import {
   useWordFit,
 } from '@/components/armory';
 import { preloadPx, PxStrip, pxFitOf } from '@/components/PxStrip';
-import { TokenIcon } from '@/components/PrisonCamp';
+import { TokenIcon } from '@/components/camp-art';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, rich, useT } from '@/i18n';
 import {

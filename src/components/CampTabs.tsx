@@ -75,7 +75,7 @@ import {
   RuneIcon,
   runeLine,
   TokenIcon,
-} from '@/components/PrisonCamp';
+} from '@/components/camp-art';
 import './camp-tabs.css';
 
 // ---- Shared ------------------------------------------------------------------------------------
