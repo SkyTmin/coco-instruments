@@ -2309,7 +2309,16 @@ export function PrisonPage() {
           onSpend={settleBalance}
         />
       )}
-      {forgeOpen && <ForgeScreen onClose={() => setForgeOpen(false)} onSpend={settleBalance} />}
+      {forgeOpen && (
+        <ForgeScreen
+          onClose={() => setForgeOpen(false)}
+          onSpend={settleBalance}
+          onBooks={() => {
+            setForgeOpen(false);
+            openScreen('enchant');
+          }}
+        />
+      )}
       {invOpen && (
         <Inventory place="mine" onClose={() => setInvOpen(false)} onUse={(id) => applyItem(id)} />
       )}

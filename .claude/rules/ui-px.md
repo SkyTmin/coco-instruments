@@ -388,3 +388,10 @@ Agent types load at session start: until a session reloads them, the critic prom
   = «ужасно». Owned/equipped things (slots, icons) dominate; bonuses are a secondary line.
 - Every block must be obvious to a new player («„С собой“ непонятная»): a short title that says
   what it is and what to do, empty slots that look tappable, locks that say what unlocks them.
+
+### Dark kit (F4, 19.10) — `src/ui-px/dark.{css,tsx}`, `dark-art.ts`
+
+A second, dark look (forge first; books and Nursery next): one `.pxd` palette block, SVG frames
+drawn from it at runtime, `PxdButton` / `PxdRibbon` / `PxdPips` / `PxdSocket` / `PxdGem` /
+`PxdPedestal` / `PxdSheet`. Details, contrast numbers and pitfalls — `forge-mine.md` → «F4».
+The light kit above is unchanged; don't mix the two on one screen.

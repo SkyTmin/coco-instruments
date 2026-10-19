@@ -28,6 +28,20 @@ export const bookName = (b: { id: string; lvl: number }) =>
 export const pickTitle = (i: number) => t(k(`books.pick.${i}`));
 
 /**
+ * The pick as the object of the forge button `forge.forgeIt` («Выковать {name}»): ru the short
+ * name in the accusative («Каменную» — every pick name is a feminine adjective in «-ая»), tr the
+ * title in the accusative («Taş Kazmayı»), fr/es/it the title in sentence case after the
+ * article of the template, en/de the title as it stands.
+ */
+export function pickToForge(i: number): string {
+  const lang = getLang();
+  if (lang === 'ru') return t(k(`mine.pick.${i}`)).replace(/ая$/, 'ую');
+  if (lang === 'tr') return pickTitle(i).replace(/Kazma$/, 'Kazmayı');
+  if (lang === 'fr' || lang === 'es' || lang === 'it') return lower(pickTitle(i));
+  return pickTitle(i);
+}
+
+/**
  * A standalone name (rock, pick, item, rarity…) inside a sentence: lower case,
  * except in German, where nouns keep their capital («der Sandstein»).
  */
