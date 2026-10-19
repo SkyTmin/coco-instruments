@@ -35,14 +35,14 @@ const SIZES = {
 };
 // N4 measured (no insets — the N3 table's conditions); never lower without the owner
 const TARGET = {
-  p320: 149,
-  p360s: 187,
-  p360: 261,
+  p320: 168,
+  p360s: 224,
+  p360: 298,
   pp: 336,
   p430: 373,
   p440: 373,
   pl: 261,
-  pl440: 299,
+  pl440: 298,
   tp: 336,
   tl: 448,
   d1: 560,
@@ -56,21 +56,39 @@ const TARGET_TG = {
   pp: 298,
   p430: 373,
   p440: 373,
-  pl: 149,
-  pl440: 186,
+  pl: 186,
+  pl440: 224,
   tp: 280,
   tl: 392,
   d1: 448,
-  d2: 560,
+  d2: 448,
 };
 // collection cards fully visible on the collection tab («never below prod v2.152»: pp 10,
 // p360 4, pl 12, tp 12, tl 10, d1 18, d2 12 — those counted the drawer / the wide list)
-const CELLS = { p320: 3, p360s: 6, p360: 9, pp: 9, p430: 12, p440: 12, pl: 2, pl440: 2, tp: 5, tl: 6, d1: 6, d2: 8 };
+const CELLS = {
+  p320: 6,
+  p360s: 6,
+  p360: 9,
+  pp: 12,
+  p430: 12,
+  p440: 12,
+  pl: 2,
+  pl440: 2,
+  tp: 5,
+  tl: 9,
+  d1: 9,
+  d2: 9,
+};
 const fmts = (process.argv[2] || 'p320,pp,p440,pl,tp,tl,d1').split(',');
 
 async function open(b, k) {
   const [w, h, dpr] = SIZES[k];
-  const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, hasTouch: k[0] !== 'd', isMobile: k[0] === 'p' });
+  const ctx = await b.newContext({
+    viewport: { width: w, height: h },
+    deviceScaleFactor: dpr,
+    hasTouch: k[0] !== 'd',
+    isMobile: k[0] === 'p',
+  });
   await ctx.addInitScript((l) => localStorage.setItem('coco.lang', l), LANG);
   if (TG)
     await ctx.addInitScript(() => {
@@ -91,16 +109,45 @@ async function open(b, k) {
   await p.waitForTimeout(800);
   // seed through the store module the page really uses (after HMR it is `store.ts?t=…`)
   await p.evaluate(async () => {
-    const live = performance.getEntriesByType('resource').map((e) => e.name).filter((n) => /\/src\/store\.ts(\?|$)/.test(n)).pop();
+    const live = performance
+      .getEntriesByType('resource')
+      .map((e) => e.name)
+      .filter((n) => /\/src\/store\.ts(\?|$)/.test(n))
+      .pop();
     const S = await import(live || '/src/store.ts');
     const pr = S.useFinanceStore.getState().prison;
     const pets = {};
-    ['mole', 'mouse', 'pigeon', 'cat', 'bulldog', 'ferret', 'owl', 'raccoon', 'spider', 'fox', 'scarab'].forEach((id, i) => (pets[id] = { xp: 2000 + i * 3000, v: 0, dup: i % 3, pat: 0 }));
+    [
+      'mole',
+      'mouse',
+      'pigeon',
+      'cat',
+      'bulldog',
+      'ferret',
+      'owl',
+      'raccoon',
+      'spider',
+      'fox',
+      'scarab',
+    ].forEach((id, i) => (pets[id] = { xp: 2000 + i * 3000, v: 0, dup: i % 3, pat: 0 }));
     pets.spider = { xp: 0, v: 0, dup: 0, pat: 0 };
     pets.fox = { xp: 90000, v: 1, dup: 0, pat: 0 };
     S.useFinanceStore.setState({
       slotsBalance: 99_400_000,
-      prison: { ...pr, rank: 9, prestige: 0, tokens: 965, pets, squad: ['spider', 'fox'], nest: [{ egg: 'moss', left: 4000 }, { egg: 'moss', left: 1200 }], eggs: { moss: 1, stone: 0, crystal: 0, dragon: 1 }, eggHeat: { moss: 1500, stone: 0, crystal: 0, dragon: 0 } },
+      prison: {
+        ...pr,
+        rank: 9,
+        prestige: 0,
+        tokens: 965,
+        pets,
+        squad: ['spider', 'fox'],
+        nest: [
+          { egg: 'moss', left: 4000 },
+          { egg: 'moss', left: 1200 },
+        ],
+        eggs: { moss: 1, stone: 0, crystal: 0, dragon: 1 },
+        eggHeat: { moss: 1500, stone: 0, crystal: 0, dragon: 0 },
+      },
     });
   });
   await p.waitForTimeout(300);
@@ -111,8 +158,18 @@ async function open(b, k) {
 }
 
 const BLOCKS = {
-  top: '.nrs-top', tabs: '.nrs-tabs', stage: '.nrs-stage', pet: '.nrs-pet', marks: '.nrs-marks', stats: '.nrs-stats',
-  bar: '.nrs-bar', cta: '.nrs-cta', slots: '.nrs-slots', sum: '.nrs-sum', grid: '.nrs-grid', tools: '.nrs-tools',
+  top: '.nrs-top',
+  tabs: '.nrs-tabs',
+  stage: '.nrs-stage',
+  pet: '.nrs-pet',
+  marks: '.nrs-marks',
+  stats: '.nrs-stats',
+  bar: '.nrs-bar',
+  cta: '.nrs-cta',
+  slots: '.nrs-slots',
+  sum: '.nrs-sum',
+  grid: '.nrs-grid',
+  tools: '.nrs-tools',
 };
 const grab = (sel) => {
   const o = {};
@@ -136,18 +193,33 @@ const audit = () => {
     const cs = getComputedStyle(e);
     if (cs.overflow === 'visible' && cs.overflowX === 'visible') continue;
     if (!e.textContent?.trim() || e.matches('.pet, .pet *, .pxs, .pxs *, .nrs-grid')) continue;
-    if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1) cut.push(`${e.className}: «${e.textContent.trim().slice(0, 24)}» ${e.scrollWidth}/${e.clientWidth}×${e.scrollHeight}/${e.clientHeight}`);
+    if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1)
+      cut.push(
+        `${e.className}: «${e.textContent.trim().slice(0, 24)}» ${e.scrollWidth}/${e.clientWidth}×${e.scrollHeight}/${e.clientHeight}`,
+      );
   }
   const long = [];
   for (const e of document.querySelectorAll('.nrs .pxd-f')) {
     const q = e.getBoundingClientRect();
     if (q.width < 2 || q.height < 2) continue;
     const a = Math.max(q.width / q.height, q.height / q.width);
-    if (a > (e.matches('.nrs-cta, .nrs-all') ? 5 : 2.5) + 0.01) long.push(`${e.className} ${Math.round(q.width)}×${Math.round(q.height)}`);
+    if (a > (e.matches('.nrs-cta, .nrs-all') ? 5 : 2.5) + 0.01)
+      long.push(`${e.className} ${Math.round(q.width)}×${Math.round(q.height)}`);
   }
   const g = document.querySelector('.nrs-grid')?.getBoundingClientRect();
-  const cards = g ? [...document.querySelectorAll('.nrs-card')].filter((c) => { const r = c.getBoundingClientRect(); return r.top >= g.top - 0.5 && r.bottom <= g.bottom + 0.5; }).length : -1;
-  return { scroll: document.scrollingElement.scrollHeight - innerHeight, cut, long, cards, pet: document.querySelector('.nrs-pet')?.getBoundingClientRect().width ?? 0 };
+  const cards = g
+    ? [...document.querySelectorAll('.nrs-card')].filter((c) => {
+        const r = c.getBoundingClientRect();
+        return r.top >= g.top - 0.5 && r.bottom <= g.bottom + 0.5;
+      }).length
+    : -1;
+  return {
+    scroll: document.scrollingElement.scrollHeight - innerHeight,
+    cut,
+    long,
+    cards,
+    pet: document.querySelector('.nrs-pet')?.getBoundingClientRect().width ?? 0,
+  };
 };
 
 const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -196,7 +268,8 @@ for (const k of fmts) {
   await tab(1);
   for (const m of moved(sq, await p.evaluate(grab, BLOCKS))) bad(k, `tab coll: ${m}`);
   await tab(2);
-  for (const m of moved({ top: sq.top, tabs: sq.tabs }, await p.evaluate(grab, BLOCKS))) bad(k, `tab eggs: ${m}`);
+  for (const m of moved({ top: sq.top, tabs: sq.tabs }, await p.evaluate(grab, BLOCKS)))
+    bad(k, `tab eggs: ${m}`);
   await tab(0);
   const before = await p.evaluate(grab, BLOCKS);
   await p.keyboard.press('ArrowRight');

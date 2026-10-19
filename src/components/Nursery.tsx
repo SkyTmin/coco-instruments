@@ -384,7 +384,10 @@ export const Nursery = memo(function Nursery({
   const stageRef = useRef<HTMLDivElement>(null);
   const stage = useBox(stageRef, card);
   const pb = 17 * u; // pedestal bottom: over the ribbon that covers the stage's lower 15u
-  const pw = Math.max(15, Math.round((Math.min(stage.w * 0.8, (stage.h - pb) * 0.8) * 0.75) / u) | 1);
+  const pw = Math.max(
+    15,
+    Math.round((Math.min(stage.w * 0.8, (stage.h - pb) * 0.8) * 0.75) / u) | 1,
+  );
   const ph = Math.max(7, Math.round(pw / 6) | 1);
   const lift = pb + Math.round(ph / 2) * u;
   const artFor = (id: PetId) => {
@@ -634,7 +637,10 @@ export const Nursery = memo(function Nursery({
           </div>
         )}
       </div>
-      <PxdRibbon className="nrs-name" style={{ '--nlen': Math.max(8, name.length) } as CSSProperties}>
+      <PxdRibbon
+        className="nrs-name"
+        style={{ '--nlen': Math.max(8, name.length) } as CSSProperties}
+      >
         {name}
       </PxdRibbon>
     </section>
@@ -646,11 +652,17 @@ export const Nursery = memo(function Nursery({
     (a, b) => (sb[b] ?? 0) - (sb[a] ?? 0) || STATS.indexOf(a) - STATS.indexOf(b),
   );
   const roleTip = roles
-    .map((s) => (srec ? t(`nursery.role.${s}.text`, { v: pctV(sb[s] ?? 0) }) : t(`nursery.stat.${s}`)))
+    .map((s) =>
+      srec ? t(`nursery.role.${s}.text`, { v: pctV(sb[s] ?? 0) }) : t(`nursery.stat.${s}`),
+    )
     .join(' · ');
   const need = srec && srec.v < MERGE_NEED.length ? MERGE_NEED[srec.v] : 0;
   const mergeOk = canMerge(srec);
-  const xpText = !srec ? '—' : !slv.need ? t('nursery.lvMax') : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`;
+  const xpText = !srec
+    ? '—'
+    : !slv.need
+      ? t('nursery.lvMax')
+      : `${fmtNum(slv.into)} / ${fmtNum(slv.need)}`;
   const openInfo = () => {
     tapLight();
     setInfo(true);
@@ -686,7 +698,10 @@ export const Nursery = memo(function Nursery({
           {roles.length === 1 ? t(`nursery.stat.${roles[0]}`) : t('nursery.bonusL')}
         </span>
       </PxdButton>
-      <div className="nrs-stat pxd-f pxd-f--panel is-level" aria-label={`${t('common.level', { n: slv.level })} · ${xpText}`}>
+      <div
+        className="nrs-stat pxd-f pxd-f--panel is-level"
+        aria-label={`${t('common.level', { n: slv.level })} · ${xpText}`}
+      >
         <b className="nrs-stat__n">{srec ? t('common.level', { n: slv.level }) : '—'}</b>
         <PxdPips n={10} on={srec ? (slv.need ? Math.floor((10 * slv.into) / slv.need) : 10) : 0} />
         <span className="nrs-stat__l px-num">{xpText}</span>
@@ -718,8 +733,14 @@ export const Nursery = memo(function Nursery({
             <b className="nrs-stat__n px-num">
               {srec ? Math.min(srec.dup, need) : 0} / {need || MERGE_NEED[0]}
             </b>
-            <PxdPips n={need || MERGE_NEED[0]} on={srec ? Math.min(srec.dup, need) : 0} ok={mergeOk} />
-            <span className="nrs-stat__l">{mergeOk ? t('nursery.makeGold') : t('nursery.toGold')}</span>
+            <PxdPips
+              n={need || MERGE_NEED[0]}
+              on={srec ? Math.min(srec.dup, need) : 0}
+              ok={mergeOk}
+            />
+            <span className="nrs-stat__l">
+              {mergeOk ? t('nursery.makeGold') : t('nursery.toGold')}
+            </span>
           </>
         )}
       </PxdButton>
@@ -801,8 +822,14 @@ export const Nursery = memo(function Nursery({
       <div ref={slotsRef} className="nrs-slots">
         {[0, 1, 2].map((i) => {
           if (i >= slots) {
-            const why = i === 1 ? t('nursery.lockRank', { rank: rankLetter(SQUAD_RANK2) }) : t('nursery.lockPrestige');
-            const tip = i === 1 ? t('nursery.lockRankTip', { rank: rankLetter(SQUAD_RANK2) }) : t('nursery.lockPrestigeTip');
+            const why =
+              i === 1
+                ? t('nursery.lockRank', { rank: rankLetter(SQUAD_RANK2) })
+                : t('nursery.lockPrestige');
+            const tip =
+              i === 1
+                ? t('nursery.lockRankTip', { rank: rankLetter(SQUAD_RANK2) })
+                : t('nursery.lockPrestigeTip');
             return (
               <PxdButton
                 key={i}
@@ -845,7 +872,9 @@ export const Nursery = memo(function Nursery({
                 <Icon name="plus" />
               </PxdButton>
             );
-          return <SquadSlot key={i} id={id} rec={r} selected={sel === id} size={big} onPick={onSlot} />;
+          return (
+            <SquadSlot key={i} id={id} rec={r} selected={sel === id} size={big} onPick={onSlot} />
+          );
         })}
       </div>
       {layout === 'two' && sumEl}
@@ -865,7 +894,9 @@ export const Nursery = memo(function Nursery({
         const cs = getComputedStyle(nm);
         const f = (v: string) => `${cs.fontWeight} ${fsOf(nm, v)}px ${cs.fontFamily}`;
         const next = { room: nm.clientWidth, sm: f('--pd-fs-sm'), xs: f('--pd-fs-xs') };
-        setNameFit((o) => (o && o.room === next.room && o.sm === next.sm && o.xs === next.xs ? o : next));
+        setNameFit((o) =>
+          o && o.room === next.room && o.sm === next.sm && o.xs === next.xs ? o : next,
+        );
       }
       const rars = [...grid.querySelectorAll<HTMLElement>('.nrs-card__rar')];
       const over = () => rars.some((r) => r.scrollWidth > r.clientWidth + 0.5);
@@ -1109,7 +1140,9 @@ const NurCard = memo(function NurCard({
         <i className="nrs-dot" aria-hidden="true" />
         <span>{rar}</span>
       </span>
-      <span className="nrs-card__lv px-num">{rec ? t('common.level', { n: petLevelOf(rec.xp).level }) : ' '}</span>
+      <span className="nrs-card__lv px-num">
+        {rec ? t('common.level', { n: petLevelOf(rec.xp).level }) : ' '}
+      </span>
       {along && (
         <em className="nrs-card__tick" aria-hidden="true">
           <Icon name="check" />
@@ -1213,7 +1246,11 @@ function PetInfo({ id, onJoy }: { id: PetId; onJoy: () => void }) {
                 {Math.min(rec.dup, MERGE_NEED[rec.v])} / {MERGE_NEED[rec.v]}
               </b>
             </div>
-            <PxdPips n={MERGE_NEED[rec.v]} on={Math.min(rec.dup, MERGE_NEED[rec.v])} ok={canMerge(rec)} />
+            <PxdPips
+              n={MERGE_NEED[rec.v]}
+              on={Math.min(rec.dup, MERGE_NEED[rec.v])}
+              ok={canMerge(rec)}
+            />
             {canMerge(rec) && (
               <PxdButton
                 frame="act"
@@ -1236,7 +1273,11 @@ function PetInfo({ id, onJoy }: { id: PetId; onJoy: () => void }) {
           </div>
         )}
         {rec.v >= 1 && (
-          <div className="nrs-info__grp nrs-info__skin" role="radiogroup" aria-label={t('nursery.skin')}>
+          <div
+            className="nrs-info__grp nrs-info__skin"
+            role="radiogroup"
+            aria-label={t('nursery.skin')}
+          >
             <h3>{t('nursery.skin')}</h3>
             <div>
               {[0, 1].map((s) => {

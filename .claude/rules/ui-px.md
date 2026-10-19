@@ -183,6 +183,9 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
 
 ### Nursery v2 (wave 2 — N, 13.10) — `src/components/Nursery.tsx`, `nursery.css`, tabs in `PetsTab.tsx`
 
+History: the light-kit `.nur-*` screen below is gone since N4 (19.10, next section); its
+lessons (decode before switch, memo cells, holes in the squad, press feedback) still apply.
+
 - Eggs (nests, basket, shop, `NestSheet`, `HatchScene`, `HatchBatch`) are untouched on the «Яйца»
   tab; on the pets tab the egg blocks are hidden by CSS (`.ppn.is-pets > :not(...)`).
 - Layouts (`Layout` in the component; round 3 — N3): `one` phone portrait — stage (room, plate
@@ -329,6 +332,74 @@ dock) → `usePress(ref)` + a `.is-down` rule; no transition on the pressed stat
 - **Not checked on a real phone / Telegram webview / gamepad hardware** (stand: Playwright at
   390×844@3, 360×780@3, 440×956@3, 844×390@3, 956×440@3, 820×1180@2, 1180×820@2, 1440×900,
   1920×1080; keyboard by real key presses, gamepad by emitted actions).
+
+### N4 — handoff layout (19.10) — `Nursery.tsx`, `PetsTab.tsx`, `nursery.css` on the dark kit
+
+Owner 19.10: the ChatGPT handoff's LAYOUT and convenience, our dark kit (forge v2.166 sibling),
+«не нравятся длинные прямоугольники». Supersedes «Nursery v2» above (history): the light-kit
+`.nur-*` screen and the old `.ppn*` egg CSS (≈650 lines of `game-ui.css`) are gone.
+
+- **Window.** `PrisonCamp` returns `<PetsTab onClose>` instead of its `GxSheet` when the tab is
+  `pets` (back = the camp's other tab, or close). `PetsWin` is a portal `.px.pxd.arm.is-window.nrs
+  .nrs--<layout>.is-<tab>` (armory's fixed window, `useFullWin`, escape stack). Header: back,
+  «Питомник» + purpose `nursery.purpose`, purse as plain lines (coin `fmtShort`, tokens). Tabs
+  Отряд / Коллекция / Яйца (`NurTab`; tabPrev/tabNext; eggs badge «!» when a nest is ready).
+  Logic, prices, odds, confirmations, saves, `NestSheet`, `HatchScene`, `HatchBatch` unchanged.
+- **Layouts** (`useArmLayout`):
+  - `one` (phone portrait). Squad tab: places row, stage (marks: rarity, power `petScore·10`
+    «Сила», «В отряде»; ribbon name), stats tiles (bonus / level / copies → gold), bar
+    `[▶ anims] [take / leave] [i]`. Collection tab: «Коллекция n из 18», tools = 3 tiles
+    (filter, sort, collection bonus — the bonus tile says its sentence on tap), 3-column grid
+    scrolling inside; a card tap selects and returns to the squad tab. Eggs tab: nests
+    (height 1.1 × width), queue, «hatch all», shop 2 × 2 (takes the height left).
+  - `two` (tablet portrait): list 9fr / card 16fr / bar; sum chips 6 across; tabs and stats
+    tiles fixed width, centred; collection head in one row; eggs = the phone column, shop 4
+    across (art on top).
+  - `three` (landscape, desktop): list 9fr | card 12fr | side 7fr (sum, bar); the squad
+    places stacked in the list column (art follows the measured place); collection 3 columns;
+    eggs = home | shop (tall shop tiles stack art / name / price / status, `is-tall`).
+    **Short three** (`max-height: 500px`, phone landscape): `.nrs-main` / `.nrs-side` are
+    `display: contents`, stats + bar go to the right column (`≥ 148u`, else the level pips
+    clip), the stage takes the whole middle column, window padding 1u, header tabs words-only
+    `--pd-fs-xs` 22u, sum hidden, collection 2 columns.
+- **Flows.** Selecting ≠ taking. Take → the picked place, else the first hole, else the replace
+  sheet «Кого оставить дома?» (`nursery.replaceTitle/Hint`). Leave keeps a hole. An empty place →
+  pick mode (collection tab, filter «Есть», unframed pickbar `nursery.pickHint` + ✕): the tapped
+  owned pet goes straight into that place. Locked places / `off` buttons say why on tap (`say` →
+  `.arm-note`; inside `NestSheet` a status line, the toast lies under its veil).
+- **No long strips.** Framed blocks ≤ 2.5:1, the CTA and «hatch all» ≤ 5:1 (`max-width: 5 ×
+  --bh`, centred; the hatch-all count moved to its price line). Phone tabs and tools are 5:2:
+  `height: max(22u, round(up, (100cqi − 6u) / 7.5, var(--u)))` in an inline-size container
+  (fallback: the plain `calc` line before it). Shop tiles: `min-height` = half the shop width /
+  2.5. Stage marks, purse and pickbar are unframed (marks: 1-art-px ink outline, rarity word in
+  `--rc`). Wide sum chips stack picture over value; queue chips put ×N over the heat pips.
+- **Text fit** (layout effects + ResizeObserver + `document.fonts.ready`; the sentence stays in
+  aria-label / tip): ribbon → the biggest kit step that fits; card names `fitName()` = whole words
+  at sm → whole words at xs → syllable soft hyphens `syl()` at xs, `.nrs-grid.is-3l` when one
+  still needs 3 lines (de «Panzerknacker-Waschbär» at 320); rarity words sm → xs → dot only
+  (`is-rar-sm/-dot`, grid-wide); tools: key words → icons → xs; tabs: icons → sm; nests: xs →
+  «blocks left» on two lines, the egg follows the measured art box; shop `is-tight`: status
+  under the art + xs (+ the small egg when a tile is < 80u wide); level tile drops «into / need»
+  (height tolerance 1.5 px — line-height rounding).
+- **Pet size** Telegram insets 47 / 46 / 34 → none (`nursery-check.mjs`, `TARGET_TG` / `TARGET`):
+  320×568@2 112 / 168; 360×640@3 149 / 224; 360×780@3 224 / 299; 390×844@3 299 / 336;
+  430×932@3 and 440×956@3 373 / 373; 844×390@3 187 / 261; 956×440@3 224 / 299; 820×1180@2
+  280 / 336; 1180×820@2 392 / 448; 1440×900 448 / 560; 1920×1080 448 / 560 (N3: 390×844 299,
+  440×956 336, both without insets). Squad tab, pet = `fitPet` on the measured stage.
+- **Contrast** (`scratchpad/ui11N/contrast.py`): text on panel / well / off 11.4 / 13.7 / 8.6;
+  muted 6.3 / 7.7 / 4.8; accent 8.6; ok 8.2; CTA ink on act 11.0; badges 12.9 / 12.3; rarity name
+  vs its ink outline 6.2–14.0; numbers always in text / accent / ok (≥ 7:1) — the shop's «ещё N»
+  is text (`is-more`).
+- **Check:** `scripts/ui-px/nursery-check.mjs [fmts]` (`TG=1` for the inset targets) — pet ≥
+  target, no page scroll, no clipped text, the ratios, 0-px drift across 5 pets / 3 tabs / a key
+  press (the ribbon may follow the name's width), visible collection cards. Sweep used for the
+  release: 8 formats × 7 languages × 3 tabs — nothing clipped, no long block.
+- **Pitfalls.** A `useState` / `const` read by JSX built ABOVE its declaration is a TDZ
+  ReferenceError at render (blank camp) — declare measured state before the elements. A literal
+  Cyrillic letter in a regex fails the i18n guard — `\u` escapes. `.nrs-tabs.is-tight2 .nrs-tab`
+  (0,3,0) beats a layout rule `.nrs--three .nrs-tab` — scope layout overrides as deep. `aria-
+  disabled` buttons are skipped by Playwright's `click()` — use `{ force: true }`.
+- Not checked on a real phone / Telegram webview / gamepad hardware.
 
 ### Rollout — waves (owner 13.10: «когда волна закончилась, сразу запускай следующую»)
 

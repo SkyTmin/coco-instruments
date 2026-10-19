@@ -107,7 +107,9 @@ function OddsBar({ egg }: { egg: EggId }) {
   return (
     <span className="nrs-odds" aria-hidden="true">
       {ch.map((c, r) =>
-        c > 0 ? <i key={r} style={{ flexGrow: Math.max(c, 0.06), background: rarityOf(r).color }} /> : null,
+        c > 0 ? (
+          <i key={r} style={{ flexGrow: Math.max(c, 0.06), background: rarityOf(r).color }} />
+        ) : null,
       )}
     </span>
   );
@@ -648,10 +650,7 @@ const PetsWin = memo(function PetsWin({ onClose }: { onClose: () => void }) {
           <p>{t('nursery.purpose')}</p>
         </div>
         {layout === 'three' && tabs}
-        <span
-          className="nrs-purse"
-          aria-label={`${fmtShort(balance)} · ${fmt(p.tokens)}`}
-        >
+        <span className="nrs-purse" aria-label={`${fmtShort(balance)} · ${fmt(p.tokens)}`}>
           <span>
             <CoinIcon size={7 * u} />
             <b className="px-num">{fmtShort(balance)}</b>
@@ -756,7 +755,11 @@ function NestSheet({
     <PxdSheet
       title={n ? eggName(n.egg) : t('eggs.nest')}
       sub={
-        n ? (n.left > 0 ? t('books.blocksLeft', { n: Math.round(n.left) }) : t('eggs.ready')) : undefined
+        n
+          ? n.left > 0
+            ? t('books.blocksLeft', { n: Math.round(n.left) })
+            : t('eggs.ready')
+          : undefined
       }
       closeLabel={t('common.close')}
       onClose={onClose}
@@ -849,7 +852,10 @@ function NestSheet({
                   {p.eggHeat[id] > 0 && (
                     <PxdPips
                       n={4}
-                      on={Math.max(1, Math.min(4, Math.floor((4 * p.eggHeat[id]) / eggOf(id).need)))}
+                      on={Math.max(
+                        1,
+                        Math.min(4, Math.floor((4 * p.eggHeat[id]) / eggOf(id).need)),
+                      )}
                     />
                   )}
                 </PxdButton>

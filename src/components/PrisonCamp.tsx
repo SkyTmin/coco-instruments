@@ -325,9 +325,7 @@ export function PrisonCamp({
   // in a camp with other tabs its «back» returns to the first of them.
   if (tab === 'pets')
     return (
-      <PetsTab
-        onClose={multi ? () => onTab(tabs.find((x) => x !== 'pets') ?? tabs[0]) : onClose}
-      />
+      <PetsTab onClose={multi ? () => onTab(tabs.find((x) => x !== 'pets') ?? tabs[0]) : onClose} />
     );
   return (
     <GxSheet
