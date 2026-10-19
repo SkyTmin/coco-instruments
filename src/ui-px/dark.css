@@ -1,0 +1,297 @@
+/* Dark pixel kit (`dark.tsx`, art in `dark-art.ts`) — the forge first, books and Nursery next.
+   Owner 19.10: «кузница слишком светлая», «не сочетается цвета шрифтов», «не нравятся длинные
+   прямоугольники» → a dark palette, three text colours, square chamfered pixel frames.
+   Every size is whole art pixels (var(--u)); text scales with the UI scale and the text setting. */
+
+/* ==== THE PALETTE — the only place with colours. ===============================================
+   Option А «Ночная шахта» (slate, gold actions) — default. To switch, replace the values:
+   Б «Малахит»: bg #0d1714 bg2 #16302a panel #1d3530 hi #3b6a5f lo #10201b well #142722 ink #050b09
+     press #172b26 text #eef4ea muted #a3c0b5 accent #ffad42 ok #b6f07c act #ffad42 act-ink #2b1400
+     act-hi #ffd08a act-lo #c26a10 act-lip #6e3a06 off #2c4a43 off-hi #3d5f57 off-lo #213a34
+     off-lip #142520 rib #2f5a50 rib-hi #3f7366 rib-lo #21423a rib2 #21423a rib-fold #0f1f1b
+   В «Аметист»: bg #17111d bg2 #2a1f38 panel #2f2340 hi #5b4680 lo #1c1426 well #22192f ink #09060c
+     press #261c34 text #f6eef8 muted #bfaecd accent #63e0c4 ok #ffd36b act #63e0c4 act-ink #062a22
+     act-hi #a8f3e2 act-lo #229a80 act-lip #0f5446 off #43345a off-hi #574573 off-lo #33274a
+     off-lip #21182f rib #4d3a6c rib-hi #634c8a rib-lo #382a50 rib2 #382a50 rib-fold #1d1529 */
+.pxd {
+  /* surfaces: page, its glow, panels (+ bevel light / shadow), wells, outline, pressed panel */
+  --pd-bg: #121826;
+  --pd-bg2: #1d2740;
+  --pd-panel: #24304a;
+  --pd-hi: #3e5079;
+  --pd-lo: #151c2c;
+  --pd-well: #19213a;
+  --pd-ink: #070a12;
+  --pd-press: #1b2439;
+  /* text: three colours (body, secondary, accent) + the «done» status; rarity only on names */
+  --pd-text: #f3eee2;
+  --pd-muted: #aab4cc;
+  --pd-accent: #ffc94a;
+  --pd-ok: #7fe0a0;
+  /* the primary action (face, label, bevel, slab) */
+  --pd-act: #ffc94a;
+  --pd-act-ink: #2b1a00;
+  --pd-act-hi: #ffe08a;
+  --pd-act-lo: #c78f12;
+  --pd-act-lip: #7a5408;
+  /* a greyed action (still tappable: it says what is missing) */
+  --pd-off: #36425e;
+  --pd-off-hi: #4a587a;
+  --pd-off-lo: #283149;
+  --pd-off-lip: #1a2133;
+  /* name ribbon */
+  --pd-rib: #3a4a70;
+  --pd-rib-hi: #4d6090;
+  --pd-rib-lo: #2a3654;
+  --pd-rib2: #2a3654;
+  --pd-rib-fold: #161d2e;
+}
+/* ==== end of the palette ======================================================================= */
+
+.pxd {
+  /* type: 1 on phones (UI scale 2), +15 % per scale step, times the player's text size */
+  --pd-k: calc((0.7 + 0.15 * var(--ui-scale, 2)) * var(--px-tx, 1));
+  --pd-fs-xs: calc(12px * var(--pd-k));
+  --pd-fs-sm: calc(13px * var(--pd-k));
+  --pd-fs: calc(15px * var(--pd-k));
+  --pd-fs-lg: calc(17px * var(--pd-k));
+  --pd-fs-xl: calc(23px * var(--pd-k));
+  --pd-fs-num: calc(24px * var(--pd-k));
+  color: var(--pd-text);
+}
+/* the kit's text vars follow the palette inside (kit pieces reused here read right) */
+.pxd {
+  --px-text: var(--pd-text);
+  --px-muted: var(--pd-muted);
+  --px-dim: var(--pd-muted);
+  --px-gold: var(--pd-accent);
+  --px-green: var(--pd-ok);
+}
+
+/* ---- Frames: 9-slices with stepped chamfered corners -------------------------------------------
+   The picture is `--pxd-f-<name>` (installed by `installPxdFrames`); the drawn width is the whole
+   slice (`--pxd-s` art px), the LAYOUT border is only the ring (ink + bevel, `--pxd-bw`), so content
+   may sit over the fill of the cut corners. Buttons with a slab: bottom = ring + lip. */
+.pxd-f {
+  --pxd-s: 4;
+  --pxd-bw: 2;
+  --pxd-fi: var(--pxd-f-panel);
+  border-style: solid;
+  border-color: transparent;
+  border-width: calc(var(--pxd-bw) * var(--u));
+  border-image-source: var(--pxd-fi);
+  border-image-slice: var(--pxd-s) fill;
+  border-image-width: calc(var(--pxd-s) * var(--u));
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  background: none;
+}
+.pxd-f--panel {
+  --pxd-fi: var(--pxd-f-panel);
+}
+.pxd-f--sel {
+  --pxd-fi: var(--pxd-f-sel);
+}
+.pxd-f--well {
+  --pxd-fi: var(--pxd-f-well);
+  --pxd-s: 3;
+}
+.pxd-f--oct {
+  --pxd-fi: var(--pxd-f-oct);
+  --pxd-s: 8;
+}
+/* the primary action: cut 3 + a 2-pixel slab; pressed = face 2 px lower, slab gone, same box */
+.pxd-f--act,
+.pxd-f--off {
+  --pxd-fi: var(--pxd-f-act);
+  --pxd-s: 5;
+  border-width: calc(2 * var(--u)) calc(2 * var(--u)) calc(4 * var(--u));
+  border-image-slice: 5 5 7 fill;
+  border-image-width: calc(5 * var(--u)) calc(5 * var(--u)) calc(7 * var(--u));
+}
+.pxd-f--off {
+  --pxd-fi: var(--pxd-f-off);
+}
+.pxd-f--act.is-down {
+  --pxd-fi: var(--pxd-f-act-down);
+  border-width: calc(4 * var(--u)) calc(2 * var(--u)) calc(2 * var(--u));
+  border-image-slice: 7 5 5 fill;
+  border-image-width: calc(7 * var(--u)) calc(5 * var(--u)) calc(5 * var(--u));
+}
+
+/* ---- Buttons on the frames -------------------------------------------------------------------- */
+.pxd-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+  margin: 0;
+  padding: 0 calc(2 * var(--u));
+  font: 700 var(--pd-fs) / 1.15 var(--px-font);
+  color: var(--pd-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.pxd-btn.pxd-f--act {
+  color: var(--pd-act-ink);
+}
+.pxd-btn.pxd-f--off {
+  color: var(--pd-text);
+}
+/* a panel button pressed: its face one step darker, the content one art pixel lower */
+.pxd-btn:is(.pxd-f--panel, .pxd-f--sel).is-down {
+  --pxd-fi: var(--pxd-f-panel-down);
+}
+.pxd-btn.pxd-f--sel.is-down {
+  --pxd-fi: var(--pxd-f-sel-down);
+}
+.pxd-btn:is(.pxd-f--panel, .pxd-f--sel).is-down > * {
+  translate: 0 var(--u);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pxd-btn.pxd-f--panel:not(.is-down):hover {
+    --pxd-fi: var(--pxd-f-panel-hover);
+  }
+  .pxd-btn.pxd-f--act:not(.is-down):hover {
+    --pxd-fi: var(--pxd-f-act-hover);
+  }
+}
+.pxd-btn > .px-keyhint {
+  position: absolute;
+  top: calc(-3 * var(--u));
+  right: calc(-3 * var(--u));
+}
+
+/* ---- Ribbon: name banner with swallowtail ends (3-slice, fixed height 21 art px) ------------- */
+.pxd-ribbon {
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  max-width: 100%;
+  height: calc(21 * var(--u));
+  padding: 0 0 calc(4 * var(--u));
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 calc(10 * var(--u));
+  border-image-source: var(--pxd-f-ribbon);
+  border-image-slice: 0 14 fill;
+  border-image-width: 0 calc(14 * var(--u));
+  border-image-repeat: stretch;
+  image-rendering: pixelated;
+  text-align: center;
+  white-space: nowrap;
+}
+.pxd-ribbon > * {
+  display: block;
+  margin: 0;
+  font: 400 var(--pd-fs-xl) / calc(17 * var(--u)) var(--px-head);
+  color: var(--rc, var(--pd-text));
+  /* a one-art-pixel ink outline: rarity colours read on the ribbon (outline contrast ≥ 5.8) */
+  text-shadow:
+    var(--u) 0 0 var(--pd-ink),
+    calc(-1 * var(--u)) 0 0 var(--pd-ink),
+    0 var(--u) 0 var(--pd-ink),
+    0 calc(-1 * var(--u)) 0 var(--pd-ink);
+}
+
+/* ---- Pips: N small squares on an ink strip, progress without a long bar -------------------- */
+.pxd-pips {
+  display: inline-flex;
+  gap: var(--u);
+  padding: var(--u);
+  background: var(--pd-ink);
+  flex: none;
+}
+.pxd-pips > i {
+  display: block;
+  width: calc(3 * var(--u));
+  height: calc(3 * var(--u));
+  background: var(--pd-lo);
+}
+.pxd-pips > i.is-on {
+  background: var(--pd-accent);
+}
+.pxd-pips.is-ok > i.is-on {
+  background: var(--pd-ok);
+}
+
+/* ---- Pictures (socket, gem, pedestal): SVG at a whole art pixel each ------------------------- */
+.pxd-img {
+  display: block;
+  flex: none;
+  width: calc(var(--w) * var(--u));
+  height: calc(var(--h) * var(--u));
+  background: var(--pxd-img) center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+}
+
+/* ---- Chip: content-sized, in a well -------------------------------------------------------- */
+.pxd-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  min-height: calc(16 * var(--u));
+  padding: 0 calc(2 * var(--u));
+  font: 600 var(--pd-fs) / 1.1 var(--px-font);
+  white-space: nowrap;
+}
+
+/* ---- Sheet: a dark window docked at the bottom on phones, centred elsewhere ---------------- */
+.pxd-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: calc(var(--safe-top, 0px) + 8 * var(--u)) calc(3 * var(--u))
+    calc(var(--safe-bottom, 0px) + 3 * var(--u));
+  background: rgba(4, 6, 12, 0.72);
+  animation: px-fade 120ms steps(3, jump-none);
+}
+html:not([data-ff='phone-portrait']) .pxd-veil {
+  align-items: center;
+}
+.pxd-sheet {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: calc(4 * var(--u));
+  width: min(100%, calc(var(--mw, 220) * var(--u)));
+  max-height: 100%;
+  padding: calc(5 * var(--u)) calc(5 * var(--u)) calc(6 * var(--u));
+  background: none;
+}
+.pxd-sheet__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(4 * var(--u));
+}
+.pxd-sheet__title {
+  margin: 0;
+  font: 400 var(--pd-fs-num) / 1.1 var(--px-head);
+  color: var(--pd-text);
+}
+.pxd-sheet__title small {
+  margin-left: calc(3 * var(--u));
+  font: 600 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-muted);
+}
+.pxd-sheet__close {
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+  padding: 0;
+}
+.pxd-sheet__body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* room for the focus rings and corner badges of the cells */
+  padding: calc(4 * var(--u));
+  margin: calc(-4 * var(--u));
+}

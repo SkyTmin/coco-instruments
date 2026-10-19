@@ -15,20 +15,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CoinIcon } from '@/components/slot-art';
-import { BagIcon, OreIcon, TokenIcon } from '@/components/PrisonCamp';
+import { OreIcon, TokenIcon } from '@/components/PrisonCamp';
 import { GxIcon } from '@/components/gx';
-import {
-  PICK_ART,
-  PickArt,
-  PickPx,
-  RarityChip,
-  RarityName,
-  rarityVars,
-} from '@/components/PickArt';
-import { preloadPx, PxStrip } from '@/components/PxStrip';
+import type { GxIconName } from '@/components/gx';
+import { PICK_ART, PickArt, PickPx, RarityChip, RarityName, rarityVars } from '@/components/PickArt';
+import { preloadPx, pxFitOf, PxStrip } from '@/components/PxStrip';
 import {
   fromKeys,
-  heroFit,
   nameFit,
   useArmLayout,
   useBox,
@@ -38,17 +31,26 @@ import {
 } from '@/components/armory';
 import { useFinanceStore } from '@/store';
 import { enchantName, fmtNum, fmtShort, pickName, rarityName, rockName, t, useT } from '@/i18n';
-import { nameIn, pickTitle } from '@/i18n/data-mine';
-import { enchantEffect } from '@/i18n/data-books';
+import { nameIn, pickTitle, pickToForge } from '@/i18n/data-mine';
 import { useAction } from '@/input';
-import { Bar, Button, Heading, Icon, Panel, Slot } from '@/ui-px';
+import { Button, Icon } from '@/ui-px';
+import {
+  PxdButton,
+  PxdGem,
+  PxdPedestal,
+  PxdPips,
+  PxdRibbon,
+  PxdSheet,
+  PxdSocket,
+  usePxd,
+} from '@/ui-px/dark';
+import { PX_SETS } from '@/lib/props-pixel/manifest';
 import {
   AUTOSELL_TOKENS,
   BAG_MAX,
   bagCapacity,
   bagCost,
   enchSlots,
-  enchUnits,
   ENCHANTS,
   forgeCheck,
   forgeOres,
@@ -60,6 +62,7 @@ import {
   pickSpeed,
   PICKS,
   rankLetter,
+  ROCKS,
 } from '@/lib/prison';
 import { ROMAN } from '@/lib/books';
 import { rarityOf } from '@/lib/rarity';
@@ -94,32 +97,18 @@ function oreList(rocks: number[]): string {
   return t('forge.listAnd', { a: names.slice(0, -1).join(', '), b: names[names.length - 1] });
 }
 
-/** Разница с киркой в руке: «+3» зелёным, «−2» красным, ноль — ничего. */
-function Delta({ v }: { v: number }) {
-  if (!v) return null;
-  return (
-    <span className={`arm-delta ${v > 0 ? 'is-up' : 'is-down'}`}>
-      {v > 0 ? '+' : '−'}
-      {fmt(Math.abs(v))}
-    </span>
-  );
-}
-
 type Status = 'hand' | 'have' | 'next' | 'locked';
-
-/** Pedestal pixel: the pick's own pixel (large strip, box 112) in whole screen dots, ≥ UI px. */
-function pedPx(art: number, u: number): number {
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-  return Math.max(u, Math.round((art * PICK_ART * dpr) / 112) / dpr);
-}
 
 export function ForgeScreen({
   onClose,
   onSpend,
+  onBooks,
 }: {
   onClose: () => void;
   /** Монеты ушли — табло встаёт на новое значение. */
   onSpend?: () => void;
+  /** Открыть книги чар (кнопка › у гнёзд); нет — кнопки нет. */
+  onBooks?: () => void;
 }) {
   const t = useT();
   const p = useFinanceStore((s) => s.prison);
@@ -172,6 +161,21 @@ export function ForgeScreen({
 
   // Выбор при открытии: следующая кирка, если её уже можно выковать, иначе та, что в руке.
   const [sel, setSel] = useState(() => (ready && n >= 0 ? n : p.pick));
+  // The collection row shows 4 picks from `win`; a tap inside it never shifts it, a pick chosen
+  // elsewhere (the full sheet, a forging) re-centres it.
+  const winOf = (i: number) => Math.max(0, Math.min(PICKS.length - 4, i - 1));
+  const [win, setWin] = useState(() => winOf(sel));
+  const choose = (i: number, recenter: boolean) => {
+    setSel(i);
+    setWin((w) => (recenter ? winOf(i) : i < w ? i : i > w + 3 ? i - 3 : w));
+  };
+  const [tab, setTab] = useState<'picks' | 'gear'>('picks');
+  const switchTab = (to: 'picks' | 'gear') => {
+    if (to === tab) return;
+    selectionChanged();
+    setTab(to);
+  };
+  const [sheet, setSheet] = useState<'all' | 'recipe' | null>(null);
   const statusOf = (i: number): Status =>
     i === p.pick ? 'hand' : i <= p.pickMax ? 'have' : i === n ? 'next' : 'locked';
   const st = statusOf(sel);
@@ -228,7 +232,7 @@ export function ForgeScreen({
     }
     uiBuy();
     onSpend?.();
-    setSel(got);
+    choose(got, true);
     setReveal(got);
   };
 
@@ -296,10 +300,10 @@ export function ForgeScreen({
    * палец действует кнопкой внизу — долгое нажатие, чтобы прочесть подсказку, выковывало кирку
    * на отпускании (критик), а двойной тап выбирал и сразу действовал.
    */
-  const pickTap = (i: number, keys: boolean) => {
+  const pickTap = (i: number, keys: boolean, recenter = false) => {
     if (i !== sel) {
       selectionChanged();
-      setSel(i);
+      choose(i, recenter);
       return;
     }
     if (!keys) return;
@@ -309,470 +313,647 @@ export function ForgeScreen({
 
   useAction(['inspect'], () => forge(), { scope: root });
 
-  let cta: string;
-  if (!check) cta = t('forge.best');
-  else if (!check.open)
-    cta = next?.prestige
+  useAction(['tabPrev', 'tabNext'], () => switchTab(tab === 'picks' ? 'gear' : 'picks'), {
+    scope: root,
+  });
+
+  // ---- CTA: «Выковать <name>» over the price, or over what is still missing ------------------
+  let why = '';
+  if (check && !check.open)
+    why = next?.prestige
       ? t('forge.cta.prestige', { n: next.prestige })
       : t('forge.cta.floor', { rank: rankLetter(next!.floor) });
-  else if (!check.ore) cta = t('forge.cta.ore');
-  else if (balance < coins) cta = t('forge.cta.coins', { sum: fmtShort(coins - balance) });
-  else cta = t('forge.cta.go');
+  else if (check && !check.ore) why = t('forge.cta.ore');
+  else if (check && balance < coins) why = t('forge.cta.coins', { sum: fmtShort(coins - balance) });
+  const ctaText = check && n >= 0 ? t('forge.forgeIt', { name: pickToForge(n) }) : t('forge.best');
 
-  // ---- Витрина: кирка крупно, имя, ступень, состояние, три цифры ----------------------------
-  const roomRef = useRef<HTMLSpanElement>(null);
-  const room = useBox(roomRef);
-  const painted = useFirstFrame(); // the picks grid comes a frame after the window
+  // ---- Stage: the selected pick, STILL (owner: «почему она вообще в 3д»), on a plinth --------
+  const stageRef = useRef<HTMLDivElement>(null);
+  const stage = useBox(stageRef);
+  const painted = useFirstFrame(); // the collection comes a frame after the window
   useFullWin();
-  const art = heroFit(room, u, 64 * u * 4, (a) => pedPx(a, u));
+  usePxd();
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const snap = (v: number) => Math.round(v * dpr) / dpr;
+  const ov = 13 * u; // the ribbon covers the bottom of the stage
+  const roomH = stage.h - ov - 8 * u;
+  let art = fitPick(Math.min(stage.w - 18 * u, roomH * 0.94));
+  let pedW = Math.max(15, Math.round((art * 0.9) / u) | 1);
+  let pedH = Math.max(7, Math.round(pedW / 6) | 1);
+  while (art > 24 && art + (pedH * u) / 2 > roomH) {
+    art = fitPick(art - 1);
+    pedW = Math.max(15, Math.round((art * 0.9) / u) | 1);
+    pedH = Math.max(7, Math.round(pedW / 6) | 1);
+  }
+  const pedBottom = ov + 2 * u;
   const dim = st === 'locked' || (st === 'next' && !ready);
   const selSpeed = pickSpeed(floor, sel, m);
-  const statusText =
-    st === 'hand'
-      ? t('forge.hand')
-      : st === 'have'
-        ? t('forge.forged')
-        : st === 'next'
-          ? t('forge.next')
-          : PICKS[sel].prestige
-            ? t('forge.cta.prestige', { n: PICKS[sel].prestige })
-            : t('forge.cta.floor', { rank: rankLetter(PICKS[sel].floor) });
 
-  const stats = (
-    <div className="arm-stats">
-      <span className="arm-stat">
-        <b>
-          <GxIcon name="pick" size={u * 8} />
-          {d.power}
-        </b>
-        <i>{t('forge.power')}</i>
-        <Delta v={st === 'hand' ? 0 : d.power - cur.power} />
-      </span>
-      <span className="arm-stat">
-        <b>
-          <GxIcon name="energy" size={u * 8} />
-          {fmt(selSpeed)}
-        </b>
-        {/* a break allowed after «/»: «Blöcke/Min.» broke inside a word in the narrow cell */}
-        <i>{t('forge.perMin').replace('/', '/​')}</i>
-        <Delta v={st === 'hand' ? 0 : selSpeed - speed} />
-      </span>
-      {st === 'hand' ? (
-        <span className="arm-stat">
-          <b>
-            <Icon name="up" />
-            {lvl.level}
-          </b>
-          <i>{t('forge.level')}</i>
-        </span>
-      ) : (
-        <span className="arm-stat">
-          <b>
-            <Icon name="down" />
-            {d.prestige ? t('forge.rungPrestige', { n: d.prestige }) : rankLetter(d.floor)}
-          </b>
-          <i>{t('forge.floorWord')}</i>
-        </span>
-      )}
-    </div>
-  );
-
-  const showcase = (
-    <section className="arm-show" style={rarityVars(d.rarity)}>
-      <Panel material="stone" stage className="arm-stage frg-stage">
-        <span ref={roomRef} className="arm-room">
-          {art > 0 && (
-            <span className="arm-ped" style={{ '--ped': `${pedPx(art, u)}px` } as CSSProperties}>
-              <PickArt key={sel} pick={sel} size={art} dim={dim} />
-            </span>
-          )}
-        </span>
-        <div className="arm-id px-dark">
-          <h2 className="arm-name" style={nameFit(pickTitle(sel))}>
-            {pickTitle(sel)}
-          </h2>
-          <div className="arm-sub">
-            <span className={`arm-status is-${st}`}>
-              {st === 'hand' && <Icon name="check" />}
-              {st === 'locked' && <Icon name="lock" />}
-              {statusText}
-            </span>
-            {st === 'hand' && p.pickStars > 0 && (
-              <span className="arm-stars" aria-label={`★${p.pickStars}`}>
-                <Icon name="star" />×{p.pickStars}
-              </span>
-            )}
-          </div>
-        </div>
-        {stats}
-      </Panel>
-    </section>
-  );
-
-  // ---- Карточка выбранной кирки: рецепт / чары и уровень / где куётся -----------------------
-  const opens = opensRocks(sel);
-  const onPick = ENCHANTS.filter((e) => p.ench[e.id] > 0);
-  const recipe = st === 'next' && next && (
-    <div className="frg-recipe">
-      <Heading sub>{t('forge.recipe')}</Heading>
-      <div className="frg-ing">
-        <Slot
-          rarity={PICKS[p.pickMax].rarity}
-          aria-label={pickName(p.pickMax)}
-          tip={pickName(p.pickMax)}
-        >
-          <PickPx pick={p.pickMax} size={u * 18} />
-        </Slot>
-        <span className="frg-ing__txt">
-          <b style={rarityVars(PICKS[p.pickMax].rarity)}>{pickTitle(p.pickMax)}</b>
-        </span>
-      </div>
-      {ores.map((o) => {
-        const have = o.box + o.bag;
-        const ok = have >= o.need;
-        return (
-          <div key={o.rock} className={`frg-ing${ok ? ' is-ok' : ''}`}>
-            <Slot
-              aria-label={t('forge.ore', {
-                rock: rockName(o.rock),
-                have: String(have),
-                need: String(o.need),
-              })}
-              corner={ok ? '✓' : undefined}
-              onClick={() => oreTap(o.rock, o.need, o.box, o.bag)}
-            >
-              <OreIcon rock={o.rock} size={u * 18} />
-            </Slot>
-            <span className="frg-ing__txt">
-              <b>{rockName(o.rock)}</b>
-              <Bar
-                value={o.need ? have / o.need : 1}
-                tone={ok ? 'green' : 'gold'}
-                label={`${fmtShort(have)} / ${fmtShort(o.need)}`}
-              />
-            </span>
-          </div>
-        );
-      })}
-      <div className="frg-ing">
-        <span className="frg-ing__coin">
-          <CoinIcon size={u * 14} />
-        </span>
-        <span className="frg-ing__txt">
-          <b className={`arm-num${balance < coins ? ' is-short' : ''}`}>
-            {coins > 0 ? fmt(coins) : t('forge.paidShort')}
-          </b>
-        </span>
-      </div>
-    </div>
-  );
-
-  const handInfo = st === 'hand' && (
-    <>
-      <div className="frg-level">
-        <span className="frg-level__lv">{t('common.level', { n: lvl.level })}</span>
-        <Bar value={lvl.need ? lvl.into / lvl.need : 1} tone="blue" />
-        <span className="arm-num">
-          {lvl.need ? `${fmt(lvl.into)}/${fmt(lvl.need)}` : t('forge.max')}
-        </span>
-      </div>
-      <div className="frg-ench">
-        <Heading sub>
-          {t('forge.enchants')}{' '}
-          <span className="arm-num">
-            {onPick.length}/{enchSlots(p)}
+  const stateRow =
+    st === 'have' ? (
+      <PxdButton className="frg-equip" hint="confirm" onClick={() => equip(sel)}>
+        <Icon name="up" />
+        {t('forge.equip')}
+      </PxdButton>
+    ) : (
+      <span className={`frg-state is-${st}`}>
+        {st === 'hand' && <Icon name="check" />}
+        {st === 'locked' && <Icon name="lock" />}
+        {st === 'hand'
+          ? t('forge.state.hand')
+          : st === 'next'
+            ? ready
+              ? t('forge.state.ready')
+              : t('forge.next')
+            : d.prestige
+              ? t('forge.state.lockedPrestige', { n: d.prestige })
+              : t('forge.state.locked', { rank: rankLetter(d.floor) })}
+        {st === 'hand' && p.pickStars > 0 && (
+          <span className="frg-stars" aria-label={`★${p.pickStars}`}>
+            <Icon name="star" />×{p.pickStars}
           </span>
-        </Heading>
-        {onPick.length === 0 ? (
-          <p className="arm-muted">{t('forge.noEnch')}</p>
-        ) : (
-          onPick.map((e) => {
-            const l = p.ench[e.id];
-            const off = p.off.includes(e.id);
-            return (
-              <div key={e.id} className={`frg-ench__row${off ? ' is-off' : ''}`}>
-                <b>
-                  {enchantName(e.id)} {ROMAN[l - 1]}
-                </b>
-                <span>
-                  {off ? t('books.offState') : enchantEffect(e.id, enchUnits(e.id, l, p.pickStars))}
-                </span>
-              </div>
-            );
-          })
         )}
-      </div>
-    </>
-  );
+      </span>
+    );
 
-  const where = (st === 'locked' || st === 'have') && (
-    <p className="arm-muted">
-      {d.prestige
-        ? t('forge.say.ladderPrestige', {
-            name: pickName(sel),
-            rarity: nameIn(rarityName(rarityOf(d.rarity).id)),
-            n: d.prestige,
-          })
-        : st === 'locked'
-          ? t('forge.say.floor', { rank: rankLetter(d.floor), rock: nameIn(rockName(d.floor)) })
-          : t('forge.forgedOn', { rank: rankLetter(d.floor) })}
-    </p>
-  );
-
-  const details = (
-    <div className="arm-details">
-      {opens.length > 0 && (
-        <div className="frg-opens">
-          <span>{t('forge.takesShort')}</span>
-          {opens.map((r) => (
-            <span key={r} className="frg-opens__ore" data-tip={rockName(r)}>
-              <OreIcon rock={r} size={u * 12} />
-            </span>
-          ))}
-        </div>
-      )}
-      {recipe}
-      {handInfo}
-      {where}
-    </div>
-  );
-
-  // ---- Лестница: вся коллекция кирок ---------------------------------------------------------
-  const thumb = u * 20;
-  const ladder = (
-    <section className="frg-ladder">
-      <div className="arm-head">
-        <Heading>
-          {t('forge.picks')}{' '}
-          <span className="arm-num arm-muted">
-            {p.pickMax + 1}/{PICKS.length}
-          </span>
-        </Heading>
-      </div>
-      <div className="arm-grid frg-grid" role="group">
-        {(painted ? PICKS : []).map((pk, i) => {
-          const s = statusOf(i);
-          return (
-            <Slot
-              key={pk.id}
-              rarity={s === 'locked' ? 0 : pk.rarity}
-              selected={sel === i}
-              locked={s === 'locked'}
-              count={pk.prestige ? t('forge.rungPrestige', { n: pk.prestige }) : pk.power}
-              corner={s === 'hand' ? '✓' : undefined}
-              dot={s === 'next' && ready ? '!' : undefined}
-              className={`frg-slot is-${s}`}
-              data-autofocus={sel === i ? '' : undefined}
-              aria-label={
-                s === 'hand'
-                  ? t('forge.rungHand', { name: pickName(i) })
-                  : s === 'have'
-                    ? t('forge.rungTake', { name: pickName(i) })
-                    : pickName(i)
-              }
-              tip={<PickTip i={i} hand={p.pick} speedOf={(k) => pickSpeed(floor, k, m)} />}
-              onClick={(e) => pickTap(i, fromKeys(e))}
-              onFocus={() => {
-                if (i !== sel) setSel(i);
+  const show = (
+    <section className="frg-show" style={rarityVars(d.rarity)}>
+      <div ref={stageRef} className="frg-stage pxd-f pxd-f--oct">
+        <i className="frg-glow" />
+        {art > 0 && (
+          <>
+            <PxdPedestal
+              w={pedW}
+              className="frg-ped"
+              style={{
+                left: Math.round((stage.w - pedW * u) / 2 / u) * u,
+                bottom: pedBottom,
+              }}
+            />
+            <span
+              className={`frg-art${dim ? ' is-dim' : ''}`}
+              style={{
+                width: art,
+                height: art,
+                left: snap((stage.w - art) / 2),
+                bottom: snap(pedBottom + (pedH * u) / 2),
               }}
             >
-              <span className={s === 'locked' || (s === 'next' && !ready) ? 'frg-ghost' : ''}>
-                <PickPx pick={i} size={thumb} />
-              </span>
-            </Slot>
+              <PickPx key={sel} pick={sel} size={art} />
+            </span>
+          </>
+        )}
+        <span className="frg-no pxd-f pxd-f--well">
+          {sel + 1} / {PICKS.length}
+        </span>
+      </div>
+      <PxdRibbon className="frg-name" style={nameFit(pickTitle(sel))}>
+        {pickTitle(sel)}
+      </PxdRibbon>
+      <div className="frg-staterow">{stateRow}</div>
+    </section>
+  );
+
+  // ---- Three square stats: power · blocks a minute · level (floor for other picks) -----------
+  const tile = (
+    key: string,
+    icon: GxIconName,
+    num: ReactNode,
+    label: ReactNode,
+    extra?: ReactNode,
+    delta = 0,
+  ) => (
+    <div key={key} className={`frg-stat is-${key} pxd-f pxd-f--panel`}>
+      <span className="frg-stat__ic pxd-f pxd-f--well">
+        <GxIcon name={icon} />
+      </span>
+      <b className="frg-stat__n">
+        {num}
+        {delta !== 0 && (
+          <em className={delta > 0 ? 'is-up' : 'is-down'}>
+            {delta > 0 ? '+' : '−'}
+            {fmt(Math.abs(delta))}
+          </em>
+        )}
+      </b>
+      {extra}
+      {label != null && <i className="frg-stat__l">{label}</i>}
+    </div>
+  );
+  const lvPips = lvl.need ? Math.floor((10 * lvl.into) / lvl.need) : 10;
+  const stats = (
+    <div className="frg-stats">
+      {tile('power', 'pick', d.power, t('forge.power'), null, st === 'hand' ? 0 : d.power - cur.power)}
+      {tile(
+        'speed',
+        'stopwatch',
+        fmt(selSpeed),
+        t('forge.perMinLong'),
+        null,
+        st === 'hand' ? 0 : selSpeed - speed,
+      )}
+      {st === 'hand'
+        ? tile(
+            'level',
+            'upgrade',
+            <>
+              <small>{t('forge.lvlShort')}</small>
+              {lvl.level}
+            </>,
+            lvl.need ? `${fmt(lvl.into)} / ${fmt(lvl.need)}` : t('forge.max'),
+            <PxdPips n={10} on={lvPips} label={t('common.level', { n: lvl.level })} />,
+          )
+        : tile(
+            'floor',
+            'stairs',
+            d.prestige ? t('forge.rungPrestige', { n: d.prestige }) : rankLetter(d.floor),
+            t('forge.floorTile'),
+          )}
+    </div>
+  );
+
+  // ---- «Берёт»: ore chips of what the selected pick breaks ------------------------------------
+  const opens = opensRocks(sel);
+  const oreLen = opens.reduce((a, r) => a + rockName(r).length, 0);
+  const takes = (
+    <div
+      className="frg-line frg-takes"
+      style={{ '--clen': oreLen + opens.length * 4 } as CSSProperties}
+    >
+      <i className="frg-line__k">{t('forge.takesShort')}</i>
+      <span className="frg-line__v">
+        {opens.map((r) => (
+          <span key={r} className="frg-ore pxd-chip pxd-f pxd-f--well">
+            <PxdGem color={oreGem(r)} />
+            {rockName(r)}
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+
+  // ---- «Чары»: round sockets + what is in them + › to the books ------------------------------
+  const slots = enchSlots(p);
+  const onPick = ENCHANTS.filter((e) => p.ench[e.id] > 0).slice(0, Math.max(slots, 1));
+  const enchText =
+    onPick.length === 0
+      ? slots > 1
+        ? t('forge.enchEmptyN')
+        : t('forge.enchEmpty1')
+      : onPick.map((e) => `${enchantName(e.id)} ${ROMAN[p.ench[e.id] - 1]}`).join(', ');
+  const ench = (
+    <div className={`frg-line frg-ench${slots > 2 ? ' is-many' : ''}`}>
+      <i className="frg-line__k">{t('forge.enchants')}</i>
+      <span className="frg-socks">
+        {Array.from({ length: slots }, (_, k) => {
+          const e = onPick[k];
+          return (
+            <PxdSocket
+              key={k}
+              gem={e ? (p.off.includes(e.id) ? ENCH_OFF : (ENCH_GEM[e.id] ?? ENCH_OFF)) : undefined}
+            />
           );
         })}
-      </div>
-    </section>
-  );
-
-  // ---- Снаряжение: рюкзак и вагонетка ----------------------------------------------------------
-  const gear = (
-    <section className="frg-gear">
-      <div className="arm-head">
-        <Heading>{t('forge.gear')}</Heading>
-      </div>
-      <div className="frg-gear__row">
-        <span className="frg-gear__ico">
-          <BagIcon size={u * 16} />
-        </span>
-        <span className="frg-gear__info">
-          <b>{t('forge.bag', { n: fmt(bagCapacity(p.bagLevel)) })}</b>
-          {p.bagLevel < BAG_MAX && (
-            <i className="arm-num">
-              {fmt(bagCapacity(p.bagLevel))} → {fmt(bagCapacity(p.bagLevel + 1))}
-            </i>
-          )}
-        </span>
-        {p.bagLevel < BAG_MAX ? (
-          <Button
-            kind="primary"
-            size="sm"
-            off={balance < bagCost(p.bagLevel)}
-            className={balance < bagCost(p.bagLevel) ? 'px-dark' : undefined}
-            onClick={() => (balance < bagCost(p.bagLevel) ? notifyWarning() : buy('bag'))}
-          >
-            {fmtShort(bagCost(p.bagLevel))} <CoinIcon size={u * 7} />
-          </Button>
-        ) : (
-          <Icon name="check" className="frg-gear__ok" />
-        )}
-      </div>
-      <div className="frg-gear__row">
-        <span className="frg-gear__ico">
-          <GxIcon name="minecart" size={u * 16} />
-        </span>
-        <span className="frg-gear__info">
-          <b>{t('forge.cart')}</b>
-          <i>{p.cart ? t('forge.cartOn') : t('forge.cartOff')}</i>
-        </span>
-        {p.cart ? (
-          <Icon name="check" className="frg-gear__ok" />
-        ) : (
-          <Button
-            kind="primary"
-            size="sm"
-            off={p.tokens < AUTOSELL_TOKENS}
-            className={p.tokens < AUTOSELL_TOKENS ? 'px-dark' : undefined}
-            onClick={() => (p.tokens < AUTOSELL_TOKENS ? notifyWarning() : buy('cart'))}
-          >
-            {fmtShort(AUTOSELL_TOKENS)} <TokenIcon size={u * 7} />
-          </Button>
-        )}
-      </div>
-    </section>
-  );
-
-  // ---- Кнопки под большим пальцем -------------------------------------------------------------
-  // Both buttons always stand in place (nothing jumps): «в руку» is hidden for picks that are
-  // not forged yet and greyed for the one already in hand.
-  const acts = (
-    <div className="arm-acts">
-      <Button
-        kind="confirm"
-        wide
-        hint={st === 'have' ? 'confirm' : undefined}
-        off={st !== 'have'}
-        className={
-          st === 'next' || st === 'locked' ? 'is-hidden' : st !== 'have' ? 'px-dark' : undefined
-        }
-        onClick={() => equip(sel)}
+      </span>
+      <small className="frg-ench__txt">{enchText}</small>
+      <PxdButton
+        className={`frg-round${onBooks ? '' : ' is-hidden'}`}
+        aria-label={t('forge.toBooks')}
+        onClick={() => {
+          tapLight();
+          onBooks?.();
+        }}
       >
-        {st === 'hand' ? t('forge.inHandBtn') : t('forge.equip')}
-      </Button>
-      <Button
-        kind="primary"
-        wide
+        <Icon name="right" />
+      </PxdButton>
+    </div>
+  );
+
+  // ---- Collection: four picks around the selected one + «all 17» ----------------------------
+  const rowRef = useRef<HTMLDivElement>(null);
+  const row = useBox(rowRef);
+  const cellArt = fitPick((row.w - 4 * 4 * u) / 5 - 8 * u);
+  const fullArt = fitPick(24 * u);
+  const cell = (i: number, size: number, after?: () => void) => {
+    const s = statusOf(i);
+    return (
+      <PxdButton
+        key={i}
+        frame={sel === i ? 'sel' : 'panel'}
+        className={`frg-cell is-${s}`}
+        data-autofocus={sel === i ? '' : undefined}
+        aria-pressed={sel === i}
+        aria-label={
+          s === 'hand'
+            ? t('forge.rungHand', { name: pickName(i) })
+            : s === 'have'
+              ? t('forge.rungTake', { name: pickName(i) })
+              : pickName(i)
+        }
+        onClick={(e) => {
+          pickTap(i, fromKeys(e), !!after);
+          after?.();
+        }}
+        onFocus={() => {
+          if (i !== sel && !after) choose(i, false);
+        }}
+      >
+        <span className={s === 'locked' || (s === 'next' && !ready) ? 'frg-ghost' : undefined}>
+          {size > 0 && <PickPx pick={i} size={size} />}
+        </span>
+        {s === 'hand' && <i className="frg-tick">✓</i>}
+        {s === 'next' && ready && <i className="frg-tick is-go">!</i>}
+        {after && (
+          <i className="frg-pw">
+            {PICKS[i].prestige ? t('forge.rungPrestige', { n: PICKS[i].prestige }) : PICKS[i].power}
+          </i>
+        )}
+      </PxdButton>
+    );
+  };
+  const forged = p.pickMax + 1;
+  const collHead = (
+    <div className="frg-coll__h">
+      <h3>{t('forge.collection')}</h3>
+      <small>{t('forge.collCount', { n: forged, all: PICKS.length })}</small>
+    </div>
+  );
+  const coll =
+    layout === 'one' ? (
+      <section className="frg-coll">
+        {collHead}
+        <div ref={rowRef} className="frg-row">
+          {painted && Array.from({ length: 4 }, (_, k) => cell(win + k, cellArt))}
+          <PxdButton
+            className="frg-cell frg-all"
+            onClick={() => {
+              tapLight();
+              setSheet('all');
+            }}
+          >
+            <b>{t('forge.allTile')}</b>
+            <small>{t('forge.allPicks', { n: PICKS.length })}</small>
+          </PxdButton>
+        </div>
+      </section>
+    ) : (
+      <section className="frg-coll frg-list">
+        {collHead}
+        <div className="frg-grid">{painted && PICKS.map((_, i) => cell(i, fullArt))}</div>
+      </section>
+    );
+
+  // ---- Bottom bar: recipe square + the forge CTA, always in the same place -------------------
+  const bar = (
+    <div className="frg-bar">
+      <PxdButton
+        className="frg-sq"
+        off={n < 0}
+        onClick={() => {
+          tapLight();
+          if (n < 0) forge();
+          else setSheet('recipe');
+        }}
+      >
+        <GxIcon name="book" />
+        <span>{t('forge.recipeShort')}</span>
+      </PxdButton>
+      <PxdButton
+        frame="act"
         off={!ready}
         hint="inspect"
+        className="frg-go"
         onClick={forge}
-        className={ready ? 'frg-go' : 'frg-go px-dark'}
+        style={nameFit(ctaText)}
       >
-        {ready && <GxIcon name="anvil" size={u * 9} />}
-        <span className="arm-btn-txt">{cta}</span>
-        {ready && coins > 0 && (
-          <span className="arm-btn-price">
-            {fmtShort(coins)} <CoinIcon size={u * 7} />
-          </span>
-        )}
-      </Button>
+        <GxIcon name="hammer" />
+        <span className="frg-go__t">
+          <b>{ctaText}</b>
+          <small>
+            {ready || (check && !why) ? (
+              <>
+                {coins > 0 ? fmt(coins) : t('forge.paidShort')}
+                {coins > 0 && <CoinIcon size={u * 8} />}
+              </>
+            ) : (
+              why || (lockedByPrestige ? t('forge.cta.prestige', { n: lockedByPrestige.prestige }) : '')
+            )}
+          </small>
+        </span>
+      </PxdButton>
     </div>
   );
 
-  const list = (
-    <div className="arm-list">
-      {/* phone portrait: the strip first — under the 144-px details it opened below the fold on a
-          360x800 phone (0 of 17 picks visible) */}
-      {ladder}
-      {layout === 'one' && details}
-      {gear}
+  // ---- Sheets: the whole collection; the recipe of the next pick -----------------------------
+  const oreTile = (o: { rock: number; need: number; box: number; bag: number }) => {
+    const have = o.box + o.bag;
+    const ok = have >= o.need;
+    return (
+      <PxdButton
+        key={o.rock}
+        frame={ok ? 'sel' : 'panel'}
+        className={`frg-bt${ok ? ' is-ok' : ''}`}
+        aria-label={t('forge.ore', { rock: rockName(o.rock), have: String(have), need: String(o.need) })}
+        onClick={() => oreTap(o.rock, o.need, o.box, o.bag)}
+      >
+        <PxdGem color={oreGem(o.rock)} className="frg-bt__gem" />
+        <b>
+          {fmtShort(Math.min(have, o.need))} / {fmtShort(o.need)}
+          {ok && ' ✓'}
+        </b>
+        <i>{rockName(o.rock)}</i>
+      </PxdButton>
+    );
+  };
+  const sheetEl =
+    sheet === 'all' ? (
+      <PxdSheet
+        title={t('forge.allTitle')}
+        sub={t('forge.collCount', { n: forged, all: PICKS.length })}
+        closeLabel={t('common.close')}
+        onClose={() => setSheet(null)}
+        className="frg-sheet"
+      >
+        <div className="frg-grid">
+          {PICKS.map((_, i) =>
+            cell(i, fullArt, () => {
+              choose(i, true);
+              setSheet(null);
+            }),
+          )}
+        </div>
+      </PxdSheet>
+    ) : sheet === 'recipe' && next ? (
+      <PxdSheet
+        title={t('forge.recipe')}
+        sub={pickTitle(n)}
+        closeLabel={t('common.close')}
+        onClose={() => setSheet(null)}
+        className="frg-sheet"
+      >
+        <div className="frg-recipe">
+          <div className="frg-recipe__row">
+            <span className="frg-bt pxd-f pxd-f--panel" style={rarityVars(PICKS[p.pickMax].rarity)}>
+              <PickPx pick={p.pickMax} size={fitPick(20 * u)} />
+              <i>{pickName(p.pickMax)}</i>
+            </span>
+            <b className="frg-op">+</b>
+            {ores.map(oreTile)}
+          </div>
+          <div className="frg-recipe__row">
+            <span className={`frg-coins pxd-chip pxd-f pxd-f--well${balance < coins ? ' is-short' : ''}`}>
+              <CoinIcon size={u * 8} />
+              {coins > 0 ? fmt(coins) : t('forge.paidShort')}
+            </span>
+            <b className="frg-op">=</b>
+            <span className="frg-bt pxd-f pxd-f--sel" style={rarityVars(next.rarity)}>
+              <span className={ready ? undefined : 'frg-ghost'}>
+                <PickPx pick={n} size={fitPick(20 * u)} />
+              </span>
+              <i>{pickName(n)}</i>
+            </span>
+          </div>
+          <p className="frg-hint">
+            <GxIcon name="sparkles" />
+            {t('forge.boxHint')}
+          </p>
+        </div>
+      </PxdSheet>
+    ) : null;
+
+  // ---- Equipment tab: backpack and minecart as two tall cards + the smith's box --------------
+  const bagMax = p.bagLevel >= BAG_MAX;
+  const bagPrice = bagCost(p.bagLevel);
+  const cap = bagCapacity(p.bagLevel);
+  const gear = (
+    <div className="frg-gear">
+      <div className="frg-cards">
+        <article className="frg-card pxd-f pxd-f--panel">
+          <span className="frg-card__art pxd-f pxd-f--oct">
+            <GxIcon name="backpack" />
+          </span>
+          <h3>{t('forge.bagName')}</h3>
+          <p>{t('forge.bagWhat')}</p>
+          <div className="frg-card__val">
+            <b>{fmt(cap)}</b>
+            {!bagMax && (
+              <>
+                →<em>{fmt(bagCapacity(p.bagLevel + 1))}</em>
+              </>
+            )}
+            <small>{t('forge.blocksN', { n: bagMax ? cap : bagCapacity(p.bagLevel + 1) })}</small>
+          </div>
+          <div className="frg-card__lv">
+            <PxdPips n={BAG_MAX + 1} on={p.bagLevel + 1} />
+            {t('forge.lvlOf', { n: p.bagLevel + 1, max: BAG_MAX + 1 })}
+          </div>
+          {bagMax ? (
+            <span className="frg-card__done pxd-f pxd-f--well">
+              <Icon name="check" />
+              {t('forge.maxed')}
+            </span>
+          ) : (
+            <PxdButton
+              frame="act"
+              off={balance < bagPrice}
+              className="frg-card__btn"
+              onClick={() => {
+                if (balance < bagPrice) {
+                  notifyWarning();
+                  say(t('forge.say.coins', { n: Math.round(bagPrice - balance) }));
+                } else buy('bag');
+              }}
+            >
+              <span className="frg-go__t">
+                <b>{t('forge.upgrade')}</b>
+                <small>
+                  {fmt(bagPrice)}
+                  <CoinIcon size={u * 8} />
+                </small>
+              </span>
+            </PxdButton>
+          )}
+        </article>
+        <article className="frg-card pxd-f pxd-f--panel">
+          <span className="frg-card__art pxd-f pxd-f--oct">
+            <GxIcon name="minecart" />
+          </span>
+          <h3>{t('forge.cart')}</h3>
+          <p>{t('forge.cartWhat')}</p>
+          <div className="frg-card__val">
+            {p.cart ? (
+              <em>{t('forge.cartYes')}</em>
+            ) : (
+              <>
+                <small>{t('forge.cartNo')}</small>→<em>{t('forge.cartYes')}</em>
+              </>
+            )}
+          </div>
+          <div className="frg-card__lv">{t('forge.once')}</div>
+          {p.cart ? (
+            <span className="frg-card__done pxd-f pxd-f--well">
+              <Icon name="check" />
+              {t('forge.bought')}
+            </span>
+          ) : (
+            <PxdButton
+              frame="act"
+              off={p.tokens < AUTOSELL_TOKENS}
+              className="frg-card__btn"
+              onClick={() => {
+                if (p.tokens < AUTOSELL_TOKENS) {
+                  notifyWarning();
+                  say(t('forge.say.tokens', { n: AUTOSELL_TOKENS - p.tokens }));
+                } else buy('cart');
+              }}
+            >
+              <span className="frg-go__t">
+                <b>{t('forge.buy')}</b>
+                <small>
+                  {fmt(AUTOSELL_TOKENS)}
+                  <TokenIcon size={u * 8} />
+                </small>
+              </span>
+            </PxdButton>
+          )}
+        </article>
+      </div>
+      <section className="frg-box pxd-f pxd-f--panel">
+        <div className="frg-coll__h">
+          <h3>{t('forge.box')}</h3>
+          {next && <small>{pickTitle(n)}</small>}
+        </div>
+        {next ? (
+          <div className="frg-box__row">
+            {ores.map(oreTile)}
+            <p className="frg-hint">
+              <GxIcon name="sparkles" />
+              {t('forge.boxHint')}
+            </p>
+          </div>
+        ) : (
+          <p className="frg-hint">{t('forge.boxNone')}</p>
+        )}
+      </section>
     </div>
+  );
+
+  const tabBtn = (id: 'picks' | 'gear', icon: GxIconName, label: string) => (
+    <PxdButton
+      frame={tab === id ? 'sel' : 'panel'}
+      className={`frg-tab${tab === id ? ' is-on' : ''}`}
+      role="tab"
+      aria-selected={tab === id}
+      onClick={() => switchTab(id)}
+    >
+      <GxIcon name={icon} />
+      {label}
+    </PxdButton>
+  );
+  const tabs = (
+    <nav className="frg-tabs" role="tablist">
+      {tabBtn('picks', 'pick', t('forge.picks'))}
+      {tabBtn('gear', 'backpack', t('forge.gear'))}
+    </nav>
   );
 
   return createPortal(
     <div
       ref={root}
-      className={`px arm arm--${layout} is-window frg`}
+      className={`px pxd arm is-window frg frg--${layout} is-${tab}`}
       role="dialog"
       aria-label={t('forge.title')}
     >
-      <header className="arm-top">
-        <Button
-          icon="left"
-          label={t('common.back')}
-          className="arm-top__back"
+      <header className="frg-top">
+        <PxdButton
+          className="frg-back"
+          aria-label={t('common.back')}
           onClick={() => {
             tapLight();
             onClose();
           }}
-        />
-        <Heading ribbon className="arm-top__title">
-          {t('forge.title')}
-        </Heading>
-        <span className="arm-purse">
-          <span>
-            <CoinIcon size={u * 8} />
-            <b className="arm-num">{fmtShort(balance)}</b>
-          </span>
+        >
+          <Icon name="left" />
+        </PxdButton>
+        <div className="frg-ttl">
+          <h1>{t('forge.title')}</h1>
+          <p>{t('forge.purpose')}</p>
+        </div>
+        {layout !== 'one' && tabs}
+        <span className="frg-purse pxd-chip pxd-f pxd-f--well">
+          <CoinIcon size={u * 8} />
+          <b>{fmtShort(balance)}</b>
         </span>
       </header>
-      {showcase}
-      {list}
-      {layout === 'one' ? (
-        acts
+      {layout === 'one' && tabs}
+      {tab === 'picks' ? (
+        <>
+          <div className="frg-main">
+            {show}
+            {stats}
+          </div>
+          <div className="frg-side">
+            {takes}
+            {ench}
+            {layout === 'one' && coll}
+          </div>
+          {layout !== 'one' && coll}
+          {bar}
+        </>
       ) : (
-        <aside className="arm-side">
-          <Panel material="obsidian" className="arm-info">
-            <div className="arm-info__head">
-              <h3 className="arm-info__name">{pickTitle(sel)}</h3>
-              <RarityChip rarity={d.rarity} />
-            </div>
-            {details}
-          </Panel>
-          {acts}
-        </aside>
+        gear
       )}
       {note && (
-        <div className="arm-note" key={note.id} role="status">
+        <div className="arm-note frg-note pxd-f pxd-f--panel" key={note.id} role="status">
           {note.text}
         </div>
       )}
+      {sheetEl}
       {reveal != null && <ForgeReveal pick={reveal} onDone={() => setReveal(null)} />}
     </div>,
     document.body,
   );
 }
 
-/** Подсказка ячейки (наведение мышью, долгое нажатие): сила и скорость против кирки в руке. */
-function PickTip({
-  i,
-  hand,
-  speedOf,
-}: {
-  i: number;
-  hand: number;
-  speedOf: (i: number) => number;
-}): ReactNode {
-  const t = useT();
-  const d = PICKS[i];
-  const h = PICKS[hand];
-  const sp = speedOf(i);
-  const hs = speedOf(hand);
-  return (
-    <span className="arm-tip" style={rarityVars(d.rarity)}>
-      <b>{pickTitle(i)}</b>
-      <RarityChip rarity={d.rarity} />
-      <span className="arm-tip__row">
-        <GxIcon name="pick" size={24} /> {d.power} {i !== hand && <Delta v={d.power - h.power} />}
-      </span>
-      <span className="arm-tip__row">
-        <GxIcon name="energy" size={24} /> {fmt(sp)} {t('forge.perMin')}{' '}
-        {i !== hand && <Delta v={sp - hs} />}
-      </span>
-      {i !== hand && <i className="arm-tip__vs">{t('forge.vsHand')}</i>}
-    </span>
-  );
+/** Pick art sizes that the strip shows pixel-exact (whole device px per art px), ≤ `max`. */
+function fitPick(max: number): number {
+  if (!(max > 0)) return 0;
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const set = PX_SETS.picks;
+  let best = 0;
+  for (const box of [set.box, set.large]) {
+    if (!box) continue;
+    for (let k = 1; (k * box) / dpr <= max + 0.01; k++) {
+      const s = (k * box) / dpr;
+      const f = pxFitOf('picks', 'icon-0', s);
+      if (f && f.fit.crisp && Math.abs(f.fit.s - s) < 0.01 && s > best) best = s;
+    }
+  }
+  return best || Math.max(16, Math.floor(max));
 }
+
+/** The gem colour of an ore: the rock itself for plain rocks, its fleck for ores. */
+function oreGem(rock: number): string {
+  const r = ROCKS[rock];
+  if (!r) return '#9aa8ac';
+  return rock < 4 || rock === 24 ? r.base : r.fleck;
+}
+
+/** Gem colours of the enchantments in the sockets (the books' own colours). */
+const ENCH_GEM: Partial<Record<string, string>> = {
+  power: '#ff8a3a',
+  fortune: '#5fd35a',
+  vein: '#4ff0dc',
+  blast: '#ff5a3a',
+  hammer: '#c4c0b8',
+  token: '#4aa0ff',
+  key: '#ffd25e',
+  frenzy: '#ff5fa8',
+  beam: '#b86bff',
+  reforge: '#ffb52e',
+};
+/** A switched-off enchantment: a grey gem. */
+const ENCH_OFF = '#5e6875';
 
 // ---------------------------------------------------------------------------
 // Сцена выковки.
