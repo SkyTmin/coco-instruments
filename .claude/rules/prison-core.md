@@ -521,3 +521,6 @@ Field drawing, mining, timings, critters and their animations are untouched.
     extended to the right only (left would eat the back button).
   - Follow-ups (outside M4): bomb hint «под полем» and books/chests «внизу» are wrong where the
     items/dock sit elsewhere (p320 column, wide); finding 4 (sheet host) is the lead's.
+    p320 rank chips are clipped by `.mn-rank__needs { overflow: hidden }` (172 px): rank J
+    184 px («0/5» → «0/»), rank U 213 px (both ends) — `{SCR}/ui6M/needs.mjs`, `RK=<rank>`; pp
+    and p430 fit (228/272). Keys chip at 99,9 млн overflows on tl/d1/pl tr (unrealistic count).
