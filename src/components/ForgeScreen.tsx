@@ -336,7 +336,7 @@ export function ForgeScreen({
 
   // ---- Stage: the selected pick, STILL (owner: «почему она вообще в 3д»), on a plinth --------
   const stageRef = useRef<HTMLDivElement>(null);
-  const stage = useBox(stageRef);
+  const stage = useBox(stageRef, tab === 'picks');
   const painted = useFirstFrame(); // the collection comes a frame after the window
   useFullWin();
   usePxd();
@@ -528,7 +528,7 @@ export function ForgeScreen({
             return (
               <PxdSocket
                 key={k}
-                d={slots > 4 ? 12 : slots > 2 ? 14 : 20}
+                d={slots > 4 ? 12 : slots > 2 ? 14 : 16}
                 gem={
                   e ? (p.off.includes(e.id) ? ENCH_OFF : (ENCH_GEM[e.id] ?? ENCH_OFF)) : undefined
                 }
@@ -553,7 +553,7 @@ export function ForgeScreen({
 
   // ---- Collection: four picks around the selected one + «all 17» ----------------------------
   const rowRef = useRef<HTMLDivElement>(null);
-  const row = useBox(rowRef);
+  const row = useBox(rowRef, tab === 'picks');
   // the icon's box has a transparent margin: it may reach over the cell's 2-px ring
   const cellArt = fitPick((row.w - 4 * 4 * u) / 5 - 2 * u);
   const fullArt = fitPick(24 * u);

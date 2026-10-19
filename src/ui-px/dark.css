@@ -278,8 +278,9 @@ html:not([data-ff='phone-portrait']) .pxd-veil {
   color: var(--pd-text);
 }
 .pxd-sheet__title small {
-  margin-left: calc(3 * var(--u));
-  font: 600 var(--pd-fs-sm) / 1 var(--px-font);
+  display: block;
+  margin-top: var(--u);
+  font: 600 var(--pd-fs-sm) / 1.2 var(--px-font);
   color: var(--pd-muted);
 }
 .pxd-sheet__close {

@@ -42,6 +42,31 @@
   height: calc(22 * var(--u));
   flex: none;
 }
+/* phone portrait: back | title · purse, the purpose line under both (full width, never cut) */
+.frg--one .frg-top {
+  display: grid;
+  grid-template: 'back h1 purse' calc(17 * var(--u)) 'back sub sub' auto / auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--g);
+  row-gap: 0;
+  height: auto;
+}
+.frg--one .frg-back {
+  grid-area: back;
+}
+.frg--one .frg-ttl {
+  display: contents;
+}
+.frg--one .frg-ttl h1 {
+  grid-area: h1;
+}
+.frg--one .frg-ttl p {
+  grid-area: sub;
+  margin-top: 0;
+}
+.frg--one .frg-purse {
+  grid-area: purse;
+}
 .frg-back {
   width: calc(22 * var(--u));
   height: calc(22 * var(--u));
@@ -154,7 +179,9 @@
   position: absolute;
   top: calc(5 * var(--u));
   right: calc(8 * var(--u));
+  min-width: calc(7ch + 10 * var(--u));
   padding: 0 calc(3 * var(--u));
+  text-align: center;
   font: 700 var(--pd-fs-sm) / calc(11 * var(--u)) var(--px-font);
   color: var(--pd-muted);
   font-variant-numeric: tabular-nums;
@@ -175,6 +202,7 @@
   height: calc(16 * var(--u));
   margin-top: calc(2 * var(--u));
   flex: none;
+  align-self: stretch;
 }
 .frg-state {
   display: inline-flex;
@@ -213,6 +241,7 @@
 .frg-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: calc(4 * var(--u));
   height: calc(48 * var(--u));
   flex: none;
@@ -224,6 +253,8 @@
   justify-content: center;
   gap: 0;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   text-align: center;
   container: frg-stat / inline-size;
 }
@@ -686,8 +717,12 @@
   height: calc(12 * var(--u));
   color: var(--pd-accent);
 }
+.frg-box__row {
+  flex-wrap: wrap;
+}
+/* beside the ore tiles when there is room, under them on a narrow phone */
 .frg-box__row .frg-hint {
-  flex: 1 1 0;
+  flex: 1 1 calc(60 * var(--u));
 }
 
 /* ---- Sheets: the whole collection, the recipe ---------------------------------------------- */
@@ -711,8 +746,13 @@
   gap: calc(3 * var(--u));
 }
 .frg-recipe .frg-bt {
-  width: calc(40 * var(--u));
-  height: calc(40 * var(--u));
+  width: min(calc(44 * var(--u)), calc((100% - 24 * var(--u)) / 3));
+  height: auto;
+  aspect-ratio: 1;
+}
+.frg-recipe .frg-bt i {
+  overflow-wrap: normal;
+  hyphens: auto;
 }
 .frg-recipe span.frg-bt {
   display: inline-flex;
@@ -759,18 +799,17 @@
     padding-bottom: calc(var(--safe-bottom, 0px) + 4 * var(--u));
   }
   .frg--one .frg-top {
-    height: calc(18 * var(--u));
-    gap: calc(4 * var(--u));
+    grid-template-rows: calc(15 * var(--u)) auto;
+    column-gap: calc(4 * var(--u));
   }
   .frg--one .frg-back {
-    width: calc(18 * var(--u));
-    height: calc(18 * var(--u));
+    width: calc(20 * var(--u));
+    height: calc(20 * var(--u));
   }
   .frg--one .frg-ttl h1 {
     font-size: var(--pd-fs-lg);
   }
   .frg--one .frg-ttl p {
-    margin-top: 0;
     font-size: var(--pd-fs-xs);
   }
   .frg--one .frg-purse {
@@ -810,6 +849,10 @@
   .frg--one .frg-ore {
     height: calc(14 * var(--u));
   }
+  .frg--one .frg-ench__txt {
+    font-size: var(--pd-fs-xs);
+    line-height: 1.15;
+  }
   .frg--one .frg-round {
     width: calc(15 * var(--u));
     height: calc(15 * var(--u));
@@ -842,6 +885,42 @@
   .frg--one .frg-card__btn,
   .frg--one .frg-card__done {
     height: calc(26 * var(--u));
+  }
+}
+
+/* 320×568: two more art pixels off every gap and row, so the showcase keeps half the height */
+@media (max-height: 600px) {
+  .frg--one.arm.is-window {
+    --g: calc(2 * var(--u));
+  }
+  .frg--one .frg-tab {
+    height: calc(16 * var(--u));
+    isolation: isolate;
+  }
+  .frg--one .frg-tab::before {
+    content: '';
+    position: absolute;
+    inset: calc(-4 * var(--u)) calc(-2 * var(--u));
+    z-index: -1;
+  }
+  .frg--one .frg-stats {
+    height: calc(30 * var(--u));
+  }
+  .frg--one .frg-line {
+    height: calc(13 * var(--u));
+  }
+  .frg--one .frg-coll__h {
+    margin-bottom: var(--u);
+  }
+  .frg--one .frg-staterow,
+  .frg--one .frg-equip {
+    height: calc(12 * var(--u));
+  }
+  .frg--one .frg-bar {
+    height: calc(24 * var(--u));
+  }
+  .frg--one .frg-sq {
+    width: calc(24 * var(--u));
   }
 }
 
@@ -954,7 +1033,7 @@
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   align-items: stretch;
 }
-.frg--two .frg-gear {
+.frg.frg--two .frg-gear {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
 }
