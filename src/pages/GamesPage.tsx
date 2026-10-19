@@ -134,6 +134,7 @@ export function GamesPage() {
               <>
                 <CasStat
                   fit
+                  className="hall-fact--sp"
                   icon={<KitIcon name="play" />}
                   value={fmt(slotsSpins)}
                   label={t('slots.statSpins')}
@@ -179,6 +180,7 @@ export function GamesPage() {
               <>
                 <CasStat
                   fit
+                  className="hall-fact--sp"
                   icon={<KitIcon name="play" />}
                   value={fmt(scatterSpins)}
                   label={t('slots.statTurns')}

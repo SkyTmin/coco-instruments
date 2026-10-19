@@ -1655,6 +1655,11 @@ html[data-ff='phone-landscape'] .hall-card__t {
   html[data-ff='phone-portrait'] .hall-card__facts .cas-stat__k {
     display: none;
   }
+  /* Without its caption «▶ 312» read as unexplained points (critic15 #5); the game strips drop
+     the counter on these phones too. The best win keeps its coin. */
+  html[data-ff='phone-portrait'] .hall-card__facts .hall-fact--sp {
+    display: none;
+  }
 }
 /* 320 px: a long one-word name (es «Tragaperras», 140 px in a 125-px column) one more step down —
    a single word cannot wrap. */
