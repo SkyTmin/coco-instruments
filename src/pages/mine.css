@@ -246,9 +246,17 @@ html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items {
 }
 html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items__row {
   --slot: min(calc(23 * var(--u)), round(down, calc((100cqi - 8 * var(--u)) / 5), var(--u)));
+  /* Зазор — целыми px: ячейки стоят на целых точках (space-between давал x = 70,625). */
+  justify-content: center;
+  gap: round(down, calc((100cqi - 5 * var(--slot)) / 4), 1px);
 }
 html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-items[data-n='6'] .mn-items__row {
   --slot: min(calc(23 * var(--u)), round(down, calc((100cqi - 10 * var(--u)) / 6), var(--u)));
+  gap: round(down, calc((100cqi - 6 * var(--slot)) / 5), 1px);
+}
+/* В сжатой ячейке цифра — мелким кеглем набора: 22 px закрывали пол-ячейки. */
+html[data-ff='tablet'] .mn--wide .mn-side--l:has(.mn-quest) .mn-item .px-slot__n {
+  font-size: var(--px-fs-tiny);
 }
 .mn-panel {
   flex: none;
@@ -1254,6 +1262,19 @@ html[data-ff^='phone'] .mn--wide .mn-items__row {
 }
 .mn-item .px-slot__n {
   font-size: var(--px-fs-sm);
+}
+/* Значок — от ячейки, целыми u, на 1u внутри окна рисунка (критик r3: на tl с заданием
+   ячейка 15u, окно 13u, а значок 16u — виден был только центр, 81 % по стороне). */
+.mn-item {
+  --ic: min(var(--ic-max), round(down, calc(var(--slot) - 4 * var(--u)), var(--u)));
+  --ic-max: calc(13 * var(--u));
+}
+html:not([data-ff^='phone']) .mn--wide .mn-item {
+  --ic-max: calc(16 * var(--u));
+}
+.mn-item > .px-slot__art > .gx-icon {
+  width: var(--ic);
+  height: var(--ic);
 }
 .mn-item.is-buy .gx-icon {
   opacity: 0.45;

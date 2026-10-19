@@ -2482,7 +2482,7 @@ export function PrisonPage() {
                   data-tip-key={`item${i + 1}`}
                   onClick={() => live.current.applyItem(it.id)}
                 >
-                  <ItemIcon id={it.id} size={(roomy ? 16 : 13) * u} />
+                  <ItemIcon id={it.id} />
                   {!n && <i className="px-i pxi-plus mn-item__plus" aria-hidden="true" />}
                   <KeyHint action={`item${i + 1}` as Action} />
                 </Slot>
