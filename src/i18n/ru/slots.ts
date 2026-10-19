@@ -69,6 +69,8 @@ export const slots = {
     fromLevel: 'с {n} уровня',
     current: 'выбран',
     note: '«Реликвию» не открывает уровень — её зарабатывают одним крупным спином, и она остаётся навсегда. Символы — Twemoji (CC-BY 4.0, Twitter Inc. и контрибьюторы).',
+    relicLock: 'Реликвия — за выигрыш ×{x} одним спином',
+    credit: 'Символы — Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Баланс',
@@ -93,6 +95,7 @@ export const slots = {
   anyWin: 'ЕСТЬ ВЫИГРЫШ',
   payout: 'выплата ×{n}',
   status: {
+    broke: 'Монеты добывают в шахте',
     counting: 'Считаем…',
     combo: 'Комбо ×{n}!',
     chain: 'Цепочка ×{n}!',
@@ -134,8 +137,9 @@ export const slots = {
   },
   brokeHint: 'Монеты кончились — заработай в шахте',
   recent: 'Последние',
-  statSpins: 'спинов',
-  statBestWin: 'лучший выигрыш',
+  statSpins: 'Спины',
+  statTurns: 'Вращения',
+  statBestWin: 'Лучший выигрыш',
   pay: {
     more: 'Подробнее',
     cascShort: 'Сыгравшие исчезают, новые падают — множитель растёт',
@@ -239,6 +243,7 @@ export const slots = {
   cascade: {
     howShort: '{n} одинаковых где угодно — выигрыш, поле осыпается',
     anteChip: '×{n}',
+    anteBroke: 'Не хватает на Ante — выключите его',
     subtitle: 'Поле {cols}×{rows} · {n} одинаковых где угодно',
     bonus: 'БОНУС',
     left: 'ещё {n}',

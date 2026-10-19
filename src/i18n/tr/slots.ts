@@ -65,6 +65,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'seviye {n} ile açılır',
     current: 'seçili',
     note: '“Kalıntı” seviyeyle açılmaz — tek bir büyük spinle kazanılır ve sonsuza dek kalır. Semboller: Twemoji (CC-BY 4.0, Twitter Inc. ve katkıda bulunanlar).',
+    relicLock: 'Kalıntı — tek spinde ×{x} kazançla',
+    credit: 'Semboller: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Bakiye',
@@ -89,6 +91,7 @@ export const slots: Translation<typeof ru> = {
   anyWin: 'KAZANÇ VAR',
   payout: 'ödeme ×{n}',
   status: {
+    broke: 'Altınlar madenden gelir',
     counting: 'Sayıyoruz…',
     combo: 'Kombo ×{n}!',
     chain: 'Zincir ×{n}!',
@@ -126,8 +129,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Altın bitti — madende kazan',
   recent: 'Son spinler',
-  statSpins: 'spin',
-  statBestWin: 'en iyi kazanç',
+  statSpins: 'Spin',
+  statTurns: 'Spin',
+  statBestWin: 'En iyi kazanç',
   pay: {
     more: 'Ayrıntılar',
     cascShort: 'Kazananlar kaybolur, yenileri düşer — çarpan büyür',
@@ -225,6 +229,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: 'Her yerde {n} aynı sembol = kazanç, alan çöker',
     anteChip: '×{n}',
+    anteBroke: 'Ante için yetmiyor — kapatın',
     subtitle: '{cols}×{rows} alan · her yerde {n} aynı',
     bonus: 'BONUS',
     left: '{n} kaldı',

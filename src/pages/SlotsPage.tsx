@@ -1,11 +1,11 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAction } from '@/input/hooks';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { AnimatedNumber } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
-import { Bar } from '@/ui-px';
+import { Bar, usePress } from '@/ui-px';
 import {
   CasAutoPicker,
   CasBetPicker,
@@ -13,11 +13,15 @@ import {
   CasStat,
   CasToggles,
   fitStyles,
+  CasMore,
   CasRound,
+  CasSheet,
   CasTools,
   keepDot,
   KitIcon,
+  openCasSheet,
   SKIP_GUARD_MS,
+  SKIP_START_MS,
   SKIP_TEMPO,
   useCasLayout,
   useCasLying,
@@ -36,7 +40,17 @@ import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
 import type { SlotsSpinOutcome } from '@/store';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
-import { fmtCompact, fmtNum, lineIn, lineName, skinText, t, useT, winStepName } from '@/i18n';
+import {
+  fmtCompact,
+  fmtNum,
+  lineIn,
+  lineName,
+  skinText,
+  t,
+  useLang,
+  useT,
+  winStepName,
+} from '@/i18n';
 import {
   BET_STEP,
   BETS,
@@ -374,6 +388,7 @@ function PaylineOverlay({ wins }: { wins: SpinResult['wins'] }) {
 
 export function SlotsPage() {
   const tr = useT();
+  const lang = useLang();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const bet = useFinanceStore((s) => s.slotsBet);
@@ -417,8 +432,6 @@ export function SlotsPage() {
   const [pending, setPending] = useState(0);
   const [auto, setAuto] = useState(0);
   const [autoSheet, setAutoSheet] = useState(false);
-  const [sheet, setSheet] = useState(false);
-  const [skinSheet, setSkinSheet] = useState(false);
   const [settings, setSettings] = useState(false);
   const [betSheet, setBetSheet] = useState(false);
   const [betDraft, setBetDraft] = useState(BETS[0]);
@@ -446,6 +459,12 @@ export function SlotsPage() {
   const hurry = useRef(1);
   const skipAt = useRef(-1e9);
   const reelsDone = useRef<(() => void) | null>(null);
+  // Текущий исход, время старта и число «Пропустить» за спин: второе нажатие — сразу финал.
+  const curRes = useRef<SlotsSpinOutcome | null>(null);
+  const spinAt = useRef(-1e9);
+  const skips = useRef(0);
+  // Идёт большой счёт (а не ход звена): его `rollStop` сам доводит спин до конца.
+  const paying = useRef(false);
 
   const reelsRef = useRef<HTMLDivElement>(null);
 
@@ -471,6 +490,10 @@ export function SlotsPage() {
   const winRef = useRef<HTMLSpanElement>(null);
   /** Шток рычага: его дёргает и кнопка «Крутить», а не только палец. */
   const armRef = useRef<HTMLSpanElement>(null);
+  // Рычаг виден нажатым с первого кадра (critic9 #12): шар садится на арт-пиксель ещё до
+  // того, как палец сдвинулся.
+  const leverRef = useRef<HTMLDivElement>(null);
+  const leverPress = usePress(leverRef);
   const dustRef = useRef<HTMLCanvasElement>(null);
   const dustStop = useRef<(() => void) | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -545,6 +568,20 @@ export function SlotsPage() {
   // Уровень — только знак и скины (v2.66): денег за него больше нет.
   const level = levelFromXp(xp);
   const broke = balance < MIN_BET && freeSpins <= 0;
+  // «Нет монет»: нажатие объясняет, откуда монеты (строка статуса, толчок плашки, вибро).
+  const [nope, setNope] = useState(0);
+  const [nopeShown, setNopeShown] = useState(false);
+  useEffect(() => {
+    if (!nope) return undefined;
+    setNopeShown(true);
+    const tm = setTimeout(() => setNopeShown(false), 2600);
+    return () => clearTimeout(tm);
+  }, [nope]);
+  const explainBroke = useCallback(() => {
+    if (!broke) return;
+    notifyWarning();
+    setNope((n) => n + 1);
+  }, [broke]);
   const canSpin = hydrated && !spinning && (freeSpins > 0 || balance >= bet);
   // На табло — копилка плюс то, что заплатит сама линия семёрок.
   const jackpotPrize = jackpotPool + lineBet(bet) * symbolOf('seven').three;
@@ -607,6 +644,7 @@ export function SlotsPage() {
 
       setCounting(true);
       setWinStep(null);
+      paying.current = true;
       wonRef.current = start;
       winOdo.current?.set(start);
       tapLight();
@@ -666,6 +704,7 @@ export function SlotsPage() {
           },
           done: () => {
             live = false;
+            paying.current = false;
             rollStop.current = null;
             wonRef.current = to;
             balOdo.current?.set(balance);
@@ -920,6 +959,10 @@ export function SlotsPage() {
       setSpinning(true);
       hurry.current = 1;
       setHurried(false);
+      curRes.current = res;
+      spinAt.current = performance.now();
+      skips.current = 0;
+      paying.current = false;
 
       // Барабаны отъехали (или их остановил «Пропустить») — дальше каскад или деньги.
       const reelTimers: ReturnType<typeof setTimeout>[] = [];
@@ -944,29 +987,77 @@ export function SlotsPage() {
   );
 
   /**
+   * Второе «Пропустить»: всё, что ещё впереди, случается сразу — итоговое поле, сумма, баланс.
+   * Исход решён в момент спина, поэтому пропуск меняет только показ.
+   */
+  const skipAll = useCallback(() => {
+    const res = curRes.current;
+    if (!res) return;
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    if (reelsDone.current) {
+      reelsDone.current = null;
+      setSlam((n) => n + 1);
+    }
+    stopReelSound();
+    dustStop.current?.();
+    setCelebration(null);
+    // Большой счёт уже идёт — его стоп сам ставит итог и закрывает спин (`done` → `finish`).
+    if (paying.current && rollStop.current) {
+      rollStop.current();
+      return;
+    }
+    rollStop.current?.();
+    rollStop.current = null;
+    const last = res.steps[res.steps.length - 1];
+    if (last) {
+      shownGrid.current = last.next;
+      setBoard(gridToBoard(last.next, `${res.steps.length}-end`));
+    }
+    setCascade(null);
+    setChain(0);
+    setStepWins([]);
+    wonRef.current = res.total;
+    winOdo.current?.set(res.total);
+    finish(res);
+  }, [finish]);
+
+  /**
    * «Пропустить» — та же кнопка «Крутить», пока спин идёт: исход уже решён, правила не
-   * тронуты. Первое нажатие ставит барабаны на место сразу; следующие досчитывают текущий
-   * ход, а оставшиеся звенья и счёт идут в темпе SKIP_TEMPO (обычный спин — как турбо).
+   * тронуты. Первое нажатие ставит барабаны на место и переводит остаток в темп SKIP_TEMPO
+   * (звенья и счёт вдвое быстрее); второе — сразу итог (`skipAll`). Первые SKIP_START_MS
+   * после старта нажатие не считается: двойной тап не съедает показ спина.
    */
   const skip = useCallback(() => {
     if (!spinning) return;
-    skipAt.current = performance.now();
-    const land = reelsDone.current;
-    if (land) {
-      tapLight();
-      setSlam((n) => n + 1);
-      land();
+    const now = performance.now();
+    if (now - spinAt.current < SKIP_START_MS) return;
+    skipAt.current = now;
+    skips.current += 1;
+    tapLight();
+    if (skips.current >= 2) {
+      skipAll();
       return;
     }
     hurry.current = SKIP_TEMPO;
     setHurried(true);
-    if (!skipCount()) tapLight();
-  }, [spinning, skipCount]);
+    const land = reelsDone.current;
+    if (land) {
+      setSlam((n) => n + 1);
+      land();
+      return;
+    }
+    skipCount();
+  }, [spinning, skipCount, skipAll]);
   // Спин от игрока (кнопка, Space, «A»): тап сразу после «Пропустить» нового спина не начинает.
   const pressSpin = useCallback(() => {
     if (performance.now() - skipAt.current < SKIP_GUARD_MS) return;
+    if (broke) {
+      explainBroke();
+      return;
+    }
     spin();
-  }, [spin]);
+  }, [spin, broke, explainBroke]);
 
   // Баннер крупного выигрыша живёт ~4 секунды: вспышка → лучи → счёт с тиканьем.
   useEffect(() => {
@@ -1081,7 +1172,7 @@ export function SlotsPage() {
         className="cas-skin-btn"
         onClick={() => {
           tapLight();
-          setSkinSheet(true);
+          openCasSheet('skins');
         }}
         aria-label={tr('slots.a11y.skin')}
         data-tip={tr('slots.a11y.skin')}
@@ -1092,7 +1183,7 @@ export function SlotsPage() {
       <CasRound
         onClick={() => {
           tapLight();
-          setSheet(true);
+          openCasSheet('rules');
         }}
         aria-label={tr('slots.a11y.rules')}
         data-tip={tr('slots.a11y.rules')}
@@ -1113,23 +1204,30 @@ export function SlotsPage() {
       </CasRound>
     </>
   );
+  // The header is memoised: a new `right` on every page render re-ran GameTop's fit — a forced
+  // layout of the whole page inside the spin-start task (critic12, next pass 7). `topRight`'s
+  // handlers are stable; what it shows changes with the skin and the language.
+  const header = useMemo(
+    () =>
+      lying ? undefined : (
+        <GameTop title={skinText(skin, 'title')} onBack={goBack} right={topRight} />
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lying, lang, skin, nav],
+  );
 
   return (
     <GameScreen
       className="gx cas-page"
       bg={
-        <div className="slots cas-bg" data-skin={skin}>
+        <div className="slots cas-bg cas-ground pxt-stone" data-skin={skin}>
           {/* Сцена темы: фон и декор за всем содержимым страницы */}
           <div className="slots-scene" aria-hidden="true">
             <span className="slots-scene__decor" />
           </div>
         </div>
       }
-      top={
-        lying ? undefined : (
-          <GameTop title={skinText(skin, 'title')} onBack={goBack} right={topRight} />
-        )
-      }
+      top={header}
     >
       {/* --speed уезжает во ВСЕ CSS-анимации страницы. Без него турбо сжимал
           только паузы на таймерах, а жетон, титул ступени, счётчик и рамки
@@ -1343,13 +1441,19 @@ export function SlotsPage() {
 
                 {/* Рычаг */}
                 <div
+                  ref={leverRef}
                   className={`lever${canSpin ? '' : ' is-off'}`}
-                  onPointerDown={leverDown}
+                  onPointerDown={(e) => {
+                    leverPress.onPointerDown(e);
+                    leverDown(e);
+                  }}
+                  onPointerLeave={leverPress.onPointerLeave}
                   onPointerMove={leverMove}
                   onPointerUp={leverUp}
                   onPointerCancel={leverUp}
                   role="button"
                   tabIndex={-1}
+                  aria-disabled={canSpin ? undefined : true}
                   aria-label={tr('slots.a11y.lever')}
                 >
                   <span className="lever__slot" />
@@ -1382,7 +1486,9 @@ export function SlotsPage() {
             текст в нём на телефоне выходил 9–14 px. Здесь он кегля набора, высота
             постоянная — спины меняют только содержимое. */}
         <div className="cabinet__status cas-status">
-          {cascade || counting ? (
+          {nopeShown && !spinning ? (
+            <span className="status">{tr('slots.status.broke')}</span>
+          ) : cascade || counting ? (
             <>
               <span className={`status status--combo status--t${tier}`}>
                 {/* Во время счёта строка говорит только, что идёт счёт.
@@ -1434,7 +1540,9 @@ export function SlotsPage() {
               )}
             </>
           ) : (
-            <span className="status status--hint">{tr('slots.status.hintLever')}</span>
+            <span className="status status--hint">
+              {broke ? tr('slots.brokeHint') : tr('slots.status.hintLever')}
+            </span>
           )}
         </div>
 
@@ -1460,6 +1568,8 @@ export function SlotsPage() {
           busy={spinning}
           onSpin={() => (auto > 0 ? stopAuto() : pressSpin())}
           onSkip={skip}
+          onBlocked={explainBroke}
+          nope={nope}
           spinLabel={
             auto > 0
               ? tr('slots.btn.stopShort')
@@ -1486,74 +1596,77 @@ export function SlotsPage() {
         />
       </div>
 
-      {sheet && (
-        <GxSheet title={tr('slots.pay.title')} onClose={() => setSheet(false)}>
-          {/* Правила — одна строка на раздел и картинка (таблица, лестница, линии); длинные
+      <CasSheet id="rules">
+        {(close) => (
+          <GxSheet title={tr('slots.pay.title')} onClose={close}>
+            {/* Правила — одна строка на раздел и картинка (таблица, лестница, линии); длинные
               абзацы — под «Подробнее» (critic K2 #8: на пергаменте 12-px абзацы не читались). */}
-          <div className="cas-rules">
-            <p className="cas-rules__lead">{keepDot(tr('slots.pay.introShort'))}</p>
-            <div className="paytable">
-              {[...SLOT_SYMBOLS].reverse().map((s) => (
-                <div className="paytable__row cas-well" key={s.id}>
-                  <span className="paytable__syms">
-                    <Sym id={s.id} skin={skin} size={26} />
-                    <Sym id={s.id} skin={skin} size={26} />
-                    <Sym id={s.id} skin={skin} size={26} />
-                  </span>
-                  <span className="paytable__mult px-num">×{s.three}</span>
-                  <span className="paytable__pair">{tr('slots.pay.pair', { n: s.pair })}</span>
-                </div>
-              ))}
-            </div>
-            <div className="lines-grid">
-              {PAYLINES.map((line) => (
-                <div
-                  className="line-card cas-well"
-                  key={line.id}
-                  role="img"
-                  aria-label={lineName(line.id)}
-                  data-tip={lineName(line.id)}
-                >
-                  <svg viewBox="0 0 30 30" aria-hidden="true">
-                    {[0, 1, 2].map((col) =>
-                      [0, 1, 2].map((row) => (
-                        <rect
-                          key={`${col}-${row}`}
-                          x={col * 10 + 1}
-                          y={row * 10 + 1}
-                          width="8"
-                          height="8"
-                          className={line.rows[col] === row ? 'is-on' : ''}
-                        />
-                      )),
-                    )}
-                  </svg>
-                </div>
-              ))}
-            </div>
-            <section className="cas-rules__sec">
-              <h3 className="cas-rules__h">{tr('slots.pay.cascTitle')}</h3>
-              <p className="cas-rules__lead">{tr('slots.pay.cascShort')}</p>
-              <div className="combo-rules__ladder">
-                {COMBO_LADDER.map((m, i) => (
-                  <span key={i} className="combo-rules__step cas-well">
-                    <b className="px-num">{i + 1 === COMBO_LADDER.length ? `${i + 1}+` : i + 1}</b>
-                    <i className="px-num">×{m}</i>
-                  </span>
+            <div className="cas-rules">
+              <p className="cas-rules__lead">{keepDot(tr('slots.pay.introShort'))}</p>
+              <div className="paytable">
+                {[...SLOT_SYMBOLS].reverse().map((s) => (
+                  <div className="paytable__row cas-well" key={s.id}>
+                    <span className="paytable__syms">
+                      <Sym id={s.id} skin={skin} size={26} />
+                      <Sym id={s.id} skin={skin} size={26} />
+                      <Sym id={s.id} skin={skin} size={26} />
+                    </span>
+                    <span className="paytable__mult px-num">×{s.three}</span>
+                    <span className="paytable__pair">{tr('slots.pay.pair', { n: s.pair })}</span>
+                  </div>
                 ))}
               </div>
-            </section>
-            <details className="cas-more">
-              <summary>{tr('slots.pay.more')}</summary>
-              <p>{tr('slots.pay.intro', { unit: LINE_UNIT, bet, line: lineBet(bet) })}</p>
-              <p>{tr('slots.pay.cascText')}</p>
-              <p>{tr('slots.pay.note')}</p>
-            </details>
-          </div>
-        </GxSheet>
-      )}
+              <div className="lines-grid">
+                {PAYLINES.map((line) => (
+                  <div
+                    className="line-card cas-well"
+                    key={line.id}
+                    role="img"
+                    aria-label={lineName(line.id)}
+                    data-tip={lineName(line.id)}
+                  >
+                    <svg viewBox="0 0 30 30" aria-hidden="true">
+                      {[0, 1, 2].map((col) =>
+                        [0, 1, 2].map((row) => (
+                          <rect
+                            key={`${col}-${row}`}
+                            x={col * 10 + 1}
+                            y={row * 10 + 1}
+                            width="8"
+                            height="8"
+                            className={line.rows[col] === row ? 'is-on' : ''}
+                          />
+                        )),
+                      )}
+                    </svg>
+                  </div>
+                ))}
+              </div>
+              <section className="cas-rules__sec">
+                <h3 className="cas-rules__h">{tr('slots.pay.cascTitle')}</h3>
+                <p className="cas-rules__lead">{tr('slots.pay.cascShort')}</p>
+                <div className="combo-rules__ladder">
+                  {COMBO_LADDER.map((m, i) => (
+                    <span key={i} className="combo-rules__step cas-well">
+                      <b className="px-num">
+                        {i + 1 === COMBO_LADDER.length ? `${i + 1}+` : i + 1}
+                      </b>
+                      <i className="px-num">×{m}</i>
+                    </span>
+                  ))}
+                </div>
+              </section>
+              <CasMore summary={tr('slots.pay.more')}>
+                <p>{tr('slots.pay.intro', { unit: LINE_UNIT, bet, line: lineBet(bet) })}</p>
+                <p>{tr('slots.pay.cascText')}</p>
+                <p>{tr('slots.pay.note')}</p>
+              </CasMore>
+            </div>
+          </GxSheet>
+        )}
+      </CasSheet>
 
-      {skinSheet && <SkinSheet onClose={() => setSkinSheet(false)} />}
+      <CasSheet id="skins">{(close) => <SkinSheet onClose={close} />}</CasSheet>
 
       {autoSheet && (
         <GxSheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
