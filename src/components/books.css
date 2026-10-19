@@ -1,349 +1,1180 @@
-/* Enchantment books tab (components/BooksTab.tsx) on the pixel kit — the tab's own parts.
-   Skeleton (columns, showcase, stats, actions) — armory.css. The scenes (.pbks*, .pbka*, .pbook*)
-   and the Enchanter's portrait overlays (.pbk-mage__*) keep their styles in game-ui.css. */
+/* Books (components/BooksTab.tsx) on the dark kit (`src/ui-px/dark.*`) — B1, the handoff layout
+   (owner 19.10): header · three tabs («В кирке» / «Полка» / «Чародей») · the tab's list · the card
+   of what is chosen · the action bar (two squares + the main button, the same places on every
+   tab). The forge's sibling (forge.css): colours only from the `.pxd` tokens, sizes in whole art
+   pixels. The scenes (.pbks*, .pbka*, .pbook*) and the Enchanter's portrait overlays
+   (.pbk-mage__*) keep their styles in game-ui.css. */
 
-/* From the mine dock the books are a full-screen window (`.is-window`, as the forge and the
-   backpack); inside a multi-tab camp they fill the camp's body (`.is-embed`). */
-.bkx {
+/* ---- The window: dark, no wood frame. Phones: a column; elsewhere list | card -------------- */
+.bks.arm {
+  --g: calc(4 * var(--u));
+  --bg: calc(3 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: var(--g);
+  color: var(--pd-text);
+  font: 500 var(--pd-fs) / 1.2 var(--px-font);
+  overflow: hidden;
+  /* the height tiers below ask the window's own content box: the Telegram insets are already
+     out of it (a media query would not see them) */
+  container: bks / size;
+}
+.bks.arm.is-window {
+  /* the camp chrome's top (safe area + Telegram's own header row), not the bare safe area */
+  padding: calc(var(--gs-safe-top, var(--safe-top, 0px)) + 4 * var(--u))
+    calc(var(--gs-safe-right, 0px) + 6 * var(--u))
+    calc(var(--gs-safe-bottom, var(--safe-bottom, 0px)) + 6 * var(--u))
+    calc(var(--gs-safe-left, 0px) + 6 * var(--u));
+  border-width: 0;
+  border-image: none;
+  background: radial-gradient(120% 60% at 50% 22%, var(--pd-bg2), var(--pd-bg) 70%);
+}
+/* inside a multi-tab camp: the camp body, dark */
+.bks.arm.is-embed {
+  height: 100%;
   min-height: 0;
+  padding: calc(4 * var(--u));
+  background: var(--pd-bg);
 }
-.bkx .bkx-top {
-  grid-template-columns: minmax(0, 1fr);
-  justify-items: end;
+.bks .gx-icon {
+  width: calc(10 * var(--u));
+  height: calc(10 * var(--u));
+  flex: none;
 }
-.bkx-dust {
-  color: var(--px-violet);
+.bks .is-hidden {
+  visibility: hidden;
 }
-/* Embedded on landscape / tablet / desktop: no top row — the purse heads the side column. */
-.bkx.is-embed.arm--two {
-  grid-template:
-    'show show' minmax(0, 13fr)
-    'list side' minmax(0, 7fr)
-    / minmax(0, 11fr) minmax(0, 9fr);
+.bks :is(h1, h2, h3, p) {
+  margin: 0;
 }
-.bkx.is-embed.arm--three {
-  grid-template:
-    'list show side' minmax(0, 1fr)
-    / minmax(0, 6fr) minmax(0, 15fr) minmax(0, 6fr);
+.bks i,
+.bks em {
+  font-style: normal;
 }
-.bkx .arm-side > .arm-purse {
+.bks .tok-ico,
+.bks .coin-ico {
   flex: none;
 }
 
-/* Status under the name: can enchant / weaker / no room. */
-.arm-status.is-ok {
-  color: var(--px-green);
-}
-.arm-status.is-lower {
-  color: var(--px-red);
-}
-.arm-status.is-full {
-  color: var(--px-gold);
-}
-/* The effect line: the small step at a fixed height — one line on a plate across the stage (the
-   longest effect, «+252% лишних блоков добычи», is ~260 px), two on the narrow plate beside the
-   art. The plate stacks under the art on every format, as the forge's: beside it on a phone the
-   plate was 139 px and broke words in the middle («Эффективнос|ть»). */
-.bkx-fx {
-  margin: 0;
-  hyphens: auto;
-  overflow-wrap: normal;
-  max-width: 100%;
-  height: calc(1.2 * var(--px-fs-sm));
-  font: 500 var(--px-fs-sm) / 1.2 var(--px-font);
-  color: var(--px-text);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-}
-@container arm-show (aspect-ratio > 23 / 20) {
-  .arm-stage .bkx-fx {
-    height: calc(2 * 1.2 * var(--px-fs-sm));
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-  }
-}
-
-/* The chance cell is a toggle for dust (tap = add / remove dust). Same box as the other cells. */
-.bkx-chance {
-  margin: 0;
-  background: none;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-/* Pressed (kit `usePress`): the non-kit buttons sink one step like a kit button. */
-.bkx-chance:is(:active, .is-down),
-.bkx .pbk-mage:is(:active, .is-down) {
-  translate: 0 var(--u);
-  filter: brightness(0.9);
-}
-.bkx-chance.is-hi > b {
-  color: var(--px-green);
-}
-.bkx-chance.is-mid > b {
-  color: var(--px-gold);
-}
-.bkx-chance.is-lo > b {
-  color: var(--px-red);
-}
-.bkx-dusttag {
-  grid-area: delta;
-  justify-self: start;
-  display: inline-flex;
+/* ---- Header: back · title + purpose · purse (tabs between them on wide screens) ------------ */
+.bks-top {
+  display: flex;
   align-items: center;
-  gap: var(--u);
-  font: 400 var(--px-fs) / 1 var(--px-head);
-  font-variant-numeric: tabular-nums;
-  color: var(--px-text);
+  gap: var(--g);
+  height: calc(22 * var(--u));
+  flex: none;
+  min-width: 0;
+}
+/* phone portrait: back | title · purse, the purpose line under both; when it doesn't fit there
+   (fit pass) it takes its own full-width row — never cut */
+.bks--one .bks-top {
+  display: grid;
+  grid-template: 'back h1 purse' calc(17 * var(--u)) 'back sub sub' auto / auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--g);
+  row-gap: 0;
+  height: auto;
+}
+.bks--one .bks-top.is-subrow {
+  grid-template: 'back h1 purse' calc(22 * var(--u)) 'sub sub sub' auto / auto minmax(0, 1fr) auto;
+}
+.bks--one .bks-top.is-subrow .bks-ttl p {
+  white-space: normal;
+}
+.bks-top.is-nosub .bks-ttl p {
+  display: none;
+}
+.bks--one .bks-back {
+  grid-area: back;
+}
+.bks--one .bks-ttl {
+  display: contents;
+}
+.bks--one .bks-ttl h1 {
+  grid-area: h1;
+}
+.bks--one .bks-ttl p {
+  grid-area: sub;
+  margin-top: 0;
+}
+.bks--one .bks-purse {
+  grid-area: purse;
+}
+.pxd-btn.bks-back {
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+  padding: 0;
+  flex: none;
+}
+.bks-ttl {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.bks-ttl h1 {
+  font: 400 var(--pd-fs-lg) / 1 var(--px-head);
+  color: var(--pd-text);
   white-space: nowrap;
 }
-.bkx-dusttag.is-on {
-  color: var(--px-green);
+.bks-ttl p {
+  margin-top: var(--u);
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.arm-stat.is-short > b {
-  color: var(--px-red);
+.bks-purse {
+  height: calc(17 * var(--u));
+  gap: calc(4 * var(--u));
+  flex: none;
 }
-.bkx-stars > b > .px-i {
-  color: var(--px-gold);
-}
-
-/* Details. */
-.bkx-details p {
-  margin: 0;
-}
-.bkx-block {
-  display: grid;
+.bks-purse > span {
+  display: inline-flex;
+  align-items: center;
   gap: calc(2 * var(--u));
 }
-/* the dust toggle: as wide as its words, but never wider than the narrow side column */
-.bkx-block > .px-btn {
-  justify-self: start;
-  max-width: 100%;
-  white-space: normal;
-  text-align: left;
-}
-/* a block, not a flex row: the text was an anonymous flex item that could not wrap below its
-   longest word (12 px past the side column on a phone held sideways) */
-.bkx-note {
-  display: block;
-  color: var(--px-gold);
-}
-.bkx-note > .gx-icon {
-  vertical-align: middle;
-  margin-right: calc(2 * var(--u));
-}
-.bkx-note.is-bad {
-  color: var(--px-red);
+.bks-purse b {
+  font: 700 var(--pd-fs) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Grids: the pick's places, the Enchanter's tiers, the shelf. */
-.bkx-sec .px-heading b {
-  color: var(--px-gold);
-}
-.bkx-shelfhead {
-  align-items: center;
-}
-.bkx-up {
-  color: var(--px-green);
-}
-.bkx-weak .pbook,
-.bkx-off .pbook,
-.bkx-off.px-slot > :first-child {
-  filter: saturate(0.35) brightness(0.75);
-}
-.bkx-ghost {
-  display: grid;
-  filter: brightness(0) invert(0.35);
-}
-
-/* The Enchanter: his portrait (3:2, overlays in %) beside his line, the four tiers next to it. */
-.bkx-seller {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+/* ---- Tabs: three chunky ones, content-sized, centred ------------------------------------------ */
+.bks-tabs {
+  display: flex;
+  justify-content: center;
   gap: calc(4 * var(--u));
-  align-items: start;
+  flex: none;
+  min-width: 0;
 }
-.bkx-mage {
+.pxd-btn.bks-tab {
+  flex: none;
+  height: calc(23 * var(--u));
+  padding: 0 calc(4 * var(--u));
+  gap: calc(3 * var(--u));
+  color: var(--pd-muted);
+  white-space: nowrap;
+}
+.bks-tab.is-on {
+  color: var(--pd-text);
+}
+.bks-tab.is-on .gx-icon {
+  color: var(--pd-accent);
+}
+.bks-tab__n {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--pd-muted);
+}
+.bks-tab.is-on .bks-tab__n {
+  color: var(--pd-accent);
+}
+/* the row doesn't fit (fit pass): first the icons go, then the counts — the words stay */
+.bks-tabs.is-tight {
+  gap: calc(3 * var(--u));
+}
+.bks-tabs.is-tight .bks-tab {
+  padding: 0 calc(3 * var(--u));
+}
+.bks-tabs.is-tight .bks-tab > .gx-icon,
+.bks-tabs.is-tight2 .bks-tab__n {
+  display: none;
+}
+.bks-tabs.is-tight2 {
+  gap: calc(2 * var(--u));
+}
+/* still too wide: one kit step smaller */
+.bks-tabs.is-tight3 .bks-tab {
+  font-size: var(--pd-fs-sm);
+}
+
+/* ---- Body: the tab's list, the card, the bar -------------------------------------------------- */
+.bks-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bg);
+}
+.bks-h {
+  font: 700 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bks-h b {
+  color: var(--pd-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Tiles: an enchant in the pick, a free / locked place, a shelf book (square) ------------ */
+.bks-tile,
+.pxd-btn.bks-tile {
+  position: relative;
+  flex: none;
+  width: var(--tile);
+  height: var(--tile);
+  padding: 0;
   display: grid;
+  place-items: center;
+}
+.bks-tile > .pbook {
+  grid-area: 1 / 1;
+}
+.bks-tile:is(.is-off, .is-weak) > .pbook {
+  filter: grayscale(0.8) brightness(0.75);
+}
+.bks-tile.is-place {
+  opacity: 0.6;
+}
+.bks-tile.is-lock {
+  color: var(--pd-muted);
+}
+.bks-tile__lv {
+  position: absolute;
+  right: var(--u);
+  bottom: 0;
+  font: 700 var(--pd-fs-xs) / 1 var(--px-font);
+  color: var(--pd-text);
+  text-shadow:
+    var(--u) 0 0 var(--pd-ink),
+    calc(-1 * var(--u)) 0 0 var(--pd-ink),
+    0 var(--u) 0 var(--pd-ink),
+    0 calc(-1 * var(--u)) 0 var(--pd-ink);
+  pointer-events: none;
+}
+.bks-tile__c {
+  position: absolute;
+  top: var(--u);
+  right: var(--u);
+  display: grid;
+  place-items: center;
+  min-width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+  background: var(--pd-ink);
+  color: var(--pd-text);
+  font: 700 var(--pd-fs-xs) / 1 var(--px-font);
+  pointer-events: none;
+}
+.bks-tile__c :is(.px-i, .gx-icon) {
+  width: calc(6 * var(--u));
+  height: calc(6 * var(--u));
+}
+.bks-tile__c.is-up {
+  color: var(--pd-ok);
+}
+.bks-tile__c.is-new {
+  background: var(--pd-accent);
+  color: var(--pd-act-ink);
+}
+
+/* ---- «В кирке»: the pick card + its places ------------------------------------------------- */
+.bks-pc {
+  flex: none;
+  display: grid;
+  /* the name and the level line take the whole width; the reforge sits beside the stars */
+  grid-template:
+    'ico name name' auto
+    'ico lv lv' auto
+    'ico st re' auto / auto minmax(0, 1fr) auto;
+  column-gap: calc(3 * var(--u));
+  row-gap: var(--u);
+  align-items: center;
+  padding: var(--u);
+  container: bks-pc / inline-size;
+}
+/* a narrow card (320 px): the reforge says its word, the next star is in its aria-label */
+@container bks-pc (max-width: 320px) {
+  .bks-pc__re > small {
+    display: none;
+  }
+}
+/* the ten pips need the stars row to themselves: narrow cards keep «★ 2/10» */
+@container bks-pc (max-width: 390px) {
+  .bks-pc .pxd-pips {
+    display: none;
+  }
+}
+.bks-pc__ico {
+  grid-area: ico;
+  display: grid;
+  place-items: center;
+  padding: var(--u);
+}
+.bks-pc__txt {
+  display: contents;
+}
+.bks-pc__name {
+  grid-area: name;
+  font: 400 var(--pd-fs) / 1.15 var(--px-head);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bks-pc__name.is-tight {
+  font-size: var(--pd-fs-sm);
+}
+.bks-pc__name.is-tight2 {
+  font-size: var(--pd-fs-xs);
+}
+.bks-pc__lv {
+  grid-area: lv;
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* «ур. 25 · ещё 1 124 блока»: a narrow card (fr / it at 320) breaks it after the dot */
+.bks-pc__lv > span {
+  display: inline-block;
+  white-space: pre;
+}
+.bks-pc__stars {
+  grid-area: st;
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  min-width: 0;
+  font: 700 var(--pd-fs-sm) / 1.2 var(--px-font);
+  font-variant-numeric: tabular-nums;
+}
+.bks-pc__stars > .px-i {
+  color: var(--pd-accent);
+}
+.pxd-btn.bks-pc__re {
+  grid-area: re;
+  height: calc(17 * var(--u));
+  gap: calc(2 * var(--u));
+  padding: 0 calc(3 * var(--u));
+}
+.bks-pc__re > b {
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  white-space: nowrap;
+}
+.bks-pc__re > small {
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  font-variant-numeric: tabular-nums;
+}
+.bks-sl {
+  flex: none;
+  display: flex;
+  flex-direction: column;
   gap: calc(2 * var(--u));
   min-width: 0;
 }
-.bkx .pbk-mage {
-  width: 100%;
-  max-width: calc(110 * var(--u));
-  margin: 0;
-  border-radius: 0;
-  border-width: var(--u);
-  border-style: solid;
-  border-color: transparent;
-  border-image-source: var(--pxk-frame-wood);
-  border-image-slice: var(--pxk-frame-wood-s);
-  border-image-width: var(--pxk-frame-wood-w);
-  box-shadow: none;
-  image-rendering: auto;
-}
-.bkx .pbk-mage::after {
-  content: none;
-}
-.bkx-mage__say {
-  margin: 0;
-  font: 500 var(--px-fs) / 1.2 var(--px-font);
-  color: var(--px-text);
-}
-.bkx-tiers {
-  display: grid;
-  grid-template-columns: repeat(2, var(--slot, calc(26 * var(--u))));
-  gap: calc(3 * var(--u));
-}
-.arm--three .bkx-seller {
-  grid-template-columns: minmax(0, 1fr);
-}
-/* as many tiers in a row as the column holds (four overflowed the 182-px list on a phone held
-   sideways — the whole list scrolled sideways) */
-.arm--three .bkx-tiers {
-  grid-template-columns: repeat(auto-fill, var(--slot, calc(26 * var(--u))));
-  justify-content: space-between;
-}
-
-/* Two-tap confirmations («В пыль», «Снять», «Перековать»): the armed button blinks. */
-.bkx .px-btn.is-armed,
-.ivx .px-btn.is-armed {
-  animation: bkx-armed 0.9s steps(2, jump-none) infinite;
-}
-@keyframes bkx-armed {
-  50% {
-    filter: brightness(1.25);
-  }
-}
-
-/* «No room»: which enchant to knock out. */
-.bkx-replace {
-  display: grid;
-  gap: calc(4 * var(--u));
-}
-.bkx-replace p {
-  margin: 0;
-}
-.bkx-replace__chips {
+.bks-slots {
   display: flex;
-  flex-wrap: wrap;
-  gap: calc(3 * var(--u));
+  justify-content: center;
+  gap: calc(2 * var(--u));
+  min-height: var(--tile);
 }
 
-/* Phone portrait list: the pick's places in one strip (scrolls sideways, as the forge's ladder),
-   then the shelf — two rows of books on open at 390x844, one at 360x800. */
-.bkx.arm--one .bkx-list {
-  gap: calc(4 * var(--u));
+/* ---- «Полка»: the owned books -------------------------------------------------------------- */
+.bks-sh {
+  flex: 5 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
 }
-.bkx.arm--one .arm-head {
-  margin-bottom: calc(2 * var(--u));
+.bks-sh__h {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(3 * var(--u));
+  min-width: 0;
 }
-.arm--one .bkx-pickgrid {
-  grid-auto-flow: column;
-  grid-template-columns: none;
-  grid-auto-columns: var(--slot, calc(26 * var(--u)));
-  justify-content: start;
-  overflow-x: auto;
-  overscroll-behavior: contain;
+.pxd-btn.bks-sort {
+  flex: none;
+  height: calc(15 * var(--u));
+  padding: 0 calc(3 * var(--u));
+  gap: calc(2 * var(--u));
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-muted);
+}
+.bks-sort.is-on {
+  color: var(--pd-text);
+}
+.bks-grid {
+  /* whole rows: the fit pass sets the height */
+  flex: none;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--tile));
+  grid-auto-rows: var(--tile);
+  gap: calc(3 * var(--u));
+  justify-content: space-between;
+  align-content: start;
+  /* the focus rings and corner marks stay inside the scroller */
   padding: calc(3 * var(--u));
   margin: calc(-3 * var(--u));
-  scrollbar-width: thin;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
 }
-/* Phone portrait bar and the tablet-portrait side column: «В пыль» · anvil (an icon, only with
-   a pair) · «Вписать» in one row (stacked on a tablet they took 252 of the side column's 347 px
-   and the details collapsed to ~30 px; three text buttons there cut «Verzaubern»). */
-.bkx:is(.arm--one, .arm--two) .bkx-acts {
-  grid-template-columns: minmax(0, 1fr) calc(26 * var(--u)) minmax(0, 1fr);
-  grid-auto-flow: row;
+.bks-grid::-webkit-scrollbar {
+  display: none;
 }
-/* The words get the room: «Verzaubern» alone is 116 px, the 360-px phone gave it 106 with the
-   kit's 6u padding; the tablet column takes the small size and a 20u anvil (60 px, still a finger). */
-.bkx:is(.arm--one, .arm--two) .bkx-acts > .px-btn:not(.bkx-iconbtn) {
-  padding-inline: calc(2 * var(--u));
-}
-.bkx.arm--two .bkx-acts {
-  grid-template-columns: minmax(0, 1fr) calc(20 * var(--u)) minmax(0, 1fr);
-}
-.bkx.arm--two .bkx-acts > .px-btn:not(.bkx-iconbtn) {
-  font-size: var(--px-fs-sm);
-}
-.bkx-acts > .px-btn.bkx-iconbtn {
-  padding-inline: 0;
-}
-
-/* Details: the book against the same enchant in the pick — one row and a verdict chip; the
-   sentence is the row's tooltip (critic: nine lines that said «в кирке» twice). */
-.bkx-cmp {
+.bks-sh__empty {
+  grid-column: 1 / -1;
+  grid-row: 1 / span 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--u) calc(3 * var(--u));
-  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+  justify-content: center;
+  align-content: center;
+  gap: calc(3 * var(--u));
+  margin: 0;
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+  text-align: center;
 }
-.bkx-cmp__side {
+.bks-sh__empty > .gx-icon {
+  color: var(--pd-text);
+}
+.bks-sh__empty > span {
+  flex-basis: 100%;
+}
+
+/* ---- «Чародей»: a small portrait + four offers 2 × 2 --------------------------------------- */
+.bks-mg {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: calc(3 * var(--u));
+  align-items: center;
+  padding: var(--u);
+}
+.bks .bks-mg__pic {
+  width: calc(42 * var(--u));
+  margin: 0;
+  border: var(--u) solid var(--pd-ink);
+  border-radius: 0;
+  box-shadow: none;
+}
+.bks .bks-mg__pic::after {
+  content: none;
+}
+.bks .bks-mg__pic:is(:active, .is-down) {
+  translate: 0 var(--u);
+  filter: brightness(0.9);
+}
+.bks-mg__txt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--u);
+  min-width: 0;
+}
+.bks-mg__txt .bks-h {
+  font: 400 var(--pd-fs) / 1.1 var(--px-head);
+  color: var(--pd-text);
+}
+.bks-mg__say {
+  /* two lines reserved: the next line (a tap on him) never moves the offers */
+  height: 2.4em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+}
+.bks-of {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: calc(3 * var(--u));
+}
+.bks-of.is-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+.bks-of.is-noname .bks-offer__name {
+  display: none;
+}
+/* side by side: name / [book | price, state] / the unknown enchant + level range */
+.pxd-btn.bks-offer {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template:
+    'name name' auto
+    'art price' minmax(0, 1fr)
+    'art st' minmax(0, 1fr)
+    'lv lv' auto / auto minmax(0, 1fr);
+  column-gap: calc(2 * var(--u));
+  row-gap: 0;
+  align-items: center;
+  justify-items: start;
+  padding: 0 calc(2 * var(--u));
+  text-align: left;
+  container: bks-offer / inline-size;
+}
+/* stacked: a tall offer (phones with room, tablets) — the book over the lines */
+.bks-of.is-stack .bks-offer {
+  grid-template:
+    'name' auto
+    'art' minmax(0, 1fr)
+    'price' auto
+    'st' auto
+    'lv' auto / minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+  row-gap: var(--u);
+}
+.bks-offer__name {
+  grid-area: name;
+  justify-self: stretch;
+  font: 400 var(--pd-fs) / 1.05 var(--px-head);
+  white-space: nowrap;
+  /* sideways only: accents (É) and descenders stand out of the tight line, not cut */
+  overflow-x: clip;
+  overflow-y: visible;
+}
+.bks-offer__art {
+  grid-area: art;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+.bks-offer.is-short .bks-offer__art .pbook {
+  filter: grayscale(0.6) brightness(0.8);
+}
+.bks-offer__price {
+  grid-area: price;
   display: inline-flex;
   align-items: center;
   gap: calc(2 * var(--u));
+  font: 700 var(--pd-fs) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.bkx-cmp__side > b {
-  font-family: var(--px-head);
-  font-weight: 400;
+.bks-offer__st {
+  grid-area: st;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  max-width: 100%;
+  min-width: 0;
+  font: 700 var(--pd-fs-sm) / 1.15 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--pd-accent);
+  white-space: nowrap;
 }
-.bkx-cmp__arrow {
-  color: var(--px-green);
+.bks-offer__st.is-ok {
+  color: var(--pd-ok);
 }
-.bkx-cmp__arrow.is-down {
-  color: var(--px-red);
+.bks-offer__lv {
+  grid-area: lv;
+  display: flex;
+  justify-content: inherit;
+  justify-self: stretch;
+  min-width: 0;
+  font: 500 var(--pd-fs-sm) / 1.1 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.bkx-verdict {
-  padding: 0 calc(3 * var(--u));
-  border: var(--u) solid currentColor;
-  color: var(--px-red);
-  line-height: 1.4;
+@container bks-offer (max-width: 170px) {
+  .bks-offer__name {
+    font-size: var(--pd-fs-sm);
+  }
 }
 
-/* Replace window: the enchants as kit slots with their number under each. */
-.bkx-replace__chip {
-  display: grid;
-  justify-items: center;
+/* A line with a short form (fit pass → `.is-short` on its holder): the long one or the short one */
+.bks-fit {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+.bks-fit.is-s,
+.is-short > .bks-fit:not(.is-s) {
+  display: none;
+}
+.is-short > .bks-fit.is-s {
+  display: inline-flex;
+  align-items: center;
   gap: var(--u);
 }
-.bkx-replace__fx {
-  font: 700 var(--px-fs-sm) / 1.2 var(--px-font);
+
+/* ---- The card: what is chosen on this tab -------------------------------------------------- */
+.bks-card {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--u));
+  padding: var(--u);
+  overflow: hidden;
+  container: bks-card / size;
+}
+.bks-card__main {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  column-gap: calc(4 * var(--u));
+  align-items: center;
+}
+/* the art's box: as tall as the card's main row, square, never more than half the card */
+.bks-card__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  aspect-ratio: 1;
+  /* the text column keeps «Эффективность» whole at the small step on a 320 phone */
+  max-width: 44cqw;
+  min-width: 0;
+}
+/* no book yet: the sentence (where books come from) wants the room more than the place-holder */
+.bks-card.is-empty .bks-card__art {
+  max-width: 34cqw;
+}
+.bks-card__art > * {
+  grid-area: 1 / 1;
+}
+.bks-card__sock {
+  display: grid;
+  place-items: center;
+  color: var(--pd-muted);
+}
+.bks-card__sock.is-lock .px-i {
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+}
+/* fixed rows: name 2 lines, then 3 lines for the state + effect — nothing moves between books */
+.bks-card__txt {
+  --nfs: var(--pd-fs-lg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: calc(2 * 1.1 * var(--nfs)) calc(3 * 1.2 * var(--pd-fs-sm));
+  row-gap: var(--u);
+  align-content: center;
+  min-width: 0;
+}
+.bks-card__name {
+  display: flex;
+  align-items: flex-end;
+  font: 400 var(--nfs) / 1.1 var(--px-head);
+  overflow: hidden;
+}
+/* phones: the body size; a word still too long for the column (fit pass) — one step smaller */
+.bks--one .bks-card__txt {
+  --nfs: var(--pd-fs);
+}
+.bks-card__name.is-tight {
+  font-size: var(--pd-fs-sm);
+}
+.bks-card__state,
+.bks-card__fx {
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+}
+.bks-card__txt > :is(.bks-card__state, .bks-card__fx) {
+  /* one cell: the state from its top, the effect from its bottom */
+  grid-area: 2 / 1;
+}
+.bks-card__state {
+  align-self: start;
+}
+.bks-card__fx {
+  align-self: end;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  color: var(--pd-text);
+}
+.bks-state {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  font-weight: 700;
+  color: var(--pd-muted);
+}
+.bks-state .px-i {
+  width: calc(7 * var(--u));
+  height: calc(7 * var(--u));
+}
+.bks-state.is-ok {
+  color: var(--pd-ok);
+}
+.bks-state:is(.is-lower, .is-full) {
+  color: var(--pd-accent);
+}
+/* a sentence instead of a state (empty shelf, free / locked place, a tier): three lines */
+.bks-card:is(.is-empty, .is-free, .is-lock, .is-tier) .bks-state {
+  display: block;
+  font-weight: 500;
+}
+.bks-card:is(.is-empty, .is-free, .is-lock) .bks-card__state {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.bks-card:is(.is-empty, .is-free, .is-lock) .bks-card__fx {
+  display: none;
+}
+.bks-card.is-lock .bks-card__state {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.bks-card.is-lock .bks-card__fx {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  color: var(--pd-muted);
+}
+.bks-card.is-tier .bks-card__state {
+  white-space: normal;
+}
+.bks-card.is-tier .bks-card__fx {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  color: var(--pd-muted);
+}
+/* stacked: a tall card (phones with room, tablets) — the book over the lines, centred */
+@container bks-card (aspect-ratio < 1.3) {
+  .bks-card__main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    row-gap: calc(2 * var(--u));
+  }
+  .bks-card__art {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    max-width: none;
+  }
+  .bks-card__txt {
+    text-align: center;
+  }
+  .bks-card__name {
+    justify-content: center;
+  }
+  .bks-card__state {
+    justify-self: center;
+  }
 }
 
-/* Dust: a 4-frame puff where the book was, the dust counter ticks (critic: only a text note). */
-.bkx .arm-room {
-  position: relative;
+/* facts: three square-ish cells — numbers big, the label under */
+.bks-facts {
+  flex: none;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: calc(2 * var(--u));
+  height: calc(22 * var(--u));
 }
-.bkx-puff {
+.bks-facts.is-none {
+  visibility: hidden;
+}
+.bks-fact,
+.pxd-btn.bks-fact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+  padding: 0 var(--u);
+}
+.bks-fact > b {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u);
+  font: 700 var(--pd-fs) / 0.95 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bks-fact > i {
+  max-width: 100%;
+  font: 500 var(--pd-fs-sm) / 1.05 var(--px-font);
+  color: var(--pd-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bks-fact > b small {
+  display: inline-flex;
+  align-items: center;
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  color: var(--pd-muted);
+}
+.bks-fact > b small.is-on {
+  color: var(--pd-accent);
+}
+.bks-fact.is-hi > b {
+  color: var(--pd-ok);
+}
+.bks-fact.is-lo > b {
+  color: var(--pd-accent);
+}
+.bks-fact em {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+}
+.bks-fact em.is-up {
+  color: var(--pd-ok);
+}
+.bks-fact em.is-down {
+  color: var(--pd-accent);
+}
+
+/* ---- Bottom bar: two squares + the main button, fixed places ------------------------------- */
+.bks-bar {
+  flex: none;
+  display: flex;
+  gap: calc(3 * var(--u));
+  height: calc(26 * var(--u));
+}
+.pxd-btn.bks-sq {
+  /* two lines: [picture +N] over the word */
+  flex: none;
+  flex-wrap: wrap;
+  align-content: center;
+  column-gap: var(--u);
+  row-gap: 0;
+  width: calc(34 * var(--u));
+  padding: 0;
+  color: var(--pd-text);
+}
+.bks-sq__i {
+  display: grid;
+  place-items: center;
+}
+.bks-sq__i :is(.gx-icon, .px-i) {
+  width: calc(9 * var(--u));
+  height: calc(9 * var(--u));
+}
+.bks-sq__t {
+  display: contents;
+}
+.bks-sq__t > small {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--pd-accent);
+  white-space: nowrap;
+}
+.bks-sq__t > b {
+  order: 1;
+  flex: 0 0 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+  font: 700 var(--pd-fs-sm) / 1.1 var(--px-font);
+  white-space: nowrap;
+}
+/* the word doesn't fit (fit pass): the picture and the number stay, the word is the aria-label;
+   an armed confirm keeps its «Точно?» and drops the number instead */
+.bks-sq:not(.is-armed) .bks-sq__t.is-short > b,
+.bks-sq.is-armed .bks-sq__t.is-short > small {
+  display: none;
+}
+.pxd-btn.bks-go {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: flex-start;
+  gap: calc(3 * var(--u));
+  padding: 0 calc(2 * var(--u));
+}
+.bks-go__i {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.bks-go__i :is(.gx-icon, .px-i) {
+  width: calc(12 * var(--u));
+  height: calc(12 * var(--u));
+}
+.bks-go__t {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  text-align: left;
+}
+.bks-go__t > b {
+  max-width: 100%;
+  overflow: hidden;
+  font: 700 var(--pd-fs) / 1.15 var(--px-font);
+  white-space: nowrap;
+}
+.bks-go__t > small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 700 var(--pd-fs-sm) / 1.2 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bks-go.pxd-f--off .bks-go__t > small {
+  font-weight: 500;
+  color: var(--pd-muted);
+}
+/* the text doesn't fit (fit pass): the picture goes first, then the word takes the label size */
+.bks-go:has(> .bks-go__t.is-short) > .bks-go__i {
+  display: none;
+}
+.bks-go__t.is-short2 > b {
+  font-size: var(--pd-fs-sm);
+}
+
+/* ---- Toast, «no room» sheet ------------------------------------------------------------------ */
+.bks .bks-note {
+  bottom: calc(var(--gs-safe-bottom, var(--safe-bottom, 0px)) + 36 * var(--u));
+  border-width: calc(2 * var(--u));
+  border-image-source: var(--pxd-fi);
+  border-image-slice: var(--pxd-s) fill;
+  border-image-width: calc(var(--pxd-s) * var(--u));
+  font: 500 var(--pd-fs) / 1.25 var(--px-font);
+  color: var(--pd-text);
+}
+.bks .bks-note.is-bad {
+  color: var(--pd-accent);
+}
+.bks-rep__tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(3 * var(--u));
+}
+.bks-tile.bks-rep__tile {
+  --tile: calc(30 * var(--u));
+  height: calc(38 * var(--u));
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding-bottom: var(--u);
+}
+.bks-rep__tile .bks-tile__lv {
+  bottom: calc(10 * var(--u));
+}
+.bks-rep__fx {
+  font: 700 var(--pd-fs-sm) / 1 var(--px-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--pd-ok);
+  white-space: nowrap;
+}
+.bks-rep__note {
+  margin: calc(3 * var(--u)) 0;
+  font: 500 var(--pd-fs-sm) / 1.2 var(--px-font);
+  color: var(--pd-muted);
+  text-align: center;
+}
+.pxd-btn.bks-rep__go {
+  width: 100%;
+  min-height: calc(24 * var(--u));
+}
+
+/* ---- Per tab on phone portrait -------------------------------------------------------------- */
+/* «В кирке»: the slot's card takes what the pick card and the places leave; its facts repeat the
+   name (level), the state line and the «Снять» number — so phones show none */
+.bks--one.is-pick .bks-facts {
+  display: none;
+}
+/* «Полка»: the shelf is whole rows of books (fit pass), the card takes the rest */
+.bks--one .bks-sh {
+  flex: none;
+}
+/* «Полка»: the dust value is the «В пыль» square's number — two facts, wide enough for fr / de */
+.bks--one .bks-fact[data-k='dust'] {
+  display: none;
+}
+/* «Чародей»: the four offers are the card (the bar's «Купить» buys the chosen one) */
+.bks--one.is-mage .bks-card {
+  display: none;
+}
+
+/* ---- Short phones (the window's own height: Telegram insets are out of it) ----------------- */
+@container bks (max-height: 600px) {
+  .pxd-btn.bks-tab {
+    height: calc(21 * var(--u));
+  }
+  .bks-bar {
+    height: calc(25 * var(--u));
+  }
+  .bks-mg__pic {
+    width: calc(36 * var(--u));
+  }
+}
+@container bks (max-height: 480px) {
+  .bks-body {
+    --bg: calc(2 * var(--u));
+  }
+  .pxd-btn.bks-tab {
+    height: calc(20 * var(--u));
+  }
+  .bks-bar {
+    height: calc(24 * var(--u));
+  }
+  .bks--one .bks-sl > .bks-h {
+    display: none;
+  }
+  .bks--one .bks-pc .pxd-pips {
+    display: none;
+  }
+  .bks--one .bks-sort > span {
+    display: none;
+  }
+  .bks--one .bks-sort {
+    width: calc(15 * var(--u));
+    padding: 0;
+  }
+  .bks .bks-mg__pic {
+    width: calc(30 * var(--u));
+  }
+  /* «Чародей» is the tab's own name: his line keeps its two lines */
+  .bks--one .bks-mg__txt > .bks-h {
+    display: none;
+  }
+  /* two lines under the name: a sentence keeps them, the note under it goes */
+  .bks-card:is(.is-lock, .is-tier) .bks-card__fx {
+    display: none;
+  }
+  .bks-card:is(.is-empty, .is-free, .is-lock, .is-tier) .bks-card__state {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .bks-card.is-tier .bks-card__state {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* the empty shelf says where books come from itself (and the bar: «К Чародею») */
+  .bks-card.is-empty .bks-card__state {
+    display: none;
+  }
+  /* the bar's main button says it already (Вписать · 97 %, «Слабее», «В кирке»): the effect
+     takes both lines */
+  .bks--one .bks-card:is(.is-slot, .is-book) .bks-card__state {
+    display: none;
+  }
+  .bks-card__txt {
+    --nfs: var(--pd-fs);
+    grid-template-rows: calc(2 * 1.1 * var(--nfs)) calc(2 * 1.2 * var(--pd-fs-sm));
+  }
+}
+
+/* a card shorter than its text rows (the phone's pick tab with Telegram's rows): the lines under
+   the name go to two, then the name to one line (the fit pass makes a long one a step smaller).
+   The card's height is the tab's, not the selection's — nothing moves between selections. */
+@container bks-card (max-height: 106px) {
+  .bks-card__txt {
+    grid-template-rows: calc(2 * 1.1 * var(--nfs)) calc(2 * 1.2 * var(--pd-fs-sm));
+  }
+}
+@container bks-card (max-height: 86px) {
+  .bks-card__txt {
+    grid-template-rows: calc(1.1 * var(--nfs)) calc(2 * 1.2 * var(--pd-fs-sm));
+  }
+  .bks-card__name {
+    white-space: nowrap;
+  }
+}
+/* the last step: one line each (at this height a card shows either the state or the effect) */
+@container bks-card (max-height: 64px) {
+  .bks-card__txt {
+    grid-template-rows: calc(1.1 * var(--nfs)) calc(1.2 * var(--pd-fs-sm));
+  }
+  .bks-card__fx,
+  .bks-card__state {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+}
+
+/* ---- Tablet portrait: the phone's column with room — facts, the tier's card on «Чародей» ---- */
+.bks--two .bks-sh {
+  flex: none;
+}
+
+/* ---- Landscape (phone, tablet) and desktop: list | card, tabs in the header ------------------ */
+/* a phone on its side with Telegram's rows (≈ 300 px): the offers take the Enchanter's strip —
+   the card beside says what he would (the enchant is a secret until bought) */
+@container bks (max-height: 330px) {
+  .bks--three .bks-mg {
+    display: none;
+  }
+}
+.bks--three .bks-top .bks-tabs {
+  flex: none;
+}
+.bks--three .bks-body {
+  display: grid;
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  column-gap: var(--g);
+  row-gap: var(--bg);
+}
+.bks--three :is(.bks-pc, .bks-mg) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.bks--three :is(.bks-sl, .bks-of) {
+  grid-column: 1;
+  grid-row: 2 / 4;
+}
+.bks--three .bks-sl {
+  align-self: start;
+}
+.bks--three .bks-card {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+.bks--three .bks-bar {
+  grid-column: 2;
+  grid-row: 3;
+}
+/* the shelf: its own column, the card over the bar */
+.bks--three.is-shelf .bks-body {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.bks--three .bks-sh {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  min-height: 0;
+}
+.bks--three.is-shelf .bks-card {
+  grid-row: 1;
+}
+.bks--three.is-shelf .bks-bar {
+  grid-row: 2;
+}
+
+/* ---- Motion: dust puff, dust tick, the armed button --------------------------------------- */
+/* Dust: a 4-frame puff where the book was, the dust counter ticks. */
+.bks-puff {
   position: absolute;
   left: 50%;
   top: 50%;
   z-index: 2;
   pointer-events: none;
 }
-.bkx-puff > i {
+.bks-puff > i {
   position: absolute;
   left: calc(-5 * var(--u));
   top: calc(-5 * var(--u));
   width: calc(10 * var(--u));
   height: calc(10 * var(--u));
-  background: var(--px-violet);
-  border: var(--u) solid var(--px-ink);
+  background: var(--pd-muted);
+  border: var(--u) solid var(--pd-ink);
   opacity: 0;
-  animation: bkx-puff 420ms steps(4, jump-none);
+  animation: bks-puff 420ms steps(4, jump-none);
 }
-.bkx-puff > i:nth-child(odd) {
+.bks-puff > i:nth-child(odd) {
   width: calc(7 * var(--u));
   height: calc(7 * var(--u));
-  background: color-mix(in srgb, var(--px-violet) 55%, transparent);
+  background: var(--pd-hi);
 }
-@keyframes bkx-puff {
+@keyframes bks-puff {
   from {
     opacity: 1;
     transform: translate(0, 0);
@@ -356,36 +1187,49 @@
     transform: translate(var(--dx), var(--dy));
   }
 }
-.bkx-dust.is-tick > b {
-  animation: bkx-tick 480ms steps(2, jump-none);
+.bks-dust.is-tick > b {
+  animation: bks-tick 480ms steps(2, jump-none);
 }
-@keyframes bkx-tick {
+@keyframes bks-tick {
   0%,
   60% {
     translate: 0 calc(-1 * var(--u));
-    color: var(--px-violet);
+    color: var(--pd-accent);
+  }
+}
+/* Two-tap confirmations («В пыль», «Снять», «Перековать»): the armed button blinks. The
+   backpack (`.ivx`, Inventory.tsx) uses the same rule on the light kit's buttons. */
+.bks .pxd-btn.is-armed,
+.ivx .px-btn.is-armed {
+  animation: bkx-armed 0.9s steps(2, jump-none) infinite;
+}
+@keyframes bkx-armed {
+  50% {
+    filter: brightness(1.25);
   }
 }
 /* Reduced motion: no puff, the armed button stays lit instead of blinking. */
 @media (prefers-reduced-motion: reduce) {
-  .bkx-puff {
+  .bks-puff {
     display: none;
   }
-  .bkx-dust.is-tick > b,
-  :is(.bkx, .ivx) .px-btn.is-armed {
+  .bks-dust.is-tick > b,
+  .bks .pxd-btn.is-armed,
+  .ivx .px-btn.is-armed {
     animation: none;
   }
-  :is(.bkx, .ivx) .px-btn.is-armed {
+  .bks .pxd-btn.is-armed,
+  .ivx .px-btn.is-armed {
     filter: brightness(1.15);
   }
 }
-html[data-motion='reduce'] .bkx-puff {
+html[data-motion='reduce'] .bks-puff {
   display: none;
 }
 html[data-motion='reduce']
-  :is(.bkx .bkx-dust.is-tick > b, .bkx .px-btn.is-armed, .ivx .px-btn.is-armed) {
+  :is(.bks-dust.is-tick > b, .bks .pxd-btn.is-armed, .ivx .px-btn.is-armed) {
   animation: none;
 }
-html[data-motion='reduce'] :is(.bkx, .ivx) .px-btn.is-armed {
+html[data-motion='reduce'] :is(.bks .pxd-btn.is-armed, .ivx .px-btn.is-armed) {
   filter: brightness(1.15);
 }
