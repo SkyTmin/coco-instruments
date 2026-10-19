@@ -414,8 +414,7 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
   const [byLevel, setByLevel] = useState(false);
   const [mageK, setMageK] = useState(0);
 
-  const say = (text: string, bad = false, ms = 2600) =>
-    setHint({ text, key: Date.now(), bad, ms });
+  const say = (text: string, bad = false, ms = 2600) => setHint({ text, key: Date.now(), bad, ms });
   useEffect(() => {
     if (!hint) return undefined;
     const id = setTimeout(() => setHint(null), hint.ms);
@@ -806,12 +805,12 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         t('books.statPrice'),
         { cls: p.tokens < bt.price ? 'is-lo' : undefined },
       ),
+      fact('lvl', `${ROMAN[bt.lvl[0] - 1]}–${ROMAN[bt.lvl[1] - 1]}`, t('books.statLevel')),
       fact(
-        'lvl',
-        `${ROMAN[bt.lvl[0] - 1]}–${ROMAN[bt.lvl[1] - 1]}`,
-        t('books.statLevel'),
+        'chance',
+        t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] }),
+        t('books.statChance'),
       ),
-      fact('chance', t('books.pctRange', { a: bt.chance[0], b: bt.chance[1] }), t('books.statChance')),
     ]);
   } else if (sid === 'free') {
     cKind = 'free';
@@ -856,12 +855,9 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
     cFx = effectOf(id, l, p.pickStars);
     cFacts = factsOf([
       fact('lvl', ROMAN[l - 1], t('books.statLevel')),
-      fact(
-        'state',
-        off ? t('common.off') : t('common.on'),
-        t('books.statState'),
-        { cls: off ? 'is-lo' : 'is-hi' },
-      ),
+      fact('state', off ? t('common.off') : t('common.on'), t('books.statState'), {
+        cls: off ? 'is-lo' : 'is-hi',
+      }),
       fact(
         'dust',
         <>
@@ -1082,7 +1078,9 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         <p className="bks-pc__lv">
           <span>{t('books.lv', { n: lvl.level })} · </span>
           <span>
-            {lvl.need ? t('books.blocksLeft', { n: Math.round(lvl.need - lvl.into) }) : t('books.max')}
+            {lvl.need
+              ? t('books.blocksLeft', { n: Math.round(lvl.need - lvl.into) })
+              : t('books.max')}
           </span>
         </p>
         <p className="bks-pc__stars">
@@ -1240,37 +1238,43 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
         ) : (
           [
             ...(painted ? order : []).map((i) => {
-            const x = p.books[i];
-            const ck = canApply(p.ench, slots, x);
-            const mt = anvilMate(p.books, i) >= 0;
-            return tile(
-              `${i}-${x.id}-${x.lvl}-${x.chance}`,
-              bi === i,
-              'book',
-              gridArt > 0 && <BookArt book={x} size={gridArt} />,
-              `${bookName(x)} · ${t('books.pct', { v: x.chance })}`,
-              () => pickBook(i),
-              {
-                badge: ROMAN[x.lvl - 1],
-                cls: ck === 'lower' ? 'is-weak' : undefined,
-                corner:
-                  fresh === x ? (
-                    <span className="bks-tile__c is-new">!</span>
-                  ) : ck === 'ok' ? (
-                    <span className="bks-tile__c is-up">
-                      <Icon name="up" />
-                    </span>
-                  ) : mt ? (
-                    <span className="bks-tile__c">
-                      <GxIcon name="anvil" />
-                    </span>
-                  ) : undefined,
-              },
-            );
+              const x = p.books[i];
+              const ck = canApply(p.ench, slots, x);
+              const mt = anvilMate(p.books, i) >= 0;
+              return tile(
+                `${i}-${x.id}-${x.lvl}-${x.chance}`,
+                bi === i,
+                'book',
+                gridArt > 0 && <BookArt book={x} size={gridArt} />,
+                `${bookName(x)} · ${t('books.pct', { v: x.chance })}`,
+                () => pickBook(i),
+                {
+                  badge: ROMAN[x.lvl - 1],
+                  cls: ck === 'lower' ? 'is-weak' : undefined,
+                  corner:
+                    fresh === x ? (
+                      <span className="bks-tile__c is-new">!</span>
+                    ) : ck === 'ok' ? (
+                      <span className="bks-tile__c is-up">
+                        <Icon name="up" />
+                      </span>
+                    ) : mt ? (
+                      <span className="bks-tile__c">
+                        <GxIcon name="anvil" />
+                      </span>
+                    ) : undefined,
+                },
+              );
             }),
             // the free places of the shelf: it holds SHELF_MAX books
             ...(painted ? Array.from({ length: SHELF_MAX - p.books.length }, (_, i) => i) : []).map(
-              (i) => <span key={`e${i}`} className="bks-tile is-place pxd-f pxd-f--well" aria-hidden="true" />,
+              (i) => (
+                <span
+                  key={`e${i}`}
+                  className="bks-tile is-place pxd-f pxd-f--well"
+                  aria-hidden="true"
+                />
+              ),
             ),
           ]
         )}
@@ -1344,7 +1348,13 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
                 if (fromKeys(e)) onBuy(x.id);
                 return;
               }
-              if (!can) say(full ? t('books.shelfFull') : t('books.needTokens', { n: Math.round(x.price - p.tokens) }), true);
+              if (!can)
+                say(
+                  full
+                    ? t('books.shelfFull')
+                    : t('books.needTokens', { n: Math.round(x.price - p.tokens) }),
+                  true,
+                );
             }}
             onFocus={() => pickTier(x.id)}
           >
@@ -1520,7 +1530,23 @@ export function BooksTab({ onClose }: { onClose?: () => void } = {}) {
       if (f.matches('.bks-go__t') && over()) f.classList.add('is-short2');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs of the measured texts
-  }, [fitTick, layout, tab, sid, bi, tierSel, armed, t, p.tokens, p.books.length, p.pickMax, gridTile, offerArt, cardArt, slotTile]);
+  }, [
+    fitTick,
+    layout,
+    tab,
+    sid,
+    bi,
+    tierSel,
+    armed,
+    t,
+    p.tokens,
+    p.books.length,
+    p.pickMax,
+    gridTile,
+    offerArt,
+    cardArt,
+    slotTile,
+  ]);
 
   const body = (
     <div
