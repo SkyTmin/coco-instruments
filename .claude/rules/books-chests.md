@@ -197,3 +197,80 @@ and the scenes (`RevealScene`, `ApplyScene`, `BookLift`, portaled) are as before
     self time < 20 ms, the rest is style/layout/paint of the window); anvil frames > 20 ms 55 of
     300 (was 117 of 189), apply 81 of 276, p95 67 ms (was 94 of 177, p95 133).
 - Not verified on a phone / webview / gamepad hardware.
+
+## B1 — handoff layout (19.10) — `BooksTab.tsx`, `books.css`
+
+Owner: «меню книги и кузница на телефоне выглядит ужасно», «у чатгпт мне нравится
+расположение и удобства интерфейса», «не нравятся длинные прямоугольники». The ChatGPT handoff
+gave the LAYOUT only; the look is the dark kit (`src/ui-px/dark.{css,tsx}`), a sibling of the
+forge (`ForgeScreen.tsx`). This replaces the layout of «Books UI v2» above; the selection model,
+the fixed action places, store calls, two-tap confirmations, prices and the scenes are unchanged.
+
+- **Screen**: header (‹, «Книги», one purpose line, both balances) → tabs «В кирке» / «Полка» /
+  «Чародей» (content-sized kit buttons, centred; in the header on 'three') → the tab → a fixed
+  bar (to dust · anvil · the main button; a place is kept even when its button is hidden).
+  - «В кирке»: a pick card (`PickPx`, name in its rarity, level · blocks left, ★ pips, a local
+    «Перековать»), square slot tiles (≤ 40u; the locked place says «+N»), then the card of the
+    selected slot.
+  - «Полка»: whole rows only (the fit pass snaps the grid height, the card takes the rest), all 30
+    places drawn as wells, sort by level. An empty shelf gives the sources and «К Чародею».
+  - «Чародей»: a portrait strip and his line, then 4 square offers 2 × 2. Each offer shows the tier
+    name, price + token icon, availability or the missing «−N», and «Чара: ?» with the level range.
+    The card says the enchant stays secret until bought.
+- **Layouts** (`useArmLayout`): 'one' phone portrait — a column; 'two' tablet portrait — a column
+  with the facts row; 'three' landscape / desktop — list | card + bar.
+- **Size tiers** (container `bks`, the content box, so without Telegram's rows):
+  - ≤ 600 px — short;
+  - ≤ 480 px — tiny. A 320 × 568 phone with Telegram's rows is ≈ 421 px, and 844 × 390 with them
+    ≈ 263 px.
+  - ≤ 330 px — 'three' hides the mage strip.
+
+  The card (`bks-card`, size container) stacks below aspect 1.3. Its text rows step down at
+  heights ≤ 106 / ≤ 86 / ≤ 64 px. The card height belongs to the tab, not the selection.
+- **Fit pass** (one `useLayoutEffect` + ResizeObserver + `fonts.ready`; it sets classes):
+  - header: `is-subrow` on 'one'; on 'three' the tabs drop their icons for the purpose line, else
+    `is-nosub`;
+  - tabs: `is-tight` (no icons) → `is-tight2` (no counts) → `is-tight3` (small step);
+  - shelf rows;
+  - `.bks-of.is-noname`;
+  - card name and pick name: `is-tight`, the pick name also `is-tight2`;
+  - long/short `.bks-fit` pairs (main button, square buttons, offer status and level line).
+- **Measured on the stand** (Telegram insets 47 / 46 / 34):
+  - no page scroll and no clipped or ellipsized text, presets fresh / empty / mid / full:
+    - p320 in all 7 languages;
+    - p360 / pp / p430 in ru, de, tr, fr;
+    - pl / tp / tl / d1 in ru, de;
+    - without the insets: p320 / p360 / pp / pl.
+  - Drift 0 px on all 8 formats: 109 blocks over 18 selections and a tab round trip.
+  - Card art (pick / shelf): p320 72 / 96, pp 187 / 149, p430 224 / 149, tl 224.
+  - Slot tile 56 / 70 / 78 / 119.
+  - Shelf tile: 70 px at p320 (4 columns, 1 row); 56–63 px at pp and p430 (6 columns, 4 rows);
+    95 px at tl (5 rows).
+  - Offer art 48 at p320, 112 from pp up.
+- **Contrast** (WCAG; scratch `contrast.py` on the kit tokens):
+  - text ≥ 8.6 on every kit fill;
+  - muted ≥ 4.8 (lowest on `off`);
+  - accent ≥ 8.6, ok ≥ 8.2;
+  - act-ink on act 11.0;
+  - rarity names on the panel 4.1 (epic) … 9.3 — large text — and ≥ 6.2 against their ink outline
+    (`.pxd-rname`, new generic piece in the dark kit).
+- **Pitfalls**:
+  - dark.css loads after books.css, so a single-class `.bks-*` rule on a `PxdButton` loses to
+    `.pxd-btn`. Write `.pxd-btn.bks-*`, inside container queries too.
+  - Card text grid: state and effect share `grid-area: 2 / 1` with a `minmax(0, 1fr)` column.
+    Two row-2 items without it made an implicit column, and the name got 0 width.
+  - Facts row: `grid-template-rows: minmax(0, 1fr)`. Auto rows made the cells 2.8 px taller than
+    the row, and the card cut their bottom frames.
+  - Offer names clip only sideways (`overflow-x: clip`), so accents (É) are not cut;
+    `scrollWidth` still reports the overflow for `is-noname`.
+- **Strings**:
+  - `tabMage` is a short form (de «Zauberer», it «Mago»); the glossary names stay everywhere else.
+  - The main button's `toMage` is a verb where the name did not fit (en «Buy books», de «Bücher
+    kaufen», fr «Acheter», es «Comprar», it «Compra libri»), with `fromPrice` («from 140») as its
+    sub.
+  - Shorter `freeNone` / `emptyText`; fr `purpose` «Enchante ta pioche»; fr `statDust`
+    «Poussière».
+- The square's camp-only enchant opens `BooksTab onClose` as a window (`YardPage`, `booksOpen`).
+- Safe areas: books pads with `--gs-safe-*`, the forge only with `--safe-top` (reported, not
+  changed here).
+- Not verified: a real phone, the Telegram webview, a gamepad.

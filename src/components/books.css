@@ -1226,7 +1226,8 @@
 html[data-motion='reduce'] .bks-puff {
   display: none;
 }
-html[data-motion='reduce'] :is(.bks-dust.is-tick > b, .bks .pxd-btn.is-armed, .ivx .px-btn.is-armed) {
+html[data-motion='reduce']
+  :is(.bks-dust.is-tick > b, .bks .pxd-btn.is-armed, .ivx .px-btn.is-armed) {
   animation: none;
 }
 html[data-motion='reduce'] :is(.bks .pxd-btn.is-armed, .ivx .px-btn.is-armed) {
