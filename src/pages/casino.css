@@ -1097,6 +1097,15 @@ html[data-ff='desktop'] .cas-spin__t,
 html[data-ff='tablet'] .cas-spin__t {
   font-size: var(--px-fs-big);
 }
+/* …and the fit steps still apply there: the rule above beat `[data-fit]`, so in the one-row deck
+   of a laptop window (Spin 192 px wide) de «Überspringen» wrapped to 3 lines at 29 px and the
+   plate grew 84 → 115 px. */
+html:is([data-ff='desktop'], [data-ff='tablet']) .cas-spin__t[data-fit='1'] {
+  font-size: var(--px-fs);
+}
+html:is([data-ff='desktop'], [data-ff='tablet']) .cas-spin__t[data-fit='2'] {
+  font-size: var(--px-fs-sm);
+}
 html[data-ff='phone-landscape'] .cas-spin__t {
   font-size: var(--px-fs);
 }
@@ -1213,6 +1222,55 @@ html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-hist
 /* The quick bets go to one row of six: the deck gives the facts its height. */
 html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-chips {
   grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+/* Laptop browser windows (critic18 #1, R70): a 1366 × 768 screen leaves a ~657-px window, and the
+   deck column (one height for every window: --u is 3 from 560 to 999 px) put Spin 112 px under
+   its edge. Two steps by height, each a whole layout of its own (nothing moves inside one):
+   ≤ 800 px — auto | Spin | turbo in one row (−90 px); ≤ 740 px — no quick bets (−52 px; the
+   stepper and the bet well stay), Slots also drops the spin counter and the recent spins (as
+   on phones), and the deck frame packs a little tighter. 1440 × 900, 1920 × 1080 and tl untouched. */
+@media (max-height: 800px) {
+  html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-deck__go {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: none;
+  }
+  /* The plate's inline padding gives its label 24 px more: ru «⏭ Пропустить» fits a step larger. */
+  html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-deck__go > .cas-spin {
+    grid-area: auto;
+    padding-inline: calc(3 * var(--u));
+  }
+}
+@media (max-height: 740px) {
+  html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-chips {
+    display: none;
+  }
+  /* The balance on one line, caption | number, as in the tall deck (−21 px: Cascade's Ante / buy
+     row needs it at 1280 × 650). */
+  html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-bal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(3 * var(--u));
+  }
+  html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-bal > .cas-cap {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-bal__v {
+    flex: none;
+    justify-content: flex-end;
+    min-width: calc(11ch + 22px + 2 * var(--u));
+  }
+  html:is([data-ff='tablet'], [data-ff='desktop']) .cas--slots[data-lay='wide'] > .cas-info {
+    grid-template-rows: auto auto;
+    grid-template-areas: 'lvl lvl' 'jp best';
+  }
+  html:is([data-ff='tablet'], [data-ff='desktop'])
+    .cas--slots[data-lay='wide']
+    > .cas-info
+    > :is(.cas-stat--sp, .cas-hist) {
+    display: none;
+  }
 }
 
 /* ---- Tablet portrait: the stage takes the whole width on top; info | deck share the bottom -- */
@@ -1749,6 +1807,46 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
 }
 .skn > * {
   flex: none;
+}
+/* The scroller's frame for the «more» cue (critic18 #3, R73): the ▼ and the edge sit on the
+   scroller's bottom edge, outside the scrolled content. Shown while `data-more` is set. */
+.skn-box {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* One art pixel of ink on the edge and a two-step pixel shadow over the content above it
+   (solid bands, no gradient — R31). */
+.skn-edge {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--u);
+  background: var(--px-ink);
+  box-shadow:
+    0 calc(-1 * var(--u)) 0 rgb(18 10 14 / 0.32),
+    0 calc(-2 * var(--u)) 0 rgb(18 10 14 / 0.14);
+  pointer-events: none;
+}
+/* Bottom-right, clear of the scrollbar: in one column a centred ▼ sat on the cut card's name; at
+   the right it covers the card's empty end (names are left-aligned beside the art). */
+.skn-more.px-btn {
+  position: absolute;
+  z-index: 3;
+  right: calc(var(--skn-sb, 0px) + 3 * var(--u));
+  bottom: calc(2 * var(--u));
+  width: var(--gx-hit);
+  height: var(--gx-hit);
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+  padding: 0;
+}
+.skn-box:not([data-more]) > :is(.skn-edge, .skn-more) {
+  visibility: hidden;
 }
 .skn__grid {
   /* Queried by the narrow-card rules below (a card cannot query its own width). */

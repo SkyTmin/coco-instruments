@@ -1,9 +1,9 @@
 // Выбор скина. Скин общий для обеих игр (лежит в сторе как `slotsSkin`),
 // поэтому и лист один на всех — «Слоты» и «Каскад» показывают его одинаково.
 
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { GxSheet } from '@/components/gx';
-import { Bar, Icon } from '@/ui-px';
+import { Bar, Button, Icon } from '@/ui-px';
 import { cachedOwner, getBackupStatus } from '@/lib/backup';
 import { RELIC_X, SKINS, symbolSrc } from '@/lib/skins';
 import type { Skin, SkinId } from '@/lib/skins';
@@ -64,41 +64,97 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
     if (cur && !isSkinAvailable(cur, level, topX, granted)) setPrefs({ skin: 'classic' });
   }, [skin, level, topX, granted, owner, setPrefs]);
 
+  const { box, list, more } = useMoreCue();
+
   return (
-    <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
+    <GxSheet guard title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
       {/* Лист прокручивает сама сетка: тело листа с набором внутри — `overflow: hidden`
           (gx-px.css), и без своей прокрутки треть скинов и строка лицензии Twemoji были
           недоступны пальцу (critic15 #1). Обе строки внизу — внутри той же прокрутки. */}
-      <div className="skn px">
-        <div className="skn__grid">
-          {/* Все карточки — сразу: второй пакет кадром позже давал отдельную задачу 157–286 мс
+      <div className="skn-box" ref={box}>
+        <div className="skn px" ref={list}>
+          <div className="skn__grid">
+            {/* Все карточки — сразу: второй пакет кадром позже давал отдельную задачу 157–286 мс
             при 4× ровно на первом свайпе (critic12 #5). Картинки за первым экраном грузятся
             и декодируются сами (`loading="lazy"`, `decoding="async"`). */}
-          {[...SKINS].sort(order).map((sk, i) => (
-            <SkinCard
-              key={sk.id}
-              sk={sk}
-              eager={i < FIRST}
-              available={isSkinAvailable(sk, level, topX, granted)}
-              active={sk.id === skin}
-              // Выдан владельцу, а не добыт спином: подпись должна говорить
-              // правду, иначе карточка приписывает игроку чужой рекорд.
-              byGrant={!!sk.earn && granted && topX < sk.earn.topX}
-              topX={topX}
-              onPick={pick}
-            />
-          ))}
-        </div>
-        {/* Одна строка про «Реликвию» и строка авторства вместо абзаца на 23 слова (critic9 #13);
+            {[...SKINS].sort(order).map((sk, i) => (
+              <SkinCard
+                key={sk.id}
+                sk={sk}
+                eager={i < FIRST}
+                available={isSkinAvailable(sk, level, topX, granted)}
+                active={sk.id === skin}
+                // Выдан владельцу, а не добыт спином: подпись должна говорить
+                // правду, иначе карточка приписывает игроку чужой рекорд.
+                byGrant={!!sk.earn && granted && topX < sk.earn.topX}
+                topX={topX}
+                onPick={pick}
+              />
+            ))}
+          </div>
+          {/* Одна строка про «Реликвию» и строка авторства вместо абзаца на 23 слова (critic9 #13);
             полный текст — в подсказке. */}
-        <p className="skn-note" data-tip={t('slots.skin.note')}>
-          <Icon name="lock" />
-          {t('slots.skin.relicLock', { x: RELIC_X })}
-        </p>
-        <p className="skn-note skn-note--credit">{t('slots.skin.credit')}</p>
+          <p className="skn-note" data-tip={t('slots.skin.note')}>
+            <Icon name="lock" />
+            {t('slots.skin.relicLock', { x: RELIC_X })}
+          </p>
+          <p className="skn-note skn-note--credit">{t('slots.skin.credit')}</p>
+        </div>
+        {/* «Ещё» (critic18 #3, R73 / R65): on 1180 × 820 the list ended exactly on a row edge —
+            12 of 13 cards whole, nothing hinted at the 13th or the credit line. While the list is
+            not at its end, an ink edge line with a two-step pixel shadow and a real 44-px ▼ that
+            scrolls one page; at the end both go (`data-more`, set on the DOM — no render). */}
+        <i className="skn-edge" aria-hidden="true" />
+        <Button
+          size="sm"
+          icon="down"
+          label={t('slots.skin.more')}
+          className="skn-more"
+          tabIndex={-1}
+          onClick={more}
+        />
       </div>
     </GxSheet>
   );
+}
+
+/** The list's «more» cue: `data-more` on the box while the list is not scrolled to its end. */
+function useMoreCue() {
+  const box = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = list.current;
+    const host = box.current;
+    if (!el || !host) return undefined;
+    const sync = () => {
+      const left = el.scrollHeight - el.clientHeight - el.scrollTop;
+      host.toggleAttribute('data-more', left > 2);
+    };
+    const fit = () => {
+      // The ▼ keeps clear of a classic (mouse) scrollbar; overlay scrollbars measure 0.
+      host.style.setProperty('--skn-sb', `${el.offsetWidth - el.clientWidth}px`);
+      sync();
+    };
+    fit();
+    el.addEventListener('scroll', sync, { passive: true });
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener('scroll', sync);
+      ro.disconnect();
+    };
+  }, []);
+  const more = useCallback(() => {
+    const el = list.current;
+    if (!el) return;
+    selectionChanged();
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // One page, less the ▼'s own band: the card it covered comes up whole.
+    const page = Math.max(el.clientHeight * 0.5, el.clientHeight - 56);
+    el.scrollBy({ top: page, behavior: reduce ? 'auto' : 'smooth' });
+  }, []);
+  return { box, list, more };
 }
 
 /** Сколько карточек видно на телефоне сразу — их картинки грузятся первыми. */

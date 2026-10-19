@@ -1598,7 +1598,7 @@ export function SlotsPage() {
 
       <CasSheet id="rules">
         {(close) => (
-          <GxSheet title={tr('slots.pay.title')} onClose={close}>
+          <GxSheet guard title={tr('slots.pay.title')} onClose={close}>
             {/* Правила — одна строка на раздел и картинка (таблица, лестница, линии); длинные
               абзацы — под «Подробнее» (critic K2 #8: на пергаменте 12-px абзацы не читались). */}
             <div className="cas-rules">
@@ -1669,7 +1669,7 @@ export function SlotsPage() {
       <CasSheet id="skins">{(close) => <SkinSheet onClose={close} />}</CasSheet>
 
       {autoSheet && (
-        <GxSheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
+        <GxSheet guard title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
           <CasAutoPicker
             options={AUTO_OPTIONS}
             hint={(h) => tr(`slots.auto.${h}`)}
@@ -1680,7 +1680,7 @@ export function SlotsPage() {
       )}
 
       {settings && (
-        <GxSheet title={tr('common.settings')} onClose={() => setSettings(false)}>
+        <GxSheet guard title={tr('common.settings')} onClose={() => setSettings(false)}>
           <CasToggles
             items={[
               {
@@ -1727,7 +1727,7 @@ export function SlotsPage() {
       )}
 
       {betSheet && (
-        <GxSheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
+        <GxSheet guard title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
           <CasBetPicker
             value={betDraft}
             min={MIN_BET}
