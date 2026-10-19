@@ -65,6 +65,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'from level {n}',
     current: 'selected',
     note: '“Relic” isn’t unlocked by level — you earn it with one big spin, and it stays forever. Symbols: Twemoji (CC-BY 4.0, Twitter Inc. and contributors).',
+    relicLock: 'Relic — for a ×{x} win in one spin',
+    credit: 'Symbols: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Balance',
@@ -89,6 +91,7 @@ export const slots: Translation<typeof ru> = {
   anyWin: 'WINNER',
   payout: 'payout ×{n}',
   status: {
+    broke: 'Coins come from the mine',
     counting: 'Counting…',
     combo: 'Combo ×{n}!',
     chain: 'Chain ×{n}!',
@@ -126,8 +129,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Out of coins — earn some in the mine',
   recent: 'Recent',
-  statSpins: 'spins',
-  statBestWin: 'best win',
+  statSpins: 'Spins',
+  statTurns: 'Spins',
+  statBestWin: 'Best win',
   pay: {
     more: 'Details',
     cascShort: 'Winners vanish, new symbols fall — the multiplier grows',
@@ -225,6 +229,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} alike anywhere = a win, the board tumbles',
     anteChip: '×{n}',
+    anteBroke: 'Not enough for Ante — turn it off',
     subtitle: '{cols}×{rows} board · {n} of a kind anywhere',
     bonus: 'BONUS',
     left: '{n} left',

@@ -65,6 +65,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'ab Level {n}',
     current: 'gewählt',
     note: '„Relikt“ schaltet kein Level frei — man erspielt es mit einem großen Spin, und es bleibt für immer. Symbole: Twemoji (CC-BY 4.0, Twitter Inc. und Mitwirkende).',
+    relicLock: 'Relikt — für einen ×{x}-Gewinn in einem Spin',
+    credit: 'Symbole: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Guthaben',
@@ -89,6 +91,7 @@ export const slots: Translation<typeof ru> = {
   anyWin: 'TREFFER',
   payout: 'Gewinn ×{n}',
   status: {
+    broke: "Münzen gibt's im Bergwerk",
     counting: 'Wird gezählt…',
     combo: 'Kombo ×{n}!',
     chain: 'Kette ×{n}!',
@@ -127,7 +130,8 @@ export const slots: Translation<typeof ru> = {
   brokeHint: 'Keine Münzen mehr — verdien welche in der Mine',
   recent: 'Zuletzt',
   statSpins: 'Spins',
-  statBestWin: 'bester Gewinn',
+  statTurns: 'Spins',
+  statBestWin: 'Bester Gewinn',
   pay: {
     more: 'Details',
     cascShort: 'Gewinner verschwinden, neue fallen nach — der Multiplikator steigt',
@@ -225,6 +229,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} gleiche irgendwo = Gewinn, das Feld rutscht nach',
     anteChip: '×{n}',
+    anteBroke: 'Zu wenig für Ante – schalte es aus',
     subtitle: '{cols}×{rows}-Feld · {n} gleiche irgendwo',
     bonus: 'BONUS',
     left: 'noch {n}',

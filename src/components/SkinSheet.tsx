@@ -1,11 +1,11 @@
 // Выбор скина. Скин общий для обеих игр (лежит в сторе как `slotsSkin`),
 // поэтому и лист один на всех — «Слоты» и «Каскад» показывают его одинаково.
 
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { GxSheet } from '@/components/gx';
 import { Bar, Icon } from '@/ui-px';
 import { cachedOwner, getBackupStatus } from '@/lib/backup';
-import { SKINS, symbolSrc } from '@/lib/skins';
+import { RELIC_X, SKINS, symbolSrc } from '@/lib/skins';
 import type { Skin, SkinId } from '@/lib/skins';
 import { SKIN_UNLOCK, isSkinAvailable } from '@/lib/slots-meta';
 import { useFinanceStore } from '@/store';
@@ -45,11 +45,15 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   }, [owner]);
   const granted = owner === true;
 
-  const pick = (id: SkinId) => {
-    selectionChanged();
-    setPrefs({ skin: id });
-    onClose();
-  };
+  // Stable, so the owner's answer re-renders only the relic's card (`SkinCard` is memo).
+  const pick = useCallback(
+    (id: SkinId) => {
+      selectionChanged();
+      setPrefs({ skin: id });
+      onClose();
+    },
+    [setPrefs, onClose],
+  );
 
   // Страховка: если выбранный скин почему-то стал недоступен, возвращаем
   // автомат на «Классику», а не оставляем с символами, которых не выбрать.
@@ -60,36 +64,39 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
     if (cur && !isSkinAvailable(cur, level, topX, granted)) setPrefs({ skin: 'classic' });
   }, [skin, level, topX, granted, owner, setPrefs]);
 
-  // Первые карточки — сразу, картинки остальных — кадром позже: лист открывался одной
-  // длинной задачей (294 мс), и его 160-мс появление терялось (critic K2 #11). Коробки
-  // карточек стоят с первого кадра, так что ничего не прыгает.
-  const [warm, setWarm] = useState(false);
-  useEffect(() => {
-    let id = requestAnimationFrame(() => {
-      id = requestAnimationFrame(() => setWarm(true));
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
-
   return (
     <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
+      {/* Лист прокручивает сама сетка: тело листа с набором внутри — `overflow: hidden`
+          (gx-px.css), и без своей прокрутки треть скинов и строка лицензии Twemoji были
+          недоступны пальцу (critic15 #1). Обе строки внизу — внутри той же прокрутки. */}
       <div className="skn px">
-        {[...SKINS].sort(order).map((sk, i) => (
-          <SkinCard
-            key={sk.id}
-            sk={sk}
-            art={warm || i < FIRST}
-            available={isSkinAvailable(sk, level, topX, granted)}
-            active={sk.id === skin}
-            // Выдан владельцу, а не добыт спином: подпись должна говорить
-            // правду, иначе карточка приписывает игроку чужой рекорд.
-            byGrant={!!sk.earn && granted && topX < sk.earn.topX}
-            topX={topX}
-            onPick={pick}
-          />
-        ))}
+        <div className="skn__grid">
+          {/* Все карточки — сразу: второй пакет кадром позже давал отдельную задачу 157–286 мс
+            при 4× ровно на первом свайпе (critic12 #5). Картинки за первым экраном грузятся
+            и декодируются сами (`loading="lazy"`, `decoding="async"`). */}
+          {[...SKINS].sort(order).map((sk, i) => (
+            <SkinCard
+              key={sk.id}
+              sk={sk}
+              eager={i < FIRST}
+              available={isSkinAvailable(sk, level, topX, granted)}
+              active={sk.id === skin}
+              // Выдан владельцу, а не добыт спином: подпись должна говорить
+              // правду, иначе карточка приписывает игроку чужой рекорд.
+              byGrant={!!sk.earn && granted && topX < sk.earn.topX}
+              topX={topX}
+              onPick={pick}
+            />
+          ))}
+        </div>
+        {/* Одна строка про «Реликвию» и строка авторства вместо абзаца на 23 слова (critic9 #13);
+            полный текст — в подсказке. */}
+        <p className="skn-note" data-tip={t('slots.skin.note')}>
+          <Icon name="lock" />
+          {t('slots.skin.relicLock', { x: RELIC_X })}
+        </p>
+        <p className="skn-note skn-note--credit">{t('slots.skin.credit')}</p>
       </div>
-      <p className="skn-note">{t('slots.skin.note')}</p>
     </GxSheet>
   );
 }
@@ -102,9 +109,9 @@ const FIRST = 6;
  * карточки; имя в одну строку (на узкой карточке длинное — на ступень меньше); под ним строка
  * состояния. Описание скина и условия — в подсказке (`data-tip`: наведение, долгое нажатие).
  */
-function SkinCard({
+const SkinCard = memo(function SkinCard({
   sk,
-  art,
+  eager,
   available,
   active,
   byGrant,
@@ -112,7 +119,8 @@ function SkinCard({
   onPick,
 }: {
   sk: Skin;
-  art: boolean;
+  /** On the first screen: its images load at once; the rest are lazy. */
+  eager: boolean;
   available: boolean;
   active: boolean;
   byGrant: boolean;
@@ -124,8 +132,10 @@ function SkinCard({
   // Длина имени — классом, а не замером: 13 замеров ширины давали лишние раскладки при открытии.
   const long = name.length > 20 ? ' is-xlong' : name.length > 14 ? ' is-long' : '';
   const quest = !!sk.earn && !available && !byGrant;
+  const lockedAt = !available && !sk.earn ? SKIN_UNLOCK[sk.id] : undefined;
   const tip = [
     skinText(sk.id, 'hint'),
+    lockedAt !== undefined && t('slots.skin.fromLevel', { n: lockedAt }),
     quest && sk.earn && t('slots.skin.relicWhat', { x: sk.earn.topX }),
     quest && sk.earn && t('slots.skin.yourBest', { x: fmtX(topX), goal: sk.earn.topX }),
     sk.earn &&
@@ -137,7 +147,9 @@ function SkinCard({
   return (
     <button
       type="button"
-      className={`skn-card px-f${active ? ' is-on' : ''}${available ? '' : ' is-locked'}`}
+      className={`skn-card px-f${active ? ' is-on' : ''}${available ? '' : ' is-locked'}${
+        sk.earn ? ' is-earn' : ''
+      }`}
       aria-pressed={active}
       aria-disabled={available ? undefined : true}
       aria-label={`${name}. ${tip}`}
@@ -155,12 +167,17 @@ function SkinCard({
         data-skin={sk.id}
         aria-hidden="true"
       >
-        {sk.earn && art && <i className="skin-card__halo" />}
+        {sk.earn && <i className="skin-card__halo" />}
         <span className="skin-card__reels">
-          {art &&
-            (['seven', 'star', 'bell'] as const).map((id) => (
-              <img key={id} src={symbolSrc(sk.id, id)} alt="" loading="lazy" decoding="async" />
-            ))}
+          {(['seven', 'star', 'bell'] as const).map((id) => (
+            <img
+              key={id}
+              src={symbolSrc(sk.id, id)}
+              alt=""
+              loading={eager ? 'eager' : 'lazy'}
+              decoding="async"
+            />
+          ))}
         </span>
       </span>
       <b className={`skn-card__name${long}`}>{name}</b>
@@ -175,15 +192,16 @@ function SkinCard({
           // Прогресс обязателен: условие без «сколько уже» — это не цель, а отказ.
           <span className="skn-quest">
             <Icon name="lock" />
-            <em className="px-num">
-              {fmtX(topX)} / ×{fmtNum(sk.earn.topX)}
-            </em>
+            {/* Narrow no-break spaces: «×83 / ×200» fits the 100-px column of a 320-px phone. */}
+            <em className="px-num">{`${fmtX(topX)}\u202f/\u202f×${fmtNum(sk.earn.topX)}`}</em>
             <Bar value={Math.min(1, topX / sk.earn.topX)} />
           </span>
         ) : !available ? (
+          // «🔒 Ур. 12»: the short level form fits every card (fr «dès le niveau 12» was cut by
+          // 32 px at 320, critic12 #3); the full phrase is in the tooltip / aria-label.
           <span className="skn-lock">
             <Icon name="lock" />
-            {t('slots.skin.fromLevel', { n: SKIN_UNLOCK[sk.id] })}
+            {t('slots.hud.lvl', { n: SKIN_UNLOCK[sk.id] })}
           </span>
         ) : (
           active && (
@@ -196,4 +214,4 @@ function SkinCard({
       </span>
     </button>
   );
-}
+});

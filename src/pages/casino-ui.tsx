@@ -2,7 +2,7 @@
 // the fit-to-box scaler, the control deck (balance, bet −/+, Spin, auto, turbo) and the info
 // cells. The cabinet itself (reels, grid, lever, skins) is untouched: it is drawn at its old
 // fixed pixel size and scaled as one piece, because the reel motion moves in those pixels.
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode, RefObject } from 'react';
 import { Button, Icon, KeyHint, usePress } from '@/ui-px';
 import type { PxIconName } from '@/ui-px';
@@ -64,6 +64,8 @@ export function fitStyles(fit: { k: number; w: number; h: number }): {
     wrap: { width: Math.round(fit.w * fit.k), height: Math.round(fit.h * fit.k) },
     item: {
       scale: String(fit.k),
+      // For sizes that must stay whole on screen whatever the scale (the lever's hit column).
+      '--fit': String(fit.k),
       marginLeft: -fit.w / 2,
       marginTop: -fit.h / 2,
     } as CSSProperties,
@@ -108,12 +110,17 @@ export function useReelSpin<T>(
 }
 
 /** Tempo of the rest of a spin after the Skip press (× the turbo factor): links and the count. */
-export const SKIP_TEMPO = 0.5;
+export const SKIP_TEMPO = 0.45;
 /**
  * После «Пропустить» кнопка снова «Крутить», и быстрый второй тап запускал новый спин (ставка!).
  * Тап «Крутить» раньше этого срока после пропуска — мимо (Android DOUBLE_TAP_TIMEOUT = 300 мс).
  */
 export const SKIP_GUARD_MS = 350;
+/**
+ * Зеркало: «Пропустить» раньше этого срока после старта спина не считается — двойной тап
+ * (90 мс) запускал спин и тут же съедал весь показ.
+ */
+export const SKIP_START_MS = 250;
 
 /** Строка правил «A · B»: точка держится за левую половину, перенос — после неё. */
 export const keepDot = (s: string) => s.replace(/ · /g, '\u00a0· ');
@@ -134,6 +141,52 @@ export function useCasLying(): boolean {
 }
 
 /** Круглая кнопка шапки (`gx-round`): нажатие видно в первый кадр (`usePress` → `.is-down`). */
+// Sheets of a game page (skins, rules) open through a tiny host, not page state: a page flag
+// re-rendered the whole page (board, deck, stats) inside the tap — 27 ms of the Cascade rules'
+// first frame at 4× (critic9 #8). One sheet at a time; closed again when its page leaves.
+let openSheetId: string | null = null;
+const sheetSubs = new Set<() => void>();
+const subscribeSheet = (f: () => void) => {
+  sheetSubs.add(f);
+  return () => {
+    sheetSubs.delete(f);
+  };
+};
+const setOpenSheet = (id: string | null) => {
+  openSheetId = id;
+  sheetSubs.forEach((f) => f());
+};
+export const openCasSheet = (id: string) => setOpenSheet(id);
+
+/** Renders `children(close)` while the sheet `id` is open (see `openCasSheet`). */
+export function CasSheet({
+  id,
+  children,
+}: {
+  id: string;
+  children: (close: () => void) => ReactNode;
+}) {
+  const on = useSyncExternalStore(subscribeSheet, () => openSheetId === id);
+  useEffect(
+    () => () => {
+      if (openSheetId === id) openSheetId = null;
+    },
+    [id],
+  );
+  return on ? <>{children(() => setOpenSheet(null))}</> : null;
+}
+
+/** «Подробнее» of the rules: the long paragraphs are mounted only when it is opened. */
+export function CasMore({ summary, children }: { summary: ReactNode; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="cas-more" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>{summary}</summary>
+      {open && children}
+    </details>
+  );
+}
+
 export function CasRound({ className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
   const ref = useRef<HTMLButtonElement>(null);
   const press = usePress(ref);
@@ -177,13 +230,23 @@ export function CasTools({ onBack, children }: { onBack: () => void; children: R
  */
 function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boolean) {
   const ref = useRef<T>(null);
+  // A node `dep` is a new object on every render: as a dependency it re-ran the effect — and a
+  // forced layout of the whole page — on every render of the page (opening the skins sheet
+  // spent 65 ms of its first frame here at 4×). Text changes come through the observer.
+  const key = typeof dep === 'object' ? null : dep;
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !on) return;
+    // Fractional widths (R36): `scrollWidth` is an integer, so text 0.4–1 px wider than its box
+    // (fr «★ 988 k 🪙» 75.6 in 75) passed and lost its coin's edge.
+    const range = document.createRange();
+    const over = () => {
+      range.selectNodeContents(el);
+      return range.getBoundingClientRect().width > el.getBoundingClientRect().width + 0.25;
+    };
     const fit = () => {
       el.dataset.fit = '0';
-      for (let i = 1; i <= 2 && el.scrollWidth > el.clientWidth + 1; i++)
-        el.dataset.fit = String(i);
+      for (let i = 1; i <= 2 && over(); i++) el.dataset.fit = String(i);
     };
     fit();
     const ro = new ResizeObserver(fit);
@@ -196,7 +259,7 @@ function useFitText<T extends HTMLElement = HTMLElement>(dep: unknown, on: boole
       ro.disconnect();
       mo.disconnect();
     };
-  }, [dep, on]);
+  }, [key, on]);
   return ref;
 }
 
@@ -245,7 +308,11 @@ export interface DeckProps {
   balance: ReactNode;
   balanceNum: number;
   bet: number;
-  /** Shown as the stake on the spin plate (Cascade: bet × ante). */
+  /**
+   * What the bet well shows when a spin costs more than the bet (Cascade with Ante: the store's
+   * `scatterStake`, 10 → 13). −/+ still walk the bets; the well shows the price of one spin.
+   */
+  betShown?: number;
   freeSpins: number;
   spinning: boolean;
   setBet: (b: number) => void;
@@ -261,6 +328,10 @@ export interface DeckProps {
    */
   onSkip?: () => void;
   spinDisabled: boolean;
+  /** A tap on the plate while it is off: the page says why (status line, haptic). */
+  onBlocked?: () => void;
+  /** Bumped by the page when a spin was refused: the plate shakes by one art pixel. */
+  nope?: number;
   busy: boolean;
   onSpin: () => void;
   auto: number;
@@ -268,8 +339,10 @@ export interface DeckProps {
   onAuto: () => void;
   turbo: boolean;
   onTurbo: () => void;
-  /** Cascade: ante + buy bonus. */
+  /** Cascade (wide layouts): the buy-bonus row above the money. */
   extra?: ReactNode;
+  /** Cascade: the Ante toggle at the right end of the bet row. */
+  betSide?: ReactNode;
 }
 
 /**
@@ -336,10 +409,36 @@ export function CasDeck(p: DeckProps) {
   const autoOn = p.auto > 0;
   // Auto keeps its «Stop» plate; otherwise a running spin turns the plate into «Skip».
   const skipping = p.spinning && !!p.onSkip && !autoOn;
-  const spinText = skipping ? t('slots.btn.skip') : p.spinLabel;
-  // A long verb steps its font down (then wraps at the smallest step), never an ellipsis.
-  const spinRef = useFitText<HTMLSpanElement>(spinText, true);
+  const skipText = t('slots.btn.skip');
+  const spinText = skipping ? skipText : p.spinLabel;
+  // Every label the plate can show (spin, free, bonus, broke, stop, skip with its icon) sits in
+  // one grid cell, only the current one visible: the font step is found once for the longest of
+  // them, so «Крутить» → «Пропустить» no longer shrinks and grows the text on every spin. A long
+  // verb steps the font down (then wraps at the smallest step), never an ellipsis.
+  const labels = [
+    ...new Set([
+      p.spinLabel,
+      t('slots.btn.spinShort'),
+      t('slots.btn.freeShort'),
+      t('slots.btn.bonusShort'),
+      t('slots.btn.brokeShort'),
+      t('slots.btn.stopShort'),
+      skipText,
+    ]),
+  ];
+  const spinRef = useFitText<HTMLSpanElement>(labels.join('|'), true);
   const betPress = usePress<HTMLButtonElement>();
+  // «Нет монет»: the plate shakes one art pixel (class restarted on each refusal).
+  useEffect(() => {
+    if (!p.nope) return undefined;
+    const el = root.current?.querySelector<HTMLElement>('.cas-spin');
+    if (!el) return undefined;
+    el.classList.remove('is-nope');
+    void el.offsetWidth;
+    el.classList.add('is-nope');
+    const tm = setTimeout(() => el.classList.remove('is-nope'), 400);
+    return () => clearTimeout(tm);
+  }, [p.nope]);
   return (
     <div className="cas-deck px" ref={root}>
       {p.extra && <div className="cas-deck__extra">{p.extra}</div>}
@@ -371,7 +470,7 @@ export function CasDeck(p: DeckProps) {
                 p.onCustomBet();
               }}
             >
-              {fmtNum(p.bet)}
+              {fmtNum(p.betShown ?? p.bet)}
               <CoinIcon size={18} />
             </button>
             <Button
@@ -382,6 +481,7 @@ export function CasDeck(p: DeckProps) {
               onClick={() => step(1)}
               className="cas-bet__step"
             />
+            {p.betSide}
           </div>
           <div className="cas-bet__keys" aria-hidden="true">
             <KeyHint action="tabPrev" />
@@ -436,13 +536,24 @@ export function CasDeck(p: DeckProps) {
               p.onSkip?.();
               return;
             }
-            if (p.spinDisabled) return;
+            if (p.spinDisabled) {
+              p.onBlocked?.();
+              return;
+            }
             p.onSpin();
           }}
         >
-          {skipping && <Icon name="skip" />}
           <span className="cas-spin__t" ref={spinRef}>
-            {spinText}
+            {labels.map((l) => (
+              <span
+                key={l}
+                className={`cas-spin__l${l === spinText ? ' is-on' : ''}`}
+                aria-hidden={l === spinText ? undefined : true}
+              >
+                {l === skipText && <Icon name="skip" />}
+                {l}
+              </span>
+            ))}
           </span>
           {!skipping && p.spinBadge != null && (
             <b className="cas-mini__n cas-spin__n px-num">{p.spinBadge}</b>
@@ -536,6 +647,8 @@ export function CasAutoPicker<H extends string>({
 /** Bet picker: the value, −/slider/+, an optional note and the confirm button. */
 export function CasBetPicker({
   value,
+  shown,
+  sub,
   min,
   max,
   step,
@@ -548,6 +661,11 @@ export function CasBetPicker({
   onConfirm,
 }: {
   value: number;
+  /** What one spin at `value` costs (Cascade's Ante) — the big number shows it, like the deck's
+   *  bet well; the stepper still moves the bet itself. */
+  shown?: number;
+  /** A caption under the number (Cascade: «Ante ×1,25» while the surcharge is on). */
+  sub?: string;
   min: number;
   max: number;
   step: number;
@@ -562,9 +680,10 @@ export function CasBetPicker({
   return (
     <div className="cas-betpick px">
       <div className="cas-betpick__v cas-well px-num">
-        {fmtNum(value)}
+        {fmtNum(shown ?? value)}
         <CoinIcon size={26} />
       </div>
+      {sub && <p className="cas-betpick__sub px-num">{sub}</p>}
       <div className="cas-betpick__row">
         <Button
           icon="minus"

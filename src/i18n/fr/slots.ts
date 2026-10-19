@@ -68,6 +68,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'dès le niveau {n}',
     current: 'choisi',
     note: '« Relique » ne se débloque pas au niveau : on la gagne en un seul gros tour, et elle reste pour toujours. Symboles : Twemoji (CC-BY 4.0, Twitter Inc. et contributeurs).',
+    relicLock: 'Relique — pour un gain ×{x} en un seul tour',
+    credit: 'Symboles : Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Solde',
@@ -92,6 +94,7 @@ export const slots: Translation<typeof ru> = {
   anyWin: 'GAGNÉ',
   payout: 'gain ×{n}',
   status: {
+    broke: 'Les pièces viennent de la mine',
     counting: 'On compte…',
     combo: 'Combo ×{n} !',
     chain: 'Chaîne ×{n} !',
@@ -131,8 +134,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Plus de pièces — va en gagner à la mine',
   recent: 'Récents',
-  statSpins: 'tours',
-  statBestWin: 'meilleur gain',
+  statSpins: 'Tours',
+  statTurns: 'Tours',
+  statBestWin: 'Meilleur gain',
   pay: {
     more: 'Détails',
     cascShort: 'Les gagnants disparaissent, d’autres tombent — le multiplicateur monte',
@@ -233,6 +237,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} identiques n’importe où = gain, la grille s’effondre',
     anteChip: '×{n}',
+    anteBroke: 'Pas assez pour l’Ante — désactivez-le',
     subtitle: 'Grille {cols}×{rows} · {n} identiques n’importe où',
     bonus: 'BONUS',
     left: 'encore {n}',
