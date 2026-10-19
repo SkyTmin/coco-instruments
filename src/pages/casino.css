@@ -1670,6 +1670,8 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
    Now each card is a row: the skin's palette plate with three 20-u symbols (≥ 40 px, most of the
    card's height) | the name on one line and one state line. The description is the tooltip. */
 .skn {
+  /* Queried by the narrow-card rules below (a card cannot query its own width). */
+  container: skng / inline-size;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(150 * var(--u))), 1fr));
   /* Every card as tall as the tallest (the relic's progress bar): one even list. */
@@ -1697,6 +1699,9 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
   column-gap: calc(4 * var(--u));
   row-gap: calc(2 * var(--u));
   min-width: 0;
+  /* One height in every state (critic12 #5): as tall as the relic's quest card (name line + lock
+     line + bar), so the owner's «выдано» arriving a second later moves nothing. */
+  min-height: calc(15 * var(--u) + var(--px-fs) * 1.1 + max(9 * var(--u), var(--px-fs-sm) * 1.1));
   padding: calc(2 * var(--u));
   border-width: var(--u);
   border-style: solid;
@@ -1706,10 +1711,6 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
   border-image-width: var(--pxk-frame-well-w);
   border-image-repeat: stretch;
   image-rendering: pixelated;
-}
-/* A card below the first screen on the sheet's first frame: the empty well, same grid cell. */
-.skn-card--ph {
-  cursor: default;
 }
 .skn-card[aria-disabled='true'] {
   cursor: default;
@@ -1766,11 +1767,10 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
 }
 /* A long name on a narrow (phone) card: a step smaller; over 20 letters («Notte di mezza
    estate») it may take two lines. By length class, not by measuring: 13 measurements forced
-   13 layouts while the sheet opened. */
-.skn-card {
-  container: skn / inline-size;
-}
-@container skn (max-width: 420px) {
+   13 layouts while the sheet opened. The query is on the grid, not on each card: 13 size
+   containers cost the open 30–70 ms of layout at 4× (critic12 #5). The list is one column on every
+   format, so card = grid − 6 u (12 px on phones): 420-px card = 432-px grid. */
+@container skng (max-width: 432px) {
   .skn-card__name:is(.is-long, .is-xlong) {
     font-size: var(--px-fs-sm);
   }
@@ -1782,10 +1782,10 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
    size, wrapping to at most two lines (one-word German names carry a soft hyphen); the state line
    wraps too. The lock of the relic's quest moves beside its bar, so «×83 / ×200» gets the whole
    column. All cards stay one height (the grid's 1fr rows): 70 px. */
-@container skn (max-width: 300px) {
+@container skng (max-width: 312px) {
   .skn-card {
     row-gap: var(--u);
-    column-gap: calc(2 * var(--u));
+    min-height: calc(17 * var(--u) + var(--px-fs-sm) * 2.15);
   }
   /* The plate gives 18 px of its frame and gaps (the 40-px symbols stay; their images have their
      own margin): one-word names of 101–113 px
@@ -1829,6 +1829,17 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
   gap: var(--u) calc(2 * var(--u));
   min-width: 0;
   font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
+}
+/* The relic's state line keeps the quest's height (numbers over the 6u bar) when it turns into the
+   badge — the owner's answer or a new record: nothing inside the card moves (critic12 #5). */
+.skn-card.is-earn .skn-card__state {
+  min-height: calc(var(--px-fs-sm) * 1.1 + 7 * var(--u));
+}
+@container skng (max-width: 312px) {
+  /* Narrow: the second quest row is the 9u lock beside the bar. */
+  .skn-card.is-earn .skn-card__state {
+    min-height: calc(var(--px-fs-sm) * 1.1 + 10 * var(--u));
+  }
 }
 .skn-on,
 .skn-lock {

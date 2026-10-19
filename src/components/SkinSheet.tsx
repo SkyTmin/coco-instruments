@@ -1,7 +1,7 @@
 // Выбор скина. Скин общий для обеих игр (лежит в сторе как `slotsSkin`),
 // поэтому и лист один на всех — «Слоты» и «Каскад» показывают его одинаково.
 
-import { useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { GxSheet } from '@/components/gx';
 import { Bar, Icon } from '@/ui-px';
 import { cachedOwner, getBackupStatus } from '@/lib/backup';
@@ -45,11 +45,15 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
   }, [owner]);
   const granted = owner === true;
 
-  const pick = (id: SkinId) => {
-    selectionChanged();
-    setPrefs({ skin: id });
-    onClose();
-  };
+  // Stable, so the owner's answer re-renders only the relic's card (`SkinCard` is memo).
+  const pick = useCallback(
+    (id: SkinId) => {
+      selectionChanged();
+      setPrefs({ skin: id });
+      onClose();
+    },
+    [setPrefs, onClose],
+  );
 
   // Страховка: если выбранный скин почему-то стал недоступен, возвращаем
   // автомат на «Классику», а не оставляем с символами, которых не выбрать.
@@ -60,40 +64,26 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
     if (cur && !isSkinAvailable(cur, level, topX, granted)) setPrefs({ skin: 'classic' });
   }, [skin, level, topX, granted, owner, setPrefs]);
 
-  // Первые карточки — сразу, остальные (и их картинки) — кадром позже: лист открывался одной
-  // длинной задачей (294 мс), и его 160-мс появление терялось (critic K2 #11). Коробки
-  // карточек стоят с первого кадра, так что ничего не прыгает.
-  const [warm, setWarm] = useState(false);
-  useEffect(() => {
-    let id = requestAnimationFrame(() => {
-      id = requestAnimationFrame(() => setWarm(true));
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
-
   return (
     <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
       <div className="skn px">
-        {[...SKINS].sort(order).map((sk, i) =>
-          // За краем первого экрана на первом кадре — пустые рамки той же сетки: лист должен
-          // показаться за ≤ 100 мс при 4× (critic9 #8), карточки дорисуются кадром позже.
-          !warm && i >= FIRST ? (
-            <span key={sk.id} className="skn-card skn-card--ph" aria-hidden="true" />
-          ) : (
-            <SkinCard
-              key={sk.id}
-              sk={sk}
-              art={warm || i < FIRST}
-              available={isSkinAvailable(sk, level, topX, granted)}
-              active={sk.id === skin}
-              // Выдан владельцу, а не добыт спином: подпись должна говорить
-              // правду, иначе карточка приписывает игроку чужой рекорд.
-              byGrant={!!sk.earn && granted && topX < sk.earn.topX}
-              topX={topX}
-              onPick={pick}
-            />
-          ),
-        )}
+        {/* Все карточки — сразу: второй пакет кадром позже давал отдельную задачу 157–286 мс
+            при 4× ровно на первом свайпе (critic12 #5). Картинки за первым экраном грузятся
+            и декодируются сами (`loading="lazy"`, `decoding="async"`). */}
+        {[...SKINS].sort(order).map((sk, i) => (
+          <SkinCard
+            key={sk.id}
+            sk={sk}
+            eager={i < FIRST}
+            available={isSkinAvailable(sk, level, topX, granted)}
+            active={sk.id === skin}
+            // Выдан владельцу, а не добыт спином: подпись должна говорить
+            // правду, иначе карточка приписывает игроку чужой рекорд.
+            byGrant={!!sk.earn && granted && topX < sk.earn.topX}
+            topX={topX}
+            onPick={pick}
+          />
+        ))}
       </div>
       {/* Одна строка про «Реликвию» и строка авторства вместо абзаца на 23 слова (critic9 #13);
           полный текст — в подсказке. */}
@@ -114,9 +104,9 @@ const FIRST = 6;
  * карточки; имя в одну строку (на узкой карточке длинное — на ступень меньше); под ним строка
  * состояния. Описание скина и условия — в подсказке (`data-tip`: наведение, долгое нажатие).
  */
-function SkinCard({
+const SkinCard = memo(function SkinCard({
   sk,
-  art,
+  eager,
   available,
   active,
   byGrant,
@@ -124,7 +114,8 @@ function SkinCard({
   onPick,
 }: {
   sk: Skin;
-  art: boolean;
+  /** On the first screen: its images load at once; the rest are lazy. */
+  eager: boolean;
   available: boolean;
   active: boolean;
   byGrant: boolean;
@@ -151,7 +142,9 @@ function SkinCard({
   return (
     <button
       type="button"
-      className={`skn-card px-f${active ? ' is-on' : ''}${available ? '' : ' is-locked'}`}
+      className={`skn-card px-f${active ? ' is-on' : ''}${available ? '' : ' is-locked'}${
+        sk.earn ? ' is-earn' : ''
+      }`}
       aria-pressed={active}
       aria-disabled={available ? undefined : true}
       aria-label={`${name}. ${tip}`}
@@ -169,12 +162,17 @@ function SkinCard({
         data-skin={sk.id}
         aria-hidden="true"
       >
-        {sk.earn && art && <i className="skin-card__halo" />}
+        {sk.earn && <i className="skin-card__halo" />}
         <span className="skin-card__reels">
-          {art &&
-            (['seven', 'star', 'bell'] as const).map((id) => (
-              <img key={id} src={symbolSrc(sk.id, id)} alt="" loading="lazy" decoding="async" />
-            ))}
+          {(['seven', 'star', 'bell'] as const).map((id) => (
+            <img
+              key={id}
+              src={symbolSrc(sk.id, id)}
+              alt=""
+              loading={eager ? 'eager' : 'lazy'}
+              decoding="async"
+            />
+          ))}
         </span>
       </span>
       <b className={`skn-card__name${long}`}>{name}</b>
@@ -213,4 +211,4 @@ function SkinCard({
       </span>
     </button>
   );
-}
+});
