@@ -69,7 +69,8 @@ export const skins: Translation<typeof ru> = {
     subtitle: 'Gold der Götter und Zeus’ Blitze',
   },
   kupala: {
-    name: 'Mittsommernacht',
+    // Soft hyphen: a 320-px phone's skin card is 100 px wide; one word cannot wrap otherwise.
+    name: 'Mittsommer\u00adnacht',
     hint: 'Glühwürmchen und Farnblüte – ab Level 15',
     title: 'Farnblüte',
     subtitle: 'Eine Nacht im Jahr, um den Schatz zu finden',

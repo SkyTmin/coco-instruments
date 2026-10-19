@@ -1,10 +1,10 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAction } from '@/input/hooks';
 import { AnimatedNumber } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
 import { GameScreen } from '@/game-shell/GameScreen';
 import { GameTop, GxSheet, KIcon } from '@/components/gx';
-import { Bar, Button } from '@/ui-px';
+import { Bar, Button, Icon } from '@/ui-px';
 import {
   CasAutoPicker,
   CasBetPicker,
@@ -12,11 +12,15 @@ import {
   CasStat,
   CasToggles,
   fitStyles,
+  CasMore,
   CasRound,
+  CasSheet,
   CasTools,
   keepDot,
   KitIcon,
+  openCasSheet,
   SKIP_GUARD_MS,
+  SKIP_START_MS,
   SKIP_TEMPO,
   useCasLayout,
   useCasLying,
@@ -30,7 +34,7 @@ import { skinOf, symbolSrc } from '@/lib/skins';
 import type { SkinId } from '@/lib/skins';
 import { CashDesk } from '@/components/CashDesk';
 import { SkinSheet } from '@/components/SkinSheet';
-import { useFinanceStore } from '@/store';
+import { scatterStake, useFinanceStore } from '@/store';
 import { useExit } from '@/lib/use-exit';
 import { useGameAudio } from '@/lib/use-game-audio';
 import type { ScatterSpinOutcome } from '@/store';
@@ -62,7 +66,7 @@ import type {
 import type { SlotSymbolId } from '@/types';
 import { BET_STEP, BETS, clampBet, MAX_BET, MIN_BET } from '@/lib/slots';
 import { levelFromXp, levelReward } from '@/lib/slots-meta';
-import { fmtCompact, fmtDec, fmtNum, orbName, rich, t, useT, winStepName } from '@/i18n';
+import { fmtCompact, fmtDec, fmtNum, orbName, rich, t, useLang, useT, winStepName } from '@/i18n';
 import { loudestTier, multRarity, ORB_TIERS, orbTier } from '@/lib/orb-rarity';
 import type { OrbTier } from '@/lib/orb-rarity';
 import { plainPlan, rollupPlan, runRollup, winTier } from '@/lib/rollup';
@@ -497,6 +501,7 @@ const SpinCol = memo(
 
 export function ScatterPage() {
   const tr = useT();
+  const lang = useLang();
   const hydrated = useFinanceStore((s) => s.hydrated);
   const balance = useFinanceStore((s) => s.slotsBalance);
   const bet = useFinanceStore((s) => s.slotsBet);
@@ -532,6 +537,12 @@ export function ScatterPage() {
   const hurry = useRef(1);
   const skipAt = useRef(-1e9);
   const reelsDone = useRef<(() => void) | null>(null);
+  // Текущий исход, время старта и число «Пропустить» за спин: второе нажатие — сразу финал.
+  const curRes = useRef<ScatterSpinOutcome | null>(null);
+  const spinAt = useRef(-1e9);
+  const skips = useRef(0);
+  // Идёт большой счёт (а не ход звена): его `rollStop` сам доводит спин до конца.
+  const paying = useRef(false);
   const [board, setBoard] = useState<Board | null>(null);
   /** Поле, каким оно отрисовано сейчас, — для досыпки после сбора сфер. */
   const boardNow = useRef<Board | null>(null);
@@ -584,8 +595,6 @@ export function ScatterPage() {
   const [betSheet, setBetSheet] = useState(false);
   const [betDraft, setBetDraft] = useState(bet);
   const [settings, setSettings] = useState(false);
-  const [rules, setRules] = useState(false);
-  const [skinSheet, setSkinSheet] = useState(false);
   // ox/oy — тот самый рывок тотема в случайный угол. Выбирается один раз при
   // показе: если считать его в разметке, он бы менялся на каждой перерисовке.
   const [celebration, setCelebration] = useState<{
@@ -668,23 +677,52 @@ export function ScatterPage() {
     [],
   );
 
-  // Ставка всегда по карману.
-  useEffect(() => {
-    if (!hydrated || spinning || balance >= bet) return;
-    // Сначала пробуем быструю ставку, иначе опускаемся к любой посильной —
-    // с восемью монетами в кармане игрок всё ещё должен мочь крутить.
-    const affordable = [...BETS].reverse().find((b) => b <= balance) ?? clampBet(balance);
-    if (affordable <= balance && affordable !== bet) setBet(affordable);
-  }, [hydrated, spinning, balance, bet, setBet]);
-
   const level = levelFromXp(xp);
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
   const inBonus = !!fs && fs.left > 0;
-  // Ante дороже на четверть; в бонусе вращения бесплатные.
-  const stake = inBonus || freeSpins > 0 ? 0 : Math.round(bet * (ante ? ANTE_COST : 1));
+  // Ante дороже на четверть; в бонусе вращения бесплатные. Цена — та же функция, что
+  // списывает стор: окно ставки показывает ровно её (critic12 #1: «10🪙», а списывалось 13).
+  const anteOn = ante && !inBonus;
+  const stake = inBonus || freeSpins > 0 ? 0 : scatterStake(bet, ante);
   const buyCost = Math.round(bet * BUY_BONUS_COST);
+
+  // Ставка всегда по карману. Карман сверяется с ценой спина, а не с голой ставкой: с Ante
+  // спин стоит `scatterStake` (critic15 #2 — баланс 12, ставка 10, окно «13», спин молча мёртв).
+  useEffect(() => {
+    const fits = (b: number) => scatterStake(b, anteOn) <= balance;
+    if (!hydrated || spinning || fits(bet)) return;
+    // Сначала пробуем быструю ставку, иначе опускаемся к любой посильной кратной шагу —
+    // с восемью монетами в кармане игрок всё ещё должен мочь крутить.
+    let affordable = [...BETS].reverse().find(fits);
+    if (affordable === undefined) {
+      for (let b = clampBet(Math.floor(balance / BET_STEP) * BET_STEP); b >= MIN_BET; b -= BET_STEP)
+        if (fits(b)) {
+          affordable = b;
+          break;
+        }
+    }
+    if (affordable !== undefined && affordable !== bet) setBet(affordable);
+  }, [hydrated, spinning, balance, bet, anteOn, setBet]);
+
   const broke = balance < MIN_BET && freeSpins <= 0 && !inBonus;
+  // На голую ставку хватает, а с Ante — даже на самую малую нет: «Нет монет» и строка, что
+  // Ante можно выключить (critic15 #2), а не мёртвая кнопка без слова.
+  const anteBroke = !broke && anteOn && freeSpins <= 0 && balance < scatterStake(MIN_BET, true);
+  // «Нет монет»: нажатие объясняет, откуда монеты (строка статуса, толчок плашки, вибро).
+  const [nope, setNope] = useState(0);
+  const [nopeShown, setNopeShown] = useState(false);
+  useEffect(() => {
+    if (!nope) return undefined;
+    setNopeShown(true);
+    const tm = setTimeout(() => setNopeShown(false), 2600);
+    return () => clearTimeout(tm);
+  }, [nope]);
+  const explainBroke = useCallback(() => {
+    if (!broke && !anteBroke) return;
+    notifyWarning();
+    setNope((n) => n + 1);
+  }, [broke, anteBroke]);
   const canSpin = hydrated && !spinning && balance >= stake;
   const tier = tierOf(chain);
   const marking =
@@ -781,6 +819,7 @@ export function ScatterPage() {
 
       setCounting(true);
       setWinStep(null);
+      paying.current = true;
       wonRef.current = start;
       winOdo.current?.set(start);
       tapLight();
@@ -840,6 +879,7 @@ export function ScatterPage() {
           },
           done: () => {
             live = false;
+            paying.current = false;
             rollStop.current = null;
             wonRef.current = to;
             balOdo.current?.set(balance);
@@ -1402,6 +1442,10 @@ export function ScatterPage() {
     setSpinning(true);
     hurry.current = 1;
     setHurried(false);
+    curRes.current = res;
+    spinAt.current = performance.now();
+    skips.current = 0;
+    paying.current = false;
 
     stopReelSound();
     if (!reduceMotion()) startReelSound(turbo);
@@ -1438,13 +1482,69 @@ export function ScatterPage() {
   }, [hydrated, spinning, balance, stake, playScatter, turbo, playOrbs]);
 
   /**
+   * Второе «Пропустить»: всё, что ещё впереди, случается сразу — итоговое поле (сферы уже
+   * собраны, дыры досыпаны), сумма, баланс. Исход решён в момент спина: меняется только показ.
+   */
+  const skipAll = useCallback(() => {
+    const res = curRes.current;
+    if (!res) return;
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    if (reelsDone.current) {
+      reelsDone.current = null;
+      setSlam((n) => n + 1);
+    }
+    stopReelSound();
+    dustStop.current?.();
+    mergeSkip.current = null;
+    setCelebration(null);
+    setSolo(null);
+    setMerging(null);
+    setCollectOut(false);
+    // Большой счёт уже идёт — его стоп сам ставит итог и закрывает спин (`done` → `finish`).
+    if (paying.current && rollStop.current) {
+      rollStop.current();
+      return;
+    }
+    rollStop.current?.();
+    rollStop.current = null;
+    const last = res.steps[res.steps.length - 1];
+    let end = gridToBoard(last ? last.next : res.grid, `${res.steps.length}-end`);
+    if (res.orbs.length && res.applied > 1 && res.base > 0)
+      end = dropHoles(
+        end,
+        new Set(res.orbs.map((o) => `${o.col}-${o.row}`)),
+        `refill-${res.steps.length}`,
+      );
+    shownGrid.current = end.map((col) => col.map((cell) => cell.id));
+    setBoard(end);
+    setCascade(null);
+    setChain(0);
+    setStepWins([]);
+    wonRef.current = res.total;
+    winOdo.current?.set(res.total);
+    finish(res);
+  }, [finish]);
+
+  /**
    * «Пропустить» — та же кнопка «Крутить», пока спин идёт: исход уже решён, правила не
-   * тронуты. Первое нажатие ставит колонки на место сразу; следующие досчитывают текущий ход
-   * (и дожимают слияние сфер), а оставшиеся звенья и счёт идут в темпе SKIP_TEMPO.
+   * тронуты. Первое нажатие ставит колонки на место и переводит остаток в темп SKIP_TEMPO
+   * (звенья, сбор сфер и счёт быстрее, текущий ход досчитан); второе — сразу итог
+   * (`skipAll`). Первые SKIP_START_MS после старта нажатие не считается.
    */
   const skip = useCallback(() => {
     if (!spinning) return;
-    skipAt.current = performance.now();
+    const now = performance.now();
+    if (now - spinAt.current < SKIP_START_MS) return;
+    skipAt.current = now;
+    skips.current += 1;
+    if (skips.current >= 2) {
+      tapLight();
+      skipAll();
+      return;
+    }
+    hurry.current = SKIP_TEMPO;
+    setHurried(true);
     const land = reelsDone.current;
     if (land) {
       tapLight();
@@ -1452,15 +1552,17 @@ export function ScatterPage() {
       land();
       return;
     }
-    hurry.current = SKIP_TEMPO;
-    setHurried(true);
     if (!skipCount()) tapLight();
-  }, [spinning, skipCount]);
+  }, [spinning, skipCount, skipAll]);
   // Спин от игрока (кнопка, Space, «A»): тап сразу после «Пропустить» нового спина не начинает.
   const pressSpin = useCallback(() => {
     if (performance.now() - skipAt.current < SKIP_GUARD_MS) return;
+    if (broke || anteBroke) {
+      explainBroke();
+      return;
+    }
     spin();
-  }, [spin]);
+  }, [spin, broke, anteBroke, explainBroke]);
 
   // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
   useAction(
@@ -1520,7 +1622,7 @@ export function ScatterPage() {
         className="cas-skin-btn"
         onClick={() => {
           tapLight();
-          setSkinSheet(true);
+          openCasSheet('skins');
         }}
         aria-label={tr('slots.a11y.skin')}
         data-tip={tr('slots.a11y.skin')}
@@ -1531,7 +1633,7 @@ export function ScatterPage() {
       <CasRound
         onClick={() => {
           tapLight();
-          setRules(true);
+          openCasSheet('rules');
         }}
         aria-label={tr('slots.a11y.rules')}
         data-tip={tr('slots.a11y.rules')}
@@ -1553,19 +1655,77 @@ export function ScatterPage() {
     </>
   );
 
+  // The header is memoised: a new `right` on every page render re-ran GameTop's fit — a forced
+  // layout of the whole page (29 ms at 4×) inside the spin-start task (critic12, next pass 7).
+  // `topRight`'s handlers are stable; what it shows changes with the skin and the language.
+  const header = useMemo(
+    () =>
+      lying ? undefined : <GameTop title={tr('hall.cascade')} onBack={goBack} right={topRight} />,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lying, lang, skin, nav],
+  );
+
+  // Ante — тумблер в ряду ставки (44 px); покупка бонуса — в полосе сводки на высоких
+  // раскладках, над деньгами на широких. Под словом — его цена «×1,25»; включённый — ещё и
+  // галочка в углу (не только цвет, R16/R57). Смысл — в подсказке и в правилах.
+  const anteBtn = (
+    <Button
+      on={ante}
+      off={spinning}
+      className={`cas-ante${inBonus ? ' is-hidden' : ''}`}
+      data-tip={tr('slots.cascade.anteHint', { n: ANTE_COST })}
+      aria-label={`Ante · ${tr('slots.cascade.anteHint', { n: ANTE_COST })}`}
+      aria-pressed={ante}
+      onClick={() => {
+        if (spinning || inBonus) return;
+        selectionChanged();
+        setAnte(!ante);
+      }}
+    >
+      <b>Ante</b>
+      <i className="px-num">{tr('slots.cascade.anteChip', { n: ANTE_COST })}</i>
+      {anteOn && (
+        <span className="cas-ante__on" aria-hidden="true">
+          <Icon name="check" />
+        </span>
+      )}
+    </Button>
+  );
+  const buyBtn = (
+    <Button
+      kind="primary"
+      className={`cas-buy${inBonus ? ' is-hidden' : ''}`}
+      off={spinning || balance < buyCost}
+      onClick={() => {
+        if (spinning || inBonus || balance < buyCost) return;
+        if (!buyBonus()) return;
+        // Новый бонус — плашка начинает с чистого листа.
+        setShownFs(null);
+        tapMedium();
+        primeAudio();
+        jackpotFanfare();
+        burstConfetti(80, theme.confetti);
+      }}
+    >
+      <b>{tr('slots.cascade.buy')}</b>
+      <i className="px-num">
+        {fmt(buyCost)}
+        <CoinIcon size={16} />
+      </i>
+    </Button>
+  );
+
   return (
     <GameScreen
       className="gx cas-page"
       bg={
-        <div className="slots cas-bg" data-skin={skin}>
+        <div className="slots cas-bg cas-ground pxt-stone" data-skin={skin}>
           <div className="slots-scene" aria-hidden="true">
             <span className="slots-scene__decor" />
           </div>
         </div>
       }
-      top={
-        lying ? undefined : <GameTop title={tr('hall.cascade')} onBack={goBack} right={topRight} />
-      }
+      top={header}
     >
       {/* --speed уезжает во ВСЕ анимации каскада. Без него турбо сжимал
           только паузы на таймерах, а CSS-анимации шли в полную длину и
@@ -1618,8 +1778,9 @@ export function ScatterPage() {
             className="cas-stat--sp"
             icon={<KitIcon name="play" />}
             value={fmt(spins)}
-            label={tr('slots.session.spins')}
+            label={tr('slots.statTurns')}
           />
+          {lay === 'tall' && buyBtn}
         </section>
 
         <div className="cas-stage" ref={stageRef}>
@@ -1872,7 +2033,11 @@ export function ScatterPage() {
             текст в нём на телефоне выходил 9–14 px. Здесь он кегля набора, высота
             постоянная — спины меняют только содержимое. */}
         <div className="cabinet__status cas-status">
-          {cascade || counting ? (
+          {nopeShown && !spinning && (broke || anteBroke) ? (
+            <span className={anteBroke ? 'status status--long' : 'status'}>
+              {tr(anteBroke ? 'slots.cascade.anteBroke' : 'slots.status.broke')}
+            </span>
+          ) : cascade || counting ? (
             <>
               <span className={`status status--combo status--t${tier}`}>
                 {/* Во время счёта строка говорит только, что идёт счёт.
@@ -1930,6 +2095,7 @@ export function ScatterPage() {
           }
           balanceNum={balance}
           bet={bet}
+          betShown={scatterStake(bet, anteOn)}
           freeSpins={freeSpins}
           spinning={spinning}
           setBet={setBet}
@@ -1941,12 +2107,14 @@ export function ScatterPage() {
           busy={spinning}
           onSpin={() => (auto > 0 ? stopAuto() : pressSpin())}
           onSkip={skip}
+          onBlocked={explainBroke}
+          nope={nope}
           spinLabel={
             auto > 0
               ? tr('slots.btn.stopShort')
               : inBonus && fs
                 ? tr('slots.btn.bonusShort')
-                : broke
+                : broke || anteBroke
                   ? tr('slots.btn.brokeShort')
                   : freeSpins > 0
                     ? tr('slots.btn.freeShort')
@@ -1974,143 +2142,114 @@ export function ScatterPage() {
             selectionChanged();
             setPrefs({ turbo: !turbo });
           }}
+          betSide={lay === 'tall' ? anteBtn : undefined}
           extra={
-            /* Ставка Ante и покупка бонуса — оба пути к фриспинам. В бонусе
-               ряд не исчезает, а гаснет: иначе поле над ним прыгало бы. */
-            <div
-              className={`cas-bonus${inBonus ? ' is-hidden' : ''}`}
-              aria-hidden={inBonus || undefined}
-            >
-              <Button
-                on={ante}
-                off={spinning}
-                data-tip={tr('slots.cascade.anteHint', { n: ANTE_COST })}
-                aria-label={`Ante · ${tr('slots.cascade.anteHint', { n: ANTE_COST })}`}
-                onClick={() => {
-                  if (spinning || inBonus) return;
-                  selectionChanged();
-                  setAnte(!ante);
-                }}
-              >
-                <b>Ante</b>
-                {/* Одна строка значков вместо абзаца в кнопке: монета — во сколько
-                    раз ставка, скаттер — во сколько раз чаще бонус (≈ вдвое, см.
-                    правила); фраза целиком — в подсказке и в листе правил. */}
-                <i className="cas-bonus__sub" aria-hidden="true">
-                  <CoinIcon size={14} />
-                  {tr('slots.cascade.anteChip', { n: ANTE_COST })}
-                  <span className="cas-bonus__sep">·</span>
-                  <Sym id="scatter" skin={skin} size={16} />
-                  {tr('slots.cascade.anteChip', { n: 2 })}
-                </i>
-              </Button>
-              <Button
-                kind="primary"
-                off={spinning || balance < buyCost}
-                onClick={() => {
-                  if (spinning || inBonus || balance < buyCost) return;
-                  if (!buyBonus()) return;
-                  // Новый бонус — плашка начинает с чистого листа.
-                  setShownFs(null);
-                  tapMedium();
-                  primeAudio();
-                  jackpotFanfare();
-                  burstConfetti(80, theme.confetti);
-                }}
-              >
-                <b>{tr('slots.cascade.buy')}</b>
-                <i>
-                  {fmt(buyCost)}
-                  <CoinIcon size={13} />
-                </i>
-              </Button>
-            </div>
+            /* В высоких раскладках Ante — в ряду ставки, покупка — в полосе сводки (ряд
+               «Ante / Купить» стоил полю 52 px). В широких оба — ряд над деньгами: в узкой
+               колонке телефона лёжа ряд ставки с Ante не помещается. В бонусе кнопки не
+               исчезают, а гаснут: иначе поле прыгало бы. */
+            lay === 'wide' ? (
+              <div className="cas-bonus" aria-hidden={inBonus || undefined}>
+                {anteBtn}
+                {buyBtn}
+              </div>
+            ) : undefined
           }
         />
       </div>
 
-      {rules && (
-        <GxSheet title={tr('slots.rules.title')} onClose={() => setRules(false)}>
-          {/* Раздел = заголовок + одна строка + картинка; длинные абзацы — под «Подробнее»
+      <CasSheet id="rules">
+        {(close) => (
+          <GxSheet title={tr('slots.rules.title')} onClose={close}>
+            {/* Раздел = заголовок + одна строка + картинка; длинные абзацы — под «Подробнее»
               (critic K2 #8). Редкость сфер — чернильные плашки цвета ступени. */}
-          <div className="cas-rules">
-            <section className="cas-rules__sec">
-              <h3 className="cas-rules__h">{tr('slots.rules.anyTitle')}</h3>
-              <p className="cas-rules__lead">{tr('slots.cascade.howShort', { n: CLUSTER_MIN })}</p>
-              <div className="paytable">
-                {[...SCATTER_PAYS].reverse().map((p) => (
-                  <div className="paytable__row cas-well" key={p.id}>
-                    <span className="paytable__syms">
-                      <Sym id={p.id} skin={skin} size={26} />
+            <div className="cas-rules">
+              <section className="cas-rules__sec">
+                <h3 className="cas-rules__h">{tr('slots.rules.anyTitle')}</h3>
+                <p className="cas-rules__lead">
+                  {tr('slots.cascade.howShort', { n: CLUSTER_MIN })}
+                </p>
+                <div className="paytable">
+                  {[...SCATTER_PAYS].reverse().map((p) => (
+                    <div className="paytable__row cas-well" key={p.id}>
+                      <span className="paytable__syms">
+                        <Sym id={p.id} skin={skin} size={26} />
+                      </span>
+                      <span className="paytable__mult px-num">×{p.tiers[2]}</span>
+                      {/* Two halves: on a 320-px phone they stack (critic12 #3: «10–11 ×» lost
+                          its number). */}
+                      <span className="paytable__pair px-num">
+                        <span>8–9 ×{p.tiers[0]}</span>
+                        <span>10–11 ×{p.tiers[1]}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="cas-rules__sec">
+                <h3 className="cas-rules__h">{tr('slots.rules.orbTitle')}</h3>
+                <p className="cas-rules__lead">{tr('slots.rules.orbShort')}</p>
+                <div className="rarity-ladder">
+                  {ORB_TIERS.map((t) => (
+                    <div className={`rarity-row rarity-row--${t.id} cas-well`} key={t.id}>
+                      <b className="rarity-row__name">{orbName(t.id)}</b>
+                      <span className="rarity-row__range px-num">
+                        {t.id === 'mythic' ? '×250 — ×500' : tr('slots.rules.fromX', { n: t.min })}
+                      </span>
+                      <span className="rarity-row__odds px-num">{fmtDec(t.chance, 1)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="cas-rules__sec">
+                <h3 className="cas-rules__h">{tr('slots.rules.scatTitle')}</h3>
+                <p className="cas-rules__lead">
+                  {tr('slots.rules.scatShort', { trigger: SCATTER_TRIGGER, fs: FREE_SPINS })}
+                </p>
+                <div className="combo-rules__ladder">
+                  {[4, 5, 6].map((n) => (
+                    <span key={n} className="combo-rules__step cas-well">
+                      <b className="px-num">{n === 4 ? SCATTER_TRIGGER : n}</b>
+                      <i className="px-num">×{SCATTER_PAYOUTS[n]}</i>
                     </span>
-                    <span className="paytable__mult px-num">×{p.tiers[2]}</span>
-                    <span className="paytable__pair px-num">
-                      8–9 ×{p.tiers[0]} · 10–11 ×{p.tiers[1]}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-            <section className="cas-rules__sec">
-              <h3 className="cas-rules__h">{tr('slots.rules.orbTitle')}</h3>
-              <p className="cas-rules__lead">{tr('slots.rules.orbShort')}</p>
-              <div className="rarity-ladder">
-                {ORB_TIERS.map((t) => (
-                  <div className={`rarity-row rarity-row--${t.id} cas-well`} key={t.id}>
-                    <b className="rarity-row__name">{orbName(t.id)}</b>
-                    <span className="rarity-row__range px-num">
-                      {t.id === 'mythic' ? '×250 — ×500' : tr('slots.rules.fromX', { n: t.min })}
-                    </span>
-                    <span className="rarity-row__odds px-num">{fmtDec(t.chance, 1)}%</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-            <section className="cas-rules__sec">
-              <h3 className="cas-rules__h">{tr('slots.rules.scatTitle')}</h3>
-              <p className="cas-rules__lead">
-                {tr('slots.rules.scatShort', { trigger: SCATTER_TRIGGER, fs: FREE_SPINS })}
-              </p>
-              <div className="combo-rules__ladder">
-                {[4, 5, 6].map((n) => (
-                  <span key={n} className="combo-rules__step cas-well">
-                    <b className="px-num">{n === 4 ? SCATTER_TRIGGER : n}</b>
-                    <i className="px-num">×{SCATTER_PAYOUTS[n]}</i>
-                  </span>
-                ))}
-              </div>
-            </section>
-            <section className="cas-rules__sec">
-              <h3 className="cas-rules__h">{tr('slots.rules.anteTitle')}</h3>
-              <p className="cas-rules__lead">
-                {keepDot(tr('slots.rules.anteShort', { ante: ANTE_COST, buy: BUY_BONUS_COST }))}
-              </p>
-            </section>
-            <details className="cas-more">
-              <summary>{tr('slots.pay.more')}</summary>
-              <p>
-                {tr('slots.rules.any', { cols: SCATTER_COLS, rows: SCATTER_ROWS, n: CLUSTER_MIN })}
-              </p>
-              <p>{rich('slots.rules.orb', { cell: <b>{tr('slots.rules.orbCell')}</b> })}</p>
-              <p>{tr('slots.rules.orb2')}</p>
-              <p>
-                {tr('slots.rules.scat', {
-                  trigger: SCATTER_TRIGGER,
-                  p4: SCATTER_PAYOUTS[4],
-                  p5: SCATTER_PAYOUTS[5],
-                  p6: SCATTER_PAYOUTS[6],
-                  fs: FREE_SPINS,
-                  max: MAX_WIN,
-                })}
-              </p>
-              <p>
-                {tr('slots.rules.ante', { ante: ANTE_COST, buy: BUY_BONUS_COST, fs: FREE_SPINS })}
-              </p>
-              <p>{tr('slots.rules.note')}</p>
-            </details>
-          </div>
-        </GxSheet>
-      )}
+                  ))}
+                </div>
+              </section>
+              <section className="cas-rules__sec">
+                <h3 className="cas-rules__h">{tr('slots.rules.anteTitle')}</h3>
+                <p className="cas-rules__lead">
+                  {keepDot(tr('slots.rules.anteShort', { ante: ANTE_COST, buy: BUY_BONUS_COST }))}
+                </p>
+              </section>
+              <CasMore summary={tr('slots.pay.more')}>
+                <p>
+                  {tr('slots.rules.any', {
+                    cols: SCATTER_COLS,
+                    rows: SCATTER_ROWS,
+                    n: CLUSTER_MIN,
+                  })}
+                </p>
+                <p>{rich('slots.rules.orb', { cell: <b>{tr('slots.rules.orbCell')}</b> })}</p>
+                <p>{tr('slots.rules.orb2')}</p>
+                <p>
+                  {tr('slots.rules.scat', {
+                    trigger: SCATTER_TRIGGER,
+                    p4: SCATTER_PAYOUTS[4],
+                    p5: SCATTER_PAYOUTS[5],
+                    p6: SCATTER_PAYOUTS[6],
+                    fs: FREE_SPINS,
+                    max: MAX_WIN,
+                  })}
+                </p>
+                <p>
+                  {tr('slots.rules.ante', { ante: ANTE_COST, buy: BUY_BONUS_COST, fs: FREE_SPINS })}
+                </p>
+                <p>{tr('slots.rules.note')}</p>
+              </CasMore>
+            </div>
+          </GxSheet>
+        )}
+      </CasSheet>
 
       {autoSheet && (
         <GxSheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
@@ -2129,8 +2268,12 @@ export function ScatterPage() {
 
       {betSheet && (
         <GxSheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
+          {/* Число, кнопка и «хватает ли» — по цене спина, как окно ставки: с Ante лист
+              говорил «Играть по 10», а спин списывал 13 (critic15 #2, R69). */}
           <CasBetPicker
             value={betDraft}
+            shown={scatterStake(betDraft, anteOn)}
+            sub={anteOn ? `Ante ${tr('slots.cascade.anteChip', { n: ANTE_COST })}` : undefined}
             min={MIN_BET}
             max={MAX_BET}
             step={BET_STEP}
@@ -2138,11 +2281,11 @@ export function ScatterPage() {
             lessLabel={tr('slots.bet.less')}
             moreLabel={tr('slots.bet.more')}
             cta={
-              betDraft > balance && freeSpins <= 0
+              scatterStake(betDraft, anteOn) > balance && freeSpins <= 0
                 ? tr('slots.bet.noCoins')
-                : tr('slots.bet.play', { bet: betDraft })
+                : tr('slots.bet.play', { bet: scatterStake(betDraft, anteOn) })
             }
-            ctaOff={betDraft > balance && freeSpins <= 0}
+            ctaOff={scatterStake(betDraft, anteOn) > balance && freeSpins <= 0}
             onConfirm={() => {
               tapMedium();
               setBet(betDraft);
@@ -2199,7 +2342,7 @@ export function ScatterPage() {
         </GxSheet>
       )}
 
-      {skinSheet && <SkinSheet onClose={() => setSkinSheet(false)} />}
+      <CasSheet id="skins">{(close) => <SkinSheet onClose={close} />}</CasSheet>
 
       {lvlShown && (
         <div

@@ -68,6 +68,8 @@ export const slots: Translation<typeof ru> = {
     fromLevel: 'dal livello {n}',
     current: 'scelto',
     note: 'La «Reliquia» non si sblocca col livello: si guadagna con un solo giro grosso e resta per sempre. Simboli: Twemoji (CC-BY 4.0, Twitter Inc. e collaboratori).',
+    relicLock: 'Reliquia — per una vincita ×{x} in un solo giro',
+    credit: 'Simboli: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {
     balance: 'Saldo',
@@ -92,6 +94,7 @@ export const slots: Translation<typeof ru> = {
   anyWin: 'VINCITA',
   payout: 'vincita ×{n}',
   status: {
+    broke: 'Le monete vengono dalla miniera',
     counting: 'Contiamo…',
     combo: 'Combo ×{n}!',
     chain: 'Catena ×{n}!',
@@ -131,8 +134,9 @@ export const slots: Translation<typeof ru> = {
   },
   brokeHint: 'Monete finite: guadagnale in miniera',
   recent: 'Ultimi',
-  statSpins: 'giri',
-  statBestWin: 'vincita migliore',
+  statSpins: 'Giri',
+  statTurns: 'Giri',
+  statBestWin: 'Vincita migliore',
   pay: {
     more: 'Dettagli',
     cascShort: 'I vincenti spariscono, ne cadono altri: il moltiplicatore sale',
@@ -233,6 +237,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} uguali ovunque = vincita, il campo crolla',
     anteChip: '×{n}',
+    anteBroke: 'Non basta per l’Ante: disattivalo',
     subtitle: 'Griglia {cols}×{rows} · {n} uguali ovunque',
     bonus: 'BONUS',
     left: 'ancora {n}',

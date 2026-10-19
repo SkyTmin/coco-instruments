@@ -1742,6 +1742,14 @@ async function readRealGames() {
   return gameFields(slots, prison, forest, dungeon, fishing, bunk);
 }
 
+/**
+ * Цена платного спина «Каскада»: ставка, с Ante — на четверть дороже. Одна функция на
+ * списание (`playScatter`) и на окно ставки пульта, чтобы игрок видел ровно то, что спишут.
+ */
+export function scatterStake(bet: number, ante: boolean): number {
+  return Math.round(bet * (ante ? ANTE_COST : 1));
+}
+
 export const useFinanceStore = create<FinanceState>((set, get) => ({
   expenses: [],
   savings: [],
@@ -3245,7 +3253,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const inBonus = !!s.scatterFs && s.scatterFs.left > 0;
     // Бонусное вращение бесплатно; иначе тратим билет из наград или монеты.
     const ticket = !inBonus && s.slotsFreeSpins > 0;
-    const stake = inBonus || ticket ? 0 : Math.round(s.slotsBet * (s.scatterAnte ? ANTE_COST : 1));
+    const stake = inBonus || ticket ? 0 : scatterStake(s.slotsBet, s.scatterAnte);
     if (stake > s.slotsBalance) return null;
 
     const result = resolveScatter(s.slotsBet, {

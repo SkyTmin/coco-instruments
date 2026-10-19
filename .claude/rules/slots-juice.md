@@ -442,5 +442,101 @@ skins sheet, cash desk, session card, game sheets). Cabinet, reels, grid, skins 
   compare the content range, not sw/cw. After HMR Vite serves `/src/store.ts?t=…`: scripts must
   import the same URL the page did, or they patch a second store. Eruda (dev) sits top-right and
   steals taps / inflates long tasks — abort its requests in the stand.
-- Left: tablet-landscape Slots cabinet is ~11 % of the screen; the lever is a 34-px-wide target;
-  juice tiers (R18) not touched by ruling.
+- Juice tiers (R18) not touched by ruling.
+
+### Critic round 2 (K2 / K2′, 19.10.2026)
+
+- **The page never scrolls on any format** (`.gs__main` sh = ch, `scrollTop` 0 after a swipe, 320 …
+  1440): `html[data-ff] .cas-page .gs__main { overflow: hidden }` beats the shell's landscape
+  `overflow-y: auto`; `.slots.cas::before` (theme glow, 460 px tall) is `content: none`.
+- **Light ground** `.cas-ground` (kit stone tile under a warm veil); the theme's `.slots-scene` is
+  hidden on casino routes. Dark stays on the cabinet and the status plate (an opaque ink base under
+  the skin's translucent plate). Near-black outside them 5–14 % of the screen.
+- **Slots on tablet landscape / desktop:** two columns — stage | (info 2 × 2 on top of the deck);
+  the cabinet is height-bound, 77–79 % of the height (tl 648 × 635, was ~11 % of the screen).
+  Cascade too since K3 (ruling 3 of critic12; see «Critic round 3»).
+- **SKIP:** press 1 lands the reels AND sets `hurry` (`SKIP_TEMPO`); press 2 jumps to the final
+  state. `SKIP_START_MS` 250: a press within 250 ms of the spin start is ignored (a 90-ms double
+  tap kept the whole show). `SKIP_GUARD_MS` 350 stays. Rigged Slots ×660: 16.8 s; one press at
+  0.3 s → 7.0 s; two → over 30 ms after the second. Cascade rig 12: 6.7 → 2.8 → 0.66 s.
+- **Spin label size is one per language and width:** `useFitText` runs on the SET of plate labels
+  (spin / skip / free / bonus / broke / stop stacked in one grid cell, only `.is-on` visible).
+- **«Нет монет» explains:** a tap on the off plate → status `slots.status.broke` for 3 s + a
+  1-art-px shake (`is-nope`) + `tapError()`.
+- **Cascade deck:** Ante is a 44-px toggle at the right end of the bet row; «Купить бонус» is the
+  third fact of the info strip (tall) / a row above the money (wide). Deck 178 px, cell 53 × 66 at
+  390. Under 380 px the Cascade bet caption is hidden (the stepper + coin say it; it was «Став…»);
+  on tablet portrait its steps are 20 u wide (es «Apuesta» was cut beside Ante).
+- **theme.css dead-CSS removal (K) re-checked:** home, finance, an expense page, notes and the
+  guide at pp + d1 with the old vs current theme.css — pixel-identical except the donut chart and
+  an emoji, which differ between two runs of the same build too.
+- **Sheets mount in `CasSheet`** (`openCasSheet(id)`): opening one no longer re-renders the page.
+  The skins sheet mounts all cards at once since K3 (the deferred second batch was its own
+  157–286-ms task). Stand pitfall: a first CDP touch flips `data-input` and restyles the whole page — warm up
+  with a touch elsewhere before timing a sheet (`WARM=1` in `ui5K/m/sheet2.mjs`).
+- **Short phones (`max-height: 680px`, tall layout; 320 × 568, 360 × 640):** the info strip is
+  level + one row of pictured facts (captions hidden, the recent-spins row hidden), Cascade's buy
+  plate spans both strip rows (`fit-content(50%)`), gaps 2 u, deck padding 4 u / 6 u, thumb rows
+  44 px. The hall hides its note and shows the card facts in one line. `max-width: 340px`: balance
+  `--px-fs`, deck side padding 5 u, a long one-word card name (es «Tragaperras») `--px-fs`. p320
+  Slots cabinet 143 × 118 → 236 × 195, Cascade 149 × 170 → 167 × 192 (still small: the
+  shell's top takes 72 px).
+- **Lever:** `usePress` on it (the knob drops 1 art px on pointerdown); hit column `::after`
+  `max(52px, 48px / var(--fit))` — `--fit` is the cabinet's scale, set by `fitStyles`. 48–128 px on
+  every format, 43 at 320 (the cabinet's own edge clips it; wider would cover the reels).
+- **Type:** three sizes per screen in the frame (caption `sm`, body `fs`, display `big`; the
+  GameTop title is the shell's): hall facts `fs`, wallet and tablet card titles `big`, the
+  «Каторга» row title `fs`, tablet balance / Spin `big` (hero was a fourth size). Coins follow
+  their digits (`0.9em` in facts, `1.1em` in the buy price).
+- **Skins sheet note:** one line «🔒 Реликвия — за выигрыш ×200 одним спином»
+  (`slots.skin.relicLock`) + the Twemoji credit line (`slots.skin.credit`); the old 23-word
+  `slots.skin.note` is the tooltip.
+- Probe scripts of this round: `scratchpad/ui5K/m/` (`rects.mjs` = block rects + clipped text,
+  `stage2.mjs`, `item7.mjs`, `skipprobe.mjs`, `spinlbl.mjs`, `broke.mjs`, `lever.mjs`,
+  `sheet2.mjs`, `fsz.mjs`, `iconsz.mjs`; `lib.mjs` has p320 / p640 / pse / p430).
+
+### Critic round 3 (K3, 19.10.2026)
+
+- **Ante (R57):** the bet well shows what the spin charges — `scatterStake(bet, ante)` in
+  `store.ts` is the one source for `playScatter` and the page (`CasDeck betShown`). The toggle
+  reads «Ante / ×1,25» and carries a ✓ corner badge when on (visible in greyscale). Checked: bets
+  10 / 25 / 500 (= `MAX_BET`) / 15 / 35 × 7 formats — well = charge (13 / 31 / 625 / 19 / 44).
+- **320 px (R36):** `useFitText` measures a Range (fractional width), not `scrollWidth`; the coin
+  never hides (fit 2 used to drop it). Short-phone strips: spins and free spins are hidden; Slots
+  'lvl lvl' / 'jp best', Cascade 'lvl buy' / 'best buy' (`fit-content(60%)`). Hall «Каторга» row:
+  fact `min-width: 6.4ch`, ≤ 380 px title / fact `sm`, `overflow-wrap: normal` — 48 px at 7 000 …
+  1 234 567 tokens in 7 languages (two-word titles wrap whole).
+- **Sheets at 320 / 360 (R58):** skins — names `sm`, ≤ 2 lines, state line wraps, the lock
+  reads `slots.hud.lvl` («Ур. 12», full phrase in the tooltip), relic quest 'x x' / 'ico bar'; de
+  «Mittsommer\u00adnacht» has a soft hyphen. The narrow rules query the grid
+  (`.skn { container: skng }`): 13 per-card containers cost 39–84 ms of layout on open at 4×.
+  Rules — `.cas-rules` column `minmax(0, 1fr)`, the paytable pair «8–9 ×… · 10–11 ×…» stacks
+  under 340 px, the scatter ladder is `repeat(3, minmax(0, 1fr))`. Only the shell's `GxSheet`
+  titles still ellipsize (fr / tr / es / it, the lead's).
+- **Info gaps (R59):** 6 u between facts (≥ 12 px at 390 / 430, ru / de / tr); captions are nouns
+  with a capital (`statSpins`, `statBestWin`; Cascade uses the new `statTurns` «Вращения» —
+  `session.spins` stays lower-case: the session card builds phrases with it).
+- **Skins sheet:** every card mounts on open; images `loading="lazy"` beyond the first 6 and
+  `decoding="async"`. `SkinCard` is `memo` with a stable `onPick`. The relic card (`is-earn`)
+  keeps the quest's height in its state line (`sm·1.1 + 7u`, narrow `+ 10u`), so the owner's
+  answer changes nothing: CLS 0.0558 → 0, rects identical. Production build at 4× (pp): first
+  frame 103–185 ms, one task 72–106 ms (dev was 158–252) — the ≤ 100-ms target is not met; rAF
+  pauses of 400–630 ms appear without a main-thread task (raster wait of the software stand: the
+  trace shows compositor frames ≤ 84 ms).
+- **Cascade on tablet landscape / desktop (ruling 3):** the Slots two-column block now applies to
+  both games (`.cas[data-lay='wide']` under `html:is([data-ff='tablet'], [data-ff='desktop'])`);
+  Cascade info is 'lvl lvl' / 'best sp'; out of coins the hint takes the row ('best best', spins
+  hidden) at a fact's height (`11u + big·1.1`), so the deck does not move. Cabinet tl 480 × 609 →
+  502 × 637 (74.3 → 77.7 %), d1 / d2 78.7 % (height-bound, unchanged); the empty left column
+  (418 / 490 / 579 px) is gone. Rects equal across ante, bet +, bonus.
+- **Spin start:** the pages memoise the GameTop element (`useMemo` on lying / language / skin /
+  nav) — a new `right` on every render re-ran the shell's `fitRow` (a forced layout, 29 ms at 4×
+  in dev) inside the spin-start task. The rest of that task is mounting the reel strips (React
+  `setInitialProperties` ≈ 50 ms at 4× dev); production at 4×: Slots 69–114 ms, Cascade
+  83–194 ms. Reusing strip nodes would be the next step (not done).
+- **Production timing on the stand (R61):** `vite build --outDir {SCR}/dist`, `vite preview`
+  on another port, state copied from the dev page through localStorage — call a persisting action
+  first (`setSlotsPrefs`): a bare `setState` is never written, and the prod page starts broke.
+- Probes: `scratchpad/ui6K/m/` (`ante.mjs`, `coins.mjs`, `clip.mjs` — skips `display: contents`
+  wrappers, `hallrow3.mjs`, `sheetclip.mjs`, `gaps.mjs`, `skinshift.mjs`, `cab.mjs`, `jump.mjs`,
+  `stath.mjs`, `prof.mjs` (CPU profile + `FN=` callers), `prodsk.mjs`, `prodtrace.mjs`).

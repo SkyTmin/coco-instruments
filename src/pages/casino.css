@@ -12,9 +12,25 @@
   position: absolute;
   inset: 0;
 }
-.cas-bg .slots-scene {
+/* Light warm ground (critic9 #5, owner «light palette»): the Nursery stage material — the kit's
+   stone tile under a warm veil (ink on it 8.9:1). The theme's dark scene and its device-px glow
+   are gone; dark stays only on the cabinet (skin art) and the recessed status plate. */
+.cas-ground {
   position: absolute;
-  z-index: 0;
+  inset: 0;
+  --cas-veil: rgb(255 244 222 / 0.4);
+  background-image: linear-gradient(var(--cas-veil), var(--cas-veil)), var(--tile);
+  background-size:
+    100% 100%,
+    calc(var(--tile-w) * var(--u)) calc(var(--tile-h) * var(--u));
+  background-repeat: no-repeat, repeat;
+  image-rendering: pixelated;
+}
+.cas-bg .slots-scene {
+  display: none;
+}
+.slots.cas-bg::before {
+  content: none;
 }
 /* The page never scrolls: the stage takes what the info and the deck leave. `html[data-ff]`
    because the shell's `html[data-ff='phone-landscape'] .gs__main { overflow-y: auto }` (0,2,1)
@@ -78,10 +94,21 @@ html[data-ff] .cas-page .gs__main,
   font-family: var(--px-font);
   min-width: 0;
 }
+/* An opaque ink base under the skin's translucent plate: over the light ground the theme's
+   20–42 % black read as grey, cream text on it about 3:1. */
+html .slots.cas .cas-status {
+  background-color: #2a190c;
+}
 .cas .cas-status .status {
   min-width: 0;
   font: 700 var(--px-fs) / 1.05 var(--px-font);
   text-wrap: balance;
+}
+/* A two-line message (Cascade «not enough for Ante — turn it off»): one step smaller, so two
+   lines sit inside the fixed plate with air (at --px-fs they filled 45 of its 44 px). */
+.cas .cas-status .status--long {
+  font-size: var(--px-fs-sm);
+  line-height: 1.1;
 }
 .cas .cas-status .status--hint,
 .cas .cas-status .status--spin {
@@ -187,9 +214,10 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
 }
 /* Slots, phone portrait: jackpot and spins take what they need, the best win gets the rest —
    in three equal thirds «988 тыс.» stepped down beside 20-px neighbours and lost its coin. */
+/* 6 u between facts (critic12 #4, R59): at 2 u «Спины» and «Лучший выигрыш» read as one phrase. */
 [data-lay='tall']:not(.cas--scatter) > .cas-info {
   grid-template-columns: auto auto minmax(0, 1fr);
-  column-gap: calc(2 * var(--u));
+  column-gap: calc(6 * var(--u));
 }
 .cas-info > .cas-lvl {
   grid-area: lvl;
@@ -267,21 +295,22 @@ html:is([data-ff='phone-portrait'], [data-ff='phone-landscape']) .cas .cabinet__
   white-space: nowrap;
   overflow: hidden;
 }
-/* The coin never gives way to the digits (it was squeezed to 0–9 px beside «988 тыс.»). */
+/* The coin never gives way to the digits (it was squeezed to 0–9 px beside «988 тыс.»), and it
+   follows the digits' size (a fixed 16 px stood beside 29-px digits on tablets, critic9 #13). */
 .cas-stat__v > svg {
   flex: none;
+  width: 0.9em;
+  height: 0.9em;
 }
-/* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): one step smaller,
-   then the coin goes — the 777 / ★ picture and the caption still say what it is. */
+/* `useFitText` on the info records (in play «18 тыс.» becomes «988 тыс.»): both steps are the
+   small size; the coin stays at every step — a sum without its coin reads as points (critic12
+   #2), so the strip's grid gives the records the room instead. */
 html .cas .cas-info .cas-stat .cas-stat__v:is([data-fit='1'], [data-fit='2']) {
   font-size: var(--px-fs-sm);
 }
 /* One digit size across the strip: when one record steps down, all of them do. */
 html .cas .cas-info:has(.cas-stat__v:is([data-fit='1'], [data-fit='2'])) .cas-stat .cas-stat__v {
   font-size: var(--px-fs-sm);
-}
-html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
-  display: none;
 }
 .cas-stat--gold .cas-stat__v {
   color: var(--px-gold);
@@ -510,10 +539,45 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   z-index: 2;
 }
 /* Skip: the same gold plate (a press always does something), the skip arrows in front. */
-.cas-spin.is-skip {
-  gap: calc(2 * var(--u));
+/* «Нет монет» tapped: one art pixel left-right-left, no transition elsewhere. */
+.cas-spin.is-nope {
+  animation: cas-nope 0.3s steps(1, end);
 }
-.cas-spin.is-skip > .px-i {
+@keyframes cas-nope {
+  0%,
+  50% {
+    translate: calc(-1 * var(--u)) 0;
+  }
+  25%,
+  75% {
+    translate: var(--u) 0;
+  }
+  100% {
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cas-spin.is-nope {
+    animation: none;
+  }
+}
+/* The label set in one cell (see CasDeck): the cell is as wide as the longest label. */
+.cas-spin__t {
+  display: inline-grid;
+  justify-items: center;
+  align-items: center;
+}
+.cas-spin__l {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
+  visibility: hidden;
+}
+.cas-spin__l.is-on {
+  visibility: visible;
+}
+.cas-spin__l > .px-i {
   flex: none;
 }
 /* The key sits on the corner like on the small buttons: the label keeps the whole width. */
@@ -524,48 +588,153 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   z-index: 2;
 }
 
-/* Cascade: ante + buy bonus — two equal plates, fixed height. */
+/* Cascade: Ante is a toggle in the bet row, the buy-bonus plate is a fact of the info strip on the
+   tall layouts and a row above the money on the wide ones (critic9 #7: the deck's own 46-px bonus
+   row went to the board). */
 .cas-bonus {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: calc(3 * var(--u));
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(2 * var(--u));
 }
-.cas-bonus.is-hidden {
+.cas-ante.is-hidden,
+.cas-buy.is-hidden {
   visibility: hidden;
 }
-.cas-bonus .px-btn {
+.cas-info > .cas-buy {
+  grid-area: buy;
+}
+.cas-buy.px-btn {
   flex-direction: column;
   gap: 0;
-  /* One 44-px row (critic 10): a name line and a line of numbers, no paragraph inside. */
+  /* A name line and a line of numbers, no paragraph inside. */
   min-height: var(--gx-hit);
-  padding-top: var(--u);
-  padding-bottom: calc(3 * var(--u));
+  padding: var(--u) calc(2 * var(--u)) calc(3 * var(--u));
   width: 100%;
   min-width: 0;
 }
-.cas-bonus .px-btn:is(:active, .is-down):not([aria-disabled='true']) {
+.cas-buy.px-btn:is(:active, .is-down):not([aria-disabled='true']) {
   padding-top: calc(3 * var(--u));
   padding-bottom: var(--u);
 }
-.cas-bonus .px-btn > b {
+.cas-buy.px-btn > b {
   max-width: 100%;
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
-  /* A narrow plate (phone landscape, fr/de) takes two lines instead of cutting the name. */
+  /* A narrow plate (fr/de at 360) takes two lines instead of cutting the name. */
   text-wrap: balance;
   text-align: center;
 }
-.cas-bonus .px-btn > i {
+.cas-buy.px-btn > i {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--u);
-  max-width: 100%;
+  /* The plate is as wide as its name: the price (≤ «50 000» + coin, narrower than the name in
+     every language) does not size it, so a bet change never moves the facts beside it. */
+  width: 0;
+  min-width: 100%;
   font: 700 var(--px-fs-sm) / 1 var(--px-font);
   font-style: normal;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.cas-bonus__sep {
-  padding: 0 var(--u);
+/* The price's coin is not smaller than its digits (16 px beside 17-px text, critic9 #13). */
+.cas-buy.px-btn > i > svg {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  /* …without making the price line taller (the plate is a fact of the strip: +2 px of it is
+     −1 px of every Cascade cell). */
+  margin-block: -0.05em;
+}
+.cas-ante.px-btn {
+  flex: none;
+  min-width: var(--gx-hit);
+  min-height: var(--gx-hit);
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+.cas[data-lay='tall'] .cas-ante.px-btn {
+  min-height: max(var(--gx-hit), calc(24 * var(--u)));
+}
+.cas-ante.px-btn > b {
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+}
+/* Ante says its price (critic12 #1 / R57): «Ante» over «×1,25», and the bet well shows what the
+   spin charges. On = gold AND a ✓ badge on the corner, so it reads without colour (R16). */
+.cas-ante.px-btn {
+  position: relative;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--u) var(--u) calc(2 * var(--u));
+}
+.cas-ante.px-btn.is-on {
+  padding: calc(2 * var(--u)) var(--u) var(--u);
+}
+.cas-ante.px-btn > i.px-num {
+  font: 700 var(--px-fs-sm) / 1 var(--px-font);
+  font-style: normal;
+  white-space: nowrap;
+}
+.cas-ante.px-btn > .cas-ante__on {
+  position: absolute;
+  /* Mostly outside the frame (it sits in the deck's padding / the row gap), so it never covers
+     the «e» of «Ante». */
+  right: calc(-4 * var(--u));
+  top: calc(-5 * var(--u));
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  /* An ink plate with a gold tick: black-on-gold reads in greyscale too. */
+  background: #2a190c;
+  box-shadow: 0 0 0 var(--u) #ffd25e;
+  color: #ffd25e;
+  line-height: 0;
+}
+/* Wide: the buy plate stands 2 u to the right — the badge stops at its edge. */
+.cas[data-lay='wide'] .cas-ante.px-btn > .cas-ante__on {
+  right: calc(-2 * var(--u));
+}
+/* Tall: the plate is the third fact beside the best win and the spins, as wide as its name (fr
+   «Acheter le bonus» took two lines in a third of the strip and cost the board 17 px). */
+.cas--scatter[data-lay='tall'] > .cas-info {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'lvl lvl lvl'
+    'best sp buy';
+  column-gap: calc(6 * var(--u));
+  align-items: center;
+}
+/* Phones: with 12-px gaps three facts left the best spin 45 px at 360 and 75 at 390 (it needs
+   93 at 17 px). The buy plate now stands beside both lines and is as narrow as its longest word or
+   its price (sized for «50 000» + coin, so a bet change never moves it): the name may take two
+   lines there. */
+/* (Short phones keep their one-line plate: there the strip is two 20-px lines.) */
+@media (min-height: 681px) {
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info {
+    grid-template-areas:
+      'lvl lvl buy'
+      'best sp buy';
+  }
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info > .cas-buy {
+    align-self: stretch;
+    width: min-content;
+  }
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info > .cas-buy > i {
+    width: auto;
+    min-width: calc(6ch + 1.1em + var(--u));
+  }
+}
+/* Under 380 px the spins counter goes, as on short phones: the best spin keeps its coin. */
+@media (max-width: 380px) and (min-height: 681px) {
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'lvl buy'
+      'best buy';
+  }
+  html[data-ff='phone-portrait'] .cas--scatter[data-lay='tall'] > .cas-info > .cas-stat--sp {
+    display: none;
+  }
 }
 
 /* ---- Phone portrait: info strip on top (parchment, thin), stage, deck in the thumb zone ----- */
@@ -617,6 +786,92 @@ html .cas .cas-info .cas-stat .cas-stat__v[data-fit='2'] > svg {
   font-size: var(--px-fs-sm);
   white-space: normal;
   line-height: 1.05;
+}
+
+/* ---- Short phones (320 × 568, 360 × 640, a Telegram webview under its own bar) ------------- */
+/* At 568 px the strip (144) and the deck (178) left the machine 84 px: a 143 × 118 cabinet,
+   Cascade cells 22 × 27. The strip becomes level + one row of pictured facts (their captions go
+   to the tooltip, as when lying — the 777 / ▶ / ★ say what they are), the recent-spins row goes
+   (the status line still reports every spin), the deck loses its padding and the 48-px thumb
+   rows step down to 44 (the shell's hit size). */
+@media (max-height: 680px) {
+  .cas[data-lay='tall'] {
+    --cg: calc(2 * var(--u));
+  }
+  .cas[data-lay='tall'] > .cas-info {
+    padding: calc(3 * var(--u)) calc(5 * var(--u));
+    row-gap: var(--u);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'lvl lvl'
+      'jp best';
+  }
+  /* The spins counter goes too (lead + critic12): without its caption «▶ 312» said nothing, and
+     its room is what keeps the records' coins. */
+  .cas[data-lay='tall'] > .cas-info > .cas-hist,
+  .cas[data-lay='tall'] > .cas-info > .cas-stat--sp,
+  .cas[data-lay='tall'] > .cas-info .cas-stat__k {
+    display: none;
+  }
+  /* The free-spin count is on the spin plate's corner: its reserved box here left Cascade's level
+     bar 28 px beside the buy plate. */
+  .cas[data-lay='tall'] > .cas-info .cas-lvl__free {
+    display: none;
+  }
+  .cas[data-lay='tall'] > .cas-info .cas-stat {
+    grid-template-areas: 'ico v';
+  }
+  /* Cascade: the buy plate stands beside both lines instead of making the second one 46 px. */
+  .cas--scatter[data-lay='tall'] > .cas-info {
+    /* With the spins counter gone the best win needs ≤ 40 % (ru «★ 988 тыс. 🪙» 120 of 288 px):
+       the plate may take 60 %, so fr «Acheter le bonus» stays one line (two cost the board
+       17 px). */
+    grid-template-columns: minmax(0, 1fr) fit-content(60%);
+    grid-template-areas:
+      'lvl buy'
+      'best buy';
+  }
+  .cas[data-lay='tall'] > .cas-deck {
+    padding: calc(4 * var(--u)) calc(6 * var(--u));
+  }
+  /* `html`: the 48-px thumb-row rules come later in the file at the same weight. */
+  html .cas[data-lay='tall'] .cas-bet__step.px-btn,
+  html .cas[data-lay='tall'] .cas-ante.px-btn {
+    min-width: var(--gx-hit);
+    min-height: var(--gx-hit);
+  }
+  html .cas[data-lay='tall'] .cas-bet__v {
+    height: var(--gx-hit);
+  }
+  html .cas[data-lay='tall'] .cas-mini,
+  html .cas[data-lay='tall'] .cas-spin {
+    min-height: var(--gx-hit);
+  }
+}
+/* 320-px phones: the balance box one more step smaller and the deck's side padding thinner, so
+   «Баланс» keeps its whole word (it was «Бал…»). */
+@media (max-width: 340px) {
+  .cas[data-lay='tall'] > .cas-deck {
+    padding-left: calc(5 * var(--u));
+    padding-right: calc(5 * var(--u));
+  }
+  .cas[data-lay='tall'] .cas-bal__v {
+    font-size: var(--px-fs);
+  }
+}
+/* Cascade under 380 px: − [bet] + and Ante left the caption 42 px at 360 and 14 px at 320
+   («Став…»). The stepper with its coin says «stake» (its value opens the bet sheet and carries
+   the word as its label), so the caption goes rather than being cut; Ante keeps the right end. */
+@media (max-width: 380px) {
+  .cas--scatter[data-lay='tall'] .cas-bet > .cas-cap {
+    display: none;
+  }
+  .cas--scatter[data-lay='tall'] .cas-bet__row {
+    flex: 1 1 auto;
+  }
+  .cas--scatter[data-lay='tall'] .cas-bet__row > .cas-ante {
+    margin-left: auto;
+  }
 }
 
 /* ---- Wide formats: info | stage | deck --------------------------------------------------------- */
@@ -746,10 +1001,12 @@ html[data-ff='tablet'] .cas-777 .sym {
   grid-template-columns: minmax(0, 1fr);
   gap: calc(3 * var(--u));
 }
+/* Three text sizes per screen (R24): caption, body, display — the balance and Spin share the
+   display size with the facts (hero 31.5 px was a fourth on tablets). */
 html[data-ff='desktop'] .cas-bal__v,
 html[data-ff='tablet'] .cas-bal__v {
   height: calc(20 * var(--u));
-  font-size: var(--px-fs-hero);
+  font-size: var(--px-fs-big);
 }
 /* Touch targets: never under 44 px (the shell's --gx-hit). */
 .cas-bet__step.px-btn {
@@ -763,6 +1020,11 @@ html[data-ff='tablet'] .cas-bal__v {
 }
 .cas[data-lay='tall'] .cas-bet__v {
   height: max(var(--gx-hit), calc(24 * var(--u)));
+}
+/* Tablet portrait, Cascade: Ante shares the row — 60-px-wide steps (still 72 tall) leave the
+   caption its word (es «Apuesta» was 79 px in 70). */
+html[data-ff='tablet'] .cas--scatter[data-lay='tall'] .cas-bet__step.px-btn {
+  min-width: calc(20 * var(--u));
 }
 .cas[data-lay='wide'] .cas-bet {
   justify-self: stretch;
@@ -789,19 +1051,8 @@ html:is([data-ff='desktop'], [data-ff='tablet']) .cas[data-lay='wide'] .cas-chip
 .cas[data-lay='wide'] .cas-deck__go > .cas-spin {
   grid-area: spin;
 }
-/* The two bonus plates are narrow — thinner side padding. */
-.cas .cas-bonus .px-btn {
-  padding-left: calc(2 * var(--u));
-  padding-right: calc(2 * var(--u));
-}
 html[data-ff='phone-landscape'] .cas-mini {
   min-height: var(--gx-hit);
-}
-html[data-ff='phone-landscape'] .cas-bonus .px-btn {
-  min-height: var(--gx-hit);
-}
-html[data-ff='phone-landscape'] .cas-bonus .px-btn > i {
-  display: none;
 }
 html[data-ff='phone-landscape'] .cas-spin {
   min-height: var(--gx-hit);
@@ -817,13 +1068,124 @@ html[data-ff='tablet'] .cas-spin {
 }
 html[data-ff='desktop'] .cas-spin__t,
 html[data-ff='tablet'] .cas-spin__t {
-  font-size: var(--px-fs-hero);
+  font-size: var(--px-fs-big);
 }
 html[data-ff='phone-landscape'] .cas-spin__t {
   font-size: var(--px-fs);
 }
-html[data-ff='phone-landscape'] .cas-bonus .px-btn > b {
-  font-size: var(--px-fs-sm);
+
+/* ---- Lever (critic9 #12) ----------------------------------------------------------------------- */
+/* The art is 34 px wide (22–39 after the cabinet's fit): a hit column over it that is ≥ 48 px on
+   screen at any scale (`--fit` = the cabinet's scale; 52 px of cabinet at ×1), and the knob drops
+   1 art px on pointerdown — before the finger has moved. */
+.slots.cas .lever::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: max(52px, 48px / var(--fit, 1));
+  translate: -50% 0;
+}
+.slots.cas .lever.is-down .lever__knob {
+  translate: 0 var(--u);
+}
+
+/* ---- Tablet landscape and desktop: the machine is the show ------------------------------------ */
+/* The info column was 60 % empty parchment beside a cabinet of 11 % of the screen (critic9 #4).
+   The facts move into the top of the deck column as a 2 × 2 block, the stage takes the rest and
+   the cabinet becomes height-bound (≥ 75 % of the height). Cascade too since critic12 ruling 3:
+   its left column was 60–64 % empty (418 of 696 px on tl), the board was width-bound on tl. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] {
+  --cas-r: calc(140 * var(--u));
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--cas-r));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'stage info' 'stage deck' 'status deck';
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] > .cas-info {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto auto;
+  grid-template-areas: 'lvl lvl' 'jp best' 'sp hist';
+  align-content: start;
+  gap: calc(2 * var(--u)) calc(4 * var(--u));
+}
+/* Cascade: level, then the best spin and the spin count side by side. Out of coins the hint takes
+   the whole row (in a half-width cell de needed 4 lines and pushed the deck down). */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas--scatter[data-lay='wide'] > .cas-info {
+  grid-template-rows: auto auto;
+  grid-template-areas: 'lvl lvl' 'best sp';
+}
+html:is([data-ff='tablet'], [data-ff='desktop'])
+  .cas--scatter[data-lay='wide']
+  > .cas-info:has(> .cas-broke) {
+  grid-template-areas: 'lvl lvl' 'best best';
+}
+/* As tall as a fact (9u icon row + 2u + the number), so the deck under it stays put. */
+html:is([data-ff='tablet'], [data-ff='desktop'])
+  .cas--scatter[data-lay='wide']
+  > .cas-info
+  > .cas-broke {
+  display: grid;
+  align-content: center;
+  min-height: calc(11 * var(--u) + var(--px-fs-big) * 1.1);
+}
+html:is([data-ff='tablet'], [data-ff='desktop'])
+  .cas--scatter[data-lay='wide']
+  > .cas-info:has(> .cas-broke)
+  > .cas-stat--sp {
+  display: none;
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-lvl {
+  flex-wrap: nowrap;
+}
+/* A fact: icon and caption on one line, the number under them at full width. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-stat {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'ico k' 'v v';
+  column-gap: calc(2 * var(--u));
+  row-gap: 0;
+  padding: 0;
+  border-image-source: none;
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-stat__k {
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.05;
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-hist {
+  height: auto;
+  grid-template-rows: auto auto;
+  row-gap: var(--u);
+  align-self: start;
+}
+/* The deck gives up a little height for the facts (the wood frame keeps its 8-u padding). */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-bal__v {
+  height: calc(16 * var(--u));
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-deck,
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-deck__money {
+  row-gap: calc(2 * var(--u));
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-mini {
+  min-height: calc(22 * var(--u));
+}
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-spin {
+  min-height: calc(28 * var(--u));
+}
+/* One row of whole chips: the ones that do not fit wrap to a hidden second line (no half chip). */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-hist__row {
+  flex-wrap: wrap;
+  height: calc(17px + var(--px-fs-sm) + 4 * var(--u));
+  overflow: hidden;
+}
+/* Out of coins: the hint moves to the status line (4 lines in a half-width cell pushed the deck
+   38 px down); the facts keep their places. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-hist:has(.cas-broke) {
+  display: none;
+}
+/* The quick bets go to one row of six: the deck gives the facts its height. */
+html:is([data-ff='tablet'], [data-ff='desktop']) .cas[data-lay='wide'] .cas-chips {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 /* ---- Tablet portrait: the stage takes the whole width on top; info | deck share the bottom -- */
@@ -842,7 +1204,8 @@ html[data-ff='tablet'] .cas[data-lay='tall'] > .cas-info {
   align-content: space-between;
 }
 html[data-ff='tablet'] .cas--scatter[data-lay='tall'] > .cas-info {
-  grid-template-areas: 'lvl' 'best' 'sp';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'lvl' 'best' 'sp' 'buy';
   align-content: start;
   row-gap: calc(5 * var(--u));
 }
@@ -925,7 +1288,8 @@ html[data-ff='tablet'] .cas[data-lay='tall'] .cas-hist {
   align-items: center;
   gap: calc(2 * var(--u));
   min-width: calc(11ch + 26px + 2 * var(--u));
-  font-size: var(--px-fs-hero);
+  /* The display size of the hall (= the card titles): three text sizes per screen (R24). */
+  font-size: var(--px-fs-big);
   line-height: 1.05;
   color: var(--px-text);
   white-space: nowrap;
@@ -1067,19 +1431,16 @@ html .hall .hall-card__facts .cas-stat {
   padding: 0;
   border-image-source: none;
 }
+/* Phones: body size — the art and the title are the big things on a card (three sizes, R24). */
 html .hall .hall-card__facts .cas-stat__v {
-  font-size: var(--px-fs-head);
+  font-size: var(--px-fs);
 }
 /* `useFitText`: a long number steps down instead of losing its tail. */
 html .hall .hall-card__facts .cas-stat__v[data-fit='1'] {
-  font-size: var(--px-fs);
+  font-size: var(--px-fs-sm);
 }
 html .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   font-size: var(--px-fs-sm);
-}
-/* Last step: the coin goes (the star and the label already say «best win»), the digits stay. */
-html .hall .hall-card__facts .cas-stat__v[data-fit='2'] > svg {
-  display: none;
 }
 html .hall .hall-card__facts .cas-stat__ico .px-i {
   --i-w: 9;
@@ -1148,18 +1509,13 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   background: var(--px-text);
 }
 /* Never clip a name: it wraps to two lines instead (two 20-px lines fit the 48-px row). */
+/* Body size on every format (it was `head` above 400 px — a fourth size on the hall, R24). */
 .hall-row__t {
   min-width: 0;
-  font-size: var(--px-fs-head);
-  line-height: 1.05;
+  font-size: var(--px-fs);
+  line-height: 1;
   overflow-wrap: anywhere;
   text-wrap: balance;
-}
-@media (max-width: 400px) {
-  .hall-row__t {
-    font-size: var(--px-fs);
-    line-height: 1;
-  }
 }
 .hall-row__fact {
   display: inline-flex;
@@ -1169,6 +1525,10 @@ html .hall .hall-card__facts .cas-stat__ico .px-i {
   white-space: nowrap;
 }
 .hall-row__fact > b {
+  /* As wide as the widest compact form in any language (ru «100 тыс.» = 6.35 ch): the name's box
+     is the same for 7 000 and 1 234 567 tokens, nothing in the row moves (critic12 #2). */
+  min-width: 6.4ch;
+  text-align: right;
   font: 700 var(--px-fs) / 1 var(--px-font);
   color: var(--px-text);
 }
@@ -1253,10 +1613,54 @@ html[data-ff='phone-landscape'] .hall-card__facts .cas-stat__k {
 html[data-ff='phone-landscape'] .hall-card__t {
   font-size: var(--px-fs-head);
 }
+/* Short phones (320 × 568): the facts stood under the cards' edge and the note took 64 px. As
+   when lying: the note gives its lines to the cards, the facts stand in one line with their
+   pictures, the captions go to the tooltip. */
+@media (max-height: 680px) {
+  html[data-ff='phone-portrait'] .hall {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  html[data-ff='phone-portrait'] .hall-note {
+    display: none;
+  }
+  html[data-ff='phone-portrait'] .hall-card {
+    padding: calc(5 * var(--u)) calc(6 * var(--u));
+  }
+  html[data-ff='phone-portrait'] .hall .hall-card__facts .cas-stat {
+    grid-template-areas: 'ico v';
+  }
+  html[data-ff='phone-portrait'] .hall-card__facts .cas-stat__k {
+    display: none;
+  }
+}
+/* 320 px: a long one-word name (es «Tragaperras», 140 px in a 125-px column) one more step down —
+   a single word cannot wrap. */
+/* (360 × 800 too: there it was 1 px over its column.) */
+@media (max-width: 380px) {
+  html[data-ff='phone-portrait'] .hall-card__t.is-long {
+    font-size: var(--px-fs);
+  }
+}
+@media (max-width: 340px) {
+  /* «Каторга» in 20 px was 78 px in a 72-px column: with ≥ 99 999 tokens it broke mid-word
+     («Каторг / а») and the row grew 48 → 52 px (critic12 #2). The small size fits it whole. */
+  html[data-ff='phone-portrait'] .hall-row {
+    column-gap: calc(3 * var(--u));
+  }
+}
+/* …and up to 380 px the small size for the name and the tokens: two lines of it (en «Hard Labor»
+   at 360) still fit the 48-px row; in 20 px they made it 52. */
+@media (max-width: 380px) {
+  html[data-ff='phone-portrait'] .hall-row__t,
+  html[data-ff='phone-portrait'] .hall-row__fact > b {
+    font-size: var(--px-fs-sm);
+    overflow-wrap: normal;
+  }
+}
 /* Tablet / desktop: the cards are big — so is everything on them. */
 html[data-ff='tablet'] .hall-card__t,
 html[data-ff='desktop'] .hall-card__t {
-  font-size: var(--px-fs-hero);
+  font-size: var(--px-fs-big);
 }
 html[data-ff='tablet'] .hall-card__t.is-long,
 html[data-ff='desktop'] .hall-card__t.is-long {
@@ -1274,19 +1678,54 @@ html[data-ff='tablet'] .hall .hall-card__facts .cas-stat__v[data-fit='2'],
 html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   font-size: var(--px-fs);
 }
+/* One digit size per card: when the best win steps down, the spins beside it step down with it
+   (tp: «988 тыс.» 22.5 px stood beside «312» in 29, critic12). */
+html .hall .hall-card__facts:has([data-fit='1']) .cas-stat__v {
+  font-size: var(--px-fs-sm);
+}
+html .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v {
+  font-size: var(--px-fs-sm);
+}
+html[data-ff='tablet'] .hall .hall-card__facts:has([data-fit='1']) .cas-stat__v,
+html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='1']) .cas-stat__v {
+  font-size: var(--px-fs-head);
+}
+html[data-ff='tablet'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v,
+html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v {
+  font-size: var(--px-fs);
+}
 
 /* ==== Skins sheet (SkinSheet): the art is the card ========================================== */
 /* critic K2 #11: previews were 3 symbols of 20–25 px under a 20-px name and 2–5 lines of text.
    Now each card is a row: the skin's palette plate with three 20-u symbols (≥ 40 px, most of the
    card's height) | the name on one line and one state line. The description is the tooltip. */
+/* critic15 #1: the sheet body holding a kit root is `overflow: hidden` (gx-px.css — kit content
+   brings its own scroller), so `.skn` is that scroller: the grid and both note lines scroll
+   together. 3u of padding on EVERY side is room for the select frame and the focus ring drawn
+   3u outside a card — the bottom card's frame was cut without it (R14). */
 .skn {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  scrollbar-width: thin;
+  scrollbar-color: var(--px-dim, #7e735f) transparent;
+}
+.skn > * {
+  flex: none;
+}
+.skn__grid {
+  /* Queried by the narrow-card rules below (a card cannot query its own width). */
+  container: skng / inline-size;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(150 * var(--u))), 1fr));
   /* Every card as tall as the tallest (the relic's progress bar): one even list. */
   grid-auto-rows: 1fr;
   gap: calc(3 * var(--u));
-  /* Room for the select frame drawn outside the first row. */
-  padding: calc(3 * var(--u)) calc(3 * var(--u)) 0;
 }
 .skn-card {
   position: relative;
@@ -1307,6 +1746,9 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   column-gap: calc(4 * var(--u));
   row-gap: calc(2 * var(--u));
   min-width: 0;
+  /* One height in every state (critic12 #5): as tall as the relic's quest card (name line + lock
+     line + bar), so the owner's «выдано» arriving a second later moves nothing. */
+  min-height: calc(15 * var(--u) + var(--px-fs) * 1.1 + max(9 * var(--u), var(--px-fs-sm) * 1.1));
   padding: calc(2 * var(--u));
   border-width: var(--u);
   border-style: solid;
@@ -1372,16 +1814,57 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
 }
 /* A long name on a narrow (phone) card: a step smaller; over 20 letters («Notte di mezza
    estate») it may take two lines. By length class, not by measuring: 13 measurements forced
-   13 layouts while the sheet opened. */
-.skn-card {
-  container: skn / inline-size;
-}
-@container skn (max-width: 420px) {
+   13 layouts while the sheet opened. The query is on the grid, not on each card: 13 size
+   containers cost the open 30–70 ms of layout at 4× (critic12 #5). The list is one column on every
+   format, so card = grid − 6 u (12 px on phones): 420-px card = 432-px grid. */
+@container skng (max-width: 432px) {
   .skn-card__name:is(.is-long, .is-xlong) {
     font-size: var(--px-fs-sm);
   }
   .skn-card__name.is-xlong {
     white-space: normal;
+  }
+}
+/* 320–360-px phones (critic12 #3, R58): the text column is 100–140 px. Every name in the small
+   size, wrapping to at most two lines (one-word German names carry a soft hyphen); the state line
+   wraps too. The lock of the relic's quest moves beside its bar, so «×83 / ×200» gets the whole
+   column. All cards stay one height (the grid's 1fr rows): 70 px. */
+@container skng (max-width: 312px) {
+  .skn-card {
+    row-gap: var(--u);
+    min-height: calc(17 * var(--u) + var(--px-fs-sm) * 2.15);
+  }
+  /* The plate gives 18 px of its frame and gaps (the 40-px symbols stay; their images have their
+     own margin): one-word names of 101–113 px
+     (ru «Купальская», tr «Gündönümü», de «Kürbisnacht», «Mittsommer-») fit whole. */
+  .skn-card .skn-card__art.skin-card {
+    padding: var(--u);
+  }
+  .skn-card__art .skin-card__reels {
+    gap: 0;
+    padding: var(--u) 0;
+  }
+  .skn-card__name,
+  .skn-card__name:is(.is-long, .is-xlong) {
+    font-size: var(--px-fs-sm);
+    line-height: 1.05;
+    white-space: normal;
+    hyphens: manual;
+  }
+  /* `.skn-card` first: the base rules of these come later in the file. */
+  .skn-card .skn-on,
+  .skn-card .skn-lock,
+  .skn-card .skn-badge {
+    white-space: normal;
+  }
+  .skn-card .skn-quest {
+    grid-template-areas: 'x x' 'ico bar';
+  }
+  .skn-card .skn-quest > .px-i {
+    grid-area: ico;
+  }
+  .skn-card .skn-quest > em {
+    grid-area: x;
   }
 }
 .skn-card__state {
@@ -1393,6 +1876,17 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   gap: var(--u) calc(2 * var(--u));
   min-width: 0;
   font: 700 var(--px-fs-sm) / 1.15 var(--px-font);
+}
+/* The relic's state line keeps the quest's height (numbers over the 6u bar) when it turns into the
+   badge — the owner's answer or a new record: nothing inside the card moves (critic12 #5). */
+.skn-card.is-earn .skn-card__state {
+  min-height: calc(var(--px-fs-sm) * 1.1 + 7 * var(--u));
+}
+@container skng (max-width: 312px) {
+  /* Narrow: the second quest row is the 9u lock beside the bar. */
+  .skn-card.is-earn .skn-card__state {
+    min-height: calc(var(--px-fs-sm) * 1.1 + 10 * var(--u));
+  }
 }
 .skn-on,
 .skn-lock {
@@ -1441,9 +1935,18 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   white-space: nowrap;
 }
 .skn-note {
+  display: flex;
+  align-items: center;
+  gap: calc(2 * var(--u));
   margin: calc(4 * var(--u)) 0 0;
   font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
   color: var(--px-muted);
+}
+.skn-note > .px-i {
+  flex: none;
+}
+.skn-note--credit {
+  margin-top: var(--u);
 }
 
 /* ==== Cash desk (CashDesk, owner only): kit buttons in a well; also in the mine settings ===== */
@@ -1704,6 +2207,8 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
    paragraphs under «Подробнее». Rarity names are ink pills on the rarity colour (`.nur-rar`). */
 .cas-rules {
   display: grid;
+  /* A nowrap row never widens the sheet: at 320 px one pay row pushed every heading out. */
+  grid-template-columns: minmax(0, 1fr);
   gap: calc(5 * var(--u));
   color: var(--px-text);
   font: 500 var(--px-fs-sm) / 1.3 var(--px-font);
@@ -1737,8 +2242,15 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   color: var(--px-gold);
 }
 .cas-rules .paytable__pair {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: 0.3em;
   font: 600 var(--px-fs-sm) / 1 var(--px-font);
   color: var(--px-muted);
+}
+.cas-rules .paytable__pair > span + span::before {
+  content: '· ';
 }
 /* Lines: the picture is the content; the name is the tooltip (it was 10 px under it). */
 .cas-rules .lines-grid {
@@ -1815,6 +2327,33 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   min-width: 5ch;
   color: var(--px-muted);
   opacity: 1;
+}
+/* 320-px phones (critic12 #3, R58): the pay pair stacks in its plate, the rarity row lets its
+   range wrap beside a fixed odds column, the scatter steps are three equal columns. */
+@media (max-width: 340px) {
+  .cas-rules .paytable__pair {
+    flex-direction: column;
+    align-items: flex-end;
+    row-gap: var(--u);
+  }
+  .cas-rules .paytable__pair > span + span::before {
+    content: none;
+  }
+  .cas-rules .rarity-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .cas-rules .rarity-row__odds {
+    min-width: 0;
+    text-align: right;
+  }
+  .cas-rules .combo-rules__ladder {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .cas-rules .combo-rules__step {
+    min-width: 0;
+  }
 }
 /* «Подробнее»: a 44-px row with a pixel triangle; the long texts open under it. */
 .cas-more > summary {
@@ -1951,6 +2490,13 @@ html[data-ff='desktop'] .hall .hall-card__facts .cas-stat__v[data-fit='2'] {
   padding: calc(2 * var(--u)) calc(8 * var(--u));
   font-size: var(--px-fs-hero);
   line-height: 1.1;
+}
+.cas-betpick__sub {
+  justify-self: center;
+  /* Tucked under the number it belongs to (the grid gap is 4u). */
+  margin: calc(-2 * var(--u)) 0 0;
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  color: var(--px-muted);
 }
 .cas-betpick__row {
   display: grid;

@@ -68,7 +68,7 @@ export function GamesPage() {
   return (
     <GameScreen
       className="gx cas-hall"
-      bg={<div className="yard-scene-bg" />}
+      bg={<div className="cas-ground pxt-stone" />}
       top={
         <GameTop
           title={t('hall.title')}
@@ -181,8 +181,8 @@ export function GamesPage() {
                   fit
                   icon={<KitIcon name="play" />}
                   value={fmt(scatterSpins)}
-                  label={t('slots.session.spins')}
-                  tip={`${t('slots.session.spins')}: ${fmt(scatterSpins)}`}
+                  label={t('slots.statTurns')}
+                  tip={`${t('slots.statTurns')}: ${fmt(scatterSpins)}`}
                 />
                 <CasStat
                   fit
@@ -207,7 +207,7 @@ export function GamesPage() {
           play={t('hall.play')}
           onClick={() => go('/prison')}
         />
-        <p className="hall-note px-dark px-shadow">{t('hall.note')}</p>
+        <p className="hall-note">{t('hall.note')}</p>
       </div>
       {settingsOpen && <GameSettings onClose={() => setSettingsOpen(false)} />}
     </GameScreen>
