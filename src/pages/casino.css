@@ -2263,6 +2263,13 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
 .cas-rules .paytable__mult {
   font: 700 var(--px-fs) / 1 var(--px-font);
   color: var(--px-gold);
+  white-space: nowrap;
+}
+/* The big number's condition («12+»), set like the small steps' «8–9» beside it. */
+.cas-rules .paytable__n {
+  margin-right: 0.3em;
+  font: 600 var(--px-fs-sm) / 1 var(--px-font);
+  color: var(--px-muted);
 }
 .cas-rules .paytable__pair {
   display: inline-flex;
