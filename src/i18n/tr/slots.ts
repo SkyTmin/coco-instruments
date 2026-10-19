@@ -229,6 +229,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: 'Her yerde {n} aynı sembol = kazanç, alan çöker',
     anteChip: '×{n}',
+    anteBroke: 'Ante için yetmiyor — kapatın',
     subtitle: '{cols}×{rows} alan · her yerde {n} aynı',
     bonus: 'BONUS',
     left: '{n} kaldı',

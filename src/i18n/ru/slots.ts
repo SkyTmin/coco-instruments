@@ -243,6 +243,7 @@ export const slots = {
   cascade: {
     howShort: '{n} одинаковых где угодно — выигрыш, поле осыпается',
     anteChip: '×{n}',
+    anteBroke: 'Не хватает на Ante — выключите его',
     subtitle: 'Поле {cols}×{rows} · {n} одинаковых где угодно',
     bonus: 'БОНУС',
     left: 'ещё {n}',

@@ -104,6 +104,12 @@ html .slots.cas .cas-status {
   font: 700 var(--px-fs) / 1.05 var(--px-font);
   text-wrap: balance;
 }
+/* A two-line message (Cascade «not enough for Ante — turn it off»): one step smaller, so two
+   lines sit inside the fixed plate with air (at --px-fs they filled 45 of its 44 px). */
+.cas .cas-status .status--long {
+  font-size: var(--px-fs-sm);
+  line-height: 1.1;
+}
 .cas .cas-status .status--hint,
 .cas .cas-status .status--spin {
   font-weight: 500;
@@ -1693,7 +1699,26 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
 /* critic K2 #11: previews were 3 symbols of 20–25 px under a 20-px name and 2–5 lines of text.
    Now each card is a row: the skin's palette plate with three 20-u symbols (≥ 40 px, most of the
    card's height) | the name on one line and one state line. The description is the tooltip. */
+/* critic15 #1: the sheet body holding a kit root is `overflow: hidden` (gx-px.css — kit content
+   brings its own scroller), so `.skn` is that scroller: the grid and both note lines scroll
+   together. 3u of padding on EVERY side is room for the select frame and the focus ring drawn
+   3u outside a card — the bottom card's frame was cut without it (R14). */
 .skn {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(3 * var(--u));
+  scrollbar-width: thin;
+  scrollbar-color: var(--px-dim, #7e735f) transparent;
+}
+.skn > * {
+  flex: none;
+}
+.skn__grid {
   /* Queried by the narrow-card rules below (a card cannot query its own width). */
   container: skng / inline-size;
   display: grid;
@@ -1701,8 +1726,6 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
   /* Every card as tall as the tallest (the relic's progress bar): one even list. */
   grid-auto-rows: 1fr;
   gap: calc(3 * var(--u));
-  /* Room for the select frame drawn outside the first row. */
-  padding: calc(3 * var(--u)) calc(3 * var(--u)) 0;
 }
 .skn-card {
   position: relative;
@@ -2467,6 +2490,13 @@ html[data-ff='desktop'] .hall .hall-card__facts:has([data-fit='2']) .cas-stat__v
   padding: calc(2 * var(--u)) calc(8 * var(--u));
   font-size: var(--px-fs-hero);
   line-height: 1.1;
+}
+.cas-betpick__sub {
+  justify-self: center;
+  /* Tucked under the number it belongs to (the grid gap is 4u). */
+  margin: calc(-2 * var(--u)) 0 0;
+  font: 700 var(--px-fs-sm) / 1.1 var(--px-font);
+  color: var(--px-muted);
 }
 .cas-betpick__row {
   display: grid;

@@ -229,6 +229,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} gleiche irgendwo = Gewinn, das Feld rutscht nach',
     anteChip: '×{n}',
+    anteBroke: 'Zu wenig für Ante – schalte es aus',
     subtitle: '{cols}×{rows}-Feld · {n} gleiche irgendwo',
     bonus: 'BONUS',
     left: 'noch {n}',

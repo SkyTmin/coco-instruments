@@ -66,32 +66,37 @@ export function SkinSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <GxSheet title={t('slots.skin.title')} onClose={onClose} className="cas-skins">
+      {/* Лист прокручивает сама сетка: тело листа с набором внутри — `overflow: hidden`
+          (gx-px.css), и без своей прокрутки треть скинов и строка лицензии Twemoji были
+          недоступны пальцу (critic15 #1). Обе строки внизу — внутри той же прокрутки. */}
       <div className="skn px">
-        {/* Все карточки — сразу: второй пакет кадром позже давал отдельную задачу 157–286 мс
+        <div className="skn__grid">
+          {/* Все карточки — сразу: второй пакет кадром позже давал отдельную задачу 157–286 мс
             при 4× ровно на первом свайпе (critic12 #5). Картинки за первым экраном грузятся
             и декодируются сами (`loading="lazy"`, `decoding="async"`). */}
-        {[...SKINS].sort(order).map((sk, i) => (
-          <SkinCard
-            key={sk.id}
-            sk={sk}
-            eager={i < FIRST}
-            available={isSkinAvailable(sk, level, topX, granted)}
-            active={sk.id === skin}
-            // Выдан владельцу, а не добыт спином: подпись должна говорить
-            // правду, иначе карточка приписывает игроку чужой рекорд.
-            byGrant={!!sk.earn && granted && topX < sk.earn.topX}
-            topX={topX}
-            onPick={pick}
-          />
-        ))}
+          {[...SKINS].sort(order).map((sk, i) => (
+            <SkinCard
+              key={sk.id}
+              sk={sk}
+              eager={i < FIRST}
+              available={isSkinAvailable(sk, level, topX, granted)}
+              active={sk.id === skin}
+              // Выдан владельцу, а не добыт спином: подпись должна говорить
+              // правду, иначе карточка приписывает игроку чужой рекорд.
+              byGrant={!!sk.earn && granted && topX < sk.earn.topX}
+              topX={topX}
+              onPick={pick}
+            />
+          ))}
+        </div>
+        {/* Одна строка про «Реликвию» и строка авторства вместо абзаца на 23 слова (critic9 #13);
+            полный текст — в подсказке. */}
+        <p className="skn-note" data-tip={t('slots.skin.note')}>
+          <Icon name="lock" />
+          {t('slots.skin.relicLock', { x: RELIC_X })}
+        </p>
+        <p className="skn-note skn-note--credit">{t('slots.skin.credit')}</p>
       </div>
-      {/* Одна строка про «Реликвию» и строка авторства вместо абзаца на 23 слова (critic9 #13);
-          полный текст — в подсказке. */}
-      <p className="skn-note" data-tip={t('slots.skin.note')}>
-        <Icon name="lock" />
-        {t('slots.skin.relicLock', { x: RELIC_X })}
-      </p>
-      <p className="skn-note skn-note--credit">{t('slots.skin.credit')}</p>
     </GxSheet>
   );
 }

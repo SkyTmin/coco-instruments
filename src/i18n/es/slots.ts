@@ -237,6 +237,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} iguales en cualquier sitio = premio, el tablero cae',
     anteChip: '×{n}',
+    anteBroke: 'No alcanza para el Ante: desactívalo',
     subtitle: 'Tablero {cols}×{rows} · {n} iguales en cualquier sitio',
     bonus: 'BONUS',
     left: 'quedan {n}',

@@ -229,6 +229,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} alike anywhere = a win, the board tumbles',
     anteChip: '×{n}',
+    anteBroke: 'Not enough for Ante — turn it off',
     subtitle: '{cols}×{rows} board · {n} of a kind anywhere',
     bonus: 'BONUS',
     left: '{n} left',

@@ -237,6 +237,7 @@ export const slots: Translation<typeof ru> = {
   cascade: {
     howShort: '{n} identiques n’importe où = gain, la grille s’effondre',
     anteChip: '×{n}',
+    anteBroke: 'Pas assez pour l’Ante — désactivez-le',
     subtitle: 'Grille {cols}×{rows} · {n} identiques n’importe où',
     bonus: 'BONUS',
     left: 'encore {n}',

@@ -677,15 +677,6 @@ export function ScatterPage() {
     [],
   );
 
-  // Ставка всегда по карману.
-  useEffect(() => {
-    if (!hydrated || spinning || balance >= bet) return;
-    // Сначала пробуем быструю ставку, иначе опускаемся к любой посильной —
-    // с восемью монетами в кармане игрок всё ещё должен мочь крутить.
-    const affordable = [...BETS].reverse().find((b) => b <= balance) ?? clampBet(balance);
-    if (affordable <= balance && affordable !== bet) setBet(affordable);
-  }, [hydrated, spinning, balance, bet, setBet]);
-
   const level = levelFromXp(xp);
   const theme = skinOf(skin);
   const rainSrc = symbolSrc(skin, theme.rain);
@@ -695,7 +686,29 @@ export function ScatterPage() {
   const anteOn = ante && !inBonus;
   const stake = inBonus || freeSpins > 0 ? 0 : scatterStake(bet, ante);
   const buyCost = Math.round(bet * BUY_BONUS_COST);
+
+  // Ставка всегда по карману. Карман сверяется с ценой спина, а не с голой ставкой: с Ante
+  // спин стоит `scatterStake` (critic15 #2 — баланс 12, ставка 10, окно «13», спин молча мёртв).
+  useEffect(() => {
+    const fits = (b: number) => scatterStake(b, anteOn) <= balance;
+    if (!hydrated || spinning || fits(bet)) return;
+    // Сначала пробуем быструю ставку, иначе опускаемся к любой посильной кратной шагу —
+    // с восемью монетами в кармане игрок всё ещё должен мочь крутить.
+    let affordable = [...BETS].reverse().find(fits);
+    if (affordable === undefined) {
+      for (let b = clampBet(Math.floor(balance / BET_STEP) * BET_STEP); b >= MIN_BET; b -= BET_STEP)
+        if (fits(b)) {
+          affordable = b;
+          break;
+        }
+    }
+    if (affordable !== undefined && affordable !== bet) setBet(affordable);
+  }, [hydrated, spinning, balance, bet, anteOn, setBet]);
+
   const broke = balance < MIN_BET && freeSpins <= 0 && !inBonus;
+  // На голую ставку хватает, а с Ante — даже на самую малую нет: «Нет монет» и строка, что
+  // Ante можно выключить (critic15 #2), а не мёртвая кнопка без слова.
+  const anteBroke = !broke && anteOn && freeSpins <= 0 && balance < scatterStake(MIN_BET, true);
   // «Нет монет»: нажатие объясняет, откуда монеты (строка статуса, толчок плашки, вибро).
   const [nope, setNope] = useState(0);
   const [nopeShown, setNopeShown] = useState(false);
@@ -706,10 +719,10 @@ export function ScatterPage() {
     return () => clearTimeout(tm);
   }, [nope]);
   const explainBroke = useCallback(() => {
-    if (!broke) return;
+    if (!broke && !anteBroke) return;
     notifyWarning();
     setNope((n) => n + 1);
-  }, [broke]);
+  }, [broke, anteBroke]);
   const canSpin = hydrated && !spinning && balance >= stake;
   const tier = tierOf(chain);
   const marking =
@@ -1544,12 +1557,12 @@ export function ScatterPage() {
   // Спин от игрока (кнопка, Space, «A»): тап сразу после «Пропустить» нового спина не начинает.
   const pressSpin = useCallback(() => {
     if (performance.now() - skipAt.current < SKIP_GUARD_MS) return;
-    if (broke) {
+    if (broke || anteBroke) {
       explainBroke();
       return;
     }
     spin();
-  }, [spin, broke, explainBroke]);
+  }, [spin, broke, anteBroke, explainBroke]);
 
   // Пробел/Enter и «A» геймпада — крутить, как в «Слотах» (слой действий).
   useAction(
@@ -2020,8 +2033,10 @@ export function ScatterPage() {
             текст в нём на телефоне выходил 9–14 px. Здесь он кегля набора, высота
             постоянная — спины меняют только содержимое. */}
         <div className="cabinet__status cas-status">
-          {nopeShown && !spinning ? (
-            <span className="status">{tr('slots.status.broke')}</span>
+          {nopeShown && !spinning && (broke || anteBroke) ? (
+            <span className={anteBroke ? 'status status--long' : 'status'}>
+              {tr(anteBroke ? 'slots.cascade.anteBroke' : 'slots.status.broke')}
+            </span>
           ) : cascade || counting ? (
             <>
               <span className={`status status--combo status--t${tier}`}>
@@ -2099,7 +2114,7 @@ export function ScatterPage() {
               ? tr('slots.btn.stopShort')
               : inBonus && fs
                 ? tr('slots.btn.bonusShort')
-                : broke
+                : broke || anteBroke
                   ? tr('slots.btn.brokeShort')
                   : freeSpins > 0
                     ? tr('slots.btn.freeShort')
@@ -2253,8 +2268,12 @@ export function ScatterPage() {
 
       {betSheet && (
         <GxSheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
+          {/* Число, кнопка и «хватает ли» — по цене спина, как окно ставки: с Ante лист
+              говорил «Играть по 10», а спин списывал 13 (critic15 #2, R69). */}
           <CasBetPicker
             value={betDraft}
+            shown={scatterStake(betDraft, anteOn)}
+            sub={anteOn ? `Ante ${tr('slots.cascade.anteChip', { n: ANTE_COST })}` : undefined}
             min={MIN_BET}
             max={MAX_BET}
             step={BET_STEP}
@@ -2262,11 +2281,11 @@ export function ScatterPage() {
             lessLabel={tr('slots.bet.less')}
             moreLabel={tr('slots.bet.more')}
             cta={
-              betDraft > balance && freeSpins <= 0
+              scatterStake(betDraft, anteOn) > balance && freeSpins <= 0
                 ? tr('slots.bet.noCoins')
-                : tr('slots.bet.play', { bet: betDraft })
+                : tr('slots.bet.play', { bet: scatterStake(betDraft, anteOn) })
             }
-            ctaOff={betDraft > balance && freeSpins <= 0}
+            ctaOff={scatterStake(betDraft, anteOn) > balance && freeSpins <= 0}
             onConfirm={() => {
               tapMedium();
               setBet(betDraft);

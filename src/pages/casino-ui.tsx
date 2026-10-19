@@ -647,6 +647,8 @@ export function CasAutoPicker<H extends string>({
 /** Bet picker: the value, −/slider/+, an optional note and the confirm button. */
 export function CasBetPicker({
   value,
+  shown,
+  sub,
   min,
   max,
   step,
@@ -659,6 +661,11 @@ export function CasBetPicker({
   onConfirm,
 }: {
   value: number;
+  /** What one spin at `value` costs (Cascade's Ante) — the big number shows it, like the deck's
+   *  bet well; the stepper still moves the bet itself. */
+  shown?: number;
+  /** A caption under the number (Cascade: «Ante ×1,25» while the surcharge is on). */
+  sub?: string;
   min: number;
   max: number;
   step: number;
@@ -673,9 +680,10 @@ export function CasBetPicker({
   return (
     <div className="cas-betpick px">
       <div className="cas-betpick__v cas-well px-num">
-        {fmtNum(value)}
+        {fmtNum(shown ?? value)}
         <CoinIcon size={26} />
       </div>
+      {sub && <p className="cas-betpick__sub px-num">{sub}</p>}
       <div className="cas-betpick__row">
         <Button
           icon="minus"
