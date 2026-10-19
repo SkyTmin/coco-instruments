@@ -1823,8 +1823,10 @@ export function PrisonPage() {
   const roomy = wide && !shell.ff.startsWith('phone');
   /** Низкий телефон стоя (320×568, ≤ 640 px — тот же порог, что в mine.css): расходники —
    *  столбиком слева от рамы, их ряд (44 + 2 px) отдан полю (критик r3: клетка с заданием
-   *  16 → 21). От окна, а не от клетки — иначе раскладка качалась бы между двумя видами. */
-  const itemsCol = !wide && shell.ff.startsWith('phone') && shell.h <= 640;
+   *  16 → 21). От окна, а не от клетки — иначе раскладка качалась бы между двумя видами.
+   *  Телефон лёжа до 400 px (667×375, 844×390) — так же, у левой кромки рамы: в узкой левой
+   *  колонке пять ячеек вставали в два ряда и уходили под низ экрана (критик r4). */
+  const itemsCol = shell.ff.startsWith('phone') && shell.h <= (wide ? 400 : 640);
   const rootRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -1832,7 +1834,7 @@ export function PrisonPage() {
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   /** Рюкзак — наверху правой колонки: левая на этом окне не помещается (см. `useSideFit`). */
-  const bagRight = useSideFit(leftRef, rightRef, wide, roomy);
+  const bagRight = useSideFit(leftRef, rightRef, wide);
   // Отряд на кромке рамы растёт вместе с клеткой; на телефоне — прежние 44.
   const petSize = Math.max(44, Math.min(112, Math.round(cell * 0.9)));
   const dockIco = (roomy ? 24 : 12) * shell.scale;
@@ -2231,6 +2233,7 @@ export function PrisonPage() {
         getLang(),
         arming,
         roomy,
+        wide && !itemsCol,
         u,
         ...shownItems.map((it) => `${it.id}:${prison.items[it.id]}`),
       ]}
@@ -2241,7 +2244,7 @@ export function PrisonPage() {
           aria-label={t('inv.section.items')}
           data-n={shownItems.length}
         >
-          {wide && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
+          {wide && !itemsCol && <h3 className="px-h mn-side__h">{t('inv.section.items')}</h3>}
           <div className="mn-items__row">
             {shownItems.map((it, i) => {
               const n = prison.items[it.id];
@@ -2556,7 +2559,9 @@ export function PrisonPage() {
           >
             {count && value ? (
               <>
-                <span>{t('mineHud.bag.sell', { sum: fmtShort(value) })}</span>
+                {/* Сумма — как в фишках шапки (≤ 5 знаков: «9 665», «244к»): «Продать 244,1 тыс.»
+                    вылезал за кнопку на tl, de «Verkaufen 244.091» — на всех телефонах. */}
+                <span>{t('mineHud.bag.sell', { sum: chipCount(value) })}</span>
                 <i className="mn-coin mn-coin--s" aria-hidden="true" />
               </>
             ) : count ? (
@@ -2727,12 +2732,12 @@ export function PrisonPage() {
           <div className="mn-rankwrap">{rankBox}</div>
           <div className="mn-panel">{streakBox}</div>
           {questBox}
-          {itemsRow}
-          {roomy && !bagRight && bagBox}
+          {!itemsCol && itemsRow}
+          {!bagRight && bagBox}
         </div>,
         fieldBox,
         <div key="r" ref={rightRef} className="mn-side mn-side--r">
-          {(!roomy || bagRight) && bagBox}
+          {bagRight && bagBox}
           {dock}
         </div>,
       ]
@@ -2752,7 +2757,7 @@ export function PrisonPage() {
   return (
     <div
       ref={rootRef}
-      className={`gx px mn ${wide ? 'mn--wide' : 'mn--tall'}${screen || forgeOpen || invOpen ? ' is-under' : ''}`}
+      className={`gx px mn ${wide ? 'mn--wide' : 'mn--tall'}${wide && itemsCol ? ' mn--short' : ''}${screen || forgeOpen || invOpen ? ' is-under' : ''}`}
       style={cell ? ({ '--cell': `${cell}px` } as CSSProperties) : undefined}
     >
       <div className="prison-scene pxt-stone" aria-hidden="true" />
@@ -3179,7 +3184,12 @@ function useFieldCell(
       if (wide) {
         const rs = getComputedStyle(r);
         const inner = r.clientWidth - parseFloat(rs.paddingLeft) - parseFloat(rs.paddingRight);
-        W = inner - 2 * (SIDE_MIN_U + SIDE_GAP_U) * scale;
+        // Поля слота — столбик расходников у рамы на низком телефоне лёжа (`has-items`).
+        W =
+          inner -
+          2 * (SIDE_MIN_U + SIDE_GAP_U) * scale -
+          parseFloat(ss.paddingLeft) -
+          parseFloat(ss.paddingRight);
       }
       const c = Math.floor(Math.min((W - cw) / 7, (H - ch) / 9));
       // Нижний предел 12, а не 20: на 320×568 рама с клеткой 20 налезала на расходники
@@ -3196,10 +3206,10 @@ function useFieldCell(
 }
 
 /**
- * Широкий экран: помещается ли левая колонка. На планшете и компьютере (`roomy`) рюкзак
- * стоит внизу левой колонки, пока она влезает в окно; не влезает — рюкзак переезжает наверх
- * правой, над доком (критик r4: на 1280×720 с заданием «Продать» был под краем на 66 px, в
- * окне браузера ноутбука 1280×650 — и без задания). Колонка меряется ВМЕСТЕ с рюкзаком, где
+ * Широкий экран: помещается ли левая колонка. Рюкзак стоит внизу левой колонки, пока она
+ * влезает в окно; не влезает — рюкзак переезжает наверх правой, над доком (критик r4: на
+ * 1280×720 с заданием «Продать» был под краем на 66 px, в окне браузера ноутбука 1280×650 —
+ * и без задания; телефон лёжа почти всегда здесь). Колонка меряется ВМЕСТЕ с рюкзаком, где
  * бы он сейчас ни стоял, поэтому переезд не качается туда-обратно. Колонка, которая всё равно
  * длиннее окна (полоса прокрутки скрыта), получает `data-more` — ступенчатая тень у нижней
  * кромки: молча не обрезаем.
@@ -3208,7 +3218,6 @@ function useSideFit(
   left: RefObject<HTMLDivElement>,
   right: RefObject<HTMLDivElement>,
   wide: boolean,
-  roomy: boolean,
 ): boolean {
   const [moved, setMoved] = useState(false);
   useLayoutEffect(() => {
@@ -3219,21 +3228,19 @@ function useSideFit(
       return undefined;
     }
     const measure = () => {
-      if (roomy) {
-        const bag = L.querySelector(':scope > .mn-bag') ?? R.querySelector(':scope > .mn-bag');
-        const cs = getComputedStyle(L);
-        const gap = parseFloat(cs.rowGap) || 0;
-        let need = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-        let n = 0;
-        for (const el of [...L.children, ...(bag && !L.contains(bag) ? [bag] : [])]) {
-          const h = el.getBoundingClientRect().height;
-          if (!h) continue;
-          need += h;
-          n += 1;
-        }
-        need += gap * Math.max(0, n - 1);
-        setMoved(need > L.clientHeight + 0.5);
+      const bag = L.querySelector(':scope > .mn-bag') ?? R.querySelector(':scope > .mn-bag');
+      const cs = getComputedStyle(L);
+      const gap = parseFloat(cs.rowGap) || 0;
+      let need = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      let n = 0;
+      for (const el of [...L.children, ...(bag && !L.contains(bag) ? [bag] : [])]) {
+        const h = el.getBoundingClientRect().height;
+        if (!h) continue;
+        need += h;
+        n += 1;
       }
+      need += gap * Math.max(0, n - 1);
+      setMoved(need > L.clientHeight + 0.5);
       for (const c of [L, R]) c.toggleAttribute('data-more', c.scrollHeight > c.clientHeight + 1);
     };
     const ro = new ResizeObserver(measure);
@@ -3253,8 +3260,8 @@ function useSideFit(
       ro.disconnect();
       mo.disconnect();
     };
-  }, [left, right, wide, roomy]);
-  return roomy && moved;
+  }, [left, right, wide]);
+  return moved;
 }
 
 /** Перерисовка раз в секунду, пока `on` — для таймеров баффов. */

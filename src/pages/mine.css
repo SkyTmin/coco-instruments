@@ -263,20 +263,20 @@ html:not([data-ff^='phone']) .mn--wide .mn-side {
 .mn-side--l:has(.mn-quest) .mn-side__h {
   display: none;
 }
-/* Планшет и компьютер: задание одной высоты на всех шагах — название всегда занимает две
-   строки, конец — 16u, полосы нет (тот же счёт «N/M» стоит в карточке). Иначе карточка
-   менялась 96 → 135 px от шага к шагу, а рюкзак под ней прыгал (и мог переезжать в
-   правую колонку на одних шагах и не на других). */
-html:not([data-ff^='phone']) .mn--wide .mn-quest {
+/* Широкий экран: задание одной высоты на всех шагах — название всегда занимает две строки,
+   конец — 15u, полосы нет (тот же счёт «N/M» стоит в карточке). Иначе карточка менялась
+   96 → 135 px от шага к шагу (1280×720 de), а рюкзак под ней прыгал и мог переезжать в
+   правую колонку на одних шагах и не на других; на 667×375 полоса добавляла 12 px. */
+.mn.mn--wide .mn-quest {
   grid-template-rows: calc(2.2 * var(--px-fs-sm)) calc(15 * var(--u));
   /* 2u, а не 3u: 1280×650 с заданием — левая колонка без рюкзака перебирала 9 px. */
   padding-top: calc(2 * var(--u));
   padding-bottom: calc(2 * var(--u));
 }
-html:not([data-ff^='phone']) .mn--wide .mn-quest .px-bar {
+.mn--wide .mn-quest .px-bar {
   display: none;
 }
-html:not([data-ff^='phone']) .mn--wide .mn-quest > :last-child {
+.mn.mn--wide .mn-quest > :last-child {
   height: 100%;
 }
 /* …и ячейки 22u (44 px): полоса серии выросла на 3u (темп внутри рамки) — ряд расходников
@@ -698,6 +698,25 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
   display: grid;
   grid-template-columns: repeat(2, var(--slot));
 }
+/* Телефон лёжа до 400 px (667×375, 844×390; критик r4): тот же столбик у левой кромки рамы,
+   от её верха; поле слота — только слева (рама между колонками не обязана стоять по центру
+   экрана, а 2 · 23u отняли бы у клетки ещё 7 px). Шесть расходников — одним столбиком:
+   6 · 21u + 5u = 262 px ≤ высоты рамы при клетке от 26. */
+.mn--wide > .mn-field.has-items {
+  padding-left: calc(23 * var(--u));
+}
+.mn--wide .mn-frame > .mn-items,
+.mn--wide .mn-frame > .mn-items[data-n] {
+  --slot: calc(21 * var(--u));
+  top: 0;
+}
+.mn.mn--wide .mn-frame > .mn-items > .mn-items__row,
+.mn.mn--wide .mn-frame > .mn-items[data-n] > .mn-items__row {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  gap: var(--u);
+}
 .mn-parcel {
   position: relative;
   display: grid;
@@ -746,8 +765,14 @@ html:not([data-ff^='phone']) .mn-panel > .mn-strip > .mn-strip__pace {
 }
 /* Низкий телефон: отряд на 1u ниже — центры нижнего ряда клеток (21 px) свободны с запасом
    3,5 px, а не 1,5; низ отряда всё ещё внутри слота поля (R63). */
-.mn-field.has-items .ppets {
+.mn--tall .mn-field.has-items .ppets {
   bottom: calc(-13 * var(--u));
+}
+/* Телефон лёжа до 400 px: отряд (44 px) опущен от клетки — верх спрайта на 2 px ниже центров
+   нижнего ряда (row9b: на 667×375 и 844×390 три питомца закрывали 5 и 3 центра), низ — на
+   экране (667×375: 357 из 375, 844×390: 385 из 390). */
+.mn.mn--short .ppets {
+  bottom: calc(var(--cell) / 2 - 18 * var(--u));
 }
 .mn .ppets__say {
   padding: calc(1 * var(--u)) calc(3 * var(--u));
@@ -1754,6 +1779,62 @@ html[data-ff^='phone'] .mn-dock__label {
 .mn-dock__btn > .px-keyhint {
   right: calc(1 * var(--u));
   bottom: calc(2 * var(--u));
+}
+
+/* ---- Телефон лёжа до 400 px (`mn--short`: 667×375, 844×390) — критик r4 ---------------- */
+/* Колонки плотнее: зазоры 1u, ряды шапки через 1u, рюкзак на 4 px короче — с заданием левая
+   колонка на 667×375 перебирала 12 px и после переезда расходников к раме, а без задания
+   рюкзак не входил в неё на 6 px (колонка пустела на четверть). Монеты в шапке — не кнопка:
+   зоны нажатия «назад» и ⚙ (−4u по вертикали) могут заходить на них. */
+.mn--short .mn-side {
+  gap: var(--u);
+}
+.mn.mn--short .mn-hud {
+  row-gap: var(--u);
+}
+/* Задание в колонке 177 px: награда и «Забрать» — во всю ширину карточки под номером и
+   названием (рядом с шестиугольником «Забрать» вылезал за колонку на 18 px). */
+.mn.mn--short .mn-quest > :first-child {
+  grid-row: auto;
+}
+.mn.mn--short .mn-quest > :last-child {
+  grid-column: 1 / -1;
+  gap: calc(2 * var(--u));
+}
+.mn.mn--short .mn-bag {
+  row-gap: var(--u);
+  padding: calc(3 * var(--u)) calc(2 * var(--u)) calc(2 * var(--u));
+}
+/* Колонка 177 px (рама с расходниками шире): «Продать» добирает ширину полями — de
+   «Verkaufen 821» вылезал за кнопку на 1 px. */
+.mn.mn--short .mn-bag__sell {
+  gap: calc(2 * var(--u));
+  padding-left: calc(2 * var(--u));
+  padding-right: calc(2 * var(--u));
+}
+/* Док — одной колонкой из шести строк, значок слева от подписи (как на планшете): в плитке
+   2 × 3 шириной 85 px «Инвентарь» (95 px) и tr «Demirhane» вылезали за рамку. Строки — от
+   21u (42 px), зона нажатия добирает 44 по 1 px в зазоры. */
+html[data-ff^='phone'] .mn--short .mn-side--r > .mn-dock {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--u);
+}
+html[data-ff^='phone'] .mn--short .mn-dock__btn {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: calc(3 * var(--u));
+  padding: 0 0 calc(3 * var(--u)) calc(4 * var(--u));
+}
+html[data-ff^='phone'] .mn--short .mn-dock__btn:is(:active, .is-down) {
+  padding: calc(2 * var(--u)) 0 var(--u) calc(4 * var(--u));
+}
+html[data-ff^='phone'] .mn--short .mn-dock__label {
+  text-align: left;
+}
+.mn--short .mn-dock__btn::before {
+  content: '';
+  position: absolute;
+  inset: -1px 0;
 }
 
 /* Лагерь, кузница или инвентарь закрывают поле — шахта стоит: её CSS-анимации (отряд,
