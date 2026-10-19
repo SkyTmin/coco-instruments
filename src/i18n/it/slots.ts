@@ -69,6 +69,7 @@ export const slots: Translation<typeof ru> = {
     current: 'scelto',
     note: 'La «Reliquia» non si sblocca col livello: si guadagna con un solo giro grosso e resta per sempre. Simboli: Twemoji (CC-BY 4.0, Twitter Inc. e collaboratori).',
     relicLock: 'Reliquia — per una vincita ×{x} in un solo giro',
+    more: 'Altre skin',
     credit: 'Simboli: Twemoji (Twitter Inc., CC-BY 4.0)',
   },
   hud: {

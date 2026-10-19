@@ -2160,7 +2160,7 @@ export function ScatterPage() {
 
       <CasSheet id="rules">
         {(close) => (
-          <GxSheet title={tr('slots.rules.title')} onClose={close}>
+          <GxSheet guard title={tr('slots.rules.title')} onClose={close}>
             {/* Раздел = заголовок + одна строка + картинка; длинные абзацы — под «Подробнее»
               (critic K2 #8). Редкость сфер — чернильные плашки цвета ступени. */}
             <div className="cas-rules">
@@ -2256,7 +2256,7 @@ export function ScatterPage() {
       </CasSheet>
 
       {autoSheet && (
-        <GxSheet title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
+        <GxSheet guard title={tr('slots.a11y.auto')} onClose={() => setAutoSheet(false)}>
           <CasAutoPicker
             options={AUTO_OPTIONS}
             hint={(h) => tr(`slots.auto.${h}`)}
@@ -2271,7 +2271,7 @@ export function ScatterPage() {
       )}
 
       {betSheet && (
-        <GxSheet title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
+        <GxSheet guard title={tr('slots.a11y.bet')} onClose={() => setBetSheet(false)}>
           {/* Число, кнопка и «хватает ли» — по цене спина, как окно ставки: с Ante лист
               говорил «Играть по 10», а спин списывал 13 (critic15 #2, R69). */}
           <CasBetPicker
@@ -2300,7 +2300,7 @@ export function ScatterPage() {
       )}
 
       {settings && (
-        <GxSheet title={tr('common.settings')} onClose={() => setSettings(false)}>
+        <GxSheet guard title={tr('common.settings')} onClose={() => setSettings(false)}>
           <CasToggles
             items={[
               {
