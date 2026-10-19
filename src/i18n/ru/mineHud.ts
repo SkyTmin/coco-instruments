@@ -111,20 +111,12 @@ export const mineHud = {
     kuiva: 'Куйва',
     arm: 'Тапни, куда бросить',
   },
-  /** Find card, shift summary, crew note. */
+  /** Find card, crew note. */
   card: {
     findNew: 'Находка!',
     findDup: 'Дубликат ×{n}',
     findNewBonus: '+1% к продаже навсегда',
     findDupBonus: '+40 токенов',
-    shift: 'Смена · 5 минут',
-    shiftBlocks: ru3('{n} блок · +{coins}', '{n} блока · +{coins}', '{n} блоков · +{coins}'),
-    shiftKeys: {
-      one: ' · +{n} ключ',
-      few: ' · +{n} ключа',
-      many: ' · +{n} ключей',
-      other: ' · +{n} ключа',
-    },
     crewDug: ru3(
       'Рабочие накопали {n} блок',
       'Рабочие накопали {n} блока',

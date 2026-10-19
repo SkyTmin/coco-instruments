@@ -112,13 +112,6 @@ export const mineHud: Translation<typeof ru> = {
     findDup: 'Repetido ×{n}',
     findNewBonus: '+1 % a la venta para siempre',
     findDupBonus: '+40 fichas',
-    shift: 'Turno · 5 minutos',
-    shiftBlocks: {
-      one: '{n} bloque · +{coins}',
-      many: '{n} de bloques · +{coins}',
-      other: '{n} bloques · +{coins}',
-    },
-    shiftKeys: { one: ' · +{n} llave', many: ' · +{n} de llaves', other: ' · +{n} llaves' },
     crewDug: {
       one: 'La cuadrilla sacó {n} bloque',
       many: 'La cuadrilla sacó {n} de bloques',
