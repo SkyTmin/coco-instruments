@@ -519,8 +519,21 @@ Field drawing, mining, timings, critters and their animations are untouched.
   - Phone landscape: strip 27u (rows 14u / 8u) — the pace line hung 3 px below; quest items 22u
     (the 27u strip pushed them 1 px off-screen); floor chip hit 39 → 44×46 via `::before`
     extended to the right only (left would eat the back button).
-  - Follow-ups (outside M4): bomb hint «под полем» and books/chests «внизу» are wrong where the
-    items/dock sit elsewhere (p320 column, wide); finding 4 (sheet host) is the lead's.
-    p320 rank chips are clipped by `.mn-rank__needs { overflow: hidden }` (172 px): rank J
-    184 px («0/5» → «0/»), rank U 213 px (both ends) — `{SCR}/ui6M/needs.mjs`, `RK=<rank>`; pp
-    and p430 fit (228/272). Keys chip at 99,9 млн overflows on tl/d1/pl tr (unrealistic count).
+  - Rank conditions (M4b): the one-line row «⛏12 · 4 299/4 300 · 9/10» needed 237–240 px (u 2)
+    / ~320 (u 3) and was cut by `overflow: hidden` (p320 172, 375×600 219, pp 228) or spilled out
+    of the tl column. The blocks chip is its own `RankBlocks` beside the coin bar; the pick chip
+    lost its anvil (pink `#ffb4a0` on parchment, ~20–30 px). Tall (phone + tablet): two rows in
+    the same 22u — bar + blocks / pick + work (p320 rank gap 2u: row 170 of 176). Wide: grid
+    hex · bar · blocks · hex over pick + work (pl, desktop: height unchanged); a narrow frame
+    (`.mn-rankwrap` = container `mnrank`, ≤ 299 px at u 3, ≤ 224 at u 2: tl, 667×375) uses three
+    fixed rows — work / pick | blocks around the centre (tl rank 108 → 138 px). Check
+    `{SCR}/ui6M/needs2.mjs <fmts> <langs>`: every chip Range ⊆ its row on all 25 ranks × worst /
+    empty / done, bar label ⊆ bar, row positions constant.
+  - Guide hints name labels, not places (M4b): `guideHint` also fills `{chests}` `{books}`
+    (dock), `{sell}` (the bag button word, `mineHud.bag.sell` without the sum), `{streak}` (idle
+    strip), `{bag}` (forge row, `forge.bag` without the number); the bomb hint is «Тапни по
+    бомбе, потом по клетке поля». `{SCR}/ui6M/f3check2.mjs <langs> <fmt>`: rendered hints, no
+    place word per language, every quoted name visible on screen.
+  - Not fixed (outside M4): finding 4 (sheet host) is the lead's; 667×375 and 1280×720 /
+    1366×768 with the quest overflow the left column (pre-existing, `{SCR}/ui6M/side.mjs`);
+    keys chip at 99,9 млн overflows on tl/d1/pl tr (unrealistic count).
