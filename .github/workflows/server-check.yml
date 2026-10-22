@@ -87,6 +87,13 @@ jobs:
             tail -n 15 /var/lib/coco/errors.log 2>/dev/null | cut -c1-200 | sed 's/^/  /' || echo "  errors.log пуст или отсутствует"
 
             echo
+            echo "=== 8. Пакеты ==="
+            . /etc/os-release 2>/dev/null && echo "  ОС: $PRETTY_NAME, ядро $(uname -r)"
+            if command -v php >/dev/null 2>&1; then echo "  PHP: $(php -v 2>/dev/null | head -1)"; else echo "  PHP: нет"; fi
+            echo "  ждут обновления (по последнему apt-get update): $(apt list --upgradable 2>/dev/null | grep -vc '^Listing')"
+            [ -f /var/run/reboot-required ] && echo "  нужна перезагрузка" || echo "  перезагрузка не нужна"
+
+            echo
             echo "=== 7. Журнал сервиса coco ==="
             journalctl -u coco --no-pager -n 15 2>/dev/null | cut -c1-200 | sed 's/^/  /' || echo "  нет"
 

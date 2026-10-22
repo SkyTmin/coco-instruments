@@ -1,0 +1,120 @@
+name: Server update (apt + PHP)
+
+# Обновление системных пакетов на VPS по просьбе владельца (письмо хостера о
+# CVE-2026-109618/109619 в PHP, 22.10.2026). Только исправления в пределах
+# выпуска ОС: `apt-get upgrade`, без dist-upgrade. Конфиги остаются как есть
+# (`force-confold`): Caddyfile, /etc/coco.env, данные в /var/lib/coco не трогаются.
+# PHP нашему приложению не нужен (Node + Caddy); если он пришёл с образом
+# хостера — покажем, что стоит, и обновим вместе со всем, но не удаляем.
+#
+# Запуск: Actions → «Server update (apt + PHP)» → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reboot:
+        description: 'Перезагрузить, если обновление ядра этого требует'
+        type: boolean
+        default: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Обновить пакеты
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 25m
+          script: |
+            export DEBIAN_FRONTEND=noninteractive
+            echo "=== До ==="
+            . /etc/os-release 2>/dev/null && echo "  ОС: $PRETTY_NAME"
+            echo "  ядро: $(uname -r)"
+            echo "  --- PHP ---"
+            if command -v php >/dev/null 2>&1; then
+              echo "  php есть: $(php -v 2>/dev/null | head -1)"
+            else
+              echo "  php в PATH нет"
+            fi
+            dpkg -l 2>/dev/null | awk '/^ii/ && $2 ~ /php/ {print "  " $2 " " $3}' | head -40
+            systemctl list-units --all --no-legend 'php*' 2>/dev/null | sed 's/^/  /'
+            echo "  --- кто слушает 80/443/3000 ---"
+            (ss -lntp 2>/dev/null || netstat -lntp 2>/dev/null) | grep -E ':(80|443|3000)\b' | sed 's/^/  /'
+
+            echo
+            echo "=== apt-get update ==="
+            apt-get update -q 2>&1 | tail -5
+            echo "  ждут обновления:"
+            apt list --upgradable 2>/dev/null | grep -v '^Listing' | sed 's/^/  /' | head -80
+
+            echo
+            echo "=== apt-get upgrade ==="
+            apt-get -y -q -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef upgrade 2>&1 | tail -25
+            echo "  код выхода: ${PIPESTATUS[0]}"
+            echo "  осталось (отложенные — обычно новые зависимости ядра):"
+            apt list --upgradable 2>/dev/null | grep -v '^Listing' | sed 's/^/  /' | head -30
+
+            echo
+            echo "=== После ==="
+            command -v php >/dev/null 2>&1 && echo "  php: $(php -v 2>/dev/null | head -1)"
+            for S in coco caddy; do
+              printf '  %-8s %s / %s\n' "$S" "$(systemctl is-active $S)" "$(systemctl is-enabled $S 2>/dev/null)"
+            done
+            printf '  /api/health: '; curl -sS --max-time 10 http://127.0.0.1:3000/api/health 2>&1 | head -c 120; echo
+
+            if [ -f /var/run/reboot-required ]; then
+              echo "  НУЖНА ПЕРЕЗАГРУЗКА: $(cat /var/run/reboot-required.pkgs 2>/dev/null | tr '\n' ' ')"
+              if [ "${{ inputs.reboot }}" != "true" ]; then
+                echo "  перезагрузка выключена параметром — не перезагружаю"
+              elif [ "$(systemctl is-enabled coco 2>/dev/null)" != enabled ] || [ "$(systemctl is-enabled caddy 2>/dev/null)" != enabled ]; then
+                echo "  coco или caddy не в автозапуске — НЕ перезагружаю, иначе сайт не поднимется сам"
+              else
+                echo "  перезагружаю через 5 с"
+                touch /var/lib/coco/.rebooted-by-update
+                nohup sh -c 'sleep 5; systemctl reboot' >/dev/null 2>&1 &
+              fi
+            else
+              echo "  перезагрузка не нужна"
+            fi
+
+      - name: Ждать, пока сервер вернётся
+        run: |
+          D="${{ secrets.DOMAIN }}"; D="${D:-coco-instruments.ru}"
+          sleep 20
+          for i in $(seq 40); do
+            if curl -fsS --max-time 8 "https://$D/api/health" >/dev/null 2>&1; then
+              echo "сайт отвечает (через $((20 + i * 8)) с или раньше)"; exit 0
+            fi
+            sleep 8
+          done
+          echo "::error::сайт не ответил за ~6 минут"; exit 1
+
+      - name: Проверка после
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          command_timeout: 3m
+          script: |
+            echo "  ядро: $(uname -r), работает: $(uptime -p)"
+            if [ -f /var/lib/coco/.rebooted-by-update ]; then echo "  была перезагрузка"; rm -f /var/lib/coco/.rebooted-by-update; fi
+            [ -f /var/run/reboot-required ] && echo "  всё ещё просит перезагрузку" || echo "  перезагрузка не требуется"
+            for S in coco caddy coco-backup.timer; do
+              printf '  %-18s %s\n' "$S" "$(systemctl is-active $S)"
+            done
+            printf '  /api/health: '; curl -sS --max-time 10 http://127.0.0.1:3000/api/health 2>&1 | head -c 120; echo
+
+      - name: Что видит Telegram
+        if: always()
+        run: |
+          curl -sS --max-time 20 "https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/getWebhookInfo" \
+            | jq -r '.result | "  вебхук задан: " + (if (.url|length)>0 then "да" else "НЕТ" end)
+                + "\n  последняя ошибка: " + (.last_error_message // "нет")
+                + "\n  ждут доставки: " + (.pending_update_count|tostring)' || true
